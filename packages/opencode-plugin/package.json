@@ -1,0 +1,19 @@
+{
+  "name": "@parsar/opencode-plugin",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Parsar's OpenCode plugin — emits permission and tool-execution events back to the Parsar server so the connector can route them into PromptEvent.EventPermissionRequest / tool_call audit hooks.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

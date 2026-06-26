@@ -1,0 +1,177 @@
+# parsar-daemon — cross-platform release build pipeline.
+#
+# Triggers on push of a tag matching `parsar-daemon-v*` (e.g.
+# `parsar-daemon-v0.1.0`). Builds a matrix of static Go binaries — macOS and
+# Linux, amd64 and arm64 — uploads them as workflow artifacts and (for
+# tag pushes) attaches them to a GitHub Release.
+#
+# Phase 1 platform scope: macOS + Linux only. Windows is out per
+# project_daemon_platform_scope decision and the absence of a fork
+# implementation for that OS.
+#
+# The same artifacts are consumed by the sandbox image build (the e2b
+# Dockerfile at infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile
+# pins PARSAR_DAEMON_VERSION and curls the matching linux/amd64 binary from
+# the deployment's download mirror). When cutting a sandbox template
+# rebuild, bump the tag here first, wait for this workflow to publish,
+# then trigger the template rebuild against the new version.
+
+name: parsar-daemon release
+
+on:
+  push:
+    tags:
+      - "parsar-daemon-v*"
+  # Also allow a manual dispatch for hotfix builds against a non-tagged
+  # commit. Artifacts upload only — no GitHub Release attachment in
+  # this mode.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build (branch / tag / SHA)"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write # required for softprops/action-gh-release on tag push
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve version
+        id: ver
+        run: |
+          # Strip the `parsar-daemon-` prefix from the tag so the binary
+          # filename matches the e2b Dockerfile's PARSAR_DAEMON_VERSION arg
+          # (which is bare semver like `v0.1.0` or `0.1.0`).
+          if [[ "${GITHUB_REF}" == refs/tags/parsar-daemon-* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/parsar-daemon-}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building parsar-daemon ${VERSION}"
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # -trimpath + -buildvcs=false: reproducible builds; no
+          # absolute paths or VCS stamps in the binary.
+          # -ldflags "-s -w": strip symbols + DWARF to halve the binary
+          # size (no impact on debugging since these are released
+          # binaries — local devs build their own with symbols).
+          OUTPUT="parsar-daemon-${VERSION}-${GOOS}-${GOARCH}"
+          mkdir -p dist
+          go build \
+            -trimpath \
+            -buildvcs=false \
+            -ldflags "-s -w -X main.version=${VERSION}" \
+            -o "dist/${OUTPUT}" \
+            ./apps/parsar-daemon/cmd/parsar-daemon
+          # Sanity check: confirm the binary actually built and ldd-free.
+          file "dist/${OUTPUT}" || true
+          ls -lh "dist/${OUTPUT}"
+
+      - name: Compute checksum
+        id: sum
+        run: |
+          cd dist
+          OUTPUT="parsar-daemon-${{ steps.ver.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          shasum -a 256 "${OUTPUT}" > "${OUTPUT}.sha256"
+          cat "${OUTPUT}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: parsar-daemon-${{ steps.ver.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/parsar-daemon-${{ steps.ver.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+            dist/parsar-daemon-${{ steps.ver.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only attach to a GitHub Release on real tag pushes — manual
+    # workflow_dispatch runs produce artifacts but skip the release step
+    # so a hotfix build doesn't accidentally publish.
+    if: startsWith(github.ref, 'refs/tags/parsar-daemon-v')
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: |
+          ls -lR dist/
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Tag name is automatic from refs/tags/<tag>.
+          name: parsar-daemon ${{ github.ref_name }}
+          body: |
+            parsar-daemon binaries for macOS + Linux (amd64 / arm64).
+
+            ## Install (sandbox template)
+            Bump `PARSAR_DAEMON_VERSION` in
+            `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile`
+            to this release, then rebuild the e2b template.
+
+            ## Install (local laptop)
+            ```sh
+            # macOS arm64 example
+            curl -fsSL -o parsar-daemon \
+              https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/parsar-daemon-${{ github.ref_name }}-darwin-arm64
+            chmod +x parsar-daemon
+            ./parsar-daemon connect --url https://your.parsar.example.com --token <pairing> -b
+            ./parsar-daemon connect -b
+            ```
+
+            Verify the SHA256 against the matching `.sha256` artifact
+            before running.
+          files: |
+            dist/parsar-daemon-*-linux-amd64
+            dist/parsar-daemon-*-linux-amd64.sha256
+            dist/parsar-daemon-*-linux-arm64
+            dist/parsar-daemon-*-linux-arm64.sha256
+            dist/parsar-daemon-*-darwin-amd64
+            dist/parsar-daemon-*-darwin-amd64.sha256
+            dist/parsar-daemon-*-darwin-arm64
+            dist/parsar-daemon-*-darwin-arm64.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true

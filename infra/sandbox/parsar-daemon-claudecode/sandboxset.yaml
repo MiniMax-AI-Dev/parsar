@@ -1,0 +1,68 @@
+# Parsar agent_daemon SandboxSet — K8s warm pool for Claude Code sandboxes.
+#
+# The SandboxSet controller (agents.kruise.io) maintains a warm pool of
+# sandbox pods; the Parsar server's E2B-compatible API allocates from
+# this pool at prompt time.
+#
+# Defaults below point at the open-source ghcr.io image stream produced
+# by .github/workflows/sandbox-image-release.yml; swap `<your-org>` for
+# your GitHub Container Registry namespace, or replace the image entirely
+# with your own registry path.
+#
+# Usage:
+#   kubectl apply -f sandboxset.yaml
+#
+#   # Update image:
+#   kubectl apply -f sandboxset.yaml
+#
+#   # Check pool status:
+#   kubectl -n sandbox-work get sandboxset parsar-daemon
+#   kubectl -n sandbox-work get pods -l sandboxset=parsar-daemon
+
+apiVersion: agents.kruise.io/v1alpha1
+kind: SandboxSet
+metadata:
+  name: parsar-daemon
+  namespace: sandbox-work
+spec:
+  # Warm pool size. Each pod consumes 4 CPU + 8Gi, so pool size × resources
+  # = total cluster reservation.
+  replicas: 10
+  template:
+    spec:
+      containers:
+        - name: sandbox
+          # envd is the e2b sandbox daemon. It listens on port 49983 and
+          # provides the API for running commands, reading/writing files,
+          # etc. The Dockerfile bakes envd into /usr/bin/envd so the
+          # container Command resolves without cluster-side injection.
+          command: ["envd", "-port", "49983"]
+          env:
+            - name: GODEBUG
+              value: multipathtcp=0
+            - name: ENVD_DIR
+              value: /mnt/envd
+          # Pinned to the ghcr.io image stream produced by
+          # .github/workflows/sandbox-image-release.yml. Replace
+          # `<your-org>` with your GitHub org/user, or override entirely
+          # if you push to your own registry. Bump the tag when rolling
+          # out a new image.
+          image: ghcr.io/<your-org>/parsar-sandbox:latest
+          resources:
+            requests:
+              cpu: 4
+              memory: 8Gi
+            limits:
+              cpu: 4
+              memory: 8Gi
+          ports:
+            - name: envd
+              containerPort: 49983
+          startupProbe:
+            failureThreshold: 20
+            tcpSocket:
+              port: 49983
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            timeoutSeconds: 1
+      terminationGracePeriodSeconds: 1

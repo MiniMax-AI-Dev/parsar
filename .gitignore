@@ -1,0 +1,67 @@
+.DS_Store
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.worktrees/*
+!.worktrees/.gitkeep
+
+# Mavis/mavis scratch tree (per-session whiteboard, daemon state).
+# Never enters git history.
+.mavis/
+.harness/
+
+# Parsar runtime must never live in the repo. Patterns are anchored
+# to repo root so they only catch CWD pollution (e.g. `./config/`,
+# `./logs/`); they do NOT swallow source directories that happen to
+# share the same name (e.g. server/internal/config/).
+/.parsar/
+/config/
+/logs/
+/state/
+/cache/
+
+# Per-worktree fork-point pinning (see AGENTS.md worktree workflow).
+.fork-point
+
+# Per-worktree deliverable handoff notes (worker → orchestrator scratch);
+# never part of the merged history.
+deliverable.md
+
+# go.work.sum is regenerated on every `go run` / `go build` and
+# should not be tracked (Go convention: only go.work itself is
+# committed; the .sum gets rebuilt from go.work + module sums).
+go.work.sum
+
+# OpenCode runtime cache — auto-created when starting `opencode serve`
+# in this repo (plugins, package-lock, tmp). Project-level OpenCode
+# state must never enter Parsar history.
+.opencode/
+
+# Reviewer / verifier session artifacts (workspace-only, never commit)
+reviewer-report.md
+/.fork-point
+
+# Claude Code IDE state (per-developer scratch: plans, worktree pointers,
+# local settings). Never enters git history.
+/.claude/
+
+# Stray binaries from `go build .` in repo root. Patterns are
+# specifically the binary name with no trailing slash AND anchored
+# to root, so they only match files (not the source directories
+# that happen to share the name — e.g. server/ subtree must NOT
+# be ignored). Each pattern is paired with a `!` glob negating
+# the directory form so a misread by future git versions can't
+# swallow the source tree.
+/migrate
+!/migrate/
+/seeddev
+!/seeddev/
+/parsar-bootstrap
+!/parsar-bootstrap/
+/httprunner
+!/httprunner/

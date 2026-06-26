@@ -1,0 +1,151 @@
+# Parsar agent_daemon sandbox template — base image w/ Claude Code CLI + parsar-daemon preinstalled
+#
+# Builds an E2B sandbox image where:
+#   - Claude Code CLI is installed under /usr/local/bin/claude (Anthropic's installer)
+#   - parsar-daemon static linux/amd64 binary is installed under /usr/local/bin/parsar-daemon
+#   - parsar CLI (spec/memory client) is installed under /usr/local/bin/parsar, compiled
+#     on-the-fly in Stage 1 from apps/parsar/cmd/parsar. Multi-stage keeps the Go toolchain
+#     out of the runtime image (final image only contains the static binary).
+#   - Hook scripts for Claude Code + OpenCode are pre-baked under
+#     /opt/parsar/hooks/{claude,opencode}/. Platform settings files
+#     (~/.claude/settings.json etc.) are NOT pre-baked — server's sandbox
+#     provider writes them at runtime via e2b Exec because they carry
+#     runtime-specific values.
+#   - IS_SANDBOX=1 is exported so Claude Code accepts running as root in a container
+#     (per Anthropic's docs — without this Claude refuses to run --permission-mode
+#      bypassPermissions in non-interactive contexts)
+#   - /workspace is the default working directory; the server's sandbox provider
+#     drops repo state in here before issuing prompt_request frames.
+#
+# After build, the SandboxProvider only needs to:
+#   1. Sandbox.Create("parsar-daemon-claudecode", { timeout })
+#   2. RunCommand: parsar-daemon connect --device-name <deviceId> -b (URL/token via env)
+#   3. Wait for the gateway to see deviceId dial in (gateway.Registry.WaitForDevice)
+# No npm / curl at spawn time → boot ~3-5s instead of 30s+.
+#
+# Build (from REPO ROOT, not this directory — Stage 1 needs apps/parsar source):
+#   docker build -f infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile \
+#                -t parsar-daemon-claudecode .
+#
+# CRITICAL: parsar-daemon ships as a static Go binary, downloaded from GitHub
+# Releases at build time. CI publishes new binaries on every release tag
+# via .github/workflows/parsar-daemon-release.yml. When updating, pass
+# --build-arg PARSAR_DAEMON_VERSION=<release-tag> matching the published
+# release (e.g. `parsar-daemon-v0.1.0`). parsar CLI is compiled in Stage 1 below.
+
+###############################################################################
+# Stage 1: parsar-builder — compile the parsar CLI from apps/parsar/cmd/parsar.
+#
+# Why multi-stage instead of curl-from-registry (the parsar-daemon pattern):
+# the parsar CLI moves in lock-step with this repo (DTOs duplicate server-side
+# shapes), so a registry artifact would need re-publishing on every PR
+# touching apps/parsar or server/internal/api/specmem. Until a CI job exists
+# to do that, compiling in-place keeps the build self-contained.
+#
+# Only apps/ is COPY'd (parsar only imports apps/parsar/internal/cli) so server-
+# side changes don't bust this layer's cache.
+###############################################################################
+ARG GO_VERSION=1.24-bookworm
+
+FROM golang:${GO_VERSION} AS parsar-builder
+WORKDIR /src
+
+# Module graph first, source second — keeps `go mod download` cacheable.
+COPY go.mod go.sum go.work ./
+COPY go.work.sum* ./
+RUN go mod download
+
+COPY apps ./apps
+
+# Static linux/amd64 binary, debug info stripped (~25% smaller). trimpath
+# scrubs build-host file paths so the binary leaks no operator info.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS=-trimpath \
+    go build -ldflags="-s -w -X github.com/MiniMax-AI-Dev/parsar/apps/parsar/internal/cli.Version=sandbox" \
+    -o /out/parsar ./apps/parsar/cmd/parsar
+
+###############################################################################
+# Stage 2: runtime — the actual sandbox image.
+###############################################################################
+FROM e2bdev/base:latest
+
+# --- Base tools (curl + ca-certs for downloads, jq optional for debugging) ---
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends curl ca-certificates jq \
+ && rm -rf /var/lib/apt/lists/*
+
+# --- Claude Code CLI ---
+# Anthropic's installer drops claude into /root/.local/bin by default; symlink
+# it into /usr/local/bin so the daemon's exec.LookPath("claude") works without
+# a PATH override. The `claude --version` sanity-check at the end fails the
+# build loudly if the installer ever changes layout.
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+ && CLAUDE_BIN="$(command -v claude || true)" \
+ && if [ -z "$CLAUDE_BIN" ] && [ -x /root/.local/bin/claude ]; then CLAUDE_BIN=/root/.local/bin/claude; fi \
+ && if [ -z "$CLAUDE_BIN" ]; then echo "claude install failed: no binary on PATH"; exit 1; fi \
+ && ln -sf "$CLAUDE_BIN" /usr/local/bin/claude \
+ && /usr/local/bin/claude --version
+
+# --- parsar-daemon static binary ---
+# Pulled from GitHub Releases (default `MiniMax-AI-Dev/parsar`). CI publishes
+# binaries via .github/workflows/parsar-daemon-release.yml on tag push.
+# Override the repo and version with --build-arg if your fork publishes
+# its own release stream.
+ARG PARSAR_DAEMON_REPO=MiniMax-AI-Dev/parsar
+ARG PARSAR_DAEMON_VERSION=""
+RUN set -e; \
+    REPO="${PARSAR_DAEMON_REPO}"; \
+    VERSION="${PARSAR_DAEMON_VERSION}"; \
+    if [ -z "$VERSION" ]; then \
+      LATEST_URL="$(curl -fsILo /dev/null -w '%{url_effective}' \
+        "https://github.com/${REPO}/releases/latest")"; \
+      VERSION="${LATEST_URL##*/tag/}"; \
+      [ -n "$VERSION" ] && [ "$VERSION" != "$LATEST_URL" ] \
+        || { echo "Failed to resolve latest parsar-daemon release from ${REPO}" >&2; exit 1; }; \
+    fi; \
+    BARE_VERSION="${VERSION#parsar-daemon-}"; \
+    BINARY="parsar-daemon-${BARE_VERSION}-linux-amd64"; \
+    curl -fsSL \
+      "https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}" \
+      -o /usr/local/bin/parsar-daemon \
+ && chmod +x /usr/local/bin/parsar-daemon \
+ && /usr/local/bin/parsar-daemon version
+
+# --- parsar CLI (spec/memory client) ---
+# Compiled in Stage 1; only the ~10MB static binary lands here. No Go
+# toolchain in the runtime image. parsar --version exits non-zero on a broken
+# binary so the build fails loudly if the COPY ever picks up the wrong file.
+COPY --from=parsar-builder /out/parsar /usr/local/bin/parsar
+RUN chmod +x /usr/local/bin/parsar \
+ && /usr/local/bin/parsar --version
+
+# --- Hook scripts (Claude Code + OpenCode) ---
+# Pre-baked under /opt/parsar/hooks/. The Claude Python hooks must be
+# executable since Claude Code invokes them directly as commands. OpenCode
+# plugins are loaded by `node` so executable-bit doesn't matter, but we
+# set it anyway for uniformity.
+#
+# Platform settings.json / opencode config that POINTS at these scripts is
+# NOT baked here — the server's sandbox provider writes those at runtime
+# (carries PARSAR_* env vars + sandbox-specific values).
+COPY infra/e2b-templates/parsar-daemon-claudecode/hooks /opt/parsar/hooks
+RUN chmod -R a+rx /opt/parsar/hooks
+
+# --- Sandbox identity ---
+# IS_SANDBOX=1 lets the Claude Code CLI know it's running in a disposable
+# container — required for bypassPermissions modes to engage. The daemon
+# defaults to mode=default (web-driven approvals) but we set this anyway
+# so the sandbox can run Bash-heavy workflows without re-prompting on every
+# tool call when the user explicitly opts into a permissive mode.
+ENV IS_SANDBOX=1
+# Disable Claude telemetry from inside the sandbox — the host already has
+# its own opt-in policy for the server side, the sandbox should not add a
+# second uncontrolled outbound stream.
+ENV DISABLE_TELEMETRY=1
+ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+# --- Workspace ---
+# Server-side sandbox provider writes a working_directory into the
+# binding metadata; the daemon honours it but defaults to /workspace
+# when unset. mkdir -p so a fresh sandbox boot is always cd-able.
+RUN mkdir -p /workspace
+WORKDIR /workspace

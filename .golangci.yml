@@ -1,0 +1,69 @@
+# golangci-lint configuration.
+#
+# Primary purpose right now: enforce the unified-logger contract. Every
+# log line in this repo MUST flow through `internal/obs/log` so that
+# trace_id auto-injection (the W3C traceparent we plumb through HTTP +
+# WebSocket entrypoints) actually sticks. A bare `slog.Info("msg")`
+# call internally uses `context.Background()` — it would silently
+# produce a log line without the request's trace_id and undo the whole
+# point of obs/log. The `forbidigo` rule below catches those at CI
+# time so reviewers don't have to.
+#
+# What stays allowed:
+#   - `slog.String / slog.Int / slog.Time / slog.Duration / slog.Any`
+#     and the other attr constructors — these are pure value builders,
+#     they don't emit logs, and obs/log returns *slog.Logger so callers
+#     legitimately need them.
+#   - `slog.Logger` / `slog.Handler` / `slog.Level*` types — same reason.
+#   - Everything inside `internal/obs/log/` itself — the wrapper IS
+#     the legitimate user of the underlying API.
+#   - `_test.go` files — tests sometimes need a tightly-controlled
+#     local handler (io.Discard logger, captured buffer) that doesn't
+#     touch the global default; forcing them through obs/log would
+#     create circular setup pain for no safety gain.
+#
+# To add a new linter later, append under `linters.enable`; don't strip
+# existing entries unless the rule is genuinely broken.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - forbidigo
+
+  settings:
+    forbidigo:
+      # `forbid` patterns match call expressions (the regex matches the
+      # printed AST source of the call's function part). We pin each
+      # pattern to start with `^slog\.` so we only catch direct package
+      # calls — `someLogger.Info(...)` and `obslog.Bg().Info(...)` are
+      # untouched. The trailing `$` is critical: it stops the pattern
+      # from also matching `slog.InfoContext`, which is fine to call
+      # from inside obs/log.
+      forbid:
+        - pattern: ^slog\.Info$
+          msg: "use log.Info(ctx, ...) or log.Bg().Info(...) from internal/obs/log; bare slog.Info bypasses trace_id auto-injection."
+        - pattern: ^slog\.Warn$
+          msg: "use log.Warn(ctx, ...) or log.Bg().Warn(...) from internal/obs/log; bare slog.Warn bypasses trace_id auto-injection."
+        - pattern: ^slog\.Error$
+          msg: "use log.Error(ctx, ...) or log.Bg().Error(...) from internal/obs/log; bare slog.Error bypasses trace_id auto-injection."
+        - pattern: ^slog\.Debug$
+          msg: "use log.Debug(ctx, ...) or log.Bg().Debug(...) from internal/obs/log; bare slog.Debug bypasses trace_id auto-injection."
+        - pattern: ^slog\.Default$
+          msg: "use log.Bg() or log.With(...) from internal/obs/log; slog.Default() is reserved for the obs/log package itself."
+
+  exclusions:
+    rules:
+      # Tests legitimately build local loggers (io.Discard, captured
+      # buffers) that should not touch the global default.
+      - path: _test\.go
+        linters:
+          - forbidigo
+      # The obs/log package itself IS the wrapper — its whole job is
+      # to call into slog.
+      - path: internal/obs/log/
+        linters:
+          - forbidigo

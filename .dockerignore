@@ -1,0 +1,79 @@
+# Parsar docker build context filter.
+#
+# We default to "deny most" with explicit allow-lines, so a stray
+# secret file (~/.env, *.pem, etc.) the operator drops in the repo
+# does NOT silently flow into the build context — and from there
+# into intermediate layers an attacker who pulls the image could
+# extract.
+#
+# Each pattern below is anchored to the repo root.
+
+# Repo runtime / state directories that must never enter the image.
+.mavis/
+.harness/
+.opencode/
+.parsar/
+.worktrees/
+.fork-point
+deliverable.md
+
+# Local dev databases, sockets, postgres data volumes.
+docker/postgres/data/
+*.sock
+
+# Build outputs from host runs of `make` / `pnpm build` / `go build`.
+# The image rebuilds these from source inside the multi-stage build,
+# so shipping the host versions would only bloat the context and
+# risk cross-platform binary mismatches.
+**/dist/
+**/build/
+**/coverage/
+**/node_modules/
+server/bin/
+out/
+
+# Git metadata — adds size and triggers cache invalidations on
+# unrelated commits. The image does not need git history at runtime.
+.git/
+.gitignore
+.gitattributes
+
+# Editor / IDE droppings.
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local env / secret files. We list known-secret file names
+# explicitly so a typo'd suffix (e.g. .env.production-prod-real-final)
+# doesn't slip through a permissive pattern — and so legitimate
+# source files like apps/web/src/lib/api-secrets.ts (the Vault HTTP
+# client) are NOT swept up.
+#
+# DO NOT add bare wildcards like `**/secret*` or `**/*-secret*` here:
+# they match too widely (api-secrets.ts, secret-handling docs, etc.)
+# and break the web build.
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+**/credentials.json
+**/.npmrc
+**/id_rsa
+**/id_ed25519
+**/.aws/credentials
+
+# Test artefacts / playground that aren't needed in the image.
+tests/.evidence/
+tests/.playwright-report/
+tests/playwright-report/
+tests/playwright/.cache/
+
+# Lockfile we DO want: pnpm-lock.yaml stays in the context so the
+# web builder can `pnpm install --frozen-lockfile`. (Don't add it to
+# this ignore list.)
+
+# CI scratch / coverage from local runs.
+*.log
+*.lock-info

@@ -1,0 +1,212 @@
+{
+  "appName": "Parsar",
+  "languageSwitcher": {
+    "label": "Language",
+    "zh-CN": "中文",
+    "en-US": "English"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "disable": "Disable",
+    "enable": "Enable",
+    "test": "Test",
+    "rotate": "Rotate",
+    "search": "Search",
+    "viewDetail": "View detail",
+    "viewAuditLog": "View Audit Log",
+    "retry": "Retry"
+  },
+  "states": {
+    "loading": "Loading…",
+    "errorTitle": "Failed to load data",
+    "noResults": "No matches",
+    "emptyTitle": "Nothing here yet"
+  },
+  "search": {
+    "placeholder": "Jump to Run / Agent / Conversation…"
+  },
+  "workspaceSwitcher": {
+    "triggerAriaLabel": "Switch workspace / project",
+    "demoWorkspace": "Demo Workspace",
+    "workspaceLabel": "Workspace",
+    "projectsLabel": "Projects",
+    "projectsInLabel": "Projects in {{workspace}}",
+    "noWorkspaces": "No workspaces available",
+    "noProjects": "No projects in this workspace yet",
+    "pickWorkspaceFirst": "Pick a workspace first",
+    "discoverLabel": "Other workspaces",
+    "memberCount": "{{count}} members",
+    "requestJoinAction": "Request to join",
+    "requestJoinTitle": "Request to join this workspace",
+    "pendingRequestBadge": "Requested",
+    "pendingRequestTitle": "Request submitted, awaiting admin approval",
+    "withdrawRequestAction": "Withdraw",
+    "withdrawRequestTitle": "Withdraw this request",
+    "joinSubmittedToast": "Join request submitted for \"{{name}}\"",
+    "discoverViewAll": "View all ({{count}})",
+    "discoverDialogTitle": "Discover workspaces",
+    "discoverDialogDescription": "Search and request to join public workspaces in your org. Private workspaces are invite-only.",
+    "discoverSearchPlaceholder": "Search by name…",
+    "discoverEmpty": "No workspaces available to join",
+    "discoverNoMatch": "No workspaces match \"{{q}}\"",
+    "discoverRange": "{{start}}–{{end}} of {{total}}",
+    "paginationPrev": "Previous",
+    "paginationNext": "Next"
+  },
+  "workspaceCrud": {
+    "actions": {
+      "create": "Create",
+      "save": "Save",
+      "archive": "Archive",
+      "submitJoinRequest": "Submit request",
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "visibility": "Visibility",
+      "reason": "Reason",
+      "optional": "(optional)"
+    },
+    "visibility": {
+      "private": "Private (invite only)",
+      "public": "Public (others can request to join)"
+    },
+    "workspace": {
+      "createAction": "New workspace",
+      "createTitle": "Create workspace",
+      "createDescription": "Workspaces hold projects, members, and shared registry. You become the owner of any workspace you create. The system identifier is generated automatically.",
+      "renameTitle": "Rename workspace",
+      "renameDescription": "Change the workspace display name. The system identifier is permanent and not editable.",
+      "archiveTitle": "Archive workspace",
+      "archiveDescription": "Archive \"{{name}}\"? The workspace will disappear from the switcher; existing members and projects stay in the database but become unreachable through the workspace JOIN.",
+      "archiveMarketplaceDependents": "If capabilities published by this workspace are still used by Agents in other workspaces, archive will be blocked. Unpublish first and wait for those workspaces to remove the capabilities.",
+      "namePlaceholder": "e.g. Platform Team"
+    },
+    "project": {
+      "createAction": "New project",
+      "createTitle": "Create project",
+      "createDescription": "Projects scope conversations and runs inside a workspace. You become the owner of any project you create. The system identifier is generated automatically.",
+      "renameTitle": "Rename project",
+      "renameDescription": "Change the project name or description. The system identifier is permanent and not editable.",
+      "archiveTitle": "Archive project",
+      "archiveDescription": "Archive \"{{name}}\"? The project will be hidden from the switcher (status=archived) but its history stays intact.",
+      "namePlaceholder": "e.g. Q3 Migration",
+      "descriptionPlaceholder": "Optional short description"
+    },
+    "join": {
+      "title": "Request to join \"{{name}}\"",
+      "reasonPlaceholder": "Optional — tell the admin why you'd like to join",
+      "reasonTooLong": "Reason must be 1000 characters or less",
+      "landing": {
+        "loading": "Preparing the request…",
+        "loginRequired": "Sign in to request access to \"{{name}}\"",
+        "loginCta": "Sign in with Feishu",
+        "notFoundTitle": "Workspace not found",
+        "notFoundDescription": "It may have been deleted, or it doesn't accept public join requests. Contact the workspace admin to request access.",
+        "privateTitle": "This workspace doesn't accept public join requests",
+        "privateDescription": "Contact the workspace admin to be invited.",
+        "alreadyMember": "You're already a member — redirecting…",
+        "pendingTitle": "Request submitted — waiting for admin approval",
+        "pendingDescription": "You'll be added automatically once an admin approves.",
+        "withdrawAction": "Withdraw request",
+        "successTitle": "Request sent",
+        "successDescription": "An admin will be notified; you can revisit this page to check the status.",
+        "backToHome": "Back to home"
+      }
+    }
+  },
+  "login": {
+    "title": "Parsar",
+    "subtitle": "Team agent control plane",
+    "feishuButton": "Sign in with Feishu",
+    "firstLoginNote": "First-time sign-in will create your account automatically",
+    "terms": "Signing in means you agree to the Terms",
+    "loading": "Loading sign-in status..."
+  },
+  "onboarding": {
+    "title": "Create your first workspace",
+    "subtitle": "A workspace is a shared space where your team collaborates on projects and agents. You'll be its Owner.",
+    "fields": {
+      "name": "Workspace name",
+      "namePlaceholder": "e.g. Platform Team"
+    },
+    "actions": {
+      "create": "Create workspace"
+    }
+  },
+  "userMenu": {
+    "myCredentials": "My Credentials",
+    "signOut": "Sign out"
+  },
+  "stub": {
+    "title": "Page under construction",
+    "back": "Go back"
+  },
+  "nav": {
+    "collaborationGroup": "Collaboration",
+    "agentManagementGroup": "Agent Management",
+    "ingressGroup": "Ingress & Execution",
+    "assetsGroup": "Assets",
+    "governanceGroup": "Governance & Security",
+    "items": {
+      "approvals": "Inbox / Approvals",
+      "conversations": "Conversations",
+      "runs": "Runs",
+      "artifacts": "Artifacts",
+      "agents": "Agents",
+      "connections": "Connections",
+      "capabilities": "Capabilities",
+      "models": "Models",
+      "connectors": "Connectors",
+      "runtime": "Runtime",
+      "specs": "Spec",
+      "memory": "Memory",
+      "updates": "Updates",
+      "members": "Members & Groups",
+      "secrets": "Credentials",
+      "usage": "Usage",
+      "audit": "Audit Logs",
+      "settings": "Settings"
+    },
+    "p1Hint": "P1"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "empty": {
+      "title": "We couldn't find that page",
+      "description": "The page you requested has been merged or removed.",
+      "cta": "Go to Agents"
+    }
+  },
+  "workspace": {
+    "mockBadge": "Not selected",
+    "mockTooltip": "Choose a Workspace first"
+  },
+  "relativeTime": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "scopeRequired": {
+    "workspace": {
+      "title": "Choose a Workspace to view {{resource}}",
+      "description": "This data is managed by Workspace. Choose a Workspace in the header first."
+    },
+    "project": {
+      "noWorkspaceTitle": "Choose a Workspace first",
+      "noWorkspaceDescription": "This data is shown by Project. Choose a Workspace in the header, then pick a Project.",
+      "loadingTitle": "Loading Projects",
+      "loadingDescription": "Once Projects load for this Workspace, you can switch to the matching data scope.",
+      "noProjectsTitle": "This Workspace has no available Projects yet",
+      "selectTitle": "Choose a Project to view {{resource}}",
+      "selectDescription": "Project is the data scope for this page. The sidebar stays the same; this page switches to the selected scope."
+    }
+  }
+}

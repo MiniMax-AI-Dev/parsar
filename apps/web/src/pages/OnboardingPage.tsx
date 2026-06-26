@@ -1,0 +1,97 @@
+/**
+ * /onboarding — first-time workspace creation. Rendered by `Root` when
+ * an authenticated user has no workspace memberships.
+ */
+import { useState } from "react"
+import { useTranslation } from "react-i18next"
+import { ApiError } from "../lib/api-client"
+import { useCreateWorkspace } from "../lib/api-workspaces"
+import { setWorkspaceId } from "../lib/workspace"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+
+function extractErrorMessage(err: unknown): string | null {
+  if (!err) return null
+  if (err instanceof ApiError) {
+    return err.envelope.message || err.message
+  }
+  if (err instanceof Error) return err.message
+  return String(err)
+}
+
+export function OnboardingPage() {
+  const { t } = useTranslation("common")
+  const [name, setName] = useState("")
+  const create = useCreateWorkspace()
+  const errMsg = extractErrorMessage(create.error)
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-white px-6 text-slate-900">
+      <section className="w-full max-w-[440px]">
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-semibold tracking-display">
+            {t("onboarding.title")}
+          </h1>
+          <p className="mt-2 text-[14px] text-slate-500">
+            {t("onboarding.subtitle")}
+          </p>
+        </div>
+
+        <form
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const trimmed = name.trim()
+            if (!trimmed || create.isPending) return
+            create.mutate(
+              { name: trimmed },
+              {
+                onSuccess: (data) => {
+                  setWorkspaceId(data.workspace.id)
+                  // Hard navigate so AuthProvider + useMyWorkspaces both
+                  // refetch instead of depending on cache-invalidation
+                  // timing.
+                  window.location.assign("/")
+                },
+              }
+            )
+          }}
+        >
+          <div className="grid gap-1.5">
+            <label
+              className="text-[13px] font-medium text-slate-700"
+              htmlFor="onboarding-ws-name"
+            >
+              {t("onboarding.fields.name")}
+            </label>
+            <Input
+              id="onboarding-ws-name"
+              value={name}
+              autoFocus
+              required
+              maxLength={64}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("onboarding.fields.namePlaceholder")}
+            />
+          </div>
+
+          {errMsg && (
+            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+              {errMsg}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            className="mt-5 w-full"
+            disabled={create.isPending || !name.trim()}
+          >
+            {create.isPending
+              ? t("states.loading")
+              : t("onboarding.actions.create")}
+          </Button>
+        </form>
+      </section>
+    </main>
+  )
+}

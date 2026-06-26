@@ -1,0 +1,212 @@
+{
+  "appName": "Parsar",
+  "languageSwitcher": {
+    "label": "语言",
+    "zh-CN": "中文",
+    "en-US": "English"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "delete": "删除",
+    "disable": "禁用",
+    "enable": "启用",
+    "test": "测试",
+    "rotate": "轮换",
+    "search": "搜索",
+    "viewDetail": "查看详情",
+    "viewAuditLog": "查看审计日志",
+    "retry": "重试"
+  },
+  "states": {
+    "loading": "加载中…",
+    "errorTitle": "无法加载数据",
+    "noResults": "没有匹配的结果",
+    "emptyTitle": "暂时还没有数据"
+  },
+  "search": {
+    "placeholder": "跳转到运行 / Agent / 对话…"
+  },
+  "workspaceSwitcher": {
+    "triggerAriaLabel": "切换工作区 / 项目",
+    "demoWorkspace": "演示工作区",
+    "workspaceLabel": "工作区",
+    "projectsLabel": "项目",
+    "projectsInLabel": "{{workspace}} 下的项目",
+    "noWorkspaces": "暂无可用工作区",
+    "noProjects": "该工作区下还没有项目",
+    "pickWorkspaceFirst": "请先选择一个工作区",
+    "discoverLabel": "其他工作区",
+    "memberCount": "{{count}} 人",
+    "requestJoinAction": "申请加入",
+    "requestJoinTitle": "申请加入此工作区",
+    "pendingRequestBadge": "已申请",
+    "pendingRequestTitle": "申请已提交,等待管理员审批",
+    "withdrawRequestAction": "撤回",
+    "withdrawRequestTitle": "撤回本次申请",
+    "joinSubmittedToast": "已提交「{{name}}」的加入申请,等待审批",
+    "discoverViewAll": "查看全部 ({{count}})",
+    "discoverDialogTitle": "发现工作区",
+    "discoverDialogDescription": "搜索并申请加入你团队里的公开工作区。私密工作区只能通过邀请加入。",
+    "discoverSearchPlaceholder": "按名称搜索…",
+    "discoverEmpty": "暂时没有可申请加入的工作区",
+    "discoverNoMatch": "没有匹配「{{q}}」的工作区",
+    "discoverRange": "{{start}}–{{end}} / 共 {{total}}",
+    "paginationPrev": "上一页",
+    "paginationNext": "下一页"
+  },
+  "workspaceCrud": {
+    "actions": {
+      "create": "创建",
+      "save": "保存",
+      "archive": "归档",
+      "submitJoinRequest": "提交申请",
+      "approve": "同意",
+      "reject": "拒绝"
+    },
+    "fields": {
+      "name": "名称",
+      "description": "描述",
+      "visibility": "可见性",
+      "reason": "申请理由",
+      "optional": "（可选）"
+    },
+    "visibility": {
+      "private": "私密(仅邀请)",
+      "public": "公开(其他人可申请加入)"
+    },
+    "workspace": {
+      "createAction": "新建工作区",
+      "createTitle": "新建工作区",
+      "createDescription": "工作区承载项目、成员和共享注册表。你将自动成为新建工作区的 Owner。系统标识会自动生成。",
+      "renameTitle": "重命名工作区",
+      "renameDescription": "修改工作区显示名称。系统标识不可修改。",
+      "archiveTitle": "归档工作区",
+      "archiveDescription": "确认归档「{{name}}」？归档后将从切换器中消失，原有成员和项目保留在数据库中，但通过工作区维度的查询都不会再返回。",
+      "archiveMarketplaceDependents": "如果这个工作区发布的市场能力仍被其它工作区的 Agent 使用，归档会被阻止。请先取消发布并等待对方移除后再归档。",
+      "namePlaceholder": "例如：平台团队"
+    },
+    "project": {
+      "createAction": "新建项目",
+      "createTitle": "新建项目",
+      "createDescription": "项目用来组织对话、运行和审批，归属于一个工作区。你将自动成为新建项目的 Owner。系统标识会自动生成。",
+      "renameTitle": "重命名项目",
+      "renameDescription": "修改项目名称或描述。系统标识不可修改。",
+      "archiveTitle": "归档项目",
+      "archiveDescription": "确认归档「{{name}}」？项目会从切换器隐藏（status=archived），历史数据仍然保留。",
+      "namePlaceholder": "例如：Q3 迁移",
+      "descriptionPlaceholder": "可选的简短描述"
+    },
+    "join": {
+      "title": "申请加入「{{name}}」",
+      "reasonPlaceholder": "说明你想加入的原因(选填,审批人会看到)",
+      "reasonTooLong": "申请理由不能超过 1000 字符",
+      "landing": {
+        "loading": "正在准备申请…",
+        "loginRequired": "登录后即可申请加入「{{name}}」",
+        "loginCta": "使用飞书登录",
+        "notFoundTitle": "找不到这个工作区",
+        "notFoundDescription": "工作区可能已删除,或它不接受公开申请。如需访问,请联系工作区管理员。",
+        "privateTitle": "该工作区不接受公开申请",
+        "privateDescription": "请联系工作区管理员加入。",
+        "alreadyMember": "你已经是该工作区的成员,正在跳转…",
+        "pendingTitle": "申请已提交,等待管理员审批",
+        "pendingDescription": "审批通过后会自动加入该工作区。",
+        "withdrawAction": "撤回申请",
+        "successTitle": "申请已发送",
+        "successDescription": "管理员审批后会通知你,你也可以稍后在此页面查看状态。",
+        "backToHome": "返回首页"
+      }
+    }
+  },
+  "login": {
+    "title": "Parsar",
+    "subtitle": "团队 Agent 协作控制台",
+    "feishuButton": "使用飞书登录",
+    "firstLoginNote": "首次登录会自动创建账号",
+    "terms": "登录即表示同意《使用条款》",
+    "loading": "登录态加载中..."
+  },
+  "onboarding": {
+    "title": "创建你的第一个工作区",
+    "subtitle": "工作区是团队协作处理项目和 Agent 的共享空间。你将自动成为它的 Owner。",
+    "fields": {
+      "name": "工作区名称",
+      "namePlaceholder": "例如：平台团队"
+    },
+    "actions": {
+      "create": "创建工作区"
+    }
+  },
+  "userMenu": {
+    "myCredentials": "我的凭据",
+    "signOut": "退出登录"
+  },
+  "stub": {
+    "title": "页面建设中",
+    "back": "返回上一页"
+  },
+  "nav": {
+    "collaborationGroup": "协作现场",
+    "agentManagementGroup": "Agent 管理",
+    "ingressGroup": "入口与执行",
+    "assetsGroup": "沉淀资产",
+    "governanceGroup": "治理与安全",
+    "items": {
+      "approvals": "收件箱 / 审批",
+      "conversations": "对话",
+      "runs": "运行",
+      "artifacts": "产物",
+      "agents": "Agent",
+      "connections": "连接",
+      "capabilities": "能力",
+      "models": "模型",
+      "connectors": "连接器",
+      "runtime": "运行环境",
+      "specs": "Spec",
+      "memory": "记忆",
+      "updates": "进展",
+      "members": "成员与用户组",
+      "secrets": "凭据",
+      "usage": "用量",
+      "audit": "审计日志",
+      "settings": "设置"
+    },
+    "p1Hint": "P1"
+  },
+  "notFound": {
+    "title": "页面不存在",
+    "empty": {
+      "title": "找不到这个页面",
+      "description": "你访问的页面已被合并或下线。",
+      "cta": "前往 Agent"
+    }
+  },
+  "workspace": {
+    "mockBadge": "未选择",
+    "mockTooltip": "请先选择 Workspace"
+  },
+  "relativeTime": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前"
+  },
+  "scopeRequired": {
+    "workspace": {
+      "title": "选择 Workspace 查看{{resource}}",
+      "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。"
+    },
+    "project": {
+      "noWorkspaceTitle": "先选择 Workspace",
+      "noWorkspaceDescription": "这些数据按 Project 展示。请先在顶部选择 Workspace，再选择 Project。",
+      "loadingTitle": "正在读取 Project",
+      "loadingDescription": "读取当前 Workspace 下的 Project 后，就能切换到对应数据范围。",
+      "noProjectsTitle": "当前 Workspace 还没有可用 Project",
+      "selectTitle": "选择 Project 查看{{resource}}",
+      "selectDescription": "Project 是当前页面的数据范围。选择后侧边栏保持不变，页面会切换到对应范围。"
+    }
+  }
+}

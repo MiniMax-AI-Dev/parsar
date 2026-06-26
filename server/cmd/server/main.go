@@ -1,0 +1,1570 @@
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
+	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
+	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/api"
+	runtimeapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/runtime"
+	specmemapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/specmem"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
+	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
+	connagentdaemon "github.com/MiniMax-AI-Dev/parsar/server/internal/connector/agentdaemon"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/dev"
+	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishuinbound"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishuoutbound"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
+	runtimesweeper "github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/sweeper"
+	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/specmemory"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+)
+
+const feishuStartupFatalMessage = "PARSAR_FEISHU_APP_ID/APP_SECRET/REDIRECT_URI and PARSAR_FEISHU_VERIFICATION_TOKEN required when not in mock mode; export PARSAR_FEISHU_MOCK=true for local dev"
+
+type feishuStartupMode string
+
+const (
+	feishuStartupModeDev  feishuStartupMode = "dev"
+	feishuStartupModeProd feishuStartupMode = "prod"
+)
+
+type feishuStartupDecision struct {
+	Mode                feishuStartupMode
+	RegisterHandlers    bool
+	CookieSecureWarning bool
+	FatalMessage        string
+}
+
+func main() {
+	// Install the logger before any other subsystem boots so the
+	// config-load error path below flows through the JSON handler.
+	log.Init(log.ConfigFromEnv())
+
+	// PARSAR_CONFIG_FILE must be absolute or start with ~/ — the
+	// config package does NOT touch CWD.
+	loadResult, cfgErr := config.LoadFromOS()
+	if cfgErr != nil {
+		log.Bg().Error("parsar config invalid", "error", cfgErr)
+		os.Exit(1)
+	}
+	cfg := loadResult.Config
+	log.Bg().Info("parsar config loaded",
+		"source", loadResult.Source,
+		"file", loadResult.FilePath,
+		"profile", cfg.Profile(),
+		"addr", cfg.Server.Addr,
+		"data_dir", cfg.Server.DataDir,
+		"dev_auth_enabled", cfg.Auth.DevAuth,
+		"cookie_secure", cfg.Auth.Cookie.Secure,
+		"sandbox_runner", cfg.Sandbox.Runner,
+		"platform_admin_count", len(cfg.Auth.PlatformAdminUserIDs),
+	)
+
+	auth.SetPlatformAdminIDs(cfg.Auth.PlatformAdminUserIDs)
+
+	// envLookup returns YAML+env merged values for keys the config
+	// models, and falls through to os.Getenv for keys not folded into
+	// typed config (e.g. PARSAR_E2B_*).
+	envLookup := cfg.AsEnvLookup(os.Getenv)
+	addr := cfg.Server.Addr
+
+	// Dev convenience: when PARSAR_MASTER_KEY isn't set, fall back to
+	// a stable dev-only constant that the admin web UI also hardcodes
+	// (apps/web/src/lib/api-models.ts DEV_MASTER_KEY). Gated on
+	// Profile()==ProfileDev — production fails Validate() upstream.
+	const devMasterKeyDefault = "parsar-dev-master-key-2026"
+	if cfg.Secret.MasterKey == "" {
+		if cfg.Profile() == config.ProfileDev {
+			cfg.Secret.MasterKey = devMasterKeyDefault
+			if err := os.Setenv(config.EnvMasterKey, devMasterKeyDefault); err != nil {
+				log.Bg().Warn("failed to seed dev PARSAR_MASTER_KEY default; secrets will not work",
+					"error", err)
+			} else {
+				// Rebuild envLookup so downstream sub-packages see the
+				// dev master key through the merged closure.
+				envLookup = cfg.AsEnvLookup(os.Getenv)
+				log.Bg().Warn("PARSAR_MASTER_KEY not set — using dev default; do NOT use this default in production",
+					"length", len(devMasterKeyDefault))
+			}
+		}
+	}
+
+	// Mirror the master-key fallback for the OTLP receiver Bearer
+	// signing key: production failed Validate() upstream when
+	// audit.otlp.enabled=true and the key was blank, so this
+	// substitution can only fire in dev.
+	const devOTLPSigningKeyDefault = "parsar-dev-otlp-signing-key-2026" // #nosec G101
+	if cfg.Audit.OTLP.SigningKey == "" && cfg.Profile() == config.ProfileDev {
+		cfg.Audit.OTLP.SigningKey = devOTLPSigningKeyDefault
+		if err := os.Setenv(config.EnvAuditOTLPSigningKey, devOTLPSigningKeyDefault); err != nil {
+			log.Bg().Warn("failed to seed dev PARSAR_AUDIT_OTLP_SIGNING_KEY default; OTLP receiver will fail to start",
+				"error", err)
+		} else {
+			envLookup = cfg.AsEnvLookup(os.Getenv)
+			log.Bg().Warn("PARSAR_AUDIT_OTLP_SIGNING_KEY not set — using dev default; do NOT use this default in production",
+				"length", len(devOTLPSigningKeyDefault))
+		}
+	}
+
+	if cfg.Gateway.Feishu.RedirectURI == "" {
+		cfg.Gateway.Feishu.RedirectURI = cfg.BuildPublicURL("/api/v1/auth/feishu/callback")
+		envLookup = cfg.AsEnvLookup(os.Getenv)
+	}
+	if strings.TrimSpace(envLookup(authgithub.EnvRedirectURI)) == "" && strings.TrimSpace(envLookup(authgithub.EnvClientID)) != "" {
+		if err := os.Setenv(authgithub.EnvRedirectURI, cfg.BuildPublicURL("/api/v1/connections/github/callback")); err != nil {
+			log.Bg().Warn("failed to seed GitHub OAuth redirect URI", "error", err)
+		} else {
+			envLookup = cfg.AsEnvLookup(os.Getenv)
+		}
+	}
+
+	// Validate Feishu deployment mode before DB wiring so a
+	// misconfigured production process cannot come up with missing
+	// login/event routes.
+	feishuDecision := decideFeishuStartup(envLookup)
+	if feishuDecision.FatalMessage != "" {
+		log.Bg().Error(feishuDecision.FatalMessage)
+		os.Exit(1)
+	}
+	if feishuDecision.Mode == feishuStartupModeDev {
+		log.Bg().Warn("DEV MODE: PARSAR_FEISHU_MOCK=true — using mock Feishu auth and skipping webhook verification")
+	} else {
+		log.Bg().Info("feishu prod mode: real Feishu auth/event configuration present")
+		if feishuDecision.CookieSecureWarning {
+			log.Bg().Warn("running prod auth on HTTP — cookies will leak")
+		}
+	}
+
+	pool := openPool(cfg.Database.URL)
+	dbStore, auditIngester := buildStore(pool, cfg.Audit.OTLP.FanoutEndpoint)
+
+	// Object storage client — backs capability-plugin upload + dispatch.
+	// Nil when the operator did not configure OSS env vars; downstream
+	// consumers tolerate nil and 503 / log-warn rather than failing boot.
+	var ossClient *oss.Client
+	if ossCfg := cfg.Storage.OSS; ossCfg.Bucket != "" {
+		built, err := oss.New(oss.Config{
+			Region:          ossCfg.Region,
+			Endpoint:        ossCfg.Endpoint,
+			Bucket:          ossCfg.Bucket,
+			AccessKeyID:     ossCfg.AccessKeyID,
+			AccessKeySecret: ossCfg.AccessKeySecret,
+			BaseURL:         ossCfg.BaseURL,
+		})
+		if err != nil {
+			log.Bg().Warn("OSS client construction failed; plugin capability will be unavailable", "error", err)
+		} else {
+			ossClient = built
+			log.Bg().Info("OSS client initialized", "region", ossCfg.Region, "bucket", ossCfg.Bucket)
+		}
+	} else {
+		log.Bg().Info("OSS not configured (storage.oss.bucket empty); plugin capability disabled")
+	}
+
+	// Spec/memory service: reused by connectors and HTTP routes so
+	// admin writes and runtime writes land on the same audit ingester.
+	// Nil dbStore → connectors treat nil SpecMemory as "injection disabled".
+	var specmemSvc *specmemory.Service
+	if dbStore != nil {
+		specmemSvc = specmemory.NewService(dbStore, auditIngester, specmemory.Options{
+			Logger: log.Bg(),
+		})
+	}
+
+	r := chi.NewRouter()
+	// Trace middleware first so every downstream handler emits log
+	// lines tagged with a stable trace_id.
+	r.Use(log.HTTPMiddleware)
+	// Wrap pool in a local var so the Pinger interface ends up nil
+	// when pool is nil — assigning a typed-nil *pgxpool.Pool would
+	// otherwise produce a non-nil interface holding a nil pointer and
+	// crash /readyz on every poll.
+	var dbPinger api.Pinger
+	if pool != nil {
+		dbPinger = pool
+	}
+	api.RegisterHealthRoutes(r, api.HealthDeps{DB: dbPinger})
+	api.RegisterParsarDaemonInstallRoute(r, api.ParsarDaemonInstallConfig{
+		Repo: strings.TrimSpace(os.Getenv("PARSAR_DAEMON_REPO")),
+	})
+
+	// Bootstrap (first-owner provisioning) mounts OUTSIDE the auth
+	// middleware because no user exists yet to log in. Token-gated
+	// via PARSAR_BOOTSTRAP_TOKEN; empty = HTTP endpoint OFF
+	// (fall back to cmd/parsar-bootstrap CLI). Status route is
+	// always exposed — it only leaks boolean state.
+	if dbStore != nil {
+		bootstrapSvc := bootstrap.NewService(dbStore, cfg.Auth.Bootstrap.Token)
+		bootstrap.RegisterRoutes(r, bootstrapSvc, func() bool { return cfg.Auth.DevAuth })
+		log.Bg().Info("bootstrap endpoint mode",
+			"http_enabled", cfg.Auth.Bootstrap.Token != "",
+			"dev_auth", cfg.Auth.DevAuth,
+		)
+	}
+
+	// Hoist these so downstream route registration can see them; nil
+	// means agent_daemon gateway is not exposed.
+	var agentDaemonHandler *agentdaemongateway.Handler
+	var runtimeStatusProber dev.SandboxLivenessProber
+	managedSandboxProviderWired := false
+	// serverRootCtx is forward-declared so we can pass it to
+	// dev.WithDispatchContext before the dev router is built.
+	serverRootCtx, serverRootStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// Shared runstream broker: the dev router publishes events into it
+	// from dispatchConversationRun; SSE /stream subscribers drain it.
+	// A freshly-created agent_daemon run auto-started by the store
+	// must publish into the same broker the UI /stream is subscribing
+	// to, otherwise events land in a per-call broker and the UI hangs.
+	runStreamBroker := runstream.NewBroker(runstream.DefaultBufferSize)
+	opts := []dev.RouterOption{
+		dev.WithDispatchContext(serverRootCtx),
+		dev.WithRunStreamBroker(runStreamBroker),
+	}
+	if regClient, err := gatewaypkg.NewFeishuAppRegistrationClient(gatewaypkg.FeishuAppRegistrationClientOptions{
+		AccountsBaseURL: strings.TrimSpace(envLookup(feishu.EnvAuthorizeBase)),
+		OpenBaseURL:     strings.TrimSpace(envLookup(feishu.EnvAPIBase)),
+	}); err != nil {
+		log.Bg().Warn("feishu app-registration client not registered", "error", err)
+	} else {
+		opts = append(opts, dev.WithFeishuAppRegistration(regClient, strings.TrimSpace(envLookup(feishu.EnvAPIBase))))
+		log.Bg().Info("feishu app-registration provisioning registered")
+	}
+	if feishuDecision.RegisterHandlers {
+		opts = append(opts, dev.WithFeishuWebhookSecurity(
+			feishuDecision.Mode == feishuStartupModeDev,
+			strings.TrimSpace(envLookup(feishu.EnvVerificationToken)),
+			strings.TrimSpace(envLookup(feishu.EnvEncryptKey)),
+		))
+	}
+	// connectorReg is hoisted so the Feishu inbound + outbound builders
+	// below can wrap the agent_daemon AgentConnector as a
+	// PermissionRouter. Stays empty when dbStore is nil.
+	connectorReg := connector.NewRegistry()
+	if dbStore != nil {
+		// Shared connector registry: every AgentConnector registers
+		// under its Type() so dev router / permission decide / run
+		// cancel can dispatch via lookup rather than a hard-coded switch.
+		opts = append(opts, dev.WithConnectorRegistry(connectorReg))
+
+		// SweepOrphanedSandboxBindings is intentionally kept in the
+		// store layer for a future heartbeat-driven reaper to reuse.
+		// The startup sweep was written for the legacy Acquire flow
+		// whose envd token lived only in the previous process; under
+		// agent_daemon the sandbox outlives the server process and the
+		// daemon reconnects via persisted runner_credential.
+
+		// PublicWSURL derives from cfg.Server.PublicURL by swapping the
+		// scheme (http→ws, https→wss). Dev falls back to 127.0.0.1:18080;
+		// prod boots without public_url fail config validate.go.
+		agentDaemonBinder := agentdaemonbinding.NewPgBinder(pool, func(format string, args ...any) {
+			log.Bg().Warn("agentdaemon binder", "msg", fmt.Sprintf(format, args...))
+		})
+		agentDaemonRegistry := agentdaemongateway.NewRegistry()
+		agentDaemonAuth := agentdaemongateway.NewAuthenticator(dbStore)
+		publicWSURL := buildAgentDaemonWSURL(cfg)
+		agentDaemonPodID := resolveAgentDaemonOwnerPodID(envLookup)
+		agentDaemonOwnerURL, err := resolveAgentDaemonOwnerURL(envLookup, cfg)
+		if err != nil {
+			log.Bg().Error("agent_daemon owner URL not resolvable; aborting startup", "error", err.Error())
+			os.Exit(1)
+		}
+		agentDaemonInternalToken := resolveAgentDaemonInternalToken(envLookup, cfg.Secret.MasterKey)
+		agentDaemonHandler = agentdaemongateway.NewHandler(agentdaemongateway.HandlerConfig{
+			Authenticator: agentDaemonAuth,
+			Registry:      agentDaemonRegistry,
+			Heartbeat:     dbStore,
+			PublicWSURL:   publicWSURL,
+			OwnerStore:    dbStore,
+			OwnerPodID:    agentDaemonPodID,
+			OwnerURL:      agentDaemonOwnerURL,
+			Log: func(format string, args ...any) {
+				log.Bg().Info("agentdaemon gateway", "msg", fmt.Sprintf(format, args...))
+			},
+		})
+		agentDaemonSandbox := buildAgentDaemonSandboxProvider(envLookup, cfg, dbStore, agentDaemonRegistry, agentDaemonBinder, agentDaemonPodID)
+		agentDaemonRemote := connagentdaemon.HTTPRemoteStreamer{Token: agentDaemonInternalToken}
+		agentDaemonCfg := connagentdaemon.Config{
+			Registry:          agentDaemonRegistry,
+			Binder:            agentDaemonBinder,
+			Sandbox:           agentDaemonSandbox,
+			OwnerResolver:     dbStore,
+			OwnerPodID:        agentDaemonPodID,
+			Remote:            agentDaemonRemote,
+			RemoteSubmit:      agentDaemonRemote,
+			SubmitSlots:       dbStore,
+			ModelResolver:     dbStore,
+			ExecutionRecorder: dbStore,
+			RunStatusReader:   dbStore,
+			Capabilities:      dbStore,
+			MasterKey:         cfg.Secret.MasterKey,
+			// Spec/memory SessionStart injection. override_system_prompt
+			// still wins; nil is a no-op.
+			SpecMemory: specmemSvc,
+			// Soft-degrade nudges: without this the Feishu outbound
+			// driver receives no notice when an MCP is soft-degraded
+			// and the credential-form recovery loop never fires.
+			SystemMessages: dbStore,
+			// Sandbox binding reader lets the connector turn the
+			// generic "Agent 未绑定 Runtime" hint into a precise
+			// spawning / failed / never-attempted message.
+			SandboxBindingReader: dbStore,
+			Log:                  log.Bg(),
+		}
+		// Only assign OSS when ossClient is a real, non-nil pointer —
+		// assigning a typed-nil interface field would silently defeat
+		// the `c.oss == nil` skip check in resolvePluginCapability /
+		// resolveSkillCapability.
+		if ossClient != nil {
+			agentDaemonCfg.OSS = ossClient
+		}
+		agentDaemonConn := connagentdaemon.New(agentDaemonCfg)
+		connagentdaemon.RegisterInternalRoutes(r, agentDaemonConn, agentDaemonInternalToken)
+		if regErr := connectorReg.Register(agentDaemonConn); regErr != nil {
+			log.Bg().Warn("agent_daemon connector registry registration failed; agent_daemon dispatch will 503",
+				"error", regErr,
+				"type", agentDaemonConn.Type())
+		} else {
+			log.Bg().Info("agent_daemon AgentConnector registered",
+				"type", agentDaemonConn.Type(),
+				"capabilities", agentDaemonConn.Capabilities().String(),
+				"ws_url", publicWSURL,
+			)
+		}
+
+		// Wire the agent_daemon sandbox provider into the dev router
+		// so createAgent can eager-acquire and the /sandbox/acquire
+		// endpoint works. nil provider is safe — both paths degrade
+		// to lazy-create or 503 respectively.
+		if agentDaemonSandbox != nil {
+			managedSandboxProviderWired = true
+			runtimeStatusProber = configuredSandboxProber{}
+			opts = append(opts, dev.WithAgentDaemonSandbox(agentDaemonSandbox))
+			opts = append(opts, dev.WithSandboxLifecycle(dbStore, agentDaemonSandbox))
+
+			// Reap ticker: evict idle agent_daemon sandboxes so they
+			// don't leak E2B resources. 5-minute interval mirrors the
+			// opencode idle sweeper cadence.
+			go func() {
+				ticker := time.NewTicker(5 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-serverRootCtx.Done():
+						return
+					case <-ticker.C:
+						reapCtx, reapCancel := context.WithTimeout(context.Background(), 30*time.Second)
+						if n, reapErr := agentDaemonSandbox.Reap(reapCtx); reapErr != nil {
+							log.Bg().Warn("agent_daemon sandbox reap failed", "err", reapErr)
+						} else if n > 0 {
+							log.Bg().Info("agent_daemon sandbox reap", "evicted", n)
+						}
+						reapCancel()
+					}
+				}
+			}()
+		}
+
+		// Abandoned credential-form slot sweep (1h TTL). The slot lives
+		// inside conversations.metadata.gateway_inflight rather than a
+		// side table; sweep removes the expired subkey. Errors are
+		// logged + swallowed — best-effort, a missed cycle clears at
+		// the next pass.
+		if dbStore != nil {
+			go func() {
+				ticker := time.NewTicker(10 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-serverRootCtx.Done():
+						return
+					case <-ticker.C:
+						sweepCtx, sweepCancel := context.WithTimeout(context.Background(), 15*time.Second)
+						if n, err := dbStore.SweepExpiredPendingCredentialFormSlots(sweepCtx, time.Now().UTC()); err != nil {
+							log.Bg().Warn("feishu credential form sweep failed", "err", err)
+						} else if n > 0 {
+							log.Bg().Info("feishu credential form sweep", "cleared", n)
+						}
+						if stale, err := dbStore.CountStalePendingCredentialFormSlots(sweepCtx, time.Now().UTC().Add(-time.Hour)); err != nil {
+							log.Bg().Warn("feishu credential form stale count failed", "err", err)
+						} else if stale > 0 {
+							// Non-zero past now-1h means the 10-min
+							// sweep is not keeping up. Log at WARN
+							// for operator visibility.
+							log.Bg().Warn("feishu credential form stale slots present",
+								"stale_count", stale,
+								"hint", "sweep cron may be stalled or running behind",
+							)
+						}
+						sweepCancel()
+					}
+				}
+			}()
+		}
+
+		// Streaming-dispatch hook: auto-start agent_daemon AgentRuns
+		// the moment SendUserMessageToConversation /
+		// CreateInboundIMMessage / agent-to-agent commit. Without
+		// this, a freshly created agent_daemon run sits at
+		// status=queued forever. The adapter shares runStreamBroker
+		// + connectorReg with the dev router so events from the
+		// auto-started goroutine reach the same /stream subscribers.
+		dbStore.SetStreamingDispatcher(streamingDispatcherAdapter{
+			runtimeStore: dbStore,
+			deps: dev.StreamingDispatchDeps{
+				Broker:            runStreamBroker,
+				ConnectorRegistry: connectorReg,
+				DispatchCtx:       serverRootCtx,
+			},
+			failRun: func(ctx context.Context, runID, source, reason string) {
+				if err := dbStore.FailAgentRun(ctx, store.FailAgentRunInput{RunID: runID, Source: source, Reason: reason}); err != nil {
+					log.Bg().Error("streaming dispatcher: FailAgentRun after auto-start failure also failed",
+						"run_id", runID, "source", source, "error", err)
+				}
+			},
+		})
+		log.Bg().Info("streaming dispatch hook wired")
+	}
+
+	// Runtime status banner: ConfiguredByOps marks "operator set
+	// PARSAR_OPENCODE_RUNNER explicitly" and is retained only for
+	// the legacy admin badge query; it no longer drives runtime
+	// selection.
+	runtimeProfile := resolveRuntimeProfile(envLookup, managedSandboxProviderWired)
+	runtimeStatusDeps := dev.RuntimeStatusDeps{
+		SettingsStore:   dbStore,
+		SandboxProber:   runtimeStatusProber,
+		Profile:         runtimeProfile,
+		ConfiguredByOps: strings.TrimSpace(envLookup("PARSAR_OPENCODE_RUNNER")) != "",
+	}
+	log.Bg().Info("runtime status profile configured",
+		"profile", runtimeProfile,
+		"managed_sandbox_provider", managedSandboxProviderWired)
+	opts = append(opts, dev.WithRuntimeStatus(runtimeStatusDeps))
+	if ossClient != nil {
+		opts = append(opts, dev.WithOSSClient(ossClient))
+	}
+
+	// Wire the audit ingester for dev handlers that emit directly.
+	// Nil-safe: nil store treats it as "audit not wired" (best-effort).
+	if auditIngester != nil {
+		opts = append(opts, dev.WithAuditIngester(auditIngester))
+	}
+
+	// Session middleware so protected /dev/* routes require a resolved
+	// user from the HttpOnly cookie. The explicit dev header shim is
+	// available only when PARSAR_DEV_AUTH=true.
+	if pool != nil && dbStore != nil {
+		sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
+		// Wire auth middleware with the merged Config view of dev_auth
+		// (YAML + env). Without .WithDevAuth, NewMiddleware reads
+		// PARSAR_DEV_AUTH from os.Getenv directly, so an operator
+		// who sets `auth.dev_auth: true` only in YAML would see
+		// Profile()==dev but the dev shim would silently stay disabled.
+		opts = append(opts, dev.WithAuthMiddleware(
+			auth.NewMiddleware(sessionStore).WithDevAuth(cfg.Auth.DevAuth),
+		))
+		log.Bg().Info("auth middleware mode",
+			"dev_auth_enabled", cfg.Auth.DevAuth,
+		)
+
+		githubClient, githubErr := authgithub.NewClientFromEnv(envLookup)
+		if githubErr != nil {
+			log.Bg().Info("github OAuth connection not configured", "error", githubErr)
+		}
+		githubRedirect := strings.TrimSpace(cfg.Gateway.Feishu.LoginRedirectURL)
+		opts = append(opts, dev.WithGitHubConnectionHandlers(dev.GitHubConnectionDeps{
+			Client:       githubClient,
+			RedirectURL:  githubRedirect,
+			CookieSecure: cfg.Auth.Cookie.Secure,
+		}))
+
+		if feishuDecision.RegisterHandlers {
+			feishuClient, err := feishu.NewClientFromEnv(envLookup)
+			if err != nil {
+				log.Bg().Warn("feishu OIDC client not registered", "error", err)
+			} else {
+				// CookieSecure driven by Config.Auth.Cookie.Secure; we
+				// do not sniff request scheme because proxies lie.
+				cookieSecure := cfg.Auth.Cookie.Secure
+				// loginRedirect: default "/" for prod / single-origin
+				// where the server serves the SPA; `make dev` points
+				// at the Vite origin (e.g. http://127.0.0.1:5173/).
+				loginRedirect := strings.TrimSpace(cfg.Gateway.Feishu.LoginRedirectURL)
+				opts = append(opts, dev.WithOAuthHandlers(dev.OAuthHandlerDeps{
+					Feishu:           feishuClient,
+					Sessions:         sessionStore,
+					Store:            dbStore,
+					CookieSecure:     cookieSecure,
+					LoginRedirectURL: loginRedirect,
+				}))
+				log.Bg().Info("feishu OIDC handlers registered",
+					"mode", feishuDecision.Mode, "mock", feishuClient.IsMock(), "cookie_secure", cookieSecure,
+					"login_redirect", loginRedirect)
+			}
+		}
+	}
+
+	var runtimeStore dev.RuntimeStore
+	if dbStore != nil {
+		runtimeStore = dbStore
+	}
+	// Wire the visibility=workspace rejection card's "申请加入" URL
+	// builder. Only when PublicURL is configured — nil builder leaves
+	// the rejection card link-free (falls back to "请联系上述管理员加入").
+	if strings.TrimSpace(cfg.Server.PublicURL) != "" {
+		opts = append(opts, dev.WithFeishuJoinURLBuilder(func(workspaceID string) string {
+			return cfg.BuildPublicURL("/join-workspace?id=" + workspaceID + "&from=feishu")
+		}))
+	}
+	dev.RegisterRoutesWithStore(r, runtimeStore, opts...)
+
+	// Runtime lifecycle API: admin tree behind session middleware,
+	// runtime credential tree open at chi with Bearer auth enforced
+	// inside the package. Wired AFTER dev.RegisterRoutesWithStore so
+	// chi's NotFound fallback still fires last.
+	if pool != nil && dbStore != nil {
+		runtimeDeps := runtimeapi.Deps{Store: dbStore}
+		sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
+		authMw := auth.NewMiddleware(sessionStore).WithDevAuth(cfg.Auth.DevAuth)
+		r.Group(func(r chi.Router) {
+			r.Use(authMw.Require)
+			runtimeapi.RegisterAdminRoutes(r, runtimeDeps)
+		})
+		runtimeapi.RegisterRunnerRoutes(r, runtimeDeps)
+		log.Bg().Info("runtime lifecycle API mounted",
+			"admin_paths", "/api/v1/workspaces/{wid}/runtimes",
+			"runtime_paths", "/api/v1/runtimes/pair, /api/v1/runtimes/{id}/heartbeat")
+
+		// Spec/memory: admin tree behind session middleware (cookie auth);
+		// runtime tree behind RunnerCredential so the in-sandbox parsar CLI's
+		// Bearer maps to a RuntimeIdentity in ctx. Both trees share the
+		// *specmemory.Service so audit events land on the same ingester.
+		specmemDeps := specmemapi.Deps{
+			Service:    specmemSvc,
+			Membership: dbStore,
+			Logger:     log.Bg(),
+		}
+		r.Group(func(r chi.Router) {
+			r.Use(authMw.Require)
+			specmemapi.RegisterAdminRoutes(r, specmemDeps)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RunnerCredential(dbStore, auth.RunnerCredentialOptions{
+				Logger: log.Bg(),
+			}))
+			specmemapi.RegisterRuntimeRoutes(r, specmemDeps)
+		})
+		log.Bg().Info("spec/memory API mounted",
+			"admin_paths", "/api/v1/workspaces/{wid}/spec/..., /api/v1/memories",
+			"runtime_paths", "/api/v1/agent-runtime/...")
+
+		// agent_daemon WS / bootstrap routes. Nil handler when connector
+		// wiring above failed; skipping the mount keeps an otherwise-
+		// healthy server from advertising an endpoint that would panic.
+		if agentDaemonHandler != nil {
+			agentdaemongateway.RegisterRoutes(r, agentDaemonHandler)
+			log.Bg().Info("agent_daemon gateway mounted",
+				"ws_path", "/agent-daemon/ws",
+				"bootstrap_path", "/agent-daemon/bootstrap",
+				"status_path", "/agent-daemon/device-status")
+		}
+	}
+
+	// Mount SPA static-asset handler AFTER every API route so chi's
+	// NotFound only fires for paths the API does not own. No-op when
+	// PARSAR_WEB_DIST is unset (the `make dev` profile) or when the
+	// directory is missing/lacks index.html. The production image
+	// bakes the Vite build at /app/web/dist.
+	webDir := strings.TrimSpace(envLookup("PARSAR_WEB_DIST"))
+	mounted := api.MountStaticAssets(r, api.StaticAssetsOptions{
+		Dir: webDir,
+		Logger: func(format string, args ...any) {
+			log.Bg().Warn(fmt.Sprintf(format, args...),
+				"subsystem", "static_assets")
+		},
+	})
+	if mounted {
+		log.Bg().Info("SPA static assets mounted",
+			"dir", webDir)
+	} else if webDir != "" {
+		// Operator set PARSAR_WEB_DIST but mount failed (warning
+		// already emitted above). This INFO confirms the dev path
+		// is active so operators can tell apart "intentional dev"
+		// from "broken prod config".
+		log.Bg().Info("SPA static assets NOT mounted (see warning above)")
+	}
+
+	// Drain the audit ingester and OpenCode LocalPool / opencode
+	// subprocesses on SIGINT/SIGTERM so children don't reparent to
+	// init and audit events still in buffer get flushed before exit.
+	// K8s callers must size terminationGracePeriodSeconds accordingly.
+	ctx, stop := serverRootCtx, serverRootStop
+	defer stop()
+
+	if auditIngester != nil {
+		auditIngester.Start(ctx)
+	}
+
+	// Optional embedded OTLP/HTTP receiver so sandbox sidecars / OTel-
+	// SDK producers can ship tool-lifecycle events into the same
+	// audit_records pipeline. Disabled by default; opt-in via
+	// PARSAR_AUDIT_OTLP_ENABLED.
+	var otlpReceiver *otlp.Receiver
+	if auditIngester != nil && cfg.Audit.OTLP.Enabled {
+		signer, err := otlp.NewSigner(cfg.Audit.OTLP.SigningKey, otlp.SignerOptions{})
+		if err != nil {
+			log.Bg().Error("otlp signer init failed; receiver cannot start without a signing key",
+				"error", err)
+			os.Exit(1)
+		}
+		rec, err := otlp.NewReceiver(otlp.Config{
+			Addr:     cfg.Audit.OTLP.Addr,
+			Ingester: auditIngester,
+			Signer:   signer,
+		})
+		if err != nil {
+			log.Bg().Error("otlp receiver init failed", "error", err)
+			os.Exit(1)
+		}
+		if err := rec.Start(ctx); err != nil {
+			log.Bg().Error("otlp receiver bind failed",
+				"addr", cfg.Audit.OTLP.Addr, "error", err)
+			os.Exit(1)
+		}
+		otlpReceiver = rec
+		log.Bg().Info("audit otlp receiver enabled", "addr", rec.Addr())
+	}
+
+	// Runtime heartbeat sweeper: demote runtimes whose heartbeat has
+	// gone stale. Prevents Agent Daemon devices from staying online
+	// forever after a laptop sleep, process crash, or broken network.
+	if dbStore != nil {
+		if sw := buildRuntimeHeartbeatSweeper(envLookup, dbStore); sw != nil {
+			go func() {
+				if err := sw.Run(ctx); err != nil {
+					log.Bg().Error("runtime heartbeat sweeper exited with error", "error", err)
+				}
+			}()
+		}
+	}
+
+	// OSS lazy mode (PARSAR_FEISHU_OSS_SHARE_OAUTH_APP=true): collapses
+	// OAuth platform App and Feishu Bot onto a single App ID — only safe
+	// with ≤ 1 active Feishu-bot Agent. Refuse to start if more exist.
+	if dbStore != nil && truthy(os.Getenv("PARSAR_FEISHU_OSS_SHARE_OAUTH_APP")) {
+		if n, err := dbStore.CountActiveFeishuBotAgents(ctx); err != nil {
+			log.Bg().Error("OSS lazy mode: count feishu bot agents failed", "error", err)
+			os.Exit(1)
+		} else if n > 1 {
+			log.Bg().Error("OSS lazy mode (PARSAR_FEISHU_OSS_SHARE_OAUTH_APP=true) is incompatible with the current data — more than one active Agent has a Feishu Bot enabled, but the lazy mode collapses OAuth + Bot onto a single App ID and supports at most one Bot Agent. Either disable the env flag and run separate Bot apps per Agent, or disable all but one Agent's Feishu connector.",
+				"active_bot_agents", n)
+			os.Exit(1)
+		} else {
+			log.Bg().Warn("OSS lazy mode enabled — OAuth platform App and Feishu Bot share App ID. Only safe with ≤ 1 active Bot Agent.",
+				"active_bot_agents", n)
+		}
+	}
+
+	// Feishu Bot event-websocket inbound manager. Opt-in via
+	// PARSAR_FEISHU_WEBSOCKET=true. QR-provisioned Bots write
+	// event_mode=websocket and need this manager to turn Feishu
+	// events into Parsar gateway messages.
+	if dbStore != nil {
+		if manager, err := buildFeishuWebSocketManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("feishu websocket inbound manager init failed", "error", err)
+			os.Exit(1)
+		} else if manager != nil {
+			go func() {
+				if err := manager.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("feishu websocket inbound manager exited", "error", err)
+				}
+			}()
+		}
+	}
+
+	// Feishu outbound poll worker. Opt-in via PARSAR_FEISHU_OUTBOUND=true.
+	// Poll interval default 10s; override via
+	// PARSAR_FEISHU_OUTBOUND_POLL_SECONDS for load-shedding.
+	if dbStore != nil {
+		// Standalone binder for outbound's card-write path. Stamps the
+		// agent_daemon device id onto each inflight slot so the
+		// card-callback path (Phase 2 owner routing) can resolve the
+		// owning pod without re-walking the binding tree.
+		outboundBinder := agentdaemonbinding.NewPgBinder(pool, func(format string, args ...any) {
+			log.Bg().Warn("feishuoutbound binder", "msg", fmt.Sprintf(format, args...))
+		})
+		if worker, err := buildFeishuOutboundWorker(os.Getenv, dbStore, connectorReg, outboundBinder, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("feishu outbound worker init failed", "error", err)
+			os.Exit(1)
+		} else if worker != nil {
+			go func() {
+				if err := worker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("feishu outbound worker exited", "error", err)
+				}
+			}()
+		}
+	}
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Bg().Info("parsar server starting", "addr", addr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+			return
+		}
+		serverErr <- nil
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			log.Bg().Error("parsar server stopped", "error", err)
+			drainOTLPReceiver(otlpReceiver)
+			drainAudit(auditIngester)
+			os.Exit(1)
+		}
+	case <-ctx.Done():
+		log.Bg().Info("parsar server shutdown signal received")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Bg().Warn("http server shutdown error", "error", err)
+		}
+		// Drain order matters: HTTP server first (so in-flight
+		// requests finish their audit emits), OTLP receiver next
+		// (so in-flight POSTs reach the ingester buffer), audit
+		// ingester (flush buffer) last.
+		drainOTLPReceiver(otlpReceiver)
+		drainAudit(auditIngester)
+	}
+}
+
+func decideFeishuStartup(env func(string) string) feishuStartupDecision {
+	if env == nil {
+		env = os.Getenv
+	}
+	if feishu.IsMockEnabled(env) {
+		return feishuStartupDecision{Mode: feishuStartupModeDev, RegisterHandlers: true}
+	}
+	decision := feishuStartupDecision{
+		Mode:                feishuStartupModeProd,
+		RegisterHandlers:    true,
+		CookieSecureWarning: !strings.EqualFold(strings.TrimSpace(env("PARSAR_COOKIE_SECURE")), "true"),
+	}
+	if !feishu.IsConfigured(env) || !feishu.IsWebhookConfigured(env) {
+		decision.RegisterHandlers = false
+		decision.CookieSecureWarning = false
+		decision.FatalMessage = feishuStartupFatalMessage
+	}
+	return decision
+}
+
+func drainAudit(ing *audit.Ingester) {
+	if ing == nil {
+		return
+	}
+	drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := ing.Stop(drainCtx); err != nil {
+		stats := ing.Stats()
+		log.Bg().Warn("audit ingester drain incomplete",
+			"error", err,
+			"buffer_len_remaining", stats.BufferLen,
+			"dropped", stats.Dropped,
+			"sink_errors", stats.SinkErrors,
+		)
+	}
+}
+
+// drainOTLPReceiver shuts down the embedded OTLP/HTTP receiver. Must
+// be called BEFORE drainAudit so any OTLP request still in flight has
+// a chance to land its events on the ingester buffer before the
+// ingester closes. Nil-safe so the disabled-receiver path is a no-op.
+func drainOTLPReceiver(r *otlp.Receiver) {
+	if r == nil {
+		return
+	}
+	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.Shutdown(drainCtx); err != nil {
+		log.Bg().Warn("otlp receiver shutdown error", "error", err)
+	}
+}
+
+// runtimeHeartbeatSweeperStore is the tiny store surface needed by the
+// runtime liveness sweeper. Narrower than *store.Store so startup
+// config tests stay DB-free.
+type runtimeHeartbeatSweeperStore interface {
+	SweepStaleRuntimes(ctx context.Context, cutoff time.Time) (int64, error)
+}
+
+// buildRuntimeHeartbeatSweeper constructs the runtime heartbeat sweeper
+// from env. Defaults match agent_daemon: 15s heartbeat, 60s timeout.
+//
+// Env contract:
+//   - PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS (default 60; <= 0 disables)
+//   - PARSAR_RUNTIME_HEARTBEAT_SWEEP_INTERVAL_SECONDS (optional;
+//     default = stale / 4 floored at 15s)
+func buildRuntimeHeartbeatSweeper(
+	env func(string) string,
+	runtimeStore runtimeHeartbeatSweeperStore,
+) *runtimesweeper.Sweeper {
+	if runtimeStore == nil {
+		return nil
+	}
+	const defaultStaleSeconds = 60
+	staleSeconds := defaultStaleSeconds
+	if raw := strings.TrimSpace(env("PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			log.Bg().Warn("PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS invalid; runtime heartbeat sweep disabled",
+				"value", raw, "err", err.Error())
+			return nil
+		}
+		staleSeconds = n
+	}
+	if staleSeconds <= 0 {
+		log.Bg().Info("runtime heartbeat sweep disabled by PARSAR_RUNTIME_HEARTBEAT_STALE_SECONDS",
+			"value", staleSeconds)
+		return nil
+	}
+
+	intervalSeconds := 0
+	if raw := strings.TrimSpace(env("PARSAR_RUNTIME_HEARTBEAT_SWEEP_INTERVAL_SECONDS")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			log.Bg().Warn("PARSAR_RUNTIME_HEARTBEAT_SWEEP_INTERVAL_SECONDS invalid; falling back to derived interval",
+				"value", raw)
+		} else {
+			intervalSeconds = n
+		}
+	}
+	opts := runtimesweeper.Options{
+		StaleAfter: time.Duration(staleSeconds) * time.Second,
+	}
+	if intervalSeconds > 0 {
+		opts.Interval = time.Duration(intervalSeconds) * time.Second
+	}
+	sw, err := runtimesweeper.New(runtimeStore, opts)
+	if err != nil {
+		log.Bg().Error("runtime heartbeat sweeper construct failed", "error", err)
+		return nil
+	}
+	log.Bg().Info("runtime heartbeat sweeper configured", "sweeper", sw.String())
+	return sw
+}
+
+// buildAgentDaemonWSURL returns the wss://.../agent-daemon/ws URL the
+// daemon dials after bootstrap. Derives from cfg.Server.PublicURL by
+// swapping http→ws / https→wss; dev falls back to 127.0.0.1:18080.
+// Production boot without public_url aborts in config.validate.go.
+func buildAgentDaemonWSURL(cfg config.Config) string {
+	const path = "/agent-daemon/ws"
+	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
+	publicURL = strings.TrimRight(publicURL, "/")
+	if publicURL == "" {
+		return "ws://127.0.0.1:18080" + path
+	}
+	parsed, err := url.Parse(publicURL)
+	if err != nil || parsed.Host == "" {
+		// Best-effort dev fallback so a hand-rolled public_url doesn't
+		// crash gateway wiring; Validate would catch this in prod.
+		return "ws://" + publicURL + path
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+		parsed.Scheme = "wss"
+	default:
+		parsed.Scheme = "ws"
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + path
+	return parsed.String()
+}
+
+func resolveAgentDaemonOwnerPodID(env func(string) string) string {
+	if env == nil {
+		env = os.Getenv
+	}
+	for _, key := range []string{"PARSAR_AGENT_DAEMON_POD_ID", "POD_NAME", "HOSTNAME"} {
+		if value := strings.TrimSpace(env(key)); value != "" {
+			return value
+		}
+	}
+	if hostname, err := os.Hostname(); err == nil && strings.TrimSpace(hostname) != "" {
+		return strings.TrimSpace(hostname)
+	}
+	return "parsar-pod-unknown"
+}
+
+func resolveAgentDaemonOwnerURL(env func(string) string, cfg config.Config) (string, error) {
+	if env == nil {
+		env = os.Getenv
+	}
+	if value := strings.TrimRight(strings.TrimSpace(env("PARSAR_AGENT_DAEMON_OWNER_URL")), "/"); value != "" {
+		return value, nil
+	}
+	if podIP := strings.TrimSpace(env("POD_IP")); podIP != "" {
+		return "http://" + net.JoinHostPort(podIP, resolveListenPort(cfg.Server.Addr)), nil
+	}
+	// No fallback to cfg.Server.PublicURL or 127.0.0.1: both are unsafe
+	// in multi-replica deployments. PublicURL points at the ingress,
+	// which load-balances stream-prompt forwards across replicas and
+	// trips `stale_owner` checks; 127.0.0.1 only works when the owner
+	// pod and the forwarding pod are the same process.
+	return "", fmt.Errorf("agent_daemon owner URL not resolvable: set POD_IP (downward API: status.podIP) or PARSAR_AGENT_DAEMON_OWNER_URL")
+}
+
+func resolveListenPort(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return "8080"
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err == nil && strings.TrimSpace(port) != "" {
+		return strings.TrimSpace(port)
+	}
+	if strings.HasPrefix(addr, ":") && strings.TrimSpace(strings.TrimPrefix(addr, ":")) != "" {
+		return strings.TrimSpace(strings.TrimPrefix(addr, ":"))
+	}
+	lastColon := strings.LastIndex(addr, ":")
+	if lastColon >= 0 && lastColon < len(addr)-1 {
+		candidate := strings.TrimSpace(addr[lastColon+1:])
+		if candidate != "" && !strings.Contains(candidate, "]") {
+			return candidate
+		}
+	}
+	return "8080"
+}
+
+func resolveAgentDaemonInternalToken(env func(string) string, masterKey string) string {
+	if env == nil {
+		env = os.Getenv
+	}
+	if token := strings.TrimSpace(env("PARSAR_AGENT_DAEMON_INTERNAL_TOKEN")); token != "" {
+		return token
+	}
+	if strings.TrimSpace(masterKey) == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte("parsar:agent-daemon-internal-routing:" + strings.TrimSpace(masterKey)))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+const envRuntimeProfile = "PARSAR_RUNTIME_PROFILE"
+
+func resolveRuntimeProfile(env func(string) string, managedSandboxProvider bool) string {
+	if env == nil {
+		env = os.Getenv
+	}
+	raw := strings.ToLower(strings.TrimSpace(env(envRuntimeProfile)))
+	switch raw {
+	case "oss", "managed", "selfhost":
+		return raw
+	case "":
+		if managedSandboxProvider {
+			return "managed"
+		}
+		return "oss"
+	default:
+		log.Bg().Warn("PARSAR_RUNTIME_PROFILE invalid; falling back to runtime wiring", "value", raw)
+		if managedSandboxProvider {
+			return "managed"
+		}
+		return "oss"
+	}
+}
+
+type configuredSandboxProber struct{}
+
+func (configuredSandboxProber) Ping(ctx context.Context) error {
+	return ctx.Err()
+}
+
+// buildAgentDaemonSandboxProvider wires the lazy-create SandboxProvider
+// for the agent_daemon connector. Returns nil when sandbox mode is not
+// configured (caller falls back to NoopSandboxProvider).
+//
+// Required env vars:
+//   - AGENT_DAEMON_SANDBOX_TEMPLATE — e2b template id; empty -> disabled.
+//   - PARSAR_E2B_API_KEY          — shared with opencode; empty -> disabled.
+//
+// Optional:
+//   - PARSAR_E2B_API_BASE_URL — self-hosted e2b api base.
+func buildAgentDaemonSandboxProvider(
+	env func(string) string,
+	cfg config.Config,
+	dbStore *store.Store,
+	registry *agentdaemongateway.Registry,
+	binder agentdaemonbinding.Binder,
+	selfPodID string,
+) connagentdaemon.SandboxProvider {
+	if env == nil {
+		env = os.Getenv
+	}
+	template := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE"))
+	if template == "" {
+		return nil
+	}
+	// Optional XL template — agents with config.sandbox_size = "xl" get
+	// routed here instead of the default. Standard (4c8g) is always the
+	// fallback; if XL is not configured an agent that requests "xl" will
+	// silently fall back to the standard template (with a warn log) so a
+	// missing XL pool degrades gracefully rather than failing acquires.
+	templateXL := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE_XL"))
+	templates := map[string]string{
+		"standard": template,
+	}
+	if templateXL != "" {
+		templates["xl"] = templateXL
+	}
+	apiKey := strings.TrimSpace(env("PARSAR_E2B_API_KEY"))
+	if apiKey == "" {
+		log.Bg().Warn("agent_daemon sandbox mode disabled: AGENT_DAEMON_SANDBOX_TEMPLATE set but PARSAR_E2B_API_KEY is missing",
+			"template", template)
+		return nil
+	}
+	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
+	if publicURL == "" {
+		// Dev fallback mirrors buildAgentDaemonWSURL.
+		publicURL = "http://127.0.0.1:18080"
+	}
+	apiBaseURL := strings.TrimSpace(env("PARSAR_E2B_API_BASE_URL"))
+	client := &e2bsandbox.Client{
+		APIKey:            apiKey,
+		APIBaseURL:        apiBaseURL,
+		SandboxHost:       strings.TrimSpace(env("PARSAR_E2B_SANDBOX_HOST")),
+		DefaultTemplateID: template,
+	}
+	// If the internal sandbox gateway uses a private CA, inject it into
+	// the E2B client's TLS trust pool so Go can verify the certificate.
+	if caPEM := strings.TrimSpace(env("PARSAR_E2B_CA_CERT")); caPEM != "" {
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			pool = x509.NewCertPool()
+		}
+		if !pool.AppendCertsFromPEM([]byte(caPEM)) {
+			log.Bg().Warn("PARSAR_E2B_CA_CERT: failed to parse PEM certificate; TLS may fail")
+		} else {
+			client.HTTPClient = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{RootCAs: pool},
+				},
+			}
+			log.Bg().Info("agent_daemon sandbox: custom CA cert loaded for E2B client")
+		}
+	}
+	// In-cluster pod IP resolver: when running inside K8s, resolve the
+	// sandbox pod's cluster-internal IP so envd RunCommand calls bypass
+	// the external gateway and connect directly via the pod network.
+	// Prefer an explicit token (PARSAR_K8S_POD_TOKEN) pointed at the
+	// sandbox cluster's API server (PARSAR_K8S_API_SERVER); fall back
+	// to in-cluster SA when neither is set.
+	var podIPResolver *e2bsandbox.PodIPResolver
+	if tok := strings.TrimSpace(env("PARSAR_K8S_POD_TOKEN")); tok != "" {
+		apiServer := strings.TrimSpace(env("PARSAR_K8S_API_SERVER"))
+		podIPResolver = e2bsandbox.NewPodIPResolver(apiServer, tok, nil, true)
+		if podIPResolver != nil {
+			log.Bg().Info("agent_daemon sandbox: pod IP resolver using explicit token",
+				"api_server", apiServer)
+		}
+	}
+	if podIPResolver == nil {
+		if r := e2bsandbox.NewInClusterPodIPResolver(); r != nil {
+			podIPResolver = r
+			log.Bg().Info("agent_daemon sandbox: pod IP resolver using in-cluster SA token")
+		}
+	}
+	provider, err := connagentdaemon.NewE2BSandboxProvider(connagentdaemon.E2BProviderConfig{
+		Client:        client,
+		Store:         dbStore,
+		Registry:      registry,
+		Binder:        binder,
+		Bindings:      dbStore,
+		Template:      template,
+		Templates:     templates,
+		DefaultSize:   "standard",
+		ServerURL:     publicURL,
+		PodIPResolver: podIPResolver,
+		OwnerChecker:  dbStore,
+		SelfPodID:     selfPodID,
+		Log:           log.Bg(),
+	})
+	if err != nil {
+		log.Bg().Warn("agent_daemon sandbox provider init failed; sandbox mode disabled",
+			"error", err)
+		return nil
+	}
+	log.Bg().Info("agent_daemon sandbox provider wired",
+		"template", template,
+		"template_xl", templateXL,
+		"server_url", publicURL)
+	return provider
+}
+
+// openPool opens the shared pgxpool used by both the audit ingester and
+// the store. Returns nil when databaseURL is empty so dev environments
+// without a database can still bring up the health endpoint.
+func openPool(databaseURL string) *pgxpool.Pool {
+	if strings.TrimSpace(databaseURL) == "" {
+		log.Bg().Warn("DATABASE_URL is not set; database-backed dev endpoints are disabled")
+		return nil
+	}
+	pool, err := db.OpenPool(context.Background(), databaseURL)
+	if err != nil {
+		log.Bg().Warn("failed to connect database; database-backed dev endpoints are disabled", "error", err)
+		return nil
+	}
+	return pool
+}
+
+// buildStore constructs the *store.Store and the audit ingester from a
+// shared pgxpool. Returns (nil, nil) when the pool is unavailable, so
+// the caller can degrade gracefully without panicking.
+//
+// When fanoutEndpoint is non-empty, the ingester's sink becomes a
+// MultiSink composed of the canonical PostgresSink (authoritative —
+// the audit_records write that must never fail silently) plus an
+// OTelExporterSink that ships every event to a customer-owned OTel
+// collector. Fan-out errors are logged + swallowed; only the
+// PostgresSink result drives ingester success metrics. Empty
+// fanoutEndpoint keeps the legacy single-sink behaviour.
+func buildStore(pool *pgxpool.Pool, fanoutEndpoint string) (*store.Store, *audit.Ingester) {
+	if pool == nil {
+		return nil, nil
+	}
+	queries := sqlc.New(pool)
+	canonical := audit.NewPostgresSink(queries)
+
+	var sink audit.Sink = canonical
+	if endpoint := strings.TrimSpace(fanoutEndpoint); endpoint != "" {
+		exporter, err := audit.NewOTelExporterSink(audit.OTelExporterOptions{
+			Endpoint: endpoint,
+		})
+		if err != nil {
+			log.Bg().Warn("audit OTLP fan-out exporter init failed; running without fan-out",
+				"endpoint", endpoint, "error", err)
+		} else {
+			multi, err := audit.NewMultiSink(func(format string, args ...any) {
+				log.Bg().Warn(fmt.Sprintf(format, args...),
+					"subsystem", "audit_otel_fanout")
+			}, canonical, exporter)
+			if err != nil {
+				log.Bg().Warn("audit MultiSink init failed; running without fan-out",
+					"error", err)
+			} else {
+				sink = multi
+				// Log host-only to avoid leaking the full collector URL
+				// (path/query/internal subdomain) into INFO startup
+				// logs; cfg.Redacted() carries the full endpoint.
+				log.Bg().Info("audit OTLP fan-out wired",
+					"endpoint_host", fanoutEndpointHost(endpoint))
+			}
+		}
+	}
+
+	ing := audit.NewIngester(sink, audit.Options{})
+	return store.New(pool, store.WithAudit(ing)), ing
+}
+
+// fanoutEndpointHost extracts a host-only label so a customer-internal
+// collector URL does not show up in INFO logs. Returns "<unparseable>"
+// on bad input so callers get a non-empty field.
+func fanoutEndpointHost(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return "<unparseable>"
+	}
+	return u.Host
+}
+
+type feishuSharedBotEnv struct {
+	appID     string
+	appSecret string
+	botOpenID string
+}
+
+func (c feishuSharedBotEnv) configured() bool {
+	return strings.TrimSpace(c.appID) != "" && strings.TrimSpace(c.appSecret) != ""
+}
+
+func defaultFeishuSharedBotEnv(env func(string) string) feishuSharedBotEnv {
+	appID := strings.TrimSpace(env("PARSAR_FEISHU_DEFAULT_BOT_APP_ID"))
+	appSecret := strings.TrimSpace(env("PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET"))
+	botOpenID := strings.TrimSpace(env("PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID"))
+	if appID != "" || appSecret != "" {
+		return feishuSharedBotEnv{appID: appID, appSecret: appSecret, botOpenID: botOpenID}
+	}
+	if botOpenID == "" {
+		botOpenID = strings.TrimSpace(env("PARSAR_FEISHU_BOT_OPEN_ID"))
+	}
+	return feishuSharedBotEnv{
+		appID:     strings.TrimSpace(env("PARSAR_FEISHU_APP_ID")),
+		appSecret: strings.TrimSpace(env("PARSAR_FEISHU_APP_SECRET")),
+		botOpenID: botOpenID,
+	}
+}
+
+// buildFeishuWebSocketManager constructs the Feishu event-websocket inbound
+// manager from env. Returns nil when disabled.
+//
+// Env contract:
+//   - PARSAR_FEISHU_WEBSOCKET                (default off; "true" enables)
+//   - PARSAR_FEISHU_WS_REFRESH_SECONDS       (optional; default 30, cap 600)
+//   - PARSAR_FEISHU_OPENAPI_BASE_URL         (optional; default SDK domain)
+//   - PARSAR_FEISHU_DEFAULT_BOT_APP_ID       (optional; falls back to PARSAR_FEISHU_APP_ID)
+//   - PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET   (optional; falls back to PARSAR_FEISHU_APP_SECRET)
+//   - PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID      (optional; self-message dedup)
+//   - PARSAR_MASTER_KEY                      (REQUIRED when enabled)
+func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*feishuinbound.Manager, error) {
+	if !truthy(env("PARSAR_FEISHU_WEBSOCKET")) {
+		return nil, nil
+	}
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" {
+		return nil, errors.New("PARSAR_FEISHU_WEBSOCKET=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("feishu websocket inbound: init secrets service: %w", err)
+	}
+
+	refreshEvery := 30 * time.Second
+	if raw := strings.TrimSpace(env("PARSAR_FEISHU_WS_REFRESH_SECONDS")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			log.Bg().Warn("PARSAR_FEISHU_WS_REFRESH_SECONDS invalid; using default",
+				"value", raw, "default_s", 30)
+		} else if n > 600 {
+			log.Bg().Warn("PARSAR_FEISHU_WS_REFRESH_SECONDS too high; capping",
+				"value", n, "cap_s", 600)
+			refreshEvery = 600 * time.Second
+		} else {
+			refreshEvery = time.Duration(n) * time.Second
+		}
+	}
+
+	defaultBot := defaultFeishuSharedBotEnv(env)
+	var feishuJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		feishuJoinURLBuilder = func(workspaceID string) string {
+			return root + "/join-workspace?id=" + workspaceID + "&from=feishu"
+		}
+	}
+	manager, err := feishuinbound.NewManager(feishuinbound.Options{
+		Store:           dbStore,
+		Secrets:         secretsSvc,
+		Logger:          slogFeishuInboundLogger{},
+		RefreshInterval: refreshEvery,
+		Domain:          strings.TrimSpace(env("PARSAR_FEISHU_OPENAPI_BASE_URL")),
+		OpenAPIBaseURL:  strings.TrimSpace(env("PARSAR_FEISHU_OPENAPI_BASE_URL")),
+		DefaultSharedBot: feishuinbound.DefaultSharedBotConfig{
+			AppID:     defaultBot.appID,
+			AppSecret: defaultBot.appSecret,
+			BotOpenID: defaultBot.botOpenID,
+		},
+		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		JoinURLBuilder:            feishuJoinURLBuilder,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("feishu websocket inbound: init manager: %w", err)
+	}
+	log.Bg().Info("feishu websocket inbound manager configured",
+		"refresh_interval", refreshEvery,
+		"default_shared_bot", defaultBot.configured(),
+		"permission_router", connectorReg != nil,
+	)
+	return manager, nil
+}
+
+// inboundPermissionRouter adapts the connector registry to the
+// feishuinbound.PermissionRouter interface. The Feishu inbound
+// package can't depend on `connector` directly, so this adapter
+// lives in main where the wiring belongs.
+//
+// SubmitPermission iterates registered connectors because the card
+// payload carries only permission_request_id; the owning connector
+// returns nil, the rest return an error and we move on.
+type inboundPermissionRouter struct {
+	registry *connector.Registry
+}
+
+func (r inboundPermissionRouter) SubmitPermission(ctx context.Context, decision feishuinbound.PermissionDecision) error {
+	if r.registry == nil {
+		return errors.New("permission router: connector registry not configured")
+	}
+	cd := connector.PermissionDecision{
+		RequestID: decision.RequestID,
+		Approved:  decision.Approved,
+		Note:      decision.Note,
+		By:        decision.OperatorID,
+	}
+	var lastErr error
+	for _, name := range r.registry.Types() {
+		conn, err := r.registry.Get(name)
+		if err != nil || conn == nil {
+			continue
+		}
+		if err := conn.SubmitPermission(ctx, cd); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("permission router: no connector accepted the verdict")
+	}
+	return lastErr
+}
+
+// inboundPromptForUserChoiceRouter is the ask-flow twin of
+// inboundPermissionRouter: same fan-out-to-registered-connectors
+// behaviour, different decision shape.
+type inboundPromptForUserChoiceRouter struct {
+	registry *connector.Registry
+}
+
+func (r inboundPromptForUserChoiceRouter) SubmitPromptForUserChoice(ctx context.Context, decision feishuinbound.PromptForUserChoiceDecision) error {
+	if r.registry == nil {
+		return errors.New("prompt_for_user_choice router: connector registry not configured")
+	}
+	qas := make([]connector.PromptForUserChoiceQuestionAnswer, 0, len(decision.QuestionAnswers))
+	for _, qa := range decision.QuestionAnswers {
+		qas = append(qas, connector.PromptForUserChoiceQuestionAnswer{
+			Header: qa.Header,
+			Answer: qa.Answer,
+		})
+	}
+	cd := connector.PromptForUserChoiceDecision{
+		RequestID:       decision.RequestID,
+		QuestionAnswers: qas,
+		Answers:         decision.Answers,
+		Cancelled:       decision.Cancelled,
+		Reason:          decision.Reason,
+		By:              decision.OperatorID,
+	}
+	var lastErr error
+	for _, name := range r.registry.Types() {
+		conn, err := r.registry.Get(name)
+		if err != nil || conn == nil {
+			continue
+		}
+		if err := conn.SubmitPromptForUserChoice(ctx, cd); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("prompt_for_user_choice router: no connector accepted the verdict")
+	}
+	return lastErr
+}
+
+// buildFeishuOutboundWorker constructs the Feishu outbound poll worker
+// from env. Returns nil (silent skip) when the feature flag is off.
+//
+// Env contract:
+//   - PARSAR_FEISHU_OUTBOUND                (default off; "true" enables)
+//   - PARSAR_FEISHU_OUTBOUND_POLL_SECONDS   (optional; default 10, cap 600)
+//   - PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT    (optional; default 32, cap 256)
+//   - PARSAR_FEISHU_OPENAPI_BASE_URL        (optional; default Feishu prod)
+//   - PARSAR_FEISHU_DEFAULT_BOT_APP_ID      (optional; falls back to PARSAR_FEISHU_APP_ID)
+//   - PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET  (optional; falls back to PARSAR_FEISHU_APP_SECRET)
+//   - PARSAR_MASTER_KEY                     (REQUIRED when enabled — same
+//     key used by the secret vault encryptor)
+func buildFeishuOutboundWorker(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, deviceResolver feishuoutbound.DeviceResolver, publicURL string) (*feishuoutbound.Worker, error) {
+	if !truthy(env("PARSAR_FEISHU_OUTBOUND")) {
+		return nil, nil
+	}
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" {
+		return nil, errors.New("PARSAR_FEISHU_OUTBOUND=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("feishu outbound: init secrets service: %w", err)
+	}
+
+	defaultBot := defaultFeishuSharedBotEnv(env)
+	pollEvery := 10 * time.Second
+	if raw := strings.TrimSpace(env("PARSAR_FEISHU_OUTBOUND_POLL_SECONDS")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			log.Bg().Warn("PARSAR_FEISHU_OUTBOUND_POLL_SECONDS invalid; using default",
+				"value", raw, "default_s", 10)
+		} else if n > 600 {
+			log.Bg().Warn("PARSAR_FEISHU_OUTBOUND_POLL_SECONDS too high; capping",
+				"value", n, "cap_s", 600)
+			pollEvery = 600 * time.Second
+		} else {
+			pollEvery = time.Duration(n) * time.Second
+		}
+	}
+
+	// PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT is no longer honoured;
+	// inflight driver uses a built-in batch limit. Boot still parses
+	// + warns about misconfig so operators learn the knob is gone.
+	if raw := strings.TrimSpace(env("PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT")); raw != "" {
+		log.Bg().Warn("PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT is no longer honoured; inflight driver uses a built-in batch limit",
+			"value", raw)
+	}
+
+	worker, err := feishuoutbound.NewWorker(feishuoutbound.Options{
+		Store:        dbStore,
+		Secrets:      secretsSvc,
+		Logger:       slogWorkerLogger{},
+		PollInterval: pollEvery,
+		BaseURL:      strings.TrimSpace(env("PARSAR_FEISHU_OPENAPI_BASE_URL")),
+		PublicURL:    publicURL,
+		DefaultSharedBot: feishuoutbound.DefaultSharedBotConfig{
+			AppID:     defaultBot.appID,
+			AppSecret: defaultBot.appSecret,
+		},
+		PermissionRouter: outboundPermissionRouter{registry: connectorReg},
+		DeviceResolver:   deviceResolver,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("feishu outbound: init worker: %w", err)
+	}
+	log.Bg().Info("feishu outbound worker configured",
+		"poll_interval", pollEvery,
+		"default_shared_bot", defaultBot.configured(),
+		"permission_router", connectorReg != nil,
+	)
+	return worker, nil
+}
+
+// outboundPermissionRouter adapts the connector registry to
+// feishuoutbound.PermissionRouter. Kept distinct from
+// inboundPermissionRouter because feishuinbound and feishuoutbound
+// deliberately don't share a PermissionRouter type.
+type outboundPermissionRouter struct {
+	registry *connector.Registry
+}
+
+func (r outboundPermissionRouter) SubmitPermission(ctx context.Context, decision feishuoutbound.PermissionDecision) error {
+	if r.registry == nil {
+		return errors.New("permission router: connector registry not configured")
+	}
+	cd := connector.PermissionDecision{
+		RequestID: decision.RequestID,
+		Approved:  decision.Approved,
+		Note:      decision.Note,
+		By:        decision.OperatorID,
+	}
+	var lastErr error
+	for _, name := range r.registry.Types() {
+		conn, err := r.registry.Get(name)
+		if err != nil || conn == nil {
+			continue
+		}
+		if err := conn.SubmitPermission(ctx, cd); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("permission router: no connector accepted the verdict")
+	}
+	return lastErr
+}
+
+// truthy interprets common "this flag is on" env values. "" / "0" /
+// "false" return false; "1" / "true" / "yes" return true (case-insensitive).
+func truthy(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// slogFeishuInboundLogger adapts log/slog to the feishuinbound.Logger interface.
+type slogFeishuInboundLogger struct{}
+
+func (slogFeishuInboundLogger) Info(msg string, args ...any) {
+	log.Bg().Info("feishu inbound: "+msg, args...)
+}
+func (slogFeishuInboundLogger) Warn(msg string, args ...any) {
+	log.Bg().Warn("feishu inbound: "+msg, args...)
+}
+
+// slogWorkerLogger adapts log/slog to the feishuoutbound.Logger interface
+// without coupling the package to slog. Keeps the args pattern intact
+// so structured-log consumers still see key/value pairs.
+type slogWorkerLogger struct{}
+
+func (slogWorkerLogger) Info(msg string, args ...any) {
+	log.Bg().Info("feishu outbound: "+msg, args...)
+}
+func (slogWorkerLogger) Warn(msg string, args ...any) {
+	log.Bg().Warn("feishu outbound: "+msg, args...)
+}
+
+// streamingDispatcherAdapter bridges store.StreamingDispatcher to
+// dev.StartConversationRun. `store` and `dev` don't import each other;
+// main is the only place both arrive together.
+//
+// Fire-and-forget per the interface contract: failures surface to the
+// user via the SSE /stream error event + agent_runs.status=failed.
+// We use slog (not the audit ingester) because these errors point at
+// concrete wiring/connectivity issues operators need to see in stdout.
+type streamingDispatcherAdapter struct {
+	runtimeStore dev.RuntimeStore
+	deps         dev.StreamingDispatchDeps
+	failRun      func(ctx context.Context, runID, source, reason string)
+}
+
+func (a streamingDispatcherAdapter) Start(ctx context.Context, in store.StreamingDispatchInput) {
+	_, err := dev.StartConversationRun(ctx, a.runtimeStore, a.deps, in.RunID, in.ConversationID)
+	if err == nil {
+		return
+	}
+	log.Bg().Error("streaming dispatcher: auto-start failed",
+		"run_id", in.RunID,
+		"conversation_id", in.ConversationID,
+		"connector_type", in.ConnectorType,
+		"error", err)
+	if a.failRun != nil {
+		a.failRun(ctx, in.RunID, in.ConnectorType, "auto-start failed: "+err.Error())
+	}
+}

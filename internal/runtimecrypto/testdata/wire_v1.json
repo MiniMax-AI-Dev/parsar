@@ -1,0 +1,8 @@
+{
+  "description": "Wire fixture for Parsar runtime credential envelope. Recipient keypair is committed for test reproducibility. DO NOT use these keys in any other context. Wire format: NaCl SealAnonymous (X25519 + XSalsa20-Poly1305), nonce = BLAKE2b-24(ephPub || recipientPub).",
+  "wire_format": "nacl_sealed_box_v1",
+  "recipient_public_key_b64": "kxmWMYeGYw4zwKGkoXBQUh3Ac6CCD0jUechNvXEwRSk=",
+  "recipient_private_key_b64": "6b/6ZGaX77mlq1Q/ZUZd/T67wNc9orIpSslluBMYXz8=",
+  "cipher_b64": "+xJ0WbN+YwxXhccjZDMJfkRNdICegZpBkkDg2lS1gEpqVXh3ABfYWtz0vxR9zOf9JpeD0z6yprJyDdWkhn8lHbf3Mp+0Z1sMAp9BHoHO61FCGB3DdnZiHp7dTI4NAKM62Zs+LQ==",
+  "plaintext_utf8": "{\"api_key\":\"sk-wire-fixture\",\"provider\":\"anthropic\"}"
+}

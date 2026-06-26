@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    # Values come from the exported env (scripts/dev-env.sh is the
+    # single source). The inline `${VAR:-default}` fallbacks below are
+    # kept identical to dev-env.sh so a bare `docker compose -f
+    # docker-compose.dev.yml up` still works without sourcing it.
+    environment:
+      POSTGRES_USER: ${PARSAR_PG_USER:-parsar}
+      POSTGRES_PASSWORD: ${PARSAR_PG_PASSWORD:-parsar}
+      POSTGRES_DB: ${PARSAR_PG_DB:-parsar_dev}
+    ports:
+      - "${PARSAR_POSTGRES_HOST:-127.0.0.1}:${PARSAR_POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - parsar-postgres-dev:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PARSAR_PG_USER:-parsar} -d ${PARSAR_PG_DB:-parsar_dev}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  parsar-postgres-dev:

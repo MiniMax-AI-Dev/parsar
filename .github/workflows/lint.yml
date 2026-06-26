@@ -1,0 +1,42 @@
+name: lint
+
+# Runs golangci-lint on every push and PR. Right now the rule set is
+# narrow on purpose (only forbidigo, banning bare slog.Info / Warn /
+# Error / Debug / Default), but the job exists so future linter
+# additions (staticcheck, govet, etc.) inherit the same CI plumbing
+# without each one needing its own workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          # Pinned to match go.mod. Bump both together when upgrading.
+          go-version: "1.24"
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          # Pinned to a v2 release that matches the .golangci.yml v2
+          # schema. Newer minors are safe; major bumps need a config
+          # audit because golangci-lint's options key occasionally
+          # gets re-shaped between majors.
+          version: v2.12.2
+          # Keep this in sync with the file at the repo root.
+          args: --timeout=5m
