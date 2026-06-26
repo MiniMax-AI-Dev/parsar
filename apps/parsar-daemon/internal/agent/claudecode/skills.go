@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/google/uuid"
 )
 
@@ -40,7 +41,7 @@ func installSkills(
 	skills []skillDescriptor,
 ) (SkillInstallResult, error) {
 	if logger == nil {
-		logger = slog.Default()
+		logger = obslog.Bg()
 	}
 	if len(skills) == 0 {
 		return SkillInstallResult{}, nil

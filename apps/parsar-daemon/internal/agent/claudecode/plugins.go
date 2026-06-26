@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/google/uuid"
 )
 
@@ -78,7 +79,7 @@ func installPlugins(
 	plugins []pluginDescriptor,
 ) (PluginInstallResult, error) {
 	if logger == nil {
-		logger = slog.Default()
+		logger = obslog.Bg()
 	}
 	if len(plugins) == 0 {
 		return PluginInstallResult{}, nil
