@@ -31,7 +31,9 @@ jobs:
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        # golangci-lint-action@v7 is required for golangci-lint v2
+        # (v6 only drives v1 and rejects a v2.x `version:` string).
+        uses: golangci/golangci-lint-action@v7
         with:
           # Pinned to a v2 release that matches the .golangci.yml v2
           # schema. Newer minors are safe; major bumps need a config
