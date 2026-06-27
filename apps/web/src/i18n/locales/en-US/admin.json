@@ -1111,7 +1111,8 @@
         "runs": "Runs",
         "audit": "Audit",
         "dynamics": "Activity",
-        "config": "Config"
+        "config": "Config",
+        "scheduled": "Scheduled"
       },
       "dynamics": {
         "current": {
@@ -2760,6 +2761,58 @@
       "dialogTitle": "Audit history",
       "dialogDescription": "Every create / update / delete event recorded for this memory.",
       "unavailableUserScope": "Audit for user-scope memory requires a Workspace-level audit endpoint, coming in a follow-up release."
+    }
+  },
+  "scheduledTasks": {
+    "title": "Scheduled tasks",
+    "subtitle": "At each fire time, runs the agent once in a clean session; results land in run history.",
+    "new": "New task",
+    "empty": "No scheduled tasks yet — create one from the top right.",
+    "loadError": "Failed to load scheduled tasks",
+    "never": "—",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "col": { "name": "Name", "frequency": "Frequency", "status": "Status", "nextRun": "Next run", "actions": "Actions" },
+    "action": { "edit": "Edit", "runNow": "Run now", "delete": "Delete" },
+    "runNowOk": "Triggered a run",
+    "runNowErr": "Failed to trigger",
+    "deleteConfirm": "Delete this scheduled task? Past runs are kept.",
+    "status": { "queued": "Queued", "running": "Running", "completed": "Succeeded", "failed": "Failed", "cancelled": "Cancelled", "interrupted": "Interrupted", "none": "Not run yet" },
+    "freq": { "hourly": "Hourly", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "weekday": "Weekdays", "custom": "Custom" },
+    "desc": {
+      "hourly": "Hourly at minute {{minute}}",
+      "daily": "Daily at {{time}}",
+      "weekly": "Weekly on {{day}} at {{time}}",
+      "monthly": "Monthly on day {{dom}} at {{time}}",
+      "weekday": "Weekdays at {{time}}",
+      "custom": "cron: {{cron}}",
+      "withTz": "{{desc}} ({{tz}})"
+    },
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "dialog": {
+      "createTitle": "New scheduled task",
+      "editTitle": "Edit scheduled task",
+      "name": "Name",
+      "namePlaceholder": "Daily standup summary",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Summarise yesterday's commits, list today's TODOs…",
+      "frequency": "Frequency",
+      "time": "Time",
+      "dayOfWeek": "Day of week",
+      "dayOfMonth": "Day of month",
+      "minute": "Minute",
+      "timezone": "Timezone",
+      "cronLabel": "cron expression",
+      "cronPlaceholder": "0 9 * * *",
+      "preview": "Schedule preview",
+      "feishu": "Push to Feishu group",
+      "feishuDisabledHint": "Coming in a later release; Web-only for now.",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "nameRequired": "Name is required",
+      "promptRequired": "Prompt is required",
+      "cronInvalid": "cron must have 5 fields (min hour dom mon dow)"
     }
   }
 }
