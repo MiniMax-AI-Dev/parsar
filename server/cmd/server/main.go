@@ -41,6 +41,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishuoutbound"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/scheduler"
 	runtimesweeper "github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/sweeper"
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
@@ -678,6 +679,18 @@ func main() {
 		}
 	}
 
+	// Scheduled task scheduler: each cron fire dispatches an independent
+	// agent run (own session) into the task's container conversation.
+	if dbStore != nil {
+		if sc := buildScheduler(envLookup, dbStore); sc != nil {
+			go func() {
+				if err := sc.Run(ctx); err != nil {
+					log.Bg().Error("scheduled task scheduler exited with error", "error", err)
+				}
+			}()
+		}
+	}
+
 	// OSS lazy mode (PARSAR_FEISHU_OSS_SHARE_OAUTH_APP=true): collapses
 	// OAuth platform App and Feishu Bot onto a single App ID — only safe
 	// with ≤ 1 active Feishu-bot Agent. Refuse to start if more exist.
@@ -887,6 +900,46 @@ func buildRuntimeHeartbeatSweeper(
 	}
 	log.Bg().Info("runtime heartbeat sweeper configured", "sweeper", sw.String())
 	return sw
+}
+
+// buildScheduler constructs the scheduled-task scheduler from env. Disabled by
+// PARSAR_SCHEDULER_ENABLED=false; tunables (optional, defaulted in
+// scheduler.New): PARSAR_SCHEDULER_INTERVAL_SECONDS,
+// PARSAR_SCHEDULER_CLAIM_STALE_SECONDS, PARSAR_SCHEDULER_CLAIM_BATCH.
+func buildScheduler(env func(string) string, st scheduler.Store) *scheduler.Scheduler {
+	if st == nil {
+		return nil
+	}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_ENABLED")); raw != "" && !truthy(raw) {
+		log.Bg().Info("scheduled task scheduler disabled by PARSAR_SCHEDULER_ENABLED")
+		return nil
+	}
+	opts := scheduler.Options{}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_INTERVAL_SECONDS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			opts.Interval = time.Duration(n) * time.Second
+		}
+	}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_CLAIM_STALE_SECONDS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			opts.ClaimStaleAfter = time.Duration(n) * time.Second
+		}
+	}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_CLAIM_BATCH")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			opts.ClaimBatch = int32(n)
+		}
+	}
+	if host, err := os.Hostname(); err == nil && host != "" {
+		opts.ClaimedBy = "scheduler@" + host
+	}
+	sc, err := scheduler.New(st, opts)
+	if err != nil {
+		log.Bg().Error("scheduler construct failed", "error", err)
+		return nil
+	}
+	log.Bg().Info("scheduled task scheduler configured", "scheduler", sc.String())
+	return sc
 }
 
 // buildAgentDaemonWSURL returns the wss://.../agent-daemon/ws URL the
