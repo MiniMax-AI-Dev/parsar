@@ -236,6 +236,28 @@ func (q *Queries) AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMember
 	return i, err
 }
 
+const advanceScheduledTaskAfterSkip = `-- name: AdvanceScheduledTaskAfterSkip :exec
+update scheduled_tasks
+set next_run_at = $1,
+    last_status = 'skipped_overlap',
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = $2::timestamptz
+where id = $3::uuid
+`
+
+type AdvanceScheduledTaskAfterSkipParams struct {
+	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
+	Now       pgtype.Timestamptz `json:"now"`
+	ID        pgtype.UUID        `json:"id"`
+}
+
+// Self-overlap skip: advance next_run_at, release claim, no run dispatched.
+func (q *Queries) AdvanceScheduledTaskAfterSkip(ctx context.Context, arg AdvanceScheduledTaskAfterSkipParams) error {
+	_, err := q.db.Exec(ctx, advanceScheduledTaskAfterSkip, arg.NextRunAt, arg.Now, arg.ID)
+	return err
+}
+
 const agentRunExists = `-- name: AgentRunExists :one
 select exists(select 1 from agent_runs where id = $1::uuid)
 `
@@ -654,6 +676,80 @@ func (q *Queries) ClaimActiveFeishuInflightConversations(ctx context.Context, ar
 			&i.AgentName,
 			&i.SenderOpenID,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const claimDueScheduledTasks = `-- name: ClaimDueScheduledTasks :many
+with picked as (
+  select t.id
+  from scheduled_tasks t
+  where t.enabled = true
+    and t.deleted_at is null
+    and t.next_run_at is not null
+    and t.next_run_at <= $1::timestamptz
+    and (
+      t.claimed_at is null
+      or t.claimed_at < $2::timestamptz
+      or t.claimed_by = $3::text
+    )
+  order by t.next_run_at asc
+  limit $4
+  for update of t skip locked
+),
+claimed as (
+  update scheduled_tasks t
+  set claimed_at = $1::timestamptz,
+      claimed_by = $3::text,
+      updated_at = $1::timestamptz
+  from picked
+  where t.id = picked.id
+  returning t.id, t.cron_expr, t.timezone
+)
+select claimed.id::text   as id,
+       claimed.cron_expr  as cron_expr,
+       claimed.timezone   as timezone
+from claimed
+`
+
+type ClaimDueScheduledTasksParams struct {
+	Now         pgtype.Timestamptz `json:"now"`
+	StaleBefore pgtype.Timestamptz `json:"stale_before"`
+	ClaimedBy   string             `json:"claimed_by"`
+	ItemLimit   int32              `json:"item_limit"`
+}
+
+type ClaimDueScheduledTasksRow struct {
+	ID       string `json:"id"`
+	CronExpr string `json:"cron_expr"`
+	Timezone string `json:"timezone"`
+}
+
+// Multi-pod-safe: FOR UPDATE OF t SKIP LOCKED so sibling pods get disjoint
+// batches; claim lease (claimed_at/claimed_by) recovers crashed claims.
+// Mirrors ClaimPendingQueuedFeishuRuns. Returns only what the scheduler
+// needs to compute next_run_at; FireScheduledTaskRun re-reads FOR UPDATE.
+func (q *Queries) ClaimDueScheduledTasks(ctx context.Context, arg ClaimDueScheduledTasksParams) ([]ClaimDueScheduledTasksRow, error) {
+	rows, err := q.db.Query(ctx, claimDueScheduledTasks,
+		arg.Now,
+		arg.StaleBefore,
+		arg.ClaimedBy,
+		arg.ItemLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimDueScheduledTasksRow{}
+	for rows.Next() {
+		var i ClaimDueScheduledTasksRow
+		if err := rows.Scan(&i.ID, &i.CronExpr, &i.Timezone); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2547,6 +2643,156 @@ func (q *Queries) CreateSandboxPoolEntry(ctx context.Context, arg CreateSandboxP
 	return err
 }
 
+const createScheduledAgentRun = `-- name: CreateScheduledAgentRun :exec
+insert into agent_runs(
+  id, workspace_id, project_id, conversation_id,
+  trigger_message_id, trigger_source, trigger_channel, trigger_ref_type, trigger_ref_id,
+  requested_by_type, requested_by_id,
+  project_agent_id, connector_type, status, visibility, metadata,
+  created_at, updated_at
+)
+values ($1::uuid, $2::uuid, $3::uuid, $4::uuid,
+        $5::uuid, 'scheduled_task', 'cron', 'scheduled_task', $6::uuid,
+        'user', $7,
+        $8::uuid, $9, 'queued', 'project', $10::jsonb, $11, $11)
+`
+
+type CreateScheduledAgentRunParams struct {
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	ConversationID   pgtype.UUID        `json:"conversation_id"`
+	TriggerMessageID pgtype.UUID        `json:"trigger_message_id"`
+	TriggerRefID     pgtype.UUID        `json:"trigger_ref_id"`
+	RequestedByID    pgtype.UUID        `json:"requested_by_id"`
+	ProjectAgentID   pgtype.UUID        `json:"project_agent_id"`
+	ConnectorType    string             `json:"connector_type"`
+	Metadata         []byte             `json:"metadata"`
+	Now              pgtype.Timestamptz `json:"now"`
+}
+
+// 定时 run: trigger_source='scheduled_task', trigger_channel='cron',
+// trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
+// 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
+func (q *Queries) CreateScheduledAgentRun(ctx context.Context, arg CreateScheduledAgentRunParams) error {
+	_, err := q.db.Exec(ctx, createScheduledAgentRun,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.ConversationID,
+		arg.TriggerMessageID,
+		arg.TriggerRefID,
+		arg.RequestedByID,
+		arg.ProjectAgentID,
+		arg.ConnectorType,
+		arg.Metadata,
+		arg.Now,
+	)
+	return err
+}
+
+const createScheduledTask = `-- name: CreateScheduledTask :one
+
+insert into scheduled_tasks(
+  id, project_agent_id, conversation_id, name, prompt, cron_expr, timezone,
+  enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
+)
+values ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13, $13)
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+`
+
+type CreateScheduledTaskParams struct {
+	ID             pgtype.UUID        `json:"id"`
+	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	Name           string             `json:"name"`
+	Prompt         string             `json:"prompt"`
+	CronExpr       string             `json:"cron_expr"`
+	Timezone       string             `json:"timezone"`
+	Enabled        bool               `json:"enabled"`
+	FeishuChatID   pgtype.Text        `json:"feishu_chat_id"`
+	FeishuChatName pgtype.Text        `json:"feishu_chat_name"`
+	NextRunAt      pgtype.Timestamptz `json:"next_run_at"`
+	CreatedBy      pgtype.UUID        `json:"created_by"`
+	Now            pgtype.Timestamptz `json:"now"`
+}
+
+type CreateScheduledTaskRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// ============================================================
+// scheduled_tasks
+// ============================================================
+func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTaskParams) (CreateScheduledTaskRow, error) {
+	row := q.db.QueryRow(ctx, createScheduledTask,
+		arg.ID,
+		arg.ProjectAgentID,
+		arg.ConversationID,
+		arg.Name,
+		arg.Prompt,
+		arg.CronExpr,
+		arg.Timezone,
+		arg.Enabled,
+		arg.FeishuChatID,
+		arg.FeishuChatName,
+		arg.NextRunAt,
+		arg.CreatedBy,
+		arg.Now,
+	)
+	var i CreateScheduledTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.CronExpr,
+		&i.Timezone,
+		&i.Enabled,
+		&i.FeishuChatID,
+		&i.FeishuChatName,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.LastRunID,
+		&i.LastStatus,
+		&i.ConsecutiveFailures,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createSecret = `-- name: CreateSecret :one
 insert into secrets(
   id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at
@@ -3039,6 +3285,36 @@ func (q *Queries) DisableProjectAgent(ctx context.Context, arg DisableProjectAge
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const disableScheduledTaskForFailures = `-- name: DisableScheduledTaskForFailures :exec
+update scheduled_tasks
+set enabled = false,
+    last_status = 'auto_disabled',
+    consecutive_failures = $1::int,
+    next_run_at = $2,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = $3::timestamptz
+where id = $4::uuid
+`
+
+type DisableScheduledTaskForFailuresParams struct {
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	Now                 pgtype.Timestamptz `json:"now"`
+	ID                  pgtype.UUID        `json:"id"`
+}
+
+// Threshold reached: auto-disable, keep next_run_at advanced for re-enable.
+func (q *Queries) DisableScheduledTaskForFailures(ctx context.Context, arg DisableScheduledTaskForFailuresParams) error {
+	_, err := q.db.Exec(ctx, disableScheduledTaskForFailures,
+		arg.ConsecutiveFailures,
+		arg.NextRunAt,
+		arg.Now,
+		arg.ID,
+	)
+	return err
 }
 
 const disableSecret = `-- name: DisableSecret :one
@@ -5555,6 +5831,149 @@ func (q *Queries) GetSandboxPoolEntry(ctx context.Context, arg GetSandboxPoolEnt
 	return i, err
 }
 
+const getScheduledTask = `-- name: GetScheduledTask :one
+select
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+from scheduled_tasks
+where id = $1::uuid and deleted_at is null
+`
+
+type GetScheduledTaskRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetScheduledTask(ctx context.Context, id pgtype.UUID) (GetScheduledTaskRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledTask, id)
+	var i GetScheduledTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.CronExpr,
+		&i.Timezone,
+		&i.Enabled,
+		&i.FeishuChatID,
+		&i.FeishuChatName,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.LastRunID,
+		&i.LastStatus,
+		&i.ConsecutiveFailures,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getScheduledTaskForUpdate = `-- name: GetScheduledTaskForUpdate :one
+select
+  t.id::text                                   as id,
+  t.project_agent_id::text                     as project_agent_id,
+  t.conversation_id::text                      as conversation_id,
+  t.prompt                                     as prompt,
+  t.enabled                                    as enabled,
+  t.consecutive_failures                       as consecutive_failures,
+  coalesce(t.last_run_id::text, '')::text      as last_run_id,
+  coalesce(r.status, '')::text                 as last_run_status,
+  coalesce(t.created_by::text, '')::text       as created_by
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = $1::uuid and t.deleted_at is null
+for update of t
+`
+
+type GetScheduledTaskForUpdateRow struct {
+	ID                  string `json:"id"`
+	ProjectAgentID      string `json:"project_agent_id"`
+	ConversationID      string `json:"conversation_id"`
+	Prompt              string `json:"prompt"`
+	Enabled             bool   `json:"enabled"`
+	ConsecutiveFailures int32  `json:"consecutive_failures"`
+	LastRunID           string `json:"last_run_id"`
+	LastRunStatus       string `json:"last_run_status"`
+	CreatedBy           string `json:"created_by"`
+}
+
+// Row-lock the task and read the last run's terminal status for the
+// self-overlap + failure-accounting decision in FireScheduledTaskRun.
+func (q *Queries) GetScheduledTaskForUpdate(ctx context.Context, id pgtype.UUID) (GetScheduledTaskForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledTaskForUpdate, id)
+	var i GetScheduledTaskForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Prompt,
+		&i.Enabled,
+		&i.ConsecutiveFailures,
+		&i.LastRunID,
+		&i.LastRunStatus,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getScheduledTaskScope = `-- name: GetScheduledTaskScope :one
+select
+  t.id::text             as id,
+  pa.id::text            as project_agent_id,
+  pa.project_id::text    as project_id,
+  pa.workspace_id::text  as workspace_id
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where t.id = $1::uuid and t.deleted_at is null
+`
+
+type GetScheduledTaskScopeRow struct {
+	ID             string `json:"id"`
+	ProjectAgentID string `json:"project_agent_id"`
+	ProjectID      string `json:"project_id"`
+	WorkspaceID    string `json:"workspace_id"`
+}
+
+// Resolve workspace/project/project_agent for RBAC gating from a task id.
+func (q *Queries) GetScheduledTaskScope(ctx context.Context, id pgtype.UUID) (GetScheduledTaskScopeRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledTaskScope, id)
+	var i GetScheduledTaskScopeRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ProjectID,
+		&i.WorkspaceID,
+	)
+	return i, err
+}
+
 const getSecretPayload = `-- name: GetSecretPayload :one
 select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
 from secrets
@@ -6602,6 +7021,79 @@ func (q *Queries) ListAgentRunEventsByRun(ctx context.Context, arg ListAgentRunE
 			&i.Payload,
 			&i.OccurredAt,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentRunsByScheduledTask = `-- name: ListAgentRunsByScheduledTask :many
+select
+  id::text                                   as id,
+  conversation_id::text                      as conversation_id,
+  project_agent_id::text                     as project_agent_id,
+  connector_type,
+  status,
+  failure_reason,
+  trigger_source,
+  trigger_channel,
+  coalesce(trigger_ref_id::text, '')::text   as trigger_ref_id,
+  created_at, started_at, finished_at, updated_at
+from agent_runs
+where trigger_ref_type = 'scheduled_task' and trigger_ref_id = $1::uuid
+order by created_at desc
+limit $2
+`
+
+type ListAgentRunsByScheduledTaskParams struct {
+	TaskID    pgtype.UUID `json:"task_id"`
+	ItemLimit int32       `json:"item_limit"`
+}
+
+type ListAgentRunsByScheduledTaskRow struct {
+	ID             string             `json:"id"`
+	ConversationID string             `json:"conversation_id"`
+	ProjectAgentID string             `json:"project_agent_id"`
+	ConnectorType  string             `json:"connector_type"`
+	Status         string             `json:"status"`
+	FailureReason  string             `json:"failure_reason"`
+	TriggerSource  string             `json:"trigger_source"`
+	TriggerChannel string             `json:"trigger_channel"`
+	TriggerRefID   string             `json:"trigger_ref_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	StartedAt      pgtype.Timestamptz `json:"started_at"`
+	FinishedAt     pgtype.Timestamptz `json:"finished_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListAgentRunsByScheduledTask(ctx context.Context, arg ListAgentRunsByScheduledTaskParams) ([]ListAgentRunsByScheduledTaskRow, error) {
+	rows, err := q.db.Query(ctx, listAgentRunsByScheduledTask, arg.TaskID, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAgentRunsByScheduledTaskRow{}
+	for rows.Next() {
+		var i ListAgentRunsByScheduledTaskRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.ProjectAgentID,
+			&i.ConnectorType,
+			&i.Status,
+			&i.FailureReason,
+			&i.TriggerSource,
+			&i.TriggerChannel,
+			&i.TriggerRefID,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -8351,6 +8843,84 @@ func (q *Queries) ListSandboxPoolEntriesDueForAutoRenew(ctx context.Context, wor
 	return items, nil
 }
 
+const listScheduledTasksByProjectAgent = `-- name: ListScheduledTasksByProjectAgent :many
+select
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+from scheduled_tasks
+where project_agent_id = $1::uuid and deleted_at is null
+order by created_at desc
+`
+
+type ListScheduledTasksByProjectAgentRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID pgtype.UUID) ([]ListScheduledTasksByProjectAgentRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledTasksByProjectAgent, projectAgentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledTasksByProjectAgentRow{}
+	for rows.Next() {
+		var i ListScheduledTasksByProjectAgentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectAgentID,
+			&i.ConversationID,
+			&i.Name,
+			&i.Prompt,
+			&i.CronExpr,
+			&i.Timezone,
+			&i.Enabled,
+			&i.FeishuChatID,
+			&i.FeishuChatName,
+			&i.NextRunAt,
+			&i.LastRunAt,
+			&i.LastRunID,
+			&i.LastStatus,
+			&i.ConsecutiveFailures,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSecrets = `-- name: ListSecrets :many
 select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
 from secrets
@@ -9201,6 +9771,62 @@ func (q *Queries) MarkSandboxPoolEntryKilled(ctx context.Context, arg MarkSandbo
 	return err
 }
 
+const markScheduledTaskDispatched = `-- name: MarkScheduledTaskDispatched :exec
+update scheduled_tasks
+set last_run_at = $1::timestamptz,
+    last_run_id = $2::uuid,
+    last_status = 'queued',
+    consecutive_failures = $3::int,
+    next_run_at = $4,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = $1::timestamptz
+where id = $5::uuid
+`
+
+type MarkScheduledTaskDispatchedParams struct {
+	Now                 pgtype.Timestamptz `json:"now"`
+	LastRunID           pgtype.UUID        `json:"last_run_id"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	ID                  pgtype.UUID        `json:"id"`
+}
+
+// After a cron dispatch: stamp last run, set consecutive_failures to the
+// recomputed value, advance next_run_at, release claim.
+func (q *Queries) MarkScheduledTaskDispatched(ctx context.Context, arg MarkScheduledTaskDispatchedParams) error {
+	_, err := q.db.Exec(ctx, markScheduledTaskDispatched,
+		arg.Now,
+		arg.LastRunID,
+		arg.ConsecutiveFailures,
+		arg.NextRunAt,
+		arg.ID,
+	)
+	return err
+}
+
+const markScheduledTaskRunNow = `-- name: MarkScheduledTaskRunNow :exec
+update scheduled_tasks
+set last_run_at = $1::timestamptz,
+    last_run_id = $2::uuid,
+    last_status = 'queued',
+    updated_at = $1::timestamptz
+where id = $3::uuid
+`
+
+type MarkScheduledTaskRunNowParams struct {
+	Now       pgtype.Timestamptz `json:"now"`
+	LastRunID pgtype.UUID        `json:"last_run_id"`
+	ID        pgtype.UUID        `json:"id"`
+}
+
+// run-now is out-of-band: stamp last run only, DO NOT touch next_run_at
+// or consecutive_failures.
+func (q *Queries) MarkScheduledTaskRunNow(ctx context.Context, arg MarkScheduledTaskRunNowParams) error {
+	_, err := q.db.Exec(ctx, markScheduledTaskRunNow, arg.Now, arg.LastRunID, arg.ID)
+	return err
+}
+
 const projectSlugExistsInWorkspace = `-- name: ProjectSlugExistsInWorkspace :one
 select exists(
   select 1 from projects
@@ -10003,6 +10629,22 @@ func (q *Queries) SoftDeleteRejectedJoinRequest(ctx context.Context, arg SoftDel
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const softDeleteScheduledTask = `-- name: SoftDeleteScheduledTask :exec
+update scheduled_tasks
+set deleted_at = $1::timestamptz, updated_at = $1::timestamptz
+where id = $2::uuid and deleted_at is null
+`
+
+type SoftDeleteScheduledTaskParams struct {
+	Now pgtype.Timestamptz `json:"now"`
+	ID  pgtype.UUID        `json:"id"`
+}
+
+func (q *Queries) SoftDeleteScheduledTask(ctx context.Context, arg SoftDeleteScheduledTaskParams) error {
+	_, err := q.db.Exec(ctx, softDeleteScheduledTask, arg.Now, arg.ID)
+	return err
 }
 
 const softDeleteUserCredential = `-- name: SoftDeleteUserCredential :one
@@ -10842,6 +11484,97 @@ func (q *Queries) UpdateProjectAgentConfig(ctx context.Context, arg UpdateProjec
 		&i.AgentID,
 		&i.Status,
 		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateScheduledTask = `-- name: UpdateScheduledTask :one
+update scheduled_tasks
+set name = $1,
+    prompt = $2,
+    cron_expr = $3,
+    timezone = $4,
+    enabled = $5,
+    next_run_at = $6,
+    updated_at = $7::timestamptz
+where id = $8::uuid and deleted_at is null
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+`
+
+type UpdateScheduledTaskParams struct {
+	Name      string             `json:"name"`
+	Prompt    string             `json:"prompt"`
+	CronExpr  string             `json:"cron_expr"`
+	Timezone  string             `json:"timezone"`
+	Enabled   bool               `json:"enabled"`
+	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
+	Now       pgtype.Timestamptz `json:"now"`
+	ID        pgtype.UUID        `json:"id"`
+}
+
+type UpdateScheduledTaskRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateScheduledTask(ctx context.Context, arg UpdateScheduledTaskParams) (UpdateScheduledTaskRow, error) {
+	row := q.db.QueryRow(ctx, updateScheduledTask,
+		arg.Name,
+		arg.Prompt,
+		arg.CronExpr,
+		arg.Timezone,
+		arg.Enabled,
+		arg.NextRunAt,
+		arg.Now,
+		arg.ID,
+	)
+	var i UpdateScheduledTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.CronExpr,
+		&i.Timezone,
+		&i.Enabled,
+		&i.FeishuChatID,
+		&i.FeishuChatName,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.LastRunID,
+		&i.LastStatus,
+		&i.ConsecutiveFailures,
+		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

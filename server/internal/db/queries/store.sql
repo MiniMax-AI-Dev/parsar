@@ -4344,4 +4344,232 @@ left join agents a
  and a.deleted_at is null
 where c.id = @conversation_id::uuid;
 
+-- ============================================================
+-- scheduled_tasks
+-- ============================================================
+
+-- name: CreateScheduledTask :one
+insert into scheduled_tasks(
+  id, project_agent_id, conversation_id, name, prompt, cron_expr, timezone,
+  enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
+)
+values (@id::uuid, @project_agent_id::uuid, @conversation_id::uuid, @name, @prompt, @cron_expr, @timezone,
+        @enabled, @feishu_chat_id, @feishu_chat_name, @next_run_at, @created_by, @now, @now)
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at;
+
+-- name: GetScheduledTask :one
+select
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+from scheduled_tasks
+where id = @id::uuid and deleted_at is null;
+
+-- name: ListScheduledTasksByProjectAgent :many
+select
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+from scheduled_tasks
+where project_agent_id = @project_agent_id::uuid and deleted_at is null
+order by created_at desc;
+
+-- name: GetScheduledTaskScope :one
+-- Resolve workspace/project/project_agent for RBAC gating from a task id.
+select
+  t.id::text             as id,
+  pa.id::text            as project_agent_id,
+  pa.project_id::text    as project_id,
+  pa.workspace_id::text  as workspace_id
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where t.id = @id::uuid and t.deleted_at is null;
+
+-- name: UpdateScheduledTask :one
+update scheduled_tasks
+set name = @name,
+    prompt = @prompt,
+    cron_expr = @cron_expr,
+    timezone = @timezone,
+    enabled = @enabled,
+    next_run_at = @next_run_at,
+    updated_at = @now::timestamptz
+where id = @id::uuid and deleted_at is null
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  conversation_id::text                     as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at;
+
+-- name: SoftDeleteScheduledTask :exec
+update scheduled_tasks
+set deleted_at = @now::timestamptz, updated_at = @now::timestamptz
+where id = @id::uuid and deleted_at is null;
+
+-- name: ClaimDueScheduledTasks :many
+-- Multi-pod-safe: FOR UPDATE OF t SKIP LOCKED so sibling pods get disjoint
+-- batches; claim lease (claimed_at/claimed_by) recovers crashed claims.
+-- Mirrors ClaimPendingQueuedFeishuRuns. Returns only what the scheduler
+-- needs to compute next_run_at; FireScheduledTaskRun re-reads FOR UPDATE.
+with picked as (
+  select t.id
+  from scheduled_tasks t
+  where t.enabled = true
+    and t.deleted_at is null
+    and t.next_run_at is not null
+    and t.next_run_at <= @now::timestamptz
+    and (
+      t.claimed_at is null
+      or t.claimed_at < @stale_before::timestamptz
+      or t.claimed_by = @claimed_by::text
+    )
+  order by t.next_run_at asc
+  limit @item_limit
+  for update of t skip locked
+),
+claimed as (
+  update scheduled_tasks t
+  set claimed_at = @now::timestamptz,
+      claimed_by = @claimed_by::text,
+      updated_at = @now::timestamptz
+  from picked
+  where t.id = picked.id
+  returning t.id, t.cron_expr, t.timezone
+)
+select claimed.id::text   as id,
+       claimed.cron_expr  as cron_expr,
+       claimed.timezone   as timezone
+from claimed;
+
+-- name: GetScheduledTaskForUpdate :one
+-- Row-lock the task and read the last run's terminal status for the
+-- self-overlap + failure-accounting decision in FireScheduledTaskRun.
+select
+  t.id::text                                   as id,
+  t.project_agent_id::text                     as project_agent_id,
+  t.conversation_id::text                      as conversation_id,
+  t.prompt                                     as prompt,
+  t.enabled                                    as enabled,
+  t.consecutive_failures                       as consecutive_failures,
+  coalesce(t.last_run_id::text, '')::text      as last_run_id,
+  coalesce(r.status, '')::text                 as last_run_status,
+  coalesce(t.created_by::text, '')::text       as created_by
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = @id::uuid and t.deleted_at is null
+for update of t;
+
+-- name: CreateScheduledAgentRun :exec
+-- 定时 run: trigger_source='scheduled_task', trigger_channel='cron',
+-- trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
+-- 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
+insert into agent_runs(
+  id, workspace_id, project_id, conversation_id,
+  trigger_message_id, trigger_source, trigger_channel, trigger_ref_type, trigger_ref_id,
+  requested_by_type, requested_by_id,
+  project_agent_id, connector_type, status, visibility, metadata,
+  created_at, updated_at
+)
+values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uuid,
+        @trigger_message_id::uuid, 'scheduled_task', 'cron', 'scheduled_task', @trigger_ref_id::uuid,
+        'user', @requested_by_id,
+        @project_agent_id::uuid, @connector_type, 'queued', 'project', @metadata::jsonb, @now, @now);
+
+-- name: MarkScheduledTaskDispatched :exec
+-- After a cron dispatch: stamp last run, set consecutive_failures to the
+-- recomputed value, advance next_run_at, release claim.
+update scheduled_tasks
+set last_run_at = @now::timestamptz,
+    last_run_id = @last_run_id::uuid,
+    last_status = 'queued',
+    consecutive_failures = @consecutive_failures::int,
+    next_run_at = @next_run_at,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: AdvanceScheduledTaskAfterSkip :exec
+-- Self-overlap skip: advance next_run_at, release claim, no run dispatched.
+update scheduled_tasks
+set next_run_at = @next_run_at,
+    last_status = 'skipped_overlap',
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: DisableScheduledTaskForFailures :exec
+-- Threshold reached: auto-disable, keep next_run_at advanced for re-enable.
+update scheduled_tasks
+set enabled = false,
+    last_status = 'auto_disabled',
+    consecutive_failures = @consecutive_failures::int,
+    next_run_at = @next_run_at,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: MarkScheduledTaskRunNow :exec
+-- run-now is out-of-band: stamp last run only, DO NOT touch next_run_at
+-- or consecutive_failures.
+update scheduled_tasks
+set last_run_at = @now::timestamptz,
+    last_run_id = @last_run_id::uuid,
+    last_status = 'queued',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: ListAgentRunsByScheduledTask :many
+select
+  id::text                                   as id,
+  conversation_id::text                      as conversation_id,
+  project_agent_id::text                     as project_agent_id,
+  connector_type,
+  status,
+  failure_reason,
+  trigger_source,
+  trigger_channel,
+  coalesce(trigger_ref_id::text, '')::text   as trigger_ref_id,
+  created_at, started_at, finished_at, updated_at
+from agent_runs
+where trigger_ref_type = 'scheduled_task' and trigger_ref_id = @task_id::uuid
+order by created_at desc
+limit @item_limit;
+
 
