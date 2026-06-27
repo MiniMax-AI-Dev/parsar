@@ -4581,6 +4581,111 @@ paths:
                     enum: [online, offline, error]
         '401':
           description: Bearer credential missing or invalid
+  /api/v1/project-agents/{projectAgentID}/scheduled-tasks:
+    parameters:
+      - { name: projectAgentID, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listDevScheduledTasks
+      summary: List scheduled tasks for a project agent
+      tags: [scheduled-tasks]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ScheduledTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createDevScheduledTask
+      summary: Create a scheduled task (also creates its container conversation)
+      tags: [scheduled-tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduledTaskCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduledTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/scheduled-tasks/{taskID}:
+    parameters:
+      - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getDevScheduledTask
+      summary: Get a scheduled task
+      tags: [scheduled-tasks]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduledTask' }
+        '404': { $ref: '#/components/responses/BadRequest' }
+    patch:
+      operationId: updateDevScheduledTask
+      summary: Update a scheduled task
+      tags: [scheduled-tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduledTaskUpdateRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduledTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: deleteDevScheduledTask
+      summary: Soft-delete a scheduled task
+      tags: [scheduled-tasks]
+      responses:
+        '204': { description: No Content }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/scheduled-tasks/{taskID}/run-now:
+    parameters:
+      - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: runDevScheduledTaskNow
+      summary: Trigger a scheduled task immediately (does not change next_run_at)
+      tags: [scheduled-tasks]
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { run_id: { type: string } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: A run is already active for this task }
+  /api/v1/scheduled-tasks/{taskID}/runs:
+    parameters:
+      - { name: taskID, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listDevScheduledTaskRuns
+      summary: List runs for a scheduled task
+      tags: [scheduled-tasks]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
 
 
@@ -4691,6 +4796,47 @@ components:
           schema:
             $ref: '#/components/schemas/InFlightRunsError'
   schemas:
+    ScheduledTask:
+      type: object
+      required: [id, project_agent_id, conversation_id, name, prompt, cron_expr, timezone, enabled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        project_agent_id: { type: string, format: uuid }
+        conversation_id: { type: string, format: uuid }
+        name: { type: string }
+        prompt: { type: string }
+        cron_expr: { type: string, example: "0 9 * * *" }
+        timezone: { type: string, example: "Asia/Shanghai" }
+        enabled: { type: boolean }
+        feishu_chat_id: { type: string }
+        feishu_chat_name: { type: string }
+        next_run_at: { type: string, format: date-time, nullable: true }
+        last_run_at: { type: string, format: date-time, nullable: true }
+        last_run_id: { type: string }
+        last_status: { type: string }
+        consecutive_failures: { type: integer }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ScheduledTaskCreateRequest:
+      type: object
+      required: [name, prompt, cron_expr, timezone]
+      properties:
+        name: { type: string }
+        prompt: { type: string }
+        cron_expr: { type: string }
+        timezone: { type: string }
+        enabled: { type: boolean, default: true }
+        feishu_chat_id: { type: string }
+    ScheduledTaskUpdateRequest:
+      type: object
+      required: [name, prompt, cron_expr, timezone, enabled]
+      properties:
+        name: { type: string }
+        prompt: { type: string }
+        cron_expr: { type: string }
+        timezone: { type: string }
+        enabled: { type: boolean }
     RuntimeCredentialResponse:
       type: object
       required: [has_credential, updated_at]
