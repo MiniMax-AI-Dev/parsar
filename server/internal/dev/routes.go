@@ -521,6 +521,13 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/project-agents/{projectAgentID}/disable", disableProjectAgent(runtimeStore))
 			r.Post("/project-agents/{projectAgentID}/enable", enableProjectAgent(runtimeStore))
 			r.Delete("/project-agents/{projectAgentID}", deleteProjectAgent(runtimeStore))
+			r.Get("/project-agents/{projectAgentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
+			r.Post("/project-agents/{projectAgentID}/scheduled-tasks", createScheduledTask(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}", getScheduledTask(runtimeStore))
+			r.Patch("/scheduled-tasks/{taskID}", updateScheduledTask(runtimeStore))
+			r.Delete("/scheduled-tasks/{taskID}", deleteScheduledTask(runtimeStore))
+			r.Post("/scheduled-tasks/{taskID}/run-now", runScheduledTaskNow(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
 			r.Get("/workspaces/{workspaceID}/project-agents/{projectAgentID}/runtime", getProjectAgentRuntimeBinding(runtimeStore))
