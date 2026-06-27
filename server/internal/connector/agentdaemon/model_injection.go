@@ -276,6 +276,18 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 			"provider_slug", mr.ProviderType,
 			"env_key_count", len(copyStringAnyMap(opts["env"])))
 		return nil
+	case "pi":
+		if err := injectPiManagedModel(opts, modelID, mr, apiKey); err != nil {
+			return err
+		}
+		c.log.Info("agent_daemon: injectManagedModel ok",
+			"run_id", in.RunID,
+			"agent_kind", agentKind,
+			"model_id", modelID,
+			"model_key", mr.ModelKey,
+			"provider_slug", mr.ProviderType,
+			"pi_model", stringFromMap(opts, "model"))
+		return nil
 	default:
 		return fmt.Errorf("%w: %q", ErrUnsupportedAgentKind, agentKind)
 	}
@@ -440,6 +452,45 @@ func isOpenAICompatibleRuntime(mr store.ModelRuntime) bool {
 		}
 	}
 	return false
+}
+
+// injectPiManagedModel stamps the Parsar-managed model into an
+// agent_kind="pi" prompt_request. pi requires --api-key to be paired
+// with --model and selects via the combined "<provider>/<model>" form,
+// so the secret rides opts["api_key"] (never env) and opts["model"]
+// carries the provider-qualified key. Unmapped providers reject as
+// ErrManagedModelUnsupported so the caller emits a credential-form notice.
+func injectPiManagedModel(opts map[string]any, modelID string, mr store.ModelRuntime, apiKey string) error {
+	provider := piProviderID(mr)
+	if provider == "" {
+		return fmt.Errorf("%w: model_id=%s provider_type=%q adapter=%q",
+			ErrManagedModelUnsupported, modelID, mr.ProviderType, mr.Adapter)
+	}
+	modelKey := strings.TrimSpace(mr.ModelKey)
+	if modelKey == "" {
+		return fmt.Errorf("%w: model_id=%s pi requires a model_key to pair with --api-key",
+			ErrManagedModelConfigInvalid, modelID)
+	}
+	opts["model"] = provider + "/" + modelKey
+	opts["api_key"] = apiKey
+	return nil
+}
+
+// piProviderID maps a Parsar provider_type / adapter slug onto the
+// provider id pi expects in its "<provider>/<model>" selector.
+func piProviderID(mr store.ModelRuntime) string {
+	for _, v := range []string{mr.ProviderType, mr.Adapter} {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "anthropic", "anthropic-compatible", "anthropic_compatible", "@ai-sdk/anthropic":
+			return "anthropic"
+		case "openai", "openai-compatible", "openai_compatible",
+			"@ai-sdk/openai", "@ai-sdk/openai-compatible":
+			return "openai"
+		case "google", "gemini", "google-generative-ai", "google_generative_ai", "@ai-sdk/google":
+			return "google"
+		}
+	}
+	return ""
 }
 
 // applySpecMemoryInjection appends the SessionStart spec/memory bundle

@@ -24,6 +24,7 @@ func TestAgentKindToRenderTarget(t *testing.T) {
 		{"claude_code", render.TargetClaudeCode},
 		{"opencode", render.TargetOpenCode},
 		{"codex", render.TargetCodex},
+		{"pi", render.TargetPi},
 		{"", render.TargetClaudeCode},
 		{"  claude_code  ", render.TargetClaudeCode},
 		{"unknown_engine", render.TargetClaudeCode},
@@ -119,6 +120,58 @@ func TestResolveCapabilityAdditions_OpenCodeMCPStillRenders(t *testing.T) {
 	}
 	if len(got.Disabled) != 0 {
 		t.Fatalf("opencode mcp must not be disabled, got %+v", got.Disabled)
+	}
+}
+
+// TestResolveCapabilityAdditions_PiSkillRenders is the positive half of
+// pi's scope: pi delivers managed skills (via --skill), so a skill row on
+// a pi agent must render, not degrade. pi is the inverse of codex here —
+// codex rejects skills, pi accepts them.
+func TestResolveCapabilityAdditions_PiSkillRenders(t *testing.T) {
+	presigner := &stubPluginPresigner{}
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newSkillRow(t, "skill-a", "Skill A", "do a"),
+		}},
+		oss: presigner,
+		log: discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "pi")
+	if err != nil {
+		t.Fatalf("pi skill must render: %v", err)
+	}
+	if len(got.Skills) != 1 {
+		t.Fatalf("pi must render skills, got %d (%+v)", len(got.Skills), got.Skills)
+	}
+	if len(got.Disabled) != 0 {
+		t.Fatalf("pi skill must not be disabled, got %+v", got.Disabled)
+	}
+}
+
+// TestResolveCapabilityAdditions_PiMCPSoftDegrades is the negative half:
+// managed MCP is out of scope for pi, so the pi renderer returns
+// ErrUnsupported and the connector must skip the row as a Disabled
+// capability rather than hard-fail. This depends on agentKindToRenderTarget
+// mapping "pi"→TargetPi; were pi to fall back to TargetClaudeCode it would
+// wrongly render the MCP server instead of degrading.
+func TestResolveCapabilityAdditions_PiMCPSoftDegrades(t *testing.T) {
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newMCPRow(t, "mcp-1", "github", []canonical.MCPServer{
+				{Name: "github", Command: "npx", Args: []string{"@modelcontextprotocol/server-github"}},
+			}, nil),
+		}},
+		log: discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "pi")
+	if err != nil {
+		t.Fatalf("pi mcp must soft-degrade, got hard error: %v", err)
+	}
+	if len(got.MCPServers) != 0 {
+		t.Fatalf("pi must not produce mcp servers, got %+v", got.MCPServers)
+	}
+	if len(got.Disabled) != 1 || got.Disabled[0].CapabilityID != "mcp-1" {
+		t.Fatalf("expected 1 disabled mcp capability with id=mcp-1, got %+v", got.Disabled)
 	}
 }
 

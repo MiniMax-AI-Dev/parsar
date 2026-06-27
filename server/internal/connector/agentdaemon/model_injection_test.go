@@ -1021,6 +1021,155 @@ func TestInjectCodexManagedModel_NoBaseURLRejected(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------
+// injectPiManagedModel
+// ----------------------------------------------------------------------
+
+// TestInjectPiManagedModel_AnthropicHappyPath pins the contract pi's
+// daemon adapter relies on: opts["model"] is pi's combined
+// "<provider>/<model_key>" selector and opts["api_key"] carries the
+// decrypted secret (pi authenticates via --api-key, NOT env), so the
+// platform key must never leak into the child env.
+func TestInjectPiManagedModel_AnthropicHappyPath(t *testing.T) {
+	opts := map[string]any{
+		"env": map[string]any{"OTHER_FLAG": "kept"},
+	}
+	mr := store.ModelRuntime{
+		ModelID:      "model-anthropic",
+		ModelKey:     "claude-opus-4-7",
+		ProviderType: "anthropic-compatible",
+		Adapter:      "@ai-sdk/anthropic",
+	}
+	if err := injectPiManagedModel(opts, mr.ModelID, mr, "sk-pi"); err != nil {
+		t.Fatalf("injectPiManagedModel: %v", err)
+	}
+	if got := opts["model"]; got != "anthropic/claude-opus-4-7" {
+		t.Fatalf("opts[model] = %v, want anthropic/claude-opus-4-7", got)
+	}
+	if got := opts["api_key"]; got != "sk-pi" {
+		t.Fatalf("opts[api_key] = %v, want sk-pi", got)
+	}
+	env, _ := opts["env"].(map[string]any)
+	if _, hasKey := env["ANTHROPIC_API_KEY"]; hasKey {
+		t.Fatalf("secret must NOT be placed in env for pi — auth flows through --api-key: %+v", env)
+	}
+	if got := env["OTHER_FLAG"]; got != "kept" {
+		t.Fatalf("unrelated env key lost: %+v", env)
+	}
+}
+
+func TestInjectPiManagedModel_ProviderMapping(t *testing.T) {
+	cases := []struct {
+		name string
+		mr   store.ModelRuntime
+		want string
+	}{
+		{"openai", store.ModelRuntime{ModelKey: "gpt-4o", ProviderType: "openai"}, "openai/gpt-4o"},
+		{"openai-compatible adapter", store.ModelRuntime{ModelKey: "gpt-4o-mini", Adapter: "@ai-sdk/openai"}, "openai/gpt-4o-mini"},
+		{"anthropic", store.ModelRuntime{ModelKey: "claude-sonnet-4-5", ProviderType: "anthropic"}, "anthropic/claude-sonnet-4-5"},
+		{"google", store.ModelRuntime{ModelKey: "gemini-2.5-pro", ProviderType: "google"}, "google/gemini-2.5-pro"},
+		{"gemini alias", store.ModelRuntime{ModelKey: "gemini-2.5-flash", ProviderType: "gemini"}, "google/gemini-2.5-flash"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := map[string]any{}
+			if err := injectPiManagedModel(opts, "model-x", tc.mr, "sk-x"); err != nil {
+				t.Fatalf("inject: %v", err)
+			}
+			if got := opts["model"]; got != tc.want {
+				t.Fatalf("opts[model] = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestInjectPiManagedModel_UnmappedProviderRejected confirms an
+// unrecognised provider surfaces ErrManagedModelUnsupported (so the
+// credential-form flow can steer the admin) and leaves opts untouched.
+func TestInjectPiManagedModel_UnmappedProviderRejected(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-cohere",
+		ModelKey:     "command-r",
+		ProviderType: "cohere",
+	}
+	err := injectPiManagedModel(opts, mr.ModelID, mr, "sk-x")
+	if err == nil {
+		t.Fatal("expected ErrManagedModelUnsupported for unmapped provider, got nil")
+	}
+	if !errors.Is(err, ErrManagedModelUnsupported) {
+		t.Fatalf("expected ErrManagedModelUnsupported, got %v", err)
+	}
+	if _, ok := opts["model"]; ok {
+		t.Fatalf("opts[model] must not be set on rejection: %+v", opts)
+	}
+	if _, ok := opts["api_key"]; ok {
+		t.Fatalf("opts[api_key] must not be set on rejection: %+v", opts)
+	}
+}
+
+// TestInjectPiManagedModel_MissingModelKeyRejected guards the
+// half-built selector: pi requires --api-key to be paired with --model,
+// so an empty model_key must fail loud rather than emit "<provider>/".
+func TestInjectPiManagedModel_MissingModelKeyRejected(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{ModelID: "model-x", ProviderType: "anthropic"}
+	err := injectPiManagedModel(opts, mr.ModelID, mr, "sk-x")
+	if err == nil {
+		t.Fatal("expected ErrManagedModelConfigInvalid for missing model_key, got nil")
+	}
+	if !errors.Is(err, ErrManagedModelConfigInvalid) {
+		t.Fatalf("expected ErrManagedModelConfigInvalid, got %v", err)
+	}
+}
+
+// TestInjectManagedModel_PiSwitchWired drives the full
+// c.injectManagedModel path with agent_kind="pi" to prove the switch
+// dispatches to injectPiManagedModel (without a case "pi" it falls
+// through to ErrUnsupportedAgentKind).
+func TestInjectManagedModel_PiSwitchWired(t *testing.T) {
+	const masterKey = "test-master-key"
+	svc, err := secrets.New(masterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := svc.Encrypt(map[string]any{"api_key": "sk-pi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := fakeModelResolver{
+		runtime: store.ModelRuntime{
+			ModelID:      "model-pi",
+			ModelKey:     "claude-opus-4-7",
+			ProviderType: "anthropic-compatible",
+			Adapter:      "@ai-sdk/anthropic",
+			SecretID:     "secret-pi",
+		},
+		secret: store.SecretPayload{SecretRead: store.SecretRead{Status: "active"}, EncryptedPayload: enc},
+	}
+	c := New(Config{
+		Registry:      gateway.NewRegistry(),
+		Binder:        binding.NewInMemoryBinder(),
+		ModelResolver: &resolver,
+		Secrets:       svc,
+	})
+
+	in := basicInput()
+	in.WorkspaceID = "ws-1"
+	in.ProjectAgentConfig = map[string]any{"model_id": "model-pi"}
+	opts := renderStaticAgentOptions(in)
+
+	if err := c.injectManagedModel(context.Background(), in, opts, "pi"); err != nil {
+		t.Fatalf("injectManagedModel(pi): %v", err)
+	}
+	if got := opts["model"]; got != "anthropic/claude-opus-4-7" {
+		t.Fatalf("opts[model] = %v, want anthropic/claude-opus-4-7", got)
+	}
+	if got := opts["api_key"]; got != "sk-pi" {
+		t.Fatalf("opts[api_key] = %v, want sk-pi", got)
+	}
+}
+
+// ----------------------------------------------------------------------
 // model_credential_binding (shared API key on the agent)
 // ----------------------------------------------------------------------
 
