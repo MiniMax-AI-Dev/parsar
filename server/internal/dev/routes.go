@@ -188,6 +188,16 @@ type RuntimeStore interface {
 	ApproveJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	RejectJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error
+
+	// 定时任务(scheduled tasks)
+	ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error)
+	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error)
+	GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error)
+	UpdateScheduledTask(ctx context.Context, in store.UpdateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	SoftDeleteScheduledTask(ctx context.Context, taskID string) error
+	RunScheduledTaskNow(ctx context.Context, taskID string) (string, error)
+	ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error)
 }
 
 type FeishuAppRegistrationClient interface {
