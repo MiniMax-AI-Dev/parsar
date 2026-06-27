@@ -1070,6 +1070,52 @@ COMMENT ON INDEX  idx_agent_runs_runtime_queue       IS '按 runtime/status 查�
 
 
 -- ============================================================
+-- 表: scheduled_tasks
+-- ============================================================
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_agent_id     uuid NOT NULL REFERENCES project_agents(id),
+  conversation_id      uuid NOT NULL REFERENCES conversations(id),
+  name                 text NOT NULL,
+  prompt               text NOT NULL,
+  cron_expr            text NOT NULL,
+  timezone             text NOT NULL,
+  enabled              boolean NOT NULL DEFAULT true,
+  feishu_chat_id       text,
+  feishu_chat_name     text,
+  next_run_at          timestamptz,
+  last_run_at          timestamptz,
+  last_run_id          uuid REFERENCES agent_runs(id),
+  last_status          text NOT NULL DEFAULT '',
+  consecutive_failures integer NOT NULL DEFAULT 0,
+  claimed_at           timestamptz,
+  claimed_by           text NOT NULL DEFAULT '',
+  created_by           uuid REFERENCES users(id),
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  deleted_at           timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_due
+  ON scheduled_tasks (enabled, next_run_at)
+  WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE  scheduled_tasks IS '定时任务: 锚定 project_agent, 到点用独立 session 触发一次 agent run';
+COMMENT ON COLUMN scheduled_tasks.project_agent_id     IS '触发的 project_agent (runnable 单元)';
+COMMENT ON COLUMN scheduled_tasks.conversation_id      IS '该任务的 run 容器 conversation (platform='''' = web only)';
+COMMENT ON COLUMN scheduled_tasks.cron_expr            IS '标准 5 段 cron 表达式';
+COMMENT ON COLUMN scheduled_tasks.timezone             IS 'IANA 时区, 解释 cron_expr';
+COMMENT ON COLUMN scheduled_tasks.feishu_chat_id       IS 'phase 2 投递目标群; null = web only';
+COMMENT ON COLUMN scheduled_tasks.next_run_at          IS '调度器算出的下次触发 (UTC)';
+COMMENT ON COLUMN scheduled_tasks.last_run_id          IS '最近一次派发的 agent_run';
+COMMENT ON COLUMN scheduled_tasks.consecutive_failures IS '连续失败计数, 到阈值自动停用';
+COMMENT ON COLUMN scheduled_tasks.claimed_at           IS '多 pod claim 租约时间';
+COMMENT ON COLUMN scheduled_tasks.claimed_by           IS '多 pod claim 持有者';
+COMMENT ON COLUMN scheduled_tasks.created_by           IS '执行身份 = 创建者';
+COMMENT ON INDEX  idx_scheduled_tasks_due              IS '调度器扫到期任务';
+
+
+-- ============================================================
 -- 表: connector_session_bindings
 -- ============================================================
 CREATE TABLE IF NOT EXISTS connector_session_bindings (
