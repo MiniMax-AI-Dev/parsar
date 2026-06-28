@@ -118,6 +118,48 @@ func TestTranslateMessageEndCapturesUsage(t *testing.T) {
 	}
 }
 
+// A tool loop makes pi emit one message_end per assistant turn. Every
+// counter — including the cache/reasoning/total ones parked in Raw — must
+// sum across frames, not get clobbered by the final frame.
+func TestTranslateMessageEndAccumulatesUsageAcrossFrames(t *testing.T) {
+	tr := pi.NewTranslatorForTest("run-multi")
+	first := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"a"}],"provider":"anthropic","model":"m","usage":{"input":10,"output":7,"cacheRead":2,"cacheWrite":1,"reasoning":3,"totalTokens":23,"cost":{"total":0.3}},"stopReason":"tool_use"}}`
+	second := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"b"}],"provider":"anthropic","model":"m","usage":{"input":5,"output":4,"cacheRead":6,"cacheWrite":2,"reasoning":1,"totalTokens":12,"cost":{"total":0.2}},"stopReason":"stop"}}`
+	for _, line := range []string{first, second} {
+		if _, err := tr.Translate([]byte(line)); err != nil {
+			t.Fatalf("Translate: %v", err)
+		}
+	}
+	envs := tr.TerminalEnvelopes(nil, "", false)
+	var got *proto.UsagePayload
+	for _, env := range envs {
+		if env.Type == proto.TypeUsage {
+			payload := decodePayload[proto.UsagePayload](t, env)
+			got = &payload
+		}
+	}
+	if got == nil {
+		t.Fatalf("usage env missing: %#v", envs)
+	}
+	if got.InputTokens != 15 || got.OutputTokens != 11 {
+		t.Fatalf("summed input/output = %d/%d, want 15/11", got.InputTokens, got.OutputTokens)
+	}
+	if got.CostUSD < 0.49 || got.CostUSD > 0.51 {
+		t.Fatalf("summed cost = %v, want ~0.5", got.CostUSD)
+	}
+	// Raw round-trips through JSON, so the counters decode back as float64.
+	for key, want := range map[string]float64{
+		"cache_read_tokens":  8,
+		"cache_write_tokens": 3,
+		"reasoning_tokens":   4,
+		"total_tokens":       35,
+	} {
+		if got.Raw[key] != want {
+			t.Fatalf("Raw[%q] = %#v, want %v (must sum across frames)", key, got.Raw[key], want)
+		}
+	}
+}
+
 // pi exits 0 even when the model errors: it emits a message_end whose
 // assistant message carries stopReason "error". The parser MUST surface
 // that as TypeError despite the clean process exit.

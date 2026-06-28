@@ -244,26 +244,31 @@ func (t *translator) mergeUsage(u piUsage, provider, model string) {
 	if model != "" {
 		t.usage.Model = model
 	}
-	if u.CacheRead != 0 || u.CacheWrite != 0 || u.CacheWrite1h != 0 || u.Reasoning != 0 || u.TotalTokens != 0 {
-		if t.usage.Raw == nil {
-			t.usage.Raw = map[string]any{}
-		}
-		if u.CacheRead != 0 {
-			t.usage.Raw["cache_read_tokens"] = u.CacheRead
-		}
-		if u.CacheWrite != 0 {
-			t.usage.Raw["cache_write_tokens"] = u.CacheWrite
-		}
-		if u.CacheWrite1h != 0 {
-			t.usage.Raw["cache_write_1h_tokens"] = u.CacheWrite1h
-		}
-		if u.Reasoning != 0 {
-			t.usage.Raw["reasoning_tokens"] = u.Reasoning
-		}
-		if u.TotalTokens != 0 {
-			t.usage.Raw["total_tokens"] = u.TotalTokens
-		}
+	// pi reports usage per assistant message; a tool loop yields several
+	// message_end frames, so accumulate cache/reasoning/total the same way as
+	// input/output above — overwriting would leave Raw showing only the last
+	// frame while the summed token counts reflect all of them.
+	t.addRawTokens("cache_read_tokens", u.CacheRead)
+	t.addRawTokens("cache_write_tokens", u.CacheWrite)
+	t.addRawTokens("cache_write_1h_tokens", u.CacheWrite1h)
+	t.addRawTokens("reasoning_tokens", u.Reasoning)
+	t.addRawTokens("total_tokens", u.TotalTokens)
+}
+
+// addRawTokens sums one counter into usage.Raw. In-process the values stay
+// int32 (matching piUsage); they only become float64 once the envelope is
+// JSON-encoded downstream, which is why the lookup asserts int32.
+func (t *translator) addRawTokens(key string, v int32) {
+	if v == 0 {
+		return
 	}
+	if t.usage.Raw == nil {
+		t.usage.Raw = map[string]any{}
+	}
+	if existing, ok := t.usage.Raw[key].(int32); ok {
+		v += existing
+	}
+	t.usage.Raw[key] = v
 }
 
 func (t *translator) terminalEnvelopes(waitErr error, stderr string, cancelled bool) []proto.Envelope {
