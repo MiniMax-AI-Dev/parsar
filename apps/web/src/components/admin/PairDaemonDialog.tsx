@@ -160,35 +160,24 @@ export function PairDaemonDialog({
         ) : (
           <div className="space-y-3">
             <p className="text-[12px] text-emerald-700">
-              {t("runtime.agentDaemon.pair.success", {
-                defaultValue: "请在 {{name}} 上依次执行下列两条命令:",
+              {t("runtime.agentDaemon.pair.successOneLine", {
+                defaultValue:
+                  "在 {{name}} 上执行这一条命令即可连接（自动下载并连接,无需手动安装二进制):",
                 name: result.runtimeName,
               })}
             </p>
-            <div className="space-y-2">
-              <DaemonCommandBlock
-                command={buildInstallCommand()}
-                label={t("runtime.agentDaemon.pair.installLabel", {
-                  defaultValue: "1. 安装 parsar-daemon",
-                })}
-                description={t("runtime.agentDaemon.pair.installHint", {
-                  defaultValue: "安装到 ~/.local/bin；不写系统目录、不需要 sudo",
-                })}
-                onCopy={copyToClipboard}
-                testId="agent-daemon-pair-copy-install"
-              />
-              <DaemonCommandBlock
-                command={buildConnectCommand(result.token, result.runtimeName)}
-                label={t("runtime.agentDaemon.pair.connectLabel", {
-                  defaultValue: "2. 连接 Parsar",
-                })}
-                description={t("runtime.agentDaemon.pair.connectHint", {
-                  defaultValue: "成功后这台设备会变为「在线」,可在创建 Agent 时被选中",
-                })}
-                onCopy={copyToClipboard}
-                testId="agent-daemon-pair-copy-connect"
-              />
-            </div>
+            <DaemonCommandBlock
+              command={buildOneLineCommand(result.token, result.runtimeName)}
+              label={t("runtime.agentDaemon.pair.oneLineLabel", {
+                defaultValue: "复制并在目标机器上运行",
+              })}
+              description={t("runtime.agentDaemon.pair.oneLineHint", {
+                defaultValue:
+                  "目标机器需已安装 Claude Code / OpenCode / Codex 之一;成功后这台设备会变为「在线」",
+              })}
+              onCopy={copyToClipboard}
+              testId="agent-daemon-pair-copy-oneline"
+            />
             <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px]">
               {connected ? (
                 <>
@@ -257,16 +246,23 @@ function DaemonCommandBlock({
   )
 }
 
-// Download only. Chmod / install path is left to the user — managed
-// laptops often forbid writes to /usr/local/bin.
-function buildInstallCommand(): string {
+// Single command the operator pastes on the target machine: download via
+// the server's install endpoint, then connect — all in one pipe. Pairing
+// inputs ride as env vars (NOT a URL query string and NOT connect flags)
+// so the one-shot token never lands in server/proxy access logs or `ps`
+// output: `connect` hydrates these same vars and scrubs them from child
+// argv (see apps/parsar-daemon/internal/cli/connect.go). The piped
+// install script chmods the binary and execs `connect -b`, so the
+// operator never sees the binary, its path, or the token.
+function buildOneLineCommand(token: string, deviceName: string): string {
   const origin = serverOrigin()
-  return `curl -fsSL ${origin}/api/v1/parsar-daemon/install.sh | bash`
-}
-
-function buildConnectCommand(token: string, deviceName: string): string {
-  const origin = serverOrigin()
-  return `parsar-daemon connect --url ${origin} --token ${token} --device-name ${shellEscape(deviceName)} -b`
+  return [
+    `curl -fsSL ${origin}/api/v1/parsar-daemon/install.sh |`,
+    `PARSAR_DAEMON_CONNECT_URL=${origin}`,
+    `PARSAR_DAEMON_CONNECT_TOKEN=${token}`,
+    `PARSAR_DAEMON_CONNECT_DEVICE_NAME=${shellEscape(deviceName)}`,
+    `bash`,
+  ].join(" ")
 }
 
 function serverOrigin(): string {
