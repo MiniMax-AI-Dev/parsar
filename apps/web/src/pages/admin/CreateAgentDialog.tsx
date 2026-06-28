@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server, Sparkles } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -39,7 +39,7 @@ import type {
 const DEFAULT_PROMPT = "You are a helpful AI assistant for this team. Be concise and accurate."
 
 type ExecutionMode = "sandbox" | "local_device" | "external"
-type AgentEngine = "claude_code" | "opencode" | "codex"
+type AgentEngine = "claude_code" | "opencode" | "codex" | "pi"
 type SandboxSize = "standard" | "xl"
 type RuntimeChoice = AgentRuntime
 
@@ -61,6 +61,7 @@ function agentEngineFromAgent(a?: ProjectAgent | null): AgentEngine {
   const v = String(projectAgentConfig(a).agent_kind ?? agentConfig(a).agent_kind ?? "claude_code")
   if (v === "opencode") return "opencode"
   if (v === "codex") return "codex"
+  if (v === "pi") return "pi"
   return "claude_code"
 }
 
@@ -583,7 +584,7 @@ export function CreateAgentDialog({
   const hasConnector = true
   const connector = mode === "edit" && agent ? agent.connector_type : connectorForExecutionMode(executionMode)
   const hasModel = activeModels.length > 0
-  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex"
+  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
   const hasRequiredModel = !requiresModel || (hasModel && modelID !== "")
   const daemonExecutionEditable = connector === "agent_daemon"
   const showExecutionChoices = mode === "create" || daemonExecutionEditable
@@ -992,7 +993,7 @@ export function CreateAgentDialog({
                   </Field>
                   {connector === "agent_daemon" && (
                     <Field label={t("agents.form.fields.agentEngine")} required>
-                      <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <ChoiceCard
                           icon={<Cpu className="h-4 w-4" />}
                           title={t("agents.engine.claudeCode.title")}
@@ -1004,6 +1005,12 @@ export function CreateAgentDialog({
                           title={t("agents.engine.codex.title")}
                           selected={agentEngine === "codex"}
                           onSelect={() => setAgentEngine("codex")}
+                        />
+                        <ChoiceCard
+                          icon={<Sparkles className="h-4 w-4" />}
+                          title={t("agents.engine.pi.title")}
+                          selected={agentEngine === "pi"}
+                          onSelect={() => setAgentEngine("pi")}
                         />
                         <ChoiceCard
                           icon={<Server className="h-4 w-4" />}

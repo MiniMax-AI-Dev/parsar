@@ -1492,6 +1492,10 @@
         "title": "Codex",
         "description": "通过 app-server 协议运行 OpenAI Codex（codex-rs）。"
       },
+      "pi": {
+        "title": "Pi",
+        "description": "通过 parsar-daemon 运行 pi coding agent CLI。"
+      },
       "opencode": {
         "title": "OpenCode",
         "description": "通过 parsar-daemon 运行 OpenCode CLI，适合本机或 sandbox daemon 的 OpenCode 工作流。"

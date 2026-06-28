@@ -47,7 +47,7 @@ func skillFixture() canonical.Spec {
 
 // TestFor_KnownTargets catches "added a Target without wiring For()".
 func TestFor_KnownTargets(t *testing.T) {
-	for _, target := range []Target{TargetOpenCode, TargetClaudeCode, TargetCodex} {
+	for _, target := range []Target{TargetOpenCode, TargetClaudeCode, TargetCodex, TargetPi} {
 		r, err := For(target)
 		if err != nil {
 			t.Fatalf("For(%q) error: %v", target, err)
@@ -273,6 +273,111 @@ func TestCodexRenderer_MCPByteEqualsClaudeCode(t *testing.T) {
 	if codexCanon != claudeCanon {
 		t.Fatalf("codex and claudecode MCP shapes diverged.\ncodex     = %s\nclaudecode= %s",
 			codexCanon, claudeCanon)
+	}
+}
+
+// TestPiRenderer_SkillGolden mirrors the claudecode skill golden: pi
+// reuses Claude Code's skill descriptor verbatim so the daemon's generic
+// zip installer decodes pi's --skill payload with one code path.
+func TestPiRenderer_SkillGolden(t *testing.T) {
+	out, err := piRenderer{}.Render(context.Background(), skillFixture())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	var got claudeCodeSkillDocument
+	if err := json.Unmarshal(out.Content, &got); err != nil {
+		t.Fatalf("unmarshal: %v\nraw=%s", err, out.Content)
+	}
+	if got.Name == "" {
+		t.Fatalf("name should be populated from SkillSpec.Slug, got empty: %s", out.Content)
+	}
+	for _, key := range []string{`"name"`, `"version"`, `"oss_key"`, `"sha256"`} {
+		if !strings.Contains(string(out.Content), key) {
+			t.Fatalf("payload missing %s key: %s", key, out.Content)
+		}
+	}
+}
+
+// TestPiRenderer_SkillByteEqualsClaudeCode is the parity guard the daemon
+// relies on: pi and claudecode skill descriptors decode through the same
+// claudeCodeSkillDocument unmarshal, so any field that lands on one shape
+// and not the other silently breaks pi skill installs. Compared through
+// canonicalize() so map-key ordering jitter isn't a false positive.
+func TestPiRenderer_SkillByteEqualsClaudeCode(t *testing.T) {
+	piOut, err := piRenderer{}.Render(context.Background(), skillFixture())
+	if err != nil {
+		t.Fatalf("pi render: %v", err)
+	}
+	claudeOut, err := claudeCodeRenderer{}.Render(context.Background(), skillFixture())
+	if err != nil {
+		t.Fatalf("claudecode render: %v", err)
+	}
+	piCanon, err := canonicalizeJSON(piOut.Content)
+	if err != nil {
+		t.Fatalf("canonicalize pi: %v\nraw=%s", err, piOut.Content)
+	}
+	claudeCanon, err := canonicalizeJSON(claudeOut.Content)
+	if err != nil {
+		t.Fatalf("canonicalize claudecode: %v\nraw=%s", err, claudeOut.Content)
+	}
+	if piCanon != claudeCanon {
+		t.Fatalf("pi and claudecode skill shapes diverged.\npi        = %s\nclaudecode= %s",
+			piCanon, claudeCanon)
+	}
+}
+
+// TestPiRenderer_MCPAndPluginUnsupported pins pi's soft-degrade contract:
+// managed MCP and plugin delivery are out of scope, so both return
+// ErrUnsupported and the agentdaemon connector skips them with a Disabled
+// notice instead of hard-failing the prompt. pi is the mirror of codex —
+// it supports Skill (which codex rejects) and rejects MCP (which codex
+// renders) — so keep this distinct from the codex unsupported test.
+func TestPiRenderer_MCPAndPluginUnsupported(t *testing.T) {
+	cases := []canonical.Spec{
+		mcpFixture(),
+		{
+			SchemaVersion: canonical.SchemaVersionCurrent,
+			Kind:          canonical.KindPlugin,
+			Plugin: &canonical.PluginSpec{
+				Name:         "my-plugin",
+				Version:      "1.0.0",
+				Description:  "x",
+				OssKey:       "capabilities/plugins/u1/my-plugin.zip",
+				SHA256:       "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+				UploadSource: canonical.UploadSourceZip,
+			},
+		},
+	}
+	for _, spec := range cases {
+		_, err := piRenderer{}.Render(context.Background(), spec)
+		if !errors.Is(err, ErrUnsupported) {
+			t.Fatalf("expected ErrUnsupported for kind=%s, got %v", spec.Kind, err)
+		}
+	}
+}
+
+// TestPiRenderer_SystemPromptShared confirms pi rides the shared
+// renderSystemPrompt path (system prompt injection is in scope), emitting
+// the {prompt, mode} document every scaffold uses.
+func TestPiRenderer_SystemPromptShared(t *testing.T) {
+	spec := canonical.Spec{
+		SchemaVersion: canonical.SchemaVersionCurrent,
+		Kind:          canonical.KindSystemPrompt,
+		SystemPrompt: &canonical.SystemPromptSpec{
+			Prompt: "Stay terse.",
+			Mode:   canonical.SystemPromptModeAppend,
+		},
+	}
+	out, err := piRenderer{}.Render(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	var got systemPromptDocument
+	if err := json.Unmarshal(out.Content, &got); err != nil {
+		t.Fatalf("unmarshal: %v\nraw=%s", err, out.Content)
+	}
+	if got.Prompt != "Stay terse." {
+		t.Fatalf("prompt = %q, want 'Stay terse.'", got.Prompt)
 	}
 }
 

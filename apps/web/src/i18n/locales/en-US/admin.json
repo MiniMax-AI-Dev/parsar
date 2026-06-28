@@ -1492,6 +1492,10 @@
         "title": "Codex",
         "description": "Run OpenAI Codex (codex-rs) via the app-server protocol."
       },
+      "pi": {
+        "title": "Pi",
+        "description": "Run the pi coding agent CLI through parsar-daemon."
+      },
       "opencode": {
         "title": "OpenCode",
         "description": "Run OpenCode CLI through parsar-daemon for local or sandbox daemon workflows."
