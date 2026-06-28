@@ -1,0 +1,106 @@
+# Parsar 本地版 (local all-in-one) — Phase 1 deliverable.
+#
+# One command, single machine, zero secrets to generate:
+#
+#   docker compose -f docker-compose.local.yml up
+#
+# Brings up Postgres + a one-shot init (migrate + first-owner bootstrap) +
+# parsar-server with mock auth. Open http://127.0.0.1:18080, click
+# 「接入新设备」, copy the single command, run it on THIS host, and your
+# local Claude Code / OpenCode / Codex login is paired in.
+#
+# Profile not fork: this is the SAME image as the self-host deployment
+# (deploy/compose/compose.example.yml). Differences live only in this file
+# + the env values below. No separate "local" binary or image.
+#
+# Image source:
+#   - Default: GHCR prebuilt image (PARSAR_SERVER_IMAGE below).
+#   - Local build fallback (before the tag is published, or to test your
+#     own changes):
+#       make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
+#       PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
+#
+# Override knobs (all optional — defaults make `up` work with no .env):
+#   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
+#   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
+#   PARSAR_PG_PORT        host port for Postgres (default: 15432)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: parsar-local-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parsar
+      POSTGRES_PASSWORD: parsar
+      POSTGRES_DB: parsar
+    ports:
+      - "127.0.0.1:${PARSAR_PG_PORT:-15432}:5432"
+    volumes:
+      - parsar-local-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parsar -d parsar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  # One-shot: run migrations, then provision the first owner as the mock
+  # identity (admin@example.com — see server/internal/auth/feishu/mock.go)
+  # so the very first mock login lands in a ready workspace. Tolerates
+  # exit code 2 (store.ErrBootstrapClosed) so re-running `up` is idempotent.
+  # Binaries live on $PATH at /usr/local/bin (WORKDIR is /var/lib/parsar),
+  # so they are invoked by bare name, NOT ./parsar-migrate.
+  parsar-init:
+    image: ${PARSAR_SERVER_IMAGE:-ghcr.io/MiniMax-ai-dev/parsar-server:latest}
+    container_name: parsar-local-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        parsar-migrate
+        parsar-bootstrap \
+          --email=admin@example.com \
+          --workspace="Local Workspace" \
+          --name="Local Admin" \
+        || [ "$$?" -eq 2 ]
+    restart: "no"
+
+  parsar-server:
+    image: ${PARSAR_SERVER_IMAGE:-ghcr.io/MiniMax-ai-dev/parsar-server:latest}
+    container_name: parsar-local-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      parsar-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${PARSAR_LOCAL_PORT:-18080}:8080"
+    environment:
+      DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
+      # Mock auth -> ProfileDev: full cookie login as admin@example.com with
+      # no IdP. (PARSAR_DEV_AUTH stays unset: we want real cookie login, not
+      # the header bypass.)
+      PARSAR_FEISHU_MOCK: "true"
+      # Public URL must match the host port the browser hits so OAuth
+      # callbacks AND the minted one-line connect command line up. Kept in
+      # sync with the published port via the same variable.
+      PARSAR_PUBLIC_URL: "http://127.0.0.1:${PARSAR_LOCAL_PORT:-18080}"
+      # NOTE: deliberately NOT setting PARSAR_MASTER_KEY. In ProfileDev the
+      # server auto-seeds the dev master key (parsar-dev-master-key-2026),
+      # which the web admin UI hardcodes (apps/web/src/lib/api-models.ts
+      # DEV_MASTER_KEY). Overriding it here would desync the two.
+    volumes:
+      - parsar-local-data:/var/lib/parsar
+    # parsar-server image ships its own HEALTHCHECK (wget /healthz); no
+    # service depends on its health so no compose-level probe is needed.
+
+volumes:
+  parsar-local-pg:
+  parsar-local-data:
