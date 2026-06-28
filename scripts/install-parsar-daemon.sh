@@ -54,31 +54,59 @@ case "$ARCH" in
   *) echo "parsar-daemon: unsupported architecture '${ARCH}'" >&2; exit 1 ;;
 esac
 
-if [ -z "$VERSION" ]; then
-  echo "Resolving latest parsar-daemon release from github.com/${REPO}..."
-  # GitHub redirects /releases/latest to /releases/tag/<tag>; capture
-  # the final URL and strip the tag suffix. -sIL follows redirects with
-  # HEAD requests so we don't pull the whole release page.
-  LATEST_URL="$(curl -fsILo /dev/null -w '%{url_effective}' \
-    "https://github.com/${REPO}/releases/latest")"
-  VERSION="${LATEST_URL##*/tag/}"
-  if [ -z "$VERSION" ] || [ "$VERSION" = "$LATEST_URL" ]; then
-    echo "parsar-daemon: could not resolve latest release tag from ${LATEST_URL}" >&2
-    exit 1
+# --- Prefer the minting server's own binary (local / self-host) -------
+# The one-line connect command the web UI mints always exports
+# PARSAR_DAEMON_CONNECT_URL=<this server's origin>, and that same server
+# bakes the cross-compiled daemons into its image and serves them at
+# /api/v1/parsar-daemon/download. Trying there first lets a pure-local or
+# air-gapped self-host install succeed with no published GitHub Release.
+# If the server has no binary for this platform (404) we fall through to
+# the GitHub Releases path below — same script, source chosen purely on
+# what is reachable.
+SERVED_LOCALLY=""
+SERVER_ORIGIN="${PARSAR_DAEMON_CONNECT_URL:-}"
+if [ -n "$SERVER_ORIGIN" ]; then
+  SERVER_ORIGIN="${SERVER_ORIGIN%/}"
+  OUT_FILE="${OUT_DIR}/parsar-daemon-${OS}-${ARCH}"
+  echo "Fetching parsar-daemon for ${OS}/${ARCH} from ${SERVER_ORIGIN}..."
+  mkdir -p "$OUT_DIR"
+  if curl -fL "${SERVER_ORIGIN}/api/v1/parsar-daemon/download?os=${OS}&arch=${ARCH}" -o "$OUT_FILE"; then
+    printf 'Downloaded to %s\n' "$OUT_FILE"
+    SERVED_LOCALLY=1
+  else
+    echo "Parsar server has no prebuilt binary for ${OS}/${ARCH}; falling back to GitHub Releases." >&2
+    rm -f "$OUT_FILE"
   fi
 fi
 
-# Strip the `parsar-daemon-` prefix the release workflow stamps onto the
-# binary filename (parsar-daemon-release.yml `OUTPUT=parsar-daemon-${VERSION}-${GOOS}-${GOARCH}`).
-BARE_VERSION="${VERSION#parsar-daemon-}"
-BINARY="parsar-daemon-${BARE_VERSION}-${OS}-${ARCH}"
-DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
-OUT_FILE="${OUT_DIR}/${BINARY}"
+# GitHub Releases path — used for managed-laptop installs (no connect URL)
+# and whenever the minting server did not serve a binary above.
+if [ -z "$SERVED_LOCALLY" ]; then
+  if [ -z "$VERSION" ]; then
+    echo "Resolving latest parsar-daemon release from github.com/${REPO}..."
+    # GitHub redirects /releases/latest to /releases/tag/<tag>; capture
+    # the final URL and strip the tag suffix. -sIL follows redirects with
+    # HEAD requests so we don't pull the whole release page.
+    LATEST_URL="$(curl -fsILo /dev/null -w '%{url_effective}' \
+      "https://github.com/${REPO}/releases/latest")"
+    VERSION="${LATEST_URL##*/tag/}"
+    if [ -z "$VERSION" ] || [ "$VERSION" = "$LATEST_URL" ]; then
+      echo "parsar-daemon: could not resolve latest release tag from ${LATEST_URL}" >&2
+      exit 1
+    fi
+  fi
 
-echo "Downloading ${BINARY} from ${DOWNLOAD_URL}..."
-mkdir -p "$OUT_DIR"
-if ! curl -fL "$DOWNLOAD_URL" -o "$OUT_FILE"; then
-  cat >&2 <<ERR
+  # Strip the `parsar-daemon-` prefix the release workflow stamps onto the
+  # binary filename (parsar-daemon-release.yml `OUTPUT=parsar-daemon-${VERSION}-${GOOS}-${GOARCH}`).
+  BARE_VERSION="${VERSION#parsar-daemon-}"
+  BINARY="parsar-daemon-${BARE_VERSION}-${OS}-${ARCH}"
+  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
+  OUT_FILE="${OUT_DIR}/${BINARY}"
+
+  echo "Downloading ${BINARY} from ${DOWNLOAD_URL}..."
+  mkdir -p "$OUT_DIR"
+  if ! curl -fL "$DOWNLOAD_URL" -o "$OUT_FILE"; then
+    cat >&2 <<ERR
 
 parsar-daemon: download failed.
 URL: ${DOWNLOAD_URL}
@@ -86,10 +114,11 @@ URL: ${DOWNLOAD_URL}
 If the release tag does not exist, override with PARSAR_DAEMON_VERSION.
 If you forked the repo, override with PARSAR_DAEMON_REPO=<owner>/<name>.
 ERR
-  exit 1
-fi
+    exit 1
+  fi
 
-printf 'Downloaded to %s\n' "$OUT_FILE"
+  printf 'Downloaded to %s\n' "$OUT_FILE"
+fi
 
 # --- One-line connect mode (north star) -------------------------------
 # When the Parsar web "接入新设备 / copy one command" button mints a
