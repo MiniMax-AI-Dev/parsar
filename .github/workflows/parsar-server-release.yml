@@ -27,6 +27,11 @@ on:
       - "server/**"
       - "internal/**"
       - "apps/web/**"
+      # The image bakes cross-compiled parsar-daemon binaries (served at
+      # /api/v1/parsar-daemon/download), so a daemon-only change must also
+      # rebuild + republish the server image — else the served binary goes
+      # stale against source.
+      - "apps/parsar-daemon/**"
       - "packages/**"
       - "go.mod"
       - "go.sum"
