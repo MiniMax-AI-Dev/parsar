@@ -13,6 +13,47 @@
 
 ---
 
+## 本地版（Local）—— 一条命令在本机跑起来
+
+面向单个开发者自用，all-in-one，mock 登录开箱即用，无需配置飞书或任何密钥。
+
+### 前置
+- 已安装 Docker（含 `docker compose`）。
+- 本机至少装好一个 Agent CLI 并完成登录：Claude Code、OpenCode 或 Codex 之一。
+  daemon 会复用它的登录态与订阅，并看见你本机真实的仓库。
+
+### 启动
+```bash
+docker compose -f docker-compose.local.yml up
+```
+首次启动会拉取 `parsar-server` 镜像、跑数据库迁移、并自动创建第一个工作区
+（owner = mock 身份 `admin@example.com`）。
+
+> 镜像尚未发布、或想跑你本地改动时，先本地构建再覆盖镜像变量：
+> ```bash
+> make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
+> PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
+> ```
+
+### 接入你的宿主机 daemon（北极星：复制一条命令）
+1. 浏览器打开 http://127.0.0.1:18080 ，点击登录（mock 登录，无需账号密码）。
+2. 进入设备/运行时管理，点「接入新设备」，填一个设备名，点「生成连接命令」。
+3. 复制弹窗里的**那一条**命令，粘贴到本机另一个终端执行。它会自动下载对应
+   平台的 daemon、就地连接，无需你 chmod、改 PATH 或手动跑 connect。
+4. 弹窗显示「设备已连接」后，即可创建 Agent、跑通一个 issue。
+
+### 关停 / 清理
+```bash
+docker compose -f docker-compose.local.yml down          # 停止，保留数据卷
+docker compose -f docker-compose.local.yml down -v       # 连数据卷一起删除
+```
+
+---
+
+> 以下是面向 AI agent 的**手动 / 进阶** runbook（基于
+> `deploy/compose/compose.example.yml`，可自定义端口、密钥、bootstrap token、
+> 真实飞书）。只想本机自用，上面的「本地版」一条命令即可，无需继续往下读。
+
 ## Hard rules for the agent
 
 1. **Never invent values.** If something below says "ask the user", ask
