@@ -32,6 +32,12 @@ coverage/
 # never part of the merged history.
 deliverable.md
 
+# Superpowers brainstorming/planning scratch (design specs + implementation
+# plans). Working docs kept locally for reference — never merged into the
+# product tree. Same posture as deliverable.md above.
+docs/superpowers/plans/
+docs/superpowers/specs/
+
 # go.work.sum is regenerated on every `go run` / `go build` and
 # should not be tracked (Go convention: only go.work itself is
 # committed; the .sum gets rebuilt from go.work + module sums).

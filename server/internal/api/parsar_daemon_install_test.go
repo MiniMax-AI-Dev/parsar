@@ -78,3 +78,37 @@ func TestParsarDaemonInstallRoute(t *testing.T) {
 		})
 	}
 }
+
+// TestInstallScriptSupportsOneLineConnect pins the north-star one-liner:
+// the web "copy one command" button pipes this script with the pairing
+// env vars set, and the script must finish the job (chmod + hand off to
+// `connect`). If a future edit drops either marker the one-liner silently
+// regresses to the old two-step flow, so fail loudly here.
+func TestInstallScriptSupportsOneLineConnect(t *testing.T) {
+	t.Parallel()
+	for _, want := range []string{
+		`PARSAR_DAEMON_CONNECT_TOKEN`,
+		`exec "$OUT_FILE" connect -b`,
+	} {
+		if !strings.Contains(installParsarDaemonScript, want) {
+			t.Fatalf("install script missing one-line connect marker %q", want)
+		}
+	}
+}
+
+// TestInstallScriptPrefersLocalServerBinary pins the local binary-serve leg:
+// in connect mode the script must try the minting server's
+// /api/v1/parsar-daemon/download before the GitHub release path, so a
+// pure-local install needs no published release. Drop either marker and that
+// offline path silently regresses to GitHub.
+func TestInstallScriptPrefersLocalServerBinary(t *testing.T) {
+	t.Parallel()
+	for _, want := range []string{
+		`/api/v1/parsar-daemon/download`,
+		`SERVED_LOCALLY`,
+	} {
+		if !strings.Contains(installParsarDaemonScript, want) {
+			t.Fatalf("install script missing local-serve marker %q", want)
+		}
+	}
+}
