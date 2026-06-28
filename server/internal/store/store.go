@@ -6613,10 +6613,14 @@ returning id::text, workspace_id::text, project_id::text, conversation_id::text,
 			if !exists {
 				return MarkAgentRunRunningResult{}, fmt.Errorf("%w: %s", ErrUnknownAgentRun, runID)
 			}
-			// Disambiguate: still queued (blocked by sibling) vs past queued (not startable).
+			// Disambiguate: queued in THIS conversation (blocked by sibling)
+			// vs past-queued or foreign-conversation (not startable). The
+			// conversation_id predicate keeps a wrong-conversation run — queued
+			// but not ours to start — off the blocked-by-queue branch.
 			var status string
 			if err := s.db.QueryRow(ctx,
-				`select status from agent_runs where id = $1::uuid`, runUUID).Scan(&status); err == nil && status == "queued" {
+				`select status from agent_runs where id = $1::uuid and conversation_id = $2::uuid`,
+				runUUID, conversationUUID).Scan(&status); err == nil && status == "queued" {
 				return MarkAgentRunRunningResult{}, fmt.Errorf("%w: %s", ErrAgentRunBlockedByQueue, runID)
 			}
 			return MarkAgentRunRunningResult{}, fmt.Errorf("%w: %s", ErrAgentRunNotStartable, runID)
