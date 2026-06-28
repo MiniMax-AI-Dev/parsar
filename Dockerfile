@@ -99,6 +99,25 @@ RUN cd server \
  && CGO_ENABLED=0 GOFLAGS=-trimpath go build -ldflags="-s -w" \
       -o /out/parsar-bootstrap ./cmd/parsar-bootstrap
 
+# parsar-daemon source (root module, no separate go.mod). Copied after the
+# server build so editing the daemon doesn't invalidate the layer above.
+COPY apps/parsar-daemon ./apps/parsar-daemon
+
+# Cross-compile the daemon for every platform the install script serves —
+# the allowlist in server/internal/api/parsar_daemon_download.go is
+# {darwin,linux}×{amd64,arm64}. Baking all four into the image lets the
+# minting server hand the host-appropriate binary to the one-line connect
+# command with no GitHub release (PARSAR_DAEMON_CONNECT_URL path). CGO
+# stays off so each cross-target links statically.
+RUN mkdir -p /out/daemon \
+ && for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do \
+      os="${target%/*}"; arch="${target#*/}"; \
+      CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" GOFLAGS=-trimpath \
+        go build -ldflags="-s -w" \
+          -o "/out/daemon/parsar-daemon-${os}-${arch}" \
+          ./apps/parsar-daemon/cmd/parsar-daemon; \
+    done
+
 ###############################################################################
 # Stage 3: runtime — debian-slim with a non-root user.
 #
@@ -137,6 +156,14 @@ COPY --from=go-builder /out/parsar-server    /usr/local/bin/parsar-server
 COPY --from=go-builder /out/parsar-migrate   /usr/local/bin/parsar-migrate
 COPY --from=go-builder /out/parsar-bootstrap /usr/local/bin/parsar-bootstrap
 
+# Per-platform parsar-daemon binaries. RegisterParsarDaemonDownloadRoute
+# serves these (from PARSAR_DAEMON_BINARY_DIR) to the one-line connect
+# command, so a local or air-gapped self-host install needs no GitHub
+# release. World-readable on purpose: the binary is public; the pairing
+# token gates connecting. NOT on $PATH — they are other-OS/arch artefacts,
+# not meant to run in this container.
+COPY --from=go-builder /out/daemon /usr/local/share/parsar/daemon
+
 # SPA artefacts. Owner = root, perms = world-readable (handler runs
 # as the non-root parsar user and only needs read access).
 COPY --from=web-builder /src/apps/web/dist /app/web/dist
@@ -151,7 +178,8 @@ COPY server/migrations /app/migrations
 ENV PARSAR_ADDR=":8080" \
     PARSAR_DATA_DIR="/var/lib/parsar" \
     PARSAR_MIGRATIONS_DIR="/app/migrations" \
-    PARSAR_WEB_DIST="/app/web/dist"
+    PARSAR_WEB_DIST="/app/web/dist" \
+    PARSAR_DAEMON_BINARY_DIR="/usr/local/share/parsar/daemon"
 
 USER ${PARSAR_USER}
 WORKDIR /var/lib/parsar
