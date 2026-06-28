@@ -78,7 +78,7 @@ docker compose -f docker-compose.local.yml up -d
 ```bash
 docker compose -f docker-compose.local.yml ps
 docker inspect parsar-local-init --format 'init exit={{.State.ExitCode}}'
-# 0;重复 up 时为 2(已 bootstrap,幂等),也正常
+# 预期 0;重复 up 仍是 0(已 bootstrap 时 parsar-bootstrap 退 2,compose 用 `|| [ $? -eq 2 ]` 收敛为 0)
 ```
 
 命令行快速自检(进浏览器前 30 秒确认整栈通):
