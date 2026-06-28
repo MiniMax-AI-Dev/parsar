@@ -454,40 +454,104 @@ func isOpenAICompatibleRuntime(mr store.ModelRuntime) bool {
 	return false
 }
 
+// piAPIKeyEnv is the env var the daemon sets to the decrypted secret and
+// references from the materialised models.json "parsar" provider's apiKey
+// field. Carrying the key by env-var name (never inline, never --api-key)
+// keeps it out of the pi child's argv, where `ps` would leak it.
+const piAPIKeyEnv = "PARSAR_PI_API_KEY"
+
+// piManagedProviderID is the fixed models.json provider id the daemon
+// materialises for every managed pi run, mirroring codex's "parsar" slug.
+// opts["model"] is "<piManagedProviderID>/<model_key>".
+const piManagedProviderID = "parsar"
+
 // injectPiManagedModel stamps the Parsar-managed model into an
-// agent_kind="pi" prompt_request. pi requires --api-key to be paired
-// with --model and selects via the combined "<provider>/<model>" form,
-// so the secret rides opts["api_key"] (never env) and opts["model"]
-// carries the provider-qualified key. Unmapped providers reject as
-// ErrManagedModelUnsupported so the caller emits a credential-form notice.
+// agent_kind="pi" prompt_request.
+//
+// pi's builtin providers (anthropic/openai/google) hard-code their upstream
+// endpoints, so the old "anthropic/<model>" selector dropped mr.BaseURL and
+// sent the platform proxy key to api.anthropic.com → 401 invalid x-api-key.
+// Like codex, pi therefore needs a structured provider block the daemon
+// materialises into a config file (models.json) rather than relying on
+// flags/env alone.
+//
+// What lands in agent_options:
+//
+//	model         — "parsar/<model_key>", selecting the materialised provider
+//	pi_provider:
+//	  base_url    — mr.BaseURL (required; forwarding it is the whole point)
+//	  api         — pi wire protocol (anthropic-messages / openai-completions
+//	                / google-generative-ai)
+//	  api_key_env — piAPIKeyEnv; daemon writes models.json apiKey to reference
+//	                this env var, whose value rides opts["env"]
+//	  model       — mr.ModelKey, for the provider's models:[{id}] list
+//	  name        — mr.ModelName (display, optional)
+//	  headers     — flattened mr.ProviderConfig.headers (e.g. X-Sub-Module)
+//	  auth_header — true for openai-completions (Bearer); anthropic uses
+//	                x-api-key so it is omitted
+//	env[piAPIKeyEnv] — the decrypted secret
+//
+// Provider gating: only the three custom-provider APIs pi documents are
+// supported; anything else surfaces ErrManagedModelUnsupported so the caller
+// emits a credential-form notice. A missing base_url or model_key is
+// ErrManagedModelConfigInvalid — fail loud rather than ship a half-built
+// provider the daemon can't serialise. All guards run before any opts
+// mutation so a rejection leaves opts clean.
 func injectPiManagedModel(opts map[string]any, modelID string, mr store.ModelRuntime, apiKey string) error {
-	provider := piProviderID(mr)
-	if provider == "" {
+	api := piAPIProtocol(mr)
+	if api == "" {
 		return fmt.Errorf("%w: model_id=%s provider_type=%q adapter=%q",
 			ErrManagedModelUnsupported, modelID, mr.ProviderType, mr.Adapter)
 	}
 	modelKey := strings.TrimSpace(mr.ModelKey)
 	if modelKey == "" {
-		return fmt.Errorf("%w: model_id=%s pi requires a model_key to pair with --api-key",
+		return fmt.Errorf("%w: model_id=%s pi requires a model_key",
 			ErrManagedModelConfigInvalid, modelID)
 	}
-	opts["model"] = provider + "/" + modelKey
-	opts["api_key"] = apiKey
+	baseURL := strings.TrimSpace(mr.BaseURL)
+	if baseURL == "" {
+		return fmt.Errorf("%w: model_id=%s base_url is required for pi provider injection",
+			ErrManagedModelConfigInvalid, modelID)
+	}
+
+	provider := map[string]any{
+		"base_url":    baseURL,
+		"api":         api,
+		"api_key_env": piAPIKeyEnv,
+		"model":       modelKey,
+	}
+	if name := strings.TrimSpace(mr.ModelName); name != "" {
+		provider["name"] = name
+	}
+	if headers := flattenStringMap(mr.ProviderConfig, "headers"); len(headers) > 0 {
+		provider["headers"] = headers
+	}
+	if api == "openai-completions" {
+		provider["auth_header"] = true
+	}
+
+	opts["model"] = piManagedProviderID + "/" + modelKey
+	opts["pi_provider"] = provider
+
+	env := copyStringAnyMap(opts["env"])
+	env[piAPIKeyEnv] = apiKey
+	opts["env"] = env
 	return nil
 }
 
-// piProviderID maps a Parsar provider_type / adapter slug onto the
-// provider id pi expects in its "<provider>/<model>" selector.
-func piProviderID(mr store.ModelRuntime) string {
+// piAPIProtocol maps a Parsar provider_type / adapter slug onto the pi
+// `api` wire protocol the materialised provider speaks. Empty string means
+// unsupported (rejected upstream as ErrManagedModelUnsupported).
+func piAPIProtocol(mr store.ModelRuntime) string {
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "anthropic", "anthropic-compatible", "anthropic_compatible", "@ai-sdk/anthropic":
-			return "anthropic"
+			return "anthropic-messages"
 		case "openai", "openai-compatible", "openai_compatible",
 			"@ai-sdk/openai", "@ai-sdk/openai-compatible":
-			return "openai"
+			return "openai-completions"
 		case "google", "gemini", "google-generative-ai", "google_generative_ai", "@ai-sdk/google":
-			return "google"
+			return "google-generative-ai"
 		}
 	}
 	return ""

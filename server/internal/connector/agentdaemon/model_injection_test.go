@@ -1024,11 +1024,17 @@ func TestInjectCodexManagedModel_NoBaseURLRejected(t *testing.T) {
 // injectPiManagedModel
 // ----------------------------------------------------------------------
 
-// TestInjectPiManagedModel_AnthropicHappyPath pins the contract pi's
-// daemon adapter relies on: opts["model"] is pi's combined
-// "<provider>/<model_key>" selector and opts["api_key"] carries the
-// decrypted secret (pi authenticates via --api-key, NOT env), so the
-// platform key must never leak into the child env.
+// TestInjectPiManagedModel_AnthropicHappyPath pins the Option-B contract
+// pi's daemon adapter relies on. The previous design emitted pi's builtin
+// "<provider>/<model>" selector and dropped mr.BaseURL, so the platform
+// proxy key was sent to api.anthropic.com → 401 invalid x-api-key.
+//
+// The injector now mirrors codex: it stamps a structured opts["pi_provider"]
+// block (base_url + api protocol + headers) that the daemon materialises
+// into a models.json "parsar" provider, sets opts["model"] to the
+// provider-qualified "parsar/<model_key>" selector, and rides the secret on
+// opts["env"][PARSAR_PI_API_KEY] (referenced by api_key_env) so it never
+// leaks through --api-key argv.
 func TestInjectPiManagedModel_AnthropicHappyPath(t *testing.T) {
 	opts := map[string]any{
 		"env": map[string]any{"OTHER_FLAG": "kept"},
@@ -1036,38 +1042,74 @@ func TestInjectPiManagedModel_AnthropicHappyPath(t *testing.T) {
 	mr := store.ModelRuntime{
 		ModelID:      "model-anthropic",
 		ModelKey:     "claude-opus-4-7",
+		ModelName:    "Claude Opus 4.7",
 		ProviderType: "anthropic-compatible",
 		Adapter:      "@ai-sdk/anthropic",
+		BaseURL:      "https://platform-api.example.com",
+		ProviderConfig: map[string]any{
+			"headers": map[string]any{
+				"X-Sub-Module": "claude-code-internal",
+			},
+		},
 	}
 	if err := injectPiManagedModel(opts, mr.ModelID, mr, "sk-pi"); err != nil {
 		t.Fatalf("injectPiManagedModel: %v", err)
 	}
-	if got := opts["model"]; got != "anthropic/claude-opus-4-7" {
-		t.Fatalf("opts[model] = %v, want anthropic/claude-opus-4-7", got)
+	// model selects the materialised "parsar" provider (which carries
+	// base_url + headers), NOT pi's builtin anthropic provider.
+	if got := opts["model"]; got != "parsar/claude-opus-4-7" {
+		t.Fatalf("opts[model] = %v, want parsar/claude-opus-4-7", got)
 	}
-	if got := opts["api_key"]; got != "sk-pi" {
-		t.Fatalf("opts[api_key] = %v, want sk-pi", got)
+	provider, ok := opts["pi_provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("opts[pi_provider] has type %T, want map[string]any", opts["pi_provider"])
 	}
+	if got := provider["base_url"]; got != "https://platform-api.example.com" {
+		t.Fatalf("pi_provider.base_url = %v, want the platform base_url", got)
+	}
+	if got := provider["api"]; got != "anthropic-messages" {
+		t.Fatalf("pi_provider.api = %v, want anthropic-messages", got)
+	}
+	if got := provider["api_key_env"]; got != "PARSAR_PI_API_KEY" {
+		t.Fatalf("pi_provider.api_key_env = %v, want PARSAR_PI_API_KEY", got)
+	}
+	headers, ok := provider["headers"].(map[string]string)
+	if !ok {
+		t.Fatalf("pi_provider.headers has type %T, want map[string]string", provider["headers"])
+	}
+	if got := headers["X-Sub-Module"]; got != "claude-code-internal" {
+		t.Fatalf("custom header lost: %+v", headers)
+	}
+	// secret rides env (referenced by api_key_env), never --api-key argv.
 	env, _ := opts["env"].(map[string]any)
-	if _, hasKey := env["ANTHROPIC_API_KEY"]; hasKey {
-		t.Fatalf("secret must NOT be placed in env for pi — auth flows through --api-key: %+v", env)
+	if got := env["PARSAR_PI_API_KEY"]; got != "sk-pi" {
+		t.Fatalf("env[PARSAR_PI_API_KEY] = %v, want sk-pi", got)
 	}
 	if got := env["OTHER_FLAG"]; got != "kept" {
 		t.Fatalf("unrelated env key lost: %+v", env)
 	}
+	if _, hasKey := opts["api_key"]; hasKey {
+		t.Fatalf("opts[api_key] must be absent — pi auth flows through models.json apiKey env ref, not --api-key: %+v", opts)
+	}
 }
 
+// TestInjectPiManagedModel_ProviderMapping pins the provider_type/adapter
+// → pi `api` protocol mapping. opts["model"] is ALWAYS the fixed "parsar"
+// provider — the daemon materialises one provider per run regardless of the
+// upstream family; the family only selects which wire protocol that
+// provider speaks (anthropic-messages / openai-completions /
+// google-generative-ai — the three custom-provider APIs pi documents).
 func TestInjectPiManagedModel_ProviderMapping(t *testing.T) {
 	cases := []struct {
-		name string
-		mr   store.ModelRuntime
-		want string
+		name    string
+		mr      store.ModelRuntime
+		wantAPI string
 	}{
-		{"openai", store.ModelRuntime{ModelKey: "gpt-4o", ProviderType: "openai"}, "openai/gpt-4o"},
-		{"openai-compatible adapter", store.ModelRuntime{ModelKey: "gpt-4o-mini", Adapter: "@ai-sdk/openai"}, "openai/gpt-4o-mini"},
-		{"anthropic", store.ModelRuntime{ModelKey: "claude-sonnet-4-5", ProviderType: "anthropic"}, "anthropic/claude-sonnet-4-5"},
-		{"google", store.ModelRuntime{ModelKey: "gemini-2.5-pro", ProviderType: "google"}, "google/gemini-2.5-pro"},
-		{"gemini alias", store.ModelRuntime{ModelKey: "gemini-2.5-flash", ProviderType: "gemini"}, "google/gemini-2.5-flash"},
+		{"openai", store.ModelRuntime{ModelKey: "gpt-4o", ProviderType: "openai", BaseURL: "https://x/v1"}, "openai-completions"},
+		{"openai-compatible adapter", store.ModelRuntime{ModelKey: "gpt-4o-mini", Adapter: "@ai-sdk/openai", BaseURL: "https://x/v1"}, "openai-completions"},
+		{"anthropic", store.ModelRuntime{ModelKey: "claude-sonnet-4-5", ProviderType: "anthropic", BaseURL: "https://x"}, "anthropic-messages"},
+		{"google", store.ModelRuntime{ModelKey: "gemini-2.5-pro", ProviderType: "google", BaseURL: "https://x"}, "google-generative-ai"},
+		{"gemini alias", store.ModelRuntime{ModelKey: "gemini-2.5-flash", ProviderType: "gemini", BaseURL: "https://x"}, "google-generative-ai"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1075,8 +1117,15 @@ func TestInjectPiManagedModel_ProviderMapping(t *testing.T) {
 			if err := injectPiManagedModel(opts, "model-x", tc.mr, "sk-x"); err != nil {
 				t.Fatalf("inject: %v", err)
 			}
-			if got := opts["model"]; got != tc.want {
-				t.Fatalf("opts[model] = %v, want %v", got, tc.want)
+			if got := opts["model"]; got != "parsar/"+tc.mr.ModelKey {
+				t.Fatalf("opts[model] = %v, want parsar/%s", got, tc.mr.ModelKey)
+			}
+			provider, ok := opts["pi_provider"].(map[string]any)
+			if !ok {
+				t.Fatalf("opts[pi_provider] has type %T", opts["pi_provider"])
+			}
+			if got := provider["api"]; got != tc.wantAPI {
+				t.Fatalf("pi_provider.api = %v, want %v", got, tc.wantAPI)
 			}
 		})
 	}
@@ -1122,6 +1171,35 @@ func TestInjectPiManagedModel_MissingModelKeyRejected(t *testing.T) {
 	}
 }
 
+// TestInjectPiManagedModel_NoBaseURLRejected guards the half-built
+// provider, mirroring the codex rule: without base_url the daemon can't
+// materialise a models.json "parsar" provider, and pi would silently fall
+// back to the upstream default endpoint (api.anthropic.com) with the
+// platform proxy key → 401. Fail loud at the server boundary instead.
+func TestInjectPiManagedModel_NoBaseURLRejected(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-anthropic",
+		ModelKey:     "claude-opus-4-7",
+		ProviderType: "anthropic-compatible",
+		Adapter:      "@ai-sdk/anthropic",
+		// BaseURL deliberately empty
+	}
+	err := injectPiManagedModel(opts, mr.ModelID, mr, "sk-pi")
+	if err == nil {
+		t.Fatal("expected ErrManagedModelConfigInvalid for missing base_url, got nil")
+	}
+	if !errors.Is(err, ErrManagedModelConfigInvalid) {
+		t.Fatalf("expected ErrManagedModelConfigInvalid, got %v", err)
+	}
+	if _, ok := opts["model"]; ok {
+		t.Fatalf("opts[model] must not be set on rejection: %+v", opts)
+	}
+	if _, ok := opts["pi_provider"]; ok {
+		t.Fatalf("opts[pi_provider] must not be set on rejection: %+v", opts)
+	}
+}
+
 // TestInjectManagedModel_PiSwitchWired drives the full
 // c.injectManagedModel path with agent_kind="pi" to prove the switch
 // dispatches to injectPiManagedModel (without a case "pi" it falls
@@ -1142,6 +1220,7 @@ func TestInjectManagedModel_PiSwitchWired(t *testing.T) {
 			ModelKey:     "claude-opus-4-7",
 			ProviderType: "anthropic-compatible",
 			Adapter:      "@ai-sdk/anthropic",
+			BaseURL:      "https://platform-api.example.com",
 			SecretID:     "secret-pi",
 		},
 		secret: store.SecretPayload{SecretRead: store.SecretRead{Status: "active"}, EncryptedPayload: enc},
@@ -1161,11 +1240,18 @@ func TestInjectManagedModel_PiSwitchWired(t *testing.T) {
 	if err := c.injectManagedModel(context.Background(), in, opts, "pi"); err != nil {
 		t.Fatalf("injectManagedModel(pi): %v", err)
 	}
-	if got := opts["model"]; got != "anthropic/claude-opus-4-7" {
-		t.Fatalf("opts[model] = %v, want anthropic/claude-opus-4-7", got)
+	if got := opts["model"]; got != "parsar/claude-opus-4-7" {
+		t.Fatalf("opts[model] = %v, want parsar/claude-opus-4-7", got)
 	}
-	if got := opts["api_key"]; got != "sk-pi" {
-		t.Fatalf("opts[api_key] = %v, want sk-pi", got)
+	if _, ok := opts["pi_provider"].(map[string]any); !ok {
+		t.Fatalf("opts[pi_provider] must be set, got %T", opts["pi_provider"])
+	}
+	env, _ := opts["env"].(map[string]any)
+	if got := env["PARSAR_PI_API_KEY"]; got != "sk-pi" {
+		t.Fatalf("env[PARSAR_PI_API_KEY] = %v, want sk-pi (secret must ride env, not --api-key)", got)
+	}
+	if _, ok := opts["api_key"]; ok {
+		t.Fatalf("opts[api_key] must be absent for pi: %+v", opts)
 	}
 }
 

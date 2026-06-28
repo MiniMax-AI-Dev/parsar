@@ -99,6 +99,15 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		}
 	}
 
+	// Without this, pi never sees the proxy base_url + X-Sub-Module header and
+	// sends the managed key to api.anthropic.com → 401. Writes models.json and
+	// sets PI_CODING_AGENT_DIR in opts["env"] (buildEnv forwards it).
+	provOpts, provErr := applyPiManagedProvider(opts, req.ConversationID, req.RunID)
+	if provErr != nil {
+		return nil, fmt.Errorf("pi: apply managed provider: %w", provErr)
+	}
+	opts = provOpts
+
 	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, opts, req.ResumeSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("pi: build args: %w", err)
