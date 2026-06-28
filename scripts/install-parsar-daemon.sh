@@ -20,6 +20,12 @@
 #   curl -fsSL .../install.sh | PARSAR_DAEMON_VERSION=v0.1.0 bash
 #   curl -fsSL .../install.sh | PARSAR_DAEMON_REPO=your-org/your-fork bash
 #
+#   # One-line connect (what the Parsar web UI mints — never run by hand):
+#   curl -fsSL .../install.sh \
+#     | PARSAR_DAEMON_CONNECT_URL=https://<server> \
+#       PARSAR_DAEMON_CONNECT_TOKEN=<one-shot> \
+#       PARSAR_DAEMON_CONNECT_DEVICE_NAME=<name> bash
+#
 # Exit codes: 0 on success, non-zero on any error (set -e).
 
 set -euo pipefail
@@ -84,6 +90,36 @@ ERR
 fi
 
 printf 'Downloaded to %s\n' "$OUT_FILE"
+
+# --- One-line connect mode (north star) -------------------------------
+# When the Parsar web "接入新设备 / copy one command" button mints a
+# command, it pipes this script with the pairing env vars set:
+#
+#   curl -fsSL .../install.sh \
+#     | PARSAR_DAEMON_CONNECT_URL=<server> \
+#       PARSAR_DAEMON_CONNECT_TOKEN=<one-shot-token> \
+#       PARSAR_DAEMON_CONNECT_DEVICE_NAME=<name> bash
+#
+# In that mode we finish the job: chmod the freshly-downloaded binary and
+# hand off to `connect`, so the operator never touches the binary, its
+# path, or the token. `connect` hydrates URL/token/device-name from these
+# same env vars and scrubs them from child argv, so the one-shot token
+# never appears in any process listing. `exec` replaces this shell; the
+# `-b` flag then re-spawns the daemon detached and returns.
+#
+# Without PARSAR_DAEMON_CONNECT_TOKEN we fall through to the download-only
+# enterprise posture below (no chmod, no $PATH changes) — same script,
+# behaviour gated purely on env. Profile-not-fork applied to the installer.
+if [ -n "${PARSAR_DAEMON_CONNECT_TOKEN:-}" ]; then
+  if [ -z "${PARSAR_DAEMON_CONNECT_URL:-}" ]; then
+    echo "parsar-daemon: PARSAR_DAEMON_CONNECT_TOKEN is set but PARSAR_DAEMON_CONNECT_URL is empty" >&2
+    exit 1
+  fi
+  printf 'Pairing this device with %s ...\n' "$PARSAR_DAEMON_CONNECT_URL"
+  chmod +x "$OUT_FILE"
+  exec "$OUT_FILE" connect -b
+fi
+
 printf 'Parsar does not install or chmod this file. Review it, then move/install it according to your machine policy:\n'
 printf '  chmod +x %s\n' "$OUT_FILE"
 printf '  mv %s /usr/local/bin/parsar-daemon   # or any directory on your $PATH\n' "$OUT_FILE"
