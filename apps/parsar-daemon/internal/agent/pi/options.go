@@ -46,9 +46,10 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any, resumeSession
 	if provider := stringOpt(opts, "provider"); provider != "" {
 		args = append(args, "--provider", provider)
 	}
-	if apiKey := stringOpt(opts, "api_key"); apiKey != "" {
-		args = append(args, "--api-key", apiKey)
-	}
+	// A managed api_key is deliberately NOT forwarded as --api-key: secrets
+	// ride the environment (PARSAR_PI_API_KEY, referenced from the
+	// materialised models.json) so they never land on the pi child's argv,
+	// where `ps` would leak them. See server injectPiManagedModel.
 
 	// override replaces the base system prompt and wins over append.
 	if override := stringOpt(opts, "override_system_prompt"); override != "" {

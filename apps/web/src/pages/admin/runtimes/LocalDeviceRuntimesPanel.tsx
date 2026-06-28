@@ -251,7 +251,7 @@ function formatAgentKindLabel(kind: string): string {
       return "OpenCode"
     case "codex":
       return "Codex"
-    case "pi_agent":
+    case "pi":
       return "PI Agent"
     default:
       return kind

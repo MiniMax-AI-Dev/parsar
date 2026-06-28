@@ -30,8 +30,11 @@ func TestBuildArgsUsesModeJsonNoApproveAndPromptLast(t *testing.T) {
 	if !containsPair(res.Args, "--model", "anthropic/claude-opus-4-7") {
 		t.Fatalf("args missing --model: %v", res.Args)
 	}
-	if !containsPair(res.Args, "--api-key", "sk-test") {
-		t.Fatalf("args missing --api-key: %v", res.Args)
+	// Secrets must never ride on argv (ps would leak them): a provided
+	// api_key is intentionally dropped here and delivered via env instead
+	// (see server injectPiManagedModel / PARSAR_PI_API_KEY).
+	if slices.Contains(res.Args, "--api-key") || slices.Contains(res.Args, "sk-test") {
+		t.Fatalf("api_key must not leak onto argv: %v", res.Args)
 	}
 	if !containsPair(res.Args, "--provider", "anthropic") {
 		t.Fatalf("args missing --provider: %v", res.Args)
