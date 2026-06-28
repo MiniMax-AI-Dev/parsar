@@ -1,403 +1,155 @@
-# INSTALL — Local Quickstart (for AI coding agents)
+# INSTALL — Parsar 本地版快速上手(Local Quickstart)
 
-> **Audience:** an AI coding agent (Claude Code, Cursor, Codex, etc.) the
-> user has just opened inside a fresh clone of this repo.
-> **Human readers:** skip to `docs/deploy/deploy-runbook.md` for the
-> manual version.
->
-> **What this gives the user:** a working parsar instance on
-> `http://localhost:8080` in roughly 5 minutes of wall-clock time
-> (mostly waiting for the first `docker build`). Mock Feishu auth is
-> on by default so the user can poke at the UI without registering a
-> real OAuth app.
+> **面向:** 想在本机自用或验收 Parsar 的开发者 / AI 编码 agent(Claude Code、Cursor、Codex 等)。
+> **给你什么:** 几分钟内拉起一个可用的 Parsar(mock 登录,无需配置飞书或任何密钥),并把你本机的 Claude Code / OpenCode / Codex 接入成一台**在线设备**——全程「浏览器复制一条命令 → 终端粘贴 → 设备在线」。
+> **不在本页:** 自部署 / 生产部署(真实飞书 OIDC、自定义端口与密钥、bootstrap token)是另一条路径,见 `deploy/compose/compose.example.yml` 与 `docs/deploy/`。
 
 ---
 
-## 本地版（Local）—— 一条命令在本机跑起来
+## 总览
 
-面向单个开发者自用，all-in-one，mock 登录开箱即用，无需配置飞书或任何密钥。
-
-### 前置
-- 已安装 Docker（含 `docker compose`）。
-- 本机至少装好一个 Agent CLI 并完成登录：Claude Code、OpenCode 或 Codex 之一。
-  daemon 会复用它的登录态与订阅，并看见你本机真实的仓库。
-
-### 启动
-```bash
-docker compose -f docker-compose.local.yml up
 ```
-首次启动会拉取 `parsar-server` 镜像、跑数据库迁移、并自动创建第一个工作区
-（owner = mock 身份 `admin@example.com`）。
+clone → (拉取/构建镜像) → docker compose up → 浏览器登录 → 接入设备 → 设备在线
+```
 
-> 镜像尚未发布、或想跑你本地改动时，先本地构建再覆盖镜像变量：
+本地栈是 all-in-one:`postgres` + 一次性 `init`(迁移 + 建首个 owner)+ `parsar-server`(mock 登录)。**profile not fork**:它与自部署版用的是**同一个镜像 / 迁移 / SPA / install.sh**,差异只在 compose 文件与环境变量。
+
+---
+
+## 0 · 前置
+
+```bash
+docker compose version                                       # 需要 v2+
+claude --version || opencode --version || codex --version    # 至少一个,且已登录
+```
+
+- **Docker** 已安装并正在运行(macOS 需先打开 Docker Desktop,`docker info` 能看到 server 段)。
+- 本机已装好并**登录**至少一个 Agent CLI(Claude Code / OpenCode / Codex)。daemon 不自带模型登录,它复用这个 CLI 的登录态与订阅,并能看见你本机真实的仓库。
+
+---
+
+## 1 · 拉代码
+
+```bash
+git clone <your-repo-url> parsar
+cd parsar
+# 本地版交付目前在 feature/deliverables-design 分支;合并主干后忽略此步,用默认分支即可
+git checkout feature/deliverables-design
+```
+
+---
+
+## 2 · 选择镜像 + 设置环境变量
+
+默认从 GHCR 拉预构建镜像(下一步 `docker compose` 会自动完成,无需手动 pull):
+
+```bash
+# 端口默认 18080 / 15432;被占用就改这两个数(例:18088 / 15488)
+export PARSAR_LOCAL_PORT=18080
+export PARSAR_PG_PORT=15432
+```
+
+> **当前状态(待镜像发布到 GHCR 后删除本提示):**
+> 让「接入设备」离线零配置的关键——**镜像内置的 4 平台 daemon 二进制**——尚未随镜像发布到 GHCR。在它发布之前,直接拉 GHCR 的镜像**不含**内置 daemon,**第 4 步接入设备会下载 daemon 失败(404)**。此期间请走本地构建作为 fallback:
 > ```bash
-> make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
-> PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
+> make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local   # 首次约 5–10 分钟
+> export PARSAR_SERVER_IMAGE=parsar:local
 > ```
+> 构建后验证镜像确实内置了 daemon:
+> ```bash
+> docker run --rm --entrypoint ls parsar:local /usr/local/share/parsar/daemon
+> # 预期列出 4 个:parsar-daemon-{darwin,linux}-{amd64,arm64}
+> ```
+> 该镜像发布到 GHCR 后,本提示连同上面的构建步骤一并删除——届时直接进第 3 步用默认镜像即可。
 
-### 接入你的宿主机 daemon（北极星：复制一条命令）
-1. 浏览器打开 http://127.0.0.1:18080 ，点击登录（mock 登录，无需账号密码）。
-2. 进入设备/运行时管理，点「接入新设备」，填一个设备名，点「生成连接命令」。
-3. 复制弹窗里的**那一条**命令，粘贴到本机另一个终端执行。它会自动下载对应
-   平台的 daemon、就地连接，无需你 chmod、改 PATH 或手动跑 connect。
-4. 弹窗显示「设备已连接」后，即可创建 Agent、跑通一个 issue。
+---
 
-### 关停 / 清理
+## 3 · 一条命令拉起本地栈
+
 ```bash
-docker compose -f docker-compose.local.yml down          # 停止，保留数据卷
-docker compose -f docker-compose.local.yml down -v       # 连数据卷一起删除
+docker compose -f docker-compose.local.yml up -d
+```
+
+首次会拉取/使用 `parsar-server` 镜像、跑数据库迁移、并自动创建第一个工作区(owner = mock 身份 `admin@example.com`)。
+
+**预期:** 三个容器;`parsar-local-server` 与 `parsar-local-postgres` 在约 15 秒内 healthy,`parsar-local-init` 跑完后退出。
+
+**验证:**
+```bash
+docker compose -f docker-compose.local.yml ps
+docker inspect parsar-local-init --format 'init exit={{.State.ExitCode}}'
+# 0;重复 up 时为 2(已 bootstrap,幂等),也正常
+```
+
+命令行快速自检(进浏览器前 30 秒确认整栈通):
+```bash
+B="http://127.0.0.1:${PARSAR_LOCAL_PORT}"
+for p in /healthz /api/v1/health / ; do
+  printf '%-18s -> %s\n' "$p" "$(curl -fsS -o /dev/null -w '%{http_code}' "$B$p")"
+done
+curl -fsS "$B/api/v1/bootstrap/status"; echo
+```
+**预期:**
+```
+/healthz           -> 200
+/api/v1/health     -> 200
+/                  -> 200
+{"needed":false,"has_owners":true,"owner_count":1, ...}
 ```
 
 ---
 
-> 以下是面向 AI agent 的**手动 / 进阶** runbook（基于
-> `deploy/compose/compose.example.yml`，可自定义端口、密钥、bootstrap token、
-> 真实飞书）。只想本机自用，上面的「本地版」一条命令即可，无需继续往下读。
+## 4 · 浏览器 E2E 验收(北极星:接入你的设备)
 
-## Hard rules for the agent
-
-1. **Never invent values.** If something below says "ask the user", ask
-   the user — do not guess a port, a path, an email, or a workspace name.
-2. **Never commit `.env`** — it is already in `.gitignore` and contains
-   real secrets after step 2.
-3. **Never write inside the repo working tree** for runtime state. Use
-   the paths the user picks in step 1; defaults below are
-   `/tmp/parsar-data` + `/tmp/parsar-config` (no sudo, lost on
-   reboot — fine for a quickstart).
-4. **Verify each step before moving on.** Every step has an "Expected"
-   block; if reality doesn't match, run the "If it fails" block before
-   asking the user.
-5. **Print only what helps the user.** Suppress noisy command output
-   except when surfacing a real error.
+1. 浏览器打开 **http://127.0.0.1:18080**(改过端口就用你的端口)。
+2. 点**登录**(界面可能显示「飞书登录」;mock 模式下无需账号密码,直接进)——身份 `admin@example.com`,落在 `Local Workspace`。
+3. 进**设备 / 运行时管理** → 点**「接入新设备」** → 填一个设备名 → 点**「生成连接命令」**。
+4. 复制弹窗里**那一条**命令 → 粘到**本机另一个终端**执行。命令形如:
+   ```bash
+   curl -fsSL http://127.0.0.1:18080/api/v1/parsar-daemon/install.sh \
+     | PARSAR_DAEMON_CONNECT_URL=http://127.0.0.1:18080 \
+       PARSAR_DAEMON_CONNECT_TOKEN=<一次性 token> \
+       PARSAR_DAEMON_CONNECT_DEVICE_NAME=<设备名> bash
+   ```
+   - server 地址由网页按 `PARSAR_PUBLIC_URL` 自动填好,**不用手改**。
+   - 脚本会:从本机 server 下载对应平台 daemon → `chmod` → 后台 `connect`;token 走环境变量,不进命令行 argv,因此不落到 `ps` 输出或访问日志。你**全程不碰二进制、路径、token**。
+5. 几秒后该设备从 `pending_pairing` → **「在线 / online」**。**E2E 通过。**
+   想再确认能干活:建一个 Agent、跑通一个 issue。
 
 ---
 
-## Platform notes — read once, then act
-
-This runbook is tested on **macOS (Docker Desktop)** and **Linux**
-(Ubuntu / Debian / Amazon Linux with `docker-ce`). Windows / WSL2 is
-not tested — assume rough edges.
-
-### macOS
-
-- Docker Desktop must be **running** before step 3 (build) — the daemon
-  is not auto-started on first install. Verify with `docker info` →
-  should print a server section, not just a client section.
-- Default Docker Desktop resource limits (2 CPU / 2 GB RAM) are enough
-  for runtime but may stretch the first build to 8-10 min. If the user
-  later complains about slowness, suggest raising to 4 CPU / 4 GB in
-  Docker Desktop → Settings → Resources.
-- Apple Silicon: the Dockerfile builds `linux/arm64` natively, no
-  emulation needed. If the agent ever sees an `exec format error` at
-  runtime, the image was built on x86 CI and pulled on M-series —
-  rebuild locally with `make docker-build`.
-
-### Linux
-
-- The current shell user **must be in the `docker` group**, otherwise
-  step 3 fails with `permission denied while trying to connect to the
-  Docker daemon socket`. Check with `id -nG | tr ' ' '\n' | grep -x
-  docker`. If missing, instruct the user to run `sudo usermod -aG docker
-  $USER` and **log out and back in** (group membership is per-session).
-- Use `docker compose` (v2 plugin), NOT the standalone `docker-compose`
-  binary. If `docker compose version` errors with `is not a docker
-  command`, install the v2 plugin: `sudo apt-get install
-  docker-compose-plugin` on Debian-family, or follow Docker's official
-  install guide for the distro.
-- SELinux-enabled hosts (RHEL / Rocky / Amazon Linux 2023) may block
-  bind-mounts. If step 4 logs show `Permission denied` reading
-  `init.sql`, append `:Z` to the mount line in the compose file or
-  temporarily `sudo setenforce 0` (re-enable after verifying it was the
-  cause).
-
-### Both
-
-- `lsof` behaves the same on macOS and Linux for the port-check lines
-  below. `sed -i.bak` in step 8 is portable across both (the `.bak`
-  argument is required for BSD sed on macOS, harmless on GNU sed).
-
----
-
-## Prerequisites — check first, before step 1
-
-Run these and report any miss to the user before doing anything else:
+## 5 · 关停 / 清理
 
 ```bash
-docker compose version       # need v2+
-make --version               # any GNU make
-openssl version              # any modern openssl
-command -v curl
-command -v python3           # used by smoke.sh
+docker compose -f docker-compose.local.yml down       # 停,保留数据卷
+docker compose -f docker-compose.local.yml down -v    # 连 Postgres 数据一起删
 ```
-
-Also check ports:
-
-```bash
-lsof -iTCP:8080 -sTCP:LISTEN   # should print nothing
-lsof -iTCP:5432 -sTCP:LISTEN   # should print nothing
-```
-
-If a port is busy, ask the user for an alternative in step 1.
-
-Free disk: image build needs ~3 GB. `df -h .` and warn if free space < 5 GB.
 
 ---
 
-## Step 1 — Ask the user three things
+## 排错
 
-Use your AskUserQuestion (or equivalent) tool. The first two are
-optional; use defaults unless `lsof` above already showed the default
-port is busy.
-
-| Question | Default | When to ask |
+| 现象 | 原因 | 处理 |
 |---|---|---|
-| Host port for parsar web/api? | `8080` | If port 8080 is busy |
-| Host port for postgres? | `5432` | If port 5432 is busy |
-| Where to put runtime data + config? | `/tmp/parsar-data` + `/tmp/parsar-config` (no sudo) | Always — also offer `/var/lib/parsar` + `/etc/parsar` if user wants the install to survive reboot |
+| 接入设备时下载 daemon 报 **404** | 用的 GHCR 镜像不含内置 daemon(尚未发布) | 走第 2 步的本地构建,`export PARSAR_SERVER_IMAGE=parsar:local` 后 `up -d --force-recreate` |
+| 端口报 `address already in use` | 18080 / 15432 被占 | 改 `PARSAR_LOCAL_PORT` / `PARSAR_PG_PORT` 后重新 `up -d` |
+| `server` 崩溃循环 `agent_daemon owner URL not resolvable` | 缺 `PARSAR_AGENT_DAEMON_OWNER_URL`(本地 compose 已设默认 `http://parsar-server:8080`) | 若你改/删过该 env,补回即可 |
+| `server` 一直 unhealthy 但其实能访问 | 镜像内置 HEALTHCHECK 用 HEAD,`/healthz` 仅接受 GET(本地 compose 已覆盖为 GET 探针) | 若你改过 compose,确认 healthcheck 用 GET |
+| 设备在线但创建 Agent 时无可用 kind | 本机 Agent CLI 没装 / 没登录 | 在本机 `claude` / `opencode` / `codex` 登录后,daemon 会自动识别 |
+| macOS `exec format error` | 在 x86 上构建、Apple Silicon 上运行 | 本机 `make docker-build` 重新构建为原生架构 |
 
-Remember the answers; you'll need them in step 2.
-
----
-
-## Step 2 — Prepare directories + `.env`
-
-Substitute the four shell variables at the top with what the user picked
-in step 1.
-
-```bash
-HOST_PORT=8080                            # from step 1, question 1
-PG_HOST_PORT=5432                         # from step 1, question 2
-DATA_DIR=/tmp/parsar-data               # from step 1, question 3
-CONFIG_DIR=/tmp/parsar-config           # from step 1, question 3
-
-mkdir -p "$DATA_DIR" "$CONFIG_DIR"
-cp docs/deploy/config.example.yaml "$CONFIG_DIR/config.yaml"
-cp deploy/compose/.env.example deploy/compose/.env
-
-# Generate secrets fresh — never reuse across machines.
-PG_PASSWORD="$(openssl rand -hex 24)"
-MASTER_KEY="$(openssl rand -hex 32)"
-BOOTSTRAP_TOKEN="$(openssl rand -hex 32)"
-
-python3 - <<PY
-import re
-path = "deploy/compose/.env"
-with open(path) as f: s = f.read()
-subs = {
-    "PARSAR_SERVER_IMAGE":      "parsar:dev",
-    "PARSAR_PUBLIC_URL":        "http://localhost:${HOST_PORT}",
-    "PARSAR_PG_PASSWORD":       "${PG_PASSWORD}",
-    "PARSAR_MASTER_KEY":        "${MASTER_KEY}",
-    "PARSAR_BOOTSTRAP_TOKEN":   "${BOOTSTRAP_TOKEN}",
-    "PARSAR_CONFIG_HOST_PATH":  "${CONFIG_DIR}/config.yaml",
-    "PARSAR_DATA_HOST_PATH":    "${DATA_DIR}",
-    "PARSAR_HOST_PORT":         "${HOST_PORT}",
-    "PARSAR_PG_HOST_PORT":      "${PG_HOST_PORT}",
-}
-for k, v in subs.items():
-    s = re.sub(rf"^{re.escape(k)}=.*", f"{k}={v}", s, flags=re.M)
-with open(path, "w") as f: f.write(s)
-print("OK")
-PY
-```
-
-**Verify:**
-
-```bash
-grep -E "PARSAR_SERVER_IMAGE|PARSAR_PUBLIC_URL|PARSAR_PG_PASSWORD|PARSAR_MASTER_KEY|PARSAR_BOOTSTRAP_TOKEN|PARSAR_CONFIG_HOST_PATH|PARSAR_DATA_HOST_PATH|PARSAR_HOST_PORT|PARSAR_PG_HOST_PORT" deploy/compose/.env
-```
-
-**Expected:** every variable shows a real value (not `<placeholder>`).
-`PARSAR_FEISHU_MOCK=true` should also be present — it's the default in
-the example file. **If it isn't**, add the line manually:
-
-```bash
-echo "PARSAR_FEISHU_MOCK=true" >> deploy/compose/.env
-```
+查看日志:`docker logs -f parsar-local-server`
 
 ---
 
-## Step 3 — Build the server image
+## TL;DR
 
 ```bash
-make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=dev
+git clone <repo> parsar && cd parsar && git checkout feature/deliverables-design
+export PARSAR_LOCAL_PORT=18080 PARSAR_PG_PORT=15432
+# 当前阶段(GHCR 尚无内置 daemon 镜像)→ 本地构建;发布后这两行可删,直接用默认镜像
+make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
+export PARSAR_SERVER_IMAGE=parsar:local
+docker compose -f docker-compose.local.yml up -d
+# 浏览器 http://127.0.0.1:18080 → 登录 → 接入新设备 → 复制命令 → 另一个终端跑 → 设备在线
 ```
-
-**Expected:** 5-10 min on first build. Ends with a line like
-`naming to docker.io/library/parsar:dev`.
-
-**If it fails:**
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `Cannot connect to the Docker daemon` | docker engine not running | Start Docker Desktop / `systemctl start docker`; retry |
-| `no space left on device` | docker disk full | `docker system prune -af`; retry |
-| `pnpm install` or `apt-get` network timeout | DNS / VPN issue | Wait, retry; layer cache means it picks up where it stopped |
-| `ERROR: failed to solve: ... port is already allocated` | unrelated build artifact | `docker ps -a | grep parsar` then `docker rm -f` any leftovers; retry |
-| `denied: requested access to the resource is denied` | trying to pull from a private registry | This shouldn't happen on a clean clone; check if user fiddled with `Dockerfile` or `compose.example.yml` |
-
-After the build, verify the image exists:
-
-```bash
-docker image inspect parsar:dev --format '{{.Id}}'    # any sha256: line is fine
-```
-
----
-
-## Step 4 — Postgres up + healthy
-
-```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env up -d postgres
-sleep 6
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env ps postgres
-```
-
-**Expected:** the `STATUS` column shows `Up X seconds (healthy)`.
-
-**If unhealthy:**
-
-```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env logs postgres | tail -30
-```
-
-| Log says | Fix |
-|---|---|
-| `FATAL: password authentication failed` | leftover volume from a previous run with a different password. `docker compose ... down -v` then re-run step 4. **This deletes any old data — confirm with user first.** |
-| `could not bind IPv4 address` | the host port from step 1 is busy. Pick a different `PARSAR_PG_HOST_PORT`, re-run step 2 substitution, re-run step 4. |
-| keeps restarting with no obvious error | give it 30 more seconds; alpine postgres init can be slow on first run. |
-
----
-
-## Step 5 — Run the schema migration
-
-```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env run --rm parsar-server parsar-migrate
-```
-
-**Expected:** exit code 0. May print nothing (idempotent — if schema is
-already there, no output).
-
-**Verify:**
-
-```bash
-docker exec parsar-postgres psql -U parsar -d parsar -c '\dt' | grep -c "^ public"
-```
-
-**Expected:** `30` (thirty tables created).
-
-**If 0 tables:** migration silently failed.
-
-```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env run --rm parsar-server parsar-migrate 2>&1
-```
-
-Read the output. If it mentions `dial tcp ... connect: connection
-refused`, postgres isn't reachable from the run container — re-check
-step 4 status, then retry step 5.
-
----
-
-## Step 6 — Server up + healthy
-
-```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env up -d parsar-server
-sleep 8
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env ps parsar-server
-```
-
-**Expected:** `STATUS` shows `Up X seconds (healthy)`.
-
-**If `Restarting (1) X seconds ago`:**
-
-```bash
-docker logs parsar-server 2>&1 | tail -30
-```
-
-| Log says | Fix |
-|---|---|
-| `PARSAR_FEISHU_APP_ID/APP_SECRET/REDIRECT_URI ... required when not in mock mode` | `PARSAR_FEISHU_MOCK=true` is missing or set to false. Edit `deploy/compose/.env`, re-run step 6 with `--force-recreate`. |
-| `agent_daemon owner URL not resolvable` | `PARSAR_AGENT_DAEMON_OWNER_URL` not transparent to the container. `grep PARSAR_AGENT_DAEMON_OWNER_URL deploy/compose/.env` — if empty, leave empty (compose has a `:-http://parsar-server:8080` default that should engage). If still failing, set explicitly: `echo "PARSAR_AGENT_DAEMON_OWNER_URL=http://parsar-server:8080" >> deploy/compose/.env`, then re-run step 6 with `--force-recreate`. |
-| `create workspace: ERROR: ... visibility_check` | You're on an outdated branch missing stage 2 fixup #2. `git pull origin main` then redo step 3+ from scratch. |
-| `PARSAR_MASTER_KEY is required for secrets` | step 2's substitution didn't land. Re-run step 2's python block. |
-| anything else | give the user the last 30 log lines verbatim and stop. |
-
-After fixing, re-run step 6 with `--force-recreate parsar-server`.
-
----
-
-## Step 7 — Smoke test (proves the whole chain works)
-
-```bash
-BOOT_TOKEN="$(grep '^PARSAR_BOOTSTRAP_TOKEN=' deploy/compose/.env | cut -d= -f2)"
-HOST_PORT="$(grep '^PARSAR_HOST_PORT=' deploy/compose/.env | cut -d= -f2)"
-bash scripts/smoke.sh --core \
-  --api-url "http://localhost:${HOST_PORT}" \
-  --bootstrap-token "$BOOT_TOKEN"
-```
-
-**Expected:** last line `[smoke] all required probes passed`, summary
-`pass=8 fail=0 skip=1`. The 1 SKIP is `runtime_chain` — a known limit
-of the unauthenticated smoke surface, not a deployment failure.
-
-**If any `FAIL`:** the smoke script prints the exact endpoint, HTTP
-status, and response body. Fix the root cause it points to, then re-run.
-
----
-
-## Step 8 — Close the bootstrap door
-
-The bootstrap token is a one-shot owner-provision credential. Once
-step 7 proved the chain works (and provisioned the first owner),
-remove it from `.env` and restart the server so the door latches shut.
-
-```bash
-sed -i.bak 's/^PARSAR_BOOTSTRAP_TOKEN=.*/PARSAR_BOOTSTRAP_TOKEN=/' deploy/compose/.env
-rm -f deploy/compose/.env.bak
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env up -d --force-recreate parsar-server
-sleep 6
-```
-
-**Verify:**
-
-```bash
-curl -s http://localhost:"$HOST_PORT"/api/v1/bootstrap/status
-```
-
-**Expected:** JSON with `"http_enabled":false`.
-
----
-
-## Step 9 — Report success to the user
-
-Tell the user (use these exact words; substitute `$HOST_PORT`):
-
-> Done. Open http://localhost:$HOST_PORT in your browser, click 「飞书登录」,
-> and you'll be logged in as `admin@example.com` (mock auth — anyone hitting
-> this endpoint becomes the same user, fine for local poking).
->
-> Useful follow-up commands:
->
-> - View logs:   `docker logs -f parsar-server`
-> - Stop:        `docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env down`
-> - Wipe data:   add `-v` to the down command above (deletes the postgres volume)
-> - Rebuild + redeploy after code change:
->     `make docker-build && docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env up -d --force-recreate`
->
-> To go to production: see `docs/deploy/feishu-prod.md` for registering a
-> real Feishu OAuth app, then set `PARSAR_FEISHU_MOCK=false` and fill the
-> four `PARSAR_FEISHU_*` variables.
-
----
-
-## Self-check for the agent
-
-Before declaring "done", confirm all of these:
-
-- [ ] `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:$HOST_PORT/healthz` → `200`
-- [ ] `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:$HOST_PORT/api/v1/health` → `200`
-- [ ] `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:$HOST_PORT/` → `200` (SPA)
-- [ ] `curl -s http://localhost:$HOST_PORT/api/v1/bootstrap/status` returns JSON with `"has_owners":true`
-- [ ] `deploy/compose/.env` exists, is `git status`-clean (covered by `.gitignore`), and `PARSAR_BOOTSTRAP_TOKEN=` is empty
-
-If any check fails, do not tell the user "done" — diagnose and fix
-first, or hand the user a verbatim error.
