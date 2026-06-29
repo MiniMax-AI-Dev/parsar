@@ -22,11 +22,11 @@ func seedRunsForQueuePosition(t *testing.T, store *Store, conversationID string,
 		if _, err := store.db.Exec(ctx, `
 			insert into agent_runs (
 			  id, workspace_id, project_id, conversation_id, project_agent_id,
-			  connector_type, status, trigger_source, trigger_channel, requested_by_type, requested_by_id,
+			  status, trigger_source, trigger_channel, requested_by_type, requested_by_id,
 			  created_at, updated_at
 			) values (
 			  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
-			  'agent_daemon', $6, 'message', 'web', 'user', $7::uuid,
+			  $6, 'message', 'web', 'user', $7::uuid,
 			  $8, $8
 			)`,
 			mustUUID(id), mustUUID(ids.WorkspaceID), mustUUID(ids.ProjectID),

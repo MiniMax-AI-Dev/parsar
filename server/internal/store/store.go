@@ -1595,10 +1595,10 @@ func (s *Store) ListFeishuWebSocketAgents(ctx context.Context) ([]FeishuAgentRou
 	return routes, nil
 }
 
-// ErrUnknownFeishuUser is returned by FindUserIDByFeishuUnionID when no
-// auth_identities row links the supplied union_id. This is the signal that
-// the sender is "unregistered" for the visibility gate.
-var ErrUnknownFeishuUser = errors.New("no Parsar user linked to this Feishu union_id")
+// ErrUnknownPlatformUser is returned by FindUserIDByPlatformSubject when no
+// auth_identities row links the supplied (provider, subject). This is the
+// signal that the sender is "unregistered" for the visibility gate.
+var ErrUnknownPlatformUser = errors.New("no Parsar user linked to this platform subject")
 
 // GetFeishuConnectorDiagnostics returns a compact observation snapshot for
 // the Agent's Feishu Bot binding. Reads only aggregate metadata; never
@@ -1641,18 +1641,25 @@ func (s *Store) GetFeishuConnectorDiagnostics(ctx context.Context, agentID strin
 	}, nil
 }
 
-// FindUserIDByFeishuUnionID resolves an inbound Feishu sender to the
-// matching Parsar user_id. Returns ErrUnknownFeishuUser when the sender
-// has never signed in.
-func (s *Store) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	unionID = strings.TrimSpace(unionID)
-	if unionID == "" {
-		return "", fmt.Errorf("%w: empty union_id", ErrUnknownFeishuUser)
+// FindUserIDByPlatformSubject resolves an inbound sender to the matching
+// Parsar user_id by (provider, subject). Returns ErrUnknownPlatformUser
+// when the sender has never signed in.
+func (s *Store) FindUserIDByPlatformSubject(ctx context.Context, provider, subject string) (string, error) {
+	provider = strings.TrimSpace(provider)
+	subject = strings.TrimSpace(subject)
+	if provider == "" {
+		return "", fmt.Errorf("%w: empty provider", ErrUnknownPlatformUser)
 	}
-	userID, err := sqlc.New(s.db).FindUserByFeishuUnionID(ctx, unionID)
+	if subject == "" {
+		return "", fmt.Errorf("%w: empty subject", ErrUnknownPlatformUser)
+	}
+	userID, err := sqlc.New(s.db).FindUserByPlatformSubject(ctx, sqlc.FindUserByPlatformSubjectParams{
+		Provider: provider,
+		Subject:  subject,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("%w: union_id=%s", ErrUnknownFeishuUser, unionID)
+			return "", fmt.Errorf("%w: provider=%s subject=%s", ErrUnknownPlatformUser, provider, subject)
 		}
 		return "", err
 	}
@@ -6047,6 +6054,44 @@ func (s *Store) GetSecretPayload(ctx context.Context, workspaceID string, secret
 	}
 	read := secretReadFromSecretRow(row)
 	return SecretPayload{SecretRead: read, EncryptedPayload: row.EncryptedPayload}, nil
+}
+
+// SlackBotSecret is a decrypt-ready Slack bot-token secret resolved by Slack
+// team_id. AppID is the Slack app id from the secret metadata (empty when the
+// install didn't record one); EncryptedPayload is the AES-GCM envelope the
+// caller decrypts with secrets.Service to recover the xoxb-… Web API bearer.
+type SlackBotSecret struct {
+	AppID            string
+	EncryptedPayload []byte
+}
+
+// ResolveSlackBotSecretByTeam returns the active kind='slack_bot' secret whose
+// metadata->>'team_id' matches teamID. It backs the neutral Slack channel's
+// per-workspace token resolver so a multi-tenant deployment mints the right
+// bearer per call. Returns ErrUnknownSecret when no install row matches, which
+// the resolver treats as "fall back to the static/env token".
+func (s *Store) ResolveSlackBotSecretByTeam(ctx context.Context, teamID string) (SlackBotSecret, error) {
+	teamID = strings.TrimSpace(teamID)
+	if teamID == "" {
+		return SlackBotSecret{}, fmt.Errorf("%w: empty team_id", ErrUnknownSecret)
+	}
+	row, err := sqlc.New(s.db).ResolveSlackBotSecretByTeam(ctx, teamID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SlackBotSecret{}, fmt.Errorf("%w: slack_bot team_id=%s", ErrUnknownSecret, teamID)
+		}
+		return SlackBotSecret{}, err
+	}
+	var appID string
+	if len(row.Metadata) > 0 {
+		var meta map[string]any
+		if err := json.Unmarshal(row.Metadata, &meta); err == nil {
+			if v, ok := meta["app_id"].(string); ok {
+				appID = strings.TrimSpace(v)
+			}
+		}
+	}
+	return SlackBotSecret{AppID: appID, EncryptedPayload: row.EncryptedPayload}, nil
 }
 
 func (s *Store) CreateModel(ctx context.Context, input CreateModelInput) (ModelRead, error) {

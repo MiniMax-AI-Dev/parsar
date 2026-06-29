@@ -1,4 +1,4 @@
-// Package feishuoutbound: inflight-card driver.
+// Package inflight: inflight-card driver.
 //
 // DB-poll loop: one Feishu message_id pinned per conversation, PATCHed
 // as new agent_run_events arrive, then patched into the terminal
@@ -6,7 +6,7 @@
 // lives in conversations.metadata.gateway_inflight via
 // expected_old_msg_id optimistic CAS.
 
-package feishuoutbound
+package inflight
 
 import (
 	"context"
@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
+	feishuchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/feishu"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -52,6 +54,7 @@ func (w *Worker) InflightTickOnce(ctx context.Context) (int, error) {
 	cutoff := now.Add(-inflightCutoffWindow)
 	staleBefore := now.Add(-inflightClaimStaleWindow)
 	convs, err := w.store.ClaimActiveFeishuInflightConversations(ctx, store.ClaimActiveFeishuInflightConversationsInput{
+		Platforms:      w.platforms,
 		FinishedCutoff: cutoff,
 		StaleBefore:    staleBefore,
 		ClaimedBy:      w.claimedBy,
@@ -183,6 +186,14 @@ func pickAppID(primary, fallback string) string {
 // (steps, streaming text), then either send/patch the working card or
 // — on terminal — render Done/Error, patch, and clear the slot.
 func (w *Worker) handleInflightConversation(ctx context.Context, c store.FeishuInflightConversation) error {
+	// Non-Feishu conversations take the isolated neutral path (Slack today).
+	// Branching here keeps the Feishu terminal hot path below byte-for-byte
+	// unchanged — it carries multiple prod-incident patches we do not want to
+	// disturb. Empty platform is treated as Feishu (legacy rows predate the
+	// column's universal population).
+	if c.Platform != "" && c.Platform != string(channel.PlatformFeishu) {
+		return w.handleNeutralInflightConversation(ctx, c)
+	}
 	if strings.TrimSpace(c.SourceAppID) == "" {
 		// Shouldn't be reachable for a Feishu-platform conversation;
 		// guard anyway — we'd loop forever otherwise.
@@ -230,6 +241,14 @@ func (w *Worker) handleInflightConversation(ctx context.Context, c store.FeishuI
 		return fmt.Errorf("client for workspace: %w", err)
 	}
 
+	// Per-conversation neutral Channel handle. Both the terminal card
+	// (RenderTerminal, via buildFinalCardForRun) and the mid-run working
+	// card (RenderProgress + Send/Edit) render through this single adapter
+	// instance so card construction lives in one place. The handle is a
+	// thin value over the worker's shared transport — cheap to mint here.
+	ch := w.feishuChannel(c.SourceAppID)
+	target := channel.ReplyTarget{ExternalChatID: c.ExternalChatID, ExternalThreadID: c.ExternalThreadID}
+
 	// Terminal: render final card and either patch (we own the
 	// message_id) or send (short run that finished before any working
 	// card landed — we take responsibility so the user sees exactly
@@ -253,7 +272,7 @@ func (w *Worker) handleInflightConversation(ctx context.Context, c store.FeishuI
 		if formed {
 			finalContent = formContent
 		} else {
-			fc, buildErr := buildFinalCardForRun(ctx, w.store, c, steps, streamingText, thinkingText, errorMessage, rawError, w.publicURL)
+			fc, buildErr := buildFinalCardForRun(ctx, ch, w.store, c, steps, streamingText, thinkingText, errorMessage, rawError, w.publicURL)
 			if buildErr != nil {
 				return fmt.Errorf("build terminal card: %w", buildErr)
 			}
@@ -454,36 +473,41 @@ func (w *Worker) handleInflightConversation(ctx context.Context, c store.FeishuI
 	}
 
 	// Mid-run: render working/streaming card; send (first time) or patch.
-	cardContent, buildErr := buildMidRunCardContent(c, steps, streamingText)
+	// Routed through the neutral Channel (RenderProgress + Send/Edit) so the
+	// driver no longer owns the Feishu card-build / IM-call inline. The
+	// per-conv Channel (ch) + target were minted above so the terminal path
+	// shares the same renderer; permission / user-choice / credential-form
+	// cards stay on the raw client until the neutral contract grows seams for
+	// them (PR #3c).
+	now := time.Now().UTC()
+	elapsed := time.Duration(0)
+	if !c.RunStartedAt.IsZero() {
+		elapsed = now.Sub(c.RunStartedAt)
+	}
+	card, buildErr := ch.RenderProgress(ctx, target, channel.ProgressState{
+		Title:         c.AgentName,
+		Steps:         steps,
+		StreamingText: streamingText,
+		Elapsed:       elapsed,
+		Now:           now,
+	})
 	if buildErr != nil {
 		return fmt.Errorf("build mid-run card: %w", buildErr)
 	}
 	if !hasWorkingSlotForRun(prev, c.AgentRunID) {
-		// First send — reply in-thread when we have a thread anchor.
-		// Capture the message_id into the slot so next tick patches.
-		var deliveredID string
-		if anchor := strings.TrimSpace(c.ExternalThreadID); anchor != "" {
-			res, err := client.ReplyMessage(ctx, creds.AppSecret, anchor, gateway.FeishuMessageReplyRequest{
-				MsgType:       "interactive",
-				Content:       cardContent,
-				ReplyInThread: true,
-			})
-			if err != nil {
-				return w.handleUpstreamWorkingFailure(ctx, c, prev, "send working card (reply)", err)
-			}
-			deliveredID = res.MessageID
-		} else {
-			res, err := client.SendMessage(ctx, creds.AppSecret, gateway.FeishuMessageSendRequest{
-				ReceiveIDType: "chat_id",
-				ReceiveID:     c.ExternalChatID,
-				MsgType:       "interactive",
-				Content:       cardContent,
-			})
-			if err != nil {
-				return w.handleUpstreamWorkingFailure(ctx, c, prev, "send working card", err)
-			}
-			deliveredID = res.MessageID
+		// First send — Channel.Send replies in-thread when a thread anchor is
+		// present, else posts to the chat. Capture the message_id into the
+		// slot so next tick patches. The reply-vs-chat stage label is derived
+		// here only to preserve the dead-letter audit string.
+		stage := "send working card"
+		if strings.TrimSpace(c.ExternalThreadID) != "" {
+			stage = "send working card (reply)"
 		}
+		ref, err := ch.Send(ctx, target, card)
+		if err != nil {
+			return w.handleUpstreamWorkingFailure(ctx, c, prev, stage, err)
+		}
+		deliveredID := ref.ID
 		next := store.WorkingInflightSlot{
 			ExternalMsgID:    deliveredID,
 			AppID:            creds.AppID,
@@ -513,8 +537,8 @@ func (w *Worker) handleInflightConversation(ctx context.Context, c store.FeishuI
 		// Fall through to permission handling — a permission.asked may
 		// have landed in the same tick as the first tool.call.
 	} else {
-		// Subsequent ticks: PATCH the existing message_id.
-		if err := client.PatchMessage(ctx, creds.AppSecret, prev.ExternalMsgID, cardContent); err != nil {
+		// Subsequent ticks: PATCH the existing message_id via Channel.Edit.
+		if err := ch.Edit(ctx, target, gateway.MessageRef{ID: prev.ExternalMsgID}, card); err != nil {
 			return w.handleUpstreamWorkingFailure(ctx, c, prev, "patch working card", err)
 		}
 		next := prev
@@ -1338,20 +1362,6 @@ func latestSeq(events []store.AgentRunEvent, fallback int64) int64 {
 
 // ----- card builders for the driver -----
 
-// buildMidRunCardContent renders the unified RunningCard: streaming
-// text on top (when non-empty), current tool + collapsible history
-// underneath. Single card shape replaces the previous Working /
-// Streaming pair so a delta event no longer hides the active tool
-// from the user mid-run.
-func buildMidRunCardContent(c store.FeishuInflightConversation, steps []gateway.StepInfo, streamingText string) (string, error) {
-	now := time.Now().UTC()
-	elapsed := time.Duration(0)
-	if !c.RunStartedAt.IsZero() {
-		elapsed = now.Sub(c.RunStartedAt)
-	}
-	return gateway.MarshalCard(gateway.BuildRunningCard(c.AgentName, steps, streamingText, elapsed, now))
-}
-
 // buildFinalCardForRun renders the terminal Done/Error card. errorMessage
 // is the user-visible failure string from a run.failed event; empty
 // falls back to the generic copy. rawError is the un-mapped error from
@@ -1359,7 +1369,7 @@ func buildMidRunCardContent(c store.FeishuInflightConversation, steps []gateway.
 // gateway.BuildErrorCard for when it surfaces. publicURL is the
 // operator-configured PublicURL used to deep-link to the run-detail
 // page; empty suppresses the link.
-func buildFinalCardForRun(ctx context.Context, s doneCardAssemblyStore, c store.FeishuInflightConversation, steps []gateway.StepInfo, streamingText string, thinkingText string, errorMessage string, rawError string, publicURL string) (string, error) {
+func buildFinalCardForRun(ctx context.Context, ch *feishuchannel.Channel, s doneCardAssemblyStore, c store.FeishuInflightConversation, steps []gateway.StepInfo, streamingText string, thinkingText string, errorMessage string, rawError string, publicURL string) (string, error) {
 	if c.RunStatus == "failed" {
 		msg := strings.TrimSpace(errorMessage)
 		if msg == "" {
@@ -1374,7 +1384,21 @@ func buildFinalCardForRun(ctx context.Context, s doneCardAssemblyStore, c store.
 		if err != nil {
 			guestHint = ""
 		}
-		return gateway.BuildFeishuErrorCardContent(c.AgentName, msg, rawError, runDetailURL(publicURL, c.AgentRunID), guestHint)
+		// Render the error card through the neutral adapter. RenderTerminal
+		// mirrors BuildFeishuErrorCardContent byte-for-byte (same fallback
+		// copy), so this stays identical to the legacy inline path.
+		card, err := ch.RenderTerminal(ctx, channel.ReplyTarget{}, channel.TerminalResult{
+			Success:      false,
+			Title:        c.AgentName,
+			ErrorMessage: msg,
+			RawError:     rawError,
+			RunDetailURL: runDetailURL(publicURL, c.AgentRunID),
+			GuestHint:    guestHint,
+		})
+		if err != nil {
+			return "", err
+		}
+		return string(card.Payload), nil
 	}
 	elapsed := time.Duration(0)
 	if !c.RunStartedAt.IsZero() {
@@ -1409,7 +1433,22 @@ func buildFinalCardForRun(ctx context.Context, s doneCardAssemblyStore, c store.
 	if title == "" {
 		title = c.AgentName
 	}
-	return gateway.MarshalCard(gateway.BuildDoneCard(title, strings.TrimSpace(streamingText), data.Steps, data.Thinking, data.Elapsed, data.Usage))
+	// Render the Done card through the neutral adapter. RenderTerminal
+	// mirrors MarshalCard(BuildDoneCard(...)) (it TrimSpaces StreamingText
+	// internally), so output bytes match the legacy inline path.
+	card, err := ch.RenderTerminal(ctx, channel.ReplyTarget{}, channel.TerminalResult{
+		Success:       true,
+		Title:         title,
+		StreamingText: streamingText,
+		Steps:         data.Steps,
+		Thinking:      data.Thinking,
+		Elapsed:       data.Elapsed,
+		Usage:         data.Usage,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(card.Payload), nil
 }
 
 // tryBuildCredentialFormCard returns the orange credential-form card
@@ -1425,118 +1464,16 @@ func buildFinalCardForRun(ctx context.Context, s doneCardAssemblyStore, c store.
 // auto-resumed (falls through to DoneCard). Returns (_, _, false, _,
 // err) on I/O failure — caller logs and degrades to DoneCard.
 func (w *Worker) tryBuildCredentialFormCard(ctx context.Context, c store.FeishuInflightConversation) (string, string, bool, string, error) {
-	notices, err := w.store.ListCapabilityCredentialMissingForRun(ctx, c.ConversationID, c.AgentRunID)
-	if err != nil {
-		return "", "", false, "", fmt.Errorf("list credential missing notices: %w", err)
+	fields, qkey, ok, existingMsgID, err := w.resolveCredentialFormFields(ctx, c)
+	if err != nil || !ok {
+		return "", "", false, "", err
 	}
-	if len(notices) == 0 {
-		return "", "", false, "", nil
-	}
-	// De-duplicate by (kind, capability_id).
-	type fieldKey struct {
-		kind       string
-		capability string
-	}
-	seen := make(map[fieldKey]struct{})
-	fields := make([]gateway.CredentialFormField, 0, len(notices))
-	for _, n := range notices {
-		kind := strings.TrimSpace(n.CredentialKind)
-		if kind == "" {
-			continue
-		}
-		key := fieldKey{kind: kind, capability: n.CapabilityID}
-		if _, dup := seen[key]; dup {
-			continue
-		}
-		seen[key] = struct{}{}
-		fields = append(fields, gateway.CredentialFormField{
-			Kind:           kind,
-			Label:          kind,
-			CapabilityName: n.CapabilityName,
-		})
-	}
-	if len(fields) == 0 {
-		return "", "", false, "", nil
-	}
-	// Stash the inbound's raw_query so the submit handler can re-enqueue
-	// the same turn after the user binds credentials. Without an
-	// inbound, fall back to DoneCard rather than ship a form that can't
-	// auto-resume.
-	inbound, err := w.store.GetInboundUserMessageForRun(ctx, c.ConversationID, c.AgentRunID)
-	if err != nil {
-		return "", "", false, "", fmt.Errorf("get inbound user message: %w", err)
-	}
-	// SenderOpenID is required because the submit-card callback
-	// compares it against callback.Operator.OpenID to verify the click
-	// came from the inbound's original sender (Feishu callbacks only
-	// carry open_id, not union_id; without this pin ANY chat member
-	// could submit credentials on the initiator's behalf). Missing
-	// it → no recoverable inbound, fall back to DoneCard.
-	if strings.TrimSpace(inbound.RawQuery) == "" || strings.TrimSpace(inbound.SenderUserID) == "" || strings.TrimSpace(inbound.SenderOpenID) == "" {
-		w.logger.Info("feishu inflight: skip form card — no recoverable inbound for run",
-			"conversation_id", c.ConversationID,
-			"run_id", c.AgentRunID,
-			"has_open_id", strings.TrimSpace(inbound.SenderOpenID) != "",
-		)
-		return "", "", false, "", nil
-	}
-	// Loop guard: if the inbound was itself re-enqueued from a form
-	// submit AND the resolver STILL emits a missing-credential notice,
-	// the user bound the wrong / typo'd credential — a second form
-	// would re-enter the same dead-end. Bail out so the user fixes it
-	// via the web UI ("我的凭据").
-	if strings.TrimSpace(inbound.ReenqueuedFrom) == "credential_form_submit" {
-		w.logger.Info("feishu inflight: skip form card — turn already retried via form submit",
-			"conversation_id", c.ConversationID,
-			"run_id", c.AgentRunID,
-		)
-		return "", "", false, "", nil
-	}
-	targetAgent := strings.TrimSpace(inbound.TargetAgentID)
-	if targetAgent == "" {
-		w.logger.Info("feishu inflight: skip form card — inbound message has no target_agent_id",
-			"conversation_id", c.ConversationID,
-			"run_id", c.AgentRunID,
-		)
-		return "", "", false, "", nil
-	}
-	// Mint a fresh qkey for the proposed stash. WritePendingCredentialFormSlot
-	// is insert-or-noop: if a prior tick already stashed a slot on this
-	// conversation, our payload is discarded and the existing slot
-	// wins. We use the returned slot's qkey + external_msg_id so the
-	// card we build (and the patch/send decision in the caller) matches
-	// the persisted state.
-	proposedQkey, err := store.MintFeishuCredentialQkey()
-	if err != nil {
-		return "", "", false, "", fmt.Errorf("mint qkey: %w", err)
-	}
-	persisted, err := w.store.WritePendingCredentialFormSlot(ctx, c.ConversationID, store.PendingCredentialFormSlot{
-		Qkey:            proposedQkey,
-		InitiatorOpenID: inbound.SenderOpenID,
-		InitiatorUserID: inbound.SenderUserID,
-		AgentID:         targetAgent,
-		RawQuery:        inbound.RawQuery,
-		// ExpiresAt left zero so the store sets the now+1h default.
-	})
-	if err != nil {
-		return "", "", false, "", fmt.Errorf("stash pending credential form: %w", err)
-	}
-	reused := persisted.Qkey != proposedQkey
-	w.logger.Info("feishu inflight: stash pending credential form",
-		"conversation_id", c.ConversationID,
-		"qkey", persisted.Qkey,
-		"reused_existing_slot", reused,
-		"existing_external_msg_id_present", strings.TrimSpace(persisted.ExternalMsgID) != "",
-		"origin_run_id", c.AgentRunID,
-		"origin_inbound_message", inbound.MessageID,
-		"target_agent_id", targetAgent,
-	)
-	card := gateway.BuildCredentialFormCard(c.AgentName, fields, persisted.Qkey)
+	card := gateway.BuildCredentialFormCard(c.AgentName, fields, qkey)
 	content, err := gateway.MarshalCard(card)
 	if err != nil {
 		return "", "", false, "", fmt.Errorf("marshal form card: %w", err)
 	}
-	return content, persisted.Qkey, true, strings.TrimSpace(persisted.ExternalMsgID), nil
+	return content, qkey, true, existingMsgID, nil
 }
 
 // resolveReactionRowForRun picks the inbound-reaction row to undo for

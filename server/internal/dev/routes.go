@@ -23,7 +23,7 @@ import (
 	authfeishu "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishushared"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/httprunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
@@ -106,11 +106,11 @@ type RuntimeStore interface {
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	// ClearGatewaySessionSelection wipes a stored selection — see the
-	// matching method on feishushared.Store. Forwarded here so the
-	// HTTP webhook path satisfies feishushared.Store when it dispatches
+	// matching method on router.Store. Forwarded here so the
+	// HTTP webhook path satisfies router.Store when it dispatches
 	// into HandleInbound for shared-bot routing mode.
 	ClearGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) error
-	FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error)
+	FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error)
 	IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error)
 	// GetWorkspaceVisibility + ListActiveWorkspaceOwnerNames feed the
 	// visibility=workspace rejection card so the Feishu sender sees
@@ -120,9 +120,9 @@ type RuntimeStore interface {
 	GetWorkspaceVisibility(ctx context.Context, workspaceID string) (string, error)
 	ListActiveWorkspaceOwnerNames(ctx context.Context, workspaceID string, limit int32) ([]string, error)
 	// FindConversationByExternalRef + CancelAllInflightForConversation
-	// are forwarded so the HTTP webhook path satisfies feishushared.Store
+	// are forwarded so the HTTP webhook path satisfies router.Store
 	// for the /cancel command — without these the shared-bot dispatch
-	// site (RegisterRoutesWithStore → feishushared.HandleInbound) fails
+	// site (RegisterRoutesWithStore → router.HandleInbound) fails
 	// to compile.
 	FindConversationByExternalRef(ctx context.Context, gateway, externalChatID, externalThreadID string) (string, error)
 	CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]store.SupersededRun, error)
@@ -838,11 +838,11 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to decode feishu connector"})
 			return
 		}
-		if ok && feishushared.IsSharedRoutingMode(hostCfg.RoutingMode) {
-			reply := func(ctx context.Context, agent gatewaypkg.FeishuRouteAgent, event gatewaypkg.FeishuInboundEvent, text string) error {
+		if ok && router.IsSharedRoutingMode(hostCfg.RoutingMode) {
+			reply := func(ctx context.Context, agent gatewaypkg.FeishuRouteAgent, _ gatewaypkg.InboundEvent, text string) error {
 				return sendFeishuImmediateText(ctx, runtimeStore, agent, event, text)
 			}
-			outcome, err := feishushared.HandleInbound(r.Context(), runtimeStore, host, event, reply, nil, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
+			outcome, err := router.HandleInbound(r.Context(), runtimeStore, host, gatewaypkg.NeutralFromFeishuEvent(event), reply, nil, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to handle shared feishu bot inbound"})
 				return
@@ -858,7 +858,7 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 			return
 		}
 
-		decision, err := gatewaypkg.RouteFeishuInboundToAgent(r.Context(), route, event, host, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
+		decision, err := gatewaypkg.RouteInboundToAgent(r.Context(), route, gatewaypkg.NeutralFromFeishuEvent(event), host, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to route feishu inbound"})
 			return
@@ -911,13 +911,13 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 		}
 		createGatewayInboundFromRequest(w, r, runtimeStore, gatewayInboundRequest{
 			Gateway:          "feishu",
-			Conversation:     feishushared.ConversationTitle(decision.NormalizedText),
+			Conversation:     router.ConversationTitle(decision.NormalizedText),
 			ConversationForm: conversationForm,
 			Text:             decision.NormalizedText,
 			ExternalChatID:   event.ChatID,
 			// ThreadKey (not ReplyAnchorMessageID): every inbound in
 			// the same Feishu 话题 lands in the same Parsar
-			// conversation. Mirrors feishushared/router.go.
+			// conversation. Mirrors gateway/router/router.go.
 			ExternalThreadID:  event.ThreadKey(),
 			ExternalMessageID: event.MessageID,
 			ExternalUserID:    externalUserID,
@@ -970,11 +970,11 @@ func (r feishuRuntimeRouter) GetAgentByID(ctx context.Context, agentID string) (
 	}, nil
 }
 
-func (r feishuRuntimeRouter) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	userID, err := r.store.FindUserIDByFeishuUnionID(ctx, unionID)
+func (r feishuRuntimeRouter) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	userID, err := r.store.FindUserIDByPlatformSubject(ctx, platform, subject)
 	if err != nil {
-		if errors.Is(err, store.ErrUnknownFeishuUser) {
-			return "", gatewaypkg.ErrFeishuRouterUnknownUser
+		if errors.Is(err, store.ErrUnknownPlatformUser) {
+			return "", gatewaypkg.ErrRouterUnknownUser
 		}
 		return "", err
 	}

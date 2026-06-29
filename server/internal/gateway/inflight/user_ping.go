@@ -1,4 +1,4 @@
-// Package feishuoutbound: user-ping helper.
+// Package inflight: user-ping helper.
 //
 // Feishu interactive cards land silently — desktop / mobile clients
 // don't raise a push for them. We follow the card with a short text
@@ -14,7 +14,7 @@
 // (terminal_delivered.run_id, the per-request permission slot) — each
 // call site fires once per transition, no separate dedup needed.
 
-package feishuoutbound
+package inflight
 
 import (
 	"context"

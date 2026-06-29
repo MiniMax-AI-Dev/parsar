@@ -1,4 +1,4 @@
-package feishuinbound
+package inbound
 
 import (
 	"context"
@@ -790,5 +790,219 @@ func TestHandleCardAction_CredentialFormSubmitMissingAgentID(t *testing.T) {
 	}
 	if len(fs.created) != 0 {
 		t.Errorf("must NOT re-enqueue inbound when agent_id is missing from the slot")
+	}
+}
+
+// stubPromptForUserChoiceRouter records SubmitPromptForUserChoice
+// invocations for the user-choice handleCardAction tests. A returnErr
+// drives the "router rejected" toast branch.
+type stubPromptForUserChoiceRouter struct {
+	mu        sync.Mutex
+	calls     []PromptForUserChoiceDecision
+	returnErr error
+}
+
+func (s *stubPromptForUserChoiceRouter) SubmitPromptForUserChoice(_ context.Context, decision PromptForUserChoiceDecision) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, decision)
+	return s.returnErr
+}
+
+// buildUserChoiceEvent assembles the CardActionTriggerEvent shape
+// routeUserChoiceSubmit reads: action=ask_user_choice_submit + request_id
+// in Action.Value, with per-question picks in Action.FormValue keyed
+// "q<idx>". The operator open_id is threaded onto the decision.
+func buildUserChoiceEvent(requestID, operatorID string, formValues map[string]any) *callback.CardActionTriggerEvent {
+	ev := &callback.CardActionTriggerEvent{Event: &callback.CardActionTriggerRequest{}}
+	ev.Event.Action = &callback.CallBackAction{
+		Value: map[string]interface{}{
+			"action":     "ask_user_choice_submit",
+			"request_id": requestID,
+		},
+		FormValue: map[string]interface{}{},
+	}
+	for k, v := range formValues {
+		ev.Event.Action.FormValue[k] = v
+	}
+	ev.Event.Operator = &callback.Operator{OpenID: operatorID}
+	ev.Event.Context = &callback.Context{OpenMessageID: "om_choice_card"}
+	return ev
+}
+
+// seedUserChoiceSlot inserts a one-question prompt_for_user_choice slot the
+// submit tests resolve by request_id.
+func seedUserChoiceSlot(fs *inboundFakeStore, requestID, conversationID, agentRunID string) {
+	fs.cardsByPromptForUserChoiceReq[requestID] = store.ConversationInflightCards{
+		ConversationID:         conversationID,
+		HasPromptForUserChoice: true,
+		PromptForUserChoice: store.PromptForUserChoiceInflightSlot{
+			RequestID:  requestID,
+			AgentRunID: agentRunID,
+			Questions: []store.PromptForUserChoiceQuestion{{
+				Header:   "Pick",
+				Question: "choose one",
+				Options: []store.PromptForUserChoiceOption{
+					{Label: "选项A"},
+					{Label: "选项B"},
+				},
+			}},
+		},
+	}
+}
+
+// TestHandleCardAction_UserChoiceSubmitFullFlow locks in the happy path:
+// the user submits a pick, SubmitPromptForUserChoice receives the paired
+// answer, the done card is threaded through response.card (the canonical
+// post-callback render), and the prompt_for_user_choice slot is cleared.
+func TestHandleCardAction_UserChoiceSubmitFullFlow(t *testing.T) {
+	t.Parallel()
+	fs := newInboundFakeStore()
+	seedUserChoiceSlot(fs, "req-1", "conv-uc", "run-uc")
+	router := &stubPromptForUserChoiceRouter{}
+	mgr, err := NewManager(Options{
+		Store:                     fs,
+		Secrets:                   inboundFakeDecrypter{},
+		PromptForUserChoiceRouter: router,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := mgr.handleCardAction(context.Background(), "cli_app",
+		buildUserChoiceEvent("req-1", "ou_picker", map[string]any{"q0": "选项A"}))
+
+	if resp == nil || resp.Toast == nil {
+		t.Fatal("nil toast response")
+	}
+	if resp.Toast.Type != "success" {
+		t.Errorf("toast type = %q, want success", resp.Toast.Type)
+	}
+	if !strings.Contains(resp.Toast.Content, "已记录") {
+		t.Errorf("toast content = %q, want it to mention 已记录", resp.Toast.Content)
+	}
+	// The done card must ride the callback response itself (response.card),
+	// the same byte-identical ReplaceCard round-trip the legacy inline path
+	// used — a PATCH-only flow snaps the client back to "待回答".
+	if resp.Card == nil {
+		t.Fatal("resp.Card = nil, want the done-card payload on the callback response")
+	}
+	if resp.Card.Type != "raw" {
+		t.Errorf("resp.Card.Type = %q, want \"raw\"", resp.Card.Type)
+	}
+	if _, ok := resp.Card.Data.(map[string]any); !ok {
+		t.Errorf("resp.Card.Data is %T, want map[string]any", resp.Card.Data)
+	}
+	if len(router.calls) != 1 {
+		t.Fatalf("router calls = %d, want 1", len(router.calls))
+	}
+	dec := router.calls[0]
+	if dec.RequestID != "req-1" {
+		t.Errorf("decision RequestID = %q, want req-1", dec.RequestID)
+	}
+	if dec.OperatorID != "ou_picker" {
+		t.Errorf("decision OperatorID = %q, want ou_picker", dec.OperatorID)
+	}
+	if dec.Cancelled {
+		t.Errorf("decision Cancelled = true, want false (an answer was supplied)")
+	}
+	if len(dec.QuestionAnswers) != 1 || dec.QuestionAnswers[0].Answer != "选项A" || dec.QuestionAnswers[0].Header != "Pick" {
+		t.Errorf("decision QuestionAnswers = %+v, want one {Header:Pick, Answer:选项A}", dec.QuestionAnswers)
+	}
+	// The slot must be cleared as a prompt_for_user_choice clear keyed to
+	// the slot's agent_run_id (the optimistic-clear guard).
+	if len(fs.permissionClears) != 1 {
+		t.Fatalf("slot clears = %d, want 1", len(fs.permissionClears))
+	}
+	if fs.permissionClears[0].Slot != store.InflightSlotPromptForUserChoice {
+		t.Errorf("clear slot kind = %q, want prompt_for_user_choice", fs.permissionClears[0].Slot)
+	}
+	if fs.permissionClears[0].ExpectedAgentRunID != "run-uc" {
+		t.Errorf("clear expected agent_run_id = %q, want run-uc", fs.permissionClears[0].ExpectedAgentRunID)
+	}
+}
+
+// TestHandleCardAction_UserChoiceSubmitAllBlankCancels confirms an
+// all-blank submit is forwarded as a Cancelled decision (stop-signal) and
+// surfaces an info "已取消" toast — not a half-answered tool_result.
+func TestHandleCardAction_UserChoiceSubmitAllBlankCancels(t *testing.T) {
+	t.Parallel()
+	fs := newInboundFakeStore()
+	seedUserChoiceSlot(fs, "req-blank", "conv-uc", "run-uc")
+	router := &stubPromptForUserChoiceRouter{}
+	mgr, _ := NewManager(Options{
+		Store:                     fs,
+		Secrets:                   inboundFakeDecrypter{},
+		PromptForUserChoiceRouter: router,
+	})
+
+	resp := mgr.handleCardAction(context.Background(), "cli_app",
+		buildUserChoiceEvent("req-blank", "ou_picker", map[string]any{"q0": "   "}))
+
+	if resp.Toast.Type != "info" {
+		t.Errorf("toast type = %q, want info", resp.Toast.Type)
+	}
+	if resp.Toast.Content != "已取消" {
+		t.Errorf("toast content = %q, want 已取消", resp.Toast.Content)
+	}
+	if len(router.calls) != 1 {
+		t.Fatalf("router calls = %d, want 1", len(router.calls))
+	}
+	if !router.calls[0].Cancelled {
+		t.Errorf("decision Cancelled = false, want true (all answers blank)")
+	}
+	if len(fs.permissionClears) != 1 || fs.permissionClears[0].Slot != store.InflightSlotPromptForUserChoice {
+		t.Errorf("slot clears = %+v, want one prompt_for_user_choice clear", fs.permissionClears)
+	}
+}
+
+// TestHandleCardAction_UserChoiceSubmitSlotAlreadyCleared covers the
+// "another pod / a prior click resolved this" branch: the request_id
+// lookup misses. No router call, no clear, info toast.
+func TestHandleCardAction_UserChoiceSubmitSlotAlreadyCleared(t *testing.T) {
+	t.Parallel()
+	fs := newInboundFakeStore()
+	router := &stubPromptForUserChoiceRouter{}
+	mgr, _ := NewManager(Options{
+		Store:                     fs,
+		Secrets:                   inboundFakeDecrypter{},
+		PromptForUserChoiceRouter: router,
+	})
+
+	resp := mgr.handleCardAction(context.Background(), "cli_app",
+		buildUserChoiceEvent("req-missing", "ou_picker", map[string]any{"q0": "选项A"}))
+
+	if resp.Toast.Type != "info" {
+		t.Errorf("toast type = %q, want info", resp.Toast.Type)
+	}
+	if len(router.calls) != 0 {
+		t.Errorf("router calls = %d, want 0 on missing slot", len(router.calls))
+	}
+	if len(fs.permissionClears) != 0 {
+		t.Errorf("clears = %d, want 0", len(fs.permissionClears))
+	}
+}
+
+// TestHandleCardAction_UserChoiceSubmitMissingRequestID confirms a submit
+// missing request_id (a malformed / pre-form card) gets a generic retry
+// toast instead of hanging — and never touches the router.
+func TestHandleCardAction_UserChoiceSubmitMissingRequestID(t *testing.T) {
+	t.Parallel()
+	fs := newInboundFakeStore()
+	router := &stubPromptForUserChoiceRouter{}
+	mgr, _ := NewManager(Options{
+		Store:                     fs,
+		Secrets:                   inboundFakeDecrypter{},
+		PromptForUserChoiceRouter: router,
+	})
+
+	resp := mgr.handleCardAction(context.Background(), "cli_app",
+		buildUserChoiceEvent("", "ou_picker", map[string]any{"q0": "选项A"}))
+
+	if resp.Toast.Type != "info" {
+		t.Errorf("toast type = %q, want info", resp.Toast.Type)
+	}
+	if len(router.calls) != 0 {
+		t.Errorf("router calls = %d, want 0 on missing request_id", len(router.calls))
 	}
 }

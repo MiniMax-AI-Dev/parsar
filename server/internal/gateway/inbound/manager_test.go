@@ -1,4 +1,4 @@
-package feishuinbound
+package inbound
 
 import (
 	"context"
@@ -351,12 +351,12 @@ func (f *inboundFakeStore) ClearGatewaySessionSelection(_ context.Context, platf
 	return nil
 }
 
-func (f *inboundFakeStore) FindUserIDByFeishuUnionID(_ context.Context, unionID string) (string, error) {
+func (f *inboundFakeStore) FindUserIDByPlatformSubject(_ context.Context, _ string, subject string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	userID, ok := f.users[strings.TrimSpace(unionID)]
+	userID, ok := f.users[strings.TrimSpace(subject)]
 	if !ok {
-		return "", store.ErrUnknownFeishuUser
+		return "", store.ErrUnknownPlatformUser
 	}
 	return userID, nil
 }

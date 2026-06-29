@@ -3,7 +3,7 @@
 // the running sibling owns) and uses metadata.queue_card_sent_at as
 // the idempotency marker — ClaimPendingQueuedFeishuRuns filters on it.
 
-package feishuoutbound
+package inflight
 
 import (
 	"context"

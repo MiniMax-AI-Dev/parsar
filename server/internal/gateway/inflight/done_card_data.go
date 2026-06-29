@@ -1,4 +1,4 @@
-package feishuoutbound
+package inflight
 
 // done_card_data.go bridges the store to gateway.BuildDoneCard. Two
 // callers share this assembly: the initial DoneCard send (worker) and

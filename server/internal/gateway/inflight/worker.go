@@ -1,4 +1,4 @@
-// Package feishuoutbound assembles the running Feishu outbound worker
+// Package inflight assembles the running Feishu outbound worker
 // from the standalone pieces in package gateway. It owns:
 //
 //   - the FeishuTenantClient cache keyed by (workspace_id, app_id);
@@ -6,7 +6,7 @@
 //     fetches + decrypts dedicated Bot app_secret refs from the vault;
 //   - the Sender that pushes a message via Feishu im/v1/messages;
 //   - the polling daemon goroutine that ties the loop together.
-package feishuoutbound
+package inflight
 
 import (
 	"context"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -172,11 +173,20 @@ type Options struct {
 	// Audit is the optional ingester for dead-letter audit rows. Nil
 	// is fine — driver branches on w.audit != nil before emitting.
 	Audit *audit.Ingester
+
+	// Channels registers neutral outbound channels keyed by platform for
+	// the non-Feishu inflight path. Feishu is NOT registered here — it is
+	// built per-conversation via w.feishuChannel so it keeps its
+	// transport-injected token cache. Each registered platform is added
+	// to the claim predicate, so the worker only ever claims rows it can
+	// actually deliver (no reclaim death-loop). Empty/nil → Feishu-only,
+	// zero behavior change.
+	Channels map[channel.Platform]channel.Channel
 }
 
 // PermissionRouter is the auto-expire path's hook for pushing a Deny
 // verdict back into the runtime. Kept separate from
-// feishuinbound.PermissionRouter so the two packages don't have to
+// inbound.PermissionRouter so the two packages don't have to
 // depend on each other.
 type PermissionRouter interface {
 	SubmitPermission(ctx context.Context, decision PermissionDecision) error
@@ -190,7 +200,7 @@ type DeviceResolver interface {
 }
 
 // PermissionDecision mirrors connector.PermissionDecision in shape;
-// re-declared here so feishuoutbound doesn't depend on the connector
+// re-declared here so inflight doesn't depend on the connector
 // package.
 type PermissionDecision struct {
 	RequestID  string
@@ -214,6 +224,12 @@ type Worker struct {
 	deviceResolver DeviceResolver
 	claimedBy      string
 
+	// channels holds the neutral outbound adapters for non-Feishu
+	// platforms; platforms is the claim predicate (= {"feishu"} ∪
+	// keys(channels)). Both are read-only after NewWorker.
+	channels  map[channel.Platform]channel.Channel
+	platforms []string
+
 	audit *audit.Ingester
 
 	mu      sync.Mutex
@@ -224,10 +240,10 @@ type Worker struct {
 // Worker is inert until Run() is called.
 func NewWorker(opts Options) (*Worker, error) {
 	if opts.Store == nil {
-		return nil, errors.New("feishuoutbound: Store is required")
+		return nil, errors.New("inflight: Store is required")
 	}
 	if opts.Secrets == nil {
-		return nil, errors.New("feishuoutbound: Secrets decrypter is required")
+		return nil, errors.New("inflight: Secrets decrypter is required")
 	}
 	logger := opts.Logger
 	if logger == nil {
@@ -243,7 +259,7 @@ func NewWorker(opts Options) (*Worker, error) {
 	}
 	defaultBot := opts.DefaultSharedBot.normalized()
 	if (defaultBot.AppID == "") != (defaultBot.AppSecret == "") {
-		return nil, errors.New("feishuoutbound: DefaultSharedBot requires both AppID and AppSecret")
+		return nil, errors.New("inflight: DefaultSharedBot requires both AppID and AppSecret")
 	}
 
 	claimedBy := strings.TrimSpace(opts.ClaimedBy)
@@ -256,9 +272,24 @@ func NewWorker(opts Options) (*Worker, error) {
 		// only, not unpredictability.
 		buf := make([]byte, 8)
 		if _, err := rand.Read(buf); err != nil {
-			return nil, fmt.Errorf("feishuoutbound: derive claimed_by fallback: %w", err)
+			return nil, fmt.Errorf("inflight: derive claimed_by fallback: %w", err)
 		}
 		claimedBy = "worker-" + hex.EncodeToString(buf)
+	}
+
+	// Build the registered neutral channels + the claim platform set.
+	// Feishu is always claimable (legacy path); each registered neutral
+	// channel adds its platform so claim never returns an undeliverable
+	// row. Copy the map so post-construction mutation of Options can't
+	// race the worker.
+	channels := make(map[channel.Platform]channel.Channel, len(opts.Channels))
+	platforms := []string{string(channel.PlatformFeishu)}
+	for p, ch := range opts.Channels {
+		if ch == nil || strings.TrimSpace(string(p)) == "" || p == channel.PlatformFeishu {
+			continue
+		}
+		channels[p] = ch
+		platforms = append(platforms, string(p))
 	}
 
 	return &Worker{
@@ -274,6 +305,8 @@ func NewWorker(opts Options) (*Worker, error) {
 		permRouter:     opts.PermissionRouter,
 		deviceResolver: opts.DeviceResolver,
 		claimedBy:      claimedBy,
+		channels:       channels,
+		platforms:      platforms,
 		audit:          opts.Audit,
 		clients:        make(map[string]*gateway.FeishuTenantClient),
 	}, nil
@@ -473,7 +506,7 @@ func MaskedConfigJSON(cfg gateway.FeishuConnectorConfig) ([]byte, error) {
 // MustSecretsDecrypter adapts *secrets.Service into SecretDecrypter.
 func MustSecretsDecrypter(svc *secrets.Service) SecretDecrypter {
 	if svc == nil {
-		panic("feishuoutbound: nil secrets.Service")
+		panic("inflight: nil secrets.Service")
 	}
 	return svc
 }

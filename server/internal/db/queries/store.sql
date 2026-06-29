@@ -470,19 +470,20 @@ where (config->'connectors'->'feishu'->>'enabled')::boolean = true
   and status = 'active'
   and deleted_at is null;
 
--- B phase Feishu IM routing (docs/feishu-routing.md §4.1):
--- FindUserByFeishuUnionID resolves an inbound Feishu sender to its
--- Parsar user_id. We key on union_id because the OAuth login flow
--- stores union_id (cross-tenant stable) in auth_identities.subject,
--- not per-app open_id. Returns pgx.ErrNoRows for unregistered senders;
--- the gate translates that into Visibility public/tenant decisions.
+-- Multi-platform IM routing (docs/feishu-routing.md §4.1):
+-- FindUserByPlatformSubject resolves an inbound sender to its Parsar
+-- user_id by (provider, subject). The subject is the cross-tenant stable
+-- id the OAuth login flow stores in auth_identities.subject — Feishu keys
+-- on union_id, Slack on its workspace user id — never a per-app local id.
+-- Returns pgx.ErrNoRows for unregistered senders; the gate translates that
+-- into Visibility public/tenant decisions.
 
--- name: FindUserByFeishuUnionID :one
+-- name: FindUserByPlatformSubject :one
 select u.id::text
 from auth_identities ai
 join users u on u.id = ai.user_id
-where ai.provider = 'feishu'
-  and ai.subject = @union_id::text
+where ai.provider = @provider::text
+  and ai.subject = @subject::text
   and u.deleted_at is null
   and u.status = 'active'
 limit 1;
@@ -1586,18 +1587,23 @@ with run_event_max as (
   group by agent_run_id
 ),
 picked as (
-  select c.id, r.id as run_id
+  select c.id, c.platform, r.id as run_id
   from conversations c
   join agent_runs r on r.conversation_id = c.id
   -- INNER (not LEFT) join: a run is only claimable once it has >=1
   -- renderable event. Without a rem row the first-send branch below
   -- (agent_run_id <> r.id) would otherwise claim a run carrying only
   -- non-renderable lifecycle events (run.cancelled/requeued/superseded)
-  -- and spam an empty card. The sibling ListActive query reaches the
-  -- same exclusion via its `seq_emitted < max_seq` predicate.
+  -- or a freshly-queued run with no events yet, and spam an empty card.
+  -- The sibling ListActive query reaches the same exclusion via its
+  -- `seq_emitted < max_seq` predicate.
   join run_event_max rem on rem.agent_run_id = r.id
   left join messages m on m.id = r.output_message_id
-  where c.platform = 'feishu'
+  -- Platform predicate is parameterized (was hardcoded 'feishu') so the
+  -- driver can claim any platform whose neutral Channel is registered on
+  -- the worker. The worker passes only platforms it can actually deliver
+  -- to, so a row is never claimed without a sink.
+  where c.platform = any(@platforms::text[])
     and c.status = 'active'
     and c.deleted_at is null
     and c.external_id <> ''
@@ -1655,18 +1661,6 @@ picked as (
   for update of c skip locked
 ),
 claimed as (
-  -- Stamp the claim once PER CONVERSATION, then fan back out to one
-  -- row per run in the final SELECT. The previous shape did
-  -- `update conversations c ... from picked ... returning picked.run_id`,
-  -- but Postgres UPDATE...FROM updates each target row once and emits a
-  -- single RETURNING row even when picked holds several runs for that
-  -- conversation — so a conv with two claimable runs (e.g. two failed
-  -- runs) returned only one. The dropped run never reached the
-  -- terminal_delivered fingerprint and got re-claimed every tick (the
-  -- other half of the prod 2026-06-22 card storm; see fingerprint note
-  -- above). Updating `where c.id in (select id from picked)` keeps the
-  -- claim stamp idempotent per conversation while the run fan-out moves
-  -- to the join below.
   update conversations c
   set metadata = jsonb_set(
         coalesce(c.metadata, '{}'::jsonb),
@@ -1678,9 +1672,11 @@ claimed as (
         true
       ),
       updated_at = @now::timestamptz
-  where c.id in (select id from picked)
+  from picked
+  where c.id = picked.id
   returning c.id, c.workspace_id, c.project_id, c.external_id,
-            c.external_thread_id, c.source_app_id, c.metadata
+            c.external_thread_id, c.source_app_id, c.metadata,
+            picked.platform, picked.run_id
 )
 select claimed.id::text                 as conversation_id,
        claimed.workspace_id::text       as workspace_id,
@@ -1688,8 +1684,9 @@ select claimed.id::text                 as conversation_id,
        claimed.external_id              as external_chat_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
+       claimed.platform                 as platform,
        claimed.metadata                 as conversation_metadata,
-       picked.run_id::text              as agent_run_id,
+       claimed.run_id::text             as agent_run_id,
        r.status                         as run_status,
        r.started_at                     as run_started_at,
        r.finished_at                    as run_finished_at,
@@ -1706,10 +1703,18 @@ select claimed.id::text                 as conversation_id,
        -- Empty string when the trigger row is missing or carries no
        -- open_id (legacy fixtures, system-initiated runs); the ping
        -- helper degrades to a plain-text message.
-       coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id
-from picked
-join claimed on claimed.id = picked.id
-join agent_runs r on r.id = picked.run_id
+       coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id,
+       -- tenant_key is the platform workspace id (Slack team_id, Feishu
+       -- tenant_key) the inbound router stamped onto the trigger message
+       -- metadata. The neutral outbound path threads it into the
+       -- ReplyTarget so a multi-workspace Slack channel resolves the
+       -- per-team bot token at send time. Feishu ignores it (its token
+       -- comes from the transport-injected cache, unchanged). Empty when
+       -- the trigger row is missing (legacy fixtures); the resolver falls
+       -- back to the static/env token.
+       coalesce(trig.metadata->>'tenant_key', '')::text as tenant_key
+from claimed
+join agent_runs r on r.id = claimed.run_id
 left join messages trig on trig.id = r.trigger_message_id
 left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
 left join agents a on a.id = pa.agent_id and a.deleted_at is null
@@ -1722,7 +1727,7 @@ left join (
   -- seq_emitted compare gets confused. See same set ~line 1705.
   where event_kind in ('tool.call', 'message.delta', 'message.thinking', 'permission.asked', 'prompt_for_user_choice.asked', 'run.started', 'run.completed', 'run.failed')
   group by agent_run_id
-) rem on rem.agent_run_id = picked.run_id;
+) rem on rem.agent_run_id = claimed.run_id;
 
 -- name: ListAgentRunEventsAfterSeq :many
 -- Pull the slice of events the driver hasn't rendered yet, in
@@ -2232,6 +2237,23 @@ select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_v
 from secrets
 where id = @id::uuid
   and deleted_at is null;
+
+-- name: ResolveSlackBotSecretByTeam :one
+-- Resolve the active Slack bot-token secret for a workspace, keyed by the
+-- Slack team_id stamped in metadata at install time. kind='slack_bot' is a
+-- free-text convention (the secrets table has no kind CHECK), so no migration
+-- is needed; metadata->>'team_id' scopes the row to one workspace. The neutral
+-- Slack channel decrypts encrypted_payload to mint the per-call Web API bearer,
+-- so a re-installed app rotates without a process restart. Newest active row
+-- wins when two installs share a team (re-install supersedes).
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'slack_bot'
+  and status = 'active'
+  and metadata->>'team_id' = @team_id::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1;
 
 -- name: DisableSecret :one
 update secrets

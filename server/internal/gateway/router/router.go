@@ -1,4 +1,4 @@
-package feishushared
+package router
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -20,7 +21,7 @@ type Store interface {
 	ClearGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) error
 	GetAgentByID(ctx context.Context, agentID string) (store.FeishuAgentRoute, error)
 	GetAgentByFeishuAppID(ctx context.Context, appID string) (store.FeishuAgentRoute, error)
-	FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error)
+	FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error)
 	IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error)
 	// Feeds the visibility=workspace rejection card. Failures degrade the
 	// card content but must not block the rejection itself.
@@ -34,23 +35,38 @@ type Store interface {
 	CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]store.SupersededRun, error)
 }
 
-type ReplyFunc func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.FeishuInboundEvent, text string) error
+type ReplyFunc func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error
 
 // QuotedChainFunc fetches the rendered quoted-chain prefix for an
 // inbound reply, or "" when there's no parent / fetching failed.
 // Implementations may also mutate event.Metadata["attachments"] in place
 // to inject parent-hop images alongside the user's own. Nil disables
 // chain enrichment on this path.
-type QuotedChainFunc func(ctx context.Context, host gateway.FeishuRouteAgent, event *gateway.FeishuInboundEvent) string
+type QuotedChainFunc func(ctx context.Context, host gateway.FeishuRouteAgent, event *gateway.InboundEvent) string
 
 // QuotedChainPrefixMetadataKey mirrors store.TriggerMessageQuotedChainPrefixKey;
 // the store layer prepends the value to TriggerMessageContent at
 // dispatch time.
 const QuotedChainPrefixMetadataKey = store.TriggerMessageQuotedChainPrefixKey
 
-const (
-	gatewayPlatformFeishu = "feishu"
-)
+// platformFeishu sources the gateway platform string from the channel
+// package's canonical constant (== "feishu"). It is the fallback for
+// eventPlatform when an inbound event carries no platform tag (e.g. a
+// directly-constructed event in tests), preserving the pre-N4 behaviour.
+var platformFeishu = string(channel.PlatformFeishu)
+
+// eventPlatform is the store-facing platform discriminator for an inbound
+// event: the session-selection namespace and the stored Gateway tag. It
+// reads the platform off the neutral event (Feishu Normalize stamps
+// "feishu", Slack "slack") so a second platform routes under its own
+// namespace instead of colliding with Feishu's. Empty falls back to
+// platformFeishu so Feishu parity is byte-identical.
+func eventPlatform(event gateway.InboundEvent) string {
+	if p := strings.TrimSpace(event.Platform); p != "" {
+		return p
+	}
+	return platformFeishu
+}
 
 type Outcome struct {
 	Handled  bool
@@ -82,19 +98,19 @@ func IsSharedRoutingMode(raw string) bool {
 	return RoutingMode(raw) == "shared"
 }
 
-func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.FeishuInboundEvent, reply ReplyFunc, quotedChain QuotedChainFunc, gateCfg gateway.GateConfig) (Outcome, error) {
+func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.InboundEvent, reply ReplyFunc, quotedChain QuotedChainFunc, gateCfg gateway.GateConfig) (Outcome, error) {
 	if st == nil {
-		return Outcome{}, errors.New("feishushared: store is required")
+		return Outcome{}, errors.New("router: store is required")
 	}
 	senderSubject := SenderSubject(event)
 	if strings.TrimSpace(senderSubject) == "" {
 		return replyAndStop(ctx, reply, host, event, "无法识别飞书发送者，请稍后重试。", "missing_sender")
 	}
-	botSender := event.IsBotSender()
+	botSender := event.SenderIsBot
 
 	var senderUserID string
 	if !botSender {
-		uid, err := findSenderUserID(ctx, st, senderSubject)
+		uid, err := findSenderUserID(ctx, st, event.Platform, senderSubject)
 		if err != nil {
 			return Outcome{}, err
 		}
@@ -116,7 +132,7 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 		}
 	}
 
-	selectedAgentID, err := st.GetGatewaySessionSelection(ctx, gatewayPlatformFeishu, event.ChatID, "")
+	selectedAgentID, err := st.GetGatewaySessionSelection(ctx, eventPlatform(event), event.ExternalChatID, "")
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownGatewaySessionSelection) {
 			if botSender {
@@ -152,7 +168,7 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 			return Outcome{Handled: true, Reason: "bot_sender_no_agent_creator", AgentID: target.AgentID}, nil
 		}
 	} else {
-		decision, err = gateway.RouteFeishuInboundToAgent(ctx, routeAdapter{store: st}, event, routeFromStore(target), gateCfg)
+		decision, err = gateway.RouteInboundToAgent(ctx, routeAdapter{store: st}, event, routeFromStore(target), gateCfg)
 		if err != nil {
 			return Outcome{}, err
 		}
@@ -174,7 +190,9 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 	}
 	if botSender {
 		metadata["bot_sender"] = true
-		metadata["sender_type"] = event.SenderType
+		if v, ok := event.Metadata["sender_type"]; ok {
+			metadata["sender_type"] = v
+		}
 	}
 	// Stamp the quoted-chain prefix into metadata when this inbound is
 	// a reply. The store layer prepends it to TriggerMessageContent at
@@ -195,21 +213,21 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 		Text:              decision.NormalizedText,
 		Mentions:          []string{"@" + decision.Agent.AgentName},
 		Source:            "gateway",
-		Gateway:           "feishu",
+		Gateway:           eventPlatform(event),
 		ExternalUserID:    senderSubject,
 		InitiatorUserID:   initiatorUserID,
-		SenderOpenID:      event.SenderOpenID,
-		ExternalChatID:    event.ChatID,
+		SenderOpenID:      event.Sender.LocalUserID,
+		ExternalChatID:    event.ExternalChatID,
 		ExternalThreadID:  event.ThreadKey(),
-		ExternalMessageID: event.MessageID,
+		ExternalMessageID: event.ExternalMessageID,
 		TargetAgentID:     decision.Agent.AgentID,
-		SourceAppID:       event.AppID,
+		SourceAppID:       event.BotID,
 		ConversationForm:  conversationForm(event),
 		Metadata:          metadata,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownMention) {
-			if clearErr := st.ClearGatewaySessionSelection(ctx, gatewayPlatformFeishu, event.ChatID, ""); clearErr != nil {
+			if clearErr := st.ClearGatewaySessionSelection(ctx, eventPlatform(event), event.ExternalChatID, ""); clearErr != nil {
 				return Outcome{}, fmt.Errorf("clear stale gateway selection after binding loss: %w", clearErr)
 			}
 			if botSender {
@@ -224,8 +242,8 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 	return Outcome{Handled: true, Accepted: true, Reason: "accepted", AgentID: target.AgentID, InboundMessageID: result.MessageID}, nil
 }
 
-func SenderSubject(event gateway.FeishuInboundEvent) string {
-	for _, candidate := range []string{event.SenderUnionID, event.SenderOpenID, event.SenderUserID} {
+func SenderSubject(event gateway.InboundEvent) string {
+	for _, candidate := range []string{event.Sender.PlatformUserID, event.Sender.LocalUserID} {
 		if strings.TrimSpace(candidate) != "" {
 			return strings.TrimSpace(candidate)
 		}
@@ -233,91 +251,21 @@ func SenderSubject(event gateway.FeishuInboundEvent) string {
 	return ""
 }
 
-func findSenderUserID(ctx context.Context, st Store, subject string) (string, error) {
+func findSenderUserID(ctx context.Context, st Store, platform, subject string) (string, error) {
 	if strings.TrimSpace(subject) == "" {
 		return "", nil
 	}
-	userID, err := st.FindUserIDByFeishuUnionID(ctx, subject)
+	userID, err := st.FindUserIDByPlatformSubject(ctx, platform, subject)
 	if err == nil {
 		return userID, nil
 	}
-	if errors.Is(err, store.ErrUnknownFeishuUser) {
+	if errors.Is(err, store.ErrUnknownPlatformUser) {
 		return "", nil
 	}
 	return "", err
 }
 
-func handleList(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.FeishuInboundEvent, reply ReplyFunc, senderUserID string) (Outcome, error) {
-	current, _ := st.GetGatewaySessionSelection(ctx, gatewayPlatformFeishu, event.ChatID, "")
-	agents, err := st.ListFeishuSharedBotAgents(ctx, senderUserID, host.AgentID, 20)
-	if err != nil {
-		return Outcome{}, err
-	}
-	return replyAndStop(ctx, reply, host, event, formatAgentList(agents, current), "list")
-}
-
-func handleSelect(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.FeishuInboundEvent, reply ReplyFunc, senderUserID string, args []string) (Outcome, error) {
-	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return replyAndStop(ctx, reply, host, event, "用法：/select <agent-slug>", "select_usage")
-	}
-	agents, err := st.ListFeishuSharedBotAgents(ctx, senderUserID, host.AgentID, 50)
-	if err != nil {
-		return Outcome{}, err
-	}
-	selected, err := selectAgent(agents, strings.TrimSpace(args[0]))
-	if err != nil {
-		return replyAndStop(ctx, reply, host, event, err.Error(), "select_failed")
-	}
-	if err := st.UpsertGatewaySessionSelection(ctx, store.GatewaySessionSelectionInput{
-		Platform:   gatewayPlatformFeishu,
-		ExternalID: event.ChatID,
-		AgentID:    selected.AgentID,
-		Metadata: map[string]any{
-			"host_app_id": event.AppID,
-			"tenant_key":  event.TenantKey,
-			"chat_type":   event.ChatType,
-		},
-	}); err != nil {
-		return Outcome{}, err
-	}
-	text := fmt.Sprintf("已选择 Agent「%s」（%s / %s）。", selected.AgentName, selected.WorkspaceName, selected.ProjectName)
-	return replyAndStop(ctx, reply, host, event, text, "selected")
-}
-
-// handleCancel marks every queued/running run on the conversation as
-// cancelled; the connector sees the status flip on its next tick. We
-// deliberately do NOT call connector.Abort here — that would couple the
-// router to the connector registry, and the poll-driven cancel is
-// enough to unblock the queue.
-func handleCancel(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.FeishuInboundEvent, reply ReplyFunc, args []string) (Outcome, error) {
-	scope := "current"
-	if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "all") {
-		scope = "all"
-	}
-	conversationID, err := st.FindConversationByExternalRef(ctx, gatewayPlatformFeishu, event.ChatID, event.ThreadKey())
-	if err != nil {
-		if errors.Is(err, store.ErrUnknownConversation) {
-			return replyAndStop(ctx, reply, host, event,
-				"当前会话还没有进行中的任务，无法取消。", "cancel_no_conversation")
-		}
-		return Outcome{}, err
-	}
-	reason := "feishu_user_cancel"
-	if scope == "all" {
-		reason = "feishu_user_cancel_all"
-	}
-	cancelled, err := st.CancelAllInflightForConversation(ctx, conversationID, reason)
-	if err != nil {
-		return Outcome{}, err
-	}
-	if len(cancelled) == 0 {
-		return replyAndStop(ctx, reply, host, event, "当前没有进行中的任务。", "cancel_none")
-	}
-	msg := fmt.Sprintf("已取消 %d 个任务。", len(cancelled))
-	return replyAndStop(ctx, reply, host, event, msg, "cancelled")
-}
-
-func replyAndStop(ctx context.Context, reply ReplyFunc, host gateway.FeishuRouteAgent, event gateway.FeishuInboundEvent, text string, reason string) (Outcome, error) {
+func replyAndStop(ctx context.Context, reply ReplyFunc, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string, reason string) (Outcome, error) {
 	if reply == nil {
 		return Outcome{Handled: true, Replied: false, Reason: reason}, nil
 	}
@@ -327,105 +275,37 @@ func replyAndStop(ctx context.Context, reply ReplyFunc, host gateway.FeishuRoute
 	return Outcome{Handled: true, Replied: true, Reason: reason}, nil
 }
 
-func parseCommand(text string) (cmd string, args []string, ok bool) {
-	text = strings.TrimSpace(text)
-	if !strings.HasPrefix(text, "/") {
-		return "", nil, false
-	}
-	parts := strings.Fields(strings.TrimPrefix(text, "/"))
-	if len(parts) == 0 {
-		return "", nil, false
-	}
-	return strings.ToLower(parts[0]), parts[1:], true
-}
-
-// CancelCommand summarises a parsed /cancel or /cancel all input.
-type CancelCommand struct {
-	Scope string // "current" | "all"
-}
-
-// ParseCancelCommand recognises `/cancel`, `/cancel all`, `/stop`, and
-// `/stop all`. Returns ok=false for anything else so the caller can
-// fall through to the normal prompt path.
-func ParseCancelCommand(text string) (CancelCommand, bool) {
-	cmd, args, ok := parseCommand(text)
-	if !ok {
-		return CancelCommand{}, false
-	}
-	switch cmd {
-	case "cancel", "stop":
-		scope := "current"
-		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "all") {
-			scope = "all"
-		}
-		return CancelCommand{Scope: scope}, true
-	}
-	return CancelCommand{}, false
-}
-
-// formatAgentList renders /list output grouped by workspace. We render
-// agent.slug (not a positional [N]) because the visible set is
-// per-sender, so any index would mean different things to different
-// people in the same chat.
-func formatAgentList(agents []store.FeishuSharedBotAgent, currentAgentID string) string {
-	if len(agents) == 0 {
-		return "暂无可用 Agent。"
-	}
-	groups := make(map[string][]store.FeishuSharedBotAgent)
-	var groupOrder []string
-	for _, agent := range agents {
-		key := agent.WorkspaceName
-		if _, ok := groups[key]; !ok {
-			groupOrder = append(groupOrder, key)
-		}
-		groups[key] = append(groups[key], agent)
-	}
-	lines := []string{"可用 Agent："}
-	for _, name := range groupOrder {
-		lines = append(lines, "", fmt.Sprintf("---- %s ----", name))
-		for _, agent := range groups[name] {
-			marker := ""
-			if agent.AgentID == currentAgentID {
-				marker = " ✓"
-			}
-			lines = append(lines, fmt.Sprintf("%s（%s — %s）%s", agent.AgentSlug, agent.AgentName, agent.ProjectName, marker))
-		}
-	}
-	lines = append(lines, "", "发送 /select <agent-slug> 选择。")
-	return strings.Join(lines, "\n")
-}
-
-func selectAgent(agents []store.FeishuSharedBotAgent, token string) (store.FeishuSharedBotAgent, error) {
-	token = strings.ToLower(strings.TrimSpace(token))
-	for _, agent := range agents {
-		if strings.EqualFold(agent.AgentSlug, token) {
-			return agent, nil
-		}
-	}
-	return store.FeishuSharedBotAgent{}, fmt.Errorf("未找到 Agent %q，请发送 /list 查看可用 Agent。", token)
-}
-
-func helpText() string {
-	return "可用命令：\n/list — 查看可用 Agent\n/select <agent-slug> — 切换当前 Agent\n/cancel — 取消当前会话进行中的任务\n/help — 显示帮助"
-}
-
-func sharedMetadata(event gateway.FeishuInboundEvent, decision gateway.FeishuInboundDecision) map[string]any {
+func sharedMetadata(event gateway.InboundEvent, decision gateway.FeishuInboundDecision) map[string]any {
 	metadata := map[string]any{
 		"chat_type":      event.ChatType,
-		"tenant_key":     event.TenantKey,
+		"tenant_key":     event.Sender.TenantKey,
 		"sender_state":   decision.SenderState,
-		"message_type":   event.MessageType,
-		"raw_content":    event.RawContent,
-		"root_id":        event.RootID,
-		"parent_id":      event.ParentID,
-		"thread_id":      event.ThreadID,
+		"root_id":        event.ExternalRootID,
+		"parent_id":      event.ReplyTo,
+		"thread_id":      event.ExternalThreadID,
 		"shared_bot":     true,
-		"host_app_id":    event.AppID,
+		"host_app_id":    event.BotID,
 		"selected_agent": decision.Agent.AgentID,
 		"selected_slug":  decision.Agent.AgentSlug,
 	}
+	// message_type / raw_content live in the neutral event's Metadata bag
+	// (folded there by NeutralFromFeishuEvent); surface them back as typed
+	// keys so the stored jsonb matches the legacy Feishu-typed path.
+	if v, ok := event.Metadata["message_type"]; ok {
+		metadata["message_type"] = v
+	}
+	if v, ok := event.Metadata["raw_content"]; ok {
+		metadata["raw_content"] = v
+	}
 	for key, value := range event.Metadata {
 		if strings.TrimSpace(key) == "" || value == nil {
+			continue
+		}
+		// These three already have explicit handling above (message_type /
+		// raw_content) or belong to the bot-sender branch (sender_type);
+		// skip them in the blanket merge to avoid clobbering / leaking.
+		switch key {
+		case "message_type", "raw_content", "sender_type":
 			continue
 		}
 		metadata[key] = value
@@ -433,8 +313,8 @@ func sharedMetadata(event gateway.FeishuInboundEvent, decision gateway.FeishuInb
 	return metadata
 }
 
-func conversationForm(event gateway.FeishuInboundEvent) string {
-	if strings.EqualFold(strings.TrimSpace(event.ChatType), "p2p") {
+func conversationForm(event gateway.InboundEvent) string {
+	if strings.EqualFold(strings.TrimSpace(event.ChatType), "dm") {
 		return "dm"
 	}
 	return "group"
@@ -466,11 +346,11 @@ func (r routeAdapter) GetAgentByID(ctx context.Context, agentID string) (gateway
 	return routeFromStore(route), nil
 }
 
-func (r routeAdapter) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	userID, err := r.store.FindUserIDByFeishuUnionID(ctx, unionID)
+func (r routeAdapter) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	userID, err := r.store.FindUserIDByPlatformSubject(ctx, platform, subject)
 	if err != nil {
-		if errors.Is(err, store.ErrUnknownFeishuUser) {
-			return "", gateway.ErrFeishuRouterUnknownUser
+		if errors.Is(err, store.ErrUnknownPlatformUser) {
+			return "", gateway.ErrRouterUnknownUser
 		}
 		return "", err
 	}
@@ -504,7 +384,7 @@ func routeFromStore(route store.FeishuAgentRoute) gateway.FeishuRouteAgent {
 
 // ConversationTitle builds the sidebar title for a Feishu-sourced
 // conversation. The 30-rune cap (not bytes) avoids slicing Chinese
-// titles mid-codepoint. Shared by feishuinbound, feishushared, and
+// titles mid-codepoint. Shared by feishuinbound, router, and
 // dev/routes.go — all three must agree since they create the same
 // conversation rows.
 func ConversationTitle(text string) string {

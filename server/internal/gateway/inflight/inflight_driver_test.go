@@ -1,4 +1,4 @@
-package feishuoutbound
+package inflight
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	feishuchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/feishu"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -947,7 +948,7 @@ func TestBuildFinalCardForRun_PreservesStreamingBody(t *testing.T) {
 	}
 	const body = "你好！有什么我可以帮你的吗?"
 	content, err := buildFinalCardForRun(
-		context.Background(), fs, c,
+		context.Background(), feishuchannel.New(feishuchannel.Config{}), fs, c,
 		nil,  // steps
 		body, // streamingText
 		"",   // thinkingText
@@ -966,7 +967,7 @@ func TestBuildFinalCardForRun_PreservesStreamingBody(t *testing.T) {
 	cFail := c
 	cFail.RunStatus = "failed"
 	errContent, err := buildFinalCardForRun(
-		context.Background(), fs, cFail, nil, body, "", "boom", "", "",
+		context.Background(), feishuchannel.New(feishuchannel.Config{}), fs, cFail, nil, body, "", "boom", "", "",
 	)
 	if err != nil {
 		t.Fatalf("buildFinalCardForRun(failed) err = %v", err)
@@ -1001,7 +1002,7 @@ func TestBuildFinalCardForRun_SurfacesGuestHintOnFailure(t *testing.T) {
 		RunStatus:      "failed",
 	}
 	content, err := buildFinalCardForRun(
-		context.Background(), fs, c, nil, "", "",
+		context.Background(), feishuchannel.New(feishuchannel.Config{}), fs, c, nil, "", "",
 		"Agent 执行失败，请展开本轮错误详情查看具体原因。", "empty final output", "",
 	)
 	if err != nil {

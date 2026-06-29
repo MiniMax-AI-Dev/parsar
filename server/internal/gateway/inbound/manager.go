@@ -1,8 +1,8 @@
-// Package feishuinbound owns the Feishu event-websocket consumer for
+// Package inbound owns the Feishu event-websocket consumer for
 // QR-provisioned Agent Bots. It deliberately reuses package gateway's
 // routing/gate logic so websocket and webhook inbound paths produce the
 // same Parsar conversation/message/run records.
-package feishuinbound
+package inbound
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/larksuite/oapi-sdk-go/v3/ws"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishushared"
+	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -43,7 +43,7 @@ type Storer interface {
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	ClearGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) error
-	FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error)
+	FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error)
 	IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error)
 	// GetWorkspaceVisibility + ListActiveWorkspaceOwnerNames feed the
 	// visibility=workspace rejection card. Errors are swallowed by the
@@ -110,7 +110,7 @@ type PermissionRouter interface {
 }
 
 // PermissionDecision mirrors connector.PermissionDecision; kept gateway-
-// side so feishuinbound doesn't depend on the connector package.
+// side so inbound doesn't depend on the connector package.
 type PermissionDecision struct {
 	RequestID  string
 	Approved   bool
@@ -134,7 +134,7 @@ type PromptForUserChoiceQuestionAnswer struct {
 }
 
 // PromptForUserChoiceDecision mirrors connector.PromptForUserChoiceDecision;
-// kept gateway-side so feishuinbound stays free of the connector
+// kept gateway-side so inbound stays free of the connector
 // package.
 type PromptForUserChoiceDecision struct {
 	RequestID       string
@@ -240,10 +240,10 @@ type clientHandle struct {
 // NewManager validates options and returns an inert manager.
 func NewManager(opts Options) (*Manager, error) {
 	if opts.Store == nil {
-		return nil, errors.New("feishuinbound: Store is required")
+		return nil, errors.New("inbound: Store is required")
 	}
 	if opts.Secrets == nil {
-		return nil, errors.New("feishuinbound: Secrets decrypter is required")
+		return nil, errors.New("inbound: Secrets decrypter is required")
 	}
 	logger := opts.Logger
 	if logger == nil {
@@ -267,7 +267,7 @@ func NewManager(opts Options) (*Manager, error) {
 	}
 	defaultBot := opts.DefaultSharedBot.normalized()
 	if (defaultBot.AppID == "") != (defaultBot.AppSecret == "") {
-		return nil, errors.New("feishuinbound: DefaultSharedBot requires both AppID and AppSecret")
+		return nil, errors.New("inbound: DefaultSharedBot requires both AppID and AppSecret")
 	}
 	return &Manager{
 		store:          opts.Store,
@@ -509,16 +509,21 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	if m.isDefaultSharedBotApp(inbound.AppID) {
 		host, _ := m.defaultSharedRouteAndConfig()
 		gatewayHost := routeFromStore(host)
-		if isSelfMessage(gatewayHost.Config, inbound.SenderOpenID) {
+		botOpenID := botOpenIDFromConfig(gatewayHost.Config)
+		filterEv := gateway.NeutralFromFeishuEvent(inbound)
+		if gateway.IsSelfSender(filterEv, botOpenID) {
 			m.logger.Info("feishu websocket inbound: default shared self message skipped", "app_id", inbound.AppID, "message_id", inbound.MessageID)
 			return nil
 		}
-		if isGroupMessageWithoutBotMention(ctx, m.store, gatewayHost.Config, inbound) {
+		if gateway.ShouldSkipGroupWithoutMention(ctx, neutralThreadHist{m.store}, filterEv, botOpenID) {
 			m.logger.Info("feishu websocket inbound: default shared group message without bot mention skipped", "app_id", inbound.AppID, "message_id", inbound.MessageID)
 			return nil
 		}
 		m.enrichInboundAttachments(ctx, gatewayHost, &inbound)
-		outcome, err := feishushared.HandleInbound(ctx, m.store, gatewayHost, inbound, m.sendImmediateText, m.quotedChainText, m.gateConfig())
+		neutral := gateway.NeutralFromFeishuEvent(inbound)
+		reply := neutralReplyBridge(m, inbound)
+		quoted := neutralQuotedChainBridge(m, &inbound)
+		outcome, err := sharedrouter.HandleInbound(ctx, m.store, gatewayHost, neutral, reply, quoted, m.gateConfig())
 		if err != nil {
 			return fmt.Errorf("handle default shared feishu bot inbound: %w", err)
 		}
@@ -537,11 +542,13 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 		}
 		return fmt.Errorf("route feishu websocket inbound: %w", err)
 	}
-	if isSelfMessage(host.Config, inbound.SenderOpenID) {
+	botOpenID := botOpenIDFromConfig(host.Config)
+	filterEv := gateway.NeutralFromFeishuEvent(inbound)
+	if gateway.IsSelfSender(filterEv, botOpenID) {
 		m.logger.Info("feishu websocket inbound: self message skipped", "app_id", inbound.AppID, "message_id", inbound.MessageID)
 		return nil
 	}
-	if isGroupMessageWithoutBotMention(ctx, m.store, host.Config, inbound) {
+	if gateway.ShouldSkipGroupWithoutMention(ctx, neutralThreadHist{m.store}, filterEv, botOpenID) {
 		m.logger.Info("feishu websocket inbound: group message without bot mention skipped", "app_id", inbound.AppID, "message_id", inbound.MessageID)
 		return nil
 	}
@@ -550,9 +557,12 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	if err != nil {
 		return fmt.Errorf("decode feishu connector config: %w", err)
 	}
-	if ok && feishushared.IsSharedRoutingMode(hostCfg.RoutingMode) {
+	if ok && sharedrouter.IsSharedRoutingMode(hostCfg.RoutingMode) {
 		m.enrichInboundAttachments(ctx, host, &inbound)
-		outcome, err := feishushared.HandleInbound(ctx, m.store, host, inbound, m.sendImmediateText, m.quotedChainText, m.gateConfig())
+		neutral := gateway.NeutralFromFeishuEvent(inbound)
+		reply := neutralReplyBridge(m, inbound)
+		quoted := neutralQuotedChainBridge(m, &inbound)
+		outcome, err := sharedrouter.HandleInbound(ctx, m.store, host, neutral, reply, quoted, m.gateConfig())
 		if err != nil {
 			return fmt.Errorf("handle shared feishu bot inbound: %w", err)
 		}
@@ -568,7 +578,7 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 		return nil
 	}
 
-	decision, err := gateway.RouteFeishuInboundToAgent(ctx, r, inbound, host, m.gateConfig())
+	decision, err := gateway.RouteInboundToAgent(ctx, r, gateway.NeutralFromFeishuEvent(inbound), host, m.gateConfig())
 	if err != nil {
 		return fmt.Errorf("route feishu websocket inbound: %w", err)
 	}
@@ -590,7 +600,7 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	// The cancel marks DB state; the daemon stops streaming on its next
 	// tick. We do NOT call connector.Abort from here — that would couple
 	// the inbound manager to the connector registry.
-	if cancelCmd, ok := feishushared.ParseCancelCommand(decision.NormalizedText); ok {
+	if cancelCmd, ok := sharedrouter.ParseCancelCommand(decision.NormalizedText); ok {
 		threadKey := strings.TrimSpace(inbound.ThreadID)
 		conversationID, err := m.store.FindConversationByExternalRef(ctx, "feishu", inbound.ChatID, threadKey)
 		if err != nil {
@@ -663,7 +673,7 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 
 	threadID := inbound.ReplyAnchorMessageID()
 	created, err := m.store.CreateInboundIMMessage(ctx, store.CreateInboundIMMessageInput{
-		ConversationTitle: feishushared.ConversationTitle(decision.NormalizedText),
+		ConversationTitle: sharedrouter.ConversationTitle(decision.NormalizedText),
 		Text:              decision.NormalizedText,
 		Mentions:          []string{"@" + decision.Agent.AgentName},
 		Source:            "gateway",
@@ -709,6 +719,36 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	}
 	m.logger.Info("feishu websocket inbound accepted", "app_id", inbound.AppID, "message_id", inbound.MessageID, "agent_id", decision.Agent.AgentID)
 	return nil
+}
+
+// neutralReplyBridge adapts the manager's Feishu-typed sendImmediateText to
+// the router's neutral ReplyFunc. The router now speaks gateway.InboundEvent,
+// but the immediate-reply implementation still needs the full Feishu inbound
+// (credentials, reply anchor); we capture it from the enclosing scope and
+// ignore the neutral event the router passes. Removed in N3 once the manager
+// itself runs on the neutral event.
+func neutralReplyBridge(m *Manager, inbound gateway.FeishuInboundEvent) sharedrouter.ReplyFunc {
+	return func(ctx context.Context, host gateway.FeishuRouteAgent, _ gateway.InboundEvent, text string) error {
+		return m.sendImmediateText(ctx, host, inbound, text)
+	}
+}
+
+// neutralQuotedChainBridge adapts quotedChainText to the router's neutral
+// QuotedChainFunc. quotedChainText mutates the captured Feishu inbound's
+// Metadata["attachments"] with parent-hop images; we resync that key onto the
+// neutral event the router holds so the stored message metadata picks up the
+// additions (the router reads event.Metadata["attachments"] after the call).
+func neutralQuotedChainBridge(m *Manager, inbound *gateway.FeishuInboundEvent) sharedrouter.QuotedChainFunc {
+	return func(ctx context.Context, host gateway.FeishuRouteAgent, ev *gateway.InboundEvent) string {
+		prefix := m.quotedChainText(ctx, host, inbound)
+		if att, ok := inbound.Metadata["attachments"]; ok && ev != nil {
+			if ev.Metadata == nil {
+				ev.Metadata = map[string]any{}
+			}
+			ev.Metadata["attachments"] = att
+		}
+		return prefix
+	}
 }
 
 func (m *Manager) sendImmediateText(ctx context.Context, agent gateway.FeishuRouteAgent, inbound gateway.FeishuInboundEvent, text string) error {
@@ -1484,16 +1524,56 @@ func (m *Manager) handleCardAction(ctx context.Context, appID string, event *cal
 	// ack so new card types don't accidentally hang the user's click.
 	switch meta.Action {
 	case "permission_allow", "permission_deny":
-		return m.handlePermissionDecisionAction(ctx, meta, event)
+		// Routed through the neutral channel.ActionRouter seam (3c.1): the
+		// SDK event is projected into a neutral CardAction and the verdict
+		// flows through managerActionRouter, keeping this SDK response
+		// byte-identical to the legacy handlePermissionDecisionAction.
+		ack, err := m.cardActionRouter().RouteAction(ctx, cardActionFromSDK(appID, event))
+		if err != nil {
+			// Defensive: the router handles permission kinds, so this is
+			// unreachable; fall back to the generic ack rather than hang.
+			m.logger.Warn("feishu card action: permission kind unrouted",
+				"action", meta.Action,
+				"err", err.Error(),
+			)
+			return ackToast("info", "操作已收到")
+		}
+		return sdkResponseFromAck(ack)
 	case "credential_form_submit":
-		return m.handleCredentialFormSubmitAction(ctx, meta, event)
+		// Routed through the neutral channel.ActionRouter seam (3c.2): the
+		// SDK event is projected into a neutral CardAction and the
+		// credential-form submit flows through managerActionRouter, keeping
+		// this SDK response byte-identical to the legacy
+		// handleCredentialFormSubmitAction.
+		ack, err := m.cardActionRouter().RouteAction(ctx, cardActionFromSDK(appID, event))
+		if err != nil {
+			m.logger.Warn("feishu card action: credential kind unrouted",
+				"action", meta.Action,
+				"err", err.Error(),
+			)
+			return ackToast("info", "操作已收到")
+		}
+		return sdkResponseFromAck(ack)
 	case "credential_form_acknowledged":
 		// Placeholder button required by Feishu's "form container needs
 		// a name-bearing interactive component" rule; clicks toast and
 		// go nowhere (the card is already terminal).
 		return ackToast("info", "本卡片已结束")
 	case "ask_user_choice_submit":
-		return m.handlePromptForUserChoiceSubmitAction(ctx, meta, event)
+		// Routed through the neutral channel.ActionRouter seam (3c.3): the
+		// SDK event is projected into a neutral CardAction and the
+		// user-choice submit flows through managerActionRouter, keeping this
+		// SDK response byte-identical to the legacy
+		// handlePromptForUserChoiceSubmitAction.
+		ack, err := m.cardActionRouter().RouteAction(ctx, cardActionFromSDK(appID, event))
+		if err != nil {
+			m.logger.Warn("feishu card action: user-choice kind unrouted",
+				"action", meta.Action,
+				"err", err.Error(),
+			)
+			return ackToast("info", "操作已收到")
+		}
+		return sdkResponseFromAck(ack)
 	case "ask_user_choice_pick":
 		// Legacy per-option button from the pre-form AskUserQuestion card.
 		// Cards sent before this deploy still carry this action; clicks
@@ -1509,370 +1589,6 @@ func (m *Manager) handleCardAction(ctx context.Context, appID string, event *cal
 	default:
 		return ackToast("info", "操作已收到")
 	}
-}
-
-// handlePermissionDecisionAction parses the permission_request_id off
-// the card button, forwards the verdict to the runtime, patches the
-// card into its green/red result shape, and clears the inflight slot.
-//
-// Failure modes:
-//   - missing request id → generic ack toast (defensive)
-//   - slot already cleared → "该请求已处理或已过期" toast
-//   - SubmitPermission error → retryable toast; slot stays
-//   - PatchMessage failure → log warn but still clear the slot since
-//     the verdict landed on the runtime
-func (m *Manager) handlePermissionDecisionAction(
-	ctx context.Context,
-	meta cardActionLogMeta,
-	event *callback.CardActionTriggerEvent,
-) *callback.CardActionTriggerResponse {
-	requestID := strings.TrimSpace(cardActionStringValue(event, "permission_request_id"))
-	if requestID == "" {
-		m.logger.Warn("feishu permission callback missing permission_request_id",
-			"open_message_id", meta.OpenMessageID,
-			"operator_open_id", meta.OperatorOpenID,
-		)
-		return ackToast("info", "操作已收到")
-	}
-	approved := meta.Action == "permission_allow"
-
-	conv, err := m.store.FindConversationByPermissionRequestID(ctx, requestID)
-	if err != nil {
-		if errors.Is(err, store.ErrUnknownConversation) {
-			m.logger.Info("feishu permission callback: slot already cleared",
-				"permission_request_id", requestID,
-				"operator_open_id", meta.OperatorOpenID,
-			)
-			return ackToast("info", "该请求已处理或已过期")
-		}
-		m.logger.Warn("feishu permission callback: lookup failed",
-			"permission_request_id", requestID,
-			"err", err.Error(),
-		)
-		return ackToast("error", "查询失败,请稍后再试")
-	}
-	if !conv.HasPermission {
-		m.logger.Info("feishu permission callback: no permission slot",
-			"permission_request_id", requestID,
-			"conversation_id", conv.ConversationID,
-		)
-		return ackToast("info", "该请求已处理或已过期")
-	}
-
-	if m.permRouter == nil {
-		m.logger.Warn("feishu permission callback: permission router not configured",
-			"permission_request_id", requestID,
-		)
-		return ackToast("error", "服务未配置,请联系管理员")
-	}
-	if err := m.permRouter.SubmitPermission(ctx, PermissionDecision{
-		RequestID:  requestID,
-		Approved:   approved,
-		OperatorID: meta.OperatorOpenID,
-	}); err != nil {
-		m.logger.Warn("feishu permission callback: SubmitPermission failed",
-			"permission_request_id", requestID,
-			"approved", approved,
-			"err", err.Error(),
-		)
-		return ackToast("error", "更新失败,请稍后再试")
-	}
-
-	// Patch the card into its green / red result shape under the bot
-	// that owns the conversation.
-	if err := m.patchPermissionResultCard(ctx, conv, approved); err != nil {
-		// Verdict landed on the runtime; patch failure just leaves
-		// the card in its waiting shape. Log loud and clear the slot.
-		m.logger.Warn("feishu permission callback: patch result card failed",
-			"permission_request_id", requestID,
-			"conversation_id", conv.ConversationID,
-			"err", err.Error(),
-		)
-	}
-	if err := m.store.ClearConversationInflightSlot(ctx, conv.ConversationID, store.InflightSlotPermission, conv.Permission.AgentRunID); err != nil {
-		m.logger.Warn("feishu permission callback: clear slot failed",
-			"permission_request_id", requestID,
-			"conversation_id", conv.ConversationID,
-			"err", err.Error(),
-		)
-	}
-	if approved {
-		return ackToast("success", "已允许")
-	}
-	return ackToast("info", "已拒绝")
-}
-
-// handleCredentialFormSubmitAction routes the credential-form card's
-// submit click through the auto-retry loop.
-//
-// Authorization gate (runs BEFORE any write):
-//  1. operator.open_id must equal stash.initiator_open_id, else ANY
-//     group member could submit a form rendered for another user and
-//     have credentials persisted under that user's account. The stash
-//     uses open_id because Feishu callbacks only carry open_id.
-//  2. callback open_chat_id must equal stash.external_chat_id when
-//     both are present.
-//
-// Concurrency: ClaimPendingCredentialFormSlot is a CTE that captures
-// the pre-image under FOR UPDATE row lock and clears the slot. Two
-// racing pods produce exactly one winner; the loser sees
-// ErrPendingCredentialFormNotFound and short-circuits without writing.
-//
-// Multi-kind atomicity: ReplaceUserCredentials writes every submitted
-// kind in one transaction; any per-kind failure rolls the batch back.
-//
-// Invariant: NEVER log credential plaintext. The submitted set of
-// KINDS is logged (extracted from field names) for observability.
-func (m *Manager) handleCredentialFormSubmitAction(
-	ctx context.Context,
-	meta cardActionLogMeta,
-	event *callback.CardActionTriggerEvent,
-) *callback.CardActionTriggerResponse {
-	qkey := strings.TrimSpace(cardActionStringValue(event, "qkey"))
-	if qkey == "" {
-		m.logger.Warn("feishu credential form submit: missing qkey",
-			"open_message_id", meta.OpenMessageID,
-			"operator_open_id", meta.OperatorOpenID,
-		)
-		return ackToast("info", "操作已收到")
-	}
-	formValues := cardActionFormValues(event)
-	if len(formValues) == 0 {
-		return ackToast("error", "请填写凭据后再提交")
-	}
-	// Extract (kind, plaintext) pairs from form_value. Fields not
-	// prefixed "credential_" are ignored.
-	type kindBinding struct {
-		kind      string
-		plaintext string
-	}
-	const fieldPrefix = "credential_"
-	bindings := make([]kindBinding, 0, len(formValues))
-	kindsForLog := make([]string, 0, len(formValues))
-	for name, raw := range formValues {
-		if !strings.HasPrefix(name, fieldPrefix) {
-			continue
-		}
-		kind := strings.TrimSpace(strings.TrimPrefix(name, fieldPrefix))
-		if kind == "" {
-			continue
-		}
-		plaintext, _ := raw.(string)
-		plaintext = strings.TrimSpace(plaintext)
-		if plaintext == "" {
-			// Empty value means a client-side bypass of the
-			// required-at-render-time form fields; reject loudly.
-			m.logger.Warn("feishu credential form submit: empty credential value",
-				"qkey", qkey,
-				"kind", kind,
-			)
-			return ackToast("error", "请填写每个凭据后再提交")
-		}
-		bindings = append(bindings, kindBinding{kind: kind, plaintext: plaintext})
-		kindsForLog = append(kindsForLog, kind)
-	}
-	if len(bindings) == 0 {
-		return ackToast("error", "请填写凭据后再提交")
-	}
-
-	// Atomic claim — winning pod gets the slot, losers see NotFound.
-	// The slot's host conversation IDs come back in the same call.
-	claimed, err := m.store.ClaimPendingCredentialFormSlot(ctx, qkey)
-	if err != nil {
-		if errors.Is(err, store.ErrPendingCredentialFormNotFound) {
-			m.logger.Info("feishu credential form submit: slot not found (expired or already processed)",
-				"qkey", qkey,
-				"operator_open_id", meta.OperatorOpenID,
-			)
-			return ackToast("info", "该请求已过期，请重新发送消息")
-		}
-		m.logger.Warn("feishu credential form submit: claim failed",
-			"qkey", qkey,
-			"err", err.Error(),
-		)
-		return ackToast("error", "查询失败，请稍后再试")
-	}
-	slot := claimed.Slot
-
-	// Enforce auth AFTER the claim so the qkey is consumed exactly
-	// once even when the auth check fails — otherwise an attacker
-	// could repeatedly poke the callback to keep the stash alive.
-	stashedOpenID := strings.TrimSpace(slot.InitiatorOpenID)
-	if stashedOpenID == "" || stashedOpenID != strings.TrimSpace(meta.OperatorOpenID) {
-		m.logger.Warn("feishu credential form submit: operator mismatch",
-			"qkey", qkey,
-			"operator_open_id", meta.OperatorOpenID,
-			"stash_initiator_open_id_present", stashedOpenID != "",
-			"conversation_id", claimed.ConversationID,
-		)
-		// Flip the form to a red terminal card so the legitimate
-		// initiator sees the qkey is dead and re-sends their message —
-		// otherwise an unchanged form keeps inviting submits that fail
-		// with "expired", DoS'ing the sender after a single hostile
-		// click. Returned inline so Feishu renders without a separate
-		// PATCH round-trip.
-		rejectCard := gateway.BuildCredentialFormRejectedCard(
-			m.resolveCredentialFormCardTitle(ctx, claimed.ConversationID, "credential form reject"),
-			gateway.CredentialFormRejectOperatorMismatch,
-		)
-		return ackToastWithCard("error", "凭据只能由发起人本人填写", rejectCard)
-	}
-	stashedChat := strings.TrimSpace(claimed.ExternalChatID)
-	clickedChat := strings.TrimSpace(meta.OpenChatID)
-	// Enforce only when both sides have a chat id — clickedChat may be
-	// empty on Feishu DMs for some SDK versions; the open_id check
-	// above is sufficient there.
-	if stashedChat != "" && clickedChat != "" && stashedChat != clickedChat {
-		m.logger.Warn("feishu credential form submit: chat mismatch",
-			"qkey", qkey,
-			"stash_chat_id", stashedChat,
-			"clicked_chat_id", clickedChat,
-			"operator_open_id", meta.OperatorOpenID,
-		)
-		rejectCard := gateway.BuildCredentialFormRejectedCard(
-			m.resolveCredentialFormCardTitle(ctx, claimed.ConversationID, "credential form reject"),
-			gateway.CredentialFormRejectChatMismatch,
-		)
-		return ackToastWithCard("error", "请在原会话中提交凭据", rejectCard)
-	}
-
-	m.logger.Info("feishu credential form submit accepted",
-		"qkey", qkey,
-		"submitted_kinds", strings.Join(kindsForLog, ","),
-		"conversation_id", claimed.ConversationID,
-		"initiator_user_id", slot.InitiatorUserID,
-		"open_message_id", meta.OpenMessageID,
-	)
-
-	// Encrypt up front so an Encrypt failure aborts before we hit the
-	// DB tx. Each payload writes both "api_key" and "value" so
-	// capability_runtime.credentialPayloadValue (which tries
-	// api_key → token → access_token → value) keeps working.
-	now := time.Now().UTC()
-	credentialInputs := make([]store.CreateUserCredentialInput, 0, len(bindings))
-	for _, b := range bindings {
-		envelope, err := m.secrets.Encrypt(map[string]any{
-			"api_key": b.plaintext,
-			"value":   b.plaintext,
-		})
-		if err != nil {
-			m.logger.Warn("feishu credential form submit: encrypt failed",
-				"qkey", qkey,
-				"kind", b.kind,
-				"err", err.Error(),
-			)
-			return ackToast("error", "保存凭据失败，请稍后再试")
-		}
-		credentialInputs = append(credentialInputs, store.CreateUserCredentialInput{
-			UserID:         slot.InitiatorUserID,
-			Kind:           b.kind,
-			DisplayName:    b.kind,
-			EncryptedValue: envelope,
-			KeyVersion:     "v1",
-			Now:            now,
-		})
-	}
-
-	// Tx-wrapped multi-kind write; any per-kind failure rolls back.
-	//
-	// Note: the three operations in this handler (Claim, Replace,
-	// CreateInboundIMMessage) each open their own tx. A crash between
-	// them is bounded — the worst case is "user re-sends": either no
-	// credentials saved, or credentials saved but same turn doesn't
-	// auto-resume. No data corruption either way. Closing this fully
-	// requires an outer tx or an outbox-driven reconciler.
-	results, err := m.store.ReplaceUserCredentials(ctx, slot.InitiatorUserID, credentialInputs)
-	if err != nil {
-		m.logger.Warn("feishu credential form submit: persist user credentials failed",
-			"qkey", qkey,
-			"submitted_kinds", strings.Join(kindsForLog, ","),
-			"err", err.Error(),
-		)
-		return ackToast("error", "保存凭据失败，请稍后再试")
-	}
-
-	replacedCount := 0
-	for _, r := range results {
-		if r.Replaced {
-			replacedCount++
-		}
-	}
-
-	// Routing target comes from the slot itself. Reading
-	// gateway_sessions.selected_agent_id misses for direct @-mentions
-	// of a dedicated bot (that table is only written by /select), so
-	// the slot stashes agent_id at form-emission time. An empty value
-	// here means the slot pre-dates this field.
-	targetAgentID := strings.TrimSpace(slot.AgentID)
-	if targetAgentID == "" {
-		m.logger.Warn("feishu credential form submit: slot missing agent_id",
-			"qkey", qkey,
-			"conversation_id", claimed.ConversationID,
-			"external_chat_id", claimed.ExternalChatID,
-			"external_thread_id", claimed.ExternalThreadID,
-		)
-		return ackToast("error", "凭据已保存，但会话路由丢失，请重新 @ Agent")
-	}
-
-	// Re-enqueue the original raw_query. We bust gateway dedup by
-	// using `qkey:<qkey>` as the external_message_id: qkey is mint-once
-	// unique, so the dedup row misses and CreateInboundIMMessage
-	// creates a fresh trigger_message + agent_run instead of returning
-	// the original (terminated) run.
-	rerunExternalMessageID := "qkey:" + qkey
-	rerunMetadata := map[string]any{
-		"source":           "gateway",
-		"gateway":          "feishu",
-		"reenqueued_qkey":  qkey,
-		"reenqueued_from":  "credential_form_submit",
-		"external_chat_id": claimed.ExternalChatID,
-	}
-	if strings.TrimSpace(claimed.ExternalThreadID) != "" {
-		rerunMetadata["external_thread_id"] = claimed.ExternalThreadID
-	}
-	if _, err := m.store.CreateInboundIMMessage(ctx, store.CreateInboundIMMessageInput{
-		ConversationTitle: feishushared.ConversationTitle(slot.RawQuery),
-		Text:              slot.RawQuery,
-		Source:            "gateway",
-		Gateway:           "feishu",
-		// Re-stamp sender open_id so the next form-card path (if the
-		// turn needs another credential round) can still authenticate
-		// the submit — without this the inflight driver's safety
-		// guard trips.
-		SenderOpenID: slot.InitiatorOpenID,
-		// Pass the pre-resolved user_id directly so the store can
-		// populate agent_runs.requested_by_id without round-tripping
-		// open_id → union_id via the Feishu contact API. Without it,
-		// the re-fired run lands with an empty initiator and any MCP
-		// needing per-user credentials trips the
-		// "conversation_initiator_id is empty" runtime error.
-		InitiatorUserID:   slot.InitiatorUserID,
-		ExternalChatID:    claimed.ExternalChatID,
-		ExternalThreadID:  claimed.ExternalThreadID,
-		ExternalMessageID: rerunExternalMessageID,
-		TargetAgentID:     targetAgentID,
-		SourceAppID:       claimed.SourceAppID,
-		Metadata:          rerunMetadata,
-	}); err != nil {
-		m.logger.Warn("feishu credential form submit: re-enqueue inbound failed",
-			"qkey", qkey,
-			"err", err.Error(),
-		)
-		return ackToast("error", "凭据已保存，但会话重启失败，请重发消息")
-	}
-
-	// Return the finalized card on the callback response itself —
-	// Feishu uses `response.card` as the canonical post-callback
-	// render. PATCH alone is not enough: the client snaps back to
-	// the original card whenever the callback response omits `card`,
-	// even after a successful PATCH landed (observed in prod).
-	finalizedCard := gateway.BuildCredentialFormSubmittedCard(
-		m.resolveCredentialFormCardTitle(ctx, claimed.ConversationID, "credential form submit"),
-	)
-	if replacedCount > 0 {
-		return ackToastWithCard("success", fmt.Sprintf("已替换 %d 项现有凭据，正在继续会话", replacedCount), finalizedCard)
-	}
-	return ackToastWithCard("success", "已收到，正在继续会话", finalizedCard)
 }
 
 // patchPermissionResultCard PATCHes the permission card into its green /
@@ -1914,111 +1630,6 @@ func (m *Manager) patchPermissionResultCard(ctx context.Context, conv store.Conv
 	sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return client.PatchMessage(sendCtx, appSecret, strings.TrimSpace(conv.Permission.ExternalMsgID), content)
-}
-
-// handlePromptForUserChoiceSubmitAction handles the form-submit path.
-// Every question on the card has a stable `q<i>` field name; we look
-// the slot up by request_id, walk its question list in order, and
-// pair each one with whatever the user picked. Missing answers become
-// an empty string — the daemon treats "all blanks" as Cancelled so
-// the agent gets a stop-signal instead of a half-answered tool_result.
-func (m *Manager) handlePromptForUserChoiceSubmitAction(
-	ctx context.Context,
-	meta cardActionLogMeta,
-	event *callback.CardActionTriggerEvent,
-) *callback.CardActionTriggerResponse {
-	requestID := strings.TrimSpace(cardActionStringValue(event, "request_id"))
-	if requestID == "" {
-		m.logger.Warn("feishu prompt_for_user_choice submit missing request_id",
-			"open_message_id", meta.OpenMessageID,
-			"operator_open_id", meta.OperatorOpenID,
-		)
-		return ackToast("info", "请稍后重试")
-	}
-	return m.routePromptForUserChoiceDecision(ctx, meta, requestID, cardActionFormValues(event))
-}
-
-// routePromptForUserChoiceDecision is the shared back-half of the
-// form-submit handler. It looks up the slot by request_id, pairs each
-// of its questions with the matching form value, forwards the decision
-// to the runtime, and renders the done card.
-func (m *Manager) routePromptForUserChoiceDecision(
-	ctx context.Context,
-	meta cardActionLogMeta,
-	requestID string,
-	formValues map[string]any,
-) *callback.CardActionTriggerResponse {
-	conv, err := m.store.FindConversationByPromptForUserChoiceRequestID(ctx, requestID)
-	if err != nil {
-		if errors.Is(err, store.ErrUnknownConversation) {
-			m.logger.Info("feishu prompt_for_user_choice callback: slot already cleared",
-				"request_id", requestID,
-				"operator_open_id", meta.OperatorOpenID,
-			)
-			return ackToast("info", "该请求已处理或已过期")
-		}
-		m.logger.Warn("feishu prompt_for_user_choice callback: lookup failed",
-			"request_id", requestID, "err", err.Error())
-		return ackToast("error", "查询失败,请稍后再试")
-	}
-	if !conv.HasPromptForUserChoice {
-		m.logger.Info("feishu prompt_for_user_choice callback: no slot",
-			"request_id", requestID, "conversation_id", conv.ConversationID)
-		return ackToast("info", "该请求已处理或已过期")
-	}
-
-	if m.pfucRouter == nil {
-		m.logger.Warn("feishu prompt_for_user_choice callback: router not configured",
-			"request_id", requestID)
-		return ackToast("error", "服务未配置,请联系管理员")
-	}
-
-	questions := conv.PromptForUserChoice.EffectiveQuestions()
-	answers := make([]PromptForUserChoiceQuestionAnswer, 0, len(questions))
-	anyAnswer := false
-	for idx, q := range questions {
-		answer := extractPromptForUserChoiceFormAnswer(formValues, idx)
-		if answer != "" {
-			anyAnswer = true
-		}
-		answers = append(answers, PromptForUserChoiceQuestionAnswer{
-			Header: q.Header,
-			Answer: answer,
-		})
-	}
-
-	decision := PromptForUserChoiceDecision{
-		RequestID:       requestID,
-		QuestionAnswers: answers,
-		OperatorID:      meta.OperatorOpenID,
-	}
-	if !anyAnswer {
-		decision.Cancelled = true
-		decision.Reason = "cancelled"
-	}
-	if err := m.pfucRouter.SubmitPromptForUserChoice(ctx, decision); err != nil {
-		m.logger.Warn("feishu prompt_for_user_choice callback: SubmitPromptForUserChoice failed",
-			"request_id", requestID, "err", err.Error())
-		return ackToast("error", "更新失败,请稍后再试")
-	}
-
-	// Build the done card inline AND return it on the callback response.
-	// Feishu treats response.card as the canonical post-callback render —
-	// a PATCH-only flow snaps the client back to the original "待回答"
-	// card a beat later even when PatchMessage already landed (the
-	// credential-form path documents the same behaviour). Building the
-	// card map here means we don't need a separate patchPromptForUserChoiceDoneCard
-	// network round-trip either.
-	doneCard := m.buildPromptForUserChoiceDoneCardMap(ctx, conv, answers)
-
-	if err := m.store.ClearConversationInflightSlot(ctx, conv.ConversationID, store.InflightSlotPromptForUserChoice, conv.PromptForUserChoice.AgentRunID); err != nil {
-		m.logger.Warn("feishu prompt_for_user_choice callback: clear slot failed",
-			"request_id", requestID, "conversation_id", conv.ConversationID, "err", err.Error())
-	}
-	if !anyAnswer {
-		return ackToastWithCard("info", "已取消", doneCard)
-	}
-	return ackToastWithCard("success", "已记录: "+summarizePromptForUserChoiceAnswers(answers), doneCard)
 }
 
 // summarizePromptForUserChoiceAnswers builds the toast preview shown
@@ -2276,11 +1887,11 @@ func routeFromStore(route store.FeishuAgentRoute) gateway.FeishuRouteAgent {
 	}
 }
 
-func (r router) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	userID, err := r.store.FindUserIDByFeishuUnionID(ctx, unionID)
+func (r router) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	userID, err := r.store.FindUserIDByPlatformSubject(ctx, platform, subject)
 	if err != nil {
-		if errors.Is(err, store.ErrUnknownFeishuUser) {
-			return "", gateway.ErrFeishuRouterUnknownUser
+		if errors.Is(err, store.ErrUnknownPlatformUser) {
+			return "", gateway.ErrRouterUnknownUser
 		}
 		return "", err
 	}
@@ -2299,7 +1910,7 @@ func (r router) ListWorkspaceOwnerNames(ctx context.Context, workspaceID string,
 	return r.store.ListActiveWorkspaceOwnerNames(ctx, workspaceID, limit)
 }
 
-// gateConfig is shared by feishushared callers and the direct path so
+// gateConfig is shared by router callers and the direct path so
 // the workspace-rejection card stays identical across routing modes.
 func (m *Manager) gateConfig() gateway.GateConfig {
 	return gateway.GateConfig{JoinURLBuilder: m.joinURLBuilder}
@@ -2428,6 +2039,30 @@ func isGroupMessageWithoutBotMention(ctx context.Context, store feishuThreadHist
 		}
 	}
 	return true
+}
+
+// botOpenIDFromConfig pulls the bot's own open_id out of the per-agent
+// Feishu connector config; the neutral policy helpers take it injected
+// (they don't decode config themselves). Returns "" when the connector
+// subtree is absent or undecodable.
+func botOpenIDFromConfig(rawConfig []byte) string {
+	if cfg, ok, err := gateway.DecodeFeishuConnectorConfig(rawConfig); err == nil && ok {
+		return strings.TrimSpace(cfg.BotOpenID)
+	}
+	return ""
+}
+
+// neutralThreadHist adapts the store's Feishu-named thread-history read to
+// the neutral gateway.ThreadHistoryLookup that ShouldSkipGroupWithoutMention
+// consumes. Thin shim that disappears once the store exposes the neutral
+// method name directly.
+type neutralThreadHist struct{ lookup feishuThreadHistoryLookup }
+
+func (n neutralThreadHist) HasThreadInboundHistory(ctx context.Context, externalChatID, threadKey string) (bool, error) {
+	if n.lookup == nil {
+		return false, nil
+	}
+	return n.lookup.HasFeishuThreadInboundHistory(ctx, externalChatID, threadKey)
 }
 
 func mergeMetadata(dst map[string]any, src map[string]any) {

@@ -1,4 +1,4 @@
-package feishuoutbound
+package inflight
 
 import (
 	"context"
