@@ -1,0 +1,38 @@
+# govulncheck is sharper than a generic dependency-version scanner: it
+# walks the call graph and only flags vulnerabilities whose affected
+# symbols are actually reachable from this repo's code. That keeps the
+# signal-to-noise ratio high compared to dependabot-style alerts, which
+# fire on any vulnerable version regardless of whether we call the bad
+# function. The weekly cron exists so newly published CVEs against
+# already-pinned dependencies surface even when no PR is in flight.
+name: govulncheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 8 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: govulncheck-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Run govulncheck
+        working-directory: server
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
