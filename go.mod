@@ -7,6 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/pressly/goose/v3 v3.24.2
+	github.com/slack-go/slack v0.17.3
 	go.opentelemetry.io/proto/otlp v1.10.0
 	golang.org/x/crypto v0.48.0
 	google.golang.org/protobuf v1.36.11
