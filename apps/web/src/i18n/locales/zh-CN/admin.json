@@ -2769,6 +2769,7 @@
     "new": "新建任务",
     "empty": "还没有定时任务，点右上角新建一个。",
     "loadError": "加载定时任务失败",
+    "noAgents": "当前项目还没有可用的 Agent，请先创建并启用一个 Agent 再配置定时任务。",
     "never": "—",
     "enabled": "已启用",
     "disabled": "已停用",
@@ -2777,7 +2778,8 @@
     "runNowOk": "已触发一次运行",
     "runNowErr": "触发失败",
     "deleteConfirm": "确认删除该定时任务？历史运行记录会保留。",
-    "status": { "queued": "排队中", "running": "运行中", "completed": "成功", "failed": "失败", "cancelled": "已取消", "interrupted": "已中断", "none": "未运行" },
+    "status": { "queued": "排队中", "running": "运行中", "completed": "成功", "failed": "失败", "cancelled": "已取消", "interrupted": "已中断", "skipped_overlap": "跳过(上次未完成)", "auto_disabled": "已自动停用", "none": "未运行" },
+    "pagination": { "prev": "上一页", "next": "下一页", "range": "第 {{from}}-{{to}} 条,共 {{total}} 条" },
     "freq": { "hourly": "每小时", "daily": "每天", "weekly": "每周", "monthly": "每月", "weekday": "工作日", "custom": "自定义" },
     "desc": {
       "hourly": "每小时第 {{minute}} 分",
@@ -2793,6 +2795,7 @@
       "createTitle": "新建定时任务",
       "editTitle": "编辑定时任务",
       "name": "任务名",
+      "agent": "执行 Agent",
       "namePlaceholder": "每日晨会总结",
       "prompt": "Prompt",
       "promptPlaceholder": "总结昨天的提交，列出今天待办…",
@@ -2811,6 +2814,7 @@
       "saving": "保存中…",
       "cancel": "取消",
       "nameRequired": "请填写任务名",
+      "agentRequired": "请选择执行 Agent",
       "promptRequired": "请填写 Prompt",
       "cronInvalid": "cron 表达式需为 5 段（分 时 日 月 周）"
     }

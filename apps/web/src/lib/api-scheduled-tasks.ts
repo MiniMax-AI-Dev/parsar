@@ -57,19 +57,40 @@ export interface ScheduledTaskUpdateRequest {
   enabled: boolean
 }
 
+export interface ScheduledTasksByProjectResponse {
+  scheduled_tasks: ScheduledTask[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface UseScheduledTasksByProjectOptions {
+  offset?: number
+  limit?: number
+}
+
 /* --- Query keys --------------------------------------------------------- */
 
-const KEY_TASKS = (projectAgentID: string) =>
-  ["admin", "scheduledTasks", projectAgentID] as const
+// Page-scoped key carries offset/limit; mutations invalidate via the project
+// prefix so every cached page refreshes (React Query matches keys by prefix).
+const KEY_TASKS_BY_PROJECT_PREFIX = (projectID: string) =>
+  ["admin", "scheduledTasksByProject", projectID] as const
+const KEY_TASKS_BY_PROJECT = (projectID: string, offset: number, limit: number) =>
+  [...KEY_TASKS_BY_PROJECT_PREFIX(projectID), offset, limit] as const
 const KEY_TASK_RUNS = (taskID: string) =>
   ["admin", "scheduledTaskRuns", taskID] as const
 
 /* --- Network ------------------------------------------------------------ */
 
-async function listTasks(projectAgentID: string | null): Promise<ScheduledTask[]> {
-  if (!projectAgentID) return []
-  return apiRequest<ScheduledTask[]>(
-    `/api/v1/project-agents/${encodeURIComponent(projectAgentID)}/scheduled-tasks`,
+async function listTasksByProject(
+  projectID: string | null,
+  offset: number,
+  limit: number,
+): Promise<ScheduledTasksByProjectResponse> {
+  if (!projectID) return { scheduled_tasks: [], total: 0, limit, offset }
+  return apiRequest<ScheduledTasksByProjectResponse>(
+    `/api/v1/projects/${encodeURIComponent(projectID)}/scheduled-tasks`,
+    { query: { limit, offset } },
   )
 }
 
@@ -82,13 +103,19 @@ async function listTaskRuns(taskID: string | null): Promise<ScheduledTaskRun[]> 
 
 /* --- React Query hooks -------------------------------------------------- */
 
-export function useScheduledTasks(projectAgentID: string | null) {
+export function useScheduledTasksByProject(
+  projectID: string | null,
+  options: UseScheduledTasksByProjectOptions = {},
+) {
+  const { offset = 0, limit = 20 } = options
   return useQuery({
-    queryKey: KEY_TASKS(projectAgentID ?? "_none"),
-    queryFn: () => listTasks(projectAgentID),
-    enabled: Boolean(projectAgentID),
+    queryKey: KEY_TASKS_BY_PROJECT(projectID ?? "_none", offset, limit),
+    queryFn: () => listTasksByProject(projectID, offset, limit),
+    enabled: Boolean(projectID),
     retry: noUnreachableRetry,
     staleTime: 15_000,
+    // Keep the previous page on screen while the next one fetches.
+    placeholderData: (prev) => prev,
   })
 }
 
@@ -102,23 +129,23 @@ export function useScheduledTaskRuns(taskID: string | null) {
   })
 }
 
-export function useCreateScheduledTask(projectAgentID: string | null) {
+// Listing is project-wide, but create targets one agent (picked in the dialog),
+// so the create mutation carries projectAgentID while the rest key off taskID.
+export function useCreateScheduledTask(projectID: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (body: ScheduledTaskCreateRequest) => {
-      if (!projectAgentID) throw new Error("projectAgentID is required")
-      return apiRequest<ScheduledTask>(
+    mutationFn: async ({ projectAgentID, body }: { projectAgentID: string; body: ScheduledTaskCreateRequest }) =>
+      apiRequest<ScheduledTask>(
         `/api/v1/project-agents/${encodeURIComponent(projectAgentID)}/scheduled-tasks`,
         { method: "POST", body },
-      )
-    },
+      ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS(projectAgentID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
     },
   })
 }
 
-export function useUpdateScheduledTask(projectAgentID: string | null) {
+export function useUpdateScheduledTask(projectID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ taskID, body }: { taskID: string; body: ScheduledTaskUpdateRequest }) =>
@@ -127,12 +154,12 @@ export function useUpdateScheduledTask(projectAgentID: string | null) {
         { method: "PATCH", body },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS(projectAgentID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
     },
   })
 }
 
-export function useDeleteScheduledTask(projectAgentID: string | null) {
+export function useDeleteScheduledTask(projectID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (taskID: string) =>
@@ -141,12 +168,12 @@ export function useDeleteScheduledTask(projectAgentID: string | null) {
         { method: "DELETE" },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS(projectAgentID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
     },
   })
 }
 
-export function useRunScheduledTaskNow(projectAgentID: string | null) {
+export function useRunScheduledTaskNow(projectID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (taskID: string) =>
@@ -155,7 +182,7 @@ export function useRunScheduledTaskNow(projectAgentID: string | null) {
         { method: "POST", body: {} },
       ),
     onSuccess: (_res, taskID) => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS(projectAgentID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
       void qc.invalidateQueries({ queryKey: KEY_TASK_RUNS(taskID) })
     },
   })

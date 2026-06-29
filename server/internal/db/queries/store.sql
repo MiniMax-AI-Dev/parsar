@@ -1130,7 +1130,9 @@ select
   m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
-  m.sender_id::text,
+  -- system-authored messages (e.g. scheduled-task triggers) have a NULL
+  -- sender_id; coalesce so the row scans into a non-nullable string.
+  coalesce(m.sender_id::text, ''::text)::text as m_sender_id,
   m.kind,
   m.content_format,
   m.content,
@@ -4350,15 +4352,15 @@ where c.id = @conversation_id::uuid;
 
 -- name: CreateScheduledTask :one
 insert into scheduled_tasks(
-  id, project_agent_id, conversation_id, name, prompt, cron_expr, timezone,
+  id, project_agent_id, name, prompt, cron_expr, timezone,
   enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
 )
-values (@id::uuid, @project_agent_id::uuid, @conversation_id::uuid, @name, @prompt, @cron_expr, @timezone,
+values (@id::uuid, @project_agent_id::uuid, @name, @prompt, @cron_expr, @timezone,
         @enabled, @feishu_chat_id, @feishu_chat_name, @next_run_at, @created_by, @now, @now)
 returning
   id::text                                  as id,
   project_agent_id::text                    as project_agent_id,
-  conversation_id::text                     as conversation_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
   name, prompt, cron_expr, timezone, enabled,
   coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
   coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
@@ -4370,36 +4372,88 @@ returning
 
 -- name: GetScheduledTask :one
 select
-  id::text                                  as id,
-  project_agent_id::text                    as project_agent_id,
-  conversation_id::text                     as conversation_id,
-  name, prompt, cron_expr, timezone, enabled,
-  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
-  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
-  next_run_at, last_run_at,
-  coalesce(last_run_id::text, '')::text     as last_run_id,
-  last_status, consecutive_failures,
-  coalesce(created_by::text, '')::text      as created_by,
-  created_at, updated_at
-from scheduled_tasks
-where id = @id::uuid and deleted_at is null;
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  -- Derive the display status from the linked run's live status so the
+  -- list/detail never get stuck on the 'queued' dispatch stamp. Task-level
+  -- states (skipped_overlap / auto_disabled) take precedence when set.
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = @id::uuid and t.deleted_at is null;
 
 -- name: ListScheduledTasksByProjectAgent :many
 select
-  id::text                                  as id,
-  project_agent_id::text                    as project_agent_id,
-  conversation_id::text                     as conversation_id,
-  name, prompt, cron_expr, timezone, enabled,
-  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
-  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
-  next_run_at, last_run_at,
-  coalesce(last_run_id::text, '')::text     as last_run_id,
-  last_status, consecutive_failures,
-  coalesce(created_by::text, '')::text      as created_by,
-  created_at, updated_at
-from scheduled_tasks
-where project_agent_id = @project_agent_id::uuid and deleted_at is null
-order by created_at desc;
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.project_agent_id = @project_agent_id::uuid and t.deleted_at is null
+order by t.created_at desc;
+
+-- name: ListScheduledTasksByProjectPage :many
+-- Project-wide list (paginated): every scheduled task across all of the
+-- project's agents, newest first. last_status is derived from the linked run
+-- (see GetScheduledTask). The (created_at, id) tie-break keeps OFFSET paging
+-- stable; pair with CountScheduledTasksByProject for the page count.
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+left join agent_runs r on r.id = t.last_run_id
+where pa.project_id = @project_id::uuid and t.deleted_at is null
+order by t.created_at desc, t.id desc
+limit @item_limit offset @item_offset;
+
+-- name: CountScheduledTasksByProject :one
+-- Companion to ListScheduledTasksByProjectPage: total rows under the same
+-- filter so the pager can render "第 X-Y 条,共 N 条" and gate the Next button.
+select count(*)::bigint as total
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where pa.project_id = @project_id::uuid and t.deleted_at is null;
 
 -- name: GetScheduledTaskScope :one
 -- Resolve workspace/project/project_agent for RBAC gating from a task id.
@@ -4425,7 +4479,7 @@ where id = @id::uuid and deleted_at is null
 returning
   id::text                                  as id,
   project_agent_id::text                    as project_agent_id,
-  conversation_id::text                     as conversation_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
   name, prompt, cron_expr, timezone, enabled,
   coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
   coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
@@ -4481,8 +4535,10 @@ from claimed;
 select
   t.id::text                                   as id,
   t.project_agent_id::text                     as project_agent_id,
-  t.conversation_id::text                      as conversation_id,
+  coalesce(t.conversation_id::text, '')::text  as conversation_id,
+  t.name                                       as name,
   t.prompt                                     as prompt,
+  t.timezone                                   as timezone,
   t.enabled                                    as enabled,
   t.consecutive_failures                       as consecutive_failures,
   coalesce(t.last_run_id::text, '')::text      as last_run_id,
@@ -4515,6 +4571,7 @@ values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uui
 update scheduled_tasks
 set last_run_at = @now::timestamptz,
     last_run_id = @last_run_id::uuid,
+    conversation_id = @conversation_id::uuid,
     last_status = 'queued',
     consecutive_failures = @consecutive_failures::int,
     next_run_at = @next_run_at,
@@ -4551,6 +4608,7 @@ where id = @id::uuid;
 update scheduled_tasks
 set last_run_at = @now::timestamptz,
     last_run_id = @last_run_id::uuid,
+    conversation_id = @conversation_id::uuid,
     last_status = 'queued',
     updated_at = @now::timestamptz
 where id = @id::uuid;

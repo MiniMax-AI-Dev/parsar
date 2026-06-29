@@ -55,6 +55,37 @@ func listScheduledTasks(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
+func listScheduledTasksByProject(rs RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if rs == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed APIs are disabled"})
+			return
+		}
+		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
+		if !isUUID(projectID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+			return
+		}
+		if err := requireWorkspaceMemberByProject(r, rs, projectID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+		limit := parseLimit(r, 50)
+		offset := parseOffset(r)
+		result, err := rs.ListScheduledTasksByProject(r.Context(), projectID, limit, offset)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list scheduled tasks"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"scheduled_tasks": result.Tasks,
+			"total":           result.Total,
+			"limit":           limit,
+			"offset":          offset,
+		})
+	}
+}
+
 func getScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {

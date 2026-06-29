@@ -158,6 +158,7 @@
       "approvals": "收件箱 / 审批",
       "conversations": "对话",
       "runs": "运行",
+      "scheduled": "定时任务",
       "artifacts": "产物",
       "agents": "Agent",
       "connections": "连接",

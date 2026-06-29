@@ -603,7 +603,7 @@ type ScheduledTask struct {
 	ID pgtype.UUID `json:"id"`
 	// 触发的 project_agent (runnable 单元)
 	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
-	// 该任务的 run 容器 conversation (platform='' = web only)
+	// 最近一次 run 的对话 (创建后为 NULL, 每次派发回填)
 	ConversationID pgtype.UUID `json:"conversation_id"`
 	Name           string      `json:"name"`
 	Prompt         string      `json:"prompt"`

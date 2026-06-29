@@ -96,7 +96,6 @@ import { CreateAgentDialog } from "./CreateAgentDialog"
 import { CapabilityTypeBadge } from "./CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "./capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "./capability-ui"
-import { ScheduledTasksTab } from "./ScheduledTasksTab"
 
 /* ------------------------------------------------------------------ */
 /*  View-model derived from ProjectAgent                              */
@@ -763,7 +762,6 @@ export function AgentDetailPage({ id }: { id: string }) {
         <TabsList>
           <TabsTrigger value="dynamics">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.detail.tabs.config")}</TabsTrigger>
-          <TabsTrigger value="scheduled">{t("agents.detail.tabs.scheduled")}</TabsTrigger>
           <TabsTrigger value="audit">{t("agents.detail.tabs.audit")}</TabsTrigger>
         </TabsList>
 
@@ -795,10 +793,6 @@ export function AgentDetailPage({ id }: { id: string }) {
               targetID={agent.project_agent_id}
             />
           </Card>
-        </TabsContent>
-
-        <TabsContent value="scheduled">
-          <ScheduledTasksTab projectAgentID={agent.project_agent_id} />
         </TabsContent>
       </Tabs>
     </AdminLayout>

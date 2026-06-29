@@ -1075,7 +1075,7 @@ COMMENT ON INDEX  idx_agent_runs_runtime_queue       IS '按 runtime/status 查�
 CREATE TABLE IF NOT EXISTS scheduled_tasks (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_agent_id     uuid NOT NULL REFERENCES project_agents(id),
-  conversation_id      uuid NOT NULL REFERENCES conversations(id),
+  conversation_id      uuid REFERENCES conversations(id),
   name                 text NOT NULL,
   prompt               text NOT NULL,
   cron_expr            text NOT NULL,
@@ -1102,7 +1102,7 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_due
 
 COMMENT ON TABLE  scheduled_tasks IS '定时任务: 锚定 project_agent, 到点用独立 session 触发一次 agent run';
 COMMENT ON COLUMN scheduled_tasks.project_agent_id     IS '触发的 project_agent (runnable 单元)';
-COMMENT ON COLUMN scheduled_tasks.conversation_id      IS '该任务的 run 容器 conversation (platform='''' = web only)';
+COMMENT ON COLUMN scheduled_tasks.conversation_id      IS '最近一次 run 的对话 (创建后为 NULL, 每次派发回填)';
 COMMENT ON COLUMN scheduled_tasks.cron_expr            IS '标准 5 段 cron 表达式';
 COMMENT ON COLUMN scheduled_tasks.timezone             IS 'IANA 时区, 解释 cron_expr';
 COMMENT ON COLUMN scheduled_tasks.feishu_chat_id       IS 'phase 2 投递目标群; null = web only';

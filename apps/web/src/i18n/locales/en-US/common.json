@@ -158,6 +158,7 @@
       "approvals": "Inbox / Approvals",
       "conversations": "Conversations",
       "runs": "Runs",
+      "scheduled": "Scheduled Tasks",
       "artifacts": "Artifacts",
       "agents": "Agents",
       "connections": "Connections",

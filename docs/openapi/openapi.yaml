@@ -4581,6 +4581,24 @@ paths:
                     enum: [online, offline, error]
         '401':
           description: Bearer credential missing or invalid
+  /api/v1/projects/{projectID}/scheduled-tasks:
+    parameters:
+      - { name: projectID, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listDevScheduledTasksByProject
+      summary: List all scheduled tasks in a project (across every agent)
+      tags: [scheduled-tasks]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ScheduledTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/project-agents/{projectAgentID}/scheduled-tasks:
     parameters:
       - { name: projectAgentID, in: path, required: true, schema: { type: string, format: uuid } }

@@ -191,6 +191,7 @@ type RuntimeStore interface {
 
 	// 定时任务(scheduled tasks)
 	ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error)
+	ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error)
 	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
 	GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error)
 	GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error)
@@ -523,6 +524,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Delete("/project-agents/{projectAgentID}", deleteProjectAgent(runtimeStore))
 			r.Get("/project-agents/{projectAgentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
 			r.Post("/project-agents/{projectAgentID}/scheduled-tasks", createScheduledTask(runtimeStore))
+			r.Get("/projects/{projectID}/scheduled-tasks", listScheduledTasksByProject(runtimeStore))
 			r.Get("/scheduled-tasks/{taskID}", getScheduledTask(runtimeStore))
 			r.Patch("/scheduled-tasks/{taskID}", updateScheduledTask(runtimeStore))
 			r.Delete("/scheduled-tasks/{taskID}", deleteScheduledTask(runtimeStore))

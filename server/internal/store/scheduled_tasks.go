@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -128,6 +129,17 @@ func timePtr(ts pgtype.Timestamptz) *time.Time {
 	return &t
 }
 
+// scheduledRunTitle formats a per-run conversation title as
+// "<task name> · MM-DD HH:mm" in the task's timezone (falling back to UTC for
+// an unparseable zone). now is the dispatch time (UTC).
+func scheduledRunTitle(name, timezone string, now time.Time) string {
+	loc, err := time.LoadLocation(strings.TrimSpace(timezone))
+	if err != nil || loc == nil {
+		loc = time.UTC
+	}
+	return fmt.Sprintf("%s · %s", name, now.In(loc).Format("01-02 15:04"))
+}
+
 func scheduledTaskFromCreateRow(r sqlc.CreateScheduledTaskRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
@@ -197,6 +209,29 @@ func scheduledTaskFromListRow(r sqlc.ListScheduledTasksByProjectAgentRow) Schedu
 	}
 }
 
+func scheduledTaskFromListByProjectRow(r sqlc.ListScheduledTasksByProjectPageRow) ScheduledTaskRead {
+	return ScheduledTaskRead{
+		ID:                  r.ID,
+		ProjectAgentID:      r.ProjectAgentID,
+		ConversationID:      r.ConversationID,
+		Name:                r.Name,
+		Prompt:              r.Prompt,
+		CronExpr:            r.CronExpr,
+		Timezone:            r.Timezone,
+		Enabled:             r.Enabled,
+		FeishuChatID:        r.FeishuChatID,
+		FeishuChatName:      r.FeishuChatName,
+		NextRunAt:           timePtr(r.NextRunAt),
+		LastRunAt:           timePtr(r.LastRunAt),
+		LastRunID:           r.LastRunID,
+		LastStatus:          r.LastStatus,
+		ConsecutiveFailures: r.ConsecutiveFailures,
+		CreatedBy:           r.CreatedBy,
+		CreatedAt:           r.CreatedAt.Time,
+		UpdatedAt:           r.UpdatedAt.Time,
+	}
+}
+
 func scheduledTaskFromUpdateRow(r sqlc.UpdateScheduledTaskRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
@@ -220,9 +255,10 @@ func scheduledTaskFromUpdateRow(r sqlc.UpdateScheduledTaskRow) ScheduledTaskRead
 	}
 }
 
-// CreateScheduledTask creates the task's container conversation and the task
-// row in one transaction. The container conversation isolates scheduled runs
-// into their own serial lane (spec §5).
+// CreateScheduledTask inserts the task row. No conversation is built up front:
+// each fire/run-now creates its own fresh conversation (see
+// dispatchScheduledRunTx), so conversation_id starts NULL and is backfilled
+// with the most recent run's conversation after every dispatch.
 func (s *Store) CreateScheduledTask(ctx context.Context, in CreateScheduledTaskInput) (ScheduledTaskRead, error) {
 	var zero ScheduledTaskRead
 	name := strings.TrimSpace(in.Name)
@@ -237,40 +273,15 @@ func (s *Store) CreateScheduledTask(ctx context.Context, in CreateScheduledTaskI
 	if err != nil {
 		return zero, err
 	}
-	// GetProjectAgentDetail resolves workspace+project from the project_agent
-	// id alone, anchoring the container conversation.
-	detail, err := s.GetProjectAgentDetail(ctx, in.ProjectAgentID)
-	if err != nil {
+	// Validate the project_agent exists before anchoring a task to it.
+	if _, err := s.GetProjectAgentDetail(ctx, in.ProjectAgentID); err != nil {
 		return zero, err
 	}
 	now := time.Now().UTC()
 
-	tx, err := beginTx(ctx, s.db)
-	if err != nil {
-		return zero, err
-	}
-	defer tx.Rollback(ctx)
-	q := sqlc.New(tx)
-
-	convID := newID()
-	convMeta, _ := json.Marshal(map[string]any{"source": "scheduled_task"})
-	if _, err := q.CreateProjectConversation(ctx, sqlc.CreateProjectConversationParams{
-		ID:          mustUUID(convID),
-		WorkspaceID: mustUUID(detail.WorkspaceID),
-		ProjectID:   mustUUID(detail.ProjectID),
-		Surface:     "web",
-		Form:        "thread",
-		Title:       name,
-		Metadata:    convMeta,
-		Now:         timestamptz(now),
-	}); err != nil {
-		return zero, err
-	}
-
-	row, err := q.CreateScheduledTask(ctx, sqlc.CreateScheduledTaskParams{
+	row, err := sqlc.New(s.db).CreateScheduledTask(ctx, sqlc.CreateScheduledTaskParams{
 		ID:             mustUUID(newID()),
 		ProjectAgentID: mustUUID(in.ProjectAgentID),
-		ConversationID: mustUUID(convID),
 		Name:           name,
 		Prompt:         prompt,
 		CronExpr:       strings.TrimSpace(in.CronExpr),
@@ -283,9 +294,6 @@ func (s *Store) CreateScheduledTask(ctx context.Context, in CreateScheduledTaskI
 		Now:            timestamptz(now),
 	})
 	if err != nil {
-		return zero, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return zero, err
 	}
 	return scheduledTaskFromCreateRow(row), nil
@@ -323,6 +331,47 @@ func (s *Store) ListScheduledTasksByProjectAgent(ctx context.Context, projectAge
 		out = append(out, scheduledTaskFromListRow(r))
 	}
 	return out, nil
+}
+
+// ListScheduledTasksByProjectResult bundles a page of scheduled tasks with the
+// total row count for the project, so the standalone 定时任务 page can paginate.
+type ListScheduledTasksByProjectResult struct {
+	Tasks []ScheduledTaskRead
+	Total int64
+}
+
+// ListScheduledTasksByProject is the project-wide counterpart to
+// ListScheduledTasksByProjectAgent, powering the standalone 定时任务 page.
+// Returns a newest-first page plus the total count under the same filter.
+func (s *Store) ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (ListScheduledTasksByProjectResult, error) {
+	if limit <= 0 {
+		limit = defaultReadLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	id, err := uuid(projectID)
+	if err != nil {
+		return ListScheduledTasksByProjectResult{}, err
+	}
+	queries := sqlc.New(s.db)
+	rows, err := queries.ListScheduledTasksByProjectPage(ctx, sqlc.ListScheduledTasksByProjectPageParams{
+		ProjectID:  id,
+		ItemLimit:  limit,
+		ItemOffset: offset,
+	})
+	if err != nil {
+		return ListScheduledTasksByProjectResult{}, err
+	}
+	total, err := queries.CountScheduledTasksByProject(ctx, id)
+	if err != nil {
+		return ListScheduledTasksByProjectResult{}, err
+	}
+	out := make([]ScheduledTaskRead, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, scheduledTaskFromListByProjectRow(r))
+	}
+	return ListScheduledTasksByProjectResult{Tasks: out, Total: total}, nil
 }
 
 func (s *Store) GetScheduledTaskScope(ctx context.Context, taskID string) (ScheduledTaskScope, error) {
@@ -421,40 +470,65 @@ func (s *Store) ListAgentRunsByScheduledTask(ctx context.Context, taskID string,
 	return out, nil
 }
 
-// dispatchScheduledRunTx writes the system trigger message + scheduled
-// agent_run inside an open tx and returns the new run id plus any
-// streaming-dispatch inputs to flush AFTER commit. Shared by the cron path
-// (FireScheduledTaskRun) and run-now (RunScheduledTaskNow).
-func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, taskID, projectAgentID, conversationID, prompt, createdBy string, now time.Time) (string, []StreamingDispatchInput, error) {
-	conv, err := q.GetProjectConversation(ctx, mustUUID(conversationID))
+// dispatchScheduledRunTx builds a fresh conversation, then writes the system
+// trigger message + scheduled agent_run into it, all inside an open tx. It
+// returns the new run id, the new conversation id (for the task's
+// conversation_id backfill), and any streaming-dispatch inputs to flush AFTER
+// commit. Shared by the cron path (FireScheduledTaskRun) and run-now.
+func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, taskID, projectAgentID, taskName, timezone, prompt, createdBy string, now time.Time) (string, string, []StreamingDispatchInput, error) {
+	// Resolve workspace first: GetProjectAgentRuntime guards on workspace_id,
+	// so it can't double as the resolver. Runtime then yields project_id +
+	// connector_type. No existing conversation to read — this builds its own.
+	workspaceID, err := q.GetProjectAgentWorkspace(ctx, mustUUID(projectAgentID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil, ErrUnknownConversation
+			return "", "", nil, ErrUnknownProjectAgent
 		}
-		return "", nil, err
+		return "", "", nil, err
 	}
-	rt, err := q.GetProjectAgentRuntime(ctx, sqlc.GetProjectAgentRuntimeParams{ProjectAgentID: mustUUID(projectAgentID), WorkspaceID: mustUUID(conv.WorkspaceID)})
+	rt, err := q.GetProjectAgentRuntime(ctx, sqlc.GetProjectAgentRuntimeParams{ProjectAgentID: mustUUID(projectAgentID), WorkspaceID: mustUUID(workspaceID)})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil, ErrUnknownProjectAgent
+			return "", "", nil, ErrUnknownProjectAgent
 		}
-		return "", nil, err
+		return "", "", nil, err
+	}
+
+	// Fresh conversation per dispatch: primary_agent_id surfaces it in the
+	// agent's 对话 list (ListProjectConversations filters on that metadata key).
+	convID := newID()
+	convMeta, _ := json.Marshal(map[string]any{
+		"source":            "scheduled_task",
+		"scheduled_task_id": taskID,
+		"primary_agent_id":  projectAgentID,
+	})
+	if _, err := q.CreateProjectConversation(ctx, sqlc.CreateProjectConversationParams{
+		ID:          mustUUID(convID),
+		WorkspaceID: mustUUID(workspaceID),
+		ProjectID:   mustUUID(rt.ProjectID),
+		Surface:     "web",
+		Form:        "thread",
+		Title:       scheduledRunTitle(taskName, timezone, now),
+		Metadata:    convMeta,
+		Now:         timestamptz(now),
+	}); err != nil {
+		return "", "", nil, err
 	}
 
 	msgID := newID()
 	msgMeta, _ := json.Marshal(map[string]any{"source": "scheduled_task", "scheduled_task_id": taskID})
 	if err := q.CreateMessage(ctx, sqlc.CreateMessageParams{
 		ID:             mustUUID(msgID),
-		WorkspaceID:    mustUUID(conv.WorkspaceID),
-		ProjectID:      mustUUID(conv.ProjectID),
-		ConversationID: mustUUID(conv.ID),
+		WorkspaceID:    mustUUID(workspaceID),
+		ProjectID:      mustUUID(rt.ProjectID),
+		ConversationID: mustUUID(convID),
 		SenderType:     "system",
 		SenderID:       pgtype.UUID{}, // null: system-authored
 		Content:        prompt,
 		Metadata:       msgMeta,
 		Now:            timestamptz(now),
 	}); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	runID := newID()
@@ -465,9 +539,9 @@ func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, tas
 	}
 	if err := q.CreateScheduledAgentRun(ctx, sqlc.CreateScheduledAgentRunParams{
 		ID:               mustUUID(runID),
-		WorkspaceID:      mustUUID(conv.WorkspaceID),
-		ProjectID:        mustUUID(conv.ProjectID),
-		ConversationID:   mustUUID(conv.ID),
+		WorkspaceID:      mustUUID(workspaceID),
+		ProjectID:        mustUUID(rt.ProjectID),
+		ConversationID:   mustUUID(convID),
 		TriggerMessageID: mustUUID(msgID),
 		TriggerRefID:     mustUUID(taskID),
 		RequestedByID:    requestedBy,
@@ -476,14 +550,14 @@ func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, tas
 		Metadata:         runMeta,
 		Now:              timestamptz(now),
 	}); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	var pending []StreamingDispatchInput
 	if connectorNeedsStreamingDispatch(rt.ConnectorType) {
-		pending = append(pending, StreamingDispatchInput{RunID: runID, ConversationID: conv.ID, ConnectorType: rt.ConnectorType})
+		pending = append(pending, StreamingDispatchInput{RunID: runID, ConversationID: convID, ConnectorType: rt.ConnectorType})
 	}
-	return runID, pending, nil
+	return runID, convID, pending, nil
 }
 
 // FireScheduledTaskRun is the cron path: it row-locks the task, applies the
@@ -557,12 +631,12 @@ func (s *Store) FireScheduledTaskRun(ctx context.Context, taskID string, nextRun
 		return res, nil
 	}
 
-	runID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.ProjectAgentID, task.ConversationID, task.Prompt, task.CreatedBy, now)
+	runID, convID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.ProjectAgentID, task.Name, task.Timezone, task.Prompt, task.CreatedBy, now)
 	if err != nil {
 		return res, err
 	}
 	if err := q.MarkScheduledTaskDispatched(ctx, sqlc.MarkScheduledTaskDispatchedParams{
-		ID: tid, LastRunID: mustUUID(runID), ConsecutiveFailures: failures, NextRunAt: timestamptz(nextRunAt), Now: timestamptz(now),
+		ID: tid, LastRunID: mustUUID(runID), ConversationID: mustUUID(convID), ConsecutiveFailures: failures, NextRunAt: timestamptz(nextRunAt), Now: timestamptz(now),
 	}); err != nil {
 		return res, err
 	}
@@ -576,7 +650,7 @@ func (s *Store) FireScheduledTaskRun(ctx context.Context, taskID string, nextRun
 
 // RunScheduledTaskNow is the out-of-band manual trigger: it does NOT touch
 // next_run_at or consecutive_failures, but self-overlap still guards the
-// shared container conversation / work_dir.
+// shared work_dir (each fire builds its own fresh conversation).
 func (s *Store) RunScheduledTaskNow(ctx context.Context, taskID string) (string, error) {
 	now := time.Now().UTC()
 	tid, err := uuid(taskID)
@@ -597,17 +671,17 @@ func (s *Store) RunScheduledTaskNow(ctx context.Context, taskID string) (string,
 		}
 		return "", err
 	}
-	// run-now is allowed even when disabled, but self-overlap still guards
-	// the shared work_dir / container conversation.
+	// run-now is allowed even when disabled, but self-overlap still guards the
+	// shared work_dir.
 	switch task.LastRunStatus {
 	case "queued", "running":
 		return "", ErrScheduledTaskBusy
 	}
-	runID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.ProjectAgentID, task.ConversationID, task.Prompt, task.CreatedBy, now)
+	runID, convID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.ProjectAgentID, task.Name, task.Timezone, task.Prompt, task.CreatedBy, now)
 	if err != nil {
 		return "", err
 	}
-	if err := q.MarkScheduledTaskRunNow(ctx, sqlc.MarkScheduledTaskRunNowParams{ID: tid, LastRunID: mustUUID(runID), Now: timestamptz(now)}); err != nil {
+	if err := q.MarkScheduledTaskRunNow(ctx, sqlc.MarkScheduledTaskRunNowParams{ID: tid, LastRunID: mustUUID(runID), ConversationID: mustUUID(convID), Now: timestamptz(now)}); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {

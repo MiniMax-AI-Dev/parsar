@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Pencil, Play, Plus, Trash2 } from "lucide-react"
+import { Bot, ChevronLeft, ChevronRight, Pencil, Play, Plus, Trash2 } from "lucide-react"
 
+import { AdminLayout } from "../../components/layout/AdminLayout"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
@@ -14,16 +15,49 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { ApiError } from "../../lib/api-client"
+import { useProjectAgents } from "../../lib/api-agents"
+import { useProjectId } from "../../lib/workspace"
+import type { ProjectAgent } from "../../lib/api-types"
 import {
   useCreateScheduledTask,
   useDeleteScheduledTask,
   useRunScheduledTaskNow,
-  useScheduledTasks,
+  useScheduledTasksByProject,
   useUpdateScheduledTask,
   type ScheduledTask,
 } from "../../lib/api-scheduled-tasks"
 
 type FreqType = "hourly" | "daily" | "weekly" | "monthly" | "weekday" | "custom"
+
+const SCHED_PAGE_SIZE = 20
+
+const FALLBACK_TZS = [
+  "UTC",
+  "Asia/Shanghai",
+  "Asia/Hong_Kong",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Asia/Kolkata",
+  "Europe/London",
+  "Europe/Paris",
+  "America/New_York",
+  "America/Los_Angeles",
+]
+
+// Prefer the runtime's full IANA list; fall back to a short common set when
+// Intl.supportedValuesOf is unavailable. The current value is always kept so an
+// unusual stored timezone stays selectable.
+function timezoneOptions(current: string): string[] {
+  let zones: string[]
+  try {
+    const supported = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf
+    zones = supported ? supported("timeZone") : [...FALLBACK_TZS]
+  } catch {
+    zones = [...FALLBACK_TZS]
+  }
+  if (current && !zones.includes(current)) zones = [current, ...zones]
+  return zones
+}
 
 function pad(n: number): string {
   return String(n).padStart(2, "0")
@@ -109,6 +143,7 @@ function statusVariant(status: string): "success" | "warning" | "destructive" | 
       return "destructive"
     case "cancelled":
     case "interrupted":
+    case "auto_disabled":
       return "warning"
     case "running":
     case "queued":
@@ -125,20 +160,38 @@ function fmtWhen(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export function ScheduledTasksTab({ projectAgentID }: { projectAgentID: string }) {
+export function ScheduledTasksPage() {
   const { t } = useTranslation("admin")
-  const tasksQ = useScheduledTasks(projectAgentID)
-  const createMut = useCreateScheduledTask(projectAgentID)
-  const updateMut = useUpdateScheduledTask(projectAgentID)
-  const deleteMut = useDeleteScheduledTask(projectAgentID)
-  const runNowMut = useRunScheduledTaskNow(projectAgentID)
+  const projectID = useProjectId()
+  const [offset, setOffset] = useState(0)
+  const tasksQ = useScheduledTasksByProject(projectID, { offset, limit: SCHED_PAGE_SIZE })
+  const agentsQ = useProjectAgents(projectID)
+  const createMut = useCreateScheduledTask(projectID)
+  const updateMut = useUpdateScheduledTask(projectID)
+  const deleteMut = useDeleteScheduledTask(projectID)
+  const runNowMut = useRunScheduledTaskNow(projectID)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ScheduledTask | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
+  useEffect(() => {
+    setOffset(0)
+  }, [projectID])
+
   const weekdays = (t("scheduledTasks.weekdays", { returnObjects: true }) as unknown as string[]) ?? []
-  const tasks = tasksQ.data ?? []
+  const tasks = tasksQ.data?.scheduled_tasks ?? []
+  const total = tasksQ.data?.total ?? 0
+
+  const allAgents = useMemo(() => agentsQ.data?.agents ?? [], [agentsQ.data])
+  // active agents are selectable for new tasks; name lookup covers every agent
+  // (including disabled) so existing rows still resolve a label.
+  const activeAgents = useMemo(() => allAgents.filter((a) => a.status === "active"), [allAgents])
+  const agentName = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const a of allAgents) m.set(a.project_agent_id, a.name)
+    return m
+  }, [allAgents])
 
   function openCreate() {
     setEditing(null)
@@ -177,124 +230,187 @@ export function ScheduledTasksTab({ projectAgentID }: { projectAgentID: string }
     await deleteMut.mutateAsync(task.id)
   }
 
+  const noAgents = !agentsQ.isLoading && activeAgents.length === 0
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold text-slate-900">{t("scheduledTasks.title")}</h2>
-          <p className="mt-0.5 text-[12px] text-slate-500">{t("scheduledTasks.subtitle")}</p>
+    <AdminLayout activeMenu="scheduled">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-slate-900">{t("scheduledTasks.title")}</h2>
+            <p className="mt-0.5 text-[12px] text-slate-500">{t("scheduledTasks.subtitle")}</p>
+          </div>
+          <Button size="sm" onClick={openCreate} disabled={noAgents} data-testid="scheduled-new">
+            <Plus className="mr-1 h-4 w-4" />
+            {t("scheduledTasks.new")}
+          </Button>
         </div>
-        <Button size="sm" onClick={openCreate} data-testid="scheduled-new">
-          <Plus className="mr-1 h-4 w-4" />
-          {t("scheduledTasks.new")}
-        </Button>
-      </div>
 
-      {notice && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 break-all">
-          {notice}
-        </div>
-      )}
+        {noAgents && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 break-all">
+            {t("scheduledTasks.noAgents")}
+          </div>
+        )}
 
-      {tasksQ.isLoading ? (
-        <p className="text-[13px] text-slate-500">…</p>
-      ) : tasksQ.error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 break-all">
-          {t("scheduledTasks.loadError")}
-        </p>
-      ) : tasks.length === 0 ? (
-        <p className="rounded-md bg-slate-50 px-3 py-6 text-center text-[13px] text-slate-500">
-          {t("scheduledTasks.empty")}
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-md border border-slate-200">
-          {tasks.map((task, i) => (
-            <div
-              key={task.id}
-              data-testid="scheduled-row"
-              data-task-name={task.name}
-              className={
-                "flex flex-wrap items-center gap-3 px-3 py-2.5 " +
-                (i > 0 ? "border-t border-slate-100 " : "")
-              }
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-slate-900">{task.name}</div>
-                <div className="mt-0.5 text-[12px] text-slate-500 break-all">
-                  {t("scheduledTasks.desc.withTz", {
-                    desc: describeCron(task.cron_expr, t, weekdays),
-                    tz: task.timezone,
-                  })}
+        {notice && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 break-all">
+            {notice}
+          </div>
+        )}
+
+        {tasksQ.isLoading ? (
+          <p className="text-[13px] text-slate-500">…</p>
+        ) : tasksQ.error ? (
+          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 break-all">
+            {t("scheduledTasks.loadError")}
+          </p>
+        ) : tasks.length === 0 ? (
+          <p className="rounded-md bg-slate-50 px-3 py-6 text-center text-[13px] text-slate-500">
+            {t("scheduledTasks.empty")}
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-md border border-slate-200">
+            {tasks.map((task, i) => (
+              <div
+                key={task.id}
+                data-testid="scheduled-row"
+                data-task-name={task.name}
+                className={
+                  "flex flex-wrap items-center gap-3 px-3 py-2.5 " +
+                  (i > 0 ? "border-t border-slate-100 " : "")
+                }
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-slate-900">{task.name}</div>
+                  <div className="mt-0.5 text-[12px] text-slate-500 break-all">
+                    {t("scheduledTasks.desc.withTz", {
+                      desc: describeCron(task.cron_expr, t, weekdays),
+                      tz: task.timezone,
+                    })}
+                  </div>
+                </div>
+                <div className="flex w-32 shrink-0 items-center gap-1.5 text-[12px] text-slate-600" title={agentName.get(task.project_agent_id) ?? task.project_agent_id}>
+                  <Bot className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
+                  <span className="truncate">{agentName.get(task.project_agent_id) ?? task.project_agent_id}</span>
+                </div>
+                <div className="shrink-0">
+                  <Badge variant={statusVariant(task.last_status)}>
+                    {t(`scheduledTasks.status.${task.last_status || "none"}` as never)}
+                  </Badge>
+                </div>
+                <div className="w-32 shrink-0 text-[12px] text-slate-600">
+                  {task.next_run_at ? fmtWhen(task.next_run_at) : t("scheduledTasks.never")}
+                </div>
+                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5"
+                    checked={task.enabled}
+                    onChange={() => void toggleEnabled(task)}
+                    disabled={updateMut.isPending}
+                  />
+                  {task.enabled ? t("scheduledTasks.enabled") : t("scheduledTasks.disabled")}
+                </label>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(task)} title={t("scheduledTasks.action.edit")}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void runNow(task)}
+                    disabled={runNowMut.isPending}
+                    data-testid="scheduled-run-now"
+                    title={t("scheduledTasks.action.runNow")}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void remove(task)} title={t("scheduledTasks.action.delete")}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
-              <div className="shrink-0">
-                <Badge variant={statusVariant(task.last_status)}>
-                  {t(`scheduledTasks.status.${task.last_status || "none"}` as never)}
-                </Badge>
-              </div>
-              <div className="w-32 shrink-0 text-[12px] text-slate-600">
-                {task.next_run_at ? fmtWhen(task.next_run_at) : t("scheduledTasks.never")}
-              </div>
-              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] text-slate-600">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5"
-                  checked={task.enabled}
-                  onChange={() => void toggleEnabled(task)}
-                  disabled={updateMut.isPending}
-                />
-                {task.enabled ? t("scheduledTasks.enabled") : t("scheduledTasks.disabled")}
-              </label>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => openEdit(task)} title={t("scheduledTasks.action.edit")}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void runNow(task)}
-                  disabled={runNowMut.isPending}
-                  data-testid="scheduled-run-now"
-                  title={t("scheduledTasks.action.runNow")}
-                >
-                  <Play className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => void remove(task)} title={t("scheduledTasks.action.delete")}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {dialogOpen && (
-        <ScheduledTaskDialog
-          open={dialogOpen}
-          task={editing}
-          weekdays={weekdays}
-          pending={createMut.isPending || updateMut.isPending}
-          error={createMut.error ?? updateMut.error}
-          onOpenChange={setDialogOpen}
-          onSubmit={async (body) => {
-            if (editing) {
-              await updateMut.mutateAsync({
-                taskID: editing.id,
-                body: {
-                  name: body.name,
-                  prompt: body.prompt,
-                  cron_expr: body.cron_expr,
-                  timezone: body.timezone,
-                  enabled: editing.enabled,
-                },
-              })
-            } else {
-              await createMut.mutateAsync(body)
-            }
-            setDialogOpen(false)
-          }}
+        <SchedPager
+          offset={offset}
+          limit={SCHED_PAGE_SIZE}
+          total={total}
+          onPrev={() => setOffset((cur) => Math.max(0, cur - SCHED_PAGE_SIZE))}
+          onNext={() => setOffset((cur) => cur + SCHED_PAGE_SIZE)}
         />
-      )}
+
+        {dialogOpen && (
+          <ScheduledTaskDialog
+            open={dialogOpen}
+            task={editing}
+            agents={activeAgents}
+            agentName={agentName}
+            weekdays={weekdays}
+            pending={createMut.isPending || updateMut.isPending}
+            error={createMut.error ?? updateMut.error}
+            onOpenChange={setDialogOpen}
+            onSubmit={async (body, projectAgentID) => {
+              if (editing) {
+                await updateMut.mutateAsync({
+                  taskID: editing.id,
+                  body: {
+                    name: body.name,
+                    prompt: body.prompt,
+                    cron_expr: body.cron_expr,
+                    timezone: body.timezone,
+                    enabled: editing.enabled,
+                  },
+                })
+              } else {
+                await createMut.mutateAsync({ projectAgentID, body })
+              }
+              setDialogOpen(false)
+            }}
+          />
+        )}
+      </div>
+    </AdminLayout>
+  )
+}
+
+// Disable boundary buttons (vs. hiding) so layout stays stable.
+function SchedPager({
+  offset,
+  limit,
+  total,
+  onPrev,
+  onNext,
+}: {
+  offset: number
+  limit: number
+  total: number
+  onPrev: () => void
+  onNext: () => void
+}) {
+  const { t } = useTranslation("admin")
+  if (total === 0) return null
+  const from = offset + 1
+  const to = Math.min(offset + limit, total)
+  const onFirstPage = offset === 0
+  const onLastPage = offset + limit >= total
+  return (
+    <div className="flex items-center justify-between gap-3 px-1 text-[12px] text-slate-600">
+      <span className="tabular-nums">
+        {t("scheduledTasks.pagination.range", { from, to, total })}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={onPrev} disabled={onFirstPage}>
+          <ChevronLeft className="h-3.5 w-3.5" />
+          {t("scheduledTasks.pagination.prev")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onNext} disabled={onLastPage}>
+          {t("scheduledTasks.pagination.next")}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   )
 }
@@ -302,20 +418,27 @@ export function ScheduledTasksTab({ projectAgentID }: { projectAgentID: string }
 interface DialogProps {
   open: boolean
   task: ScheduledTask | null
+  agents: ProjectAgent[]
+  agentName: Map<string, string>
   weekdays: string[]
   pending: boolean
   error: unknown
   onOpenChange: (open: boolean) => void
-  onSubmit: (body: { name: string; prompt: string; cron_expr: string; timezone: string }) => Promise<void>
+  onSubmit: (
+    body: { name: string; prompt: string; cron_expr: string; timezone: string },
+    projectAgentID: string,
+  ) => Promise<void>
 }
 
-function ScheduledTaskDialog({ open, task, weekdays, pending, error, onOpenChange, onSubmit }: DialogProps) {
+function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending, error, onOpenChange, onSubmit }: DialogProps) {
   const { t } = useTranslation("admin")
   const initial = useMemo<CronForm>(() => (task ? parseCron(task.cron_expr) : { freq: "daily", timeStr: "09:00", dow: 1, dom: 1, minute: 0, custom: "0 9 * * *" }), [task])
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai"
+  const tzOptions = useMemo(() => timezoneOptions(task?.timezone ?? browserTz), [task, browserTz])
 
   const [name, setName] = useState(task?.name ?? "")
   const [prompt, setPrompt] = useState(task?.prompt ?? "")
+  const [agentID, setAgentID] = useState(task?.project_agent_id ?? agents[0]?.project_agent_id ?? "")
   const [freq, setFreq] = useState<FreqType>(initial.freq)
   const [timeStr, setTimeStr] = useState(initial.timeStr)
   const [dow, setDow] = useState(initial.dow)
@@ -335,6 +458,10 @@ function ScheduledTaskDialog({ open, task, weekdays, pending, error, onOpenChang
       setLocalErr(t("scheduledTasks.dialog.nameRequired"))
       return
     }
+    if (!task && !agentID) {
+      setLocalErr(t("scheduledTasks.dialog.agentRequired"))
+      return
+    }
     if (!prompt.trim()) {
       setLocalErr(t("scheduledTasks.dialog.promptRequired"))
       return
@@ -343,7 +470,7 @@ function ScheduledTaskDialog({ open, task, weekdays, pending, error, onOpenChang
       setLocalErr(t("scheduledTasks.dialog.cronInvalid"))
       return
     }
-    await onSubmit({ name: name.trim(), prompt: prompt.trim(), cron_expr: cronExpr.trim(), timezone: tz.trim() })
+    await onSubmit({ name: name.trim(), prompt: prompt.trim(), cron_expr: cronExpr.trim(), timezone: tz.trim() }, agentID)
   }
 
   return (
@@ -357,6 +484,25 @@ function ScheduledTaskDialog({ open, task, weekdays, pending, error, onOpenChang
           <div className="grid min-w-0 gap-1.5">
             <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.name")}</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("scheduledTasks.dialog.namePlaceholder")} data-testid="scheduled-name" />
+          </div>
+
+          <div className="grid min-w-0 gap-1.5">
+            <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.agent")}</label>
+            {task ? (
+              <Input value={agentName.get(task.project_agent_id) ?? task.project_agent_id} disabled readOnly />
+            ) : (
+              <select
+                value={agentID}
+                onChange={(e) => setAgentID(e.target.value)}
+                data-testid="scheduled-agent"
+                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                {agents.length === 0 && <option value="">—</option>}
+                {agents.map((a) => (
+                  <option key={a.project_agent_id} value={a.project_agent_id}>{a.name}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="grid min-w-0 gap-1.5">
@@ -455,7 +601,16 @@ function ScheduledTaskDialog({ open, task, weekdays, pending, error, onOpenChang
 
           <div className="grid min-w-0 gap-1.5">
             <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.timezone")}</label>
-            <Input value={tz} onChange={(e) => setTz(e.target.value)} spellCheck={false} autoCapitalize="off" autoCorrect="off" />
+            <select
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              data-testid="scheduled-tz"
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              {tzOptions.map((z) => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
           </div>
 
           <p className="rounded-md bg-slate-50 px-3 py-2 text-[12px] text-slate-600 whitespace-pre-wrap break-all">

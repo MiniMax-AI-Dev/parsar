@@ -2096,6 +2096,10 @@ func (stubRuntimeStore) ListScheduledTasksByProjectAgent(ctx context.Context, pr
 	return nil, nil
 }
 
+func (stubRuntimeStore) ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error) {
+	return store.ListScheduledTasksByProjectResult{}, nil
+}
+
 func (stubRuntimeStore) CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error) {
 	return store.ScheduledTaskRead{}, nil
 }
