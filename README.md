@@ -25,9 +25,7 @@ Dispatch tasks to background agents — **Claude Code**, **Codex**, and others �
 
 It is the connective tissue between **where work is discussed** and **where work gets done** — without anyone leaving their workflow.
 
-<p align="center">
-  <img src="docs/assets/demo.png" alt="Parsar dispatching a task to an agent" width="720">
-</p>
+
 
 ### Why Parsar
 
