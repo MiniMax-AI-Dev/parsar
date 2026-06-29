@@ -1401,7 +1401,8 @@
         "all": "全部",
         "mcp": "MCP",
         "skill": "Skill",
-        "plugin": "插件"
+        "plugin": "插件",
+        "systemPrompt": "系统提示词"
       },
       "capabilitySections": {
         "workspace": "本 Workspace",

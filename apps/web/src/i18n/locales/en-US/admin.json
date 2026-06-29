@@ -1401,7 +1401,8 @@
         "all": "All",
         "mcp": "MCP",
         "skill": "Skill",
-        "plugin": "Plugin"
+        "plugin": "Plugin",
+        "systemPrompt": "System Prompt"
       },
       "capabilitySections": {
         "workspace": "This Workspace",
