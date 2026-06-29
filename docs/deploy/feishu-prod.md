@@ -77,15 +77,51 @@ Mock 模式会使用 MockClient，并跳过 Feishu webhook token 验证，仅用
 
 ## 4. HTTPS 反向代理示例
 
+Parsar 自身**不内置**反代:compose 只把 server 绑到 `127.0.0.1`,由你在前面放一层 nginx / Caddy / Cloudflare Tunnel 终止 TLS。反代除了常规 HTTP,还必须正确转发两类长连接,否则「网页一行命令接入设备」会失败:
+
+- **WebSocket** `/agent-daemon/ws` —— 宿主机 daemon 出站拨入用的长连接(`Upgrade`/`Connection` 头 + 长读超时)。
+- **SSE** `/api/v1/...` —— agent 运行时的流式输出(必须关闭代理缓冲,否则前端看不到增量)。
+
 ### 4.1 Nginx
 
 ```nginx
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
 server {
   listen 443 ssl http2;
   server_name parsar.example.com;
 
   ssl_certificate /etc/letsencrypt/live/parsar.example.com/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/parsar.example.com/privkey.pem;
+
+  # daemon dial-in WebSocket。必须升级协议,并把读超时拉长到远超
+  # 心跳间隔,否则空闲连接会被 nginx 默认 60s 掐断。
+  location /agent-daemon/ws {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  # agent 流式输出 (SSE)。关闭缓冲,让 token 实时下发。
+  location /api/v1/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+  }
 
   location / {
     proxy_pass http://127.0.0.1:8080;
@@ -98,13 +134,48 @@ server {
 
 ### 4.2 Caddy
 
+Caddy 的 `reverse_proxy` 默认就会处理 WebSocket 升级,只需为 SSE 关闭响应缓冲(`flush_interval -1` 表示每次写都立即 flush)。
+
 ```caddyfile
 parsar.example.com {
   reverse_proxy 127.0.0.1:8080 {
     header_up X-Forwarded-Proto https
+    # SSE:禁用缓冲,逐字节 flush。WebSocket 升级 Caddy 自动处理。
+    flush_interval -1
   }
 }
 ```
+
+### 4.3 Cloudflare Tunnel
+
+不想在公网暴露入站端口时,用 `cloudflared` 把本机 `127.0.0.1:8080` 反向打洞到一个 Cloudflare 托管域名。Cloudflare 边缘默认支持 WebSocket 与 SSE,无需额外缓冲配置。
+
+```yaml
+# ~/.cloudflared/config.yml
+tunnel: <tunnel-uuid>
+credentials-file: /root/.cloudflared/<tunnel-uuid>.json
+
+ingress:
+  - hostname: parsar.example.com
+    service: http://127.0.0.1:8080
+    originRequest:
+      # SSE / WS 是长连接,关掉空闲超时(默认 100s 会掐断)。
+      connectTimeout: 30s
+      noHappyEyeballs: false
+  - service: http_status:404
+```
+
+```bash
+cloudflared tunnel route dns <tunnel-uuid> parsar.example.com
+cloudflared tunnel run <tunnel-uuid>
+```
+
+### 4.4 公网 URL 与 Host 头(安全)
+
+无论用哪种反代,**铸「一行接入命令」的唯一可信来源是 server 自己的 `PARSAR_PUBLIC_URL`**,而不是请求里的 `Host` / `X-Forwarded-Host` 头——后者由客户端控制,可被伪造成攻击者地址,从而把别人的 daemon 配对引流走。所以:
+
+- 必须显式设置 `PARSAR_PUBLIC_URL=https://parsar.example.com`(与上面反代的 `server_name` / hostname 一致),server 据此回填网页里的一行命令与回调地址。
+- 反代照常透传 `Host` / `X-Forwarded-*` 用于日志和常规路由即可;Parsar 在铸命令时**不读这些头**(见 `bootstrap.WithPublicURL`),因此即使头被伪造也不影响接入命令的正确性。
 
 生产必须保持 `PARSAR_COOKIE_SECURE=true`。如果生产模式下设置为 false，server 会启动但打印 `running prod auth on HTTP — cookies will leak` 警告。
 
@@ -117,7 +188,7 @@ export PARSAR_FEISHU_APP_SECRET=xxx
 export PARSAR_FEISHU_REDIRECT_URI=https://parsar.example.com/api/v1/auth/feishu/callback
 export PARSAR_FEISHU_VERIFICATION_TOKEN=xxx
 
-./parsar-server
+parsar-server
 ```
 
 检查 server 健康：

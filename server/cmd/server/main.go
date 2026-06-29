@@ -227,7 +227,8 @@ func main() {
 	// (fall back to cmd/parsar-bootstrap CLI). Status route is
 	// always exposed — it only leaks boolean state.
 	if dbStore != nil {
-		bootstrapSvc := bootstrap.NewService(dbStore, cfg.Auth.Bootstrap.Token)
+		bootstrapSvc := bootstrap.NewService(dbStore, cfg.Auth.Bootstrap.Token,
+			bootstrap.WithPublicURL(cfg.Server.PublicURL))
 		bootstrap.RegisterRoutes(r, bootstrapSvc, func() bool { return cfg.Auth.DevAuth })
 		log.Bg().Info("bootstrap endpoint mode",
 			"http_enabled", cfg.Auth.Bootstrap.Token != "",
