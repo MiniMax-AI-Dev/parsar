@@ -35,15 +35,15 @@ export function UninstallMarketplaceDialog({ capability, agents, open, pending, 
           <AlertDialogDescription>{t("capabilities.uninstall.description", { count })}</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
-          <ul className="max-h-44 space-y-1 overflow-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
+          <ul className="max-h-44 space-y-1 overflow-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
             {(agents.length > 0 ? agents : [{ name: t("capabilities.uninstall.unknownAgent") }]).map((agent, index) => (
               <li key={agent.project_agent_id ?? agent.agent_id ?? agent.id ?? index}>· {agent.name ?? agent.agent_name ?? t("capabilities.uninstall.unknownAgent")}</li>
             ))}
           </ul>
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
             {t("capabilities.uninstall.credentialNote")}
           </div>
-          {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{errMsg}</p>}
+          {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{errMsg}</p>}
         </div>
         <AlertDialogFooter>
           <Button variant="outline" size="sm" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>

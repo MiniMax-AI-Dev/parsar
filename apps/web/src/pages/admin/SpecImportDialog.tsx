@@ -79,7 +79,7 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
         {stage.kind === "edit" ? (
           <div className="space-y-3 px-5 py-4">
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("specs.import.field.text")}
               </span>
               <textarea
@@ -87,25 +87,25 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
                 onChange={(event) => setText(event.target.value)}
                 placeholder={t("specs.import.placeholder.text")}
                 rows={18}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[12.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             {previewErr && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">
+                <p className="text-[13px] font-medium text-red-900">
                   {t("specs.import.error.previewTitle")}
                 </p>
-                <p className="text-[11.5px] text-red-700">{previewErr.message}</p>
+                <p className="text-[12px] text-red-700">{previewErr.message}</p>
               </div>
             )}
           </div>
         ) : (
           <div className="space-y-3 px-5 py-4">
-            <p className="text-[12.5px] font-medium text-slate-700">
+            <p className="text-[13px] font-medium text-slate-700">
               {t("specs.import.preview.title", { count: stage.pieces.length })}
             </p>
             {stage.pieces.length === 0 ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
                 {t("specs.import.preview.empty")}
               </div>
             ) : (
@@ -116,7 +116,7 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
                     className="rounded-md border border-slate-200 bg-white px-3 py-2"
                   >
                     <p className="text-[13px] font-semibold text-slate-900">{piece.title}</p>
-                    <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11.5px] leading-relaxed text-slate-600">
+                    <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-slate-600">
                       {piece.body}
                     </pre>
                   </li>
@@ -125,10 +125,10 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
             )}
             {confirmErr && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">
+                <p className="text-[13px] font-medium text-red-900">
                   {t("specs.import.error.confirmTitle")}
                 </p>
-                <p className="text-[11.5px] text-red-700">{confirmErr.message}</p>
+                <p className="text-[12px] text-red-700">{confirmErr.message}</p>
               </div>
             )}
           </div>

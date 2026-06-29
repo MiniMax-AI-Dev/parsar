@@ -94,14 +94,14 @@ function CredentialModeBadge({ mode }: { mode: Model["credential_mode"] }) {
   const { t } = useTranslation("admin")
   if (mode === "inline_secret") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[12px] font-medium text-slate-700">
         <KeyRound className="h-3 w-3" />
         {t("models.credentialMode.shared")}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
+    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[12px] font-medium text-indigo-700">
       <UserCircle className="h-3 w-3" />
       {t("models.credentialMode.personal")}
     </span>
@@ -144,7 +144,7 @@ function ProviderCompatibilityCell({ type }: { type: string }) {
 
   return (
     <span
-      className="inline-flex max-w-full items-center gap-1.5 text-[12.5px] text-slate-700"
+      className="inline-flex max-w-full items-center gap-1.5 text-[13px] text-slate-700"
       title={label}
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -237,14 +237,14 @@ function TestResultBanner({
         ) : (
           <AlertCircle className="mt-0.5 h-4 w-4 text-red-700" />
         )}
-        <div className="flex-1 text-[12.5px]">
+        <div className="flex-1 text-[13px]">
           {ok ? (
             <>
               <div className="font-medium text-emerald-900">
                 {t("models.test.success", { ms: data.latency_ms })}
               </div>
               {data.sample && (
-                <div className="mt-1 text-[11.5px] text-emerald-800/80 line-clamp-2">
+                <div className="mt-1 text-[12px] text-emerald-800/80 line-clamp-2">
                   {data.sample}
                 </div>
               )}
@@ -255,7 +255,7 @@ function TestResultBanner({
                 {data.supported ? t("models.test.failure") : t("models.test.unsupported")}
               </div>
               {data.error && (
-                <div className="mt-1 text-[11.5px] text-red-800/80 line-clamp-3">
+                <div className="mt-1 text-[12px] text-red-800/80 line-clamp-3">
                   {data.error}
                 </div>
               )}
@@ -265,7 +265,7 @@ function TestResultBanner({
         <button
           type="button"
           onClick={onClose}
-          className="text-[11px] text-slate-500 hover:text-slate-700"
+          className="text-[12px] text-slate-500 hover:text-slate-700"
         >
           ×
         </button>
@@ -349,7 +349,7 @@ function ModelsTable({
                 </TableCell>
                 <TableCell className="overflow-hidden">
                   <span
-                    className="block truncate font-mono text-[12px] text-slate-600"
+                    className="block truncate font-mono text-[13px] text-slate-600"
                     title={m.model_key}
                   >
                     {m.model_key}

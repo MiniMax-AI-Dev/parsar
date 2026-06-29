@@ -103,7 +103,7 @@ export function StepItem({
   const upper = (name || "tool").toUpperCase()
   const summary = detail ? ellipsizeMiddle(detail) : ""
   return (
-    <div className="flex items-center gap-1.5 py-0.5 text-[12px]">
+    <div className="flex items-center gap-1.5 py-0.5 text-[13px]">
       {status === "running" ? (
         <Loader2 className="h-3 w-3 shrink-0 animate-spin text-blue-500" strokeWidth={2.5} />
       ) : status === "failed" ? (
@@ -126,7 +126,7 @@ export function StepItem({
       </span>
       {summary && (
         <span
-          className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-slate-500"
+          className="min-w-0 flex-1 truncate font-mono text-[12px] text-slate-500"
           title={detail}
         >
           {summary}
@@ -134,7 +134,7 @@ export function StepItem({
       )}
       {!summary && <span className="min-w-0 flex-1" aria-hidden="true" />}
       {durationMs !== undefined && (
-        <span className="shrink-0 tabular-nums text-[11px] text-slate-400">
+        <span className="shrink-0 tabular-nums text-[12px] text-slate-400">
           {formatElapsed(durationMs)}
         </span>
       )}
@@ -173,7 +173,7 @@ export function WorkingSteps({
     firstStart === null ? 0 : (lastEnded ?? now) - firstStart
 
   return (
-    <div className="flex w-fit min-w-[240px] flex-col gap-1 rounded-md bg-white px-3 py-2 text-[12px] shadow-sm ring-1 ring-slate-200/70">
+    <div className="flex w-fit min-w-[240px] flex-col gap-1 rounded-md bg-white px-3 py-2 text-[13px] shadow-sm ring-1 ring-slate-200/70">
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -194,7 +194,7 @@ export function WorkingSteps({
         </button>
         <div className="min-w-0 flex-1">
           {total > 0 ? (
-            <div className="flex items-center gap-2 text-[12px]">
+            <div className="flex items-center gap-2 text-[13px]">
               <span className="font-medium text-slate-700">
                 {t("conversations.steps.totalLabel", {
                   count: total,
@@ -226,7 +226,7 @@ export function WorkingSteps({
           )}
         </div>
         {overallMs > 0 && (
-          <span className="shrink-0 tabular-nums text-[11px] text-slate-400">
+          <span className="shrink-0 tabular-nums text-[12px] text-slate-400">
             {formatElapsed(overallMs)}
           </span>
         )}
@@ -294,7 +294,7 @@ export function StepTrace({ steps }: { steps: ToolStep[] }) {
         aria-expanded={expanded}
         aria-label={expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")}
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3" strokeWidth={2.2} />

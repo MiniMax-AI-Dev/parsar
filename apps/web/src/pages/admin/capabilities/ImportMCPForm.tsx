@@ -156,12 +156,12 @@ export function ImportMCPForm({
                   `{\n  "mcpServers": {\n    "github": {\n      "command": "docker",\n      "args": ["run", "-i", "ghcr.io/github/github-mcp-server"],\n      "env": {\n        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxx"\n      }\n    }\n  }\n}`,
                 )
           }
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-[11px] leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-[12px] leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
         />
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[12px] text-slate-500">
           {t(
             "capabilities.import.mcp.pasteHelp",
             "支持 Claude Code (env) / OpenCode (environment) JSON 与 Codex TOML。也可以只粘贴 mcpServers 内层对象。",
@@ -240,7 +240,7 @@ function FormatPicker({
     { value: "toml", label: "TOML" },
   ]
   return (
-    <div className="flex items-center gap-2 text-[12px]">
+    <div className="flex items-center gap-2 text-[13px]">
       <span className="font-medium text-slate-700">
         {t("capabilities.import.mcp.format", "格式")}
       </span>
@@ -252,7 +252,7 @@ function FormatPicker({
               key={opt.value}
               type="button"
               onClick={() => onChange(opt.value)}
-              className={`h-7 px-2.5 text-[11px] transition-colors ${
+              className={`h-7 px-2.5 text-[12px] transition-colors ${
                 active
                   ? "bg-white text-slate-900 shadow-inner"
                   : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
@@ -330,14 +330,14 @@ function ServerCard({
     <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
       <header className="flex min-w-0 flex-col gap-1 border-b border-slate-100 pb-2">
         <h4 className="text-[13px] font-semibold text-slate-900">{server.name}</h4>
-        <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-[11px] text-slate-500">
+        <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-[12px] text-slate-500">
           {server.command}
           {server.args && server.args.length > 0 ? ` ${server.args.join(" ")}` : ""}
         </code>
       </header>
 
       {credentialEnvEntries.length === 0 ? (
-        <p className="mt-2 text-[12px] text-slate-500">
+        <p className="mt-2 text-[13px] text-slate-500">
           {t("capabilities.import.envEmpty.noCredentialPlaceholders", "无需要处理的凭据")}
         </p>
       ) : (

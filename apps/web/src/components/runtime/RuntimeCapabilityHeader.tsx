@@ -122,8 +122,8 @@ function Chip({
     >
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`} strokeWidth={1.75} />
       <div className="min-w-0">
-        <p className={`text-[12px] font-medium leading-tight ${styles.title}`}>{title}</p>
-        <p className={`mt-0.5 text-[11.5px] leading-snug ${styles.body}`}>{body}</p>
+        <p className={`text-[13px] font-medium leading-tight ${styles.title}`}>{title}</p>
+        <p className={`mt-0.5 text-[12px] leading-snug ${styles.body}`}>{body}</p>
       </div>
     </div>
   )

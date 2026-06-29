@@ -41,7 +41,7 @@ function ManagedBoundaryCard() {
           <h2 className="text-[13px] font-semibold text-slate-900">
             {t("runtime.managedBoundary.title")}
           </h2>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
             {t("runtime.managedBoundary.description")}
           </p>
         </div>
@@ -85,12 +85,12 @@ function BoundaryColumn({
 }) {
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50/40 p-3">
-      <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold text-slate-800">
+      <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-slate-800">
         {icon}
         <span>{title}</span>
         <ManagedBadge unmanaged={unmanaged} className="ml-auto" />
       </div>
-      <ul className="space-y-1.5 text-[12px] text-slate-600">
+      <ul className="space-y-1.5 text-[13px] text-slate-600">
         {items.map((item) => (
           <li key={item}>• {item}</li>
         ))}

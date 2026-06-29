@@ -160,7 +160,7 @@ export function AdminLayout({
                 <button
                   type="button"
                   onClick={() => toggle(group.groupKey)}
-                  className="group/header mb-0.5 flex h-5 w-full items-center gap-1 rounded px-2 text-[12px] font-normal text-slate-500 transition-colors hover:text-slate-700"
+                  className="group/header mb-0.5 flex h-5 w-full items-center gap-1 rounded px-2 text-[13px] font-normal text-slate-500 transition-colors hover:text-slate-700"
                 >
                   <span>
                     {t(`nav.${group.groupKey}` as never)}
@@ -202,12 +202,12 @@ export function AdminLayout({
                           {t(`nav.items.${item.itemKey}` as never)}
                         </span>
                         {item.badge !== undefined && (
-                          <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[10.5px] font-medium text-amber-700">
+                          <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-700">
                             {item.badge}
                           </span>
                         )}
                         {item.hint && (
-                          <span className="ml-auto text-[10px] uppercase tracking-wider text-slate-400">
+                          <span className="ml-auto text-[11px] uppercase tracking-wider text-slate-400">
                             {t(`nav.${item.hint}` as never)}
                           </span>
                         )}

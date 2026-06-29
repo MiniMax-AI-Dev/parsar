@@ -13,7 +13,7 @@ export function PageHeader({ title, description, action, backLink }: PageHeaderP
       {backLink && <div className="text-xs text-slate-500">{backLink}</div>}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-[22px] font-semibold leading-tight tracking-display text-slate-900">{title}</h1>
+          <h1 className="font-display text-[22px] leading-tight text-slate-900">{title}</h1>
           {description && (
             <div className="max-w-2xl text-[13px] leading-relaxed text-slate-500">{description}</div>
           )}

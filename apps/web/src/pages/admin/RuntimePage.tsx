@@ -442,15 +442,15 @@ function CloudInstancesPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <div>
           <h3 className="text-[14px] font-medium text-slate-900">{t("runtime.cloud.instances.title")}</h3>
-          <p className="mt-0.5 text-[12px] text-slate-500">
+          <p className="mt-0.5 text-[13px] text-slate-500">
             {t("runtime.list.summary", { count: bindings.length })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-[12px] text-slate-500">
+          <label className="flex items-center gap-2 text-[13px] text-slate-500">
             {t("runtime.list.sort.label")}
             <select
-              className="rounded border border-slate-200 bg-white px-2 py-1 text-[12px]"
+              className="rounded border border-slate-200 bg-white px-2 py-1 text-[13px]"
               value={sortKey}
               onChange={(e) => onSortChange(e.target.value as SortKey)}
               data-testid="runtime-sort"
@@ -478,22 +478,22 @@ function CloudInstancesPanel({
       {bulkErrors.length > 0 && (
         <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50/70 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-red-900">
+            <span className="text-[13px] font-medium text-red-900">
               {t("runtime.list.errors.bulkKillPartial")} ({bulkErrors.length})
             </span>
             <button
               type="button"
               onClick={onClearBulkErrors}
-              className="text-[11px] text-red-700 hover:underline"
+              className="text-[12px] text-red-700 hover:underline"
               data-testid="runtime-bulk-error-dismiss"
             >
               {t("runtime.list.errors.bulkKillDismiss")}
             </button>
           </div>
-          <ul className="max-h-40 space-y-1 overflow-y-auto text-[11px] text-red-800">
+          <ul className="max-h-40 space-y-1 overflow-y-auto text-[12px] text-red-800">
             {bulkErrors.map((e) => (
               <li key={e.sandboxID} className="flex items-start gap-2 font-mono">
-                <span className="shrink-0 rounded bg-red-200/70 px-1.5 py-0.5 text-[10px] text-red-900">{e.status}</span>
+                <span className="shrink-0 rounded bg-red-200/70 px-1.5 py-0.5 text-[11px] text-red-900">{e.status}</span>
                 <span className="shrink-0 text-red-900">{e.sandboxID}</span>
                 <span className="text-red-700">{e.message}</span>
               </li>
@@ -565,19 +565,19 @@ function CloudInstancesPanel({
                         data-testid={`runtime-select-${b.binding_id}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-[180px] truncate font-mono text-[12px] text-slate-800" title={b.sandbox_id}>
+                    <TableCell className="max-w-[180px] truncate font-mono text-[13px] text-slate-800" title={b.sandbox_id}>
                       {b.sandbox_id}
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-slate-500">{b.project_agent_id ?? "—"}</TableCell>
-                    <TableCell className="text-[12px] text-slate-600">{b.template_id}</TableCell>
+                    <TableCell className="font-mono text-[12px] text-slate-500">{b.project_agent_id ?? "—"}</TableCell>
+                    <TableCell className="text-[13px] text-slate-600">{b.template_id}</TableCell>
                     <TableCell><SandboxStatusBadge kind={b.status_kind} status={b.status} /></TableCell>
                     <TableCell>
-                      <span title={b.last_active_at} className="text-[12px] text-slate-600">
+                      <span title={b.last_active_at} className="text-[13px] text-slate-600">
                         {relativeAgo(b.last_active_at)}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span title={b.created_at} className="text-[12px] text-slate-600">
+                      <span title={b.created_at} className="text-[13px] text-slate-600">
                         {relativeAgo(b.created_at)}
                       </span>
                     </TableCell>
@@ -585,7 +585,7 @@ function CloudInstancesPanel({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 gap-1 px-2 text-[12px]"
+                        className="h-7 gap-1 px-2 text-[13px]"
                         disabled={!canTest || isTesting || (testingId !== null && testingId !== b.binding_id)}
                         onClick={() => handleTestConnection(b)}
                         data-testid={`runtime-test-conn-${b.binding_id}`}
@@ -661,7 +661,7 @@ function CloudDaemonRuntimesPanel({
           <h3 className="text-[14px] font-medium text-slate-900">
             {t("runtime.cloud.daemonRuntimes.title", { defaultValue: "沙盒内 Daemon" })}
           </h3>
-          <p className="mt-0.5 max-w-3xl text-[12px] leading-relaxed text-slate-500">
+          <p className="mt-0.5 max-w-3xl text-[13px] leading-relaxed text-slate-500">
             {t("runtime.cloud.daemonRuntimes.description", {
               count: runtimes.length,
               defaultValue: "运行在云端沙盒里的 parsar-daemon 进程。它们属于云端沙盒，不是本地设备。",
@@ -686,25 +686,25 @@ function CloudDaemonRuntimesPanel({
         <TableBody>
           {runtimes.map((runtime) => (
             <TableRow key={runtime.id} data-testid={`sandbox-daemon-runtime-row-${runtime.id}`}>
-              <TableCell className="font-mono text-[12px] text-slate-800">
+              <TableCell className="font-mono text-[13px] text-slate-800">
                 <div className="space-y-1">
                   <div>{runtime.name || shortID(runtime.id)}</div>
-                  <div className="text-[11px] text-slate-500">{shortID(runtime.id)}</div>
+                  <div className="text-[12px] text-slate-500">{shortID(runtime.id)}</div>
                 </div>
               </TableCell>
-              <TableCell className="font-mono text-[11px] text-slate-500">
+              <TableCell className="font-mono text-[12px] text-slate-500">
                 {runtimeConfigText(runtime, "project_agent_id") || "—"}
               </TableCell>
-              <TableCell className="text-[12px] text-slate-600">
+              <TableCell className="text-[13px] text-slate-600">
                 {runtimeConfigText(runtime, "sandbox_kind") || runtime.provider}
               </TableCell>
-              <TableCell className="text-[12px] text-slate-600">
+              <TableCell className="text-[13px] text-slate-600">
                 {formatRuntimeAgentKinds(runtime)}
               </TableCell>
               <TableCell>
                 <RuntimeLivenessBadge runtime={runtime} />
               </TableCell>
-              <TableCell className="text-[12px] text-slate-600" title={runtime.last_heartbeat_at ?? undefined}>
+              <TableCell className="text-[13px] text-slate-600" title={runtime.last_heartbeat_at ?? undefined}>
                 {runtime.last_heartbeat_at ? relativeAgo(runtime.last_heartbeat_at) : "—"}
               </TableCell>
             </TableRow>
@@ -891,7 +891,7 @@ function ConfirmBulkKillDialog({
               {t("runtime.list.confirmBulkKill.description")}
             </DialogDescription>
             {preview.length > 0 && (
-              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[12px] text-slate-600">
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13px] text-slate-600">
                 {preview.map((id) => <li key={id} className="font-mono">{id}</li>)}
                 {count > preview.length && (
                   <li className="list-none text-slate-400">

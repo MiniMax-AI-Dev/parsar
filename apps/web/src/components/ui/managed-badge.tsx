@@ -39,7 +39,7 @@ export function ManagedBadge({ unmanaged, className }: ManagedBadgeProps) {
         <Tooltip.Portal>
           <Tooltip.Content
             side="top"
-            className="z-50 max-w-xs rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-slate-700 shadow-lg"
+            className="z-50 max-w-xs rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed text-slate-700 shadow-lg"
           >
             {tooltip}
             <Tooltip.Arrow className="fill-white" />

@@ -242,7 +242,7 @@ export function CapabilitiesPage() {
                   </span>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-600 shadow-md">
+                  <Tooltip.Content className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-600 shadow-md">
                     {t("capabilities.permission.adminOnly")}
                     <Tooltip.Arrow className="fill-white" />
                   </Tooltip.Content>
@@ -353,16 +353,16 @@ export function CapabilitiesPage() {
                                   {cap.deprecated_at && <Badge variant="destructive">{fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}</Badge>}
                                 </span>
                                 {fromMarketplace && (
-                                  <span className="truncate text-[11px] text-slate-400">{sourceLine}</span>
+                                  <span className="truncate text-[12px] text-slate-400">{sourceLine}</span>
                                 )}
                                 {cap.description && (
                                   <Tooltip.Root>
                                     <Tooltip.Trigger asChild>
-                                      <span className="block w-full truncate text-[12px] text-slate-500">{cap.description}</span>
+                                      <span className="block w-full truncate text-[13px] text-slate-500">{cap.description}</span>
                                     </Tooltip.Trigger>
                                     <Tooltip.Portal>
                                       <Tooltip.Content
-                                        className="z-50 max-w-[420px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] leading-snug text-slate-700 shadow-md"
+                                        className="z-50 max-w-[420px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] leading-snug text-slate-700 shadow-md"
                                         sideOffset={4}
                                       >
                                         {cap.description}
@@ -374,9 +374,9 @@ export function CapabilitiesPage() {
                               </button>
                             </TableCell>
                             <TableCell><CapabilityTypeBadge type={cap.type} /></TableCell>
-                            <TableCell className="font-mono text-[12px] text-slate-600">{fromMarketplace ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version ?? t("capabilities.none") : latestVersions.get(cap.id)?.version ?? t("capabilities.none")}</TableCell>
-                            <TableCell className="text-[12px] text-slate-600">{enabledCount}</TableCell>
-                            <TableCell className="text-[12px] text-slate-600">
+                            <TableCell className="font-mono text-[13px] text-slate-600">{fromMarketplace ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version ?? t("capabilities.none") : latestVersions.get(cap.id)?.version ?? t("capabilities.none")}</TableCell>
+                            <TableCell className="text-[13px] text-slate-600">{enabledCount}</TableCell>
+                            <TableCell className="text-[13px] text-slate-600">
                               {requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
                             </TableCell>
                             <TableCell className="pr-4">
@@ -595,13 +595,13 @@ function CapabilitiesPagination({
   const startIdx = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIdx = Math.min(safePage * pageSize, total)
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-[12px] text-slate-600">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-[13px] text-slate-600">
       <div>{t("capabilities.pagination.range", { start: startIdx, end: endIdx, total })}</div>
       <div className="flex items-center gap-2">
         <label className="flex items-center gap-1">
           <span>{t("capabilities.pagination.perPage")}</span>
           <select
-            className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[12px]"
+            className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[13px]"
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
           >
@@ -730,7 +730,7 @@ function CapabilityRowMoreMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 min-w-[180px] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-[12.5px] text-slate-700 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          className="z-50 min-w-[180px] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-[13px] text-slate-700 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         >
           <CapabilityMenuItem icon={Eye} label={t("capabilities.rowActions.view")} onSelect={onView} />
 
@@ -928,11 +928,11 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                   const count = installationSummary.versionCounts.get(version.id) ?? 0
                   return (
                     <TableRow key={version.id}>
-                      <TableCell className="font-mono text-[12px] text-slate-700">
+                      <TableCell className="font-mono text-[13px] text-slate-700">
                         {version.version} {index === 0 && <Badge className="ml-2" variant="neutral">{t("capabilities.versions.latest")}</Badge>}
                       </TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{formatDate(version.created_at)}</TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{count}</TableCell>
+                      <TableCell className="text-[13px] text-slate-600">{formatDate(version.created_at)}</TableCell>
+                      <TableCell className="text-[13px] text-slate-600">{count}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="ghost" onClick={() => setViewVersion(version)}>
@@ -952,13 +952,13 @@ export function CapabilityDetailPage({ id }: { id: string }) {
           {installationSummary.isLoading ? (
             <Skeleton className="h-12 w-full" />
           ) : enabledCount === 0 ? (
-            <p className="text-[12px] text-slate-500">{t("capabilities.detail.enabledAgents.empty")}</p>
+            <p className="text-[13px] text-slate-500">{t("capabilities.detail.enabledAgents.empty")}</p>
           ) : (
             <div className="space-y-2">
               {installationSummary.installations.map((item) => (
                 <button key={item.agentID} type="button" onClick={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-slate-200 p-3 text-left hover:bg-slate-50">
                   <span className="text-[13px] font-medium text-slate-900">{item.agentName}</span>
-                  <span className="flex items-center gap-2 text-[12px] text-slate-500">
+                  <span className="flex items-center gap-2 text-[13px] text-slate-500">
                     <span className="font-mono">{item.version}</span>
                     {!item.latest && <Badge variant="neutral">{t("capabilities.detail.enabledAgents.old")}</Badge>}
                     <ArrowUpRight className="h-3.5 w-3.5" />
@@ -979,7 +979,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                   </Badge>
                   {capability.deprecated_at && <Badge variant="destructive">{t("capabilities.deprecated.badgeSource")}</Badge>}
                 </div>
-                <p className="text-[12px] text-slate-500">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
+                <p className="text-[13px] text-slate-500">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {/*
@@ -1003,7 +1003,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                       </span>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
-                      <Tooltip.Content className="z-50 max-w-xs rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-600 shadow-md">
+                      <Tooltip.Content className="z-50 max-w-xs rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-600 shadow-md">
                         {capability.deprecated_at ? t("capabilities.marketStatus.undeprecateTooltip") : t("capabilities.marketStatus.deprecateTooltip")}
                         <Tooltip.Arrow className="fill-white" />
                       </Tooltip.Content>
@@ -1186,7 +1186,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         <DetailField
           label="prompt"
           value={
-            <pre className="whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-slate-700">
+            <pre className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-slate-700">
               {sp?.prompt ?? t("capabilities.none")}
             </pre>
           }
@@ -1198,13 +1198,13 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (capability.type === "mcp") {
     if (canonicalSpec?.mcp) {
       return (
-        <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-700">
+        <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-relaxed text-slate-700">
           {JSON.stringify(canonicalSpec.mcp, null, 2)}
         </pre>
       )
     }
     return (
-      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-700">
+      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-relaxed text-slate-700">
         {JSON.stringify(version.content ?? {}, null, 2)}
       </pre>
     )
@@ -1223,7 +1223,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         {plugin?.sha256 && <DetailField label="sha256" value={plugin.sha256} mono />}
         {plugin?.github_repo && <DetailField label="github_repo" value={plugin.github_repo} mono />}
         {!plugin && (
-          <p className="text-[12px] text-slate-500">{t("capabilities.none")}</p>
+          <p className="text-[13px] text-slate-500">{t("capabilities.none")}</p>
         )}
       </div>
     )
@@ -1241,7 +1241,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         {skill.instruction && (
           <DetailField
             label="instruction"
-            value={<pre className="whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-slate-700">{skill.instruction}</pre>}
+            value={<pre className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-slate-700">{skill.instruction}</pre>}
           />
         )}
       </div>
@@ -1354,23 +1354,23 @@ function containsPlaintextSecretPattern(value: string) {
 }
 
 function FormField({ label, help, required, children }: { label: string; help?: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="grid gap-1.5"><span className="text-[12px] font-medium text-slate-700">{label}{required && <span className="text-red-500"> *</span>}</span>{children}{help && <span className="text-[11px] leading-relaxed text-slate-500">{help}</span>}</label>
+  return <label className="grid gap-1.5"><span className="text-[13px] font-medium text-slate-700">{label}{required && <span className="text-red-500"> *</span>}</span>{children}{help && <span className="text-[12px] leading-relaxed text-slate-500">{help}</span>}</label>
 }
 
 function DetailField({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return <div className="rounded-md border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">{label}</p><div className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div></div>
+  return <div className="rounded-md border border-slate-200 bg-white p-3"><p className="text-[12px] text-slate-500">{label}</p><div className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div></div>
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-slate-200 bg-white p-4"><h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>{children}</section>
+  return <section className="rounded-lg border border-slate-200 bg-white p-4"><h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>{children}</section>
 }
 
 function ErrorBanner({ message }: { message: string }) {
-  return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800" role="alert">{message}</div>
+  return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800" role="alert">{message}</div>
 }
 
 function ToastBanner({ message }: { message: string }) {
-  return <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{message}</div>
+  return <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">{message}</div>
 }
 
 function CapabilitiesLoading() {

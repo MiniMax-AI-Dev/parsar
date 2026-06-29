@@ -84,7 +84,7 @@ export function DiscoverWorkspacesDialog({
               <Dialog.Title className="text-[15px] font-semibold text-slate-900">
                 {t("workspaceSwitcher.discoverDialogTitle")}
               </Dialog.Title>
-              <Dialog.Description className="text-[12px] text-slate-500">
+              <Dialog.Description className="text-[13px] text-slate-500">
                 {t("workspaceSwitcher.discoverDialogDescription")}
               </Dialog.Description>
             </div>
@@ -144,11 +144,11 @@ export function DiscoverWorkspacesDialog({
                       <span className="truncate text-[13px] text-slate-900">
                         {ws.name}
                       </span>
-                      <span className="truncate font-mono text-[10.5px] text-slate-400">
+                      <span className="truncate font-mono text-[11px] text-slate-400">
                         {ws.slug}
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-[12px] text-slate-500">
                       {t("workspaceSwitcher.memberCount", {
                         count: ws.member_count,
                       })}
@@ -156,7 +156,7 @@ export function DiscoverWorkspacesDialog({
                     {ws.has_pending_request ? (
                       <div className="flex items-center gap-1.5">
                         <span
-                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-amber-700"
+                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-[12px] text-amber-700"
                           title={t("workspaceSwitcher.pendingRequestTitle")}
                         >
                           <Clock className="h-3 w-3" strokeWidth={1.75} />
@@ -191,7 +191,7 @@ export function DiscoverWorkspacesDialog({
             )}
           </div>
 
-          <div className="flex items-center justify-between text-[12px] text-slate-500">
+          <div className="flex items-center justify-between text-[13px] text-slate-500">
             <span>{rangeLabel}</span>
             <div className="flex items-center gap-2">
               <Button

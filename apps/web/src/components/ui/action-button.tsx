@@ -60,7 +60,7 @@ export function ActionIconButton({
         </span>
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-600 shadow-md">
+        <Tooltip.Content className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-600 shadow-md">
           {label}
           <Tooltip.Arrow className="fill-white" />
         </Tooltip.Content>

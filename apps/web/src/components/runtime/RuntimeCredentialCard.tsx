@@ -129,7 +129,7 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, variant = "card" }
               {t("runtime.credential.title")}
             </h3>
           </div>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-500 max-w-xl">
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-500 max-w-xl">
             {t("runtime.credential.description")}
           </p>
         </div>
@@ -152,7 +152,7 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, variant = "card" }
           </div>
         )}
       </div>
-      <div className="mt-3 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2 text-[12px]">
+      <div className="mt-3 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2 text-[13px]">
         {hasCredential ? (
           <div className="flex items-center gap-2 text-slate-700">
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
@@ -218,7 +218,7 @@ function CredentialManageDialog({
           <DialogTitle>{t("runtime.credential.title")}</DialogTitle>
           <DialogDescription>{t("runtime.credential.description")}</DialogDescription>
         </DialogHeader>
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px]">
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px]">
           {hasCredential ? (
             <div className="flex items-center gap-2 text-slate-700">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
@@ -270,7 +270,7 @@ function ClearCredentialDialog({
           <AlertDialogDescription>{t("runtime.credential.delete.description")}</AlertDialogDescription>
         </AlertDialogHeader>
         {clearMut.error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+          <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
             {clearMut.error instanceof ApiError ? clearMut.error.envelope.message : t("runtime.credential.error.generic")}
           </p>
         )}
@@ -338,7 +338,7 @@ function SaveDialog({ open, pending, error, existing, onOpenChange, onSubmit }: 
             />
           </FieldLabel>
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{errMsg}</p>
+            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{errMsg}</p>
           )}
         </div>
         <DialogFooter>
@@ -363,8 +363,8 @@ function SaveDialog({ open, pending, error, existing, onOpenChange, onSubmit }: 
 function FieldLabel({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[12px] font-medium text-slate-700">{label}</span>
-      {hint && <span className="ml-1 text-[11px] text-slate-500">{hint}</span>}
+      <span className="text-[13px] font-medium text-slate-700">{label}</span>
+      {hint && <span className="ml-1 text-[12px] text-slate-500">{hint}</span>}
       <div className="mt-1.5">{children}</div>
     </label>
   )

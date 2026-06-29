@@ -349,7 +349,7 @@ function RunStatusBadge({ status }: { status: AgentRunStatus }) {
             : "interrupted"
   switch (status) {
     case "queued": return <Badge variant="neutral">{t(`runStatus.${labelKey}`)}</Badge>
-    case "running": return <Badge variant="primary" dot>{t(`runStatus.${labelKey}`)}</Badge>
+    case "running": return <Badge variant="primary" dot pulse>{t(`runStatus.${labelKey}`)}</Badge>
     case "completed": return <Badge variant="success" dot>{t(`runStatus.${labelKey}`)}</Badge>
     case "failed": return <Badge variant="destructive" dot>{t(`runStatus.${labelKey}`)}</Badge>
     case "cancelled": return <Badge variant="neutral">{t(`runStatus.${labelKey}`)}</Badge>
@@ -533,7 +533,7 @@ function RunsPager({
   const onFirstPage = offset === 0
   const onLastPage = offset + limit >= total
   return (
-    <div className="flex items-center justify-between gap-3 px-1 text-[12px] text-slate-600">
+    <div className="flex items-center justify-between gap-3 px-1 text-[13px] text-slate-600">
       <span className="tabular-nums">
         {t("runs.table.pagination.range", { from, to, total })}
       </span>
@@ -562,22 +562,22 @@ function RunRow({ run, onClick }: { run: AgentRunSummary; onClick: () => void })
             <Bot className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
             <span className="text-[14px] font-medium text-slate-900">{run.agent_name ?? run.agent_slug ?? "(unknown)"}</span>
           </div>
-          <span className="font-mono text-[11px] text-slate-500">
+          <span className="font-mono text-[12px] text-slate-500">
             {shortId(run.id)} · {fmtAgo(run.created_at)}
           </span>
           {errorSummary && (
-            <span className="mt-0.5 line-clamp-1 text-[11px] text-red-600">{errorSummary}</span>
+            <span className="mt-0.5 line-clamp-1 text-[12px] text-red-600">{errorSummary}</span>
           )}
         </div>
       </TableCell>
       <TableCell><RunStatusBadge status={run.status} /></TableCell>
       <TableCell>
-        <span className="font-mono text-[11px] text-slate-500">{shortId(run.conversation_id)}</span>
+        <span className="font-mono text-[12px] text-slate-500">{shortId(run.conversation_id)}</span>
       </TableCell>
-      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">
+      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">
         {fmtDuration(run.started_at, run.finished_at)}
       </TableCell>
-      <TableCell className="text-right pr-4 text-[12px] tabular-nums text-slate-400">—</TableCell>
+      <TableCell className="text-right pr-4 text-[13px] tabular-nums text-slate-400">—</TableCell>
     </TableRow>
   )
 }
@@ -678,7 +678,7 @@ export function RunDetailPage({ id }: { id: string }) {
         }
         title={run.agent_name ?? run.agent_slug ?? "(unknown agent)"}
         description={
-          <span className="font-mono text-[12px]">
+          <span className="font-mono text-[13px]">
             {shortId(run.id, 12)} · {connectorLabel(run.connector_type)}
           </span>
         }
@@ -709,7 +709,7 @@ export function RunDetailPage({ id }: { id: string }) {
                 className="inline-flex items-center gap-1 hover:underline"
                 onClick={() => navigate("conversations", { id: run.conversation_id! })}
               >
-                <span className="font-mono text-[12px]">{shortId(run.conversation_id, 10)}</span>
+                <span className="font-mono text-[13px]">{shortId(run.conversation_id, 10)}</span>
                 <ArrowUpRight className="h-3 w-3 text-slate-400" />
               </button>
             ) : (
@@ -723,7 +723,7 @@ export function RunDetailPage({ id }: { id: string }) {
       {cancelError && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/40 p-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" strokeWidth={2} />
-          <p className="font-mono text-[12px] text-red-700">{cancelError}</p>
+          <p className="font-mono text-[13px] text-red-700">{cancelError}</p>
         </div>
       )}
 
@@ -732,7 +732,7 @@ export function RunDetailPage({ id }: { id: string }) {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" strokeWidth={2} />
           <div className="space-y-1">
             <p className="text-[13px] font-medium text-red-900">{t("runs.detail.errorTitle")}</p>
-            <p className="text-[12px] text-red-700/85">{t("runs.detail.errorHint")}</p>
+            <p className="text-[13px] text-red-700/85">{t("runs.detail.errorHint")}</p>
           </div>
         </div>
       )}
@@ -788,7 +788,7 @@ export function RunDetailPage({ id }: { id: string }) {
                       <div>
                         <span>{run.runtime.name || shortId(run.runtime.id, 12)}</span>
                         {run.runtime.id && run.runtime.name ? (
-                          <div className="font-mono text-[11px] text-slate-500">{shortId(run.runtime.id, 12)}</div>
+                          <div className="font-mono text-[12px] text-slate-500">{shortId(run.runtime.id, 12)}</div>
                         ) : null}
                       </div>
                     }
@@ -851,7 +851,7 @@ export function RunDetailPage({ id }: { id: string }) {
                     value={<ToneBadge tone={runtimeDiagnosis.tone} label={runtimeDiagnosis.health} />}
                   />
                   <Field label={t("runs.detail.runtime.action")} value={runtimeDiagnosis.action} />
-                  <p className="text-[12px] text-slate-500">{t("runs.detail.runtime.empty")}</p>
+                  <p className="text-[13px] text-slate-500">{t("runs.detail.runtime.empty")}</p>
                 </>
               )}
             </Card>
@@ -869,7 +869,7 @@ export function RunDetailPage({ id }: { id: string }) {
                 <ArtifactRow key={a.id} medium={a.medium} kind={a.kind} name={a.name} meta={a.uri || undefined} />
               ))
             ) : (
-              <div className="p-6 text-center text-[12px] text-slate-500">No artifacts.</div>
+              <div className="p-6 text-center text-[13px] text-slate-500">No artifacts.</div>
             )}
           </div>
         </TabsContent>
@@ -941,7 +941,7 @@ function RuntimeCapabilities({ capabilities }: { capabilities?: Record<string, b
 function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-[11px] uppercase tracking-wider text-slate-400">{label}</dt>
+      <dt className="mb-0.5 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className={["min-w-0 text-[13px] text-slate-800 [overflow-wrap:anywhere]", mono ? "font-mono" : ""].filter(Boolean).join(" ")}>{value}</dd>
     </div>
   )
@@ -951,7 +951,7 @@ function Card({ title, actions, className, children }: { title: string; actions?
   return (
     <section className={`rounded-lg border border-slate-200 bg-white p-4 ${className ?? ""}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+        <h3 className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
         {actions}
       </div>
       {children}
@@ -985,7 +985,7 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
           <button
             type="button"
             onClick={toggleAll}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11.5px] font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
             <Code className="h-3.5 w-3.5" strokeWidth={1.9} />
             {allOpen ? t("runs.detail.steps.hideAllRaw") : t("runs.detail.steps.viewAllRaw")}
@@ -999,7 +999,7 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
           <Skeleton className="h-10 w-3/4" />
         </div>
       ) : steps.length === 0 ? (
-        <p className="text-[12px] text-slate-500">{t("runs.detail.steps.empty")}</p>
+        <p className="text-[13px] text-slate-500">{t("runs.detail.steps.empty")}</p>
       ) : (
         <ol className="space-y-3">
           {steps.map((step) => {
@@ -1012,7 +1012,7 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                       <p className="text-[13px] font-medium text-slate-900">{step.title}</p>
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className="whitespace-nowrap font-mono text-[11px] text-slate-400">
+                        <span className="whitespace-nowrap font-mono text-[12px] text-slate-400">
                           {"#" + step.sequence + (step.occurredAt ? " · " + fmtDateTime(step.occurredAt) : "")}
                         </span>
                         {step.rawEvents.length > 0 && (
@@ -1033,13 +1033,13 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
                         )}
                       </div>
                     </div>
-                    {step.detail && <p className="mt-1 break-words text-[12px] text-slate-500">{step.detail}</p>}
+                    {step.detail && <p className="mt-1 break-words text-[13px] text-slate-500">{step.detail}</p>}
                   </div>
                 </div>
                 {open && step.rawEvents.length > 0 && (
                   <div className="mt-2 space-y-2">
                     {step.rawEvents.map((ev) => (
-                      <pre key={ev.id} className="whitespace-pre-wrap break-all rounded-md bg-slate-950 p-3 text-[11px] leading-relaxed text-slate-100">
+                      <pre key={ev.id} className="whitespace-pre-wrap break-all rounded-md bg-slate-950 p-3 text-[12px] leading-relaxed text-slate-100">
                         {`#${ev.sequence} ${ev.event_kind}\n${JSON.stringify(ev.payload ?? {}, null, 2)}`}
                       </pre>
                     ))}
@@ -1150,7 +1150,7 @@ function ArtifactRow({ medium, kind, name, meta }: { medium: string; kind: strin
       )}
       <div className="flex-1">
         <code className="text-[13px] font-medium text-slate-900">{name}</code>
-        {meta && <p className="text-[11px] text-slate-500">{kind} · {medium} · {meta}</p>}
+        {meta && <p className="text-[12px] text-slate-500">{kind} · {medium} · {meta}</p>}
       </div>
       <ArrowUpRight className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
     </button>

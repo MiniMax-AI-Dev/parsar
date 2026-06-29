@@ -74,7 +74,7 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[12px] text-slate-500">
+        <p className="text-[13px] text-slate-500">
           {t("runtime.agentDaemon.intro", {
             defaultValue:
               "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
@@ -159,18 +159,18 @@ function DaemonRuntimeRow({
 
   return (
     <TableRow data-testid={`agent-daemon-row-${runtime.id}`}>
-      <TableCell className="font-mono text-[12px] text-slate-800">
+      <TableCell className="font-mono text-[13px] text-slate-800">
         <div className="space-y-1">
           <div>{runtime.name}</div>
-          <div className="text-[11px] text-slate-500">{shortRuntimeID(runtime.id)}</div>
+          <div className="text-[12px] text-slate-500">{shortRuntimeID(runtime.id)}</div>
         </div>
       </TableCell>
-      <TableCell className="text-[12px] text-slate-600">{runtime.hostname || "—"}</TableCell>
-      <TableCell className="text-[12px] text-slate-600">
+      <TableCell className="text-[13px] text-slate-600">{runtime.hostname || "—"}</TableCell>
+      <TableCell className="text-[13px] text-slate-600">
         <div className="space-y-1">
           <div>{runtime.version || "—"}</div>
           {activeRequests !== null && (
-            <div className="text-[11px] text-slate-500">
+            <div className="text-[12px] text-slate-500">
               {activeRequests === 0
                 ? t("runtime.agentDaemon.load.idle", { defaultValue: "空闲" })
                 : t("runtime.agentDaemon.load.active", { count: activeRequests, defaultValue: "{{count}} 个运行中" })}
@@ -184,14 +184,14 @@ function DaemonRuntimeRow({
       <TableCell>
         <div className="space-y-1">
           <DaemonStatusBadge liveness={runtime.liveness} />
-          <p className="max-w-[240px] text-[11px] leading-4 text-slate-500">{daemonStatusDetail(runtime, t)}</p>
+          <p className="max-w-[240px] text-[12px] leading-4 text-slate-500">{daemonStatusDetail(runtime, t)}</p>
         </div>
       </TableCell>
-      <TableCell className="text-[12px] text-slate-600" title={lastHeartbeatExact ?? undefined}>
+      <TableCell className="text-[13px] text-slate-600" title={lastHeartbeatExact ?? undefined}>
         {runtime.last_heartbeat_at ? (
           <div className="space-y-1">
             <div>{relativeAgo(runtime.last_heartbeat_at)}</div>
-            <div className="text-[11px] text-slate-500">{lastHeartbeatExact}</div>
+            <div className="text-[12px] text-slate-500">{lastHeartbeatExact}</div>
           </div>
         ) : (
           "—"
@@ -217,7 +217,7 @@ function AgentKindBadges({ runtime }: { runtime: Runtime }) {
   const kinds = supportedAgentKinds(runtime)
   const capabilities = daemonCapabilityLabels(runtime, t)
   if (kinds.length === 0) {
-    return <span className="text-[12px] text-slate-400">—</span>
+    return <span className="text-[13px] text-slate-400">—</span>
   }
   return (
     <div className="space-y-1.5">
@@ -233,11 +233,11 @@ function AgentKindBadges({ runtime }: { runtime: Runtime }) {
           </Badge>
         ))}
       </div>
-      <div className="text-[11px] leading-4 text-slate-500">
+      <div className="text-[12px] leading-4 text-slate-500">
         {kinds.map((kind) => formatAgentKindSnapshot(kind, t)).join(" · ")}
       </div>
       {capabilities.length > 0 && (
-        <div className="text-[11px] leading-4 text-slate-500">{capabilities.join(" · ")}</div>
+        <div className="text-[12px] leading-4 text-slate-500">{capabilities.join(" · ")}</div>
       )}
     </div>
   )
@@ -403,7 +403,7 @@ function ConfirmDeleteRuntimeDialog({
               })}
             </DialogDescription>
             {error && (
-              <p className="text-[12px] text-red-700">{error.message}</p>
+              <p className="text-[13px] text-red-700">{error.message}</p>
             )}
           </div>
         </DialogHeader>

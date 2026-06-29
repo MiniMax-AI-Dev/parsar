@@ -83,7 +83,7 @@ function EmptyShell({
         </div>
         <p className={`text-[14px] font-medium ${styles.title}`}>{title}</p>
       </div>
-      <div className="max-w-xl space-y-2 text-[12.5px] leading-relaxed text-slate-600">
+      <div className="max-w-xl space-y-2 text-[13px] leading-relaxed text-slate-600">
         {children}
       </div>
     </div>

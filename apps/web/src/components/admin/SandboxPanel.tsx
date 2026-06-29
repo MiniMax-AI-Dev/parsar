@@ -21,7 +21,7 @@ import { useNow } from "../../lib/use-now"
 function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
     <section className={`rounded-lg border border-slate-200 bg-white p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+      <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
       {children}
     </section>
   )
@@ -30,7 +30,7 @@ function Card({ title, className, children }: { title: string; className?: strin
 function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-[11px] uppercase tracking-wider text-slate-400">{label}</dt>
+      <dt className="mb-0.5 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className={`text-[13px] text-slate-800 ${mono ? "font-mono break-all" : ""}`}>{value}</dd>
     </div>
   )
@@ -111,7 +111,7 @@ function ExpiresValue({ iso }: { iso?: string }) {
   return (
     <span title={iso} className="text-[13px] text-slate-800">
       {absolute}
-      {label && <span className={`ml-2 text-[12px] ${toneClass}`}>({label})</span>}
+      {label && <span className={`ml-2 text-[13px] ${toneClass}`}>({label})</span>}
     </span>
   )
 }
@@ -237,7 +237,7 @@ export function SandboxPanel({
           </Button>
         </div>
         {acquireMut.isSuccess && (
-          <p className="mt-2 text-center text-[12px] text-slate-500">
+          <p className="mt-2 text-center text-[13px] text-slate-500">
             {t("agents.detail.sandbox.provisioningHint")}
           </p>
         )}
@@ -290,7 +290,7 @@ export function SandboxPanel({
           <Field label={t("agents.detail.sandbox.fields.cacheKey")} value={binding.cache_key} mono />
         </dl>
         {binding.status_kind !== "live" && (
-          <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+          <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
             {t("agents.detail.sandbox.notLiveHint")}
           </p>
         )}
@@ -309,7 +309,7 @@ export function SandboxPanel({
         />
       )}
       {renewMut.isSuccess && renewMut.data?.expires_at && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
           {t("agents.detail.sandbox.renewedToast", { expiresAt: new Date(renewMut.data.expires_at).toLocaleString() })}
         </div>
       )}

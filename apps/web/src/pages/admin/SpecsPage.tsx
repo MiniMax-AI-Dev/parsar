@@ -229,15 +229,15 @@ function FragmentRow({ fragment, fmtAgo, onEdit, onDelete }: FragmentRowProps) {
           <span className="text-[14px] font-semibold text-slate-900">{fragment.title}</span>
           <SourceBadge source={fragment.source} />
           {fragment.tags.map((tag) => (
-            <Badge key={tag} variant="neutral" className="font-mono text-[10.5px]">
+            <Badge key={tag} variant="neutral" className="font-mono text-[11px]">
               {tag}
             </Badge>
           ))}
         </div>
         {preview && (
-          <p className="line-clamp-2 text-[12.5px] text-slate-600">{preview}</p>
+          <p className="line-clamp-2 text-[13px] text-slate-600">{preview}</p>
         )}
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[12px] text-slate-400">
           {t("specs.row.updatedAt", { time: fmtAgo(fragment.updated_at) })}
         </p>
       </button>
@@ -314,7 +314,7 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
           </DialogHeader>
           <div className="space-y-3 px-5 py-4">
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("specs.editor.field.title")}
                 <span className="ml-0.5 text-red-500">*</span>
               </span>
@@ -327,7 +327,7 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("specs.editor.field.body")}
                 <span className="ml-0.5 text-red-500">*</span>
               </span>
@@ -337,11 +337,11 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
                 placeholder={t("specs.editor.placeholder.body")}
                 required
                 rows={12}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[12.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("specs.editor.field.tags")}
               </span>
               <Input
@@ -352,10 +352,10 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
             </label>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">
+                <p className="text-[13px] font-medium text-red-900">
                   {t("specs.editor.error.title")}
                 </p>
-                <p className="text-[11.5px] text-red-700">{error.message}</p>
+                <p className="text-[12px] text-red-700">{error.message}</p>
               </div>
             )}
           </div>
@@ -405,7 +405,7 @@ function DeleteConfirmDialog({
                 {t("specs.delete.title", { title: fragment.title })}
               </AlertDialogTitle>
               <AlertDialogDescription>{t("specs.delete.description")}</AlertDialogDescription>
-              {error && <p className="text-[12px] text-red-700">{error.message}</p>}
+              {error && <p className="text-[13px] text-red-700">{error.message}</p>}
             </div>
           </div>
         </AlertDialogHeader>

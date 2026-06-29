@@ -76,8 +76,8 @@ function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
             className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-90" : ""}`}
           />
           <FileText className="h-4 w-4 shrink-0 text-emerald-600" />
-          <code className="font-mono text-[12px] text-slate-900">SKILL.md</code>
-          <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
+          <code className="font-mono text-[13px] text-slate-900">SKILL.md</code>
+          <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-800">
             {t("capabilities.import.skill.fileTree.entry", "入口")}
           </span>
         </CollapsibleTrigger>
@@ -133,8 +133,8 @@ function GroupCard({
             className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-90" : ""}`}
           />
           {icon}
-          <span className="font-mono text-[12px] text-slate-700">{title}</span>
-          <span className="ml-auto text-[11px] text-slate-500">
+          <span className="font-mono text-[13px] text-slate-700">{title}</span>
+          <span className="ml-auto text-[12px] text-slate-500">
             {files.length}
           </span>
         </CollapsibleTrigger>
@@ -160,8 +160,8 @@ function FileRow({ file }: { file: SkillFile }) {
             className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
           />
           <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-          <code className="truncate font-mono text-[11.5px] text-slate-800">{file.path}</code>
-          <span className="ml-auto text-[10px] uppercase tracking-wide text-slate-400">
+          <code className="truncate font-mono text-[12px] text-slate-800">{file.path}</code>
+          <span className="ml-auto text-[11px] uppercase tracking-wide text-slate-400">
             {file.kind}
           </span>
         </CollapsibleTrigger>
@@ -204,7 +204,7 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
 
   if (err || html === null) {
     return (
-      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all bg-slate-50 px-3 py-2 font-mono text-[11.5px] leading-relaxed text-slate-700">
+      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all bg-slate-50 px-3 py-2 font-mono text-[12px] leading-relaxed text-slate-700">
         {content}
       </pre>
     )
@@ -213,7 +213,7 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
     <div
       // Force shiki's <pre> to wrap — default overflow-x: auto pushes
       // long URLs / minified JSON into horizontal dialog scroll.
-      className="max-h-[420px] overflow-y-auto text-[11.5px] leading-relaxed [&_pre]:!m-0 [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:!bg-slate-50 [&_pre]:!px-3 [&_pre]:!py-2"
+      className="max-h-[420px] overflow-y-auto text-[12px] leading-relaxed [&_pre]:!m-0 [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:!bg-slate-50 [&_pre]:!px-3 [&_pre]:!py-2"
       // shiki output is sanitized server-controlled markup.
       dangerouslySetInnerHTML={{ __html: html }}
     />

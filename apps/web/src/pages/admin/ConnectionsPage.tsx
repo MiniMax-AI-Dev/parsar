@@ -67,7 +67,7 @@ export function ConnectionsPage() {
           <section>
             <h2 className="mb-3 text-[14px] font-semibold text-slate-900">{t("connections.oauth.title")}</h2>
             {oauthKinds.length === 0 ? (
-              <p className="text-[12.5px] text-slate-500">{t("connections.oauth.empty")}</p>
+              <p className="text-[13px] text-slate-500">{t("connections.oauth.empty")}</p>
             ) : (
               <div className="grid gap-3 lg:grid-cols-3">
                 {oauthKinds.map((kind) => {
@@ -98,7 +98,7 @@ export function ConnectionsPage() {
               )}
             </div>
             {modelKinds.length === 0 ? (
-              <p className="text-[12.5px] text-slate-500">{t("connections.model.empty")}</p>
+              <p className="text-[13px] text-slate-500">{t("connections.model.empty")}</p>
             ) : (
               <div className="grid gap-3 lg:grid-cols-3">
                 {modelKinds.map((kind) => {
@@ -257,7 +257,7 @@ function OAuthConnectionCard({
           </div>
           <div>
             <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
-            <p className="mt-0.5 min-h-10 text-[12px] leading-5 text-slate-500">{description}</p>
+            <p className="mt-0.5 min-h-10 text-[13px] leading-5 text-slate-500">{description}</p>
           </div>
         </div>
         {loading ? (
@@ -313,7 +313,7 @@ function ModelKeyCard({
           <div>
             <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
             {description && (
-              <p className="mt-0.5 min-h-10 text-[12px] leading-5 text-slate-500">{description}</p>
+              <p className="mt-0.5 min-h-10 text-[13px] leading-5 text-slate-500">{description}</p>
             )}
           </div>
         </div>
@@ -385,7 +385,7 @@ function CreateModelKindDialog({
           }}
         >
           <div className="space-y-1.5">
-            <label htmlFor="create-kind-code" className="text-[12px] font-medium text-slate-700">
+            <label htmlFor="create-kind-code" className="text-[13px] font-medium text-slate-700">
               {t("connections.createKind.code")}
             </label>
             <Input
@@ -397,11 +397,11 @@ function CreateModelKindDialog({
               autoComplete="off"
               spellCheck={false}
             />
-            <p className="text-[11px] text-slate-500">{t("connections.createKind.codeHint")}</p>
+            <p className="text-[12px] text-slate-500">{t("connections.createKind.codeHint")}</p>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="create-kind-name" className="text-[12px] font-medium text-slate-700">
+            <label htmlFor="create-kind-name" className="text-[13px] font-medium text-slate-700">
               {t("connections.createKind.displayName")}
             </label>
             <Input
@@ -413,7 +413,7 @@ function CreateModelKindDialog({
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="create-kind-desc" className="text-[12px] font-medium text-slate-700">
+            <label htmlFor="create-kind-desc" className="text-[13px] font-medium text-slate-700">
               {t("connections.createKind.descriptionField")}
             </label>
             <Input
@@ -425,7 +425,7 @@ function CreateModelKindDialog({
           </div>
 
           {error && (
-            <p className="text-[12px] text-red-600">
+            <p className="text-[13px] text-red-600">
               {error.envelope.message || t("connections.createKind.errorGeneric")}
             </p>
           )}

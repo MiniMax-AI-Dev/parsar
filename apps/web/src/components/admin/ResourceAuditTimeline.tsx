@@ -37,7 +37,7 @@ function PayloadPreview({ payload }: { payload?: Record<string, unknown> }) {
   if (entries.length === 0) return null
   const preview = entries.slice(0, 3).map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · ")
   return (
-    <p className="mt-1 truncate font-mono text-[11px] text-slate-500" title={preview}>
+    <p className="mt-1 truncate font-mono text-[12px] text-slate-500" title={preview}>
       {preview}
     </p>
   )
@@ -47,7 +47,7 @@ function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: st
   return (
     <li className="flex gap-3 border-b border-slate-100 px-1 py-2.5 last:border-b-0">
       <div className="flex w-32 shrink-0 flex-col gap-0.5 pt-0.5">
-        <span className="text-[12px] text-slate-700" title={record.occurred_at}>
+        <span className="text-[13px] text-slate-700" title={record.occurred_at}>
           {fmtAgo(record.occurred_at)}
         </span>
         <Badge variant={SOURCE_BADGE[record.source]} className="w-fit">
@@ -58,7 +58,7 @@ function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: st
         <p className="truncate text-[13px] font-medium text-slate-800" title={record.event_type}>
           {record.event_type}
         </p>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+        <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-slate-500">
           <ActorIcon type={record.actor_type} />
           <span className="font-mono">
             {record.actor_type}
