@@ -1,0 +1,38 @@
+
+# The CI of the CI. Every workflow YAML in this directory is itself
+# code — a malformed `if` expression, a typo in `needs:`, or a matrix
+# value that does not exist will pass `yaml.safe_load` but blow up at
+# runtime, sometimes hours after merge. actionlint catches that class
+# of mistake locally-equivalent on every PR that touches workflows.
+#
+# Version pinned (no `main`, no `@latest`): actionlint occasionally
+# tightens rules between releases, so a silent upgrade could turn a
+# green PR red overnight. Bump in a dedicated PR.
+name: actionlint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download actionlint
+        run: bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12
+      - name: Run actionlint
+        run: ./actionlint -color
