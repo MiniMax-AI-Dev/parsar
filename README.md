@@ -123,14 +123,6 @@ cp .env.example .env   # set agent credentials, surface credentials, POSTGRES_PA
 docker compose -f docker-compose.local.yml up -d
 ```
 
-## Contributing
-
-寡人 welcomes PRs.
-
-- Read [`AGENTS.md`](AGENTS.md) **before** any implementation, refactor, or schema/API change — it documents the worktree workflow, architecture baseline, and required checks.
-- Run `make check` locally; CI runs the same target.
-- Open an [issue](https://github.com/your-org/parsar/issues) before non-trivial work so we can align on direction.
-
 ## Security
 
 Found a vulnerability? Please email **security@your-org.com** instead of opening a public issue.
