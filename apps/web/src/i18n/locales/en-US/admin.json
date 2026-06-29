@@ -1402,7 +1402,8 @@
         "all": "All",
         "mcp": "MCP",
         "skill": "Skill",
-        "plugin": "Plugin"
+        "plugin": "Plugin",
+        "systemPrompt": "System Prompt"
       },
       "capabilitySections": {
         "workspace": "This Workspace",
@@ -1492,6 +1493,10 @@
       "codex": {
         "title": "Codex",
         "description": "Run OpenAI Codex (codex-rs) via the app-server protocol."
+      },
+      "pi": {
+        "title": "Pi",
+        "description": "Run the pi coding agent CLI through parsar-daemon."
       },
       "opencode": {
         "title": "OpenCode",

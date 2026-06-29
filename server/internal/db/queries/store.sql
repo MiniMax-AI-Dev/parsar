@@ -1591,7 +1591,13 @@ picked as (
   select c.id, r.id as run_id
   from conversations c
   join agent_runs r on r.conversation_id = c.id
-  left join run_event_max rem on rem.agent_run_id = r.id
+  -- INNER (not LEFT) join: a run is only claimable once it has >=1
+  -- renderable event. Without a rem row the first-send branch below
+  -- (agent_run_id <> r.id) would otherwise claim a run carrying only
+  -- non-renderable lifecycle events (run.cancelled/requeued/superseded)
+  -- and spam an empty card. The sibling ListActive query reaches the
+  -- same exclusion via its `seq_emitted < max_seq` predicate.
+  join run_event_max rem on rem.agent_run_id = r.id
   left join messages m on m.id = r.output_message_id
   where c.platform = 'feishu'
     and c.status = 'active'
@@ -1651,6 +1657,18 @@ picked as (
   for update of c skip locked
 ),
 claimed as (
+  -- Stamp the claim once PER CONVERSATION, then fan back out to one
+  -- row per run in the final SELECT. The previous shape did
+  -- `update conversations c ... from picked ... returning picked.run_id`,
+  -- but Postgres UPDATE...FROM updates each target row once and emits a
+  -- single RETURNING row even when picked holds several runs for that
+  -- conversation — so a conv with two claimable runs (e.g. two failed
+  -- runs) returned only one. The dropped run never reached the
+  -- terminal_delivered fingerprint and got re-claimed every tick (the
+  -- other half of the prod 2026-06-22 card storm; see fingerprint note
+  -- above). Updating `where c.id in (select id from picked)` keeps the
+  -- claim stamp idempotent per conversation while the run fan-out moves
+  -- to the join below.
   update conversations c
   set metadata = jsonb_set(
         coalesce(c.metadata, '{}'::jsonb),
@@ -1662,11 +1680,9 @@ claimed as (
         true
       ),
       updated_at = @now::timestamptz
-  from picked
-  where c.id = picked.id
+  where c.id in (select id from picked)
   returning c.id, c.workspace_id, c.project_id, c.external_id,
-            c.external_thread_id, c.source_app_id, c.metadata,
-            picked.run_id
+            c.external_thread_id, c.source_app_id, c.metadata
 )
 select claimed.id::text                 as conversation_id,
        claimed.workspace_id::text       as workspace_id,
@@ -1675,7 +1691,7 @@ select claimed.id::text                 as conversation_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
        claimed.metadata                 as conversation_metadata,
-       claimed.run_id::text             as agent_run_id,
+       picked.run_id::text              as agent_run_id,
        r.status                         as run_status,
        r.started_at                     as run_started_at,
        r.finished_at                    as run_finished_at,
@@ -1693,8 +1709,9 @@ select claimed.id::text                 as conversation_id,
        -- open_id (legacy fixtures, system-initiated runs); the ping
        -- helper degrades to a plain-text message.
        coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id
-from claimed
-join agent_runs r on r.id = claimed.run_id
+from picked
+join claimed on claimed.id = picked.id
+join agent_runs r on r.id = picked.run_id
 left join messages trig on trig.id = r.trigger_message_id
 left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
 left join agents a on a.id = pa.agent_id and a.deleted_at is null
@@ -1707,7 +1724,7 @@ left join (
   -- seq_emitted compare gets confused. See same set ~line 1705.
   where event_kind in ('tool.call', 'message.delta', 'message.thinking', 'permission.asked', 'prompt_for_user_choice.asked', 'run.started', 'run.completed', 'run.failed')
   group by agent_run_id
-) rem on rem.agent_run_id = claimed.run_id;
+) rem on rem.agent_run_id = picked.run_id;
 
 -- name: ListAgentRunEventsAfterSeq :many
 -- Pull the slice of events the driver hasn't rendered yet, in

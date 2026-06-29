@@ -218,6 +218,9 @@ func main() {
 	api.RegisterParsarDaemonInstallRoute(r, api.ParsarDaemonInstallConfig{
 		Repo: strings.TrimSpace(os.Getenv("PARSAR_DAEMON_REPO")),
 	})
+	api.RegisterParsarDaemonDownloadRoute(r, api.ParsarDaemonDownloadConfig{
+		BinaryDir: strings.TrimSpace(os.Getenv("PARSAR_DAEMON_BINARY_DIR")),
+	})
 
 	// Bootstrap (first-owner provisioning) mounts OUTSIDE the auth
 	// middleware because no user exists yet to log in. Token-gated

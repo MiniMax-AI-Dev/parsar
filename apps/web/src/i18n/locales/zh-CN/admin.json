@@ -1402,7 +1402,8 @@
         "all": "全部",
         "mcp": "MCP",
         "skill": "Skill",
-        "plugin": "插件"
+        "plugin": "插件",
+        "systemPrompt": "系统提示词"
       },
       "capabilitySections": {
         "workspace": "本 Workspace",
@@ -1492,6 +1493,10 @@
       "codex": {
         "title": "Codex",
         "description": "通过 app-server 协议运行 OpenAI Codex（codex-rs）。"
+      },
+      "pi": {
+        "title": "Pi",
+        "description": "通过 parsar-daemon 运行 pi coding agent CLI。"
       },
       "opencode": {
         "title": "OpenCode",

@@ -28,6 +28,7 @@ const (
 	TargetOpenCode   Target = "opencode"
 	TargetClaudeCode Target = "claudecode"
 	TargetCodex      Target = "codex"
+	TargetPi         Target = "pi"
 )
 
 // Output is what a Renderer returns. Content is the scaffold-specific JSON
@@ -57,6 +58,8 @@ func For(target Target) (Renderer, error) {
 		return claudeCodeRenderer{}, nil
 	case TargetCodex:
 		return codexRenderer{}, nil
+	case TargetPi:
+		return piRenderer{}, nil
 	default:
 		return nil, fmt.Errorf("render: unknown target %q", target)
 	}
