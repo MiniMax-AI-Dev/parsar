@@ -9545,6 +9545,59 @@ func (q *Queries) ResolveAgentNameForConversation(ctx context.Context, conversat
 	return agent_name, err
 }
 
+const resolveDiscordBotSecretByGuild = `-- name: ResolveDiscordBotSecretByGuild :one
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'discord_bot'
+  and status = 'active'
+  and metadata->>'guild_id' = $1::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1
+`
+
+type ResolveDiscordBotSecretByGuildRow struct {
+	ID               string             `json:"id"`
+	Slug             string             `json:"slug"`
+	Name             string             `json:"name"`
+	Kind             string             `json:"kind"`
+	Provider         string             `json:"provider"`
+	AuthType         string             `json:"auth_type"`
+	EncryptedPayload []byte             `json:"encrypted_payload"`
+	KeyVersion       string             `json:"key_version"`
+	Status           string             `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Resolve the active Discord bot-token secret for a guild, keyed by the Discord
+// guild_id stamped in metadata at install time. kind='discord_bot' is a
+// free-text convention (the secrets table has no kind CHECK), so no migration
+// is needed; metadata->>'guild_id' scopes the row to one guild. The neutral
+// Discord channel decrypts encrypted_payload to mint the per-call API/Gateway
+// bearer, so a re-installed bot rotates without a process restart. Newest active
+// row wins when two installs share a guild (re-install supersedes).
+func (q *Queries) ResolveDiscordBotSecretByGuild(ctx context.Context, guildID string) (ResolveDiscordBotSecretByGuildRow, error) {
+	row := q.db.QueryRow(ctx, resolveDiscordBotSecretByGuild, guildID)
+	var i ResolveDiscordBotSecretByGuildRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Kind,
+		&i.Provider,
+		&i.AuthType,
+		&i.EncryptedPayload,
+		&i.KeyVersion,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const resolveModelRuntime = `-- name: ResolveModelRuntime :one
 select
   m.id::text as model_id,

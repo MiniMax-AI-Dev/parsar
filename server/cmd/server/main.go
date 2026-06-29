@@ -38,8 +38,10 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/dev"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
+	discordchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/discord"
 	slackchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/slack"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/discordrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/slackrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
@@ -730,6 +732,24 @@ func main() {
 			go func() {
 				if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					log.Bg().Error("slack socket mode runner exited", "error", err)
+				}
+			}()
+		}
+	}
+
+	// Discord Gateway WebSocket inbound runner. Opt-in via
+	// PARSAR_DISCORD_GATEWAY=true. Feeds the same neutral router.HandleInbound
+	// pipeline as Feishu/Slack; inbound only. Shares the router store; no DDL.
+	// MESSAGE_CONTENT is a privileged gateway intent — enable it in the Discord
+	// Developer Portal or message bodies arrive empty.
+	if dbStore != nil {
+		if runner, err := buildDiscordRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("discord gateway runner init failed", "error", err)
+			os.Exit(1)
+		} else if runner != nil {
+			go func() {
+				if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("discord gateway runner exited", "error", err)
 				}
 			}()
 		}
@@ -1437,6 +1457,100 @@ func buildSlackRunner(env func(string) string, dbStore *store.Store, connectorRe
 	return runner, nil
 }
 
+// buildDiscordRunner constructs the Discord Gateway WebSocket inbound runner
+// from env. Returns nil (silent skip) when the feature flag is off, mirroring
+// buildSlackRunner.
+//
+// Env contract:
+//   - PARSAR_DISCORD_GATEWAY      (default off; "true" enables)
+//   - PARSAR_DISCORD_BOT_TOKEN    (REQUIRED when enabled; the bot token)
+//   - PARSAR_DISCORD_APP_ID       (optional; the Discord application id, used as
+//     the neutral bot id stamped on events with no guild)
+//
+// Like Slack this is the env-gated shared-bot path: a single bot's token feeding
+// the same neutral pipeline as Feishu/Slack. publicURL seeds the
+// visibility-rejection join link. Card-action routing follows the Slack shape:
+// with PARSAR_MASTER_KEY set we build a neutral inbound.Manager and inject its
+// CardActionRouter so Discord button clicks resolve permissions / choices /
+// credential forms; without it the adapter runs router-less and a click echoes a
+// neutral "received" reply. A MemoryPickStore is always injected so the
+// per-interaction select-pick accumulation (Discord fires one interaction per
+// select change) folds into the Submit click.
+func buildDiscordRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*discordrunner.Runner, error) {
+	if !truthy(env("PARSAR_DISCORD_GATEWAY")) {
+		return nil, nil
+	}
+	botToken := strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN"))
+	if botToken == "" {
+		return nil, errors.New("PARSAR_DISCORD_GATEWAY=true requires PARSAR_DISCORD_BOT_TOKEN")
+	}
+	appID := strings.TrimSpace(env("PARSAR_DISCORD_APP_ID"))
+
+	var discordJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		discordJoinURLBuilder = func(guildID string) string {
+			return root + "/join-workspace?id=" + guildID + "&from=discord"
+		}
+	}
+
+	// The pick store folds the separate select-change interactions Discord
+	// delivers into the Submit click. The adapter owns no live state, so the
+	// runner injects one regardless of routing.
+	adapterOpts := []discordchannel.Option{discordchannel.WithPickStore(discordchannel.NewMemoryPickStore())}
+	if masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY")); masterKey != "" {
+		secretsSvc, err := secrets.New(masterKey)
+		if err != nil {
+			return nil, fmt.Errorf("discord gateway: init secrets service: %w", err)
+		}
+		actionMgr, err := inbound.NewManager(inbound.Options{
+			Store:                     dbStore,
+			Secrets:                   secretsSvc,
+			Logger:                    slogFeishuInboundLogger{},
+			JoinURLBuilder:            discordJoinURLBuilder,
+			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("discord gateway: init action manager: %w", err)
+		}
+		adapterOpts = append(adapterOpts, discordchannel.WithActionRouter(actionMgr.CardActionRouter()))
+	} else {
+		log.Bg().Warn("discord gateway: PARSAR_MASTER_KEY unset; button clicks echo 'received' (no permission/choice/credential routing)")
+	}
+
+	// Per-guild bot-token resolver: a button click or runner-side send for a guild
+	// other than the env-token default resolves its token from the
+	// kind='discord_bot' secret (keyed by Discord guild_id), with the env token as
+	// the single-bot fallback. nil when no master key — the adapter keeps the
+	// static env resolver.
+	discordResolver, err := buildDiscordCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, fmt.Errorf("discord gateway: build credential resolver: %w", err)
+	}
+	if discordResolver != nil {
+		adapterOpts = append(adapterOpts, discordchannel.WithCredentialResolver(discordResolver))
+	}
+
+	adapter := discordchannel.New(discordchannel.Config{
+		AppID:    appID,
+		BotToken: botToken,
+	}, adapterOpts...)
+	runner, err := discordrunner.New(discordrunner.Config{
+		BotToken:   botToken,
+		Channel:    adapter,
+		Store:      dbStore,
+		GateConfig: gatewaypkg.GateConfig{JoinURLBuilder: discordJoinURLBuilder},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discord gateway: init runner: %w", err)
+	}
+	log.Bg().Info("discord gateway runner configured",
+		"app_id", appID != "",
+		"action_router", len(adapterOpts) > 1) // >1: pick store is always present
+	return runner, nil
+}
+
 // inboundPermissionRouter adapts the connector registry to the
 // inbound.PermissionRouter interface. The Feishu inbound
 // package can't depend on `connector` directly, so this adapter
@@ -1643,6 +1757,49 @@ func buildSlackCredentialResolver(env func(string) string, dbStore *store.Store)
 	), nil
 }
 
+// discordBotSecretLookupAdapter bridges *store.Store to the discord channel's
+// DiscordBotSecretLookup seam: the store returns store.DiscordBotSecret, the
+// channel consumes its own package-local shape (so the channel never imports
+// internal/store). A thin field copy is all that differs — the Discord twin of
+// slackBotSecretLookupAdapter, keyed by guild_id instead of team_id.
+type discordBotSecretLookupAdapter struct{ store *store.Store }
+
+func (a discordBotSecretLookupAdapter) ResolveDiscordBotSecretByGuild(ctx context.Context, guildID string) (discordchannel.DiscordBotSecret, error) {
+	sec, err := a.store.ResolveDiscordBotSecretByGuild(ctx, guildID)
+	if err != nil {
+		return discordchannel.DiscordBotSecret{}, err
+	}
+	return discordchannel.DiscordBotSecret{AppID: sec.AppID, EncryptedPayload: sec.EncryptedPayload}, nil
+}
+
+// buildDiscordCredentialResolver assembles the per-guild Discord bot-token
+// resolver. When a master key (the secret-vault seal) and a store are available
+// it returns a DB-backed resolver keyed by Discord guild_id, falling back to the
+// env token (PARSAR_DISCORD_BOT_TOKEN) when a guild has no kind='discord_bot'
+// secret — the same primary-fallback shape Slack uses. Without a master key it
+// returns nil so the caller keeps the default static/env resolver. One Discord
+// bot connects with one token across all its guilds, so the DB-per-guild path
+// chiefly supports running several distinct bots from one process.
+func buildDiscordCredentialResolver(env func(string) string, dbStore *store.Store) (channel.CredentialResolver, error) {
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" || dbStore == nil {
+		return nil, nil
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("discord credential resolver: init secrets service: %w", err)
+	}
+	fallback := discordchannel.NewStaticCredentialResolver(
+		strings.TrimSpace(env("PARSAR_DISCORD_APP_ID")),
+		strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN")),
+	)
+	return discordchannel.NewDBCredentialResolver(
+		discordBotSecretLookupAdapter{store: dbStore},
+		secretsSvc,
+		fallback,
+	), nil
+}
+
 // buildOutboundChannels assembles the neutral outbound channel registry the
 // inflight worker dispatches non-Feishu terminal/progress cards through. Feishu
 // is NOT registered here (the worker mints it per-conversation with its
@@ -1682,6 +1839,28 @@ func buildOutboundChannels(env func(string) string, dbStore *store.Store) (map[c
 		log.Bg().Info("slack outbound channel registered for inflight worker",
 			"per_team_resolver", dbResolver != nil,
 			"static_token", slackBot != "")
+	}
+	// Discord registers when a bot token is configured (single-tenant fallback) or
+	// a per-guild DB resolver is available — the Slack shape, keyed by guild_id.
+	// Unlike Slack there is no separate app-level socket token: the bot token is
+	// the only gate.
+	discordBot := strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN"))
+	discordResolver, err := buildDiscordCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, err
+	}
+	if discordResolver != nil || discordBot != "" {
+		opts := []discordchannel.Option{}
+		if discordResolver != nil {
+			opts = append(opts, discordchannel.WithCredentialResolver(discordResolver))
+		}
+		channels[channel.PlatformDiscord] = discordchannel.New(discordchannel.Config{
+			AppID:    strings.TrimSpace(env("PARSAR_DISCORD_APP_ID")),
+			BotToken: discordBot,
+		}, opts...)
+		log.Bg().Info("discord outbound channel registered for inflight worker",
+			"per_guild_resolver", discordResolver != nil,
+			"static_token", discordBot != "")
 	}
 	return channels, nil
 }

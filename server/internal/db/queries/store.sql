@@ -2255,6 +2255,23 @@ where kind = 'slack_bot'
 order by created_at desc, id desc
 limit 1;
 
+-- name: ResolveDiscordBotSecretByGuild :one
+-- Resolve the active Discord bot-token secret for a guild, keyed by the Discord
+-- guild_id stamped in metadata at install time. kind='discord_bot' is a
+-- free-text convention (the secrets table has no kind CHECK), so no migration
+-- is needed; metadata->>'guild_id' scopes the row to one guild. The neutral
+-- Discord channel decrypts encrypted_payload to mint the per-call API/Gateway
+-- bearer, so a re-installed bot rotates without a process restart. Newest active
+-- row wins when two installs share a guild (re-install supersedes).
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'discord_bot'
+  and status = 'active'
+  and metadata->>'guild_id' = @guild_id::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1;
+
 -- name: DisableSecret :one
 update secrets
 set status = 'disabled', updated_at = @now

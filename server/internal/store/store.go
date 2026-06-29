@@ -6094,6 +6094,44 @@ func (s *Store) ResolveSlackBotSecretByTeam(ctx context.Context, teamID string) 
 	return SlackBotSecret{AppID: appID, EncryptedPayload: row.EncryptedPayload}, nil
 }
 
+// DiscordBotSecret is a decrypt-ready Discord bot-token secret resolved by
+// Discord guild_id. AppID is the Discord application id from the secret metadata
+// (empty when the install didn't record one); EncryptedPayload is the AES-GCM
+// envelope the caller decrypts with secrets.Service to recover the bot token.
+type DiscordBotSecret struct {
+	AppID            string
+	EncryptedPayload []byte
+}
+
+// ResolveDiscordBotSecretByGuild returns the active kind='discord_bot' secret
+// whose metadata->>'guild_id' matches guildID. It backs the neutral Discord
+// channel's per-guild token resolver so a multi-bot deployment mints the right
+// bearer per call. Returns ErrUnknownSecret when no install row matches, which
+// the resolver treats as "fall back to the static/env token".
+func (s *Store) ResolveDiscordBotSecretByGuild(ctx context.Context, guildID string) (DiscordBotSecret, error) {
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return DiscordBotSecret{}, fmt.Errorf("%w: empty guild_id", ErrUnknownSecret)
+	}
+	row, err := sqlc.New(s.db).ResolveDiscordBotSecretByGuild(ctx, guildID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return DiscordBotSecret{}, fmt.Errorf("%w: discord_bot guild_id=%s", ErrUnknownSecret, guildID)
+		}
+		return DiscordBotSecret{}, err
+	}
+	var appID string
+	if len(row.Metadata) > 0 {
+		var meta map[string]any
+		if err := json.Unmarshal(row.Metadata, &meta); err == nil {
+			if v, ok := meta["app_id"].(string); ok {
+				appID = strings.TrimSpace(v)
+			}
+		}
+	}
+	return DiscordBotSecret{AppID: appID, EncryptedPayload: row.EncryptedPayload}, nil
+}
+
 func (s *Store) CreateModel(ctx context.Context, input CreateModelInput) (ModelRead, error) {
 	now := time.Now().UTC()
 	mode := strings.TrimSpace(input.CredentialMode)
