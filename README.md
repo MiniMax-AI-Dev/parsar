@@ -1,8 +1,4 @@
-<p align="center">
-  <a href="https://github.com/your-org/parsar">
-    <img src="docs/assets/logo.png" alt="Parsar" height="80">
-  </a>
-</p>
+
 
 <h3 align="center">Parsar</h3>
 
@@ -20,12 +16,6 @@
   <a href="#contributing"><strong>Contributing</strong></a>
 </p>
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/your-org/parsar?color=blue" alt="License"></a>
-  <a href="https://github.com/your-org/parsar/stargazers"><img src="https://img.shields.io/github/stars/your-org/parsar" alt="Stars"></a>
-  <a href="https://github.com/your-org/parsar/actions"><img src="https://img.shields.io/github/actions/workflow/status/your-org/parsar/ci.yml?branch=main" alt="CI"></a>
-  <a href="https://github.com/your-org/parsar/releases"><img src="https://img.shields.io/github/v/release/your-org/parsar" alt="Release"></a>
-</p>
 
 ## Introduction
 
