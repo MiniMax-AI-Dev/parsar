@@ -179,12 +179,12 @@ export function UsagePage() {
                 <TableBody>
                   {byModel.map((m) => (
                     <TableRow key={m.key}>
-                      <TableCell className="text-[12px] text-slate-600">{m.provider}</TableCell>
-                      <TableCell><code className="text-[12px] text-slate-800">{m.model}</code></TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{m.callCount}</TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(m.inputTokens)}</TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(m.outputTokens)}</TableCell>
-                      <TableCell className="text-right pr-4 font-mono text-[12px] tabular-nums text-slate-700">{fmtUsd(m.costUsd)}</TableCell>
+                      <TableCell className="text-[13px] text-slate-600">{m.provider}</TableCell>
+                      <TableCell><code className="text-[13px] text-slate-800">{m.model}</code></TableCell>
+                      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">{m.callCount}</TableCell>
+                      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">{fmtInt(m.inputTokens)}</TableCell>
+                      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">{fmtInt(m.outputTokens)}</TableCell>
+                      <TableCell className="text-right pr-4 font-mono text-[13px] tabular-nums text-slate-700">{fmtUsd(m.costUsd)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -211,11 +211,11 @@ export function UsagePage() {
                 <TableBody>
                   {logs.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-mono text-[11px] text-slate-500 tabular-nums">{fmtTime(u.created_at)}</TableCell>
+                      <TableCell className="font-mono text-[12px] text-slate-500 tabular-nums">{fmtTime(u.created_at)}</TableCell>
                       <TableCell>
                         {u.agent_run_id ? (
                           <button
-                            className="font-mono text-[11px] text-slate-700 hover:underline"
+                            className="font-mono text-[12px] text-slate-700 hover:underline"
                             onClick={() => navigate("runs", { id: u.agent_run_id! })}
                           >
                             {shortId(u.agent_run_id)}
@@ -224,11 +224,11 @@ export function UsagePage() {
                           <Badge variant="neutral">{t("usage.recent.noRun")}</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{u.provider}</TableCell>
-                      <TableCell><code className="text-[12px] text-slate-800">{u.model}</code></TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(u.input_tokens)}</TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(u.output_tokens)}</TableCell>
-                      <TableCell className="text-right pr-4 font-mono text-[12px] tabular-nums text-slate-700">{fmtUsd(u.cost_usd)}</TableCell>
+                      <TableCell className="text-[13px] text-slate-600">{u.provider}</TableCell>
+                      <TableCell><code className="text-[13px] text-slate-800">{u.model}</code></TableCell>
+                      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">{fmtInt(u.input_tokens)}</TableCell>
+                      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">{fmtInt(u.output_tokens)}</TableCell>
+                      <TableCell className="text-right pr-4 font-mono text-[13px] tabular-nums text-slate-700">{fmtUsd(u.cost_usd)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -244,7 +244,7 @@ export function UsagePage() {
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[12px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className={`mt-1 text-[22px] font-semibold tabular-nums text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   )

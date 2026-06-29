@@ -101,7 +101,7 @@ function Section({
       <header className="mb-4">
         <h2 className="text-[14px] font-semibold text-slate-900">{title}</h2>
         {description && (
-          <p className="mt-0.5 text-[12px] text-slate-500">{description}</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">{description}</p>
         )}
       </header>
       <div className="space-y-4">{children}</div>
@@ -122,7 +122,7 @@ function FormRow({
     <div className="grid grid-cols-1 gap-2 md:grid-cols-[200px_1fr] md:gap-6">
       <div>
         <label className="text-[13px] font-medium text-slate-800">{label}</label>
-        {hint && <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>}
+        {hint && <p className="mt-0.5 text-[12px] text-slate-500">{hint}</p>}
       </div>
       <div>{children}</div>
     </div>
@@ -141,8 +141,8 @@ function PolicyCard({
   return (
     <article className="rounded-md border border-slate-200 bg-slate-50/70 p-4">
       <div className="text-[13px] font-semibold text-slate-900">{title}</div>
-      <p className="mt-1 min-h-10 text-[12px] leading-5 text-slate-500">{body}</p>
-      <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-[12px] text-slate-700">
+      <p className="mt-1 min-h-10 text-[13px] leading-5 text-slate-500">{body}</p>
+      <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-[13px] text-slate-700">
         {value}
       </div>
     </article>

@@ -39,13 +39,13 @@ export function ImportPreview({
   return (
     <div className="space-y-2">
       {status === "idle" && (
-        <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+        <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
           {t("capabilities.import.preview.idle", "在左侧粘贴内容后,这里会显示解析结果")}
         </p>
       )}
 
       {status === "loading" && (
-        <p className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+        <p className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {t("capabilities.import.preview.loading", "正在解析…")}
         </p>
@@ -54,7 +54,7 @@ export function ImportPreview({
       {status === "error" && errorMessage && (
         <div
           role="alert"
-          className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+          className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
         >
           {errorMessage}
         </div>
@@ -69,7 +69,7 @@ export function ImportPreview({
             {kind && <KindBadge kind={kind} />}
           </div>
           {description && (
-            <p className="mt-1 break-words text-[12px] leading-relaxed text-slate-600">
+            <p className="mt-1 break-words text-[13px] leading-relaxed text-slate-600">
               {description}
             </p>
           )}
@@ -77,7 +77,7 @@ export function ImportPreview({
       )}
 
       {warnings.length > 0 && (
-        <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+        <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           <div className="flex items-center gap-1.5 font-medium">
             <AlertTriangle className="h-3.5 w-3.5" />
             {t("capabilities.import.preview.warnings", "解析提示")}
@@ -96,7 +96,7 @@ export function ImportPreview({
 function KindBadge({ kind }: { kind: CanonicalKind }) {
   const label = kind.toUpperCase()
   return (
-    <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+    <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-white">
       {label}
     </span>
   )

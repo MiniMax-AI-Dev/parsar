@@ -163,11 +163,11 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
         <p className="mt-2 text-[13px] text-slate-500">
           {t("workspaceCrud.join.landing.successDescription")}
         </p>
-        <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+        <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           {t("workspaceCrud.join.landing.pendingTitle")}
         </div>
         {errMsg && (
-          <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+          <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
             {errMsg}
           </p>
         )}
@@ -212,11 +212,11 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
       >
         <div className="grid gap-1.5">
           <label
-            className="text-[12px] font-medium text-slate-700"
+            className="text-[13px] font-medium text-slate-700"
             htmlFor="join-reason"
           >
             {t("workspaceCrud.fields.reason")}
-            <span className="ml-1 text-[11px] font-normal text-slate-400">
+            <span className="ml-1 text-[12px] font-normal text-slate-400">
               {t("workspaceCrud.fields.optional")}
             </span>
           </label>
@@ -230,14 +230,14 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
             className="rounded-md border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-slate-400"
           />
           {tooLong && (
-            <p className="text-[11px] text-red-600">
+            <p className="text-[12px] text-red-600">
               {t("workspaceCrud.join.reasonTooLong")}
             </p>
           )}
         </div>
 
         {errMsg && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+          <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
             {errMsg}
           </p>
         )}

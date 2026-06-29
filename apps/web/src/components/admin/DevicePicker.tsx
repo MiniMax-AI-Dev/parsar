@@ -73,7 +73,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
   }
   if (q.error) {
     return (
-      <p className="text-[12px] text-red-600">
+      <p className="text-[13px] text-red-600">
         {(q.error as Error).message}
       </p>
     )
@@ -101,7 +101,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
             onClick={onAddDevice}
             disabled={disabled}
             data-testid="device-picker-add-empty"
-            className="mt-2 inline-flex items-center gap-1 rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-2 inline-flex items-center gap-1 rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-3 w-3" />
             {t("agents.form.devicePicker.addDevice", {
@@ -109,7 +109,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
             })}
           </button>
         ) : (
-          <p className="mt-1 text-[12px] text-slate-500">
+          <p className="mt-1 text-[13px] text-slate-500">
             {t(
               hasOnlineDevices
                 ? "agents.form.devicePicker.noCompatibleDescription"
@@ -153,7 +153,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
           disabled={disabled}
           data-testid="device-picker-add"
           title={t("agents.form.devicePicker.addDevice", { defaultValue: "接入新设备" })}
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-3 text-[12px] text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-3 text-[13px] text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-3 w-3" />
           {t("agents.form.devicePicker.addDevice", { defaultValue: "接入新设备" })}

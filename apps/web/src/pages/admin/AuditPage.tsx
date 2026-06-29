@@ -108,9 +108,9 @@ function shortId(s: string | undefined | null, n = 10): string {
 function ActorCell({ row }: { row: AuditRecord }) {
   if (row.actor_type === "agent") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-700">
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-700">
         <Bot className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-        <span className="font-mono text-[11px] text-slate-500">
+        <span className="font-mono text-[12px] text-slate-500">
           {shortId(row.actor_id, 10)}
         </span>
       </span>
@@ -118,9 +118,9 @@ function ActorCell({ row }: { row: AuditRecord }) {
   }
   if (row.actor_type === "user") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-700">
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-700">
         <UserIcon className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-        <span className="font-mono text-[11px] text-slate-500">
+        <span className="font-mono text-[12px] text-slate-500">
           {shortId(row.actor_id, 10)}
         </span>
       </span>
@@ -128,14 +128,14 @@ function ActorCell({ row }: { row: AuditRecord }) {
   }
   if (row.actor_type === "external") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-600">
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-600">
         <Globe className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
         external
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-600">
+    <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-600">
       <Cog className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
       system
     </span>
@@ -253,7 +253,7 @@ export function AuditPage() {
                   <TabsTrigger key={s} value={s}>
                     {t(`audit.tabs.${s}`)}
                     {counts && counts[s] > 0 && (
-                      <span className="ml-1.5 text-[11px] text-slate-400 tabular-nums">
+                      <span className="ml-1.5 text-[12px] text-slate-400 tabular-nums">
                         {counts[s]}
                       </span>
                     )}
@@ -268,7 +268,7 @@ export function AuditPage() {
                 onChange={(e) => setTargetType(e.target.value)}
                 aria-label={t("audit.filters.targetType")}
                 disabled={targetTypeOptions.length === 0}
-                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
               >
                 <option value="">
                   {targetTypeOptions.length === 0
@@ -341,10 +341,10 @@ export function AuditPage() {
                         >
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="text-[12px] text-slate-700">
+                              <span className="text-[13px] text-slate-700">
                                 {fmtAgo(r.occurred_at)}
                               </span>
-                              <span className="font-mono text-[10px] text-slate-400 tabular-nums">
+                              <span className="font-mono text-[11px] text-slate-400 tabular-nums">
                                 {fmtAbsTime(r.occurred_at)}
                               </span>
                             </div>
@@ -352,12 +352,12 @@ export function AuditPage() {
                           <TableCell><SourceBadge source={r.source} /></TableCell>
                           <TableCell><ActorCell row={r} /></TableCell>
                           <TableCell>
-                            <code className="text-[12px] text-slate-800">{r.event_type}</code>
+                            <code className="text-[13px] text-slate-800">{r.event_type}</code>
                           </TableCell>
                           <TableCell>
                             {targetClickable ? (
                               <button
-                                className="font-mono text-[11px] text-slate-700 hover:underline"
+                                className="font-mono text-[12px] text-slate-700 hover:underline"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   navigate("runs", { id: r.target_id! })
@@ -366,11 +366,11 @@ export function AuditPage() {
                                 {r.target_type} · {shortId(r.target_id, 10)}
                               </button>
                             ) : r.target_type ? (
-                              <span className="font-mono text-[11px] text-slate-600">
+                              <span className="font-mono text-[12px] text-slate-600">
                                 {r.target_type} · {shortId(r.target_id, 10)}
                               </span>
                             ) : (
-                              <span className="text-[11px] text-slate-400">—</span>
+                              <span className="text-[12px] text-slate-400">—</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right pr-4">
@@ -379,7 +379,7 @@ export function AuditPage() {
                                 {t("audit.table.payloadFields", { count: payloadEntries })}
                               </Badge>
                             ) : (
-                              <span className="text-[11px] text-slate-400">—</span>
+                              <span className="text-[12px] text-slate-400">—</span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -399,7 +399,7 @@ export function AuditPage() {
           )}
 
           {rows.length > 0 && (
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[12px] text-slate-400">
               {t("audit.footer.shownCount", {
                 shown: filtered.length,
                 total: rows.length,
@@ -436,16 +436,16 @@ function PayloadView({ record }: { record: AuditRecord }) {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Field
           label={t("audit.detail.recordId")}
-          value={<span className="font-mono text-[11px]">{record.id}</span>}
+          value={<span className="font-mono text-[12px]">{record.id}</span>}
         />
         <Field
           label={t("audit.detail.actorType")}
-          value={<span className="font-mono text-[11px]">{record.actor_type}</span>}
+          value={<span className="font-mono text-[12px]">{record.actor_type}</span>}
         />
         <Field
           label={t("audit.detail.target")}
           value={
-            <span className="font-mono text-[11px] break-all">
+            <span className="font-mono text-[12px] break-all">
               {record.target_type ?? "—"} · {record.target_id ?? "—"}
             </span>
           }
@@ -468,10 +468,10 @@ function PayloadView({ record }: { record: AuditRecord }) {
       )}
 
       <div>
-        <p className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">
+        <p className="mb-1 text-[12px] uppercase tracking-wider text-slate-400">
           {t("audit.detail.payload")}
         </p>
-        <pre className="whitespace-pre-wrap rounded-md bg-white p-3 font-mono text-[11px] text-slate-700 ring-1 ring-slate-200">
+        <pre className="whitespace-pre-wrap rounded-md bg-white p-3 font-mono text-[12px] text-slate-700 ring-1 ring-slate-200">
 {JSON.stringify(record.payload ?? {}, null, 2)}
         </pre>
       </div>
@@ -482,7 +482,7 @@ function PayloadView({ record }: { record: AuditRecord }) {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="mb-0.5 text-[11px] uppercase tracking-wider text-slate-400">{label}</dt>
+      <dt className="mb-0.5 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className="text-[13px] text-slate-800">{value}</dd>
     </div>
   )

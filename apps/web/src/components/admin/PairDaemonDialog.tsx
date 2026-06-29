@@ -98,19 +98,19 @@ export function PairDaemonDialog({
 
         {!result ? (
           <div className="space-y-3">
-            <label className="block text-[12px]">
+            <label className="block text-[13px]">
               <span className="mb-1 block text-slate-700">
                 {t("runtime.agentDaemon.pair.nameLabel", { defaultValue: "设备名称" })}
               </span>
               <input
-                className="w-full rounded border border-slate-300 px-2 py-1 font-mono text-[12px]"
+                className="w-full rounded border border-slate-300 px-2 py-1 font-mono text-[13px]"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="my-laptop"
                 data-testid="agent-daemon-pair-name"
               />
             </label>
-            <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
+            <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-900">
               <p className="mb-1 font-medium">
                 {t("runtime.agentDaemon.pair.safetyTitle", { defaultValue: "连接说明" })}
               </p>
@@ -133,7 +133,7 @@ export function PairDaemonDialog({
               </ul>
             </div>
             {create.error && (
-              <p className="text-[12px] text-red-600">
+              <p className="text-[13px] text-red-600">
                 {(create.error as Error).message}
               </p>
             )}
@@ -159,7 +159,7 @@ export function PairDaemonDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-[12px] text-emerald-700">
+            <p className="text-[13px] text-emerald-700">
               {t("runtime.agentDaemon.pair.successOneLine", {
                 defaultValue:
                   "在 {{name}} 上执行这一条命令即可连接（自动下载并连接,无需手动安装二进制):",
@@ -178,7 +178,7 @@ export function PairDaemonDialog({
               onCopy={copyToClipboard}
               testId="agent-daemon-pair-copy-oneline"
             />
-            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px]">
+            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px]">
               {connected ? (
                 <>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
@@ -222,16 +222,16 @@ function DaemonCommandBlock({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700">
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[12px] text-slate-700">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium text-slate-800">{label}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
+          <p className="mt-0.5 text-[12px] text-slate-500">{description}</p>
         </div>
         <button
           type="button"
           onClick={() => onCopy(command)}
-          className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100"
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-600 hover:bg-slate-100"
           data-testid={testId}
           title={t("runtime.agentDaemon.pair.copyCommand", { defaultValue: "复制命令" })}
         >
@@ -239,7 +239,7 @@ function DaemonCommandBlock({
           {t("runtime.agentDaemon.pair.copy", { defaultValue: "复制" })}
         </button>
       </div>
-      <code className="block break-all rounded bg-white p-2 font-mono text-[11px] leading-relaxed text-slate-800">
+      <code className="block break-all rounded bg-white p-2 font-mono text-[12px] leading-relaxed text-slate-800">
         {command}
       </code>
     </div>

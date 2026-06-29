@@ -41,7 +41,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>
+          <button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-900 hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <h2 className="text-[22px] font-semibold tracking-display text-slate-900">{capability.name}</h2>
             <CapabilityTypeBadge type={capability.type} />
@@ -53,7 +53,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
       </div>
 
       {deprecated && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-800">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] leading-5 text-red-800">
           <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />{t("capabilities.deprecated.bannerTarget")}
         </div>
       )}
@@ -69,7 +69,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
 
       <Card title={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agents.length || capability.enabled_agent_count })}>
         {agentsQ.isLoading ? <Skeleton className="h-12 w-full" /> : agents.length === 0 ? (
-          <p className="text-[12px] text-slate-500">{t("capabilities.marketplaceDetail.enabledAgents.empty")}</p>
+          <p className="text-[13px] text-slate-500">{t("capabilities.marketplaceDetail.enabledAgents.empty")}</p>
         ) : (
           <div className="space-y-2">
             {agents.map((agent) => {
@@ -77,7 +77,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
               return (
                 <button key={id ?? agent.name} type="button" onClick={() => id && navigateAdmin("agents", { id, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-slate-200 p-3 text-left hover:bg-slate-50">
                   <span className="text-[13px] font-medium text-slate-900">{agent.name ?? agent.agent_name ?? "—"}</span>
-                  <span className="flex items-center gap-2 text-[12px] text-slate-500"><span className="font-mono">v{agent.version ?? capability.pinned_version ?? "—"}</span><ArrowUpRight className="h-3.5 w-3.5" /></span>
+                  <span className="flex items-center gap-2 text-[13px] text-slate-500"><span className="font-mono">v{agent.version ?? capability.pinned_version ?? "—"}</span><ArrowUpRight className="h-3.5 w-3.5" /></span>
                 </button>
               )
             })}
@@ -89,7 +89,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="text-[13px] font-semibold text-red-900">{t("capabilities.uninstall.sectionTitle")}</h3>
-            <p className="mt-1 text-[12px] text-red-700">{t("capabilities.uninstall.sectionDescription")}</p>
+            <p className="mt-1 text-[13px] text-red-700">{t("capabilities.uninstall.sectionDescription")}</p>
           </div>
           <Button variant="destructive" size="sm" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>
         </div>
@@ -112,11 +112,11 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-slate-200 bg-white p-4"><h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>{children}</section>
+  return <section className="rounded-lg border border-slate-200 bg-white p-4"><h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>{children}</section>
 }
 
 function Detail({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return <div className="rounded-md border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">{label}</p><div className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div></div>
+  return <div className="rounded-md border border-slate-200 bg-white p-3"><p className="text-[12px] text-slate-500">{label}</p><div className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div></div>
 }
 
 function CapabilityTypeBadge({ type }: { type: Capability["type"] }) {

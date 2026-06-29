@@ -148,7 +148,7 @@ function BannerView({
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`} strokeWidth={1.75} />
       <div className="min-w-0 flex-1">
         <p className={`text-[13px] font-medium ${styles.title}`}>{title}</p>
-        {hint && <p className={`mt-0.5 text-[12px] leading-relaxed ${styles.hint}`}>{hint}</p>}
+        {hint && <p className={`mt-0.5 text-[13px] leading-relaxed ${styles.hint}`}>{hint}</p>}
       </div>
       {action}
     </div>

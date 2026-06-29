@@ -35,7 +35,7 @@ export function DeprecateCapabilityDialog({ action, capability, installCount, pe
           <AlertDialogTitle>{t(`capabilities.marketStatus.dialog.${action}.title`, { name: capability.name })}</AlertDialogTitle>
           <AlertDialogDescription>{t(`capabilities.marketStatus.dialog.${action}.description`, { count: installCount })}</AlertDialogDescription>
         </AlertDialogHeader>
-        {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{errMsg}</p>}
+        {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{errMsg}</p>}
         <AlertDialogFooter>
           <Button variant="outline" size="sm" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>
           <Button variant={destructive ? "destructive" : "default"} size="sm" disabled={pending} onClick={onConfirm}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t(`capabilities.marketStatus.dialog.${action}.confirm`)}</Button>

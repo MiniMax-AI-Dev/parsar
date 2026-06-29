@@ -136,7 +136,7 @@ export function CredentialDialog({
             </Field>
 
             {seedMeta?.getUrl && (
-              <a className="inline-flex text-[12px] text-slate-600 underline-offset-4 hover:underline" href={seedMeta.getUrl} target="_blank" rel="noopener noreferrer">
+              <a className="inline-flex text-[13px] text-slate-600 underline-offset-4 hover:underline" href={seedMeta.getUrl} target="_blank" rel="noopener noreferrer">
                 {t("myCredentials.dialog.openProvider")}
               </a>
             )}
@@ -144,7 +144,7 @@ export function CredentialDialog({
             {mode === "edit" && !replaceToken ? (
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[12.5px] text-slate-600">{t("myCredentials.dialog.tokenSet")}</span>
+                  <span className="text-[13px] text-slate-600">{t("myCredentials.dialog.tokenSet")}</span>
                   <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setReplaceToken(true)}>
                     {t("myCredentials.dialog.replaceToken")}
                   </Button>
@@ -171,8 +171,8 @@ export function CredentialDialog({
 
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">{t("myCredentials.dialog.errorTitle")}</p>
-                <p className="text-[11.5px] text-red-700">{error.message}</p>
+                <p className="text-[13px] font-medium text-red-900">{t("myCredentials.dialog.errorTitle")}</p>
+                <p className="text-[12px] text-red-700">{error.message}</p>
               </div>
             )}
           </div>
@@ -246,21 +246,21 @@ export function DeleteCredentialDialog({ target, pending, error, onCancel, onCon
               {t("myCredentials.delete.description", { kind: kindLabel })}
             </AlertDialogDescription>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[12px] font-medium text-slate-800">{t("myCredentials.delete.impactTitle")}</p>
+              <p className="text-[13px] font-medium text-slate-800">{t("myCredentials.delete.impactTitle")}</p>
               {loadingImpact ? (
                 <div className="mt-2 space-y-2">
                   <Skeleton className="h-4 w-44" />
-                  <p className="text-[11.5px] text-slate-500">{t("myCredentials.delete.loadingImpact")}</p>
+                  <p className="text-[12px] text-slate-500">{t("myCredentials.delete.loadingImpact")}</p>
                 </div>
               ) : impact.length === 0 ? (
-                <p className="mt-2 text-[12px] text-slate-600">{t("myCredentials.delete.noImpact")}</p>
+                <p className="mt-2 text-[13px] text-slate-600">{t("myCredentials.delete.noImpact")}</p>
               ) : (
-                <p className="mt-2 text-[12px] text-red-700">
+                <p className="mt-2 text-[13px] text-red-700">
                   {t("myCredentials.delete.hasImpact", { count: impact.length, workspaceCount })}
                 </p>
               )}
             </div>
-            {error && <p className="text-[12px] text-red-700">{error.message}</p>}
+            {error && <p className="text-[13px] text-red-700">{error.message}</p>}
           </div>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
@@ -294,12 +294,12 @@ function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-[13px] font-medium text-slate-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
       {children}
-      {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
+      {hint && <span className="block text-[12px] text-slate-500">{hint}</span>}
     </label>
   )
 }

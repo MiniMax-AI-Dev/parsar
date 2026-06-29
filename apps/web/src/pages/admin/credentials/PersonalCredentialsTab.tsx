@@ -160,7 +160,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
     <div className="space-y-5">
       {standalone && returnTo && route.returnTo && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[12.5px] text-slate-600">{t("myCredentials.returnBanner.description")}</p>
+          <p className="text-[13px] text-slate-600">{t("myCredentials.returnBanner.description")}</p>
           <Button size="sm" variant="outline" onClick={() => window.location.assign(returnTo)}>
             {t("myCredentials.returnBanner.action")}
           </Button>
@@ -174,7 +174,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
             <p className="text-[13px] font-medium text-amber-900">
               {t("credentialsPage.personal.banner.title", { count: missing.length })}
             </p>
-            <p className="text-[12px] leading-relaxed text-amber-800">
+            <p className="text-[13px] leading-relaxed text-amber-800">
               {t("credentialsPage.personal.banner.description")}
             </p>
           </div>
@@ -207,7 +207,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
                       <button
                         type="button"
                         onClick={() => setExpanded((prev) => ({ ...prev, [row.kind]: !prev[row.kind] }))}
-                        className="mt-1 inline-flex items-center text-[12px] text-slate-500 hover:text-slate-900"
+                        className="mt-1 inline-flex items-center text-[13px] text-slate-500 hover:text-slate-900"
                       >
                         {t("credentialsPage.personal.pending.refCount", { count: row.refCount })}
                         <span className="ml-1 text-slate-400">{open ? "▾" : "▸"}</span>
@@ -223,7 +223,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
                     </Button>
                   </div>
                   {open && (
-                    <ul className="mt-2 ml-6 list-disc space-y-0.5 text-[12px] text-slate-600">
+                    <ul className="mt-2 ml-6 list-disc space-y-0.5 text-[13px] text-slate-600">
                       {row.refs.map((ref, idx) => {
                         if (ref.source === "model") {
                           return (
@@ -259,7 +259,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
             <h3 className="text-[14px] font-semibold text-slate-900">
               {t("credentialsPage.personal.configured.title")}
             </h3>
-            <span className="text-[12px] text-slate-400">{credentials.length}</span>
+            <span className="text-[13px] text-slate-400">{credentials.length}</span>
           </div>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
@@ -313,11 +313,11 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
                     <div className="font-medium text-slate-900">
                       {credentialKindLabel(credential.kind, i18n.language, t("myCredentials.kind.unknown"), kindOptions.kinds)}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-slate-400">
+                    <div className="mt-0.5 text-[12px] text-slate-400">
                       {t("myCredentials.table.createdAt", { date: new Date(credential.created_at).toLocaleDateString() })}
                     </div>
                   </TableCell>
-                  <TableCell className="text-[12px] text-slate-500">{fmtAgo(credential.last_used_at)}</TableCell>
+                  <TableCell className="text-[13px] text-slate-500">{fmtAgo(credential.last_used_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1.5">
                       <Button variant="ghost" size="sm" onClick={() => setEditTarget(credential)}>

@@ -67,7 +67,7 @@ export function MarketplaceTab({ itemID, onSelectItem, onInstall }: MarketplaceT
             <TabsTrigger value="system_prompt">System Prompt</TabsTrigger>
           </TabsList>
         </Tabs>
-        <label className="inline-flex select-none items-center gap-1.5 text-[12px] text-slate-600">
+        <label className="inline-flex select-none items-center gap-1.5 text-[13px] text-slate-600">
           <input
             type="checkbox"
             className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
@@ -140,12 +140,12 @@ function MarketplaceCard({ capability, language, onOpen, onInstall }: {
               {capability.self_published && <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge>}
               {!capability.self_published && capability.installed && <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge>}
             </div>
-            {source && <p className="mt-1 text-[12px] text-slate-500">{t("capabilities.marketplace.card.source", { source })}</p>}
+            {source && <p className="mt-1 text-[13px] text-slate-500">{t("capabilities.marketplace.card.source", { source })}</p>}
           </div>
           <ArrowRight className="mt-1 h-3.5 w-3.5 text-slate-400" />
         </div>
         {capability.description && <p className="mt-3 line-clamp-2 text-[13px] leading-5 text-slate-600">{capability.description}</p>}
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-slate-500">
           <span>{t("capabilities.marketplace.card.latest", { version: capability.latest_version ?? "—" })}</span>
           <span>·</span>
           <span>{t("capabilities.marketplace.card.added", { count })}</span>
@@ -185,7 +185,7 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
           <h3 className="text-[18px] font-semibold text-slate-900">{capability.name}</h3>
           <CapabilityTypeBadge type={capability.type} />
         </div>
-        {source && <p className="mt-2 text-[12px] text-slate-500">{t("capabilities.marketplace.card.source", { source })}</p>}
+        {source && <p className="mt-2 text-[13px] text-slate-500">{t("capabilities.marketplace.card.source", { source })}</p>}
         {capability.description && <p className="mt-4 text-[13px] leading-5 text-slate-600">{capability.description}</p>}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <Detail label={t("capabilities.table.latestVersion")} value={capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")} mono />
@@ -205,7 +205,7 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
 function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-md border border-slate-200 p-3">
-      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="text-[12px] text-slate-500">{label}</p>
       <p className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   )

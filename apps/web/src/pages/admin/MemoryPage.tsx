@@ -360,20 +360,20 @@ function MemoryRow({ memory, fmtAgo, onEdit, onDelete, onAudit }: MemoryRowProps
           )}
           <MemorySourceBadge source={memory.source} />
           {memory.tags.map((tag) => (
-            <Badge key={tag} variant="neutral" className="font-mono text-[10.5px]">
+            <Badge key={tag} variant="neutral" className="font-mono text-[11px]">
               {tag}
             </Badge>
           ))}
         </div>
         {preview && (
-          <p className="line-clamp-2 text-[12.5px] text-slate-600">{preview}</p>
+          <p className="line-clamp-2 text-[13px] text-slate-600">{preview}</p>
         )}
         {memory.why && (
-          <p className="line-clamp-2 text-[11.5px] italic text-slate-500">
+          <p className="line-clamp-2 text-[12px] italic text-slate-500">
             Why: {memory.why}
           </p>
         )}
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[12px] text-slate-400">
           {t("memory.row.updatedAt", { time: fmtAgo(memory.updated_at) })}
           {memory.agent_actor && (
             <>
@@ -452,8 +452,8 @@ function TypeFilterChip({
       onClick={onClick}
       className={
         active
-          ? "rounded-full bg-slate-900 px-3 py-1 text-[11.5px] font-medium text-white"
-          : "rounded-full bg-slate-100 px-3 py-1 text-[11.5px] font-medium text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
+          ? "rounded-full bg-slate-900 px-3 py-1 text-[12px] font-medium text-white"
+          : "rounded-full bg-slate-100 px-3 py-1 text-[12px] font-medium text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
       }
     >
       {label}
@@ -529,7 +529,7 @@ function MemoryEditorDialog({
           </DialogHeader>
           <div className="space-y-3 px-5 py-4">
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("memory.editor.field.type")}
                 <span className="ml-0.5 text-red-500">*</span>
               </span>
@@ -549,7 +549,7 @@ function MemoryEditorDialog({
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("memory.editor.field.title")}
               </span>
               <Input
@@ -560,7 +560,7 @@ function MemoryEditorDialog({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("memory.editor.field.body")}
                 <span className="ml-0.5 text-red-500">*</span>
               </span>
@@ -570,11 +570,11 @@ function MemoryEditorDialog({
                 placeholder={t("memory.editor.placeholder.body")}
                 required
                 rows={8}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[12.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("memory.editor.field.why")}
               </span>
               <textarea
@@ -582,11 +582,11 @@ function MemoryEditorDialog({
                 onChange={(event) => setWhy(event.target.value)}
                 placeholder={t("memory.editor.placeholder.why")}
                 rows={3}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 text-[12.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-slate-200 px-3 py-2 text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-[13px] font-medium text-slate-700">
                 {t("memory.editor.field.tags")}
               </span>
               <Input
@@ -597,10 +597,10 @@ function MemoryEditorDialog({
             </label>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">
+                <p className="text-[13px] font-medium text-red-900">
                   {t("memory.editor.error.title")}
                 </p>
-                <p className="text-[11.5px] text-red-700">{error.message}</p>
+                <p className="text-[12px] text-red-700">{error.message}</p>
               </div>
             )}
           </div>
@@ -648,7 +648,7 @@ function MemoryDeleteDialog({
             <div className="space-y-1.5">
               <AlertDialogTitle>{t("memory.delete.title")}</AlertDialogTitle>
               <AlertDialogDescription>{t("memory.delete.description")}</AlertDialogDescription>
-              {error && <p className="text-[12px] text-red-700">{error.message}</p>}
+              {error && <p className="text-[13px] text-red-700">{error.message}</p>}
             </div>
           </div>
         </AlertDialogHeader>

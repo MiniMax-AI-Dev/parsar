@@ -24,9 +24,11 @@ interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {
   dot?: boolean
+  /** Animate the dot (use for live/in-progress states like "running"). */
+  pulse?: boolean
 }
 
-export function Badge({ className, variant, dot, children, ...props }: BadgeProps) {
+export function Badge({ className, variant, dot, pulse, children, ...props }: BadgeProps) {
   const dotColor = {
     success: "bg-emerald-500",
     warning: "bg-amber-500",
@@ -37,7 +39,19 @@ export function Badge({ className, variant, dot, children, ...props }: BadgeProp
 
   return (
     <span className={cn(badgeVariants({ variant }), className)} {...props}>
-      {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dotColor)} />}
+      {dot && (
+        <span className="relative flex h-1.5 w-1.5">
+          {pulse && (
+            <span
+              className={cn(
+                "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
+                dotColor
+              )}
+            />
+          )}
+          <span className={cn("relative inline-flex h-1.5 w-1.5 rounded-full", dotColor)} />
+        </span>
+      )}
       {children}
     </span>
   )

@@ -102,7 +102,7 @@ export function UserSearchCombobox({
           >
             <span className="flex min-w-0 items-center gap-2">
               <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span className="truncate text-[12px]">{triggerLabel}</span>
+              <span className="truncate text-[13px]">{triggerLabel}</span>
             </span>
             <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </Button>
@@ -126,25 +126,25 @@ export function UserSearchCombobox({
                 // Content level; without stopPropagation those steal
                 // the input's cursor movement.
                 onKeyDown={(e) => e.stopPropagation()}
-                className="h-8 text-[12px]"
+                className="h-8 text-[13px]"
                 autoFocus
               />
             </div>
 
             <div className="max-h-[280px] overflow-auto py-1">
               {trimmed.length === 0 ? (
-                <p className="px-3 py-2 text-[12px] text-slate-500">
+                <p className="px-3 py-2 text-[13px] text-slate-500">
                   {t("members.add.search.typeToSearch")}
                 </p>
               ) : isLoading ? (
-                <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-slate-500">
+                <div className="flex items-center gap-2 px-3 py-2 text-[13px] text-slate-500">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   {t("members.add.search.loading")}
                 </div>
               ) : errMsg ? (
-                <p className="px-3 py-2 text-[12px] text-red-700">{errMsg}</p>
+                <p className="px-3 py-2 text-[13px] text-red-700">{errMsg}</p>
               ) : showEmpty ? (
-                <p className="px-3 py-2 text-[12px] text-slate-500">
+                <p className="px-3 py-2 text-[13px] text-slate-500">
                   {t("members.add.search.empty")}
                 </p>
               ) : (
@@ -170,7 +170,7 @@ export function UserSearchCombobox({
               type="button"
               onClick={() => remove(u.id)}
               disabled={disabled}
-              className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11.5px] text-slate-700 hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] text-slate-700 hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <UserAvatar user={u} size="xs" />
               <span className="max-w-[140px] truncate">
@@ -208,11 +208,11 @@ function UserRow({
     >
       <UserAvatar user={user} size="sm" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12.5px] font-medium text-slate-900">
+        <div className="truncate text-[13px] font-medium text-slate-900">
           {user.name || user.email.split("@")[0]}
         </div>
         {user.name && (
-          <div className="truncate text-[11px] text-slate-500">
+          <div className="truncate text-[12px] text-slate-500">
             {user.email}
           </div>
         )}
@@ -229,7 +229,7 @@ function UserAvatar({
   user: PlatformUser
   size: "xs" | "sm"
 }) {
-  const dims = size === "xs" ? "h-4 w-4 text-[8px]" : "h-6 w-6 text-[10px]"
+  const dims = size === "xs" ? "h-4 w-4 text-[11px]" : "h-6 w-6 text-[11px]"
   if (user.avatar_url) {
     return (
       <img

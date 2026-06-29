@@ -76,7 +76,7 @@ export function OnboardingPage() {
           </div>
 
           {errMsg && (
-            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
               {errMsg}
             </p>
           )}

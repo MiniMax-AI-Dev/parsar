@@ -28,8 +28,8 @@ function Card({
   return (
     <section className={`rounded-lg border border-slate-200 bg-white p-4 ${className ?? ""}`}>
       <header className="mb-3">
-        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
-        {description && <p className="mt-1 text-[12px] text-slate-500">{description}</p>}
+        <h3 className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+        {description && <p className="mt-1 text-[13px] text-slate-500">{description}</p>}
       </header>
       {children}
     </section>
@@ -49,12 +49,12 @@ function Field({
 }) {
   return (
     <div className="mb-3 last:mb-0">
-      <label className="mb-1 block text-[11px] uppercase tracking-wider text-slate-400">
+      <label className="mb-1 block text-[12px] uppercase tracking-wider text-slate-400">
         {label}
         {required && <span className="ml-1 text-rose-500">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-[12px] text-slate-500">{hint}</p>}
     </div>
   )
 }
@@ -344,7 +344,7 @@ export function FeishuConnectorPanel({
                 <p className="text-[13px] font-medium text-slate-900">
                   {t("agents.feishuConnector.provision.title")}
                 </p>
-                <p className="text-[12px] text-slate-500">
+                <p className="text-[13px] text-slate-500">
                   {t("agents.feishuConnector.provision.subtitle")}
                 </p>
               </div>
@@ -371,14 +371,14 @@ export function FeishuConnectorPanel({
                   data-testid="feishu-provision-qr"
                 />
               )}
-              <div className="min-w-0 space-y-2 text-[12px] text-slate-600">
+              <div className="min-w-0 space-y-2 text-[13px] text-slate-600">
                 <ProvisionStatusIcon status={provision.status} loading={pollProvisionPending} />
-                <p className="font-mono text-[12px] text-slate-800">{provision.userCode}</p>
+                <p className="font-mono text-[13px] text-slate-800">{provision.userCode}</p>
                 <a
                   href={provision.verificationUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex max-w-full items-center gap-1 text-[12px] text-slate-700 underline underline-offset-2"
+                  className="inline-flex max-w-full items-center gap-1 text-[13px] text-slate-700 underline underline-offset-2"
                 >
                   <span className="truncate">{t("agents.feishuConnector.provision.openLink")}</span>
                   <ExternalLink className="h-3.5 w-3.5 shrink-0" />
@@ -508,11 +508,11 @@ export function FeishuConnectorPanel({
       )}
 
       {!canEdit && (
-        <p className="mt-3 text-[12px] text-slate-400">{t("agents.feishuConnector.ownerOnly")}</p>
+        <p className="mt-3 text-[13px] text-slate-400">{t("agents.feishuConnector.ownerOnly")}</p>
       )}
 
       {errorMsg && (
-        <p className="mt-3 text-[12px] text-rose-600" role="alert" data-testid="feishu-error">
+        <p className="mt-3 text-[13px] text-rose-600" role="alert" data-testid="feishu-error">
           {errorMsg}
         </p>
       )}
@@ -593,7 +593,7 @@ function FeishuDiagnosticsStrip({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <FeishuDiagnosticsBadge status={status} />
-        <span className="rounded-md bg-white px-2 py-1 font-mono text-[11px] text-slate-500 ring-1 ring-slate-200">
+        <span className="rounded-md bg-white px-2 py-1 font-mono text-[12px] text-slate-500 ring-1 ring-slate-200">
           {mode}
         </span>
       </div>
@@ -601,7 +601,7 @@ function FeishuDiagnosticsStrip({
       <div className="mt-3 grid grid-cols-1 gap-2 min-[520px]:grid-cols-3 sm:grid-cols-6">
         {counts.map(([key, value]) => (
           <div key={key} className="min-w-0 rounded-md bg-white px-2 py-2 ring-1 ring-slate-200">
-            <p className="truncate text-[10.5px] uppercase tracking-wider text-slate-400">
+            <p className="truncate text-[11px] uppercase tracking-wider text-slate-400">
               {t(`agents.feishuConnector.diagnostics.stats.${key}`)}
             </p>
             <p className="mt-0.5 truncate font-mono text-[13px] font-semibold tabular-nums text-slate-800">
@@ -622,7 +622,7 @@ function FeishuDiagnosticsStrip({
       </div>
 
       {diagnostics?.last_error && (
-        <p className="mt-2 flex items-start gap-1.5 break-words text-[12px] text-rose-700">
+        <p className="mt-2 flex items-start gap-1.5 break-words text-[13px] text-rose-700">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             {t("agents.feishuConnector.diagnostics.lastError")}: {diagnostics.last_error}
@@ -657,7 +657,7 @@ function FeishuDiagnosticsBadge({ status }: { status: FeishuDiagnosticsStatus })
             : MessageCircle
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium ring-1 ${tone}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-medium ring-1 ${tone}`}>
       <Icon className={`h-3.5 w-3.5 ${status === "loading" ? "animate-spin" : ""}`} />
       {label}
     </span>
@@ -667,8 +667,8 @@ function FeishuDiagnosticsBadge({ status }: { status: FeishuDiagnosticsStatus })
 function FeishuDiagnosticTime({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10.5px] uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-0.5 truncate text-[12px] text-slate-700" title={value}>
+      <p className="text-[11px] uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-0.5 truncate text-[13px] text-slate-700" title={value}>
         {value}
       </p>
     </div>

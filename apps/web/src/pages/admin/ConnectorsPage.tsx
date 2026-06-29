@@ -76,7 +76,7 @@ export function ConnectorsPage() {
         description={t("connectors.page.description")}
       />
 
-      <p className="mb-4 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-3 text-[12px] leading-relaxed text-slate-600">
+      <p className="mb-4 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-3 text-[13px] leading-relaxed text-slate-600">
         {t("connectors.aggregateHint")}
       </p>
       {!pid ? (
@@ -101,7 +101,7 @@ export function ConnectorsPage() {
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[12px] text-slate-500">
+            <span className="text-[13px] text-slate-500">
               {t("connectors.summary", { count: connectors.length })}
             </span>
             <div className="relative w-72">
@@ -143,13 +143,13 @@ export function ConnectorsPage() {
                         <div className="flex items-center gap-2">
                           <Cable className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
                           <span className="text-[14px] font-medium text-slate-900">{c.label}</span>
-                          <code className="text-[11px] text-slate-400">{c.connector_type}</code>
+                          <code className="text-[12px] text-slate-400">{c.connector_type}</code>
                         </div>
                       </TableCell>
                       <TableCell><ConnectorStatusBadge status={c.status} /></TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-700">{c.agent_count}</TableCell>
+                      <TableCell className="text-right text-[13px] tabular-nums text-slate-700">{c.agent_count}</TableCell>
                       <TableCell className="text-right pr-4">
-                        <span className="text-[11px] text-slate-500">
+                        <span className="text-[12px] text-slate-500">
                           {c.agent_count === 0 ? "—" : t("connectors.table.agentSummary", { count: c.agent_count })}
                         </span>
                       </TableCell>
@@ -214,7 +214,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
           </button>
         }
         title={connector.label}
-        description={<code className="font-mono text-[12px]">{connector.connector_type}</code>}
+        description={<code className="font-mono text-[13px]">{connector.connector_type}</code>}
         action={<ConnectorStatusBadge status={connector.status} />}
       />
 
@@ -225,11 +225,11 @@ export function ConnectorDetailPage({ id }: { id: string }) {
       </div>
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-        <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">
+        <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-slate-500">
           {t("connectors.detail.agents")}
         </h3>
         {connector.agent_count === 0 ? (
-          <p className="text-[12px] text-slate-500">{t("connectors.detail.noAgents")}</p>
+          <p className="text-[13px] text-slate-500">{t("connectors.detail.noAgents")}</p>
         ) : (
           <Button
             variant="ghost"
@@ -250,7 +250,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[12px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className={`mt-1 text-[20px] font-semibold tabular-nums text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   )

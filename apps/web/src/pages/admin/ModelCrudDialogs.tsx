@@ -164,20 +164,20 @@ function HeadersEditor({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-[12px] font-medium text-slate-700">{label}</label>
+      <label className="text-[13px] font-medium text-slate-700">{label}</label>
       {rows.map((row) => (
         <div key={row.id} className="flex gap-2">
           <Input
             value={row.key}
             onChange={(e) => updateRow(row.id, "key", e.target.value)}
             placeholder="Header"
-            className="flex-1 font-mono text-[12.5px]"
+            className="flex-1 font-mono text-[13px]"
           />
           <Input
             value={row.value}
             onChange={(e) => updateRow(row.id, "value", e.target.value)}
             placeholder="value"
-            className="flex-1 font-mono text-[12.5px]"
+            className="flex-1 font-mono text-[13px]"
           />
           <Button
             type="button"
@@ -225,7 +225,7 @@ function Field({
 }: FieldProps) {
   return (
     <div className="grid gap-1.5">
-      <label className="text-[12px] font-medium text-slate-700" htmlFor={id}>
+      <label className="text-[13px] font-medium text-slate-700" htmlFor={id}>
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
@@ -237,9 +237,9 @@ function Field({
         required={required}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={mono ? "font-mono text-[12.5px]" : undefined}
+        className={mono ? "font-mono text-[13px]" : undefined}
       />
-      {hint && <span className="text-[11px] text-slate-400">{hint}</span>}
+      {hint && <span className="text-[12px] text-slate-400">{hint}</span>}
     </div>
   )
 }
@@ -466,7 +466,7 @@ export function CreateModelDialog({
 
           {/* --- Provider type + endpoint --- */}
           <div className="grid gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700" htmlFor="model-provider-type">
+            <label className="text-[13px] font-medium text-slate-700" htmlFor="model-provider-type">
               {t("models.createProvider.fields.providerType")}
               <span className="ml-0.5 text-red-500">*</span>
             </label>
@@ -482,7 +482,7 @@ export function CreateModelDialog({
                 </option>
               ))}
             </select>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[12px] text-slate-400">
               {t("models.createProvider.fields.adapterHint", { adapter })}
             </span>
           </div>
@@ -522,7 +522,7 @@ export function CreateModelDialog({
           {/* --- Auth scheme (only for anthropic-compatible) --- */}
           {showAuthSchemeSelector && (
             <div className="grid gap-1.5">
-              <label className="text-[12px] font-medium text-slate-700" htmlFor="model-auth-scheme">
+              <label className="text-[13px] font-medium text-slate-700" htmlFor="model-auth-scheme">
                 {t("models.createProvider.fields.authScheme")}
               </label>
               <select
@@ -539,7 +539,7 @@ export function CreateModelDialog({
 
           {/* --- Credential mode --- */}
           <fieldset className="rounded-md border border-slate-200 p-3">
-            <legend className="px-1 text-[12px] font-medium text-slate-700">
+            <legend className="px-1 text-[13px] font-medium text-slate-700">
               {t("models.createModel.fields.credentialMode")}
               <span className="ml-0.5 text-red-500">*</span>
             </legend>
@@ -588,7 +588,7 @@ export function CreateModelDialog({
               />
               {(activeSecrets.length > 0 || sourceSecretMissing) && (
                 <div className="grid gap-1.5">
-                  <label className="text-[12px] font-medium text-slate-700" htmlFor="model-existing-secret">
+                  <label className="text-[13px] font-medium text-slate-700" htmlFor="model-existing-secret">
                     {t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
                   </label>
                   <select
@@ -620,7 +620,7 @@ export function CreateModelDialog({
                     ))}
                   </select>
                   {sourceSecretMissing && (
-                    <span className="text-[11px] text-red-600">
+                    <span className="text-[12px] text-red-600">
                       {t("models.copy.secretInaccessible")}
                     </span>
                   )}
@@ -633,7 +633,7 @@ export function CreateModelDialog({
           {credentialMode === "credential_ref" && (
             <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-[12px] font-medium text-slate-700" htmlFor="model-credential-kind">
+                <label className="text-[13px] font-medium text-slate-700" htmlFor="model-credential-kind">
                   {t("models.createModel.credentialMode.credentialRef.kindLabel")}
                   <span className="ml-0.5 text-red-500">*</span>
                 </label>
@@ -643,7 +643,7 @@ export function CreateModelDialog({
                   onChange={setCredentialKindCode}
                   className="w-full"
                 />
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[12px] text-slate-400">
                   {t("models.createModel.credentialMode.credentialRef.kindHint")}
                 </span>
               </div>
@@ -651,7 +651,7 @@ export function CreateModelDialog({
           )}
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
               {errMsg}
             </p>
           )}
@@ -801,7 +801,7 @@ export function EditModelDialog({
         </DialogHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           {/* --- Locked identity --- */}
-          <div className="grid grid-cols-2 gap-3 rounded-md bg-slate-50/60 p-3 text-[12px]">
+          <div className="grid grid-cols-2 gap-3 rounded-md bg-slate-50/60 p-3 text-[13px]">
             <div>
               <div className="text-slate-500">{t("models.editModel.locked.providerType")}</div>
               <div className="mt-0.5 font-medium text-slate-700">{model.provider_type}</div>
@@ -865,7 +865,7 @@ export function EditModelDialog({
           {isInline && (
             <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-[12px] font-medium text-slate-700" htmlFor="edit-model-secret">
+                <label className="text-[13px] font-medium text-slate-700" htmlFor="edit-model-secret">
                   {t("models.editModel.credentialBinding.boundSecret")}
                 </label>
                 <select
@@ -900,7 +900,7 @@ export function EditModelDialog({
           {isCredentialRef && (
             <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-[12px] font-medium text-slate-700" htmlFor="edit-model-credential-kind">
+                <label className="text-[13px] font-medium text-slate-700" htmlFor="edit-model-credential-kind">
                   {t("models.editModel.credentialBinding.kindCode")}
                   <span className="ml-0.5 text-red-500">*</span>
                 </label>
@@ -910,7 +910,7 @@ export function EditModelDialog({
                   onChange={setCredentialKindCode}
                   className="w-full"
                 />
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[12px] text-slate-400">
                   {t("models.editModel.credentialBinding.kindCodeHint")}
                 </span>
               </div>
@@ -918,7 +918,7 @@ export function EditModelDialog({
           )}
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
               {errMsg}
             </p>
           )}

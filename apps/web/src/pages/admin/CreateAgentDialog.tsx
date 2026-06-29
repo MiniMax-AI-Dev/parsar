@@ -898,7 +898,7 @@ export function CreateAgentDialog({
           }}
         >
           {mode === "edit" && attachedCount > 1 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-[12px] text-amber-900">
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-[13px] text-amber-900">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
@@ -928,7 +928,7 @@ export function CreateAgentDialog({
                 <Field label={t("agents.table.visibility")} required>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {(["workspace", "tenant", "public"] as const).map((tier) => (
-                      <label key={tier} className={"flex cursor-pointer flex-col gap-1 rounded-md border px-3 py-2 text-[12.5px] " + (visibility === tier ? "border-slate-900 bg-slate-50 text-slate-900" : "border-slate-200 bg-white text-slate-700")}>
+                      <label key={tier} className={"flex cursor-pointer flex-col gap-1 rounded-md border px-3 py-2 text-[13px] " + (visibility === tier ? "border-slate-900 bg-slate-50 text-slate-900" : "border-slate-200 bg-white text-slate-700")}>
                         <span className="flex items-center gap-2 font-medium">
                           <input
                             type="radio"
@@ -939,18 +939,18 @@ export function CreateAgentDialog({
                           />
                           {t(`agents.visibility.${tier}` as never)}
                         </span>
-                        <span className="pl-5 text-[11px] leading-4 text-slate-500">{t(`agents.visibility.${tier}Hint` as never)}</span>
+                        <span className="pl-5 text-[12px] leading-4 text-slate-500">{t(`agents.visibility.${tier}Hint` as never)}</span>
                       </label>
                     ))}
                   </div>
                   {visibility === "public" && (
-                    <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11.5px] leading-5 text-red-800">
+                    <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-800">
                       <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
                       {t("credentialCheck.publicWarning")}
                     </div>
                   )}
                   {visibility === "tenant" && (
-                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-5 text-amber-800">
+                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-5 text-amber-800">
                       <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
                       {t("credentialCheck.tenantHint")}
                     </div>
@@ -1114,7 +1114,7 @@ export function CreateAgentDialog({
                         className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 text-[13px] shadow-lg"
                       >
                         {filteredModels.length === 0 ? (
-                          <div className="px-3 py-2 text-[12px] text-slate-500">{t("agents.form.emptyModelSearch")}</div>
+                          <div className="px-3 py-2 text-[13px] text-slate-500">{t("agents.form.emptyModelSearch")}</div>
                         ) : filteredModels.map((m) => {
                           const selected = modelID === m.id
                           const highlighted = highlightedModelID === m.id
@@ -1131,7 +1131,7 @@ export function CreateAgentDialog({
                             >
                               <span className="min-w-0 truncate">{modelLabel(m)}</span>
                               {selected && (
-                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-slate-500">
+                                <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-slate-500">
                                   <Check className="h-3.5 w-3.5" />
                                   {t("agents.form.selected")}
                                 </span>
@@ -1159,10 +1159,10 @@ export function CreateAgentDialog({
                         disabled={visibility === "public"}
                         onChange={() => setModelBindingChoice({ source: "personal" })}
                       />
-                      <span className="text-[12px]">
+                      <span className="text-[13px]">
                         <span className="block text-slate-800">{t("credentialCheck.modelBindingPersonal")}</span>
                         {visibility === "public" && (
-                          <span className="block text-[11px] text-slate-500">{t("credentialCheck.personalDisabledHint")}</span>
+                          <span className="block text-[12px] text-slate-500">{t("credentialCheck.personalDisabledHint")}</span>
                         )}
                       </span>
                     </label>
@@ -1183,7 +1183,7 @@ export function CreateAgentDialog({
                           }
                         }}
                       />
-                      <span className="flex-1 text-[12px]">
+                      <span className="flex-1 text-[13px]">
                         <span className="block text-slate-800">{t("credentialCheck.modelBindingShared")}</span>
                         {modelBindingChoice.source === "shared" && (
                           <div className="mt-1 space-y-1.5">
@@ -1204,7 +1204,7 @@ export function CreateAgentDialog({
                                   }
                                 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="h-7 w-full rounded border border-slate-200 bg-white px-2 text-[12px]"
+                                className="h-7 w-full rounded border border-slate-200 bg-white px-2 text-[13px]"
                               >
                                 {sharedSecrets.map((s) => (
                                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -1215,7 +1215,7 @@ export function CreateAgentDialog({
                             {sharedSecrets.length === 0 && !modelNewSecretExpanded && !("new_secret" in modelBindingChoice) && (
                               <button
                                 type="button"
-                                className="inline-flex h-7 items-center gap-1 rounded border border-dashed border-slate-300 px-2 text-[12px] text-slate-700 hover:bg-slate-50"
+                                className="inline-flex h-7 items-center gap-1 rounded border border-dashed border-slate-300 px-2 text-[13px] text-slate-700 hover:bg-slate-50"
                                 onClick={(e) => {
                                   e.preventDefault()
                                   e.stopPropagation()
@@ -1229,7 +1229,7 @@ export function CreateAgentDialog({
                               </button>
                             )}
                             {"new_secret" in modelBindingChoice && !modelNewSecretExpanded && (
-                              <div className="flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800">
+                              <div className="flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[12px] text-emerald-800">
                                 <Check className="h-3 w-3 shrink-0" />
                                 <span className="flex-1 truncate">
                                   {t("credentialCheck.sharedNewQueued", { name: modelBindingChoice.new_secret.display_name || t("credentialCheck.modelBindingTitle") })}
@@ -1254,16 +1254,16 @@ export function CreateAgentDialog({
                             {modelNewSecretExpanded && (
                               <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="grid gap-1">
-                                  <label className="text-[11px] font-medium text-slate-600">{t("credentialCheck.form.displayName")}</label>
+                                  <label className="text-[12px] font-medium text-slate-600">{t("credentialCheck.form.displayName")}</label>
                                   <Input
                                     value={modelNewSecretDisplayName}
                                     onChange={(e) => setModelNewSecretDisplayName(e.target.value)}
                                     placeholder={selectedModel?.name ?? t("credentialCheck.modelBindingTitle")}
-                                    className="h-7 text-[12px]"
+                                    className="h-7 text-[13px]"
                                   />
                                 </div>
                                 <div className="grid gap-1">
-                                  <label className="text-[11px] font-medium text-slate-600">
+                                  <label className="text-[12px] font-medium text-slate-600">
                                     {t("credentialCheck.form.value")}
                                     <span className="ml-0.5 text-red-500">*</span>
                                   </label>
@@ -1273,7 +1273,7 @@ export function CreateAgentDialog({
                                       value={modelNewSecretPlaintext}
                                       onChange={(e) => setModelNewSecretPlaintext(e.target.value)}
                                       placeholder="sk-..."
-                                      className="h-7 pr-8 text-[12px]"
+                                      className="h-7 pr-8 text-[13px]"
                                     />
                                     <button
                                       type="button"
@@ -1289,7 +1289,7 @@ export function CreateAgentDialog({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 text-[11px]"
+                                    className="h-6 text-[12px]"
                                     onClick={() => {
                                       setModelNewSecretExpanded(false)
                                       // If the user cancels and no existing secret has been chosen yet,
@@ -1309,7 +1309,7 @@ export function CreateAgentDialog({
                                   <Button
                                     type="button"
                                     size="sm"
-                                    className="h-6 text-[11px]"
+                                    className="h-6 text-[12px]"
                                     disabled={!modelNewSecretPlaintext.trim()}
                                     onClick={() => {
                                       if (!modelNewSecretPlaintext.trim()) return
@@ -1343,7 +1343,7 @@ export function CreateAgentDialog({
               <section className="space-y-3">
                 <Input value={capabilitySearch} onChange={(e) => setCapabilitySearch(e.target.value)} placeholder={t("agents.form.placeholders.capabilitySearch")} />
                 {capabilityOptions.length === 0 ? (
-                  <p className="rounded-md bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+                  <p className="rounded-md bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
                     {admin ? t("agents.form.noTagsAdmin") : t("agents.form.noTagsMember")}
                   </p>
                 ) : (
@@ -1359,7 +1359,7 @@ export function CreateAgentDialog({
                     </Tabs>
                     <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white">
                       {visibleCapabilityOptions.length === 0 ? (
-                        <p className="px-3 py-2 text-[12px] text-slate-500">{tc("states.noResults")}</p>
+                        <p className="px-3 py-2 text-[13px] text-slate-500">{tc("states.noResults")}</p>
                       ) : (() => {
                         const sections = (["workspace", "marketplace"] as const)
                           .map((sec) => ({ sec, rows: visibleCapabilityOptions.filter((o) => o.section === sec) }))
@@ -1367,7 +1367,7 @@ export function CreateAgentDialog({
                         let rowCounter = 0
                         return sections.map(({ sec, rows }, sectionIdx) => (
                           <Fragment key={sec}>
-                            <div className={"px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50" + (sectionIdx > 0 ? " border-t border-slate-200" : "")}>
+                            <div className={"px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50" + (sectionIdx > 0 ? " border-t border-slate-200" : "")}>
                               {t(`agents.form.capabilitySections.${sec}`)}
                             </div>
                             {rows.map((cap) => {
@@ -1406,7 +1406,7 @@ export function CreateAgentDialog({
                                         />
                                       )}
                                     </span>
-                                    {cap.description && !cap.deprecated && <span className="mt-0.5 block truncate text-[12px] leading-4 text-slate-500">{cap.description}</span>}
+                                    {cap.description && !cap.deprecated && <span className="mt-0.5 block truncate text-[13px] leading-4 text-slate-500">{cap.description}</span>}
                                   </span>
                                 </label>
                               )
@@ -1421,7 +1421,7 @@ export function CreateAgentDialog({
 
               {aggregatedRequiredKinds.length > 0 && (
                 <section className="space-y-3">
-                  <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">{t("agents.form.sections.credentials")}</h3>
+                  <h3 className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">{t("agents.form.sections.credentials")}</h3>
                   <CredentialCheckPanel
                     requiredKinds={aggregatedRequiredKinds}
                     workspaceID={workspaceID}
@@ -1439,7 +1439,7 @@ export function CreateAgentDialog({
             </>
           )}
 
-          {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{errMsg}</p>}
+          {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{errMsg}</p>}
         </form>
 
         <DialogFooter className="shrink-0 border-t border-slate-100 pt-4">
@@ -1514,12 +1514,12 @@ function WizardProgress({
   return (
     <div className="shrink-0 space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{stepOfLabel}</p>
-        <p className="text-[11px] text-slate-400">{completeLabel}</p>
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">{stepOfLabel}</p>
+        <p className="text-[12px] text-slate-400">{completeLabel}</p>
       </div>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="shrink-0 text-[16px] font-semibold leading-none text-slate-900">{title}</h2>
-        <p className="min-w-0 truncate text-[12px] text-slate-500">{summary}</p>
+        <p className="min-w-0 truncate text-[13px] text-slate-500">{summary}</p>
       </div>
       <div className="relative h-1 w-full overflow-hidden rounded-full bg-slate-100">
         <div
@@ -1546,12 +1546,12 @@ const Field = forwardRef<HTMLDivElement, FieldProps>(function Field(
 ) {
   return (
     <div ref={ref} className="grid gap-1.5">
-      <label className="text-[12px] font-medium text-slate-700">
+      <label className="text-[13px] font-medium text-slate-700">
         {label}{required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
       {children}
-      {hint && <span className="text-[11px] text-slate-400">{hint}</span>}
-      {error && <span className="text-[11px] text-red-600">{error}</span>}
+      {hint && <span className="text-[12px] text-slate-400">{hint}</span>}
+      {error && <span className="text-[12px] text-red-600">{error}</span>}
     </div>
   )
 })
@@ -1560,8 +1560,8 @@ function ChoiceCard({ icon, title, description, selected, onSelect, disabled = f
   // cards without one collapse to natural height to avoid an empty body block.
   const heightClass = description ? "min-h-[92px] items-start" : "items-center"
   const className = disabled
-    ? `flex w-full ${heightClass} gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[12.5px] text-slate-400`
-    : `flex w-full ${heightClass} gap-2 rounded-md border px-3 py-2 text-left text-[12.5px] transition ` + (selected ? "border-slate-900 bg-slate-50 text-slate-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")
+    ? `flex w-full ${heightClass} gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[13px] text-slate-400`
+    : `flex w-full ${heightClass} gap-2 rounded-md border px-3 py-2 text-left text-[13px] transition ` + (selected ? "border-slate-900 bg-slate-50 text-slate-900" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")
   return (
     <button
       type="button"
@@ -1573,7 +1573,7 @@ function ChoiceCard({ icon, title, description, selected, onSelect, disabled = f
       <span className="min-w-0">
         <span className="block font-medium">{title}</span>
         {description && (
-          <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{description}</span>
+          <span className="mt-0.5 block text-[12px] leading-4 text-slate-500">{description}</span>
         )}
       </span>
     </button>
@@ -1584,8 +1584,8 @@ function DependencyCard({ title, description, href, cta }: { title: string; desc
   return (
     <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
       <p className="text-[13px] font-medium text-slate-900">{title}</p>
-      <p className="mt-1 text-[12px] text-slate-500">{description}</p>
-      <a href={href} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-slate-900 underline">
+      <p className="mt-1 text-[13px] text-slate-500">{description}</p>
+      <a href={href} className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-slate-900 underline">
         {cta} <ArrowUpRight className="h-3 w-3" />
       </a>
     </div>
@@ -1662,7 +1662,7 @@ function CapabilityVersionPicker({
       // suffix) reminds the user that breaking changes can land
       // without warning. We don't disable "latest" outright — opting
       // into it is a deliberate user choice we surface explicitly.
-      className="ml-1 h-7 shrink-0 rounded-md border border-slate-200 bg-white px-2 text-[12px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
+      className="ml-1 h-7 shrink-0 rounded-md border border-slate-200 bg-white px-2 text-[13px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
       title={fromMarketplace ? t("agents.form.versionPicker.marketplaceHint") : t("agents.form.versionPicker.localHint")}
     >
       <option value="__latest__">

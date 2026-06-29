@@ -109,7 +109,7 @@ function UserCell({ name, email }: { name: string; email: string }) {
         <div className="truncate text-[13px] font-medium text-slate-900">
           {name || "—"}
         </div>
-        <div className="truncate text-[11.5px] text-slate-500">{email}</div>
+        <div className="truncate text-[12px] text-slate-500">{email}</div>
       </div>
     </div>
   )
@@ -167,7 +167,7 @@ export function MembersPage() {
             <Users className="h-3.5 w-3.5" />
             {t("members.tabs.workspace")}
             {wsQ.data && (
-              <span className="ml-1 text-[11px] text-slate-500">
+              <span className="ml-1 text-[12px] text-slate-500">
                 ({wsQ.data.members.length})
               </span>
             )}
@@ -356,7 +356,7 @@ function MembersTable({
                     onChange={(e) =>
                       onChangeRole(m, e.target.value as MemberRole)
                     }
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
@@ -372,7 +372,7 @@ function MembersTable({
                 <UserStatusBadge status={m.user_status} />
               </TableCell>
               <TableCell>
-                <span className="text-[12px] text-slate-500">
+                <span className="text-[13px] text-slate-500">
                   {fmtAgo(m.created_at)}
                 </span>
               </TableCell>
@@ -512,7 +512,7 @@ function AddMemberDialog({
 
             {failures.length > 0 && (
               <div className="space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">
+                <p className="text-[13px] font-medium text-red-900">
                   {t("members.add.partialError.title", {
                     success: successCount,
                     failed: failures.length,
@@ -524,7 +524,7 @@ function AddMemberDialog({
                   {failures.map((f) => (
                     <li
                       key={f.user.id}
-                      className="text-[11.5px] text-red-700"
+                      className="text-[12px] text-red-700"
                     >
                       {f.user.email}: {f.message}
                     </li>
@@ -577,7 +577,7 @@ function DialogField({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-[13px] font-medium text-slate-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
@@ -623,7 +623,7 @@ function ConfirmRemoveDialog({
               {description}
             </DialogDescription>
             {error && (
-              <p className="text-[12px] text-red-700">{error.message}</p>
+              <p className="text-[13px] text-red-700">{error.message}</p>
             )}
           </div>
         </DialogHeader>
@@ -659,10 +659,10 @@ function ErrorBanner({ message }: { message: string }) {
   const { t } = useTranslation("admin")
   return (
     <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-      <p className="text-[12px] font-medium text-red-900">
+      <p className="text-[13px] font-medium text-red-900">
         {t("members.mutation.errorTitle")}
       </p>
-      <p className="text-[11.5px] text-red-700">{message}</p>
+      <p className="text-[12px] text-red-700">{message}</p>
     </div>
   )
 }
@@ -689,7 +689,7 @@ function MockBanner({
             scope: t("members.tabs.workspace"),
           })}
         </p>
-        <p className="text-[12px] leading-relaxed text-amber-800">{hint}</p>
+        <p className="text-[13px] leading-relaxed text-amber-800">{hint}</p>
       </div>
     </div>
   )
@@ -711,7 +711,7 @@ function PendingBadge({ wsId }: { wsId: string | null }) {
   const count = q.data?.requests.length ?? 0
   if (count === 0) return null
   return (
-    <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0 text-[10px] font-medium text-amber-700">
+    <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0 text-[11px] font-medium text-amber-700">
       {count}
     </span>
   )
@@ -862,17 +862,17 @@ function PendingRequestRow({
           <span className="text-[13px] font-medium text-slate-900">
             {req.user_name || req.user_email}
           </span>
-          <span className="text-[11px] text-slate-500">{req.user_email}</span>
+          <span className="text-[12px] text-slate-500">{req.user_email}</span>
         </div>
       </TableCell>
-      <TableCell className="text-[12px] text-slate-700">
+      <TableCell className="text-[13px] text-slate-700">
         {req.request_reason || (
           <span className="text-slate-400">
             {t("members.pendingRequests.noReason")}
           </span>
         )}
       </TableCell>
-      <TableCell className="text-[12px] text-slate-500">
+      <TableCell className="text-[13px] text-slate-500">
         {fmtAgo(req.requested_at)}
       </TableCell>
       <TableCell className="text-right">

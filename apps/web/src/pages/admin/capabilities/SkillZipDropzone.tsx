@@ -75,14 +75,14 @@ export function SkillZipDropzone({
               ? t("capabilities.import.skill.dropActive", "松开导入 .zip")
               : t("capabilities.import.skill.dropHint", "拖拽或点击上传 .zip(SKILL.md + references / scripts)")}
           </span>
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[12px] text-slate-500">
             {t("capabilities.import.skill.sizeHint", "最大 8 MiB")}
           </span>
         </div>
         {localError && (
           <div
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
           >
             {localError}
           </div>
@@ -98,7 +98,7 @@ export function SkillZipDropzone({
           <FileArchive className="h-4 w-4 shrink-0 text-slate-500" />
           <div className="min-w-0">
             <p className="truncate text-[13px] text-slate-900">{file.name}</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[12px] text-slate-500">
               {formatBytes(file.size)}
               {busy && (
                 <>
@@ -125,7 +125,7 @@ export function SkillZipDropzone({
       {localError && (
         <div
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
         >
           {localError}
         </div>

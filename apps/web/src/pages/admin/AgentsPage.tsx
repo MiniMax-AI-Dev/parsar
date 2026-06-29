@@ -227,7 +227,7 @@ function TruncatedName({
         <Tooltip.Portal>
           <Tooltip.Content
             side="top"
-            className="z-50 max-w-sm break-all rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-slate-700 shadow-lg"
+            className="z-50 max-w-sm break-all rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed text-slate-700 shadow-lg"
           >
             {tip}
             <Tooltip.Arrow className="fill-white" />
@@ -260,7 +260,7 @@ function RuntimeCell({ agent }: { agent: ProjectAgent }) {
             ? "pending"
             : "offline"
       return (
-        <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-700">
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-700">
           <span className="font-medium text-slate-500">Sandbox</span>
           <span className="text-slate-400">·</span>
           <TruncatedName
@@ -275,7 +275,7 @@ function RuntimeCell({ agent }: { agent: ProjectAgent }) {
     // Sandbox placement, no live binding (not yet dispatched, or reaped).
     // Neutral placeholder so users don't mistake it for misconfiguration.
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-500">
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-500">
         <span className="font-medium">Sandbox</span>
         <span className="text-slate-400">·</span>
         <span>{t("agents.runtimeCell.pending")}</span>
@@ -290,7 +290,7 @@ function RuntimeCell({ agent }: { agent: ProjectAgent }) {
   if (placement === "local" && runtimeID && name) {
     const tone = runtimeLivenessTone(agent) ?? "offline"
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-700">
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-700">
         <span className="font-medium text-slate-500">Local</span>
         <span className="text-slate-400">·</span>
         <TruncatedName display={name} />
@@ -382,12 +382,12 @@ export function AgentsPage() {
         }
       />
       {toast && (
-        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
           {toast}
         </div>
       )}
       {pendingCapabilityID && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-800">
           <span>{pendingCapability ? t("agents.pendingCapability.banner", { name: pendingCapability.name, source: pendingCapability.source_workspace_name ?? "—" }) : t("agents.pendingCapability.loading")}</span>
           <Button variant="outline" size="sm" onClick={() => navigate("agents", { pendingCapability: null })}>{t("agents.pendingCapability.cancel")}</Button>
         </div>
@@ -475,11 +475,11 @@ export function AgentsPage() {
                         </div>
                       </TableCell>
                       <TableCell><RuntimeCell agent={a} /></TableCell>
-                      <TableCell className="font-mono text-[12px] text-slate-600">{defaultModelOf(a, modelsQ.data?.models ?? [])}</TableCell>
-                      <TableCell className="text-[12px] text-slate-500">
+                      <TableCell className="font-mono text-[13px] text-slate-600">{defaultModelOf(a, modelsQ.data?.models ?? [])}</TableCell>
+                      <TableCell className="text-[13px] text-slate-500">
                         {t(`agents.visibility.${a.visibility ?? "workspace"}`)}
                       </TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{a.created_by_name || "—"}</TableCell>
+                      <TableCell className="text-[13px] text-slate-600">{a.created_by_name || "—"}</TableCell>
                       <TableCell className="pr-4">
                         <RowActions>
                           <ActionIconButton
@@ -747,12 +747,12 @@ export function AgentDetailPage({ id }: { id: string }) {
       />
 
       {toast && (
-        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
           {toast}
         </div>
       )}
       {pendingCapabilityID && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-800">
           <span>{t("agents.pendingCapability.detailBanner", { name: (marketplaceQ.data ?? []).find((capability) => capability.id === pendingCapabilityID)?.name ?? pendingCapabilityID, source: (marketplaceQ.data ?? []).find((capability) => capability.id === pendingCapabilityID)?.source_workspace_name ?? "—" })}</span>
           <Button variant="outline" size="sm" onClick={() => navigate("agents", { id: agent.project_agent_id, tab: "config", pendingCapability: null })}>{t("agents.pendingCapability.cancel")}</Button>
         </div>
@@ -802,7 +802,7 @@ export function AgentDetailPage({ id }: { id: string }) {
 function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-[11px] uppercase tracking-wider text-slate-400">{label}</dt>
+      <dt className="mb-0.5 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className={`text-[13px] text-slate-800 ${mono ? "font-mono" : ""}`}>{value}</dd>
     </div>
   )
@@ -811,7 +811,7 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
 function TagsField({ label, tags }: { label: string; tags: string[] }) {
   return (
     <div className="mb-2 last:mb-0">
-      <dt className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">{label}</dt>
+      <dt className="mb-1 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className="flex flex-wrap gap-1.5">
         {tags.length === 0 ? (
           <span className="text-[13px] text-slate-400">—</span>
@@ -893,7 +893,7 @@ function CapabilityCard({
     return (
       <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
         <p className="text-[13px] font-medium text-amber-900">{t("agents.detail.capabilities.deletedCapability.title")}</p>
-        <p className="mt-1 text-[12px] text-amber-800">{t("agents.detail.capabilities.deletedCapability.description")}</p>
+        <p className="mt-1 text-[13px] text-amber-800">{t("agents.detail.capabilities.deletedCapability.description")}</p>
         <RemoveCapabilityDialog
           agent={agent}
           binding={binding}
@@ -929,13 +929,13 @@ function CapabilityCard({
               />
             )}
           </div>
-          {capability.description && <p className="mt-1 text-[12px] text-slate-500">{capability.description}</p>}
-          {fromMarketplace && <p className="mt-1 text-[12px] text-slate-500">{t("agents.detail.capabilities.marketplace.source", { source: capability.source_workspace_name ?? "—", version: boundVersion?.version ?? capability.pinned_version ?? latest?.version ?? "—" })}</p>}
+          {capability.description && <p className="mt-1 text-[13px] text-slate-500">{capability.description}</p>}
+          {fromMarketplace && <p className="mt-1 text-[13px] text-slate-500">{t("agents.detail.capabilities.marketplace.source", { source: capability.source_workspace_name ?? "—", version: boundVersion?.version ?? capability.pinned_version ?? latest?.version ?? "—" })}</p>}
         </div>
       </div>
 
       {mode === "enabled" && deprecated && (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-800">
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] leading-5 text-red-800">
           {t("agents.detail.capabilities.marketplace.deprecatedBanner", { version: boundVersion?.version ?? capability.pinned_version ?? "—" })}
         </div>
       )}
@@ -1004,7 +1004,7 @@ function CredentialStatus({ capability, credentials, language }: { capability: C
   const { t } = useTranslation("admin")
   const requiredCreds = capability.required_credentials ?? []
   if (requiredCreds.length === 0) {
-    return <p className="mt-3 text-[12px] text-slate-500">{t("agents.detail.capabilities.credential.none")}</p>
+    return <p className="mt-3 text-[13px] text-slate-500">{t("agents.detail.capabilities.credential.none")}</p>
   }
   return (
     <div className="mt-3 space-y-1.5">
@@ -1012,7 +1012,7 @@ function CredentialStatus({ capability, credentials, language }: { capability: C
         const credential = credentials.find((cred) => cred.kind === rc.kind)
         const label = credentialKindLabel(rc.kind, language, rc.kind)
         return (
-          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-[12px] ${credential ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
+          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-[13px] ${credential ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
             {credential ? (
               <span>{t("agents.detail.capabilities.credential.present", { kind: label, name: credential.display_name || t("agents.detail.capabilities.credential.defaultName") })}</span>
             ) : (
@@ -1030,7 +1030,7 @@ function CredentialLink({ kind, className, children }: { kind?: string; classNam
   const { t } = useTranslation("admin")
   if (!kind) return null
   return (
-    <a className={className ?? "text-[12px] font-medium text-slate-900 underline underline-offset-2"} href={credentialURL(kind)}>
+    <a className={className ?? "text-[13px] font-medium text-slate-900 underline underline-offset-2"} href={credentialURL(kind)}>
       {children ?? t("agents.detail.capabilities.credential.addCta")}
     </a>
   )
@@ -1096,13 +1096,13 @@ function EnableCredentialStatusList({
             key={rc.kind}
             className={
               has
-                ? "flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] text-emerald-800"
-                : "flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] text-amber-900"
+                ? "flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[13px] text-emerald-800"
+                : "flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[13px] text-amber-900"
             }
           >
             <span>{has ? "✓" : "⚠"}</span>
             <span>{rc.kind}</span>
-            {!has && <span className="ml-auto text-[11px]">{t("credentialCheck.personalYouMissing")}</span>}
+            {!has && <span className="ml-auto text-[12px]">{t("credentialCheck.personalYouMissing")}</span>}
           </div>
         )
       })}
@@ -1173,7 +1173,7 @@ function EnableCapabilityDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700">{t("agents.detail.capabilities.enableDialog.version")}</label>
+            <label className="text-[13px] font-medium text-slate-700">{t("agents.detail.capabilities.enableDialog.version")}</label>
             {versionsQ.isLoading ? <Skeleton className="h-8 w-full" /> : <VersionSelect versions={versions} value={selectedVersion?.id ?? ""} onChange={setSelected} />}
           </div>
           {requiredKinds.length > 0 ? (
@@ -1182,11 +1182,11 @@ function EnableCapabilityDialog({
               onAllReady={setAllCredentialsSatisfied}
             />
           ) : (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
               {t("agents.detail.capabilities.enableDialog.noCredential")}
             </div>
           )}
-          {mutationError(mut.error) && <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{mutationError(mut.error)}</p>}
+          {mutationError(mut.error) && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{mutationError(mut.error)}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
@@ -1242,7 +1242,7 @@ function SwitchVersionDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant={triggerVariant} size="sm" className={triggerVariant === "link" ? "h-auto px-1 py-0 text-[12px] text-red-700" : undefined} onClick={() => setOpen(true)}>{triggerLabel ?? t("agents.detail.capabilities.actions.switchVersion")}</Button>
+      <Button variant={triggerVariant} size="sm" className={triggerVariant === "link" ? "h-auto px-1 py-0 text-[13px] text-red-700" : undefined} onClick={() => setOpen(true)}>{triggerLabel ?? t("agents.detail.capabilities.actions.switchVersion")}</Button>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("agents.detail.capabilities.switchDialog.title", { cap: capability.name })}</DialogTitle>
@@ -1255,8 +1255,8 @@ function SwitchVersionDialog({
               <span className="flex-1 text-[13px] text-slate-800">v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}{version.id === binding.capability_version_id ? ` · ${t("agents.detail.capabilities.switchDialog.current")}` : ""}</span>
             </label>
           ))}
-          <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">{t("agents.detail.capabilities.switchDialog.notice", { agent: agent.name })}</p>
-          {mutationError(mut.error) && <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{mutationError(mut.error)}</p>}
+          <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-800">{t("agents.detail.capabilities.switchDialog.notice", { agent: agent.name })}</p>
+          {mutationError(mut.error) && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{mutationError(mut.error)}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
@@ -1300,12 +1300,12 @@ function RemoveCapabilityDialog({
           <AlertDialogTitle>{t("agents.detail.capabilities.removeDialog.title", { agent: agent.name, cap: capabilityName })}</AlertDialogTitle>
           <AlertDialogDescription>{t("agents.detail.capabilities.removeDialog.description")}</AlertDialogDescription>
         </AlertDialogHeader>
-        <ul className="space-y-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+        <ul className="space-y-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
           <li>{t("agents.detail.capabilities.removeDialog.impactRun")}</li>
           <li>{t("agents.detail.capabilities.removeDialog.impactCapability")}</li>
           <li>{t("agents.detail.capabilities.removeDialog.impactCredential")}</li>
         </ul>
-        {mutationError(mut.error) && <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">{mutationError(mut.error)}</p>}
+        {mutationError(mut.error) && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{mutationError(mut.error)}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel asChild><Button variant="outline" size="sm" disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button></AlertDialogCancel>
           <Button variant="destructive" size="sm" disabled={mut.isPending} onClick={submit}>{mut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("agents.detail.capabilities.actions.removeConfirm")}</Button>
@@ -1318,7 +1318,7 @@ function RemoveCapabilityDialog({
 function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
     <section className={`rounded-lg border border-slate-200 bg-white p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+      <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
       {children}
     </section>
   )
@@ -1327,7 +1327,7 @@ function Card({ title, className, children }: { title: string; className?: strin
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[12px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className="mt-1 text-[22px] font-semibold tabular-nums text-slate-900">{value}</div>
     </div>
   )
@@ -1412,18 +1412,18 @@ function VisibilityCard({
               <div className="text-[13px] font-medium text-slate-900">
                 {t(`agents.visibility.${tier.value}`)}
               </div>
-              <div className="mt-0.5 text-[12px] text-slate-500">{tier.hint}</div>
+              <div className="mt-0.5 text-[13px] text-slate-500">{tier.hint}</div>
             </div>
           </label>
         ))}
       </div>
       {!canEdit && (
-        <p className="mt-2 text-[12px] text-slate-400">
+        <p className="mt-2 text-[13px] text-slate-400">
           {t("agents.visibility.ownerOnly")}
         </p>
       )}
       {errorMsg && (
-        <p className="mt-2 text-[12px] text-rose-600" role="alert">
+        <p className="mt-2 text-[13px] text-rose-600" role="alert">
           {errorMsg}
         </p>
       )}
@@ -1525,11 +1525,11 @@ function CurrentWorkCard({ runs, loading }: { runs: AgentRunSummary[]; loading: 
             <li key={run.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
               <div className="flex items-center gap-2 text-[13px]">
                 <RunStatusDot status={run.status} />
-                <code className="font-mono text-[12px] text-slate-700">{shortRunId(run.id)}</code>
+                <code className="font-mono text-[13px] text-slate-700">{shortRunId(run.id)}</code>
                 <span className="text-slate-500">·</span>
                 <span className="text-slate-700">{run.agent_name ?? "—"}</span>
               </div>
-              <span className="text-[12px] text-slate-500">{run.status}</span>
+              <span className="text-[13px] text-slate-500">{run.status}</span>
             </li>
           ))}
         </ul>
@@ -1574,7 +1574,7 @@ function MetricsCard({ metrics, loading }: { metrics?: AgentMetrics; loading: bo
 function MetricStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50/40 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[12px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className="mt-0.5 text-[20px] font-semibold tabular-nums text-slate-900">{value}</div>
     </div>
   )
@@ -1615,10 +1615,10 @@ function RecentRunsCard({
                 <RunStatusDot status={run.status} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-[13px]">
-                    <code className="font-mono text-[12px] text-slate-700">{shortRunId(run.id)}</code>
+                    <code className="font-mono text-[13px] text-slate-700">{shortRunId(run.id)}</code>
                     <span className="truncate text-slate-700">{run.agent_name ?? t("agents.detail.dynamics.recent.untitled")}</span>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">
+                  <div className="mt-0.5 text-[12px] text-slate-500">
                     {fmtAgo(run.created_at)}
                     {run.started_at && run.finished_at && (
                       <> · {formatDurationMs(durationMs(run.started_at, run.finished_at))}</>
@@ -1648,7 +1648,7 @@ function DynamicsCard({
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-baseline gap-2">
         <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
-        {subtitle && <span className="text-[12px] text-slate-500">{subtitle}</span>}
+        {subtitle && <span className="text-[13px] text-slate-500">{subtitle}</span>}
       </div>
       {children}
     </section>
@@ -1750,7 +1750,7 @@ function AgentConfigTab({
           value={
             <span>
               {connectorLabel}
-              <span className="ml-1 text-[12px] text-slate-500">· {agent.connector_type}</span>
+              <span className="ml-1 text-[13px] text-slate-500">· {agent.connector_type}</span>
             </span>
           }
         />
@@ -1829,7 +1829,7 @@ function ConfigCapabilitiesSection({
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
+        <h3 className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">
           {t("agents.detail.config.capabilities.title")}
         </h3>
         {isAdmin && installable.length > 0 && (
@@ -1937,7 +1937,7 @@ function AddCapabilityDialog({
           </div>
           <div className="max-h-80 space-y-2 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="rounded-md border border-dashed border-slate-200 px-3 py-6 text-center text-[12px] text-slate-500">
+              <p className="rounded-md border border-dashed border-slate-200 px-3 py-6 text-center text-[13px] text-slate-500">
                 {t("agents.detail.capabilities.emptyAvailable")}
               </p>
             ) : (
@@ -1953,7 +1953,7 @@ function AddCapabilityDialog({
                         <CapabilityTypeBadge type={capability.type} />
                       </div>
                       {capability.description && (
-                        <p className="mt-1 text-[12px] text-slate-500">{capability.description}</p>
+                        <p className="mt-1 text-[13px] text-slate-500">{capability.description}</p>
                       )}
                     </div>
                     <EnableCapabilityDialog

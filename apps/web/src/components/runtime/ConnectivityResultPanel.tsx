@@ -75,7 +75,7 @@ export function ConnectivityResultPanel({
         <button
           type="button"
           onClick={onDismiss}
-          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
+          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[13px] font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
           data-testid="connectivity-result-dismiss"
         >
           <X className="h-3 w-3" />
@@ -111,7 +111,7 @@ function CheckRow({
   const iconClr = check.pass ? "text-emerald-600" : "text-red-600"
   const isSkipped = !check.pass && !check.error
   return (
-    <li className="flex items-start gap-2 text-[12px]">
+    <li className="flex items-start gap-2 text-[13px]">
       {isSkipped ? (
         <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-slate-200" aria-hidden />
       ) : (
@@ -147,7 +147,7 @@ function FailureSuggestion({ checks }: { checks: ConnectivityCheck[] }): ReactNo
   const failIdx = checks.findIndex((c) => c === firstFail)
   const hasSkipped = checks.slice(failIdx + 1).some((c) => !c.pass && !c.error)
   return (
-    <div className="mt-2 rounded-md bg-slate-50/70 px-2.5 py-2 text-[12px] text-slate-700">
+    <div className="mt-2 rounded-md bg-slate-50/70 px-2.5 py-2 text-[13px] text-slate-700">
       <span className="font-medium text-slate-800">
         {t("runtime.connectivity.suggestionLabel")}：
       </span>

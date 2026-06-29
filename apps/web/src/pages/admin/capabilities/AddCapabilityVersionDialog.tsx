@@ -327,7 +327,7 @@ export function AddCapabilityVersionDialog({
         {(nameError || versionError) && (
           <div
             role="alert"
-            className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
           >
             {nameError ?? versionError}
           </div>
@@ -381,7 +381,7 @@ export function AddCapabilityVersionDialog({
         {errMsg && (
           <div
             role="alert"
-            className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
           >
             {errMsg}
           </div>
@@ -470,7 +470,7 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-[13px] font-medium text-slate-700">
         {label}
         {required && <span className="text-red-500"> *</span>}
       </span>
@@ -481,7 +481,7 @@ function Field({
 
 function InfoBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
+    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
       {children}
     </div>
   )
@@ -491,7 +491,7 @@ function WarningBanner({ children }: { children: React.ReactNode }) {
   return (
     <div
       role="alert"
-      className="mt-2 break-all rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900"
+      className="mt-2 break-all rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900"
     >
       {children}
     </div>
