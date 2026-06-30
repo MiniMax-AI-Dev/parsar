@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           # Pinned to match go.mod. Bump both together when upgrading.
-          go-version: "1.24"
+          go-version: "1.25"
           cache: true
 
       - name: Run golangci-lint
