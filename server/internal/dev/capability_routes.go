@@ -669,18 +669,18 @@ func deleteMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func listProjectAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
+func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		projectID, projectAgentID, agent, ok := requireProjectAgentMember(w, r, runtimeStore)
+		workspaceID, agentID, agent, ok := requireAgentMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
-		installed, err := runtimeStore.ListAgentCapabilities(r.Context(), projectAgentID)
+		installed, err := runtimeStore.ListAgentCapabilities(r.Context(), agentID)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to list agent capabilities")
 			return
 		}
-		enabledCapabilities, err := runtimeStore.GetEnabledMarketplaceCapabilitiesForAgent(r.Context(), projectAgentID)
+		enabledCapabilities, err := runtimeStore.GetEnabledMarketplaceCapabilitiesForAgent(r.Context(), agentID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -718,7 +718,7 @@ func listProjectAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 			}
 			installedAny = append(installedAny, map[string]any{
 				"id":                    binding.ID,
-				"project_agent_id":      binding.ProjectAgentID,
+				"agent_id":              binding.AgentID,
 				"capability_id":         binding.CapabilityID,
 				"capability_version_id": binding.CapabilityVersionID,
 				"enabled":               binding.Enabled,
@@ -748,13 +748,13 @@ func listProjectAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 				},
 			})
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"project_id": projectID, "project_agent_id": projectAgentID, "installed": installedAny, "available": availableAny, "marketplace_available": marketplace})
+		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "agent_id": agentID, "installed": installedAny, "available": availableAny, "marketplace_available": marketplace})
 	}
 }
 
-func enableProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
+func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, projectAgentID, agent, ok := requireProjectAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, agent, ok := requireAgentOwnerMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -785,7 +785,7 @@ func enableProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
-		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), projectAgentID, versionID, body.Configuration, body.PinningMode)
+		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), agentID, versionID, body.Configuration, body.PinningMode)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to enable agent capability")
 			return
@@ -794,9 +794,9 @@ func enableProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func deleteProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
+func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, projectAgentID, _, ok := requireProjectAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -805,7 +805,7 @@ func deleteProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "capability_version_id must be a valid uuid"})
 			return
 		}
-		if err := runtimeStore.DeleteAgentCapability(r.Context(), projectAgentID, versionID); err != nil {
+		if err := runtimeStore.DeleteAgentCapability(r.Context(), agentID, versionID); err != nil {
 			writeCapabilityError(w, err, "failed to delete agent capability")
 			return
 		}
@@ -813,9 +813,9 @@ func deleteProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func upgradeProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
+func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, projectAgentID, _, ok := requireProjectAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -833,7 +833,7 @@ func upgradeProjectAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "new_version_id must be a valid uuid"})
 			return
 		}
-		upgraded, err := runtimeStore.UpgradeAgentCapability(r.Context(), projectAgentID, capabilityID, body.NewVersionID, body.PinningMode)
+		upgraded, err := runtimeStore.UpgradeAgentCapability(r.Context(), agentID, capabilityID, body.NewVersionID, body.PinningMode)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to upgrade agent capability")
 			return
@@ -921,56 +921,56 @@ func requireAuthenticatedUser(w http.ResponseWriter, r *http.Request, runtimeSto
 	return userID, true
 }
 
-func requireProjectAgentMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.ProjectAgentStatusRead, bool) {
+func requireAgentMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.AgentStatusRead, bool) {
 	if runtimeStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
-		return "", "", store.ProjectAgentStatusRead{}, false
+		return "", "", store.AgentStatusRead{}, false
 	}
-	projectID, projectAgentID, ok := projectAgentParams(w, r)
+	workspaceID, agentID, ok := agentParams(w, r)
 	if !ok {
-		return "", "", store.ProjectAgentStatusRead{}, false
+		return "", "", store.AgentStatusRead{}, false
 	}
-	agent, err := runtimeStore.GetProjectAgentDetail(r.Context(), projectAgentID)
+	agent, err := runtimeStore.GetAgentDetail(r.Context(), agentID)
 	if err != nil {
-		writeCapabilityError(w, err, "failed to get project agent")
-		return "", "", store.ProjectAgentStatusRead{}, false
+		writeCapabilityError(w, err, "failed to get agent")
+		return "", "", store.AgentStatusRead{}, false
 	}
-	if agent.ProjectID != projectID {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "project agent not found"})
-		return "", "", store.ProjectAgentStatusRead{}, false
+	if agent.WorkspaceID != workspaceID {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})
+		return "", "", store.AgentStatusRead{}, false
 	}
-	if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+	if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 		writeRBACError(w, err)
-		return "", "", store.ProjectAgentStatusRead{}, false
+		return "", "", store.AgentStatusRead{}, false
 	}
-	return projectID, projectAgentID, agent, true
+	return workspaceID, agentID, agent, true
 }
 
-func requireProjectAgentOwnerMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.ProjectAgentStatusRead, bool) {
-	projectID, projectAgentID, agent, ok := requireProjectAgentMember(w, r, runtimeStore)
+func requireAgentOwnerMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.AgentStatusRead, bool) {
+	workspaceID, agentID, agent, ok := requireAgentMember(w, r, runtimeStore)
 	if !ok {
-		return "", "", store.ProjectAgentStatusRead{}, false
+		return "", "", store.AgentStatusRead{}, false
 	}
 	userID := strings.TrimSpace(auth.UserIDFromContext(requestContextForRBAC(r)))
 	if strings.TrimSpace(agent.CreatedBy) != "" && agent.CreatedBy != userID {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-		return "", "", store.ProjectAgentStatusRead{}, false
+		return "", "", store.AgentStatusRead{}, false
 	}
-	return projectID, projectAgentID, agent, true
+	return workspaceID, agentID, agent, true
 }
 
-func projectAgentParams(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-	projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-	if !isUUID(projectID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+func agentParams(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+	if !isUUID(workspaceID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 		return "", "", false
 	}
-	projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-	if !isUUID(projectAgentID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+	agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+	if !isUUID(agentID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 		return "", "", false
 	}
-	return projectID, projectAgentID, true
+	return workspaceID, agentID, true
 }
 
 func credentialIDParam(w http.ResponseWriter, r *http.Request) (string, bool) {
@@ -1065,13 +1065,13 @@ func capabilityVisibilityPtr(visibility, scope *string) *string {
 
 func writeCapabilityError(w http.ResponseWriter, err error, fallback string) {
 	switch {
-	case errors.Is(err, store.ErrUnknownCapability), errors.Is(err, store.ErrUnknownCapabilityVersion), errors.Is(err, store.ErrUnknownUserCredential), errors.Is(err, store.ErrUnknownAgentCapability), errors.Is(err, store.ErrUnknownProjectAgent):
+	case errors.Is(err, store.ErrUnknownCapability), errors.Is(err, store.ErrUnknownCapabilityVersion), errors.Is(err, store.ErrUnknownUserCredential), errors.Is(err, store.ErrUnknownAgentCapability), errors.Is(err, store.ErrUnknownAgent):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrImmutable):
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrMarketplaceCapabilityUnavailable):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-	case errors.Is(err, store.ErrInvalidWorkspaceInput), errors.Is(err, store.ErrInvalidProjectInput), errors.Is(err, store.ErrInvalidProjectAgent), errors.Is(err, store.ErrInvalidCredentialKind):
+	case errors.Is(err, store.ErrInvalidWorkspaceInput), errors.Is(err, store.ErrInvalidInput), errors.Is(err, store.ErrInvalidAgent), errors.Is(err, store.ErrInvalidCredentialKind):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 	default:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fallback})

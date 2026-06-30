@@ -285,13 +285,34 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
-  /api/v1/workspaces/{workspaceID}/projects/{projectID}/agents:
-    post:
-      operationId: createDevAgent
-      summary: Create an agent and attach it to a project
+  /api/v1/workspaces/{workspaceID}/agents:
+    get:
+      operationId: listDevAgents
+      summary: List active agents in a workspace
       parameters:
         - $ref: '#/components/parameters/WorkspaceID'
-        - $ref: '#/components/parameters/ProjectID'
+      responses:
+        '200':
+          description: Active workspace agents with profile basics
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agents]
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentSummary'
+        '404':
+          description: Unknown active workspace
+        '503':
+          description: Database-backed read APIs are disabled
+    post:
+      operationId: createDevAgent
+      summary: Create an agent in a workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
       requestBody:
         required: true
         content:
@@ -300,7 +321,7 @@ paths:
               $ref: '#/components/schemas/CreateAgentRequest'
       responses:
         '201':
-          description: Created agent and project attachment
+          description: Created agent
           content:
             application/json:
               schema:
@@ -358,15 +379,15 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/ImmutableSlugError'
                   - $ref: '#/components/schemas/UnknownCapabilityError'
-                  - $ref: '#/components/schemas/ProjectScopedRuntimeError'
+                  - $ref: '#/components/schemas/ImmutableRuntimeError'
     delete:
       operationId: deleteDevAgent
-      summary: Soft-delete an agent and detach it from all projects
+      summary: Soft-delete an agent
       parameters:
         - $ref: '#/components/parameters/AgentID'
       responses:
         '200':
-          description: Deleted agent with detached project-agent ids
+          description: Deleted agent
           content:
             application/json:
               schema:
@@ -375,6 +396,41 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/InFlightRuns'
+  /api/v1/agents/{agentID}/visibility:
+    patch:
+      operationId: updateDevAgentVisibility
+      summary: Update an agent's visibility
+      parameters:
+        - $ref: '#/components/parameters/AgentID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility:
+                  type: string
+                  enum: [workspace, tenant, public]
+                  description: Who can invoke this Agent.
+      responses:
+        '200':
+          description: Updated agent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/AgentSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/agents/{agentID}/connector/feishu/diagnostics:
     get:
       operationId: getDevAgentFeishuConnectorDiagnostics
@@ -576,29 +632,6 @@ paths:
           description: Feishu polling, credential, or Bot validation failed upstream.
         '503':
           description: Feishu app-registration provisioning is not configured.
-  /api/v1/project-agents/{projectAgentID}:
-    delete:
-      operationId: deleteDevProjectAgent
-      summary: Soft-detach an agent from a project
-      parameters:
-        - $ref: '#/components/parameters/ProjectAgentID'
-      responses:
-        '200':
-          description: Detached project agent
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [project_agent]
-                properties:
-                  project_agent:
-                    $ref: '#/components/schemas/ProjectAgentSummary'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-
   /dev/seed:
     get:
       operationId: getDevSeed
@@ -610,7 +643,7 @@ paths:
         - Legacy human-readable fixture (`workspace`, `users`, `agents`,
           `conversations`) for back-compat with older dev consumers.
         - A `db` envelope with the real DB UUIDs that `cmd/seeddev` writes,
-          so the admin UI can auto-bind to the seeded workspace / project /
+          so the admin UI can auto-bind to the seeded workspace /
           conversation without copy-pasting UUIDs from psql.
       responses:
         '200':
@@ -641,15 +674,12 @@ paths:
                       Deterministic DB UUIDs from
                       `server/internal/store.DefaultDevFixtureIDs`. These
                       match exactly what `make seed-dev-db` inserts and
-                      drive the admin UI's project/workspace auto-binding.
+                      drive the admin UI's workspace auto-binding.
                     properties:
                       workspace_id:
                         type: string
                         format: uuid
                       user_id:
-                        type: string
-                        format: uuid
-                      project_id:
                         type: string
                         format: uuid
                       conversation_id:
@@ -766,7 +796,7 @@ paths:
         Dev Gateway-shaped entrypoint for future Feishu/Slack adapters.
         Persists the inbound text through the same scheduling path as fake IM:
         mention parsing, message insert, and queued agent_runs for active
-        mentioned Project Agents. Does not execute Agent runtime.
+        mentioned Agents. Does not execute Agent runtime.
       requestBody:
         required: true
         content:
@@ -828,7 +858,7 @@ paths:
         '201':
           description: Persisted inbound message with queued run ids
         '400':
-          description: Invalid request or unknown active project agent mention/conversation/sender
+          description: Invalid request or unknown active agent mention/conversation/sender
   /api/v1/feishu/events/message:
     post:
       operationId: createDevFeishuMessageEvent
@@ -931,7 +961,7 @@ paths:
         '404':
           description: Unknown active conversation
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
   /dev/gateway/outbound:
     get:
       operationId: listDevGatewayOutbound
@@ -1017,7 +1047,7 @@ paths:
                 endpoint:
                   type: string
                   format: uri
-                  description: Optional http(s) endpoint override. If omitted, config endpoint is read from project_agents.config then agents.config.
+                  description: Optional http(s) endpoint override. If omitted, config endpoint is read from agents.config.
                 headers:
                   type: object
                   additionalProperties:
@@ -1031,16 +1061,16 @@ paths:
         '404':
           description: Unknown agent run
         '409':
-          description: Run is not completable, not connector_type=http, or its project agent relation is invalid
+          description: Run is not completable, not connector_type=http, or its agent relation is invalid
         '502':
           description: HTTP Agent network failure, non-2xx response, or invalid JSON response
-  /api/v1/project-agents/{projectAgentID}/connector:
+  /api/v1/agents/{agentID}/connector:
     post:
-      operationId: configureDevProjectAgentConnector
-      summary: Configure a Project Agent connector for dev harness runs
-      description: Dev-only shortcut for local demos/tests. Updates the active workspace Agent behind one active project_agents relation so future mentioned runs use connector_type=http without raw SQL. HTTP connector requires an explicit http(s) endpoint in agent config.
+      operationId: configureDevAgentConnector
+      summary: Configure an Agent connector for dev harness runs
+      description: Dev-only shortcut for local demos/tests. Updates the workspace Agent so future mentioned runs use connector_type=http without raw SQL. HTTP connector requires an explicit http(s) endpoint in agent config.
       parameters:
-        - name: projectAgentID
+        - name: agentID
           in: path
           required: true
           schema:
@@ -1063,13 +1093,13 @@ paths:
                   description: Required when connector_type=http.
       responses:
         '200':
-          description: Connector config for the active project agent relation was updated
+          description: Connector config for the agent was updated
         '400':
-          description: Malformed project_agent UUID, invalid connector type, invalid JSON, or missing/invalid HTTP endpoint
+          description: Malformed agent UUID, invalid connector type, invalid JSON, or missing/invalid HTTP endpoint
         '404':
-          description: Unknown active project agent relation
+          description: Unknown active agent
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed connector config is disabled
   /api/v1/workspaces/{workspaceID}/capabilities:
@@ -1294,7 +1324,7 @@ paths:
     get:
       operationId: listDevMarketplaceEnabledAgents
       summary: List agents in this workspace that have a marketplace capability enabled
-      description: Returns the project agents inside {workspaceID} that have the capability enabled. Used by the uninstall confirmation dialog and the marketplace capability detail page.
+      description: Returns the agents inside {workspaceID} that have the capability enabled. Used by the uninstall confirmation dialog and the marketplace capability detail page.
       parameters:
         - $ref: '#/components/parameters/WorkspaceID'
         - $ref: '#/components/parameters/CapabilityID'
@@ -1317,7 +1347,7 @@ paths:
                     items:
                       type: object
                       properties:
-                        project_agent_id:
+                        agent_id:
                           type: string
                           format: uuid
                         agent_name:
@@ -1545,13 +1575,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/projects/{projectID}/agents/{projectAgentID}/capabilities:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities:
     get:
-      operationId: listDevProjectAgentCapabilities
-      summary: List installed and available capabilities for a project agent
+      operationId: listDevAgentCapabilities
+      summary: List installed and available capabilities for an agent
       parameters:
-        - $ref: '#/components/parameters/ProjectID'
-        - $ref: '#/components/parameters/ProjectAgentID'
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
       responses:
         '200':
           description: Installed agent capabilities plus workspace-available capabilities
@@ -1559,12 +1589,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [project_id, project_agent_id, installed, available]
+                required: [workspace_id, agent_id, installed, available]
                 properties:
-                  project_id:
+                  workspace_id:
                     type: string
                     format: uuid
-                  project_agent_id:
+                  agent_id:
                     type: string
                     format: uuid
                   installed:
@@ -1585,13 +1615,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/projects/{projectID}/agents/{projectAgentID}/capabilities/{capabilityVersionID}/enable:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable:
     post:
-      operationId: enableDevProjectAgentCapability
-      summary: Enable or switch a capability version on a project agent
+      operationId: enableDevAgentCapability
+      summary: Enable or switch a capability version on an agent
       parameters:
-        - $ref: '#/components/parameters/ProjectID'
-        - $ref: '#/components/parameters/ProjectAgentID'
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
         - $ref: '#/components/parameters/CapabilityVersionID'
       requestBody:
         required: false
@@ -1620,13 +1650,13 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           description: Capability version input is invalid
-  /api/v1/projects/{projectID}/agents/{projectAgentID}/capabilities/{capabilityID}/upgrade:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade:
     post:
-      operationId: upgradeDevProjectAgentCapability
+      operationId: upgradeDevAgentCapability
       summary: Upgrade an enabled marketplace capability to a new version
       parameters:
-        - $ref: '#/components/parameters/ProjectID'
-        - $ref: '#/components/parameters/ProjectAgentID'
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
         - $ref: '#/components/parameters/CapabilityID'
       requestBody:
         required: true
@@ -1654,13 +1684,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/projects/{projectID}/agents/{projectAgentID}/capabilities/{capabilityVersionID}:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}:
     delete:
-      operationId: deleteDevProjectAgentCapability
-      summary: Disable a capability binding on a project agent
+      operationId: deleteDevAgentCapability
+      summary: Disable a capability binding on an agent
       parameters:
-        - $ref: '#/components/parameters/ProjectID'
-        - $ref: '#/components/parameters/ProjectAgentID'
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
         - $ref: '#/components/parameters/CapabilityVersionID'
       responses:
         '204':
@@ -1734,7 +1764,7 @@ paths:
         '400':
           description: Malformed workspace UUID, invalid JSON, missing required fields, or secret vault not configured
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed secret vault is disabled
   /api/v1/workspaces/{workspaceID}/secrets/{secretID}/disable:
@@ -1763,7 +1793,7 @@ paths:
         '404':
           description: Unknown secret in this workspace
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed secret vault is disabled
   /api/v1/workspaces/{workspaceID}/model-providers:
@@ -1833,7 +1863,7 @@ paths:
         '400':
           description: Malformed workspace UUID or invalid JSON
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/model-providers/{providerID}/disable:
@@ -1862,7 +1892,7 @@ paths:
         '404':
           description: Unknown model provider in this workspace
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/model-providers/{providerID}:
@@ -1924,7 +1954,7 @@ paths:
         '404':
           description: Unknown model provider in this workspace
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models:
@@ -1995,7 +2025,7 @@ paths:
         '400':
           description: Malformed workspace UUID or invalid JSON
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models/{modelID}/disable:
@@ -2024,7 +2054,7 @@ paths:
         '404':
           description: Unknown model in this workspace
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models/{modelID}/test:
@@ -2072,7 +2102,7 @@ paths:
         '404':
           description: Unknown model in this workspace
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models/{modelID}:
@@ -2128,16 +2158,16 @@ paths:
         '404':
           description: Unknown model in this workspace
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed model registry is disabled
-  /api/v1/project-agents/{projectAgentID}/profile:
+  /api/v1/agents/{agentID}/profile:
     post:
-      operationId: configureDevProjectAgentProfile
-      summary: Configure a Project Agent profile (runtime/model/workdir/system prompt)
-      description: Dev-only endpoint for updating per-project agent profile config. When `model_id` is provided, the server validates that both the model and its provider are active in the project agent's workspace before persisting.
+      operationId: configureDevAgentProfile
+      summary: Configure an Agent profile (runtime/model/workdir/system prompt)
+      description: Dev-only endpoint for updating per-agent profile config. When `model_id` is provided, the server validates that both the model and its provider are active in the agent's workspace before persisting.
       parameters:
-        - name: projectAgentID
+        - name: agentID
           in: path
           required: true
           schema:
@@ -2163,22 +2193,22 @@ paths:
                   additionalProperties: true
       responses:
         '200':
-          description: Project agent profile updated
+          description: Agent profile updated
         '400':
           description: Malformed JSON or referenced model/provider is disabled (model or provider disabled)
         '404':
-          description: Unknown project agent or unknown model
+          description: Unknown agent or unknown model
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
-          description: Database-backed project agent profile config is disabled
-  /api/v1/project-agents/{projectAgentID}/disable:
+          description: Database-backed agent profile config is disabled
+  /api/v1/agents/{agentID}/disable:
     post:
-      operationId: disableDevProjectAgent
-      summary: Disable a project agent (status='disabled') so mentions stop creating runs
-      description: Sets the project agent status to 'disabled', writes a project_agent.disabled audit event, and removes the agent from project_agents list responses. Mentions of the agent in subsequent fake IM / gateway messages will not produce queued runs until the agent is enabled again.
+      operationId: disableDevAgent
+      summary: Disable an agent (status='disabled') so mentions stop creating runs
+      description: Sets the agent status to 'disabled', writes an agent.disabled audit event, and removes the agent from agents list responses. Mentions of the agent in subsequent fake IM / gateway messages will not produce queued runs until the agent is enabled again.
       parameters:
-        - name: projectAgentID
+        - name: agentID
           in: path
           required: true
           schema:
@@ -2186,22 +2216,22 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Project agent disabled
+          description: Agent disabled
         '400':
-          description: Malformed project_agent_id
+          description: Malformed agent_id
         '404':
-          description: Unknown project agent
+          description: Unknown agent
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
-          description: Database-backed project agent lifecycle is disabled
-  /api/v1/project-agents/{projectAgentID}/enable:
+          description: Database-backed agent lifecycle is disabled
+  /api/v1/agents/{agentID}/enable:
     post:
-      operationId: enableDevProjectAgent
-      summary: Re-enable a previously disabled project agent
-      description: Sets the project agent status back to 'active', writes a project_agent.enabled audit event, and restores the agent to project_agents list responses so mentions create runs again.
+      operationId: enableDevAgent
+      summary: Re-enable a previously disabled agent
+      description: Sets the agent status back to 'active', writes an agent.enabled audit event, and restores the agent to agents list responses so mentions create runs again.
       parameters:
-        - name: projectAgentID
+        - name: agentID
           in: path
           required: true
           schema:
@@ -2209,15 +2239,15 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Project agent enabled
+          description: Agent enabled
         '400':
-          description: Malformed project_agent_id
+          description: Malformed agent_id
         '404':
-          description: Unknown project agent
+          description: Unknown agent
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
-          description: Database-backed project agent lifecycle is disabled
+          description: Database-backed agent lifecycle is disabled
   /dev/http-agent/runner/run-once:
     post:
       operationId: runDevHTTPAgentRunnerOnce
@@ -2229,39 +2259,11 @@ paths:
         '400':
           description: Claimed run is missing a valid http(s) endpoint
         '409':
-          description: Claimed run became non-completable or its project-agent relation is invalid
+          description: Claimed run became non-completable or its agent relation is invalid
         '502':
           description: HTTP Agent network failure, non-2xx response, or invalid JSON response
         '503':
           description: Database-backed HTTP runner is disabled
-  /api/v1/projects/{projectID}/agents:
-    get:
-      operationId: listDevProjectAgents
-      summary: List active agents enabled in a project
-      parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Active project agents with workspace agent profile basics
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [agents]
-                properties:
-                  agents:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ProjectAgent'
-        '404':
-          description: Unknown active project
-        '503':
-          description: Database-backed read APIs are disabled
   /api/v1/conversations/{conversationID}/timeline:
     get:
       operationId: getDevConversationTimeline
@@ -2313,7 +2315,7 @@ paths:
                   maxLength: 32000
                 mentioned_agent_ids:
                   type: array
-                  description: Optional project_agent IDs overriding @mention parsing.
+                  description: Optional agent IDs overriding @mention parsing.
                   items:
                     type: string
                     format: uuid
@@ -2407,23 +2409,18 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/projects/{projectID}/conversations:
+  /api/v1/workspaces/{workspaceID}/conversations:
     get:
-      operationId: listDevProjectConversations
-      summary: List active conversations within a project
+      operationId: listDevConversations
+      summary: List active conversations within a workspace
       description: |
         Conversations are ordered by most recent activity (last message created_at, falling back to conversation created_at) and include lightweight last-message preview metadata for sidebar rendering.
 
-        Each item includes derived fields `primary_agent_id` and `primary_agent_name` resolved from `metadata.primary_agent_id` via a JOIN against `project_agents` and `agents`. Both fields are empty strings when the conversation is channel-style (no agent bound) or when the bound agent has been soft-deleted.
+        Each item includes derived fields `primary_agent_id` and `primary_agent_name` resolved from `metadata.primary_agent_id` via a JOIN against `agents`. Both fields are empty strings when the conversation is channel-style (no agent bound) or when the bound agent has been soft-deleted.
 
         Filter by `agent_id` query parameter to scope the list to a single 1v1 DM thread group (the "按 agent 看会话" sidebar view).
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
         - name: agent_id
           in: query
           required: false
@@ -2432,12 +2429,12 @@ paths:
 
             Validation: must be a syntactically valid UUID — malformed values
             return 422. The server does NOT validate that the UUID points to
-            an active project_agent in this project (intentional: front-end
+            an active agent in this workspace (intentional: front-end
             picks the value from a dropdown of active agents, and skipping the
             extra lookup keeps the filter cheap). Foreign / inactive / unknown
             agent_id values simply return an empty list — the empty result
             does not distinguish "this agent has no conversations" from
-            "this agent does not exist in the project".
+            "this agent does not exist in the workspace".
           schema:
             type: string
             format: uuid
@@ -2450,29 +2447,24 @@ paths:
             maximum: 500
       responses:
         '200':
-          description: Project conversations ordered by recent activity with message_count, last_message_*, and primary_agent_* fields
+          description: Workspace conversations ordered by recent activity with message_count, last_message_*, and primary_agent_* fields
         '404':
-          description: Unknown active project
+          description: Unknown active workspace
         '422':
           description: agent_id is not a valid UUID
         '503':
           description: Database-backed read APIs are disabled
     post:
-      operationId: createDevProjectConversation
-      summary: Create a new conversation within a project
+      operationId: createDevConversation
+      summary: Create a new conversation within a workspace
       description: |
-        Creates a project-scoped conversation. The workspace_id is inherited from the project; `surface` defaults to "web" and `form` defaults to the surface-appropriate value ("thread" for web, "group" for im, "oneshot" for api) when omitted.
+        Creates a workspace-scoped conversation. `surface` defaults to "web" and `form` defaults to the surface-appropriate value ("thread" for web, "group" for im, "oneshot" for api) when omitted.
 
-        When `agent_id` is provided, the value is validated against `project_agents` (must be active and belong to the same project) and persisted as `metadata.primary_agent_id`. This binds the conversation to a single primary agent for 1v1 DM display in the admin UI. The conversations table schema is unchanged — the binding lives in jsonb metadata, keeping the table channel-friendly for future multi-agent forms.
+        When `agent_id` is provided, the value is validated against `agents` (must be active and belong to the same workspace) and persisted as `metadata.primary_agent_id`. This binds the conversation to a single primary agent for 1v1 DM display in the admin UI. The conversations table schema is unchanged — the binding lives in jsonb metadata, keeping the table channel-friendly for future multi-agent forms.
 
         The response carries the derived `primary_agent_id` / `primary_agent_name` fields identical to GET responses, so callers can render the sidebar entry immediately without a follow-up GET.
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
       requestBody:
         required: false
         content:
@@ -2495,7 +2487,7 @@ paths:
                 agent_id:
                   type: string
                   format: uuid
-                  description: Optional project_agent id to bind as the conversation's primary agent. Persisted to metadata.primary_agent_id. When omitted, the conversation has no primary agent (channel-style, future-compatible).
+                  description: Optional agent id to bind as the conversation's primary agent. Persisted to metadata.primary_agent_id. When omitted, the conversation has no primary agent (channel-style, future-compatible).
                 metadata:
                   type: object
                   additionalProperties: true
@@ -2504,16 +2496,16 @@ paths:
         '201':
           description: Conversation created, response carries derived primary_agent_id and primary_agent_name fields
         '400':
-          description: Invalid project UUID, invalid JSON, or invalid conversation surface/form
+          description: Invalid workspace UUID, invalid JSON, or invalid conversation surface/form
         '404':
-          description: Unknown active project
+          description: Unknown active workspace
         '422':
-          description: agent_id is malformed (ErrInvalidProjectInput) or does not belong to an active project_agent in this project (ErrUnknownMention)
+          description: agent_id is malformed (ErrInvalidInput) or does not belong to an active agent in this workspace (ErrUnknownMention)
         '503':
           description: Database-backed conversation creation is disabled
   /api/v1/conversations/{conversationID}:
     get:
-      operationId: getDevProjectConversation
+      operationId: getDevConversation
       summary: Read a single conversation summary
       description: |
         Returns basic conversation metadata without the message timeline (use /api/v1/conversations/{conversationID}/timeline for the full message history).
@@ -2569,7 +2561,7 @@ paths:
         '400':
           description: Invalid conversation_id or malformed JSON
         '403':
-          description: Caller is not a member of the conversation's project
+          description: Caller is not a member of the conversation's workspace
         '404':
           description: Unknown active conversation
         '422':
@@ -2598,7 +2590,7 @@ paths:
         '400':
           description: Invalid conversation_id
         '403':
-          description: Caller is not a member of the conversation's project
+          description: Caller is not a member of the conversation's workspace
         '404':
           description: Unknown active conversation
         '503':
@@ -2653,7 +2645,7 @@ paths:
         '400':
           description: Malformed run UUID or invalid JSON
         '403':
-          description: Caller is not a member of the run project or lacks retry role
+          description: Caller is not a member of the run workspace or lacks retry role
         '404':
           description: Unknown agent run
         '409':
@@ -2687,25 +2679,20 @@ paths:
         '400':
           description: Malformed run UUID or invalid JSON
         '403':
-          description: Caller is not a project member
+          description: Caller is not a workspace member
         '404':
           description: Unknown agent run
         '422':
           description: Run is already completed, failed, or cancelled
         '503':
           description: Database-backed cancel is disabled
-  /api/v1/projects/{projectID}/agent-runs:
+  /api/v1/workspaces/{workspaceID}/agent-runs:
     get:
-      operationId: listDevProjectAgentRuns
-      summary: List project agent runs, optionally filtered by status
+      operationId: listDevAgentRuns
+      summary: List workspace agent runs, optionally filtered by status
       description: Run summaries include user_facing_reason on failed runs so a Chinese-readable error sentence is available alongside the raw status.
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
         - name: status
           in: query
           required: false
@@ -2721,12 +2708,12 @@ paths:
             maximum: 500
       responses:
         '200':
-          description: Project agent runs ordered by creation time
+          description: Workspace agent runs ordered by creation time
         '404':
-          description: Unknown active project
+          description: Unknown active workspace
         '503':
           description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}/agent-runs/{runID}/events:
+  /api/v1/workspaces/{workspaceID}/agent-runs/{runID}/events:
     get:
       operationId: listDevAgentRunEvents
       summary: List persisted events for one agent run
@@ -2734,15 +2721,10 @@ paths:
         Dev-only Run Detail Steps read API. Returns the persisted
         `agent_run_events` rows for a run in ascending sequence order.
         The `after_sequence` cursor lets the admin UI poll while a run is
-        still active without using SSE. The run must belong to `projectID`;
-        project mismatches and unknown runs return 404.
+        still active without using SSE. The run must belong to `workspaceID`;
+        workspace mismatches and unknown runs return 404.
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
         - name: runID
           in: path
           required: true
@@ -2770,30 +2752,25 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: Unknown run, unknown project, or run/project mismatch
+          description: Unknown run, unknown workspace, or run/workspace mismatch
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BadRequestError'
         '503':
           description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}/audit-records:
+  /api/v1/workspaces/{workspaceID}/audit-records:
     get:
-      operationId: listDevProjectAuditRecords
-      summary: List project audit records
+      operationId: listDevAuditRecords
+      summary: List workspace audit records
       description: |
         Dev-only governance read API backed by the unified `audit_records`
         table. Returns events from the 5-category source taxonomy
         (identity / admin / runtime / approval / data) for the given
-        active project, ordered by `occurred_at` then `id` descending.
-        Unknown active projects return 404; malformed project IDs return 400.
+        active workspace, ordered by `occurred_at` then `id` descending.
+        Unknown active workspaces return 404; malformed workspace IDs return 400.
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
         - name: source
           in: query
           required: false
@@ -2835,13 +2812,13 @@ paths:
             maximum: 500
       responses:
         '200':
-          description: Project audit records ordered by newest first
+          description: Workspace audit records ordered by newest first
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  project_id:
+                  workspace_id:
                     type: string
                     format: uuid
                   source:
@@ -2880,44 +2857,36 @@ paths:
                         workspace_id:
                           type: string
                           format: uuid
-                        project_id:
-                          type: string
-                          format: uuid
                         payload:
                           type: object
                           additionalProperties: true
         '400':
-          description: Malformed project UUID
+          description: Malformed workspace UUID
         '404':
-          description: Unknown active project
+          description: Unknown active workspace
         '503':
           description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}/connectors:
+  /api/v1/workspaces/{workspaceID}/connectors:
     get:
-      operationId: listDevProjectConnectors
-      summary: List connector types in use by a project
+      operationId: listDevConnectors
+      summary: List connector types in use by a workspace
       description: |
         Dev-only registry-view endpoint for the admin Connectors page.
         There is no `connectors` table by design — the connector identity
-        lives on each Project Agent's `connector_type` field. This endpoint
+        lives on each Agent's `connector_type` field. This endpoint
         aggregates those rows into a per-type summary so the admin UI can
         render a list without a new schema.
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
       responses:
         '200':
-          description: Connector summary for the project
+          description: Connector summary for the workspace
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  project_id:
+                  workspace_id:
                     type: string
                     format: uuid
                   connectors:
@@ -2939,9 +2908,9 @@ paths:
                           items:
                             type: string
         '400':
-          description: Malformed project UUID
+          description: Malformed workspace UUID
         '404':
-          description: Unknown active project
+          description: Unknown active workspace
         '503':
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/gateways:
@@ -2990,18 +2959,13 @@ paths:
                           type: string
         '400':
           description: Malformed workspace UUID
-  /api/v1/projects/{projectID}/usage:
+  /api/v1/workspaces/{workspaceID}/usage:
     get:
-      operationId: listDevProjectUsage
-      summary: List project usage logs
-      description: Dev-only governance read API for fake runtime usage rows. Records are ordered by created_at descending. Unknown active projects return 404; malformed project IDs or agent_run_id filters return 400.
+      operationId: listDevUsage
+      summary: List workspace usage logs
+      description: Dev-only governance read API for fake runtime usage rows. Records are ordered by created_at descending. Unknown active workspaces return 404; malformed workspace IDs or agent_run_id filters return 400.
       parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
         - name: agent_run_id
           in: query
           required: false
@@ -3017,11 +2981,11 @@ paths:
             maximum: 500
       responses:
         '200':
-          description: Project usage logs ordered by newest first
+          description: Workspace usage logs ordered by newest first
         '400':
-          description: Malformed project UUID or agent_run_id UUID
+          description: Malformed workspace UUID or agent_run_id UUID
         '404':
-          description: Unknown active project
+          description: Unknown active workspace
         '503':
           description: Database-backed read APIs are disabled
   /api/v1/me:
@@ -3091,80 +3055,6 @@ paths:
           description: Missing or invalid auth session cookie (or disabled dev header shim)
         '503':
           description: Database-backed read APIs are disabled
-  /api/v1/workspaces/{workspaceID}/projects:
-    get:
-      operationId: listDevWorkspaceProjects
-      summary: List active projects inside a workspace (header project switcher)
-      description: |
-        Dev-only read API. Returns active projects under a workspace.
-        Returns 404 when the workspace itself does not exist; returns an
-        empty list when the workspace has no projects yet (consistent
-        with the project-scoped list endpoints).
-      parameters:
-        - name: workspaceID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 100
-            maximum: 500
-      responses:
-        '200':
-          description: Active projects in the workspace, ordered by name
-        '400':
-          description: Malformed workspace UUID
-        '404':
-          description: Unknown / deleted workspace
-        '503':
-          description: Database-backed read APIs are disabled
-    post:
-      operationId: createDevProject
-      summary: Create a new project inside a workspace
-      description: |
-        Admin path requiring an authenticated caller. The caller is auto-added
-        as the project's `owner` member in the same transaction. Slug is
-        system-generated as `project-<12 hex chars>` and is permanent — there
-        is no way to set it from the request.
-      parameters:
-        - name: workspaceID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-      responses:
-        '201':
-          description: New project plus the auto-created owner project_member row
-        '400':
-          description: Malformed workspace UUID / invalid body / empty name
-        '404':
-          description: Unknown / deleted workspace
-        '409':
-          description: Could not generate a unique slug after retry (astronomically rare)
-        '401':
-          description: Missing or invalid auth session cookie (or disabled dev header shim)
-        '403':
-          description: User lacks required role on this workspace/project
-        '503':
-          description: Database-backed read APIs are disabled
   /api/v1/workspaces:
     post:
       operationId: createDevWorkspace
@@ -3229,7 +3119,7 @@ paths:
         '401':
           description: Missing or invalid auth session cookie (or disabled dev header shim)
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/archive:
@@ -3238,7 +3128,7 @@ paths:
       summary: Soft-delete (archive) a workspace
       description: |
         Sets `deleted_at` on the workspace row. Workspace drops out of
-        `/api/v1/me/workspaces` immediately; child members / projects are
+        `/api/v1/me/workspaces` immediately; child members are
         left intact in the DB but stop appearing through the workspace
         JOIN.
       parameters:
@@ -3259,72 +3149,6 @@ paths:
           description: Workspace owns marketplace capabilities still used by another workspace
         '401':
           description: Missing or invalid auth session cookie (or disabled dev header shim)
-        '503':
-          description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}:
-    patch:
-      operationId: updateDevProject
-      summary: Rename / update a project (name and/or description — slug is permanent)
-      description: |
-        Patch the human-readable name and/or description. Slug is
-        system-generated and immutable.
-      parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-      responses:
-        '200':
-          description: Updated project
-        '400':
-          description: Malformed UUID / empty patch / empty name
-        '404':
-          description: Unknown / archived / deleted project
-        '401':
-          description: Missing or invalid auth session cookie (or disabled dev header shim)
-        '403':
-          description: User lacks required role on this workspace/project
-        '503':
-          description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}/archive:
-    post:
-      operationId: archiveDevProject
-      summary: Soft-archive a project
-      description: |
-        Sets `status = 'archived'` on the project row. The row is kept
-        joinable for historical references; active-list queries
-        (`/api/v1/workspaces/{wsId}/projects`) filter it out.
-      parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Archived project (status = archived)
-        '400':
-          description: Malformed UUID
-        '404':
-          description: Unknown / already-archived project
-        '401':
-          description: Missing or invalid auth session cookie (or disabled dev header shim)
-        '403':
-          description: User lacks required role on this workspace/project
         '503':
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/members:
@@ -3396,7 +3220,7 @@ paths:
         '500':
           description: Server-side failure (e.g. DB write error)
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/members/{userID}:
@@ -3436,156 +3260,15 @@ paths:
         '404':
           description: Workspace membership not found
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed read APIs are disabled
     delete:
       operationId: removeDevWorkspaceMember
-      summary: Remove a workspace member (soft-delete, cascades to projects)
-      description: Soft-deletes the workspace membership. In the same transaction, soft-deletes any project memberships the same user holds within this workspace. The user record itself is preserved so it can be re-added later. Returns the removed ws_member row plus the count of cascaded project rows.
+      summary: Remove a workspace member (soft-delete)
+      description: Soft-deletes the workspace membership. The user record itself is preserved so it can be re-added later. Returns the removed ws_member row.
       parameters:
         - name: workspaceID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: userID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Removed membership row + cascaded project_members count
-        '400':
-          description: Malformed UUID
-        '404':
-          description: Workspace membership not found
-        '403':
-          description: User lacks required role on this workspace/project
-        '503':
-          description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}/members:
-    get:
-      operationId: listDevProjectMembers
-      summary: List project members
-      description: Dev-only read API. Returns project memberships joined with user email/name/status. Unknown active projects return 404.
-      parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 100
-            maximum: 500
-      responses:
-        '200':
-          description: Project members joined with user info, oldest first
-        '400':
-          description: Malformed project UUID
-        '404':
-          description: Unknown active project
-        '503':
-          description: Database-backed read APIs are disabled
-    post:
-      operationId: addDevProjectMember
-      summary: Promote a workspace member into a project
-      description: |
-        Adds an existing active workspace member to the given project at
-        the chosen role. The user must already be a member of the
-        project's workspace (mint workspace members via the workspace
-        endpoint first). The project's workspace_id is resolved server-
-        side from the project record; the client supplies only user_id +
-        role. Idempotent on (project_id, user_id); a soft-deleted
-        membership is revived at the new role.
-      parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [user_id, role]
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                role:
-                  type: string
-                  enum: [owner, admin, member, viewer]
-      responses:
-        '201':
-          description: Resulting project membership row (enriched with user info)
-        '400':
-          description: Malformed UUID / invalid role / user is not an active workspace member
-        '404':
-          description: Unknown active project
-        '403':
-          description: User lacks required role on this workspace/project
-        '500':
-          description: Server-side failure
-        '503':
-          description: Database-backed read APIs are disabled
-  /api/v1/projects/{projectID}/members/{userID}:
-    patch:
-      operationId: updateDevProjectMemberRole
-      summary: Update a project member's role
-      description: Flip an existing project member's role. 404 if the membership is unknown / already soft-deleted.
-      parameters:
-        - name: projectID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: userID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [role]
-              properties:
-                role:
-                  type: string
-                  enum: [owner, admin, member, viewer]
-      responses:
-        '200':
-          description: Updated membership row
-        '400':
-          description: Malformed UUID / invalid role
-        '404':
-          description: Project membership not found
-        '403':
-          description: User lacks required role on this workspace/project
-        '503':
-          description: Database-backed read APIs are disabled
-    delete:
-      operationId: removeDevProjectMember
-      summary: Remove a project member (soft-delete)
-      description: Soft-deletes the project membership only. The user's workspace membership is untouched (no cascade in this direction — workspace is the parent scope).
-      parameters:
-        - name: projectID
           in: path
           required: true
           schema:
@@ -3603,9 +3286,9 @@ paths:
         '400':
           description: Malformed UUID
         '404':
-          description: Project membership not found
+          description: Workspace membership not found
         '403':
-          description: User lacks required role on this workspace/project
+          description: User lacks required role on this workspace
         '503':
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/runtime/status:
@@ -3995,10 +3678,10 @@ paths:
       summary: List active persistent sandboxes in a workspace
       description: |
         Dev-only admin API. Returns every persistent sandbox whose
-        `killed_at` is NULL in the given workspace. `project_agent_id`
+        `killed_at` is NULL in the given workspace. `agent_id`
         is nullable: NULL means the sandbox is currently unbound.
         Response shape matches the per-agent
-        `GET /api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox`
+        `GET /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox`
         endpoint, wrapped in `{"sandboxes": [...]}`. Empty workspace
         returns `{"sandboxes": []}`, not 404.
       parameters:
@@ -4034,29 +3717,19 @@ paths:
           description: Internal error reading sandboxes
         '503':
           description: Sandbox store not configured (sandbox runner mode disabled)
-  /api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox:
     get:
-      operationId: getDevProjectAgentSandbox
-      summary: Get the active persistent sandbox binding for one project agent
+      operationId: getDevAgentSandbox
+      summary: Get the active persistent sandbox binding for one agent
       description: |
         Dev-only admin API (Phase 4 sandbox runtime). Returns the current
-        live sandbox binding for a `(workspace, project_agent)` pair, or
+        live sandbox binding for a `(workspace, agent)` pair, or
         `null` when no binding exists. The binding includes `sandbox_id`,
         `status`, `started_at`, `last_active_at`, optional `metadata`,
         and the originating `agent_run_id` if known.
       parameters:
-        - name: workspaceID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: projectAgentID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
       responses:
         '200':
           description: Live sandbox binding (or `null` when none active)
@@ -4065,47 +3738,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/SandboxStatus'
         '400':
-          description: Malformed workspace/project-agent UUID
+          description: Malformed workspace/agent UUID
         '503':
           description: Sandbox store not configured
-  /api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/kill:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill:
     post:
-      operationId: killDevProjectAgentSandbox
-      summary: Force-kill the active persistent sandbox for a project agent
+      operationId: killDevAgentSandbox
+      summary: Force-kill the active persistent sandbox for an agent
       description: |
         Dev-only admin API. Terminates the running sandbox (via the
         configured SandboxRunner provider) and marks `killed_at` on the
         binding row. Idempotent — kicking an already-killed binding
         returns 200 with the existing terminal state. Next prompt to the
-        project agent re-spawns a fresh sandbox per the Persistent
+        agent re-spawns a fresh sandbox per the Persistent
         Sandbox Provider singleflight contract (spec § 3.1).
       parameters:
-        - name: workspaceID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: projectAgentID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
       responses:
         '200':
           description: Sandbox killed (or already terminal) — returns final binding state
         '400':
-          description: Malformed workspace/project-agent UUID
+          description: Malformed workspace/agent UUID
         '404':
-          description: No active sandbox binding for this project agent
+          description: No active sandbox binding for this agent
         '500':
           description: Sandbox kill failed at the runner / store layer
         '503':
           description: Sandbox binding store / runner not configured
-  /api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/rebuild:
+  /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild:
     post:
-      operationId: rebuildDevProjectAgentSandbox
+      operationId: rebuildDevAgentSandbox
       summary: Kill the active persistent sandbox and pre-warm a fresh one
       description: |
         Dev-only admin API. Two-step lifecycle: (1) kill the current
@@ -4127,18 +3790,8 @@ paths:
         normal kill path; subsequent calls return 404 because no
         live binding remains.
       parameters:
-        - name: workspaceID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: projectAgentID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AgentID'
       responses:
         '200':
           description: |
@@ -4146,9 +3799,9 @@ paths:
             outcome via the `warm` field
             (`ok` | `failed` | `unavailable`).
         '400':
-          description: Malformed workspace/project-agent UUID
+          description: Malformed workspace/agent UUID
         '404':
-          description: No active sandbox binding for this project agent
+          description: No active sandbox binding for this agent
         '500':
           description: Sandbox kill failed at the runner / store layer
         '503':
@@ -4592,23 +4245,9 @@ components:
       schema:
         type: string
         format: uuid
-    ProjectID:
-      in: path
-      name: projectID
-      required: true
-      schema:
-        type: string
-        format: uuid
     AgentID:
       in: path
       name: agentID
-      required: true
-      schema:
-        type: string
-        format: uuid
-    ProjectAgentID:
-      in: path
-      name: projectAgentID
       required: true
       schema:
         type: string
@@ -5041,12 +4680,12 @@ components:
           type: string
     AgentCapability:
       type: object
-      required: [id, project_agent_id, capability_id, capability_version_id, enabled, configuration, created_at, updated_at]
+      required: [id, agent_id, capability_id, capability_version_id, enabled, configuration, created_at, updated_at]
       properties:
         id:
           type: string
           format: uuid
-        project_agent_id:
+        agent_id:
           type: string
           format: uuid
         capability_id:
@@ -5086,7 +4725,7 @@ components:
         workspace_id:
           type: string
           format: uuid
-        project_agent_id:
+        agent_id:
           type:
             - string
             - 'null'
@@ -5121,15 +4760,12 @@ components:
           additionalProperties: true
     AgentRunSummary:
       type: object
-      required: [id, workspace_id, project_id, connector_type, status, created_at]
+      required: [id, workspace_id, connector_type, status, created_at]
       properties:
         id:
           type: string
           format: uuid
         workspace_id:
-          type: string
-          format: uuid
-        project_id:
           type: string
           format: uuid
         conversation_id:
@@ -5141,10 +4777,6 @@ components:
           format: uuid
           nullable: true
         output_message_id:
-          type: string
-          format: uuid
-          nullable: true
-        project_agent_id:
           type: string
           format: uuid
           nullable: true
@@ -5179,15 +4811,12 @@ components:
           nullable: true
     AgentRunOutputMessage:
       type: object
-      required: [id, workspace_id, project_id, conversation_id, sender_type, kind, content_format, content, metadata, created_at]
+      required: [id, workspace_id, conversation_id, sender_type, kind, content_format, content, metadata, created_at]
       properties:
         id:
           type: string
           format: uuid
         workspace_id:
-          type: string
-          format: uuid
-        project_id:
           type: string
           format: uuid
         conversation_id:
@@ -5241,15 +4870,12 @@ components:
           format: date-time
     AgentRunUsageRow:
       type: object
-      required: [id, workspace_id, project_id, agent_run_id, provider, model, input_tokens, output_tokens, cost_usd, raw, created_at]
+      required: [id, workspace_id, agent_run_id, provider, model, input_tokens, output_tokens, cost_usd, raw, created_at]
       properties:
         id:
           type: string
           format: uuid
         workspace_id:
-          type: string
-          format: uuid
-        project_id:
           type: string
           format: uuid
         agent_run_id:
@@ -5281,7 +4907,7 @@ components:
         agent_daemon runs, the server persists this under
         agent_runs.metadata.execution_snapshot after the concrete runtime is
         resolved. Older runs still render from the run row, runtime row,
-        project-agent execution config, and connector binding metadata.
+        agent execution config, and connector binding metadata.
       properties:
         id:
           type: string
@@ -5426,15 +5052,12 @@ components:
           format: date-time
     MessageSummary:
       type: object
-      required: [id, workspace_id, project_id, conversation_id, sender_type, sender_id, kind, content_format, content, metadata, created_at]
+      required: [id, workspace_id, conversation_id, sender_type, sender_id, kind, content_format, content, metadata, created_at]
       properties:
         id:
           type: string
           format: uuid
         workspace_id:
-          type: string
-          format: uuid
-        project_id:
           type: string
           format: uuid
         conversation_id:
@@ -5511,7 +5134,7 @@ components:
           description: Legacy display/config snapshot of capability names. New create flows should also send initial_capabilities to bind concrete versions.
         initial_capabilities:
           type: array
-          description: Capability versions to enable on the new project_agent during the same create transaction. The UI defaults each selected capability to its latest_version_id.
+          description: Capability versions to enable on the new agent during the same create transaction. The UI defaults each selected capability to its latest_version_id.
           items:
             $ref: '#/components/schemas/InitialAgentCapabilityRequest'
         visibility:
@@ -5530,7 +5153,7 @@ components:
           type: object
           additionalProperties: true
           description: |
-            Project-Agent scoped execution config. For connector_type=agent_daemon
+            Agent execution config. For connector_type=agent_daemon
             this may include daemon_mode (local|sandbox), agent_kind
             (claude_code or opencode today; codex/pi_agent later), device_id for
             daemon_mode=local, and work_dir.
@@ -5559,7 +5182,7 @@ components:
         config:
           type: object
           additionalProperties: true
-          description: Project-Agent scoped execution config.
+          description: Agent execution config.
         slug:
           type: string
           description: Immutable. Supplying this field returns 422.
@@ -5809,7 +5432,7 @@ components:
           description: True when new deep-equals old; the audit log is suppressed.
     AgentSummary:
       type: object
-      required: [id, workspace_id, name, slug, description, connector_type, status, capabilities, config, created_at, updated_at]
+      required: [id, workspace_id, name, slug, description, connector_type, visibility, status, capabilities, config, created_at, updated_at]
       properties:
         id:
           type: string
@@ -5825,6 +5448,9 @@ components:
           type: string
         connector_type:
           type: string
+        visibility:
+          type: string
+          enum: [workspace, tenant, public]
         status:
           type: string
         capabilities:
@@ -5840,102 +5466,22 @@ components:
         updated_at:
           type: string
           format: date-time
-    ProjectAgent:
-      type: object
-      required: [project_agent_id, project_id, agent_id, name, slug, description, connector_type, status, config, agent_config, enabled_at]
-      properties:
-        project_agent_id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        agent_id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        slug:
-          type: string
-        description:
-          type: string
-        connector_type:
-          type: string
-        status:
-          type: string
-        runtime:
-          type: string
-          enum: [local, sandbox]
-          description: Legacy per-Agent runtime mirror for non-daemon rows. agent_daemon execution uses config.daemon_mode and config.device_id.
-        config:
-          type: object
-          additionalProperties: true
-        agent_config:
-          type: object
-          additionalProperties: true
-        created_by_user_id:
-          type: string
-          format: uuid
-          description: |
-            Internal user ID of the Agent's creator. Empty when the creating
-            user has been deleted or the row pre-dates the field. UIs use this
-            alongside `created_by_name` to disambiguate same-named Agents.
-        created_by_name:
-          type: string
-          description: Display name of the Agent's creator. Empty when unknown.
-        enabled_at:
-          type: string
-          format: date-time
-    ProjectAgentSummary:
-      type: object
-      required: [id, workspace_id, project_id, agent_id, status, config, created_at, updated_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-        workspace_id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        agent_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-        config:
-          type: object
-          additionalProperties: true
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
     CreateAgentResponse:
       type: object
-      required: [agent, project_agent]
+      required: [agent]
       properties:
         agent:
           $ref: '#/components/schemas/AgentSummary'
-        project_agent:
-          $ref: '#/components/schemas/ProjectAgentSummary'
         initial_capabilities:
           type: array
           items:
             $ref: '#/components/schemas/AgentCapability'
     DeleteAgentResponse:
       type: object
-      required: [agent, detached_project_agent_ids]
+      required: [agent]
       properties:
         agent:
           $ref: '#/components/schemas/AgentSummary'
-        detached_project_agent_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
     NameConflictError:
       type: object
       required: [error]
@@ -5965,7 +5511,7 @@ components:
         error:
           type: string
           const: slug is immutable
-    ProjectScopedRuntimeError:
+    ImmutableRuntimeError:
       type: object
       required: [error]
       properties:
@@ -6074,7 +5620,7 @@ components:
             `runner_public_key` (base64 X25519) written by the pair
             handshake. Sandbox daemon runtimes use provider
             `agent_daemon_sandbox` and may include `created_by`,
-            `project_agent_id`, and `sandbox_kind`. Daemon heartbeat
+            `agent_id`, and `sandbox_kind`. Daemon heartbeat
             persistence may include `supported_agent_kinds`,
             `supported_agent_kind_names`, `daemon_capabilities`,
             `agent_daemon_active_requests`, and `agent_daemon_heartbeat_ts`.

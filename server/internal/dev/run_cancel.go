@@ -50,7 +50,7 @@ func cancelAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFu
 			writeReadError(w, err, "failed to get agent run")
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, run.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, run.WorkspaceID); err != nil {
 			if errors.Is(err, auth.ErrNotMember) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
@@ -122,7 +122,6 @@ func emitCancelAudit(cfg *routerConfig, r *http.Request, run store.AgentRunDetai
 		TargetType:  "agent_run",
 		TargetID:    run.ID,
 		WorkspaceID: run.WorkspaceID,
-		ProjectID:   run.ProjectID,
 		Payload: map[string]any{
 			"reason":           reason,
 			"sandbox_abort_ok": sandboxAbortOK,
@@ -158,12 +157,12 @@ func cancelConversationRuns(runtimeStore RuntimeStore, cfg *routerConfig) http.H
 			reason = "user_cancel_all"
 		}
 
-		conv, err := runtimeStore.GetProjectConversation(r.Context(), convID)
+		conv, err := runtimeStore.GetConversation(r.Context(), convID)
 		if err != nil {
 			writeReadError(w, err, "failed to get conversation")
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, conv.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, conv.WorkspaceID); err != nil {
 			if errors.Is(err, auth.ErrNotMember) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
