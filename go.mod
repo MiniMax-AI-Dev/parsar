@@ -5,12 +5,14 @@ go 1.25.7
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.1
+	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.9.7
 	github.com/pressly/goose/v3 v3.27.1
+	github.com/slack-go/slack v0.17.3
 	go.opentelemetry.io/proto/otlp v1.10.0
 	golang.org/x/crypto v0.50.0
 	google.golang.org/protobuf v1.36.11

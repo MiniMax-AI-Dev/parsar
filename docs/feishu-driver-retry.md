@@ -7,7 +7,7 @@
 
 ## 1. 路径概览
 
-驱动入口:`server/internal/gateway/feishuoutbound/inflight_driver.go::InflightTickOnce`,
+驱动入口:`server/internal/gateway/inflight/inflight_driver.go::InflightTickOnce`,
 由 `Worker.Run` 以 ~2 s 心跳触发,也是 `PARSAR_FEISHU_OUTBOUND=true` 的服务起的同一个 worker(env 名沿用历史)。
 
 每次 tick 做的事:
@@ -28,7 +28,7 @@ P1 outbound worker 已下线;driver 是唯一出站路径。
 
 ## 2. 重试与退避
 
-`server/internal/gateway/feishuoutbound/retry.go`:
+`server/internal/gateway/inflight/retry.go`:
 
 ```go
 var driverBackoffSchedule = []time.Duration{
@@ -207,8 +207,8 @@ where id = '<conversation_id>';
 
 ## 6. 相关代码
 
-- 驱动入口:`server/internal/gateway/feishuoutbound/inflight_driver.go`
-- 重试 / 死信封装:`server/internal/gateway/feishuoutbound/retry.go`
+- 驱动入口:`server/internal/gateway/inflight/inflight_driver.go`
+- 重试 / 死信封装:`server/internal/gateway/inflight/retry.go`
 - claim SQL:`server/internal/db/queries/store.sql::ClaimActiveFeishuInflightConversations`
 - system notice 写入:`server/internal/store/system_messages.go::SendSystemNoticeMessage`
 - diagnostics 聚合 SQL:`server/internal/db/queries/store.sql::GetFeishuConnectorDiagnostics`

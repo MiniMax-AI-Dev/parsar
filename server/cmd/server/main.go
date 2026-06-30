@@ -37,8 +37,13 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/dev"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishuinbound"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishuoutbound"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
+	discordchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/discord"
+	slackchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/slack"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/discordrunner"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/slackrunner"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	runtimesweeper "github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/sweeper"
@@ -574,7 +579,7 @@ func main() {
 			"runtime_paths", "/api/v1/runtimes/pair, /api/v1/runtimes/{id}/heartbeat")
 
 		// Spec/memory: admin tree behind session middleware (cookie auth);
-		// runtime tree behind RunnerCredential so the in-sandbox parsar CLI's
+		// runtime tree behind RunnerCredential so the in-sandbox tg CLI's
 		// Bearer maps to a RuntimeIdentity in ctx. Both trees share the
 		// *specmemory.Service so audit events land on the same ingester.
 		specmemDeps := specmemapi.Deps{
@@ -720,6 +725,41 @@ func main() {
 		}
 	}
 
+	// Slack Socket Mode inbound runner. Opt-in via PARSAR_SLACK_SOCKET=true.
+	// Feeds the same neutral router.HandleInbound pipeline as Feishu; inbound
+	// only (agent async answers don't return to Slack until a neutral outbound
+	// worker lands). Shares the router store; no DDL.
+	if dbStore != nil {
+		if runner, err := buildSlackRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("slack socket mode runner init failed", "error", err)
+			os.Exit(1)
+		} else if runner != nil {
+			go func() {
+				if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("slack socket mode runner exited", "error", err)
+				}
+			}()
+		}
+	}
+
+	// Discord Gateway WebSocket inbound runner. Opt-in via
+	// PARSAR_DISCORD_GATEWAY=true. Feeds the same neutral router.HandleInbound
+	// pipeline as Feishu/Slack; inbound only. Shares the router store; no DDL.
+	// MESSAGE_CONTENT is a privileged gateway intent — enable it in the Discord
+	// Developer Portal or message bodies arrive empty.
+	if dbStore != nil {
+		if runner, err := buildDiscordRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("discord gateway runner init failed", "error", err)
+			os.Exit(1)
+		} else if runner != nil {
+			go func() {
+				if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("discord gateway runner exited", "error", err)
+				}
+			}()
+		}
+	}
+
 	// Feishu outbound poll worker. Opt-in via PARSAR_FEISHU_OUTBOUND=true.
 	// Poll interval default 10s; override via
 	// PARSAR_FEISHU_OUTBOUND_POLL_SECONDS for load-shedding.
@@ -729,7 +769,7 @@ func main() {
 		// card-callback path (Phase 2 owner routing) can resolve the
 		// owning pod without re-walking the binding tree.
 		outboundBinder := agentdaemonbinding.NewPgBinder(pool, func(format string, args ...any) {
-			log.Bg().Warn("feishuoutbound binder", "msg", fmt.Sprintf(format, args...))
+			log.Bg().Warn("inflight binder", "msg", fmt.Sprintf(format, args...))
 		})
 		if worker, err := buildFeishuOutboundWorker(os.Getenv, dbStore, connectorReg, outboundBinder, cfg.Server.PublicURL); err != nil {
 			log.Bg().Error("feishu outbound worker init failed", "error", err)
@@ -1258,7 +1298,7 @@ func defaultFeishuSharedBotEnv(env func(string) string) feishuSharedBotEnv {
 //   - PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET   (optional; falls back to PARSAR_FEISHU_APP_SECRET)
 //   - PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID      (optional; self-message dedup)
 //   - PARSAR_MASTER_KEY                      (REQUIRED when enabled)
-func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*feishuinbound.Manager, error) {
+func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*inbound.Manager, error) {
 	if !truthy(env("PARSAR_FEISHU_WEBSOCKET")) {
 		return nil, nil
 	}
@@ -1294,14 +1334,14 @@ func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, 
 			return root + "/join-workspace?id=" + workspaceID + "&from=feishu"
 		}
 	}
-	manager, err := feishuinbound.NewManager(feishuinbound.Options{
+	manager, err := inbound.NewManager(inbound.Options{
 		Store:           dbStore,
 		Secrets:         secretsSvc,
 		Logger:          slogFeishuInboundLogger{},
 		RefreshInterval: refreshEvery,
 		Domain:          strings.TrimSpace(env("PARSAR_FEISHU_OPENAPI_BASE_URL")),
 		OpenAPIBaseURL:  strings.TrimSpace(env("PARSAR_FEISHU_OPENAPI_BASE_URL")),
-		DefaultSharedBot: feishuinbound.DefaultSharedBotConfig{
+		DefaultSharedBot: inbound.DefaultSharedBotConfig{
 			AppID:     defaultBot.appID,
 			AppSecret: defaultBot.appSecret,
 			BotOpenID: defaultBot.botOpenID,
@@ -1321,8 +1361,203 @@ func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, 
 	return manager, nil
 }
 
+// buildSlackRunner constructs the Slack Socket Mode inbound runner from env.
+// Returns nil (silent skip) when the feature flag is off, mirroring
+// buildFeishuWebSocketManager.
+//
+// Env contract:
+//   - PARSAR_SLACK_SOCKET        (default off; "true" enables)
+//   - PARSAR_SLACK_BOT_TOKEN     (REQUIRED when enabled; xoxb-… Web API token)
+//   - PARSAR_SLACK_APP_TOKEN     (REQUIRED when enabled; xapp-… connections:write)
+//   - PARSAR_SLACK_APP_ID        (optional; the neutral bot id stamped on events)
+//
+// N4 is the env-gated shared-bot path: a single workspace's tokens, no DB
+// config (that is N5). The runner shares the router store and feeds the same
+// neutral pipeline as Feishu. publicURL seeds the visibility-rejection join
+// link, matching the Feishu manager's JoinURLBuilder.
+//
+// Card-action routing (N10): when PARSAR_MASTER_KEY is set we build a neutral
+// inbound.Manager (same Store/Secrets/PermissionRouter/PromptForUserChoiceRouter
+// as Feishu) and inject its CardActionRouter so Slack button clicks resolve
+// permissions / choices / credential forms. Without a master key the adapter
+// runs router-less and a click just echoes a neutral "received" reply.
+func buildSlackRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*slackrunner.Runner, error) {
+	if !truthy(env("PARSAR_SLACK_SOCKET")) {
+		return nil, nil
+	}
+	botToken := strings.TrimSpace(env("PARSAR_SLACK_BOT_TOKEN"))
+	if botToken == "" {
+		return nil, errors.New("PARSAR_SLACK_SOCKET=true requires PARSAR_SLACK_BOT_TOKEN (xoxb-… Web API token)")
+	}
+	appToken := strings.TrimSpace(env("PARSAR_SLACK_APP_TOKEN"))
+	if appToken == "" {
+		return nil, errors.New("PARSAR_SLACK_SOCKET=true requires PARSAR_SLACK_APP_TOKEN (xapp-… connections:write token)")
+	}
+	appID := strings.TrimSpace(env("PARSAR_SLACK_APP_ID"))
+
+	var slackJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		slackJoinURLBuilder = func(workspaceID string) string {
+			return root + "/join-workspace?id=" + workspaceID + "&from=slack"
+		}
+	}
+
+	// Best-effort card-action router: needs the secret vault (credential-form
+	// encryption) plus the connector-backed permission/choice routers. Absent a
+	// master key the adapter stays router-less rather than failing inbound.
+	var adapterOpts []slackchannel.Option
+	if masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY")); masterKey != "" {
+		secretsSvc, err := secrets.New(masterKey)
+		if err != nil {
+			return nil, fmt.Errorf("slack socket mode: init secrets service: %w", err)
+		}
+		actionMgr, err := inbound.NewManager(inbound.Options{
+			Store:                     dbStore,
+			Secrets:                   secretsSvc,
+			Logger:                    slogFeishuInboundLogger{},
+			JoinURLBuilder:            slackJoinURLBuilder,
+			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("slack socket mode: init action manager: %w", err)
+		}
+		adapterOpts = append(adapterOpts, slackchannel.WithActionRouter(actionMgr.CardActionRouter()))
+	} else {
+		log.Bg().Warn("slack socket mode: PARSAR_MASTER_KEY unset; button clicks echo 'received' (no permission/choice/credential routing)")
+	}
+
+	// Per-team bot-token resolver: a button click or runner-side send for a
+	// workspace other than the env-token default resolves its xoxb from the
+	// kind='slack_bot' secret (keyed by Slack team_id), with the env token as
+	// the single-tenant fallback. nil when no master key — the adapter keeps
+	// the static env resolver.
+	slackResolver, err := buildSlackCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, fmt.Errorf("slack socket mode: build credential resolver: %w", err)
+	}
+	if slackResolver != nil {
+		adapterOpts = append(adapterOpts, slackchannel.WithCredentialResolver(slackResolver))
+	}
+
+	adapter := slackchannel.New(slackchannel.Config{
+		AppID:    appID,
+		BotToken: botToken,
+		AppToken: appToken,
+	}, adapterOpts...)
+	runner, err := slackrunner.New(slackrunner.Config{
+		BotToken:   botToken,
+		AppToken:   appToken,
+		Channel:    adapter,
+		Store:      dbStore,
+		GateConfig: gatewaypkg.GateConfig{JoinURLBuilder: slackJoinURLBuilder},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("slack socket mode: init runner: %w", err)
+	}
+	log.Bg().Info("slack socket mode runner configured",
+		"app_id", appID != "",
+		"action_router", len(adapterOpts) > 0)
+	return runner, nil
+}
+
+// buildDiscordRunner constructs the Discord Gateway WebSocket inbound runner
+// from env. Returns nil (silent skip) when the feature flag is off, mirroring
+// buildSlackRunner.
+//
+// Env contract:
+//   - PARSAR_DISCORD_GATEWAY      (default off; "true" enables)
+//   - PARSAR_DISCORD_BOT_TOKEN    (REQUIRED when enabled; the bot token)
+//   - PARSAR_DISCORD_APP_ID       (optional; the Discord application id, used as
+//     the neutral bot id stamped on events with no guild)
+//
+// Like Slack this is the env-gated shared-bot path: a single bot's token feeding
+// the same neutral pipeline as Feishu/Slack. publicURL seeds the
+// visibility-rejection join link. Card-action routing follows the Slack shape:
+// with PARSAR_MASTER_KEY set we build a neutral inbound.Manager and inject its
+// CardActionRouter so Discord button clicks resolve permissions / choices /
+// credential forms; without it the adapter runs router-less and a click echoes a
+// neutral "received" reply. A MemoryPickStore is always injected so the
+// per-interaction select-pick accumulation (Discord fires one interaction per
+// select change) folds into the Submit click.
+func buildDiscordRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*discordrunner.Runner, error) {
+	if !truthy(env("PARSAR_DISCORD_GATEWAY")) {
+		return nil, nil
+	}
+	botToken := strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN"))
+	if botToken == "" {
+		return nil, errors.New("PARSAR_DISCORD_GATEWAY=true requires PARSAR_DISCORD_BOT_TOKEN")
+	}
+	appID := strings.TrimSpace(env("PARSAR_DISCORD_APP_ID"))
+
+	var discordJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		discordJoinURLBuilder = func(guildID string) string {
+			return root + "/join-workspace?id=" + guildID + "&from=discord"
+		}
+	}
+
+	// The pick store folds the separate select-change interactions Discord
+	// delivers into the Submit click. The adapter owns no live state, so the
+	// runner injects one regardless of routing.
+	adapterOpts := []discordchannel.Option{discordchannel.WithPickStore(discordchannel.NewMemoryPickStore())}
+	if masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY")); masterKey != "" {
+		secretsSvc, err := secrets.New(masterKey)
+		if err != nil {
+			return nil, fmt.Errorf("discord gateway: init secrets service: %w", err)
+		}
+		actionMgr, err := inbound.NewManager(inbound.Options{
+			Store:                     dbStore,
+			Secrets:                   secretsSvc,
+			Logger:                    slogFeishuInboundLogger{},
+			JoinURLBuilder:            discordJoinURLBuilder,
+			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("discord gateway: init action manager: %w", err)
+		}
+		adapterOpts = append(adapterOpts, discordchannel.WithActionRouter(actionMgr.CardActionRouter()))
+	} else {
+		log.Bg().Warn("discord gateway: PARSAR_MASTER_KEY unset; button clicks echo 'received' (no permission/choice/credential routing)")
+	}
+
+	// Per-guild bot-token resolver: a button click or runner-side send for a guild
+	// other than the env-token default resolves its token from the
+	// kind='discord_bot' secret (keyed by Discord guild_id), with the env token as
+	// the single-bot fallback. nil when no master key — the adapter keeps the
+	// static env resolver.
+	discordResolver, err := buildDiscordCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, fmt.Errorf("discord gateway: build credential resolver: %w", err)
+	}
+	if discordResolver != nil {
+		adapterOpts = append(adapterOpts, discordchannel.WithCredentialResolver(discordResolver))
+	}
+
+	adapter := discordchannel.New(discordchannel.Config{
+		AppID:    appID,
+		BotToken: botToken,
+	}, adapterOpts...)
+	runner, err := discordrunner.New(discordrunner.Config{
+		BotToken:   botToken,
+		Channel:    adapter,
+		Store:      dbStore,
+		GateConfig: gatewaypkg.GateConfig{JoinURLBuilder: discordJoinURLBuilder},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discord gateway: init runner: %w", err)
+	}
+	log.Bg().Info("discord gateway runner configured",
+		"app_id", appID != "",
+		"action_router", len(adapterOpts) > 1) // >1: pick store is always present
+	return runner, nil
+}
+
 // inboundPermissionRouter adapts the connector registry to the
-// feishuinbound.PermissionRouter interface. The Feishu inbound
+// inbound.PermissionRouter interface. The Feishu inbound
 // package can't depend on `connector` directly, so this adapter
 // lives in main where the wiring belongs.
 //
@@ -1333,7 +1568,7 @@ type inboundPermissionRouter struct {
 	registry *connector.Registry
 }
 
-func (r inboundPermissionRouter) SubmitPermission(ctx context.Context, decision feishuinbound.PermissionDecision) error {
+func (r inboundPermissionRouter) SubmitPermission(ctx context.Context, decision inbound.PermissionDecision) error {
 	if r.registry == nil {
 		return errors.New("permission router: connector registry not configured")
 	}
@@ -1368,7 +1603,7 @@ type inboundPromptForUserChoiceRouter struct {
 	registry *connector.Registry
 }
 
-func (r inboundPromptForUserChoiceRouter) SubmitPromptForUserChoice(ctx context.Context, decision feishuinbound.PromptForUserChoiceDecision) error {
+func (r inboundPromptForUserChoiceRouter) SubmitPromptForUserChoice(ctx context.Context, decision inbound.PromptForUserChoiceDecision) error {
 	if r.registry == nil {
 		return errors.New("prompt_for_user_choice router: connector registry not configured")
 	}
@@ -1417,7 +1652,7 @@ func (r inboundPromptForUserChoiceRouter) SubmitPromptForUserChoice(ctx context.
 //   - PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET  (optional; falls back to PARSAR_FEISHU_APP_SECRET)
 //   - PARSAR_MASTER_KEY                     (REQUIRED when enabled — same
 //     key used by the secret vault encryptor)
-func buildFeishuOutboundWorker(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, deviceResolver feishuoutbound.DeviceResolver, publicURL string) (*feishuoutbound.Worker, error) {
+func buildFeishuOutboundWorker(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, deviceResolver inflight.DeviceResolver, publicURL string) (*inflight.Worker, error) {
 	if !truthy(env("PARSAR_FEISHU_OUTBOUND")) {
 		return nil, nil
 	}
@@ -1454,19 +1689,25 @@ func buildFeishuOutboundWorker(env func(string) string, dbStore *store.Store, co
 			"value", raw)
 	}
 
-	worker, err := feishuoutbound.NewWorker(feishuoutbound.Options{
+	outboundChannels, err := buildOutboundChannels(env, dbStore)
+	if err != nil {
+		return nil, fmt.Errorf("feishu outbound: build outbound channels: %w", err)
+	}
+
+	worker, err := inflight.NewWorker(inflight.Options{
 		Store:        dbStore,
 		Secrets:      secretsSvc,
 		Logger:       slogWorkerLogger{},
 		PollInterval: pollEvery,
 		BaseURL:      strings.TrimSpace(env("PARSAR_FEISHU_OPENAPI_BASE_URL")),
 		PublicURL:    publicURL,
-		DefaultSharedBot: feishuoutbound.DefaultSharedBotConfig{
+		DefaultSharedBot: inflight.DefaultSharedBotConfig{
 			AppID:     defaultBot.appID,
 			AppSecret: defaultBot.appSecret,
 		},
 		PermissionRouter: outboundPermissionRouter{registry: connectorReg},
 		DeviceResolver:   deviceResolver,
+		Channels:         outboundChannels,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("feishu outbound: init worker: %w", err)
@@ -1479,15 +1720,165 @@ func buildFeishuOutboundWorker(env func(string) string, dbStore *store.Store, co
 	return worker, nil
 }
 
+// slackBotSecretLookupAdapter bridges *store.Store to the slack channel's
+// SlackBotSecretLookup seam: the store returns store.SlackBotSecret, the
+// channel consumes its own package-local shape (so the channel never imports
+// internal/store). A thin field copy is all that differs.
+type slackBotSecretLookupAdapter struct{ store *store.Store }
+
+func (a slackBotSecretLookupAdapter) ResolveSlackBotSecretByTeam(ctx context.Context, teamID string) (slackchannel.SlackBotSecret, error) {
+	sec, err := a.store.ResolveSlackBotSecretByTeam(ctx, teamID)
+	if err != nil {
+		return slackchannel.SlackBotSecret{}, err
+	}
+	return slackchannel.SlackBotSecret{AppID: sec.AppID, EncryptedPayload: sec.EncryptedPayload}, nil
+}
+
+// buildSlackCredentialResolver assembles the per-team Slack bot-token resolver.
+// When a master key (the secret-vault seal) and a store are available it returns
+// a DB-backed resolver keyed by Slack team_id, falling back to the env token
+// (PARSAR_SLACK_BOT_TOKEN) when a workspace has no kind='slack_bot' secret —
+// the Hermes primary-fallback shape. Without a master key it returns nil so the
+// caller keeps the default static/env resolver (Config-built). The env token is
+// always allowed to be empty: a DB-only deployment resolves every workspace from
+// secrets.
+func buildSlackCredentialResolver(env func(string) string, dbStore *store.Store) (channel.CredentialResolver, error) {
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" || dbStore == nil {
+		return nil, nil
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("slack credential resolver: init secrets service: %w", err)
+	}
+	fallback := slackchannel.NewStaticCredentialResolver(
+		strings.TrimSpace(env("PARSAR_SLACK_APP_ID")),
+		strings.TrimSpace(env("PARSAR_SLACK_BOT_TOKEN")),
+	)
+	return slackchannel.NewDBCredentialResolver(
+		slackBotSecretLookupAdapter{store: dbStore},
+		secretsSvc,
+		fallback,
+	), nil
+}
+
+// discordBotSecretLookupAdapter bridges *store.Store to the discord channel's
+// DiscordBotSecretLookup seam: the store returns store.DiscordBotSecret, the
+// channel consumes its own package-local shape (so the channel never imports
+// internal/store). A thin field copy is all that differs — the Discord twin of
+// slackBotSecretLookupAdapter, keyed by guild_id instead of team_id.
+type discordBotSecretLookupAdapter struct{ store *store.Store }
+
+func (a discordBotSecretLookupAdapter) ResolveDiscordBotSecretByGuild(ctx context.Context, guildID string) (discordchannel.DiscordBotSecret, error) {
+	sec, err := a.store.ResolveDiscordBotSecretByGuild(ctx, guildID)
+	if err != nil {
+		return discordchannel.DiscordBotSecret{}, err
+	}
+	return discordchannel.DiscordBotSecret{AppID: sec.AppID, EncryptedPayload: sec.EncryptedPayload}, nil
+}
+
+// buildDiscordCredentialResolver assembles the per-guild Discord bot-token
+// resolver. When a master key (the secret-vault seal) and a store are available
+// it returns a DB-backed resolver keyed by Discord guild_id, falling back to the
+// env token (PARSAR_DISCORD_BOT_TOKEN) when a guild has no kind='discord_bot'
+// secret — the same primary-fallback shape Slack uses. Without a master key it
+// returns nil so the caller keeps the default static/env resolver. One Discord
+// bot connects with one token across all its guilds, so the DB-per-guild path
+// chiefly supports running several distinct bots from one process.
+func buildDiscordCredentialResolver(env func(string) string, dbStore *store.Store) (channel.CredentialResolver, error) {
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" || dbStore == nil {
+		return nil, nil
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("discord credential resolver: init secrets service: %w", err)
+	}
+	fallback := discordchannel.NewStaticCredentialResolver(
+		strings.TrimSpace(env("PARSAR_DISCORD_APP_ID")),
+		strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN")),
+	)
+	return discordchannel.NewDBCredentialResolver(
+		discordBotSecretLookupAdapter{store: dbStore},
+		secretsSvc,
+		fallback,
+	), nil
+}
+
+// buildOutboundChannels assembles the neutral outbound channel registry the
+// inflight worker dispatches non-Feishu terminal/progress cards through. Feishu
+// is NOT registered here (the worker mints it per-conversation with its
+// transport-injected token cache). A platform appears only when its env is
+// fully configured, so an unconfigured deployment yields an empty map and the
+// worker stays pure-Feishu with zero behavior change.
+//
+// Slack registers when the app token is configured (Slack is in play), even
+// without an env bot token: a per-team DB resolver (kind='slack_bot' keyed by
+// Slack team_id) mints the right xoxb token per call, with the env bot token as
+// a single-tenant fallback. When no master key is available the registry gate
+// keeps the legacy behavior — register only when the static env bot token is
+// present. The adapter is a separate, stateless instance (it resolves its own
+// token per call) so sharing the runner's instance is unnecessary.
+func buildOutboundChannels(env func(string) string, dbStore *store.Store) (map[channel.Platform]channel.Channel, error) {
+	channels := map[channel.Platform]channel.Channel{}
+	slackBot := strings.TrimSpace(env("PARSAR_SLACK_BOT_TOKEN"))
+	slackApp := strings.TrimSpace(env("PARSAR_SLACK_APP_TOKEN"))
+	dbResolver, err := buildSlackCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, err
+	}
+	// Register when Slack is configured (app token present) and we can resolve
+	// a token for at least one workspace: either a per-team DB resolver or the
+	// static env bot token. Without both, leave Slack unregistered so the
+	// worker stays pure-Feishu.
+	if slackApp != "" && (dbResolver != nil || slackBot != "") {
+		opts := []slackchannel.Option{}
+		if dbResolver != nil {
+			opts = append(opts, slackchannel.WithCredentialResolver(dbResolver))
+		}
+		channels[channel.PlatformSlack] = slackchannel.New(slackchannel.Config{
+			AppID:    strings.TrimSpace(env("PARSAR_SLACK_APP_ID")),
+			BotToken: slackBot,
+			AppToken: slackApp,
+		}, opts...)
+		log.Bg().Info("slack outbound channel registered for inflight worker",
+			"per_team_resolver", dbResolver != nil,
+			"static_token", slackBot != "")
+	}
+	// Discord registers when a bot token is configured (single-tenant fallback) or
+	// a per-guild DB resolver is available — the Slack shape, keyed by guild_id.
+	// Unlike Slack there is no separate app-level socket token: the bot token is
+	// the only gate.
+	discordBot := strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN"))
+	discordResolver, err := buildDiscordCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, err
+	}
+	if discordResolver != nil || discordBot != "" {
+		opts := []discordchannel.Option{}
+		if discordResolver != nil {
+			opts = append(opts, discordchannel.WithCredentialResolver(discordResolver))
+		}
+		channels[channel.PlatformDiscord] = discordchannel.New(discordchannel.Config{
+			AppID:    strings.TrimSpace(env("PARSAR_DISCORD_APP_ID")),
+			BotToken: discordBot,
+		}, opts...)
+		log.Bg().Info("discord outbound channel registered for inflight worker",
+			"per_guild_resolver", discordResolver != nil,
+			"static_token", discordBot != "")
+	}
+	return channels, nil
+}
+
 // outboundPermissionRouter adapts the connector registry to
-// feishuoutbound.PermissionRouter. Kept distinct from
-// inboundPermissionRouter because feishuinbound and feishuoutbound
+// inflight.PermissionRouter. Kept distinct from
+// inboundPermissionRouter because inbound and inflight
 // deliberately don't share a PermissionRouter type.
 type outboundPermissionRouter struct {
 	registry *connector.Registry
 }
 
-func (r outboundPermissionRouter) SubmitPermission(ctx context.Context, decision feishuoutbound.PermissionDecision) error {
+func (r outboundPermissionRouter) SubmitPermission(ctx context.Context, decision inflight.PermissionDecision) error {
 	if r.registry == nil {
 		return errors.New("permission router: connector registry not configured")
 	}
@@ -1526,7 +1917,7 @@ func truthy(raw string) bool {
 	}
 }
 
-// slogFeishuInboundLogger adapts log/slog to the feishuinbound.Logger interface.
+// slogFeishuInboundLogger adapts log/slog to the inbound.Logger interface.
 type slogFeishuInboundLogger struct{}
 
 func (slogFeishuInboundLogger) Info(msg string, args ...any) {
@@ -1536,7 +1927,7 @@ func (slogFeishuInboundLogger) Warn(msg string, args ...any) {
 	log.Bg().Warn("feishu inbound: "+msg, args...)
 }
 
-// slogWorkerLogger adapts log/slog to the feishuoutbound.Logger interface
+// slogWorkerLogger adapts log/slog to the inflight.Logger interface
 // without coupling the package to slog. Keeps the args pattern intact
 // so structured-log consumers still see key/value pairs.
 type slogWorkerLogger struct{}
