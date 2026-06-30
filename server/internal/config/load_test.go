@@ -617,3 +617,27 @@ func TestPlatformAdminUserIDsEnvEmpty(t *testing.T) {
 		t.Fatalf("unset env should leave allowlist empty; got %v", res.Config.Auth.PlatformAdminUserIDs)
 	}
 }
+
+func TestBlobBackendDefaultsToPG(t *testing.T) {
+	res, err := Load(envMap{EnvMasterKey: "abc", EnvDevAuth: "true"}.get, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := res.Config.Storage.BlobBackend; got != "pg" {
+		t.Fatalf("default blob backend: got %q want pg", got)
+	}
+}
+
+func TestBlobBackendEnvOverride(t *testing.T) {
+	res, err := Load(envMap{
+		EnvMasterKey:   "abc",
+		EnvDevAuth:     "true",
+		EnvBlobBackend: "oss",
+	}.get, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := res.Config.Storage.BlobBackend; got != "oss" {
+		t.Fatalf("env override: got %q want oss", got)
+	}
+}
