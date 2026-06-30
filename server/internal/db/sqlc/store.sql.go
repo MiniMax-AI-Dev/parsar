@@ -485,6 +485,18 @@ picked as (
   for update of c skip locked
 ),
 claimed as (
+  -- Stamp the claim once PER CONVERSATION, then fan back out to one
+  -- row per run in the final SELECT. The previous shape did
+  -- ` + "`" + `update conversations c ... from picked ... returning picked.run_id` + "`" + `,
+  -- but Postgres UPDATE...FROM updates each target row once and emits a
+  -- single RETURNING row even when picked holds several runs for that
+  -- conversation — so a conv with two claimable runs (e.g. two failed
+  -- runs) returned only one. The dropped run never reached the
+  -- terminal_delivered fingerprint and got re-claimed every tick (the
+  -- other half of the prod 2026-06-22 card storm; see fingerprint note
+  -- above). Updating ` + "`" + `where c.id in (select id from picked)` + "`" + ` keeps the
+  -- claim stamp idempotent per conversation while the run fan-out moves
+  -- to the join below.
   update conversations c
   set metadata = jsonb_set(
         coalesce(c.metadata, '{}'::jsonb),
@@ -496,11 +508,9 @@ claimed as (
         true
       ),
       updated_at = $3::timestamptz
-  from picked
-  where c.id = picked.id
+  where c.id in (select id from picked)
   returning c.id, c.workspace_id, c.project_id, c.external_id,
-            c.external_thread_id, c.source_app_id, c.metadata,
-            picked.platform, picked.run_id
+            c.external_thread_id, c.source_app_id, c.metadata
 )
 select claimed.id::text                 as conversation_id,
        claimed.workspace_id::text       as workspace_id,
@@ -508,9 +518,9 @@ select claimed.id::text                 as conversation_id,
        claimed.external_id              as external_chat_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
-       claimed.platform                 as platform,
+       picked.platform                  as platform,
        claimed.metadata                 as conversation_metadata,
-       claimed.run_id::text             as agent_run_id,
+       picked.run_id::text              as agent_run_id,
        r.status                         as run_status,
        r.started_at                     as run_started_at,
        r.finished_at                    as run_finished_at,
@@ -537,8 +547,9 @@ select claimed.id::text                 as conversation_id,
        -- the trigger row is missing (legacy fixtures); the resolver falls
        -- back to the static/env token.
        coalesce(trig.metadata->>'tenant_key', '')::text as tenant_key
-from claimed
-join agent_runs r on r.id = claimed.run_id
+from picked
+join claimed on claimed.id = picked.id
+join agent_runs r on r.id = picked.run_id
 left join messages trig on trig.id = r.trigger_message_id
 left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
 left join agents a on a.id = pa.agent_id and a.deleted_at is null
@@ -551,7 +562,7 @@ left join (
   -- seq_emitted compare gets confused. See same set ~line 1705.
   where event_kind in ('tool.call', 'message.delta', 'message.thinking', 'permission.asked', 'prompt_for_user_choice.asked', 'run.started', 'run.completed', 'run.failed')
   group by agent_run_id
-) rem on rem.agent_run_id = claimed.run_id
+) rem on rem.agent_run_id = picked.run_id
 `
 
 type ClaimActiveFeishuInflightConversationsParams struct {
