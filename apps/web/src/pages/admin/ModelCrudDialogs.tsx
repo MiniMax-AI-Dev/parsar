@@ -30,6 +30,12 @@ import {
 } from "../../components/ui/dialog"
 import { Input } from "../../components/ui/input"
 import { CredentialKindCombobox } from "./capabilities/CredentialKindCombobox"
+import { ModelKeyCombobox } from "./ModelKeyCombobox"
+import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
+import {
+  PROVIDER_CATALOG,
+  type ModelPreset,
+} from "../../lib/model-presets"
 
 function extractErrorMessage(err: unknown): string | null {
   if (!err) return null
@@ -51,24 +57,36 @@ function extractErrorMessage(err: unknown): string | null {
  * typically don't implement — they only expose `/v1/chat/completions`.
  * Use `@ai-sdk/openai-compatible` for those. Same rule lives in
  * server/internal/seed/models.go::modelSpecs.
+ *
+ * Branded providers come from the models.dev snapshot (see
+ * lib/model-catalog.ts); the two generic "custom gateway" entries are kept as
+ * fallbacks for endpoints not in the catalog (internal gateways, self-hosted).
  */
-const PROVIDER_TYPES = [
-  {
-    key: "openai",
-    adapter: "@ai-sdk/openai",
-    defaultBaseURL: "https://api.openai.com/v1",
-    customHeaders: false,
-    authSchemeSelector: false,
-    labelKey: "models.createProvider.providerTypeLabel.openai",
-  },
-  {
-    key: "anthropic",
-    adapter: "@ai-sdk/anthropic",
-    defaultBaseURL: "https://api.anthropic.com",
-    customHeaders: false,
-    authSchemeSelector: false,
-    labelKey: "models.createProvider.providerTypeLabel.anthropic",
-  },
+interface ProviderTypeOption {
+  key: string
+  adapter: string
+  defaultBaseURL: string
+  customHeaders: boolean
+  authSchemeSelector: boolean
+  /** Literal brand name (catalog) — takes precedence over labelKey. */
+  label?: string
+  /** i18n key for the generic gateway entries. */
+  labelKey?: string
+  /** Model id suggestions for the model_key datalist (catalog only). */
+  models?: ModelPreset[]
+}
+
+const CATALOG_PROVIDER_TYPES: ProviderTypeOption[] = PROVIDER_CATALOG.map((p) => ({
+  key: p.key,
+  adapter: p.adapter,
+  defaultBaseURL: p.defaultBaseURL,
+  customHeaders: p.customHeaders,
+  authSchemeSelector: p.authSchemeSelector,
+  label: p.name,
+  models: p.models,
+}))
+
+const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
   {
     key: "anthropic-compatible",
     adapter: "@ai-sdk/anthropic",
@@ -78,14 +96,6 @@ const PROVIDER_TYPES = [
     labelKey: "models.createProvider.providerTypeLabel.anthropicCompatible",
   },
   {
-    key: "google",
-    adapter: "@ai-sdk/google",
-    defaultBaseURL: "https://generativelanguage.googleapis.com/v1beta",
-    customHeaders: false,
-    authSchemeSelector: false,
-    labelKey: "models.createProvider.providerTypeLabel.google",
-  },
-  {
     key: "openai-compatible",
     adapter: "@ai-sdk/openai-compatible",
     defaultBaseURL: "",
@@ -93,7 +103,12 @@ const PROVIDER_TYPES = [
     authSchemeSelector: false,
     labelKey: "models.createProvider.providerTypeLabel.openaiCompatible",
   },
-] as const
+]
+
+const PROVIDER_TYPES: ProviderTypeOption[] = [
+  ...CATALOG_PROVIDER_TYPES,
+  ...GATEWAY_PROVIDER_TYPES,
+]
 
 /* --- HeadersEditor ------------------------------------------------------
  *
@@ -374,7 +389,30 @@ export function CreateModelDialog({
   const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
   const showHeadersEditor = !!cfg?.customHeaders
   const showAuthSchemeSelector = !!cfg?.authSchemeSelector
+  const providerModels = cfg?.models ?? []
   const errMsg = extractErrorMessage(error)
+
+  // Resolve each provider option's display label once (literal brand name, or
+  // translated key for the generic gateways) for the searchable picker.
+  const providerChoices = useMemo(
+    () =>
+      PROVIDER_TYPES.map((p) => ({
+        key: p.key,
+        label: p.label ?? (p.labelKey ? t(p.labelKey as never) : p.key),
+        adapter: p.adapter,
+      })),
+    [t],
+  )
+
+  // Picking a catalog model id fills the key; if Display name is still empty,
+  // seed it from the model's friendly name (the user can override).
+  function handleModelKeyChange(next: string) {
+    setModelKey(next)
+    if (name.trim() === "") {
+      const hit = providerModels.find((m) => m.id === next)
+      if (hit) setName(hit.name)
+    }
+  }
 
   const activeSecrets = secrets.filter(
     (s) => s.status === "active" && s.kind === "model_provider"
@@ -470,18 +508,12 @@ export function CreateModelDialog({
               {t("models.createProvider.fields.providerType")}
               <span className="ml-0.5 text-danger">*</span>
             </label>
-            <select
+            <ProviderTypeCombobox
               id="model-provider-type"
               value={providerType}
-              onChange={(e) => handleProviderTypeChange(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-            >
-              {PROVIDER_TYPES.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {t(p.labelKey)}
-                </option>
-              ))}
-            </select>
+              onChange={handleProviderTypeChange}
+              options={providerChoices}
+            />
             <span className="text-xs text-fg-faint">
               {t("models.createProvider.fields.adapterHint", { adapter })}
             </span>
@@ -497,15 +529,24 @@ export function CreateModelDialog({
             mono
           />
 
-          <Field
-            id="model-key"
-            label={t("models.createModel.fields.modelKey")}
-            value={modelKey}
-            onChange={setModelKey}
-            placeholder={t("models.createModel.fields.modelKeyPlaceholder")}
-            required
-            mono
-          />
+          <div className="grid gap-1.5">
+            <label className="text-sm font-medium text-fg-muted" htmlFor="model-key">
+              {t("models.createModel.fields.modelKey")}
+              <span className="ml-0.5 text-danger">*</span>
+            </label>
+            <ModelKeyCombobox
+              id="model-key"
+              value={modelKey}
+              onChange={handleModelKeyChange}
+              models={providerModels}
+              placeholder={t("models.createModel.fields.modelKeyPlaceholder")}
+            />
+            {providerModels.length > 0 && (
+              <span className="text-xs text-fg-faint">
+                {t("models.createModel.fields.modelKeyCatalogHint")}
+              </span>
+            )}
+          </div>
 
           {/* --- Custom headers (only for *-compatible gateways) --- */}
           {showHeadersEditor && (

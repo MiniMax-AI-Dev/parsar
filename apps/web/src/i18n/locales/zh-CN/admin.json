@@ -75,6 +75,8 @@
     "createProvider": {
       "fields": {
         "providerType": "供应商类型",
+        "providerSearch": "搜索供应商…",
+        "providerEmpty": "无匹配的供应商",
         "baseURL": "服务地址",
         "adapterHint": "Adapter 包: {{adapter}}",
         "apiKey": "API Key",
@@ -99,6 +101,10 @@
         "namePlaceholder": "例：Claude Opus 4.5",
         "modelKey": "模型 Key",
         "modelKeyPlaceholder": "claude-3-5-sonnet-20241022",
+        "modelKeyCatalogHint": "可从该厂商的已知模型中选择，也可手动输入任意模型 id。",
+        "modelKeySearch": "搜索或输入模型 id…",
+        "modelKeyUse": "使用",
+        "modelKeyEmpty": "无匹配模型 —— 可直接输入任意 id",
         "credentialMode": "凭据模式"
       },
       "credentialMode": {
