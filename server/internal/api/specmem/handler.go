@@ -35,7 +35,6 @@ import (
 // touching pgx.
 type MembershipStore interface {
 	GetWorkspaceMemberRole(ctx context.Context, workspaceID, userID string) (string, error)
-	GetProjectWorkspace(ctx context.Context, projectID string) (string, error)
 }
 
 // Deps bundles what the handlers need from cmd/server. Logger is
@@ -186,28 +185,13 @@ func (h *handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request,
 	return userID, true
 }
 
-// requireWorkspaceMemberByProject resolves the project to its workspace,
-// then gates on workspace membership (any role including viewer). Used
-// by read endpoints.
-func (h *handler) requireWorkspaceMemberByProject(w http.ResponseWriter, r *http.Request, projectID string) (string, bool) {
-	return h.requireWorkspaceRoleByProject(w, r, projectID, false)
-}
-
-// requireWorkspaceMemberNotViewerByProject is the write twin — viewer is
-// locked out, owner/admin/member allowed.
-func (h *handler) requireWorkspaceMemberNotViewerByProject(w http.ResponseWriter, r *http.Request, projectID string) (string, bool) {
-	return h.requireWorkspaceRoleByProject(w, r, projectID, true)
-}
-
-func (h *handler) requireWorkspaceRoleByProject(w http.ResponseWriter, r *http.Request, projectID string, excludeViewer bool) (string, bool) {
+// requireWorkspaceMemberNotViewer is the write twin of
+// requireWorkspaceMember — viewer is locked out, owner/admin/member
+// allowed.
+func (h *handler) requireWorkspaceMemberNotViewer(w http.ResponseWriter, r *http.Request, workspaceID string) (string, bool) {
 	userID := auth.UserIDFromContext(r.Context())
 	if userID == "" {
 		writeError(w, http.StatusUnauthorized, "unauthenticated", "session required")
-		return "", false
-	}
-	workspaceID, err := h.deps.Membership.GetProjectWorkspace(r.Context(), projectID)
-	if err != nil {
-		writeError(w, http.StatusForbidden, "not_member", "not a workspace member")
 		return "", false
 	}
 	role, err := h.deps.Membership.GetWorkspaceMemberRole(r.Context(), workspaceID, userID)
@@ -215,7 +199,7 @@ func (h *handler) requireWorkspaceRoleByProject(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusForbidden, "not_member", "not a workspace member")
 		return "", false
 	}
-	if excludeViewer && role == "viewer" {
+	if role == "viewer" {
 		writeError(w, http.StatusForbidden, "viewer_readonly", "viewer is read-only")
 		return "", false
 	}
@@ -229,15 +213,15 @@ func userActor(userID string) specmemory.Actor {
 
 // agentActor builds the audit Actor for a runtime-credential write.
 // Format mirrors what the parsar CLI passes through env vars:
-// "connector:project_agent_id". Falls back to "runtime:<runtime_id>"
-// when there's no connector/project_agent on the runtime config.
+// "connector:agent_id". Falls back to "runtime:<runtime_id>"
+// when there's no connector/agent on the runtime config.
 func agentActor(id store.RuntimeIdentity) specmemory.Actor {
 	connector := derefString(id.ConnectorName)
-	paid := derefString(id.ProjectAgentID)
+	aid := derefString(id.AgentID)
 	var actor string
 	switch {
-	case connector != "" && paid != "":
-		actor = connector + ":" + paid
+	case connector != "" && aid != "":
+		actor = connector + ":" + aid
 	case connector != "":
 		actor = connector + ":runtime:" + id.RuntimeID
 	default:
@@ -298,12 +282,12 @@ func newFragmentDTOs(fs []specmemory.Fragment) []fragmentDTO {
 }
 
 // memoryDTO is the wire view. Why is exposed because the UI shows it
-// inline (especially for feedback/project memories).
+// inline (especially for feedback/workspace memories).
 type memoryDTO struct {
 	ID             string    `json:"id"`
 	Scope          string    `json:"scope"`
 	UserID         string    `json:"user_id"`
-	ProjectID      string    `json:"project_id,omitempty"`
+	WorkspaceID    string    `json:"workspace_id,omitempty"`
 	MemoryType     string    `json:"memory_type"`
 	Title          string    `json:"title,omitempty"`
 	Body           string    `json:"body"`
@@ -325,7 +309,7 @@ func newMemoryDTO(m specmemory.Memory) memoryDTO {
 		ID:             m.ID,
 		Scope:          m.Scope.String(),
 		UserID:         m.UserID,
-		ProjectID:      m.ProjectID,
+		WorkspaceID:    m.WorkspaceID,
 		MemoryType:     m.MemoryType.String(),
 		Title:          m.Title,
 		Body:           m.Body,

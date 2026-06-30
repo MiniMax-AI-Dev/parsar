@@ -207,7 +207,7 @@ func (h *handler) importSpec(w http.ResponseWriter, r *http.Request) {
 
 type createMemoryRequest struct {
 	Scope          string   `json:"scope"`
-	ProjectID      string   `json:"project_id"`
+	WorkspaceID    string   `json:"workspace_id"`
 	MemoryType     string   `json:"memory_type"`
 	Title          string   `json:"title"`
 	Body           string   `json:"body"`
@@ -224,23 +224,23 @@ func (h *handler) createMemory(w http.ResponseWriter, r *http.Request) {
 	}
 	scope := specmemory.Scope(body.Scope)
 	if !scope.Valid() {
-		writeError(w, http.StatusBadRequest, "bad_scope", "scope must be user or project")
+		writeError(w, http.StatusBadRequest, "bad_scope", "scope must be user or workspace")
 		return
 	}
 	mtype := specmemory.MemoryType(body.MemoryType)
 	if !mtype.Valid() {
 		writeError(w, http.StatusBadRequest, "bad_memory_type",
-			"memory_type must be one of: user, feedback, project, reference")
+			"memory_type must be one of: user, feedback, workspace, reference")
 		return
 	}
-	userID, ok := h.authorizeMemoryWrite(w, r, scope, body.ProjectID)
+	userID, ok := h.authorizeMemoryWrite(w, r, scope, body.WorkspaceID)
 	if !ok {
 		return
 	}
 	mem, err := h.deps.Service.CreateMemory(r.Context(), specmemory.CreateMemoryInput{
 		Scope:          scope,
 		UserID:         userID,
-		ProjectID:      body.ProjectID,
+		WorkspaceID:    body.WorkspaceID,
 		MemoryType:     mtype,
 		Title:          body.Title,
 		Body:           body.Body,
@@ -260,13 +260,13 @@ func (h *handler) createMemory(w http.ResponseWriter, r *http.Request) {
 func (h *handler) listMemories(w http.ResponseWriter, r *http.Request) {
 	scope := specmemory.Scope(urlQuery(r, "scope"))
 	if !scope.Valid() {
-		writeError(w, http.StatusBadRequest, "bad_scope", "scope=user|project required")
+		writeError(w, http.StatusBadRequest, "bad_scope", "scope=user|workspace required")
 		return
 	}
 	mtype := specmemory.MemoryType(urlQuery(r, "memory_type"))
 	if mtype != "" && !mtype.Valid() {
 		writeError(w, http.StatusBadRequest, "bad_memory_type",
-			"memory_type must be one of: user, feedback, project, reference")
+			"memory_type must be one of: user, feedback, workspace, reference")
 		return
 	}
 	tags := parseTags(r)
@@ -288,18 +288,18 @@ func (h *handler) listMemories(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"memories": newMemoryDTOs(rows)})
-	case specmemory.ScopeProject:
-		projectID := urlQuery(r, "project_id")
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "missing_project_id",
-				"project_id required for scope=project")
+	case specmemory.ScopeWorkspace:
+		workspaceID := urlQuery(r, "workspace_id")
+		if workspaceID == "" {
+			writeError(w, http.StatusBadRequest, "missing_workspace_id",
+				"workspace_id required for scope=workspace")
 			return
 		}
-		if _, ok := h.requireWorkspaceMemberByProject(w, r, projectID); !ok {
+		if _, ok := h.requireWorkspaceMember(w, r, workspaceID); !ok {
 			return
 		}
-		rows, err := h.deps.Service.ListProjectMemories(r.Context(), specmemory.ListProjectMemoriesInput{
-			ProjectID:        projectID,
+		rows, err := h.deps.Service.ListWorkspaceMemories(r.Context(), specmemory.ListWorkspaceMemoriesInput{
+			WorkspaceID:      workspaceID,
 			MemoryTypeFilter: mtype,
 			TagFilter:        tags,
 			Limit:            limit,
@@ -386,27 +386,27 @@ func (h *handler) deleteMemory(w http.ResponseWriter, r *http.Request) {
 // ----- memory authorization helpers ----------------------------------------
 
 // authorizeMemoryWrite gates the create path before we have a row to
-// inspect. user → caller must be authenticated; project → caller must
+// inspect. user → caller must be authenticated; workspace → caller must
 // be a workspace member (viewer excluded — writes are not read-only).
-func (h *handler) authorizeMemoryWrite(w http.ResponseWriter, r *http.Request, scope specmemory.Scope, projectID string) (string, bool) {
+func (h *handler) authorizeMemoryWrite(w http.ResponseWriter, r *http.Request, scope specmemory.Scope, workspaceID string) (string, bool) {
 	switch scope {
 	case specmemory.ScopeUser:
 		return requireSession(w, r)
-	case specmemory.ScopeProject:
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "missing_project_id",
-				"project_id required for scope=project")
+	case specmemory.ScopeWorkspace:
+		if workspaceID == "" {
+			writeError(w, http.StatusBadRequest, "missing_workspace_id",
+				"workspace_id required for scope=workspace")
 			return "", false
 		}
-		return h.requireWorkspaceMemberNotViewerByProject(w, r, projectID)
+		return h.requireWorkspaceMemberNotViewer(w, r, workspaceID)
 	default:
-		writeError(w, http.StatusBadRequest, "bad_scope", "scope must be user or project")
+		writeError(w, http.StatusBadRequest, "bad_scope", "scope must be user or workspace")
 		return "", false
 	}
 }
 
 // authorizeMemoryRowAccess gates write/delete on an existing row.
-// user-scope rows are owner-only; project-scope require project
+// user-scope rows are owner-only; workspace-scope require workspace
 // membership.
 func (h *handler) authorizeMemoryRowAccess(w http.ResponseWriter, r *http.Request, mem specmemory.Memory) (string, bool) {
 	switch mem.Scope {
@@ -421,14 +421,14 @@ func (h *handler) authorizeMemoryRowAccess(w http.ResponseWriter, r *http.Reques
 			return "", false
 		}
 		return userID, true
-	case specmemory.ScopeProject:
-		if mem.ProjectID == "" {
+	case specmemory.ScopeWorkspace:
+		if mem.WorkspaceID == "" {
 			// The CHECK constraint should make this impossible.
 			writeError(w, http.StatusInternalServerError, "data_invariant",
-				"project-scope memory missing project_id")
+				"workspace-scope memory missing workspace_id")
 			return "", false
 		}
-		return h.requireWorkspaceMemberNotViewerByProject(w, r, mem.ProjectID)
+		return h.requireWorkspaceMemberNotViewer(w, r, mem.WorkspaceID)
 	default:
 		writeError(w, http.StatusInternalServerError, "bad_scope",
 			"unknown memory scope "+mem.Scope.String())

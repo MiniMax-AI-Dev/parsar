@@ -132,7 +132,6 @@ func buildEvent(eventType string, unixNano uint64, attrs map[string]string) (aud
 		TargetType:  "tool_call",
 		TargetID:    attrs[AttrToolCallID],
 		WorkspaceID: attrs[AttrWorkspaceID],
-		ProjectID:   attrs[AttrProjectID],
 		Payload:     payload,
 	}, nil
 }

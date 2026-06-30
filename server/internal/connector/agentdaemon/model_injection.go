@@ -784,7 +784,6 @@ func (c *Connector) emitModelCredentialMissingNotice(ctx context.Context, in con
 	}
 	if _, err := c.systemMessages.CreateRuntimeErrorSystemMessage(ctx, store.CreateRuntimeErrorSystemMessageInput{
 		WorkspaceID:    in.WorkspaceID,
-		ProjectID:      in.ProjectID,
 		AgentID:        in.AgentID,
 		RunID:          in.RunID,
 		ConversationID: in.ConversationID,

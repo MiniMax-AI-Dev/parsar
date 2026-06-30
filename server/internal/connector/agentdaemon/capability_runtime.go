@@ -1098,7 +1098,6 @@ func (c *Connector) emitDisabledCapabilityNotices(ctx context.Context, in connec
 		if len(d.MissingCredentials) == 0 {
 			if _, err := c.systemMessages.CreateRuntimeErrorSystemMessage(ctx, store.CreateRuntimeErrorSystemMessageInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectID:      in.ProjectID,
 				AgentID:        in.AgentID,
 				RunID:          in.RunID,
 				ConversationID: in.ConversationID,
@@ -1116,7 +1115,6 @@ func (c *Connector) emitDisabledCapabilityNotices(ctx context.Context, in connec
 		for _, missing := range d.MissingCredentials {
 			if _, err := c.systemMessages.CreateRuntimeErrorSystemMessage(ctx, store.CreateRuntimeErrorSystemMessageInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectID:      in.ProjectID,
 				AgentID:        in.AgentID,
 				RunID:          in.RunID,
 				ConversationID: in.ConversationID,

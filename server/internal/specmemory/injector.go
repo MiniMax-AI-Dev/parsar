@@ -24,26 +24,25 @@ type Injection struct {
 // SnapshotInput is the per-session injection request. WorkspaceName
 // is rendered into <spec workspace="..."> so the agent can name it.
 //
-// ProjectID empty → project-scope memory bucket is skipped.
+// WorkspaceID also scopes the workspace-scope memory bucket.
 // Limits default to the store's defaultReadLimit when <= 0.
 type SnapshotInput struct {
-	WorkspaceID        string
-	WorkspaceName      string
-	UserID             string
-	ProjectID          string
-	SpecLimit          int32
-	UserMemoryLimit    int32
-	ProjectMemoryLimit int32
+	WorkspaceID          string
+	WorkspaceName        string
+	UserID               string
+	SpecLimit            int32
+	UserMemoryLimit      int32
+	WorkspaceMemoryLimit int32
 }
 
 // IncrementalInput is the per-turn delta request. Since is the cursor
 // from the end of the last turn; rows updated strictly after this
-// timestamp are surfaced. ProjectID empty → project bucket skipped.
+// timestamp are surfaced. WorkspaceID empty → workspace bucket skipped.
 type IncrementalInput struct {
-	UserID    string
-	ProjectID string
-	Since     time.Time
-	Limit     int32
+	UserID      string
+	WorkspaceID string
+	Since       time.Time
+	Limit       int32
 }
 
 // SnapshotReader is the read surface BuildSnapshot needs. *store.Store
@@ -51,13 +50,13 @@ type IncrementalInput struct {
 type SnapshotReader interface {
 	ListWorkspaceSpecFragments(ctx context.Context, input store.ListWorkspaceSpecFragmentsInput) ([]store.SpecFragmentRead, error)
 	ListUserMemories(ctx context.Context, input store.ListUserMemoriesInput) ([]store.MemoryRead, error)
-	ListProjectMemories(ctx context.Context, input store.ListProjectMemoriesInput) ([]store.MemoryRead, error)
+	ListWorkspaceMemories(ctx context.Context, input store.ListWorkspaceMemoriesInput) ([]store.MemoryRead, error)
 }
 
 // IncrementalReader is the read surface BuildIncremental needs.
 type IncrementalReader interface {
 	ListUserMemoriesSince(ctx context.Context, input store.ListUserMemoriesSinceInput) ([]store.MemoryRead, error)
-	ListProjectMemoriesSince(ctx context.Context, input store.ListProjectMemoriesSinceInput) ([]store.MemoryRead, error)
+	ListWorkspaceMemoriesSince(ctx context.Context, input store.ListWorkspaceMemoriesSinceInput) ([]store.MemoryRead, error)
 }
 
 // InjectionReader composes both halves so a single Injector can serve
@@ -79,7 +78,7 @@ func NewInjector(reader InjectionReader) *Injector {
 }
 
 // BuildSnapshot assembles the SessionStart injection bundle. Rows with
-// unknown enum values are silently dropped. User-scope and project-scope
+// unknown enum values are silently dropped. User-scope and workspace-scope
 // memories are merged before rendering; the prompt groups them by
 // memory type, not scope.
 func (i *Injector) BuildSnapshot(ctx context.Context, input SnapshotInput) (Injection, error) {
@@ -106,19 +105,16 @@ func (i *Injector) BuildSnapshot(ctx context.Context, input SnapshotInput) (Inje
 		return Injection{}, fmt.Errorf("specmemory: snapshot user memory list: %w", err)
 	}
 
-	var projectMemoryRows []store.MemoryRead
-	if input.ProjectID != "" {
-		projectMemoryRows, err = i.reader.ListProjectMemories(ctx, store.ListProjectMemoriesInput{
-			ProjectID: input.ProjectID,
-			Limit:     input.ProjectMemoryLimit,
-		})
-		if err != nil {
-			return Injection{}, fmt.Errorf("specmemory: snapshot project memory list: %w", err)
-		}
+	workspaceMemoryRows, err := i.reader.ListWorkspaceMemories(ctx, store.ListWorkspaceMemoriesInput{
+		WorkspaceID: input.WorkspaceID,
+		Limit:       input.WorkspaceMemoryLimit,
+	})
+	if err != nil {
+		return Injection{}, fmt.Errorf("specmemory: snapshot workspace memory list: %w", err)
 	}
 
 	fragments := convertFragments(fragmentRows)
-	memories := convertMemories(mergeMemoryRows(userMemoryRows, projectMemoryRows))
+	memories := convertMemories(mergeMemoryRows(userMemoryRows, workspaceMemoryRows))
 
 	return Injection{
 		SpecBlock:        RenderSpecBlock(input.WorkspaceName, fragments),
@@ -148,36 +144,36 @@ func (i *Injector) BuildIncremental(ctx context.Context, input IncrementalInput)
 		return Injection{}, fmt.Errorf("specmemory: incremental user memory list: %w", err)
 	}
 
-	var projectMemoryRows []store.MemoryRead
-	if input.ProjectID != "" {
-		projectMemoryRows, err = i.reader.ListProjectMemoriesSince(ctx, store.ListProjectMemoriesSinceInput{
-			ProjectID: input.ProjectID,
-			Since:     input.Since,
-			Limit:     input.Limit,
+	var workspaceMemoryRows []store.MemoryRead
+	if input.WorkspaceID != "" {
+		workspaceMemoryRows, err = i.reader.ListWorkspaceMemoriesSince(ctx, store.ListWorkspaceMemoriesSinceInput{
+			WorkspaceID: input.WorkspaceID,
+			Since:       input.Since,
+			Limit:       input.Limit,
 		})
 		if err != nil {
-			return Injection{}, fmt.Errorf("specmemory: incremental project memory list: %w", err)
+			return Injection{}, fmt.Errorf("specmemory: incremental workspace memory list: %w", err)
 		}
 	}
 
-	memories := convertMemories(mergeMemoryRows(userMemoryRows, projectMemoryRows))
+	memories := convertMemories(mergeMemoryRows(userMemoryRows, workspaceMemoryRows))
 
 	return Injection{
 		IncrementalMemory: RenderIncrementalMemory(memories),
 	}, nil
 }
 
-// mergeMemoryRows concatenates user + project rows, user first.
-func mergeMemoryRows(user, project []store.MemoryRead) []store.MemoryRead {
+// mergeMemoryRows concatenates user + workspace rows, user first.
+func mergeMemoryRows(user, workspace []store.MemoryRead) []store.MemoryRead {
 	if len(user) == 0 {
-		return project
+		return workspace
 	}
-	if len(project) == 0 {
+	if len(workspace) == 0 {
 		return user
 	}
-	out := make([]store.MemoryRead, 0, len(user)+len(project))
+	out := make([]store.MemoryRead, 0, len(user)+len(workspace))
 	out = append(out, user...)
-	out = append(out, project...)
+	out = append(out, workspace...)
 	return out
 }
 
@@ -200,7 +196,7 @@ func convertFragments(rows []store.SpecFragmentRead) []Fragment {
 }
 
 // convertMemories turns store rows into typed Memory values.
-// Defensive dedupe by ID — user-scope and project-scope queries are
+// Defensive dedupe by ID — user-scope and workspace-scope queries are
 // disjoint by design today, but a future cross-scope sharing schema
 // shouldn't double-render.
 func convertMemories(rows []store.MemoryRead) []Memory {
@@ -263,7 +259,7 @@ func MemoryFromStoreRow(r store.MemoryRead) (Memory, bool) {
 		ID:             r.ID,
 		Scope:          scope,
 		UserID:         r.UserID,
-		ProjectID:      r.ProjectID,
+		WorkspaceID:    r.WorkspaceID,
 		MemoryType:     mt,
 		Title:          r.Title,
 		Body:           r.Body,

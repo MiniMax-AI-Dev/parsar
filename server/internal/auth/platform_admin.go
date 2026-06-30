@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 )
 
-// Platform admins bypass workspace/project membership checks and act
+// Platform admins bypass workspace membership checks and act
 // with owner-level authority anywhere. The list is process-global and
 // driven by PARSAR_PLATFORM_ADMIN_USER_IDS — see SetPlatformAdminIDs.
 //
@@ -46,5 +46,5 @@ func IsPlatformAdmin(userID string) bool {
 
 // PlatformAdminRole is the synthetic role returned to RBAC callers
 // when a platform admin bypasses the membership check. Equivalent to
-// workspace/project owner for any allowed-role list.
+// workspace owner for any allowed-role list.
 const PlatformAdminRole = "owner"

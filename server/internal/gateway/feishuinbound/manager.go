@@ -77,7 +77,7 @@ type Storer interface {
 	ClaimPendingCredentialFormSlot(ctx context.Context, qkey string) (store.ClaimedPendingCredentialForm, error)
 	CreateUserCredential(ctx context.Context, input store.CreateUserCredentialInput) (store.UserCredentialRead, error)
 	ReplaceUserCredentials(ctx context.Context, userID string, inputs []store.CreateUserCredentialInput) ([]store.ReplaceUserCredentialResult, error)
-	GetProjectConversation(ctx context.Context, conversationID string) (store.ConversationRead, error)
+	GetConversation(ctx context.Context, conversationID string) (store.ConversationRead, error)
 	// FindConversationByExternalRef + CancelAllInflightForConversation
 	// back the /cancel and /cancel all Feishu commands.
 	FindConversationByExternalRef(ctx context.Context, gateway, externalChatID, externalThreadID string) (string, error)

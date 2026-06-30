@@ -415,7 +415,6 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 			)
 			if _, sysErr := c.systemMessages.CreateSandboxOfflineNotice(ctx, store.CreateSandboxOfflineNoticeInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectID:      in.ProjectID,
 				AgentID:        in.ProjectAgentID,
 				RunID:          in.RunID,
 				ConversationID: in.ConversationID,

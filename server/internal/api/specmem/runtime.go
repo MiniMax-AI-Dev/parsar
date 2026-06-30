@@ -6,10 +6,9 @@ package specmem
 // assumes auth.RuntimeIdentityFromContext returns a resolved identity.
 //
 // The runtime identity is the ONLY authorization signal. Workspace,
-// owning user, project binding and conversation_id come from the
-// pre-resolved sandbox row — handlers MUST NOT accept client-side
-// overrides for these (a leaked token could otherwise write to any
-// workspace).
+// owning user and conversation_id come from the pre-resolved sandbox
+// row — handlers MUST NOT accept client-side overrides for these (a
+// leaked token could otherwise write to any workspace).
 
 import (
 	"net/http"
@@ -78,8 +77,8 @@ func parseRuntimeLimit(r *http.Request, key string) int32 {
 // runtimeSnapshot serves the SessionStart injection bundle. Hook
 // scripts call this on platform startup, get back SpecBlock +
 // MemoryBlock + MemoryWriteGuide, and stitch them into the system
-// prompt. ProjectID comes from identity (empty for workspace-only
-// runtimes — those have no project memory bucket).
+// prompt. WorkspaceID comes from identity and scopes both the spec
+// fragments and the workspace memory bucket.
 func (h *handler) runtimeSnapshot(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -93,12 +92,11 @@ func (h *handler) runtimeSnapshot(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID: id.WorkspaceID,
 		// WorkspaceName is not part of RuntimeIdentity; the renderer
 		// accepts the empty string and emits `<spec workspace="">`.
-		WorkspaceName:      "",
-		UserID:             userID,
-		ProjectID:          derefString(id.ProjectID),
-		SpecLimit:          parseRuntimeLimit(r, "spec_limit"),
-		UserMemoryLimit:    parseRuntimeLimit(r, "user_memory_limit"),
-		ProjectMemoryLimit: parseRuntimeLimit(r, "project_memory_limit"),
+		WorkspaceName:        "",
+		UserID:               userID,
+		SpecLimit:            parseRuntimeLimit(r, "spec_limit"),
+		UserMemoryLimit:      parseRuntimeLimit(r, "user_memory_limit"),
+		WorkspaceMemoryLimit: parseRuntimeLimit(r, "workspace_memory_limit"),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "snapshot_failed", err.Error())
@@ -135,10 +133,10 @@ func (h *handler) runtimeIncremental(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.deps.Service.BuildIncremental(r.Context(), specmemory.IncrementalInput{
-		UserID:    userID,
-		ProjectID: derefString(id.ProjectID),
-		Since:     since,
-		Limit:     parseRuntimeLimit(r, "limit"),
+		UserID:      userID,
+		WorkspaceID: id.WorkspaceID,
+		Since:       since,
+		Limit:       parseRuntimeLimit(r, "limit"),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "incremental_failed", err.Error())
@@ -161,7 +159,7 @@ type runtimeCreateFragmentRequest struct {
 
 // runtimeCreateFragment handles `parsar spec add` from inside a sandbox.
 // Source is fixed to SourceAgent so the UI can badge agent rows; the
-// agent_actor column captures connector + project_agent_id.
+// agent_actor column captures connector + agent_id.
 func (h *handler) runtimeCreateFragment(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -190,9 +188,9 @@ func (h *handler) runtimeCreateFragment(w http.ResponseWriter, r *http.Request) 
 // ----- memory write-back ----------------------------------------------------
 
 // runtimeCreateMemoryRequest is the agent-side payload. Scope defaults
-// to user when absent. ProjectID is NOT accepted — for scope=project
-// the project comes from the runtime identity binding so an agent in
-// sandbox A can't write to project B's memory bucket by guessing IDs.
+// to user when absent. WorkspaceID is NOT accepted — for scope=workspace
+// the workspace comes from the runtime identity binding so an agent in
+// sandbox A can't write to workspace B's memory bucket by guessing IDs.
 type runtimeCreateMemoryRequest struct {
 	Scope      string   `json:"scope"`
 	MemoryType string   `json:"memory_type"`
@@ -206,7 +204,7 @@ type runtimeCreateMemoryRequest struct {
 // Source is fixed to SourceAgent; agent_actor identifies the writer;
 // conversation_id is sourced from the runtime config.
 //
-// scope=project requires a project binding; a workspace-only sandbox
+// scope=workspace requires a workspace binding; a runtime without one
 // gets 400 (not 500) so the CLI surfaces a clear message.
 func (h *handler) runtimeCreateMemory(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
@@ -229,28 +227,28 @@ func (h *handler) runtimeCreateMemory(w http.ResponseWriter, r *http.Request) {
 	scope := specmemory.Scope(rawScope)
 	if !scope.Valid() {
 		writeError(w, http.StatusBadRequest, "bad_scope",
-			"scope must be user or project")
+			"scope must be user or workspace")
 		return
 	}
 	mtype := specmemory.MemoryType(body.MemoryType)
 	if !mtype.Valid() {
 		writeError(w, http.StatusBadRequest, "bad_memory_type",
-			"memory_type must be one of: user, feedback, project, reference")
+			"memory_type must be one of: user, feedback, workspace, reference")
 		return
 	}
-	var projectID string
-	if scope == specmemory.ScopeProject {
-		projectID = derefString(id.ProjectID)
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "no_project_binding",
-				"runtime is not bound to a project; use scope=user")
+	var workspaceID string
+	if scope == specmemory.ScopeWorkspace {
+		workspaceID = id.WorkspaceID
+		if workspaceID == "" {
+			writeError(w, http.StatusBadRequest, "no_workspace_binding",
+				"runtime is not bound to a workspace; use scope=user")
 			return
 		}
 	}
 	mem, err := h.deps.Service.CreateMemory(r.Context(), specmemory.CreateMemoryInput{
 		Scope:          scope,
 		UserID:         userID,
-		ProjectID:      projectID,
+		WorkspaceID:    workspaceID,
 		MemoryType:     mtype,
 		Title:          body.Title,
 		Body:           body.Body,
@@ -378,8 +376,8 @@ func (h *handler) runtimeDeleteFragment(w http.ResponseWriter, r *http.Request) 
 // ----- memory list / update / delete ---------------------------------------
 
 // runtimeListMemories serves `parsar memory list`. Scope is required so
-// user / project lists never silently mix. Identity supplies user_id
-// (always) and project_id (when scope=project).
+// user / workspace lists never silently mix. Identity supplies user_id
+// (always) and workspace_id (when scope=workspace).
 func (h *handler) runtimeListMemories(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -392,13 +390,13 @@ func (h *handler) runtimeListMemories(w http.ResponseWriter, r *http.Request) {
 	scope := specmemory.Scope(urlQuery(r, "scope"))
 	if !scope.Valid() {
 		writeError(w, http.StatusBadRequest, "bad_scope",
-			"scope=user|project required")
+			"scope=user|workspace required")
 		return
 	}
 	mtype := specmemory.MemoryType(urlQuery(r, "memory_type"))
 	if mtype != "" && !mtype.Valid() {
 		writeError(w, http.StatusBadRequest, "bad_memory_type",
-			"memory_type must be one of: user, feedback, project, reference")
+			"memory_type must be one of: user, feedback, workspace, reference")
 		return
 	}
 	tags := parseTags(r)
@@ -416,15 +414,15 @@ func (h *handler) runtimeListMemories(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"memories": newMemoryDTOs(rows)})
-	case specmemory.ScopeProject:
-		projectID := derefString(id.ProjectID)
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "no_project_binding",
-				"runtime is not bound to a project; use scope=user")
+	case specmemory.ScopeWorkspace:
+		workspaceID := id.WorkspaceID
+		if workspaceID == "" {
+			writeError(w, http.StatusBadRequest, "no_workspace_binding",
+				"runtime is not bound to a workspace; use scope=user")
 			return
 		}
-		rows, err := h.deps.Service.ListProjectMemories(r.Context(), specmemory.ListProjectMemoriesInput{
-			ProjectID:        projectID,
+		rows, err := h.deps.Service.ListWorkspaceMemories(r.Context(), specmemory.ListWorkspaceMemoriesInput{
+			WorkspaceID:      workspaceID,
 			MemoryTypeFilter: mtype,
 			TagFilter:        tags,
 			Limit:            limit,
@@ -437,7 +435,7 @@ func (h *handler) runtimeListMemories(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// runtimeUpdateMemoryRequest is the wire payload. user_id / project_id
+// runtimeUpdateMemoryRequest is the wire payload. user_id / workspace_id
 // / scope are absent — they're read from the existing row after the
 // runtime ownership check. Structural fields are immutable from the
 // runtime tree.
@@ -467,7 +465,7 @@ func (h *handler) runtimeUpdateMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !runtimeOwnsMemory(id, existing) {
-		// 404 (not 403) so cross-user/project IDs aren't enumerable.
+		// 404 (not 403) so cross-user/workspace IDs aren't enumerable.
 		writeError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
@@ -528,16 +526,16 @@ func (h *handler) runtimeDeleteMemory(w http.ResponseWriter, r *http.Request) {
 
 // runtimeOwnsMemory is the runtime-side counterpart of
 // authorizeMemoryRowAccess: user-scope rows must match owner_user_id;
-// project-scope must match the project binding. Anything else is a
+// workspace-scope must match the workspace binding. Anything else is a
 // hard no (surface as 404).
 func runtimeOwnsMemory(id store.RuntimeIdentity, mem specmemory.Memory) bool {
 	switch mem.Scope {
 	case specmemory.ScopeUser:
 		uid := derefString(id.OwnerUserID)
 		return uid != "" && uid == mem.UserID
-	case specmemory.ScopeProject:
-		pid := derefString(id.ProjectID)
-		return pid != "" && mem.ProjectID == pid
+	case specmemory.ScopeWorkspace:
+		wid := id.WorkspaceID
+		return wid != "" && mem.WorkspaceID == wid
 	default:
 		return false
 	}

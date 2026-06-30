@@ -514,7 +514,7 @@ func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.P
 	_, templateID := p.resolveTemplate(in)
 	row, won, err := p.cfg.Bindings.ReserveSandboxBindingSlot(ctx, store.ReserveSandboxBindingSlotInput{
 		WorkspaceID:    in.WorkspaceID,
-		ProjectAgentID: in.ProjectAgentID,
+		AgentID:        in.ProjectAgentID,
 		CacheKey:       cacheKey,
 		TemplateID:     templateID,
 		Metadata: map[string]any{
@@ -845,7 +845,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		} else {
 			binding, bindErr := p.cfg.Bindings.CreateSandboxBinding(bootCtx, store.CreateSandboxBindingInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectAgentID: in.ProjectAgentID,
+				AgentID:        in.ProjectAgentID,
 				CacheKey:       "agent_daemon:" + in.ProjectAgentID,
 				SandboxID:      sandbox.SandboxID,
 				TemplateID:     templateID,

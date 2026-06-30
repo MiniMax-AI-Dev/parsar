@@ -78,7 +78,7 @@ type Storer interface {
 	FindFeishuInboundReactionByAgentRun(ctx context.Context, agentRunID string) (store.FeishuInboundReactionRow, error)
 	ClearFeishuInboundReaction(ctx context.Context, messageID string) error
 
-	LoadDoneCardRunData(ctx context.Context, workspaceID, projectID, runID string) (store.DoneCardRunData, error)
+	LoadDoneCardRunData(ctx context.Context, workspaceID, runID string) (store.DoneCardRunData, error)
 
 	// SendSystemNoticeMessage is the dead-letter notice path used when
 	// the retry budget is exhausted. Idempotent on

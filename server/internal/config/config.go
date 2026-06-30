@@ -66,7 +66,7 @@ type AuthConfig struct {
 	Bootstrap BootstrapConfig `yaml:"bootstrap"`
 
 	// PlatformAdminUserIDs is the comma-separated allowlist of user
-	// UUIDs that bypass workspace/project membership checks and act
+	// UUIDs that bypass workspace membership checks and act
 	// as owner anywhere. Empty (default) means no platform admins.
 	// Env PARSAR_PLATFORM_ADMIN_USER_IDS.
 	PlatformAdminUserIDs []string `yaml:"platform_admin_user_ids"`

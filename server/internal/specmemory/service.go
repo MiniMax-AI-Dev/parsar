@@ -42,8 +42,8 @@ type Store interface {
 // Actor identifies whoever is invoking the service.
 //   - UI user → ActorTypeUser, UserID populated
 //   - agent CLI → ActorTypeAgent, AgentActor populated
-//     (format "connector:project_agent_id", set by the parsar CLI from
-//     PARSAR_CONNECTOR + PARSAR_PROJECT_AGENT_ID env vars)
+//     (format "connector:agent_id", set by the parsar CLI from
+//     PARSAR_CONNECTOR + PARSAR_AGENT_ID env vars)
 //
 // Source maps to audit.Source*: user actions get SourceAdmin, agent
 // actions get SourceRuntime.
@@ -351,12 +351,12 @@ func (s *Service) DeleteSpecFragment(ctx context.Context, input DeleteSpecFragme
 // ----- Memory CRUD ----------------------------------------------------------
 
 // CreateMemoryInput is the UI / agent-runtime memory write payload.
-// ProjectID is required when Scope==ScopeProject (enforced both here
-// and by memories_scope_project_id_match_check at the DB level).
+// WorkspaceID is required when Scope==ScopeWorkspace (enforced both here
+// and by memories_scope_workspace_id_match_check at the DB level).
 type CreateMemoryInput struct {
 	Scope          Scope
 	UserID         string
-	ProjectID      string // required when Scope==ScopeProject
+	WorkspaceID    string // required when Scope==ScopeWorkspace
 	MemoryType     MemoryType
 	Title          string
 	Body           string
@@ -384,11 +384,11 @@ func (s *Service) CreateMemory(ctx context.Context, input CreateMemoryInput) (Me
 	if input.UserID == "" {
 		return Memory{}, errors.New("specmemory: user_id is required")
 	}
-	if input.Scope == ScopeProject && input.ProjectID == "" {
-		return Memory{}, errors.New("specmemory: project_id is required for project-scope memories")
+	if input.Scope == ScopeWorkspace && input.WorkspaceID == "" {
+		return Memory{}, errors.New("specmemory: workspace_id is required for workspace-scope memories")
 	}
-	if input.Scope == ScopeUser && input.ProjectID != "" {
-		return Memory{}, errors.New("specmemory: project_id must be empty for user-scope memories")
+	if input.Scope == ScopeUser && input.WorkspaceID != "" {
+		return Memory{}, errors.New("specmemory: workspace_id must be empty for user-scope memories")
 	}
 	id := s.newID()
 	now := s.now()
@@ -396,7 +396,7 @@ func (s *Service) CreateMemory(ctx context.Context, input CreateMemoryInput) (Me
 		ID:             id,
 		Scope:          input.Scope.String(),
 		UserID:         input.UserID,
-		ProjectID:      input.ProjectID,
+		WorkspaceID:    input.WorkspaceID,
 		MemoryType:     input.MemoryType.String(),
 		Title:          input.Title,
 		Body:           input.Body,
@@ -422,7 +422,7 @@ func (s *Service) CreateMemory(ctx context.Context, input CreateMemoryInput) (Me
 		ActorID:    input.Actor.auditID(),
 		TargetType: "memory",
 		TargetID:   mem.ID,
-		ProjectID:  mem.ProjectID,
+		WorkspaceID: mem.WorkspaceID,
 		Payload: map[string]any{
 			"scope":           mem.Scope.String(),
 			"memory_type":     mem.MemoryType.String(),
@@ -481,29 +481,29 @@ func (s *Service) ListUserMemories(ctx context.Context, input ListUserMemoriesIn
 	return convertMemories(rows), nil
 }
 
-// ListProjectMemoriesInput drives the project-scope tab.
-type ListProjectMemoriesInput struct {
-	ProjectID        string
+// ListWorkspaceMemoriesInput drives the workspace-scope tab.
+type ListWorkspaceMemoriesInput struct {
+	WorkspaceID      string
 	MemoryTypeFilter MemoryType
 	TagFilter        []string
 	Limit            int32
 }
 
-func (s *Service) ListProjectMemories(ctx context.Context, input ListProjectMemoriesInput) ([]Memory, error) {
-	if input.ProjectID == "" {
-		return nil, errors.New("specmemory: project_id is required")
+func (s *Service) ListWorkspaceMemories(ctx context.Context, input ListWorkspaceMemoriesInput) ([]Memory, error) {
+	if input.WorkspaceID == "" {
+		return nil, errors.New("specmemory: workspace_id is required")
 	}
 	if input.MemoryTypeFilter != "" && !input.MemoryTypeFilter.Valid() {
 		return nil, fmt.Errorf("specmemory: unknown memory type filter %q", input.MemoryTypeFilter)
 	}
-	rows, err := s.store.ListProjectMemories(ctx, store.ListProjectMemoriesInput{
-		ProjectID:        input.ProjectID,
+	rows, err := s.store.ListWorkspaceMemories(ctx, store.ListWorkspaceMemoriesInput{
+		WorkspaceID:      input.WorkspaceID,
 		MemoryTypeFilter: string(input.MemoryTypeFilter),
 		TagFilter:        input.TagFilter,
 		Limit:            input.Limit,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("specmemory: list project memories: %w", err)
+		return nil, fmt.Errorf("specmemory: list workspace memories: %w", err)
 	}
 	return convertMemories(rows), nil
 }
@@ -553,7 +553,7 @@ func (s *Service) UpdateMemory(ctx context.Context, input UpdateMemoryInput) (Me
 		ActorID:    input.Actor.auditID(),
 		TargetType: "memory",
 		TargetID:   mem.ID,
-		ProjectID:  mem.ProjectID,
+		WorkspaceID: mem.WorkspaceID,
 		Payload: map[string]any{
 			"title":       mem.Title,
 			"body_len":    len(mem.Body),
@@ -656,11 +656,10 @@ func (s *Service) BuildIncremental(ctx context.Context, input IncrementalInput) 
 // nothing to inject. WorkspaceName comes back empty here; the runtime
 // snapshot HTTP endpoint is the one that resolves the human-readable
 // name.
-func (s *Service) RenderSessionPrompt(ctx context.Context, workspaceID, userID, projectID string) (string, error) {
+func (s *Service) RenderSessionPrompt(ctx context.Context, workspaceID, userID, _ string) (string, error) {
 	inj, err := s.BuildSnapshot(ctx, SnapshotInput{
 		WorkspaceID: workspaceID,
 		UserID:      userID,
-		ProjectID:   projectID,
 	})
 	if err != nil {
 		return "", err

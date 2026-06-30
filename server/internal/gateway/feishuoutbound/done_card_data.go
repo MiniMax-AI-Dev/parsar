@@ -15,7 +15,7 @@ import (
 
 // doneCardAssemblyStore is the slice of *store.Store this helper needs.
 type doneCardAssemblyStore interface {
-	LoadDoneCardRunData(ctx context.Context, workspaceID, projectID, runID string) (store.DoneCardRunData, error)
+	LoadDoneCardRunData(ctx context.Context, workspaceID, runID string) (store.DoneCardRunData, error)
 	ListAgentRunEventsAfterSeq(ctx context.Context, runID string, afterSeq int64, limit int32) ([]store.AgentRunEvent, error)
 	GetGuestReplyHintForRun(ctx context.Context, conversationID, runID string) (string, error)
 }
@@ -23,7 +23,6 @@ type doneCardAssemblyStore interface {
 // assembleDoneCardInput is the per-call context.
 type assembleDoneCardInput struct {
 	WorkspaceID string
-	ProjectID   string
 	RunID       string
 	// PrefilledSteps overrides the agent_run_events read entirely when
 	// non-nil. The driver passes prev.Payload steps directly.
@@ -65,7 +64,7 @@ func assembleDoneCardData(ctx context.Context, s doneCardAssemblyStore, in assem
 		return out, nil
 	}
 
-	data, err := s.LoadDoneCardRunData(ctx, in.WorkspaceID, in.ProjectID, runID)
+	data, err := s.LoadDoneCardRunData(ctx, in.WorkspaceID, runID)
 	if err != nil {
 		return out, err
 	}

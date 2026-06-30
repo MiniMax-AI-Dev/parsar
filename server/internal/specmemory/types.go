@@ -1,5 +1,5 @@
 // Package specmemory owns the workspace-level spec fragments and the
-// user-/project-level memories that get injected into agent sessions
+// user-/workspace-level memories that get injected into agent sessions
 // at SessionStart and per-turn. See docs/spec-memory-module.md for
 // the end-to-end design.
 //
@@ -63,23 +63,22 @@ func SourceFromString(s string) (Source, error) {
 }
 
 // Scope distinguishes user-level memories (visible only to the
-// author) from project-level memories (shared across all users on
-// the project). spec_fragments is implicitly workspace-scoped.
+// author) from workspace-level memories (shared across all users on
+// the workspace). spec_fragments is implicitly workspace-scoped.
 type Scope string
 
 const (
-	// ScopeUser — memory belongs to a single user across all their
-	// projects within the workspace.
+	// ScopeUser — memory belongs to a single user across the workspace.
 	ScopeUser Scope = "user"
-	// ScopeProject — memory is shared across all users on a project.
-	// memories.project_id required (enforced by
-	// memories_scope_project_id_match_check).
-	ScopeProject Scope = "project"
+	// ScopeWorkspace — memory is shared across all users on a workspace.
+	// memories.workspace_id required (enforced by
+	// memories_scope_workspace_id_match_check).
+	ScopeWorkspace Scope = "workspace"
 )
 
 func (s Scope) Valid() bool {
 	switch s {
-	case ScopeUser, ScopeProject:
+	case ScopeUser, ScopeWorkspace:
 		return true
 	}
 	return false
@@ -107,10 +106,10 @@ const (
 	// MemoryTypeFeedback — guidance the user has given about how to
 	// approach work. Why field is strongly recommended.
 	MemoryTypeFeedback MemoryType = "feedback"
-	// MemoryTypeProject — ongoing project state (initiatives,
+	// MemoryTypeWorkspace — ongoing workspace state (initiatives,
 	// constraints, deadlines) not derivable from code or git history.
 	// Why field is strongly recommended.
-	MemoryTypeProject MemoryType = "project"
+	MemoryTypeWorkspace MemoryType = "workspace"
 	// MemoryTypeReference — pointers to external systems (dashboards,
 	// docs, Slack channels).
 	MemoryTypeReference MemoryType = "reference"
@@ -118,7 +117,7 @@ const (
 
 func (t MemoryType) Valid() bool {
 	switch t {
-	case MemoryTypeUser, MemoryTypeFeedback, MemoryTypeProject, MemoryTypeReference:
+	case MemoryTypeUser, MemoryTypeFeedback, MemoryTypeWorkspace, MemoryTypeReference:
 		return true
 	}
 	return false
@@ -146,18 +145,18 @@ type Fragment struct {
 	Tags        []string
 	Source      Source
 	CreatedBy   string // user UUID or "" for agent writes
-	AgentActor  string // "connector:projectAgentID" or "" for human writes
+	AgentActor  string // "connector:agentID" or "" for human writes
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
 
-// Memory is the business-level view of a memories row. ProjectID and
+// Memory is the business-level view of a memories row. WorkspaceID and
 // ConversationID use "" for SQL NULL (matches audit.Event).
 type Memory struct {
 	ID             string
 	Scope          Scope
 	UserID         string
-	ProjectID      string // "" when scope=user
+	WorkspaceID    string // "" when scope=user
 	MemoryType     MemoryType
 	Title          string
 	Body           string

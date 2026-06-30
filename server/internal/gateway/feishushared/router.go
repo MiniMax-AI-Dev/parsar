@@ -16,7 +16,7 @@ type Store interface {
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	// Wipes the stored selection so the next inbound has to /select again;
-	// called when the selected Agent has lost its active project binding.
+	// called when the selected Agent has lost its active binding.
 	ClearGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) error
 	GetAgentByID(ctx context.Context, agentID string) (store.FeishuAgentRoute, error)
 	GetAgentByFeishuAppID(ctx context.Context, appID string) (store.FeishuAgentRoute, error)
@@ -280,7 +280,7 @@ func handleSelect(ctx context.Context, st Store, host gateway.FeishuRouteAgent, 
 	}); err != nil {
 		return Outcome{}, err
 	}
-	text := fmt.Sprintf("已选择 Agent「%s」（%s / %s）。", selected.AgentName, selected.WorkspaceName, selected.ProjectName)
+	text := fmt.Sprintf("已选择 Agent「%s」（%s / %s）。", selected.AgentName, selected.WorkspaceName, selected.WorkspaceSlug)
 	return replyAndStop(ctx, reply, host, event, text, "selected")
 }
 
@@ -388,7 +388,7 @@ func formatAgentList(agents []store.FeishuSharedBotAgent, currentAgentID string)
 			if agent.AgentID == currentAgentID {
 				marker = " ✓"
 			}
-			lines = append(lines, fmt.Sprintf("%s（%s — %s）%s", agent.AgentSlug, agent.AgentName, agent.ProjectName, marker))
+			lines = append(lines, fmt.Sprintf("%s（%s — %s）%s", agent.AgentSlug, agent.AgentName, agent.WorkspaceSlug, marker))
 		}
 	}
 	lines = append(lines, "", "发送 /select <agent-slug> 选择。")
