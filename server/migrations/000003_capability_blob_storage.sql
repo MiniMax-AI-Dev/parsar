@@ -1,6 +1,6 @@
 -- +goose Up
 -- ==============================================================
--- 000002_capability_blob_storage — capability 二进制(plugin/skill zip)
+-- 000003_capability_blob_storage — capability 二进制(plugin/skill zip)
 -- 的 Postgres 存储后端。
 -- ==============================================================
 -- 背景:
