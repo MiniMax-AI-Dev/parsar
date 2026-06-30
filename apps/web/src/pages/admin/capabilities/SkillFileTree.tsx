@@ -52,7 +52,7 @@ export function SkillFileTree({ skill }: Props) {
       {grouped.other.length > 0 && (
         <GroupCard
           icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
-          title={t("capabilities.import.skill.fileTree.other", "其它文件")}
+          title={t("capabilities.import.skill.fileTree.other", "Other files")}
           files={grouped.other}
         />
       )}
@@ -78,7 +78,7 @@ function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
           <FileText className="h-4 w-4 shrink-0 text-success" />
           <code className="font-mono text-sm text-fg">SKILL.md</code>
           <span className="ml-auto rounded-full bg-success-subtle px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-success-emphasis">
-            {t("capabilities.import.skill.fileTree.entry", "入口")}
+            {t("capabilities.import.skill.fileTree.entry", "Entry")}
           </span>
         </CollapsibleTrigger>
         <CollapsibleContent>

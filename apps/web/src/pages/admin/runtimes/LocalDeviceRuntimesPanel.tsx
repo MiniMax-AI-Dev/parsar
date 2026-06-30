@@ -60,7 +60,7 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
     return (
       <ErrorState
         title={t("runtime.agentDaemon.errors.loadFailed", {
-          defaultValue: "无法加载本地设备列表",
+          defaultValue: "Failed to load local devices",
         })}
         description={(listQ.error as Error).message}
         onRetry={() => void listQ.refetch()}
@@ -77,7 +77,7 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
         <p className="text-sm text-fg-subtle">
           {t("runtime.agentDaemon.intro", {
             defaultValue:
-              "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
+              "Local devices dial back to Parsar through parsar-daemon, letting Agents use the Claude Code / OpenCode CLIs installed on this machine.",
           })}
         </p>
         <Button
@@ -86,14 +86,14 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
           onClick={() => setPairOpen(true)}
           data-testid="agent-daemon-pair-button"
         >
-          {t("runtime.agentDaemon.actions.pair", { defaultValue: "接入新设备" })}
+          {t("runtime.agentDaemon.actions.pair", { defaultValue: "Pair a new device" })}
         </Button>
       </div>
 
       {runtimes.length === 0 ? (
         <div className="rounded-md border border-dashed border-line bg-surface-subtle/60 p-6 text-center text-sm text-fg-subtle">
           {t("runtime.agentDaemon.empty", {
-            defaultValue: "尚未接入任何本地设备。点击右上角按钮生成连接命令。",
+            defaultValue: "No local devices paired yet. Use the button above to generate a pairing command.",
           })}
         </div>
       ) : (
@@ -101,12 +101,12 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("runtime.agentDaemon.table.name", { defaultValue: "名称" })}</TableHead>
-                <TableHead>{t("runtime.agentDaemon.table.hostname", { defaultValue: "主机名" })}</TableHead>
-                <TableHead>{t("runtime.agentDaemon.table.version", { defaultValue: "版本" })}</TableHead>
-                <TableHead>{t("runtime.agentDaemon.table.agentEngines", { defaultValue: "Agent 引擎" })}</TableHead>
-                <TableHead>{t("runtime.agentDaemon.table.status", { defaultValue: "状态" })}</TableHead>
-                <TableHead>{t("runtime.agentDaemon.table.heartbeat", { defaultValue: "最后心跳" })}</TableHead>
+                <TableHead>{t("runtime.agentDaemon.table.name", { defaultValue: "Name" })}</TableHead>
+                <TableHead>{t("runtime.agentDaemon.table.hostname", { defaultValue: "Hostname" })}</TableHead>
+                <TableHead>{t("runtime.agentDaemon.table.version", { defaultValue: "Version" })}</TableHead>
+                <TableHead>{t("runtime.agentDaemon.table.agentEngines", { defaultValue: "Agent engines" })}</TableHead>
+                <TableHead>{t("runtime.agentDaemon.table.status", { defaultValue: "Status" })}</TableHead>
+                <TableHead>{t("runtime.agentDaemon.table.heartbeat", { defaultValue: "Last heartbeat" })}</TableHead>
                 <TableHead className="w-[60px]" />
               </TableRow>
             </TableHeader>
@@ -172,8 +172,8 @@ function DaemonRuntimeRow({
           {activeRequests !== null && (
             <div className="text-xs text-fg-subtle">
               {activeRequests === 0
-                ? t("runtime.agentDaemon.load.idle", { defaultValue: "空闲" })
-                : t("runtime.agentDaemon.load.active", { count: activeRequests, defaultValue: "{{count}} 个运行中" })}
+                ? t("runtime.agentDaemon.load.idle", { defaultValue: "Idle" })
+                : t("runtime.agentDaemon.load.active", { count: activeRequests, defaultValue: "{{count}} running" })}
             </div>
           )}
         </div>
@@ -202,7 +202,7 @@ function DaemonRuntimeRow({
           type="button"
           onClick={onDelete}
           className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-faint hover:bg-danger-subtle hover:text-danger"
-          title={t("runtime.agentDaemon.actions.delete", { defaultValue: "删除设备" })}
+          title={t("runtime.agentDaemon.actions.delete", { defaultValue: "Delete device" })}
           data-testid={`agent-daemon-delete-${runtime.id}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -272,12 +272,12 @@ function formatAgentKindTitle(kind: SupportedAgentKind, t: TFunction<"admin">): 
 function formatAgentKindSnapshot(kind: SupportedAgentKind, t: TFunction<"admin">): string {
   const label = formatAgentKindLabel(kind.kind)
   if (!kind.available) {
-    return t("runtime.agentDaemon.agentKind.notDetected", { label, defaultValue: "{{label}} 未检测到" })
+    return t("runtime.agentDaemon.agentKind.notDetected", { label, defaultValue: "{{label}} not detected" })
   }
   if (kind.version) {
     return t("runtime.agentDaemon.agentKind.version", { label, version: kind.version, defaultValue: "{{label}} {{version}}" })
   }
-  return t("runtime.agentDaemon.agentKind.usable", { label, defaultValue: "{{label}} 可用" })
+  return t("runtime.agentDaemon.agentKind.usable", { label, defaultValue: "{{label}} available" })
 }
 
 function DaemonStatusBadge({
@@ -290,25 +290,25 @@ function DaemonStatusBadge({
     case "online":
       return (
         <Badge variant="success" dot>
-          {t("runtime.agentDaemon.status.online", { defaultValue: "在线" })}
+          {t("runtime.agentDaemon.status.online", { defaultValue: "Online" })}
         </Badge>
       )
     case "pending_pairing":
       return (
         <Badge variant="warning">
-          {t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "等待配对" })}
+          {t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "Pairing" })}
         </Badge>
       )
     case "error":
       return (
         <Badge variant="destructive">
-          {t("runtime.agentDaemon.status.error", { defaultValue: "错误" })}
+          {t("runtime.agentDaemon.status.error", { defaultValue: "Error" })}
         </Badge>
       )
     default:
       return (
         <Badge variant="neutral">
-          {t("runtime.agentDaemon.status.offline", { defaultValue: "离线" })}
+          {t("runtime.agentDaemon.status.offline", { defaultValue: "Offline" })}
         </Badge>
       )
   }
@@ -341,21 +341,21 @@ function daemonStatusDetail(runtime: Runtime, t: TFunction<"admin">): string {
   const availableKinds = kinds.filter((kind) => kind.available)
   switch (runtime.liveness) {
     case "pending_pairing":
-      return t("runtime.agentDaemon.detail.pendingPairing", { defaultValue: "等待执行 parsar-daemon connect 完成配对。" })
+      return t("runtime.agentDaemon.detail.pendingPairing", { defaultValue: "Waiting for parsar-daemon connect to complete pairing." })
     case "offline":
       return kinds.length === 0
-        ? t("runtime.agentDaemon.detail.offlineNoSnapshot", { defaultValue: "还没收到 capability 快照；请先确认设备上的 parsar-daemon 已连上。" })
-        : t("runtime.agentDaemon.detail.offlineWithSnapshot", { defaultValue: "最近心跳中断；可在设备上运行 parsar-daemon status 或 parsar-daemon logs 排查。" })
+        ? t("runtime.agentDaemon.detail.offlineNoSnapshot", { defaultValue: "No capability snapshot yet — make sure parsar-daemon is connected on the device." })
+        : t("runtime.agentDaemon.detail.offlineWithSnapshot", { defaultValue: "Recent heartbeats lost — run parsar-daemon status or parsar-daemon logs on the device to diagnose." })
     case "error":
-      return t("runtime.agentDaemon.detail.error", { defaultValue: "daemon 上报错误；请在设备上运行 parsar-daemon logs 查看最近错误。" })
+      return t("runtime.agentDaemon.detail.error", { defaultValue: "Daemon reported an error — run parsar-daemon logs on the device to inspect." })
     case "online":
       if (kinds.length > 0 && availableKinds.length === 0) {
-        return t("runtime.agentDaemon.detail.onlineNoCli", { defaultValue: "WebSocket 在线，但本机没有可用的 Agent CLI。" })
+        return t("runtime.agentDaemon.detail.onlineNoCli", { defaultValue: "WebSocket connected, but no Agent CLI is installed on this host." })
       }
       if (activeRequests > 0) {
-        return t("runtime.agentDaemon.detail.onlineActive", { count: activeRequests, defaultValue: "当前有 {{count}} 个运行在执行。" })
+        return t("runtime.agentDaemon.detail.onlineActive", { count: activeRequests, defaultValue: "{{count}} run(s) currently executing." })
       }
-      return t("runtime.agentDaemon.detail.onlineIdle", { defaultValue: "在线，等待新请求。" })
+      return t("runtime.agentDaemon.detail.onlineIdle", { defaultValue: "Online, waiting for new requests." })
     default:
       return "—"
   }
@@ -394,12 +394,12 @@ function ConfirmDeleteRuntimeDialog({
             <DialogTitle className="text-sm">
               {t("runtime.agentDaemon.delete.title", {
                 name: targetName,
-                defaultValue: "删除设备「{{name}}」",
+                defaultValue: "Delete device {{name}}",
               })}
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed">
               {t("runtime.agentDaemon.delete.description", {
-                defaultValue: "删除后该设备将无法接收新任务，已有运行不受影响。此操作不可撤销。",
+                defaultValue: "Once deleted, this device can no longer accept new tasks; running tasks are unaffected. This action cannot be undone.",
               })}
             </DialogDescription>
             {error && (
@@ -414,7 +414,7 @@ function ConfirmDeleteRuntimeDialog({
             onClick={onCancel}
             disabled={pending}
           >
-            {t("common.actions.cancel", { defaultValue: "取消" })}
+            {t("common.actions.cancel", { defaultValue: "Cancel" })}
           </Button>
           <Button
             variant="destructive"
@@ -423,7 +423,7 @@ function ConfirmDeleteRuntimeDialog({
             disabled={pending}
           >
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {t("runtime.agentDaemon.delete.confirm", { defaultValue: "删除" })}
+            {t("runtime.agentDaemon.delete.confirm", { defaultValue: "Delete" })}
           </Button>
         </DialogFooter>
       </DialogContent>

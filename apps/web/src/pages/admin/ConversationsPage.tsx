@@ -836,14 +836,14 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
                   cancelConvMut.mutate({ conversationID: conversationId, reason: "user_clicked_cancel_all" })
                 }}
                 className="h-7 gap-1 px-2 text-xs text-danger hover:text-danger-emphasis"
-                title={t("conversations.detail.cancelAllAria", { defaultValue: "取消该会话所有进行中的任务" })}
+                title={t("conversations.detail.cancelAllAria", { defaultValue: "Cancel all in-flight tasks in this conversation" })}
               >
                 {cancelConvMut.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
                 ) : (
                   <X className="h-3 w-3" strokeWidth={2.5} />
                 )}
-                {t("conversations.detail.cancelAll", { defaultValue: "取消全部" })}
+                {t("conversations.detail.cancelAll", { defaultValue: "Cancel all" })}
               </Button>
             )}
           </div>
@@ -1286,8 +1286,8 @@ function ComposerForm({
             type="button"
             onClick={onCancelActiveRun}
             disabled={cancelling}
-            aria-label={t("conversations.composer.stopAria", { defaultValue: "停止生成" })}
-            title={t("conversations.composer.stopAria", { defaultValue: "停止生成" })}
+            aria-label={t("conversations.composer.stopAria", { defaultValue: "Stop" })}
+            title={t("conversations.composer.stopAria", { defaultValue: "Stop" })}
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-colors",
               "bg-surface-inverse text-white hover:bg-surface-emphasis",

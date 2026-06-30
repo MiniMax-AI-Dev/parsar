@@ -79,7 +79,7 @@ export function CredentialKindCombobox({
                 ? selected.display_name
                 : value
                   ? value
-                  : t("capabilities.import.kindPicker.placeholder", "选择凭据类型")}
+                  : t("capabilities.import.kindPicker.placeholder", "Select a credential kind")}
               {selected && (
                 <code className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-fg-subtle">
                   {selected.code}
@@ -100,7 +100,7 @@ export function CredentialKindCombobox({
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("capabilities.import.kindPicker.search", "搜索…")}
+                placeholder={t("capabilities.import.kindPicker.search", "Search…")}
                 onKeyDown={(e) => e.stopPropagation() /* keep arrow keys in input */}
                 className="h-8 text-sm"
                 autoFocus
@@ -111,13 +111,13 @@ export function CredentialKindCombobox({
               {kindsQ.isLoading ? (
                 <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t("capabilities.import.kindPicker.loading", "加载中…")}
+                  {t("capabilities.import.kindPicker.loading", "Loading…")}
                 </div>
               ) : errMsg ? (
                 <p className="px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
               ) : filtered.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-fg-subtle">
-                  {t("capabilities.import.kindPicker.empty", "没有匹配的凭据类型")}
+                  {t("capabilities.import.kindPicker.empty", "No matching credential kinds")}
                 </p>
               ) : (
                 filtered.map((kind) => (
@@ -141,7 +141,7 @@ export function CredentialKindCombobox({
               className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm font-medium text-fg outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
             >
               <Plus className="h-3.5 w-3.5" />
-              {t("capabilities.import.kindPicker.createNew", "新建凭据类型…")}
+              {t("capabilities.import.kindPicker.createNew", "Create credential kind…")}
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

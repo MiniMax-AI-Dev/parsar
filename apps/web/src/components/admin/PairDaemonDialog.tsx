@@ -86,12 +86,12 @@ export function PairDaemonDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {t("runtime.agentDaemon.pair.title", { defaultValue: "接入新设备" })}
+            {t("runtime.agentDaemon.pair.title", { defaultValue: "Pair a new device" })}
           </DialogTitle>
           <DialogDescription>
             {t("runtime.agentDaemon.pair.description", {
               defaultValue:
-                "为这台设备生成一次性 token,然后在目标机器上运行 parsar-daemon connect。daemon 会主动通过 WebSocket 连回 Parsar。",
+                "Generate a one-time token for this device, then run parsar-daemon connect on the target machine. The daemon will dial back to Parsar over WebSocket.",
             })}
           </DialogDescription>
         </DialogHeader>
@@ -100,7 +100,7 @@ export function PairDaemonDialog({
           <div className="space-y-3">
             <label className="block text-sm">
               <span className="mb-1 block text-fg-muted">
-                {t("runtime.agentDaemon.pair.nameLabel", { defaultValue: "设备名称" })}
+                {t("runtime.agentDaemon.pair.nameLabel", { defaultValue: "Device name" })}
               </span>
               <input
                 className="w-full rounded border border-line-strong px-2 py-1 font-mono text-sm"
@@ -112,22 +112,22 @@ export function PairDaemonDialog({
             </label>
             <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
               <p className="mb-1 font-medium">
-                {t("runtime.agentDaemon.pair.safetyTitle", { defaultValue: "连接说明" })}
+                {t("runtime.agentDaemon.pair.safetyTitle", { defaultValue: "How the connection works" })}
               </p>
               <ul className="space-y-1 pl-4">
                 <li>
                   {t("runtime.agentDaemon.pair.safetyOutbound", {
-                    defaultValue: "由本机主动出站连接,无需开放任何入站端口",
+                    defaultValue: "This host opens an outbound connection — no inbound ports required.",
                   })}
                 </li>
                 <li>
                   {t("runtime.agentDaemon.pair.safetyClaude", {
-                    defaultValue: "Agent CLI、文件和密钥都留在这台机器上",
+                    defaultValue: "Agent CLI, files, and secrets stay on this machine.",
                   })}
                 </li>
                 <li>
                   {t("runtime.agentDaemon.pair.safetyOnce", {
-                    defaultValue: "Token 仅显示一次,关闭窗口后无法恢复",
+                    defaultValue: "The token is shown once — it cannot be recovered after this dialog closes.",
                   })}
                 </li>
               </ul>
@@ -139,7 +139,7 @@ export function PairDaemonDialog({
             )}
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={close}>
-                {t("common.actions.cancel", { defaultValue: "取消" })}
+                {t("common.actions.cancel", { defaultValue: "Cancel" })}
               </Button>
               <Button
                 size="sm"
@@ -149,10 +149,10 @@ export function PairDaemonDialog({
               >
                 {create.isPending
                   ? t("runtime.agentDaemon.pair.minting", {
-                      defaultValue: "生成中…",
+                      defaultValue: "Generating…",
                     })
                   : t("runtime.agentDaemon.pair.mint", {
-                      defaultValue: "生成连接命令",
+                      defaultValue: "Generate connection command",
                     })}
               </Button>
             </DialogFooter>
@@ -162,18 +162,18 @@ export function PairDaemonDialog({
             <p className="text-sm text-success">
               {t("runtime.agentDaemon.pair.successOneLine", {
                 defaultValue:
-                  "在 {{name}} 上执行这一条命令即可连接（自动下载并连接,无需手动安装二进制):",
+                  "Run this one command on {{name}} to connect (it downloads and connects automatically — no binary to install manually):",
                 name: result.runtimeName,
               })}
             </p>
             <DaemonCommandBlock
               command={buildOneLineCommand(result.token, result.runtimeName)}
               label={t("runtime.agentDaemon.pair.oneLineLabel", {
-                defaultValue: "复制并在目标机器上运行",
+                defaultValue: "Copy and run on the target machine",
               })}
               description={t("runtime.agentDaemon.pair.oneLineHint", {
                 defaultValue:
-                  "目标机器需已安装 Claude Code / OpenCode / Codex 之一;成功后这台设备会变为「在线」",
+                  "The target machine must have one of Claude Code / OpenCode / Codex installed. Once connected, this device flips to “Online”.",
               })}
               onCopy={copyToClipboard}
               testId="agent-daemon-pair-copy-oneline"
@@ -183,21 +183,21 @@ export function PairDaemonDialog({
                 <>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-success" />
                   <span className="text-success">
-                    {t("runtime.agentDaemon.pair.connected", { defaultValue: "设备已连接" })}
+                    {t("runtime.agentDaemon.pair.connected", { defaultValue: "Device connected" })}
                   </span>
                 </>
               ) : (
                 <>
                   <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-warning" />
                   <span className="text-fg-muted">
-                    {t("runtime.agentDaemon.pair.waitingConnection", { defaultValue: "等待设备连接…" })}
+                    {t("runtime.agentDaemon.pair.waitingConnection", { defaultValue: "Waiting for the device to connect…" })}
                   </span>
                 </>
               )}
             </div>
             <DialogFooter>
               <Button size="sm" onClick={close} data-testid="agent-daemon-pair-done">
-                {t("common.actions.done", { defaultValue: "完成" })}
+                {t("common.actions.done", { defaultValue: "Done" })}
               </Button>
             </DialogFooter>
           </div>
@@ -233,10 +233,10 @@ function DaemonCommandBlock({
           onClick={() => onCopy(command)}
           className="inline-flex shrink-0 items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-xs text-fg-muted hover:bg-surface-muted"
           data-testid={testId}
-          title={t("runtime.agentDaemon.pair.copyCommand", { defaultValue: "复制命令" })}
+          title={t("runtime.agentDaemon.pair.copyCommand", { defaultValue: "Copy command" })}
         >
           <Copy className="h-3 w-3" />
-          {t("runtime.agentDaemon.pair.copy", { defaultValue: "复制" })}
+          {t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
         </button>
       </div>
       <code className="block break-all rounded bg-surface p-2 font-mono text-xs leading-relaxed text-fg-emphasis">

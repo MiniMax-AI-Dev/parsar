@@ -189,7 +189,7 @@ export function CreateAgentDialog({
   onOpenChange,
   onSubmit,
 }: CreateAgentDialogProps) {
-  const { t, i18n } = useTranslation("admin")
+  const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const queryClient = useQueryClient()
   const [name, setName] = useState("")
@@ -406,7 +406,7 @@ export function CreateAgentDialog({
       // source (with a "副本/Copy" name suffix). URL params still win — the
       // connector-wizard return-to flow relies on them.
       const cloneSource = agent
-      const cloneSuffix = cloneSource?.name ? ` (${i18n.language.startsWith("zh") ? "副本" : "Copy"})` : ""
+      const cloneSuffix = cloneSource?.name ? " (Copy)" : ""
       setName(params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : ""))
       setDescription(params.get("agent_description") ?? cloneSource?.description ?? "")
       setExecutionMode(cloneSource ? executionModeFromAgent(cloneSource) : "sandbox")

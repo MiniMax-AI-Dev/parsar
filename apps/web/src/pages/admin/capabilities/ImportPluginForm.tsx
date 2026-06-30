@@ -97,12 +97,12 @@ export function ImportPluginForm({
   const acceptFile = async (picked: File) => {
     setLocalErr(null)
     if (!picked.name.toLowerCase().endsWith(ACCEPTED_EXT)) {
-      setLocalErr(t("capabilities.import.plugin.errors.notZip", "请选择 .zip 文件"))
+      setLocalErr(t("capabilities.import.plugin.errors.notZip", "Please choose a .zip file"))
       return
     }
     if (picked.size > MAX_BYTES) {
       setLocalErr(
-        t("capabilities.import.plugin.errors.tooLarge", "文件超过 32 MiB,服务端会拒绝"),
+        t("capabilities.import.plugin.errors.tooLarge", "File exceeds 32 MiB — the server will reject it"),
       )
       return
     }
@@ -168,7 +168,7 @@ export function ImportPluginForm({
     <div className="grid gap-4 md:grid-cols-2">
       <div className="grid gap-3">
         <span className="text-sm font-medium text-fg-muted">
-          {t("capabilities.import.plugin.uploadLabel", "上传 Plugin zip")}
+          {t("capabilities.import.plugin.uploadLabel", "Upload Plugin zip")}
         </span>
         {!file ? (
           <label
@@ -179,10 +179,10 @@ export function ImportPluginForm({
           >
             <Upload className="h-5 w-5 text-fg-subtle" />
             <span className="text-sm text-fg-muted">
-              {t("capabilities.import.plugin.dropHint", "拖拽或点击上传 .zip 文件")}
+              {t("capabilities.import.plugin.dropHint", "Drag or click to upload a .zip file")}
             </span>
             <span className="text-xs text-fg-subtle">
-              {t("capabilities.import.plugin.sizeHint", "最大 32 MiB")}
+              {t("capabilities.import.plugin.sizeHint", "Up to 32 MiB")}
             </span>
             <input
               id="plugin-zip-input"
@@ -210,8 +210,8 @@ export function ImportPluginForm({
                       <span className="inline-flex items-center gap-1 text-fg-muted">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         {presignMut.isPending
-                          ? t("capabilities.import.plugin.uploading", "上传中…")
-                          : t("capabilities.import.plugin.validating", "校验中…")}
+                          ? t("capabilities.import.plugin.uploading", "Uploading…")
+                          : t("capabilities.import.plugin.validating", "Validating…")}
                       </span>
                     </>
                   )}
@@ -223,7 +223,7 @@ export function ImportPluginForm({
               size="sm"
               onClick={reset}
               disabled={busy}
-              aria-label={t("capabilities.actions.cancel", "取消")}
+              aria-label={t("capabilities.actions.cancel", "Cancel")}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -243,11 +243,11 @@ export function ImportPluginForm({
       {/* ---- validation preview pane ----------------------------------- */}
       <div className="grid gap-3">
         <span className="text-sm font-medium text-fg-muted">
-          {t("capabilities.import.plugin.previewLabel", "校验结果")}
+          {t("capabilities.import.plugin.previewLabel", "Validation result")}
         </span>
         {!validation && !busy && (
           <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-3 py-6 text-center text-sm text-fg-subtle">
-            {t("capabilities.import.plugin.previewEmpty", "上传一个 zip 文件后在这里看到校验结果")}
+            {t("capabilities.import.plugin.previewEmpty", "Upload a zip file to see the validation result here")}
           </div>
         )}
         {validation && <ValidationPanel validation={validation} preview={previewMut.data ?? null} />}
@@ -290,11 +290,11 @@ function ValidationPanel({
     <div className="grid gap-3 rounded-md border border-line bg-surface p-3">
       {validation.valid ? (
         <div className="rounded-md border border-success-border bg-success-subtle px-3 py-1.5 text-sm text-success-emphasis">
-          {t("capabilities.import.plugin.passed", "校验通过")}
+          {t("capabilities.import.plugin.passed", "Validation passed")}
         </div>
       ) : (
         <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-1.5 text-sm text-danger-emphasis">
-          {t("capabilities.import.plugin.failed", "校验失败,请修复后重新上传")}
+          {t("capabilities.import.plugin.failed", "Validation failed — fix the issues and upload again")}
         </div>
       )}
 
@@ -322,7 +322,7 @@ function ValidationPanel({
       {errors.length > 0 && (
         <div>
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-danger-emphasis">
-            {t("capabilities.import.plugin.errorsHeader", "错误")}
+            {t("capabilities.import.plugin.errorsHeader", "Errors")}
           </p>
           <ul className="ml-4 list-disc space-y-0.5 text-sm text-danger-emphasis">
             {errors.map((e, i) => (
@@ -335,7 +335,7 @@ function ValidationPanel({
       {warnings.length > 0 && (
         <div>
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-warning">
-            {t("capabilities.import.plugin.warningsHeader", "警告")}
+            {t("capabilities.import.plugin.warningsHeader", "Warnings")}
           </p>
           <ul className="ml-4 list-disc space-y-0.5 text-sm text-warning-emphasis">
             {warnings.map((wn, i) => (

@@ -107,7 +107,7 @@ export function ImportSkillForm({
           },
           onError: (err) => {
             setPasteError(
-              formatErr(err, t("capabilities.import.preview.errorFallback", "解析失败")),
+              formatErr(err, t("capabilities.import.preview.errorFallback", "Failed to parse")),
             )
             setPasteWarnings([])
             onChange(null)
@@ -151,12 +151,12 @@ export function ImportSkillForm({
   const acceptZip = async (picked: File) => {
     setZipError(null)
     if (!picked.name.toLowerCase().endsWith(".zip")) {
-      setZipError(t("capabilities.import.skill.errors.notZip", "请选择 .zip 文件"))
+      setZipError(t("capabilities.import.skill.errors.notZip", "Please choose a .zip file"))
       return
     }
     if (picked.size > ZIP_MAX_BYTES) {
       setZipError(
-        t("capabilities.import.skill.errors.tooLarge", "文件超过 8 MiB,服务端会拒绝"),
+        t("capabilities.import.skill.errors.tooLarge", "File exceeds 8 MiB — the server will reject it"),
       )
       return
     }
@@ -195,7 +195,7 @@ export function ImportSkillForm({
     } catch (err) {
       if (myReq !== requestSeq.current) return
       setZipError(
-        formatErr(err, t("capabilities.import.preview.errorFallback", "解析失败")),
+        formatErr(err, t("capabilities.import.preview.errorFallback", "Failed to parse")),
       )
       onChange(null)
       onOssKeyChange(null)
@@ -266,7 +266,7 @@ export function ImportSkillForm({
           {source === "paste" ? (
             <>
               <p className="text-sm font-medium text-fg-muted">
-                {t("capabilities.import.skill.markdown", "Markdown 内容")}
+                {t("capabilities.import.skill.markdown", "Markdown content")}
               </p>
               <textarea
                 value={raw}
@@ -284,23 +284,23 @@ export function ImportSkillForm({
               <p className="text-xs text-fg-subtle">
                 {t(
                   "capabilities.import.skill.pasteHelp",
-                  "支持带 YAML frontmatter 的 Markdown。name + description 来自 frontmatter,正文作为 instruction 注入到模型。",
+                  "Supports Markdown with YAML frontmatter. name + description come from the frontmatter; the body is injected into the model as the instruction.",
                 )}
               </p>
             </>
           ) : (
             <>
               <p className="text-sm font-medium text-fg-muted">
-                {t("capabilities.import.skill.zipLabel", "上传 Skill zip")}
+                {t("capabilities.import.skill.zipLabel", "Upload Skill zip")}
               </p>
               <SkillZipDropzone
                 file={zipFile}
                 busy={busy}
                 busyLabel={
                   presignMut.isPending
-                    ? t("capabilities.import.skill.uploading", "上传中…")
+                    ? t("capabilities.import.skill.uploading", "Uploading…")
                     : previewMut.isPending
-                      ? t("capabilities.import.skill.parsing", "解析中…")
+                      ? t("capabilities.import.skill.parsing", "Parsing…")
                       : undefined
                 }
                 onPick={(f) => void acceptZip(f)}
@@ -310,7 +310,7 @@ export function ImportSkillForm({
               <p className="text-xs text-fg-subtle">
                 {t(
                   "capabilities.import.skill.zipHelp",
-                  "zip 内需包含 SKILL.md(可在根目录或一层子目录)。references/、scripts/ 等子目录会一并导入。",
+                  "The zip must contain a SKILL.md (at the root or one level deep). references/ and scripts/ subdirectories are imported alongside it.",
                 )}
               </p>
             </>
@@ -364,18 +364,18 @@ function SourceModeSwitch({
     <div
       className="inline-flex items-center gap-1 self-start rounded-md border border-line bg-surface-subtle p-0.5"
       role="tablist"
-      aria-label={t("capabilities.import.skill.source.label", "导入方式")}
+      aria-label={t("capabilities.import.skill.source.label", "Import method")}
     >
       <ModeButton
         active={value === "paste"}
         icon={<ClipboardPaste className="h-3.5 w-3.5" />}
-        label={t("capabilities.import.skill.source.paste", "粘贴 Markdown")}
+        label={t("capabilities.import.skill.source.paste", "Paste Markdown")}
         onClick={() => onChange("paste")}
       />
       <ModeButton
         active={value === "zip"}
         icon={<FileArchive className="h-3.5 w-3.5" />}
-        label={t("capabilities.import.skill.source.zip", "上传 zip")}
+        label={t("capabilities.import.skill.source.zip", "Upload zip")}
         onClick={() => onChange("zip")}
       />
     </div>
@@ -430,7 +430,7 @@ function SinglePreviewCard({
        *  surfaces it on the "ready" card, repeating it here was noisy. */}
 
       {skill.trigger && (
-        <Field label={t("capabilities.import.skill.trigger", "触发条件")}>
+        <Field label={t("capabilities.import.skill.trigger", "Trigger")}>
           <code className="block whitespace-pre-wrap rounded bg-surface-subtle px-2 py-1.5 font-mono text-xs text-fg-muted">
             {skill.trigger}
           </code>
@@ -438,7 +438,7 @@ function SinglePreviewCard({
       )}
 
       <Field
-        label={t("capabilities.import.skill.instruction", "Instruction(注入到模型)")}
+        label={t("capabilities.import.skill.instruction", "Instruction (injected into the model)")}
       >
         <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap rounded bg-surface-subtle px-2 py-1.5 font-mono text-xs leading-relaxed text-fg-muted">
           {skill.instruction}

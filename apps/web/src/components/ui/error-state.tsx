@@ -1,5 +1,6 @@
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import type { ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
 
@@ -13,13 +14,15 @@ interface ErrorStateProps {
 }
 
 export function ErrorState({
-  title = "无法加载数据",
+  title,
   description,
   hint,
   onRetry,
   action,
   className,
 }: ErrorStateProps) {
+  const { t } = useTranslation("common")
+  const resolvedTitle = title ?? t("errors.loadFailed", { defaultValue: "Failed to load" })
   return (
     <div
       className={cn(
@@ -32,7 +35,7 @@ export function ErrorState({
           <AlertTriangle className="h-4 w-4" />
         </div>
         <div className="space-y-1">
-          <p className="font-medium text-danger-emphasis">{title}</p>
+          <p className="font-medium text-danger-emphasis">{resolvedTitle}</p>
           {description && <p className="text-danger-emphasis">{description}</p>}
           {hint && <p className="text-xs text-danger">{hint}</p>}
         </div>
@@ -42,7 +45,7 @@ export function ErrorState({
           {onRetry && (
             <Button size="sm" variant="outline" onClick={onRetry}>
               <RefreshCw className="h-3.5 w-3.5" />
-              重试
+              {t("actions.retry", { defaultValue: "Retry" })}
             </Button>
           )}
           {action}

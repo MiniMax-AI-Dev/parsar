@@ -90,8 +90,8 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
               : "agents.form.devicePicker.emptyTitle",
             {
               defaultValue: hasOnlineDevices
-                ? "没有兼容当前 Agent 引擎的在线设备"
-                : "尚未连接任何 agent daemon",
+                ? "No online devices compatible with the current Agent engine"
+                : "No agent daemons connected yet",
             },
           )}
         </p>
@@ -105,7 +105,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
           >
             <Plus className="h-3 w-3" />
             {t("agents.form.devicePicker.addDevice", {
-              defaultValue: "接入新设备",
+              defaultValue: "Pair a new device",
             })}
           </button>
         ) : (
@@ -116,8 +116,8 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
                 : "agents.form.devicePicker.emptyDescription",
               {
                 defaultValue: hasOnlineDevices
-                  ? "请在 Runtime -> 本地设备 页面确认设备 heartbeat 已上报该 Agent 引擎，或切换到支持当前引擎的设备。"
-                  : "请先在 Runtime -> 本地设备 页面生成配对 token，并在目标机器上运行 `parsar-daemon connect --url ... --token ...` 后再回来。",
+                  ? "Open Runtime → Local devices to confirm the device has reported a heartbeat for this Agent engine, or switch to a device that supports it."
+                  : "Open Runtime → Local devices to generate a pairing token, then run `parsar-daemon connect --url ... --token ...` on the target machine before returning here.",
               },
             )}
           </p>
@@ -137,7 +137,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
       >
         <option value="">
           {t("agents.form.devicePicker.placeholder", {
-            defaultValue: "请选择 device...",
+            defaultValue: "Pick a device…",
           })}
         </option>
         {selectableDevices.map((r) => (
@@ -152,11 +152,11 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
           onClick={onAddDevice}
           disabled={disabled}
           data-testid="device-picker-add"
-          title={t("agents.form.devicePicker.addDevice", { defaultValue: "接入新设备" })}
+          title={t("agents.form.devicePicker.addDevice", { defaultValue: "Pair a new device" })}
           className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-line bg-surface px-3 text-sm text-fg-muted shadow-sm hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-3 w-3" />
-          {t("agents.form.devicePicker.addDevice", { defaultValue: "接入新设备" })}
+          {t("agents.form.devicePicker.addDevice", { defaultValue: "Pair a new device" })}
         </button>
       )}
     </div>

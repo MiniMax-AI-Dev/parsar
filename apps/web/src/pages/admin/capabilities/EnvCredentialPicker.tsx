@@ -35,8 +35,8 @@ interface Props {
 type CredentialMode = Exclude<EnvMode, "literal">
 
 const MODE_OPTIONS: { value: CredentialMode; labelKey: string; fallback: string }[] = [
-  { value: "inline_secret", labelKey: "capabilities.import.envMode.inlineSecret", fallback: "团队共享密钥" },
-  { value: "credential_ref", labelKey: "capabilities.import.envMode.credentialRef", fallback: "个人凭据" },
+  { value: "inline_secret", labelKey: "capabilities.import.envMode.inlineSecret", fallback: "Team shared secret" },
+  { value: "credential_ref", labelKey: "capabilities.import.envMode.credentialRef", fallback: "Personal credential" },
 ]
 
 function startsWithEnvPlaceholder(value: string | undefined): boolean {
@@ -85,13 +85,13 @@ export function EnvCredentialPicker({
             {envKey}
           </code>
           <span className="shrink-0 rounded bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">
-            {t("capabilities.import.envBadge.credential", "凭据")}
+            {t("capabilities.import.envBadge.credential", "Credential")}
           </span>
         </div>
 
         <div className="space-y-1.5">
           <div className="text-xs font-medium text-fg-subtle">
-            {t("capabilities.import.envMode.label", "凭据来源")}
+            {t("capabilities.import.envMode.label", "Credential source")}
           </div>
           <ModeToggle value={activeMode} onChange={setMode} />
         </div>
@@ -107,14 +107,14 @@ export function EnvCredentialPicker({
               className="font-mono text-sm"
               placeholder={t(
                 "capabilities.import.envValue.inlineSecretPlaceholder",
-                "粘贴团队共用 token，导入时加密保存",
+                "Paste a team-shared token; we encrypt it on import.",
               )}
             />
             <p className="flex items-center gap-1.5 text-xs text-success">
               <Lock className="h-3 w-3" />
               {t(
                 "capabilities.import.envValue.inlineSecretNote",
-                "适合团队共用的服务账号 token；提交后配置里只保留密钥引用，不保存明文。",
+                "Best for shared service-account tokens. The config only stores a reference; plaintext is never persisted.",
               )}
             </p>
           </div>
@@ -132,7 +132,7 @@ export function EnvCredentialPicker({
               <KeyRound className="h-3 w-3" />
               {t(
                 "capabilities.import.envValue.credentialRefNote",
-                "适合 GitLab PAT 这类个人 token；运行时使用调用者在「我的凭据」里绑定的值。",
+                "Best for personal tokens like a GitLab PAT — at runtime we use the caller's value from My Credentials.",
               )}
             </p>
           </div>

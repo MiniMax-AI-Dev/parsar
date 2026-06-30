@@ -72,11 +72,11 @@ export function SkillZipDropzone({
           <Upload className="h-5 w-5 text-fg-subtle" />
           <span className="text-sm text-fg-muted">
             {isDragActive
-              ? t("capabilities.import.skill.dropActive", "松开导入 .zip")
-              : t("capabilities.import.skill.dropHint", "拖拽或点击上传 .zip(SKILL.md + references / scripts)")}
+              ? t("capabilities.import.skill.dropActive", "Release to import the .zip")
+              : t("capabilities.import.skill.dropHint", "Drag or click to upload a .zip (SKILL.md + references / scripts)")}
           </span>
           <span className="text-xs text-fg-subtle">
-            {t("capabilities.import.skill.sizeHint", "最大 8 MiB")}
+            {t("capabilities.import.skill.sizeHint", "Up to 8 MiB")}
           </span>
         </div>
         {localError && (
@@ -105,7 +105,7 @@ export function SkillZipDropzone({
                   {" · "}
                   <span className="inline-flex items-center gap-1 text-fg-muted">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    {busyLabel ?? t("capabilities.import.skill.uploading", "上传中…")}
+                    {busyLabel ?? t("capabilities.import.skill.uploading", "Uploading…")}
                   </span>
                 </>
               )}
@@ -117,7 +117,7 @@ export function SkillZipDropzone({
           size="sm"
           onClick={onClear}
           disabled={busy}
-          aria-label={t("capabilities.actions.cancel", "取消")}
+          aria-label={t("capabilities.actions.cancel", "Cancel")}
         >
           <X className="h-4 w-4" />
         </Button>

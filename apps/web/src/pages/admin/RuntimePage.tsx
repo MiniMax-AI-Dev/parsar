@@ -647,7 +647,7 @@ function CloudDaemonRuntimesPanel({
   if (error) {
     return (
       <ErrorState
-        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "无法加载沙盒内 Daemon" })}
+        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "Failed to load sandbox daemons" })}
         description={error instanceof Error ? error.message : String(error)}
         onRetry={onRefresh}
       />
@@ -661,17 +661,17 @@ function CloudDaemonRuntimesPanel({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
         <div>
           <h3 className="text-base font-medium text-fg">
-            {t("runtime.cloud.daemonRuntimes.title", { defaultValue: "沙盒内 Daemon" })}
+            {t("runtime.cloud.daemonRuntimes.title", { defaultValue: "Sandbox daemons" })}
           </h3>
           <p className="mt-0.5 max-w-3xl text-sm leading-relaxed text-fg-subtle">
             {t("runtime.cloud.daemonRuntimes.description", {
               count: runtimes.length,
-              defaultValue: "运行在云端沙盒里的 parsar-daemon 进程。它们属于云端沙盒，不是本地设备。",
+              defaultValue: "parsar-daemon processes running inside cloud sandboxes — these belong to the sandbox, not a physical device.",
             })}
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={onRefresh}>
-          {t("runtime.list.actions.refresh", { defaultValue: "刷新" })}
+          {t("runtime.list.actions.refresh", { defaultValue: "Refresh" })}
         </Button>
       </div>
       <Table>
@@ -679,10 +679,10 @@ function CloudDaemonRuntimesPanel({
           <TableRow>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}</TableHead>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.projectAgent", { defaultValue: "Project Agent" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "沙盒类型" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent 引擎" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "状态" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "最后心跳" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent engines" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "Status" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "Last heartbeat" })}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -721,13 +721,13 @@ function RuntimeLivenessBadge({ runtime }: { runtime: Runtime }) {
   const { t } = useTranslation("admin")
   switch (runtime.liveness) {
     case "online":
-      return <Badge variant="success" dot>{t("runtime.agentDaemon.status.online", { defaultValue: "在线" })}</Badge>
+      return <Badge variant="success" dot>{t("runtime.agentDaemon.status.online", { defaultValue: "Online" })}</Badge>
     case "pending_pairing":
-      return <Badge variant="warning">{t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "等待配对" })}</Badge>
+      return <Badge variant="warning">{t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "Pairing" })}</Badge>
     case "error":
-      return <Badge variant="destructive">{t("runtime.agentDaemon.status.error", { defaultValue: "错误" })}</Badge>
+      return <Badge variant="destructive">{t("runtime.agentDaemon.status.error", { defaultValue: "Error" })}</Badge>
     default:
-      return <Badge variant="neutral">{t("runtime.agentDaemon.status.offline", { defaultValue: "离线" })}</Badge>
+      return <Badge variant="neutral">{t("runtime.agentDaemon.status.offline", { defaultValue: "Offline" })}</Badge>
   }
 }
 
