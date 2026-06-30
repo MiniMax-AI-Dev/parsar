@@ -656,7 +656,7 @@ func (s *Service) BuildIncremental(ctx context.Context, input IncrementalInput) 
 // nothing to inject. WorkspaceName comes back empty here; the runtime
 // snapshot HTTP endpoint is the one that resolves the human-readable
 // name.
-func (s *Service) RenderSessionPrompt(ctx context.Context, workspaceID, userID, _ string) (string, error) {
+func (s *Service) RenderSessionPrompt(ctx context.Context, workspaceID, userID string) (string, error) {
 	inj, err := s.BuildSnapshot(ctx, SnapshotInput{
 		WorkspaceID: workspaceID,
 		UserID:      userID,

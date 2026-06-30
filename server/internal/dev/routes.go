@@ -1841,8 +1841,8 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 					defer cancel()
 					deviceID, err := agentDaemonSandbox.Acquire(ctx, connector.PromptInput{
-						ProjectAgentID: paID,
-						WorkspaceID:    workspaceID,
+						AgentID:     paID,
+						WorkspaceID: workspaceID,
 					})
 					if err != nil {
 						log.Bg().Warn("eager sandbox acquire failed",

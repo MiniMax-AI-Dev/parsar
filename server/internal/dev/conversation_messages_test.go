@@ -89,8 +89,8 @@ func TestConversationUserMessageRouteMentionOverride(t *testing.T) {
 // acceptance, and handler stay wired together.
 //
 // agent_daemon agents require a device_id at create time; the test
-// seeds a runtimes row + passes ProjectAgentConfig to CreateAgent,
-// then asserts the chosen device_id round-trips to project_agents.config —
+// seeds a runtimes row + passes AgentConfig to CreateAgent,
+// then asserts the chosen device_id round-trips to agents.config —
 // the connector reads this JSON key on first prompt to lazy-bind the
 // conversation.
 func TestConversationUserMessageRouteAgentDaemonReturns201(t *testing.T) {
@@ -112,11 +112,10 @@ func TestConversationUserMessageRouteAgentDaemonReturns201(t *testing.T) {
 	// dispatch.go:108 takes the no-op branch (we re-verify below).
 	created, err := s.CreateAgent(ctx, store.CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Daemon Route Probe",
 		Slug:          "daemon-route-probe",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"device_id":   deviceID,
 			"daemon_mode": "local",
 			"agent_kind":  "claude_code",
@@ -127,22 +126,22 @@ func TestConversationUserMessageRouteAgentDaemonReturns201(t *testing.T) {
 		t.Fatalf("CreateAgent(agent_daemon, device_id=%q): %v", deviceID, err)
 	}
 
-	// New persistence pin: device_id must land on project_agents.config
+	// New persistence pin: device_id must land on agents.config
 	// so connector.streamPrompt's configuredDeviceBinding path can
 	// pick it up on first prompt. If this regresses, the dispatch
 	// pipeline still queues runs but the daemon never gets called.
 	var storedDeviceID string
-	if err := db.QueryRow(ctx, `select config->>'device_id' from project_agents where id = $1::uuid`, created.ProjectAgent.ID).Scan(&storedDeviceID); err != nil {
+	if err := db.QueryRow(ctx, `select config->>'device_id' from agents where id = $1::uuid`, created.Agent.ID).Scan(&storedDeviceID); err != nil {
 		t.Fatal(err)
 	}
 	if storedDeviceID != deviceID {
-		t.Fatalf("project_agents.config->>'device_id' = %q, want %q", storedDeviceID, deviceID)
+		t.Fatalf("agents.config->>'device_id' = %q, want %q", storedDeviceID, deviceID)
 	}
 
-	conv, err := s.CreateProjectConversation(ctx, store.CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	conv, err := s.CreateWorkspaceConversation(ctx, store.CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "daemon route",
-		PrimaryAgentID: created.ProjectAgent.ID,
+		PrimaryAgentID: created.Agent.ID,
 	})
 	if err != nil {
 		t.Fatal(err)

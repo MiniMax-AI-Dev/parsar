@@ -237,7 +237,7 @@ func TestConversationRunStartPersistsEventsAfterRequestContextCancel(t *testing.
 	}
 	waitForRunStatus(t, db, runID, "completed")
 
-	eventsPath := "/api/v1/projects/" + ids.ProjectID + "/agent-runs/" + runID + "/events?after_sequence=0"
+	eventsPath := "/api/v1/workspaces/" + ids.WorkspaceID + "/agent-runs/" + runID + "/events?after_sequence=0"
 	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodGet, eventsPath, "", ids.UserID))
 	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"event_kind"`) {
 		t.Fatalf("events status/body = %d %s, want persisted events", res.Code, res.Body.String())
@@ -519,7 +519,7 @@ func TestConversationRunStreamSurfacesFailedRunReason(t *testing.T) {
 }
 
 // TestStartConversationRunQueuesWhenInflightSiblingExists verifies that
-// when a new run starts for the same (conversation, project_agent) and
+// when a new run starts for the same (conversation, agent) and
 // a running predecessor exists, the new run stays queued (no
 // supersede) so the in-flight run can complete its work undisturbed.
 // The old run's terminator will pick up the queued run via
@@ -591,7 +591,7 @@ func TestStartConversationRunQueuesWhenInflightSiblingExists(t *testing.T) {
 
 // TestStartConversationRunNoQueueCrossConversation verifies that
 // runs in different conversations do NOT block each other — the
-// serial queue is per (conversation, project_agent), not global.
+// serial queue is per (conversation, agent), not global.
 func TestStartConversationRunNoQueueCrossConversation(t *testing.T) {
 	db := openDevRouteTestDB(t)
 	ctx := context.Background()
@@ -617,12 +617,12 @@ func TestStartConversationRunNoQueueCrossConversation(t *testing.T) {
 	// Create a second conversation + run via raw SQL.
 	conv2ID := "00000000-0000-0000-0000-000000066666"
 	newRunID := "00000000-0000-0000-0000-000000077777"
-	if _, err := db.Exec(ctx, `INSERT INTO conversations(id, workspace_id, project_id, created_by_id, title, created_at, updated_at) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'conv-2', now(), now())`, conv2ID, ids.WorkspaceID, ids.ProjectID, ids.UserID); err != nil {
+	if _, err := db.Exec(ctx, `INSERT INTO conversations(id, workspace_id, title, created_at, updated_at) VALUES ($1::uuid, $2::uuid, 'conv-2', now(), now())`, conv2ID, ids.WorkspaceID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(ctx, `
-		INSERT INTO agent_runs(id, workspace_id, project_id, conversation_id, trigger_message_id, trigger_channel, requested_by_id, project_agent_id, connector_type, status, metadata, created_at, updated_at)
-		SELECT $1::uuid, workspace_id, project_id, $2::uuid, trigger_message_id, 'web', requested_by_id, project_agent_id, connector_type, 'queued', '{}', now(), now()
+		INSERT INTO agent_runs(id, workspace_id, conversation_id, trigger_message_id, trigger_channel, requested_by_type, requested_by_id, agent_id, connector_type, status, metadata, created_at, updated_at)
+		SELECT $1::uuid, workspace_id, $2::uuid, trigger_message_id, 'web', requested_by_type, requested_by_id, agent_id, connector_type, 'queued', '{}', now(), now()
 		FROM agent_runs WHERE id = $3`, newRunID, conv2ID, oldRunID); err != nil {
 		t.Fatal(err)
 	}

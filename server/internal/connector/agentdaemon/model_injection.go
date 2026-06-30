@@ -49,7 +49,7 @@ const ModelCredentialMissingCapabilityID = "__model__"
 // configured, Parsar's model registry is the source of truth and wins over
 // hand-written agent_options.model/env values.
 //
-// After model resolution, enabled Skill capabilities for the project_agent
+// After model resolution, enabled Skill capabilities for the agent
 // are rendered through the daemon-side system-prompt slot so both
 // claude_code and opencode receive the same high-level instructions.
 func (c *Connector) buildAgentOptions(ctx context.Context, in connector.PromptInput) (map[string]any, error) {
@@ -59,11 +59,8 @@ func (c *Connector) buildAgentOptions(ctx context.Context, in connector.PromptIn
 		"run_id", in.RunID,
 		"agent_kind", agentKind,
 		"has_agent_config", in.AgentConfig != nil,
-		"has_project_agent_config", in.ProjectAgentConfig != nil,
 		"agent_config_model_id", stringFromMap(in.AgentConfig, "model_id"),
 		"agent_config_default_model_id", stringFromMap(in.AgentConfig, "default_model_id"),
-		"project_agent_config_model_id", stringFromMap(in.ProjectAgentConfig, "model_id"),
-		"project_agent_config_default_model_id", stringFromMap(in.ProjectAgentConfig, "default_model_id"),
 		"opts_model", stringFromMap(opts, "model"))
 
 	// Resolve capabilities up front so the system_prompt fold runs BEFORE
@@ -79,7 +76,7 @@ func (c *Connector) buildAgentOptions(ctx context.Context, in connector.PromptIn
 	}
 	c.log.Info("agent_daemon: capability additions resolved",
 		"run_id", in.RunID,
-		"project_agent_id", in.ProjectAgentID,
+		"agent_id", in.AgentID,
 		"skill_count", len(additions.Skills),
 		"mcp_server_count", len(additions.MCPServers),
 		"mcp_server_names", mapKeys(additions.MCPServers),
@@ -123,8 +120,7 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 		c.log.Warn("agent_daemon: injectManagedModel skipped — no model_id or default_model_id found",
 			"run_id", in.RunID,
 			"agent_kind", agentKind,
-			"agent_config_keys", mapKeys(in.AgentConfig),
-			"project_agent_config_keys", mapKeys(in.ProjectAgentConfig))
+			"agent_config_keys", mapKeys(in.AgentConfig))
 		return nil
 	}
 	c.log.Info("agent_daemon: injectManagedModel resolving",
@@ -151,7 +147,7 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 	// initiator — that surfaces the "missing credentials" notice via the err branch below.
 	// Mirrors capability_runtime.resolveCredentialValues: binding wins over
 	// initiator presence, never the other way.
-	modelBinding, hasModelBinding := ParseModelCredentialBinding(in.AgentConfig, in.ProjectAgentConfig)
+	modelBinding, hasModelBinding := ParseModelCredentialBinding(in.AgentConfig)
 	var (
 		mr  store.ModelRuntime
 		err error
@@ -579,7 +575,7 @@ func (c *Connector) applySpecMemoryInjection(ctx context.Context, opts map[strin
 	if stringFromMap(opts, "override_system_prompt") != "" {
 		return
 	}
-	injected, err := c.specMemory.RenderSessionPrompt(ctx, in.WorkspaceID, in.ConversationInitiatorID, in.ProjectID)
+	injected, err := c.specMemory.RenderSessionPrompt(ctx, in.WorkspaceID, in.ConversationInitiatorID)
 	if err != nil {
 		c.log.Warn("agent_daemon: spec/memory injection failed; proceeding with un-injected system prompt",
 			"err", err.Error(),
@@ -652,15 +648,11 @@ func mergeSystemPromptsIntoOptions(opts map[string]any, prompts []ResolvedSystem
 }
 
 func resolveModelID(in connector.PromptInput) string {
-	for _, cfg := range []map[string]any{in.ProjectAgentConfig, in.AgentConfig} {
-		if v := stringFromMap(cfg, "model_id"); v != "" {
-			return v
-		}
+	if v := stringFromMap(in.AgentConfig, "model_id"); v != "" {
+		return v
 	}
-	for _, cfg := range []map[string]any{in.ProjectAgentConfig, in.AgentConfig} {
-		if v := stringFromMap(cfg, "default_model_id"); v != "" {
-			return v
-		}
+	if v := stringFromMap(in.AgentConfig, "default_model_id"); v != "" {
+		return v
 	}
 	return ""
 }
@@ -746,9 +738,6 @@ func renderStaticAgentOptions(in connector.PromptInput) map[string]any {
 		"env",
 	} {
 		if v, ok := in.AgentConfig[key]; ok {
-			opts[key] = v
-		}
-		if v, ok := in.ProjectAgentConfig[key]; ok {
 			opts[key] = v
 		}
 	}

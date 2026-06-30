@@ -1617,11 +1617,10 @@ func (q *Queries) CreateChildAgentRun(ctx context.Context, arg CreateChildAgentR
 
 const createDevAgent = `-- name: CreateDevAgent :execrows
 insert into agents(id, workspace_id, name, slug, description, connector_type, status, config, created_by, created_at, updated_at)
-select $1::uuid, $2::uuid, $3, $4, $5, 'agent_daemon', 'active', $6::jsonb, $7::uuid, $8, $8
-where not exists (
-  select 1 from agents
-  where workspace_id = $2::uuid and slug = $4 and deleted_at is null
-)
+values ($1::uuid, $2::uuid, $3, $4, $5, 'agent_daemon', 'active', $6::jsonb, $7::uuid, $8, $8)
+on conflict (id) do update
+  set status = 'active', updated_at = $8
+  where agents.status <> 'active'
 `
 
 type CreateDevAgentParams struct {

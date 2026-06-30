@@ -124,18 +124,18 @@ func TestDerefString(t *testing.T) {
 // queries.
 func TestAgentActor(t *testing.T) {
 	connector := "claude"
-	projectAgent := "pa-123"
+	agentID := "pa-123"
 	cases := []struct {
 		name string
 		id   store.RuntimeIdentity
 		want string
 	}{
 		{
-			name: "connector+project_agent",
+			name: "connector+agent",
 			id: store.RuntimeIdentity{
-				RuntimeID:      "rt-1",
-				ConnectorName:  &connector,
-				ProjectAgentID: &projectAgent,
+				RuntimeID:     "rt-1",
+				ConnectorName: &connector,
+				AgentID:       &agentID,
 			},
 			want: "claude:pa-123",
 		},
@@ -323,17 +323,16 @@ func TestRuntimeCreateMemoryBadType(t *testing.T) {
 	}
 }
 
-// TestRuntimeCreateMemoryProjectScopeWithoutBinding: scope=project but
-// runtime isn't bound to a project. The agent can't pick a project; it
+// TestRuntimeCreateMemoryWorkspaceScopeWithoutBinding: scope=workspace but
+// runtime isn't bound to a workspace. The agent can't pick a workspace; it
 // must come from runtime config.
-func TestRuntimeCreateMemoryProjectScopeWithoutBinding(t *testing.T) {
+func TestRuntimeCreateMemoryWorkspaceScopeWithoutBinding(t *testing.T) {
 	h := newHandlerForValidation(t)
 	owner := "user-1"
-	body := strings.NewReader(`{"scope":"project","memory_type":"project","body":"x"}`)
+	body := strings.NewReader(`{"scope":"workspace","memory_type":"workspace","body":"x"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agent-runtime/memories", body)
 	req = req.WithContext(auth.WithRuntimeIdentity(req.Context(), store.RuntimeIdentity{
 		RuntimeID:   "rt-1",
-		WorkspaceID: "ws-1",
 		OwnerUserID: &owner,
 	}))
 	rr := httptest.NewRecorder()
@@ -341,8 +340,8 @@ func TestRuntimeCreateMemoryProjectScopeWithoutBinding(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("code = %d, want 400", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "no_project_binding") {
-		t.Errorf("body = %q, want no_project_binding", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "no_workspace_binding") {
+		t.Errorf("body = %q, want no_workspace_binding", rr.Body.String())
 	}
 }
 
@@ -558,7 +557,7 @@ func TestRuntimeListMemoriesMissingOwner(t *testing.T) {
 }
 
 // TestRuntimeListMemoriesMissingScope: no ?scope= → 400. Forces the
-// CLI to be explicit so user / project lists can't mix.
+// CLI to be explicit so user / workspace lists can't mix.
 func TestRuntimeListMemoriesMissingScope(t *testing.T) {
 	h := newHandlerForValidation(t)
 	owner := "user-1"
@@ -598,16 +597,15 @@ func TestRuntimeListMemoriesBadType(t *testing.T) {
 	}
 }
 
-// TestRuntimeListMemoriesProjectScopeWithoutBinding: scope=project
-// without a project binding → 400 (don't leak other projects or return
+// TestRuntimeListMemoriesWorkspaceScopeWithoutBinding: scope=workspace
+// without a workspace binding → 400 (don't leak other workspaces or return
 // empty).
-func TestRuntimeListMemoriesProjectScopeWithoutBinding(t *testing.T) {
+func TestRuntimeListMemoriesWorkspaceScopeWithoutBinding(t *testing.T) {
 	h := newHandlerForValidation(t)
 	owner := "user-1"
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent-runtime/memories?scope=project", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent-runtime/memories?scope=workspace", nil)
 	req = req.WithContext(auth.WithRuntimeIdentity(req.Context(), store.RuntimeIdentity{
 		RuntimeID:   "rt-1",
-		WorkspaceID: "ws-1",
 		OwnerUserID: &owner,
 	}))
 	rr := httptest.NewRecorder()
@@ -615,8 +613,8 @@ func TestRuntimeListMemoriesProjectScopeWithoutBinding(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("code = %d, want 400", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "no_project_binding") {
-		t.Errorf("body = %q, want no_project_binding", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "no_workspace_binding") {
+		t.Errorf("body = %q, want no_workspace_binding", rr.Body.String())
 	}
 }
 
@@ -678,28 +676,27 @@ func TestRuntimeUpdateMemoryCrossUser(t *testing.T) {
 	}
 }
 
-// TestRuntimeUpdateMemoryCrossProject: same enumeration guard for
-// project-scope.
-func TestRuntimeUpdateMemoryCrossProject(t *testing.T) {
+// TestRuntimeUpdateMemoryCrossWorkspace: same enumeration guard for
+// workspace-scope.
+func TestRuntimeUpdateMemoryCrossWorkspace(t *testing.T) {
 	h := newHandlerWithStub(t, stubStore{
 		memory: store.MemoryRead{
-			ID:         "m-other",
-			Scope:      "project",
-			UserID:     "user-1",
-			ProjectID:  "proj-2",
-			MemoryType: "project",
-			Body:       "leak",
-			Source:     "manual",
+			ID:          "m-other",
+			Scope:       "workspace",
+			UserID:      "user-1",
+			WorkspaceID: "ws-2",
+			MemoryType:  "workspace",
+			Body:        "leak",
+			Source:      "manual",
 		},
 	})
-	owner, proj := "user-1", "proj-1"
+	owner := "user-1"
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/agent-runtime/memories/m-other", strings.NewReader(`{"body":"x"}`))
 	req = chiURLParam(req, "memoryID", "m-other")
 	req = req.WithContext(auth.WithRuntimeIdentity(req.Context(), store.RuntimeIdentity{
 		RuntimeID:   "rt-1",
 		WorkspaceID: "ws-1",
 		OwnerUserID: &owner,
-		ProjectID:   &proj,
 	}))
 	rr := httptest.NewRecorder()
 	h.runtimeUpdateMemory(rr, req)
@@ -770,7 +767,7 @@ func TestRuntimeDeleteMemoryCrossUser(t *testing.T) {
 func TestAdminCreateMemoryBadScope(t *testing.T) {
 	h := newHandlerForValidation(t)
 	h.deps.Membership = fakeMembership{}
-	body := strings.NewReader(`{"scope":"workspace","memory_type":"user","body":"x"}`)
+	body := strings.NewReader(`{"scope":"project","memory_type":"user","body":"x"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/memories", body)
 	rr := httptest.NewRecorder()
 	h.createMemory(rr, req)
@@ -783,7 +780,7 @@ func TestAdminCreateMemoryBadScope(t *testing.T) {
 }
 
 // TestAdminListMemoriesMissingScope: list with no scope → 400. Forces
-// the client to be explicit so user-scope and project-scope memories
+// the client to be explicit so user-scope and workspace-scope memories
 // can't leak via the wrong route.
 func TestAdminListMemoriesMissingScope(t *testing.T) {
 	h := newHandlerForValidation(t)
@@ -798,19 +795,19 @@ func TestAdminListMemoriesMissingScope(t *testing.T) {
 	}
 }
 
-// TestAdminListMemoriesProjectScopeMissingID: scope=project without
-// project_id → 400 before membership lookup.
-func TestAdminListMemoriesProjectScopeMissingID(t *testing.T) {
+// TestAdminListMemoriesWorkspaceScopeMissingID: scope=workspace without
+// workspace_id → 400 before membership lookup.
+func TestAdminListMemoriesWorkspaceScopeMissingID(t *testing.T) {
 	h := newHandlerForValidation(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/memories?scope=project", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/memories?scope=workspace", nil)
 	req = req.WithContext(auth.WithUserID(req.Context(), "user-1"))
 	rr := httptest.NewRecorder()
 	h.listMemories(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("code = %d, want 400", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "missing_project_id") {
-		t.Errorf("body = %q, want missing_project_id", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "missing_workspace_id") {
+		t.Errorf("body = %q, want missing_workspace_id", rr.Body.String())
 	}
 }
 
@@ -979,11 +976,9 @@ func makeQueryReq(key, value string) *http.Request {
 // fakeMembership is the minimal MembershipStore for deterministic
 // pass/fail in tests.
 type fakeMembership struct {
-	wsRole      string
-	wsErr       error
-	projWsID    string // workspaceID returned by GetProjectWorkspace
-	projWsErr   error  // error returned by GetProjectWorkspace
-	onCall      func()
+	wsRole string
+	wsErr  error
+	onCall func()
 }
 
 func (f fakeMembership) GetWorkspaceMemberRole(ctx context.Context, workspaceID, userID string) (string, error) {
@@ -991,16 +986,6 @@ func (f fakeMembership) GetWorkspaceMemberRole(ctx context.Context, workspaceID,
 		f.onCall()
 	}
 	return f.wsRole, f.wsErr
-}
-
-func (f fakeMembership) GetProjectWorkspace(ctx context.Context, projectID string) (string, error) {
-	if f.projWsErr != nil {
-		return "", f.projWsErr
-	}
-	if f.projWsID != "" {
-		return f.projWsID, nil
-	}
-	return "ws-test", nil
 }
 
 // emptyService returns a real *specmemory.Service backed by a no-op
@@ -1042,13 +1027,13 @@ func (noopStore) ListWorkspaceSpecFragments(ctx context.Context, in store.ListWo
 func (noopStore) ListUserMemories(ctx context.Context, in store.ListUserMemoriesInput) ([]store.MemoryRead, error) {
 	return nil, nil
 }
-func (noopStore) ListProjectMemories(ctx context.Context, in store.ListProjectMemoriesInput) ([]store.MemoryRead, error) {
+func (noopStore) ListWorkspaceMemories(ctx context.Context, in store.ListWorkspaceMemoriesInput) ([]store.MemoryRead, error) {
 	return nil, nil
 }
 func (noopStore) ListUserMemoriesSince(ctx context.Context, in store.ListUserMemoriesSinceInput) ([]store.MemoryRead, error) {
 	return nil, nil
 }
-func (noopStore) ListProjectMemoriesSince(ctx context.Context, in store.ListProjectMemoriesSinceInput) ([]store.MemoryRead, error) {
+func (noopStore) ListWorkspaceMemoriesSince(ctx context.Context, in store.ListWorkspaceMemoriesSinceInput) ([]store.MemoryRead, error) {
 	return nil, nil
 }
 

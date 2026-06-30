@@ -17,7 +17,7 @@
 --                reviewed_by/reviewed_at) + 重建索引
 --       - 000005 serialize_runs_cancel_stale: 一次性 UPDATE,空库 no-op,
 --                **不再写入 init**
---       - 000006 project_agent_runtime_id: 运行时绑定列,现已并入 agents.runtime_id
+--       - 000006 runtime_id: 运行时绑定列,现已并入 agents.runtime_id
 --       - 000007 backfill_local_device_runtime_id: 一次性 UPDATE,空库
 --                no-op,**不再写入 init**
 --       - 000008 pending_credential_form_inflight_slot: conversations

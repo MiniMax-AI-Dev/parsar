@@ -38,14 +38,14 @@ type fakeSandboxBindingStore struct {
 	getRuntimeErr   error
 	getRuntimeCalls []string
 
-	// Project agent detail stub — used by rebuildSandbox to load
+	// Agent detail stub — used by rebuildSandbox to load
 	// agent.config (sandbox_size etc.) before re-Acquire. Tests that
 	// don't care about template selection can leave both fields zero —
-	// the fake returns an empty ProjectAgentStatusRead with the input
+	// the fake returns an empty AgentStatusRead with the input
 	// id and no error, which makes resolveTemplate fall through to the
 	// default size.
-	projectAgentDetails   map[string]store.ProjectAgentStatusRead
-	projectAgentDetailErr error
+	agentDetails   map[string]store.AgentStatusRead
+	agentDetailErr error
 }
 
 func (f *fakeSandboxBindingStore) GetActiveSandboxBindingForAgent(_ context.Context, _, _ string) (store.SandboxBindingRead, bool, error) {
@@ -99,18 +99,18 @@ func (f *fakeSandboxBindingStore) GetRuntime(_ context.Context, runtimeID string
 	return rt, true, nil
 }
 
-func (f *fakeSandboxBindingStore) GetProjectAgentDetail(_ context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error) {
+func (f *fakeSandboxBindingStore) GetAgentDetail(_ context.Context, agentID string) (store.AgentStatusRead, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.projectAgentDetailErr != nil {
-		return store.ProjectAgentStatusRead{}, f.projectAgentDetailErr
+	if f.agentDetailErr != nil {
+		return store.AgentStatusRead{}, f.agentDetailErr
 	}
-	detail, ok := f.projectAgentDetails[projectAgentID]
+	detail, ok := f.agentDetails[agentID]
 	if !ok {
 		// Behave like the real store: empty config when the agent has
 		// no overrides. Tests that want to inject sandbox_size populate
-		// f.projectAgentDetails ahead of time.
-		return store.ProjectAgentStatusRead{ProjectAgentID: projectAgentID}, nil
+		// f.agentDetails ahead of time.
+		return store.AgentStatusRead{AgentID: agentID}, nil
 	}
 	return detail, nil
 }
@@ -121,7 +121,7 @@ type fakeDaemonManager struct {
 	released   []string
 	releaseErr error
 
-	// Acquire bookkeeping — captures the project_agent_id of each call
+	// Acquire bookkeeping — captures the agent_id of each call
 	// so rebuild/acquire tests can assert that Acquire was invoked in
 	// the background goroutine. acquireDeviceID defaults to "fake-device"
 	// when unset.
@@ -135,7 +135,7 @@ func (f *fakeDaemonManager) Acquire(_ context.Context, in connector.PromptInput)
 	if device == "" {
 		device = "fake-device"
 	}
-	f.acquireCalls = append(f.acquireCalls, in.ProjectAgentID)
+	f.acquireCalls = append(f.acquireCalls, in.AgentID)
 	f.mu.Unlock()
 	return device, nil
 }
@@ -152,59 +152,59 @@ func (f *fakeDaemonManager) SandboxRuntimeInfo(_ context.Context, _ string) (tim
 	return time.Time{}, nil
 }
 
-func (f *fakeDaemonManager) Release(_ context.Context, projectAgentID string) error {
+func (f *fakeDaemonManager) Release(_ context.Context, agentID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.releaseErr != nil {
 		return f.releaseErr
 	}
-	f.released = append(f.released, projectAgentID)
+	f.released = append(f.released, agentID)
 	return nil
 }
 
 func newSandboxTestRouter(deps sandboxAdminDeps) chi.Router {
 	r := chi.NewRouter()
 	rt := &recordingRuntimeStore{}
-	r.Get("/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox", getSandboxStatus(deps, nil))
-	r.Post("/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/kill", killSandbox(deps, rt, nil))
-	r.Post("/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/rebuild", rebuildSandbox(deps, rt, nil))
+	r.Get("/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox", getSandboxStatus(deps, nil))
+	r.Post("/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill", killSandbox(deps, rt, nil))
+	r.Post("/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild", rebuildSandbox(deps, rt, nil))
 	r.Get("/api/v1/workspaces/{workspaceID}/sandboxes", listSandboxes(deps))
 	return r
 }
 
 // recordingRuntimeStore is the sandbox_admin_test slice of RuntimeStore
-// — only SetProjectAgentRuntime is actually exercised, so we embed the
+// — only SetAgentRuntime is actually exercised, so we embed the
 // shared stubRuntimeStore (defined in routes_test.go) for the other
 // 100+ methods and override the one we care about to record calls.
 //
-// setRuntimeCall is the captured input from each SetProjectAgentRuntime
+// setRuntimeCall is the captured input from each SetAgentRuntime
 // invocation. Empty RuntimeID means the handler asked to clear the
 // binding (kill path). Non-empty means it wrote a fresh device id
 // (rebuild / acquire success path).
 type recordingRuntimeStore struct {
 	stubRuntimeStore
 	mu       sync.Mutex
-	setCalls []store.SetProjectAgentRuntimeInput
+	setCalls []store.SetAgentRuntimeInput
 	setErr   error
 }
 
-func (r *recordingRuntimeStore) SetProjectAgentRuntime(_ context.Context, input store.SetProjectAgentRuntimeInput) (store.ProjectAgentRuntimeBinding, error) {
+func (r *recordingRuntimeStore) SetAgentRuntime(_ context.Context, input store.SetAgentRuntimeInput) (store.AgentRuntimeBinding, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.setCalls = append(r.setCalls, input)
 	if r.setErr != nil {
-		return store.ProjectAgentRuntimeBinding{}, r.setErr
+		return store.AgentRuntimeBinding{}, r.setErr
 	}
-	return store.ProjectAgentRuntimeBinding{
-		ProjectAgentID: input.ProjectAgentID,
-		WorkspaceID:    input.WorkspaceID,
+	return store.AgentRuntimeBinding{
+		AgentID:     input.AgentID,
+		WorkspaceID: input.WorkspaceID,
 	}, nil
 }
 
-func (r *recordingRuntimeStore) calls() []store.SetProjectAgentRuntimeInput {
+func (r *recordingRuntimeStore) calls() []store.SetAgentRuntimeInput {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]store.SetProjectAgentRuntimeInput, len(r.setCalls))
+	out := make([]store.SetAgentRuntimeInput, len(r.setCalls))
 	copy(out, r.setCalls)
 	return out
 }
@@ -215,7 +215,7 @@ func TestSandboxAdminStatusReturnsLiveBinding(t *testing.T) {
 		binding: &store.SandboxBindingRead{
 			ID:             "11111111-1111-1111-1111-111111111111",
 			WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-			ProjectAgentID: strPtr("00000000-0000-0000-0000-000000000009"),
+			AgentID: strPtr("00000000-0000-0000-0000-000000000009"),
 			SandboxID:      "sbx_abc",
 			TemplateID:     "parsar-daemon-claudecode",
 			Status:         store.SandboxBindingStatusActive,
@@ -226,7 +226,7 @@ func TestSandboxAdminStatusReturnsLiveBinding(t *testing.T) {
 	}
 	router := newSandboxTestRouter(sandboxAdminDeps{store: storeFake})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -250,7 +250,7 @@ func TestSandboxAdminStatusReturnsNullOnNoBinding(t *testing.T) {
 	// server logs.
 	router := newSandboxTestRouter(sandboxAdminDeps{store: &fakeSandboxBindingStore{}})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -265,7 +265,7 @@ func TestSandboxAdminStatusReturnsNullOnNoBinding(t *testing.T) {
 func TestSandboxAdminStatus503WhenStoreNotWired(t *testing.T) {
 	router := newSandboxTestRouter(sandboxAdminDeps{store: nil})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -286,9 +286,9 @@ func TestSandboxAdminKillMarksDBAndCallsRelease(t *testing.T) {
 	deps := sandboxAdminDeps{store: storeFake, daemonMgr: daemonFake}
 
 	r := chi.NewRouter()
-	r.Post("/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/kill", killSandbox(deps, runtimeFake, daemonFake))
+	r.Post("/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill", killSandbox(deps, runtimeFake, daemonFake))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox/kill", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox/kill", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -296,29 +296,29 @@ func TestSandboxAdminKillMarksDBAndCallsRelease(t *testing.T) {
 		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
 	}
 	if got := daemonFake.released; len(got) != 1 || got[0] != "00000000-0000-0000-0000-000000000009" {
-		t.Errorf("Release should be called once with project_agent_id; got %v", got)
+		t.Errorf("Release should be called once with agent_id; got %v", got)
 	}
 	if got := storeFake.marked; len(got) != 1 || got[0].BindingID != binding.ID || got[0].Status != "killed" {
 		t.Errorf("MarkSandboxBindingKilled should be called once; got %v", got)
 	}
-	// Kill must also clear project_agents.runtime_id so dispatch
+	// Kill must also clear agents.runtime_id so dispatch
 	// stops handing out the dead device.
 	calls := runtimeFake.calls()
 	if len(calls) != 1 {
-		t.Fatalf("SetProjectAgentRuntime should be called exactly once on kill; got %d calls: %+v", len(calls), calls)
+		t.Fatalf("SetAgentRuntime should be called exactly once on kill; got %d calls: %+v", len(calls), calls)
 	}
 	if calls[0].RuntimeID != "" {
 		t.Errorf("kill should clear runtime_id (empty string); got %q", calls[0].RuntimeID)
 	}
-	if calls[0].ProjectAgentID != "00000000-0000-0000-0000-000000000009" {
-		t.Errorf("SetProjectAgentRuntime should target the project_agent from the URL; got %q", calls[0].ProjectAgentID)
+	if calls[0].AgentID != "00000000-0000-0000-0000-000000000009" {
+		t.Errorf("SetAgentRuntime should target the agent from the URL; got %q", calls[0].AgentID)
 	}
 }
 
 func TestSandboxAdminKill404OnMissingBinding(t *testing.T) {
 	router := newSandboxTestRouter(sandboxAdminDeps{store: &fakeSandboxBindingStore{}})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox/kill", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox/kill", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -339,9 +339,9 @@ func TestSandboxAdminRebuildKillsAndReProvisions(t *testing.T) {
 	deps := sandboxAdminDeps{store: storeFake, daemonMgr: daemonFake}
 
 	r := chi.NewRouter()
-	r.Post("/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/rebuild", rebuildSandbox(deps, runtimeFake, daemonFake))
+	r.Post("/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild", rebuildSandbox(deps, runtimeFake, daemonFake))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox/rebuild", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox/rebuild", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -355,17 +355,17 @@ func TestSandboxAdminRebuildKillsAndReProvisions(t *testing.T) {
 	if !strings.Contains(body, `"action":"rebuilt"`) {
 		t.Errorf("response action should be 'rebuilt'; body=%s", body)
 	}
-	// Rebuild fires Acquire + SetProjectAgentRuntime in a background
+	// Rebuild fires Acquire + SetAgentRuntime in a background
 	// goroutine. Poll briefly to give it room to land before failing
 	// — bounded so a regression that drops the call still surfaces.
 	if err := waitFor(t, 2*time.Second, func() bool {
 		return len(runtimeFake.calls()) >= 1
 	}); err != nil {
-		t.Fatalf("rebuild should call SetProjectAgentRuntime after re-acquire: %v", err)
+		t.Fatalf("rebuild should call SetAgentRuntime after re-acquire: %v", err)
 	}
 	calls := runtimeFake.calls()
 	if len(calls) != 1 {
-		t.Fatalf("SetProjectAgentRuntime should be called exactly once on rebuild; got %d: %+v", len(calls), calls)
+		t.Fatalf("SetAgentRuntime should be called exactly once on rebuild; got %d: %+v", len(calls), calls)
 	}
 	if calls[0].RuntimeID != "device-new" {
 		t.Errorf("rebuild should write the new device id; got %q", calls[0].RuntimeID)
@@ -379,7 +379,7 @@ func TestSandboxAdminListReturnsActiveBindings(t *testing.T) {
 			{
 				ID:             "00000000-0000-0000-0000-000000000aa1",
 				WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-				ProjectAgentID: strPtr("00000000-0000-0000-0000-000000000009"),
+				AgentID: strPtr("00000000-0000-0000-0000-000000000009"),
 				SandboxID:      "sbx_alpha",
 				TemplateID:     "parsar-daemon-claudecode",
 				Status:         store.SandboxBindingStatusActive,
@@ -390,7 +390,7 @@ func TestSandboxAdminListReturnsActiveBindings(t *testing.T) {
 			{
 				ID:             "00000000-0000-0000-0000-000000000aa2",
 				WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-				ProjectAgentID: strPtr("00000000-0000-0000-0000-000000000010"),
+				AgentID: strPtr("00000000-0000-0000-0000-000000000010"),
 				SandboxID:      "sbx_beta",
 				TemplateID:     "parsar-daemon-claudecode",
 				Status:         store.SandboxBindingStatusSpawning,
@@ -530,16 +530,16 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) error {
 func TestSandboxAdminAcquireWritesRuntimeIDOnSuccess(t *testing.T) {
 	// No active binding → handler should kick off Acquire in a goroutine
 	// and, on success, persist the new device id to
-	// project_agents.runtime_id.
+	// agents.runtime_id.
 	storeFake := &fakeSandboxBindingStore{} // no binding
 	daemonFake := &fakeDaemonManager{acquireDeviceID: "device-fresh"}
 	runtimeFake := &recordingRuntimeStore{}
 	deps := sandboxAdminDeps{store: storeFake, daemonMgr: daemonFake}
 
 	r := chi.NewRouter()
-	r.Post("/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/acquire", acquireSandbox(deps, runtimeFake, daemonFake))
+	r.Post("/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/acquire", acquireSandbox(deps, runtimeFake, daemonFake))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000009/sandbox/acquire", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000009/sandbox/acquire", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -549,16 +549,16 @@ func TestSandboxAdminAcquireWritesRuntimeIDOnSuccess(t *testing.T) {
 	if err := waitFor(t, 2*time.Second, func() bool {
 		return len(runtimeFake.calls()) >= 1
 	}); err != nil {
-		t.Fatalf("acquire should call SetProjectAgentRuntime after Acquire: %v", err)
+		t.Fatalf("acquire should call SetAgentRuntime after Acquire: %v", err)
 	}
 	calls := runtimeFake.calls()
 	if len(calls) != 1 {
-		t.Fatalf("SetProjectAgentRuntime should be called exactly once; got %d: %+v", len(calls), calls)
+		t.Fatalf("SetAgentRuntime should be called exactly once; got %d: %+v", len(calls), calls)
 	}
 	if calls[0].RuntimeID != "device-fresh" {
 		t.Errorf("acquire should write the new device id; got %q", calls[0].RuntimeID)
 	}
-	if calls[0].ProjectAgentID != "00000000-0000-0000-0000-000000000009" {
-		t.Errorf("SetProjectAgentRuntime should target the project_agent from URL; got %q", calls[0].ProjectAgentID)
+	if calls[0].AgentID != "00000000-0000-0000-0000-000000000009" {
+		t.Errorf("SetAgentRuntime should target the agent from URL; got %q", calls[0].AgentID)
 	}
 }

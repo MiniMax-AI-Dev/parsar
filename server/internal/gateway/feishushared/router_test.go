@@ -41,28 +41,22 @@ func newFakeSharedStore() *fakeSharedStore {
 	return &fakeSharedStore{
 		agents: []store.FeishuSharedBotAgent{
 			{
-				AgentID:        "agent-product",
-				WorkspaceID:    "workspace-1",
-				WorkspaceName:  "Demo Workspace",
-				WorkspaceSlug:  "demo",
-				AgentName:      "Product Agent",
-				AgentSlug:      "product-agent",
-				Visibility:     "workspace",
-				ProjectID:      "project-1",
-				ProjectName:    "Demo Project",
-				ProjectAgentID: "pa-product",
+				AgentID:       "agent-product",
+				WorkspaceID:   "workspace-1",
+				WorkspaceName: "Demo Workspace",
+				WorkspaceSlug: "demo",
+				AgentName:     "Product Agent",
+				AgentSlug:     "product-agent",
+				Visibility:    "workspace",
 			},
 			{
-				AgentID:        "agent-backend",
-				WorkspaceID:    "workspace-1",
-				WorkspaceName:  "Demo Workspace",
-				WorkspaceSlug:  "demo",
-				AgentName:      "Backend Agent",
-				AgentSlug:      "backend-agent",
-				Visibility:     "workspace",
-				ProjectID:      "project-1",
-				ProjectName:    "Demo Project",
-				ProjectAgentID: "pa-backend",
+				AgentID:       "agent-backend",
+				WorkspaceID:   "workspace-1",
+				WorkspaceName: "Demo Workspace",
+				WorkspaceSlug: "demo",
+				AgentName:     "Backend Agent",
+				AgentSlug:     "backend-agent",
+				Visibility:    "workspace",
 			},
 		},
 		routes: map[string]store.FeishuAgentRoute{
@@ -218,10 +212,10 @@ func TestHandleInboundListRepliesWithSelectableAgents(t *testing.T) {
 	if !strings.Contains(reply, "---- Demo Workspace ----") {
 		t.Fatalf("/list reply missing workspace header: %q", reply)
 	}
-	if !strings.Contains(reply, "product-agent（Product Agent — Demo Project）") {
+	if !strings.Contains(reply, "product-agent（Product Agent — demo）") {
 		t.Fatalf("/list reply missing product-agent row: %q", reply)
 	}
-	if !strings.Contains(reply, "backend-agent（Backend Agent — Demo Project）") {
+	if !strings.Contains(reply, "backend-agent（Backend Agent — demo）") {
 		t.Fatalf("/list reply missing backend-agent row: %q", reply)
 	}
 	if !strings.Contains(reply, "/select <agent-slug>") {
@@ -400,7 +394,7 @@ func TestHandleInboundSkipsQuotedChainPrefixForBotSender(t *testing.T) {
 }
 
 // Production scenario: a chat had previously /select'd an Agent, that
-// Agent's project_agents binding was later disabled/deleted by admin,
+// Agent's binding was later disabled/deleted by admin,
 // and the next inbound surfaces store.ErrUnknownMention. HandleInbound
 // must wipe the stale selection and tell the user to /list + /select
 // again, not silently bail. Without this branch the bot looks dead.

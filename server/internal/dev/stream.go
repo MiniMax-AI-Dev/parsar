@@ -124,22 +124,18 @@ func validatePromptInputForStream(in connector.PromptInput) error {
 	if strings.TrimSpace(in.RunID) == "" {
 		return fmt.Errorf("run_id is required (per-run scratch dir is namespaced by it)")
 	}
-	if _, ok := stringFromMaps(in.AgentConfig, in.ProjectAgentConfig, "model_id"); !ok {
-		return fmt.Errorf("agent_config.model_id or project_agent_config.model_id is required")
+	if _, ok := stringFromConfig(in.AgentConfig, "model_id"); !ok {
+		return fmt.Errorf("agent_config.model_id is required")
 	}
-	if _, ok := stringFromMaps(in.AgentConfig, in.ProjectAgentConfig, "workdir"); !ok {
-		return fmt.Errorf("agent_config.workdir or project_agent_config.workdir is required (must be absolute or start with ~)")
+	if _, ok := stringFromConfig(in.AgentConfig, "workdir"); !ok {
+		return fmt.Errorf("agent_config.workdir is required (must be absolute or start with ~)")
 	}
 	return nil
 }
 
-// stringFromMaps reads a string field from either of two maps, preferring
-// the second (project-agent config overrides workspace config).
-func stringFromMaps(a, b map[string]any, key string) (string, bool) {
-	if v, ok := b[key].(string); ok && strings.TrimSpace(v) != "" {
-		return strings.TrimSpace(v), true
-	}
-	if v, ok := a[key].(string); ok && strings.TrimSpace(v) != "" {
+// stringFromConfig reads a non-empty string field from a config map.
+func stringFromConfig(m map[string]any, key string) (string, bool) {
+	if v, ok := m[key].(string); ok && strings.TrimSpace(v) != "" {
 		return strings.TrimSpace(v), true
 	}
 	return "", false

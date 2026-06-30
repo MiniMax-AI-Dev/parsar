@@ -380,8 +380,8 @@ func openTestDB(t *testing.T) *pgxpool.Pool {
 	if _, err := pool.Exec(context.Background(),
 		`truncate table runtimes, sandboxes, agent_run_events, usage_logs, audit_records,
 		agent_run_artifacts, agent_runs, messages, conversations,
-		project_agents, agents, models, secrets,
-		projects, workspace_members, workspaces,
+		agents, models, secrets,
+		workspace_members, workspaces,
 		auth_identities, users restart identity cascade`); err != nil {
 		t.Fatal(err)
 	}

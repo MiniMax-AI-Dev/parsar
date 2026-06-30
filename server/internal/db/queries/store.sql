@@ -154,11 +154,10 @@ returning id::text as workspace_id;
 
 -- name: CreateDevAgent :execrows
 insert into agents(id, workspace_id, name, slug, description, connector_type, status, config, created_by, created_at, updated_at)
-select @id::uuid, @workspace_id::uuid, @name, @slug, @description, 'agent_daemon', 'active', @config::jsonb, @created_by::uuid, @now, @now
-where not exists (
-  select 1 from agents
-  where workspace_id = @workspace_id::uuid and slug = @slug and deleted_at is null
-);
+values (@id::uuid, @workspace_id::uuid, @name, @slug, @description, 'agent_daemon', 'active', @config::jsonb, @created_by::uuid, @now, @now)
+on conflict (id) do update
+  set status = 'active', updated_at = @now
+  where agents.status <> 'active';
 
 -- name: GetActiveAgentIDBySlug :one
 select id::text from agents

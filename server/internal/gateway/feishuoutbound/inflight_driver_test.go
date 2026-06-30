@@ -939,7 +939,6 @@ func TestBuildFinalCardForRun_PreservesStreamingBody(t *testing.T) {
 	}
 	c := store.FeishuInflightConversation{
 		WorkspaceID:   "ws",
-		ProjectID:     "proj",
 		AgentRunID:    runID,
 		RunStatus:     "completed",
 		RunStartedAt:  start,
@@ -996,7 +995,6 @@ func TestBuildFinalCardForRun_SurfacesGuestHintOnFailure(t *testing.T) {
 	c := store.FeishuInflightConversation{
 		ConversationID: conv,
 		WorkspaceID:    "ws",
-		ProjectID:      "proj",
 		AgentRunID:     runID,
 		RunStatus:      "failed",
 	}
@@ -1271,7 +1269,6 @@ func TestInflightTickOnce_CredentialFormCardReplacesDoneCard(t *testing.T) {
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID:       convID,
 		WorkspaceID:          "ws-1",
-		ProjectID:            "proj-1",
 		ExternalChatID:       "oc_form_chat",
 		ExternalThreadID:     "om_form_anchor",
 		SourceAppID:          "cli_drv",
@@ -1373,7 +1370,6 @@ func TestInflightTickOnce_CredentialFormCardFallsBackWhenNoInbound(t *testing.T)
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID:       convID,
 		WorkspaceID:          "ws-1",
-		ProjectID:            "proj-1",
 		ExternalChatID:       "oc_chat",
 		SourceAppID:          "cli_drv",
 		ConversationMetadata: map[string]any{},
@@ -1425,7 +1421,6 @@ func TestInflightTickOnce_CredentialFormCardFallsBackWhenNoSenderOpenID(t *testi
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID:       convID,
 		WorkspaceID:          "ws-1",
-		ProjectID:            "proj-1",
 		ExternalChatID:       "oc_chat",
 		SourceAppID:          "cli_drv",
 		ConversationMetadata: map[string]any{},
@@ -1484,7 +1479,6 @@ func TestInflightTickOnce_CredentialFormCardLoopGuard(t *testing.T) {
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID:       convID,
 		WorkspaceID:          "ws-1",
-		ProjectID:            "proj-1",
 		ExternalChatID:       "oc_chat",
 		SourceAppID:          "cli_drv",
 		ConversationMetadata: map[string]any{},
@@ -1561,7 +1555,6 @@ func TestInflightTickOnce_CredentialFormSecondTickPatchesExistingMessage(t *test
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID:       convID,
 		WorkspaceID:          "ws-1",
-		ProjectID:            "proj-1",
 		ExternalChatID:       "oc_form_chat",
 		ExternalThreadID:     "om_form_anchor",
 		SourceAppID:          "cli_drv",
@@ -1631,7 +1624,6 @@ func TestInflightTickOnce_CredentialFormFirstTickStampsExternalMsgID(t *testing.
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID:       convID,
 		WorkspaceID:          "ws-1",
-		ProjectID:            "proj-1",
 		ExternalChatID:       "oc_form_chat",
 		ExternalThreadID:     "om_form_anchor",
 		SourceAppID:          "cli_drv",

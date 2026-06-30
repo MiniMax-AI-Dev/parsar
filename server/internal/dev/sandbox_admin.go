@@ -229,9 +229,9 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 				defer cancel()
 				deviceID, acquireErr := daemonMgr.Acquire(ctx, connector.PromptInput{
-					ProjectAgentID:     agentID,
-					WorkspaceID:        workspaceID,
-					ProjectAgentConfig: agentConfig,
+					AgentID:     agentID,
+					WorkspaceID: workspaceID,
+					AgentConfig: agentConfig,
 				})
 				if acquireErr != nil {
 					log.Bg().Warn("sandbox rebuild re-acquire failed",
@@ -364,8 +364,8 @@ func acquireSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, provider A
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			deviceID, err := provider.Acquire(ctx, connector.PromptInput{
-				ProjectAgentID: agentID,
-				WorkspaceID:    workspaceID,
+				AgentID:     agentID,
+				WorkspaceID: workspaceID,
 			})
 			if err != nil {
 				log.Bg().Warn("sandbox acquire (manual) failed",

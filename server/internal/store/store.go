@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	guuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 type Store struct {
@@ -1969,8 +1969,8 @@ const (
 	auditRuntimeUpdated              = "runtime.updated"
 	auditRuntimeDeleted              = "runtime.deleted"
 	auditRuntimeOnline               = "runtime.online"
-	auditProjectAgentDisabled        = "project_agent.disabled"
-	auditProjectAgentEnabled         = "project_agent.enabled"
+	auditAgentDisabled               = "agent.disabled"
+	auditAgentEnabled                = "agent.enabled"
 	auditAgentCreated                = "agent.created"
 	auditAgentUpdated                = "agent.updated"
 	auditAgentVisibilityChanged      = "agent.visibility.changed"
@@ -3506,7 +3506,7 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 		Artifacts:       []ArtifactRead{},
 		Usage:           []UsageLogRead{},
 		Events:          []AgentRunEventRead{},
-		Runtime:         agentRunRuntimeReadFromRow(row, runMetadata, agentConfig, agentConfig, bindingMetadata, runtimeConfig),
+		Runtime:         agentRunRuntimeReadFromRow(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
 	}
 	if transcript, ok := detail.Metadata["transcript"].(string); ok {
 		detail.Transcript = transcript
@@ -3564,7 +3564,7 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 	return detail, nil
 }
 
-func agentRunRuntimeReadFromRow(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) *AgentRunRuntimeRead {
+func agentRunRuntimeReadFromRow(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) *AgentRunRuntimeRead {
 	connectorType := strings.TrimSpace(row.ConnectorType)
 	runtime := AgentRunRuntimeRead{
 		ID:               strings.TrimSpace(row.RuntimeID),
@@ -3572,17 +3572,17 @@ func agentRunRuntimeReadFromRow(row sqlc.GetAgentRunForReadRow, runMetadata, pro
 		Type:             strings.TrimSpace(row.RuntimeType),
 		Provider:         strings.TrimSpace(row.RuntimeProvider),
 		ConnectorType:    connectorType,
-		AgentKind:        resolveAgentRunRuntimeAgentKind(connectorType, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
-		RuntimeMode:      resolveAgentRunRuntimeMode(row, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
-		DeviceID:         resolveAgentRunRuntimeDeviceID(row, runMetadata, projectAgentConfig, bindingMetadata, runtimeConfig),
-		SandboxID:        firstStringForKeys([]string{"sandbox_id", "e2b_sandbox_id", "parsar.sandbox_id"}, runMetadata, bindingMetadata, runtimeConfig, projectAgentConfig, agentConfig),
-		ManagedModelID:   resolveAgentRunManagedModelID(runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
+		AgentKind:        resolveAgentRunRuntimeAgentKind(connectorType, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
+		RuntimeMode:      resolveAgentRunRuntimeMode(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
+		DeviceID:         resolveAgentRunRuntimeDeviceID(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
+		SandboxID:        firstStringForKeys([]string{"sandbox_id", "e2b_sandbox_id", "parsar.sandbox_id"}, runMetadata, bindingMetadata, runtimeConfig, agentConfig),
+		ManagedModelID:   resolveAgentRunManagedModelID(runMetadata, agentConfig, bindingMetadata, runtimeConfig),
 		Capabilities:     boolMapFromValue(runtimeConfig["daemon_capabilities"]),
 		Liveness:         strings.TrimSpace(row.RuntimeLiveness),
 		Hostname:         strings.TrimSpace(row.RuntimeHostname),
 		Version:          strings.TrimSpace(row.RuntimeVersion),
 		LastHeartbeatAt:  pgOptionalTime(row.LastHeartbeatAt),
-		WorkingDirectory: resolveAgentRunWorkingDirectory(row, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
+		WorkingDirectory: resolveAgentRunWorkingDirectory(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
 	}
 	mergeAgentRunRuntimeSnapshot(&runtime, agentRunRuntimeReadFromMetadataSnapshot(runMetadata))
 	if runtime.ExecutionPlace == "" {
@@ -3759,8 +3759,8 @@ func deriveAgentRunGovernanceMode(runtime AgentRunRuntimeRead) string {
 	}
 }
 
-func resolveAgentRunRuntimeAgentKind(connectorType string, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
-	if v := firstStringForKeys([]string{"agent_kind"}, runMetadata, projectAgentConfig, bindingMetadata, agentConfig, runtimeConfig); v != "" {
+func resolveAgentRunRuntimeAgentKind(connectorType string, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+	if v := firstStringForKeys([]string{"agent_kind"}, runMetadata, agentConfig, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
 	if connectorType == "agent_daemon" {
@@ -3769,8 +3769,8 @@ func resolveAgentRunRuntimeAgentKind(connectorType string, runMetadata, projectA
 	return ""
 }
 
-func resolveAgentRunRuntimeMode(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
-	if v := firstStringForKeys([]string{"runtime_mode", "daemon_mode"}, runMetadata, projectAgentConfig, bindingMetadata, runtimeConfig, agentConfig); v != "" {
+func resolveAgentRunRuntimeMode(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+	if v := firstStringForKeys([]string{"runtime_mode", "daemon_mode"}, runMetadata, agentConfig, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
 	if strings.TrimSpace(row.ConnectorType) != "agent_daemon" {
@@ -3780,37 +3780,37 @@ func resolveAgentRunRuntimeMode(row sqlc.GetAgentRunForReadRow, runMetadata, pro
 	if strings.Contains(provider, "sandbox") || strings.EqualFold(stringFromMap(runtimeConfig, "created_by"), "sandbox_provider") || stringFromMap(runtimeConfig, "sandbox_kind") != "" {
 		return "sandbox"
 	}
-	if firstStringForKeys([]string{"device_id"}, projectAgentConfig, runMetadata, bindingMetadata, runtimeConfig) != "" || strings.TrimSpace(row.BoundDeviceID) != "" || provider == "agent_daemon" || strings.Contains(provider, "local") {
+	if firstStringForKeys([]string{"device_id"}, agentConfig, runMetadata, bindingMetadata, runtimeConfig) != "" || strings.TrimSpace(row.BoundDeviceID) != "" || provider == "agent_daemon" || strings.Contains(provider, "local") {
 		return "local"
 	}
 	return ""
 }
 
-func resolveAgentRunRuntimeDeviceID(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+func resolveAgentRunRuntimeDeviceID(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
 	if v := firstStringForKeys([]string{"device_id", "runtime_id"}, runMetadata); v != "" {
 		return v
 	}
 	if strings.TrimSpace(row.RuntimeID) != "" && (strings.TrimSpace(row.ConnectorType) == "agent_daemon" || strings.TrimSpace(row.RuntimeType) == "agent_daemon") {
 		return strings.TrimSpace(row.RuntimeID)
 	}
-	if v := firstStringForKeys([]string{"device_id"}, projectAgentConfig, bindingMetadata, runtimeConfig); v != "" {
+	if v := firstStringForKeys([]string{"device_id"}, agentConfig, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
 	return strings.TrimSpace(row.BoundDeviceID)
 }
 
-func resolveAgentRunWorkingDirectory(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+func resolveAgentRunWorkingDirectory(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
 	if wd := strings.TrimSpace(row.WorkingDirectory); wd != "" {
 		return wd
 	}
-	return firstStringForKeys([]string{"working_directory", "work_dir", "workdir"}, runMetadata, projectAgentConfig, bindingMetadata, agentConfig, runtimeConfig)
+	return firstStringForKeys([]string{"working_directory", "work_dir", "workdir"}, runMetadata, agentConfig, bindingMetadata, runtimeConfig)
 }
 
-func resolveAgentRunManagedModelID(runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+func resolveAgentRunManagedModelID(runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
 	if v := firstStringForKeys([]string{"managed_model_id"}, runMetadata, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
-	return firstStringForKeys([]string{"model_id", "default_model_id"}, runMetadata, projectAgentConfig, agentConfig)
+	return firstStringForKeys([]string{"model_id", "default_model_id"}, runMetadata, agentConfig)
 }
 
 func cloneBoolMap(values map[string]bool) map[string]bool {
@@ -5660,11 +5660,11 @@ type AgentStatusRead struct {
 }
 
 func (s *Store) DisableAgent(ctx context.Context, agentID string) (AgentStatusRead, error) {
-	return s.setAgentStatus(ctx, agentID, "disabled", auditProjectAgentDisabled)
+	return s.setAgentStatus(ctx, agentID, "disabled", auditAgentDisabled)
 }
 
 func (s *Store) EnableAgent(ctx context.Context, agentID string) (AgentStatusRead, error) {
-	return s.setAgentStatus(ctx, agentID, "active", auditProjectAgentEnabled)
+	return s.setAgentStatus(ctx, agentID, "active", auditAgentEnabled)
 }
 
 func (s *Store) GetAgentDetail(ctx context.Context, agentID string) (AgentStatusRead, error) {
@@ -7486,7 +7486,7 @@ func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string,
 		config["model_credential_binding"] = v
 	}
 	// Fold agent_daemon identity/runtime keys (formerly carried on the
-	// project_agent config) into the merged agent config.
+	// agent config) into the merged agent config.
 	if connectorType == "agent_daemon" {
 		for _, key := range []string{"device_id", "daemon_mode", "agent_kind", "work_dir"} {
 			if v, ok := bindings[key]; ok {

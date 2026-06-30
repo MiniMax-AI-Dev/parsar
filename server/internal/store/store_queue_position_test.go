@@ -21,16 +21,16 @@ func seedRunsForQueuePosition(t *testing.T, store *Store, conversationID string,
 		createdAt := baseTime.Add(time.Duration(i) * time.Millisecond)
 		if _, err := store.db.Exec(ctx, `
 			insert into agent_runs (
-			  id, workspace_id, project_id, conversation_id, project_agent_id,
+			  id, workspace_id, conversation_id, agent_id,
 			  connector_type, status, trigger_source, trigger_channel, requested_by_type, requested_by_id,
 			  created_at, updated_at
 			) values (
-			  $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
-			  'agent_daemon', $6, 'message', 'web', 'user', $7::uuid,
-			  $8, $8
+			  $1::uuid, $2::uuid, $3::uuid, $4::uuid,
+			  'agent_daemon', $5, 'message', 'web', 'user', $6::uuid,
+			  $7, $7
 			)`,
-			mustUUID(id), mustUUID(ids.WorkspaceID), mustUUID(ids.ProjectID),
-			mustUUID(conversationID), mustUUID(ids.ProductProjectAgentID),
+			mustUUID(id), mustUUID(ids.WorkspaceID),
+			mustUUID(conversationID), mustUUID(ids.ProductAgentID),
 			status, mustUUID(ids.UserID), timestamptz(createdAt),
 		); err != nil {
 			t.Fatalf("seed run %d (%s): %v", i, status, err)

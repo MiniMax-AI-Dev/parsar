@@ -22,17 +22,17 @@ type fakeReader struct {
 	userMemErr  error
 	userMemCall []store.ListUserMemoriesInput
 
-	projectMemRows []store.MemoryRead
-	projectMemErr  error
-	projectMemCall []store.ListProjectMemoriesInput
+	workspaceMemRows []store.MemoryRead
+	workspaceMemErr  error
+	workspaceMemCall []store.ListWorkspaceMemoriesInput
 
 	userSinceRows []store.MemoryRead
 	userSinceErr  error
 	userSinceCall []store.ListUserMemoriesSinceInput
 
-	projectSinceRows []store.MemoryRead
-	projectSinceErr  error
-	projectSinceCall []store.ListProjectMemoriesSinceInput
+	workspaceSinceRows []store.MemoryRead
+	workspaceSinceErr  error
+	workspaceSinceCall []store.ListWorkspaceMemoriesSinceInput
 }
 
 func (f *fakeReader) ListWorkspaceSpecFragments(_ context.Context, in store.ListWorkspaceSpecFragmentsInput) ([]store.SpecFragmentRead, error) {
@@ -45,9 +45,9 @@ func (f *fakeReader) ListUserMemories(_ context.Context, in store.ListUserMemori
 	return f.userMemRows, f.userMemErr
 }
 
-func (f *fakeReader) ListProjectMemories(_ context.Context, in store.ListProjectMemoriesInput) ([]store.MemoryRead, error) {
-	f.projectMemCall = append(f.projectMemCall, in)
-	return f.projectMemRows, f.projectMemErr
+func (f *fakeReader) ListWorkspaceMemories(_ context.Context, in store.ListWorkspaceMemoriesInput) ([]store.MemoryRead, error) {
+	f.workspaceMemCall = append(f.workspaceMemCall, in)
+	return f.workspaceMemRows, f.workspaceMemErr
 }
 
 func (f *fakeReader) ListUserMemoriesSince(_ context.Context, in store.ListUserMemoriesSinceInput) ([]store.MemoryRead, error) {
@@ -55,9 +55,9 @@ func (f *fakeReader) ListUserMemoriesSince(_ context.Context, in store.ListUserM
 	return f.userSinceRows, f.userSinceErr
 }
 
-func (f *fakeReader) ListProjectMemoriesSince(_ context.Context, in store.ListProjectMemoriesSinceInput) ([]store.MemoryRead, error) {
-	f.projectSinceCall = append(f.projectSinceCall, in)
-	return f.projectSinceRows, f.projectSinceErr
+func (f *fakeReader) ListWorkspaceMemoriesSince(_ context.Context, in store.ListWorkspaceMemoriesSinceInput) ([]store.MemoryRead, error) {
+	f.workspaceSinceCall = append(f.workspaceSinceCall, in)
+	return f.workspaceSinceRows, f.workspaceSinceErr
 }
 
 func TestBuildSnapshotRequiresWorkspaceID(t *testing.T) {
@@ -110,8 +110,8 @@ func TestBuildSnapshotFull(t *testing.T) {
 		userMemRows: []store.MemoryRead{
 			{ID: "m1", Scope: "user", MemoryType: "user", Body: "senior backend dev", Source: "manual"},
 		},
-		projectMemRows: []store.MemoryRead{
-			{ID: "m2", Scope: "project", MemoryType: "project", Body: "migrating to grpc", Why: "REST timeout SLOs", Source: "agent"},
+		workspaceMemRows: []store.MemoryRead{
+			{ID: "m2", Scope: "workspace", MemoryType: "workspace", Body: "migrating to grpc", Why: "REST timeout SLOs", Source: "agent"},
 		},
 	}
 	inj := NewInjector(reader)
@@ -119,7 +119,6 @@ func TestBuildSnapshotFull(t *testing.T) {
 		WorkspaceID:   "w",
 		WorkspaceName: "acme",
 		UserID:        "u",
-		ProjectID:     "p",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -133,28 +132,11 @@ func TestBuildSnapshotFull(t *testing.T) {
 	if !strings.Contains(got.MemoryBlock, "## user") || !strings.Contains(got.MemoryBlock, "senior backend dev") {
 		t.Errorf("MemoryBlock missing user-type entry: %s", got.MemoryBlock)
 	}
-	if !strings.Contains(got.MemoryBlock, "## project") || !strings.Contains(got.MemoryBlock, "migrating to grpc") {
-		t.Errorf("MemoryBlock missing project-type entry: %s", got.MemoryBlock)
+	if !strings.Contains(got.MemoryBlock, "## workspace") || !strings.Contains(got.MemoryBlock, "migrating to grpc") {
+		t.Errorf("MemoryBlock missing workspace-type entry: %s", got.MemoryBlock)
 	}
 	if !strings.Contains(got.MemoryBlock, "(Why: REST timeout SLOs)") {
-		t.Errorf("MemoryBlock should suffix Why for project memories: %s", got.MemoryBlock)
-	}
-}
-
-func TestBuildSnapshotSkipsProjectWhenIDEmpty(t *testing.T) {
-	reader := &fakeReader{}
-	inj := NewInjector(reader)
-	if _, err := inj.BuildSnapshot(context.Background(), SnapshotInput{
-		WorkspaceID: "w",
-		UserID:      "u",
-	}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(reader.projectMemCall) != 0 {
-		t.Errorf("ListProjectMemories should not have been called, got %d calls", len(reader.projectMemCall))
-	}
-	if len(reader.specCall) != 1 || len(reader.userMemCall) != 1 {
-		t.Errorf("spec + user memory should still be queried, got spec=%d user=%d", len(reader.specCall), len(reader.userMemCall))
+		t.Errorf("MemoryBlock should suffix Why for workspace memories: %s", got.MemoryBlock)
 	}
 }
 
@@ -162,12 +144,11 @@ func TestBuildSnapshotPropagatesLimits(t *testing.T) {
 	reader := &fakeReader{}
 	inj := NewInjector(reader)
 	if _, err := inj.BuildSnapshot(context.Background(), SnapshotInput{
-		WorkspaceID:        "w",
-		UserID:             "u",
-		ProjectID:          "p",
-		SpecLimit:          5,
-		UserMemoryLimit:    7,
-		ProjectMemoryLimit: 9,
+		WorkspaceID:          "w",
+		UserID:               "u",
+		SpecLimit:            5,
+		UserMemoryLimit:      7,
+		WorkspaceMemoryLimit: 9,
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,8 +158,8 @@ func TestBuildSnapshotPropagatesLimits(t *testing.T) {
 	if reader.userMemCall[0].Limit != 7 {
 		t.Errorf("UserMemoryLimit not passed through, got %d", reader.userMemCall[0].Limit)
 	}
-	if reader.projectMemCall[0].Limit != 9 {
-		t.Errorf("ProjectMemoryLimit not passed through, got %d", reader.projectMemCall[0].Limit)
+	if reader.workspaceMemCall[0].Limit != 9 {
+		t.Errorf("WorkspaceMemoryLimit not passed through, got %d", reader.workspaceMemCall[0].Limit)
 	}
 }
 
@@ -209,13 +190,12 @@ func TestBuildSnapshotWrapsUserMemoryError(t *testing.T) {
 	}
 }
 
-func TestBuildSnapshotWrapsProjectMemoryError(t *testing.T) {
-	sentinel := errors.New("proj-boom")
-	inj := NewInjector(&fakeReader{projectMemErr: sentinel})
+func TestBuildSnapshotWrapsWorkspaceMemoryError(t *testing.T) {
+	sentinel := errors.New("workspace-boom")
+	inj := NewInjector(&fakeReader{workspaceMemErr: sentinel})
 	_, err := inj.BuildSnapshot(context.Background(), SnapshotInput{
 		WorkspaceID: "w",
 		UserID:      "u",
-		ProjectID:   "p",
 	})
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("error chain should wrap sentinel, got %v", err)
@@ -260,18 +240,18 @@ func TestBuildSnapshotDropsBadEnumRows(t *testing.T) {
 	}
 }
 
-func TestBuildSnapshotMergesUserAndProjectMemories(t *testing.T) {
+func TestBuildSnapshotMergesUserAndWorkspaceMemories(t *testing.T) {
 	reader := &fakeReader{
 		userMemRows: []store.MemoryRead{
 			{ID: "u1", Scope: "user", MemoryType: "user", Body: "from user", Source: "manual"},
 		},
-		projectMemRows: []store.MemoryRead{
-			{ID: "p1", Scope: "project", MemoryType: "user", Body: "from project", Source: "manual"},
+		workspaceMemRows: []store.MemoryRead{
+			{ID: "w1", Scope: "workspace", MemoryType: "user", Body: "from workspace", Source: "manual"},
 		},
 	}
 	inj := NewInjector(reader)
 	got, err := inj.BuildSnapshot(context.Background(), SnapshotInput{
-		WorkspaceID: "w", UserID: "u", ProjectID: "p",
+		WorkspaceID: "w", UserID: "u",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -279,8 +259,8 @@ func TestBuildSnapshotMergesUserAndProjectMemories(t *testing.T) {
 	if !strings.Contains(got.MemoryBlock, "from user") {
 		t.Errorf("user memory missing: %s", got.MemoryBlock)
 	}
-	if !strings.Contains(got.MemoryBlock, "from project") {
-		t.Errorf("project memory missing: %s", got.MemoryBlock)
+	if !strings.Contains(got.MemoryBlock, "from workspace") {
+		t.Errorf("workspace memory missing: %s", got.MemoryBlock)
 	}
 }
 
@@ -321,7 +301,7 @@ func TestBuildIncrementalEmptyReturnsEmptyBundle(t *testing.T) {
 	}
 }
 
-func TestBuildIncrementalSkipsProjectWhenIDEmpty(t *testing.T) {
+func TestBuildIncrementalSkipsWorkspaceWhenIDEmpty(t *testing.T) {
 	reader := &fakeReader{}
 	inj := NewInjector(reader)
 	if _, err := inj.BuildIncremental(context.Background(), IncrementalInput{
@@ -330,8 +310,8 @@ func TestBuildIncrementalSkipsProjectWhenIDEmpty(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(reader.projectSinceCall) != 0 {
-		t.Errorf("ListProjectMemoriesSince should not have been called, got %d calls", len(reader.projectSinceCall))
+	if len(reader.workspaceSinceCall) != 0 {
+		t.Errorf("ListWorkspaceMemoriesSince should not have been called, got %d calls", len(reader.workspaceSinceCall))
 	}
 	if len(reader.userSinceCall) != 1 {
 		t.Errorf("user-since should still run, got %d calls", len(reader.userSinceCall))
@@ -343,15 +323,15 @@ func TestBuildIncrementalRendersDeltaInIncrementalTag(t *testing.T) {
 		userSinceRows: []store.MemoryRead{
 			{ID: "u1", Scope: "user", MemoryType: "user", Body: "just learned", Source: "agent"},
 		},
-		projectSinceRows: []store.MemoryRead{
-			{ID: "p1", Scope: "project", MemoryType: "project", Body: "scope cut", Why: "deadline", Source: "agent"},
+		workspaceSinceRows: []store.MemoryRead{
+			{ID: "w1", Scope: "workspace", MemoryType: "workspace", Body: "scope cut", Why: "deadline", Source: "agent"},
 		},
 	}
 	inj := NewInjector(reader)
 	got, err := inj.BuildIncremental(context.Background(), IncrementalInput{
-		UserID:    "u",
-		ProjectID: "p",
-		Since:     time.Now().Add(-time.Hour),
+		UserID:      "u",
+		WorkspaceID: "w",
+		Since:       time.Now().Add(-time.Hour),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -363,10 +343,10 @@ func TestBuildIncrementalRendersDeltaInIncrementalTag(t *testing.T) {
 		t.Errorf("user delta missing: %q", got.IncrementalMemory)
 	}
 	if !strings.Contains(got.IncrementalMemory, "scope cut") {
-		t.Errorf("project delta missing: %q", got.IncrementalMemory)
+		t.Errorf("workspace delta missing: %q", got.IncrementalMemory)
 	}
 	if !strings.Contains(got.IncrementalMemory, "(Why: deadline)") {
-		t.Errorf("Why suffix missing on project delta: %q", got.IncrementalMemory)
+		t.Errorf("Why suffix missing on workspace delta: %q", got.IncrementalMemory)
 	}
 }
 
@@ -375,10 +355,10 @@ func TestBuildIncrementalPropagatesLimitAndSince(t *testing.T) {
 	inj := NewInjector(reader)
 	cursor := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	if _, err := inj.BuildIncremental(context.Background(), IncrementalInput{
-		UserID:    "u",
-		ProjectID: "p",
-		Since:     cursor,
-		Limit:     42,
+		UserID:      "u",
+		WorkspaceID: "w",
+		Since:       cursor,
+		Limit:       42,
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -388,11 +368,11 @@ func TestBuildIncrementalPropagatesLimitAndSince(t *testing.T) {
 	if reader.userSinceCall[0].Limit != 42 {
 		t.Errorf("user limit not propagated, got %d", reader.userSinceCall[0].Limit)
 	}
-	if !reader.projectSinceCall[0].Since.Equal(cursor) {
-		t.Errorf("project since not propagated, got %v", reader.projectSinceCall[0].Since)
+	if !reader.workspaceSinceCall[0].Since.Equal(cursor) {
+		t.Errorf("workspace since not propagated, got %v", reader.workspaceSinceCall[0].Since)
 	}
-	if reader.projectSinceCall[0].Limit != 42 {
-		t.Errorf("project limit not propagated, got %d", reader.projectSinceCall[0].Limit)
+	if reader.workspaceSinceCall[0].Limit != 42 {
+		t.Errorf("workspace limit not propagated, got %d", reader.workspaceSinceCall[0].Limit)
 	}
 }
 
@@ -408,13 +388,13 @@ func TestBuildIncrementalWrapsUserError(t *testing.T) {
 	}
 }
 
-func TestBuildIncrementalWrapsProjectError(t *testing.T) {
-	sentinel := errors.New("project-since-boom")
-	inj := NewInjector(&fakeReader{projectSinceErr: sentinel})
+func TestBuildIncrementalWrapsWorkspaceError(t *testing.T) {
+	sentinel := errors.New("workspace-since-boom")
+	inj := NewInjector(&fakeReader{workspaceSinceErr: sentinel})
 	_, err := inj.BuildIncremental(context.Background(), IncrementalInput{
-		UserID:    "u",
-		ProjectID: "p",
-		Since:     time.Now().Add(-time.Hour),
+		UserID:      "u",
+		WorkspaceID: "w",
+		Since:       time.Now().Add(-time.Hour),
 	})
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("error chain should wrap sentinel, got %v", err)
@@ -427,7 +407,7 @@ func TestConvertMemoriesDeduplicatesByID(t *testing.T) {
 	got := convertMemories([]store.MemoryRead{
 		{ID: "a", Scope: "user", MemoryType: "user", Body: "first", Source: "manual"},
 		{ID: "a", Scope: "user", MemoryType: "user", Body: "dup", Source: "manual"},
-		{ID: "b", Scope: "project", MemoryType: "user", Body: "other", Source: "manual"},
+		{ID: "b", Scope: "workspace", MemoryType: "user", Body: "other", Source: "manual"},
 	})
 	if len(got) != 2 {
 		t.Fatalf("expected 2 unique memories, got %d", len(got))
@@ -474,7 +454,7 @@ func TestMemoryFromStoreRowAcceptsValid(t *testing.T) {
 		Body:       "do not mock the db",
 		Why:        "had a prod regression last quarter",
 		Source:     "agent",
-		AgentActor: "claude:proj1",
+		AgentActor: "claude:agent1",
 	}
 	got, ok := MemoryFromStoreRow(row)
 	if !ok {

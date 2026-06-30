@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestInsertDevFixture(t *testing.T) {
@@ -31,29 +31,24 @@ func TestInsertDevFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seededAgain.Users != 0 || seededAgain.Workspaces != 0 || seededAgain.Projects != 0 || seededAgain.Agents != 0 || seededAgain.ProjectAgents != 0 || seededAgain.Conversations != 0 {
+	if seededAgain.Users != 0 || seededAgain.Workspaces != 0 || seededAgain.Agents != 0 || seededAgain.Conversations != 0 {
 		t.Fatalf("expected idempotent second seed, got %+v", seededAgain)
 	}
 
 	var count int
 	if err := db.QueryRow(ctx, `
 		select count(*)
-		from project_agents pa
-		join projects p on p.id = pa.project_id
-		join workspaces w on w.id = p.workspace_id
-		join agents a on a.id = pa.agent_id
+		from agents a
+		join workspaces w on w.id = a.workspace_id
 		where w.slug = 'demo'
-			and p.slug = 'demo-project'
-			and pa.status = 'active'
-			and pa.deleted_at is null
-			and p.deleted_at is null
-			and w.deleted_at is null
+			and a.status = 'active'
 			and a.deleted_at is null
+			and w.deleted_at is null
 	`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 3 {
-		t.Fatalf("expected 3 active project agents, got %d", count)
+		t.Fatalf("expected 3 active agents, got %d", count)
 	}
 }
 
@@ -319,10 +314,9 @@ func TestCreateAgentAcceptsCapabilitiesWithoutWorkspaceAllowlist(t *testing.T) {
 	}
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Capability Test Agent",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "opencode",
 		},
@@ -372,10 +366,9 @@ func TestCreateAgentBindsInitialCapabilityVersions(t *testing.T) {
 
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Versioned Skill Agent",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "opencode",
 		},
@@ -392,14 +385,14 @@ func TestCreateAgentBindsInitialCapabilityVersions(t *testing.T) {
 		t.Fatalf("initial capabilities = %#v, want 1 binding", created.InitialCapabilities)
 	}
 	binding := created.InitialCapabilities[0]
-	if binding.ProjectAgentID != created.ProjectAgent.ID || binding.CapabilityID != capability.ID || binding.CapabilityVersionID != versions[0].ID {
+	if binding.AgentID != created.Agent.ID || binding.CapabilityID != capability.ID || binding.CapabilityVersionID != versions[0].ID {
 		t.Fatalf("binding mismatch: %#v", binding)
 	}
 	if binding.Configuration["mode"] != "create" {
 		t.Fatalf("binding configuration = %#v", binding.Configuration)
 	}
 
-	listed, err := st.ListAgentCapabilities(ctx, created.ProjectAgent.ID)
+	listed, err := st.ListAgentCapabilities(ctx, created.Agent.ID)
 	if err != nil {
 		t.Fatalf("ListAgentCapabilities: %v", err)
 	}
@@ -419,10 +412,9 @@ func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 	}
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Backend Agent",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "opencode",
 		},
@@ -440,11 +432,10 @@ func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 
 	_, err = st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Explicit Backend Agent",
 		Slug:          "backend-agent",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "opencode",
 		},
@@ -455,7 +446,7 @@ func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 	}
 }
 
-func TestSeedDevFixtureReactivatesSeededProjectAgents(t *testing.T) {
+func TestSeedDevFixtureReactivatesSeededAgents(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -464,7 +455,7 @@ func TestSeedDevFixtureReactivatesSeededProjectAgents(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(ctx, `update project_agents set status = 'disabled' where id = $1`, ids.BackendProjectAgentID); err != nil {
+	if _, err := db.Exec(ctx, `update agents set status = 'disabled' where id = $1`, ids.BackendAgentID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -472,11 +463,11 @@ func TestSeedDevFixtureReactivatesSeededProjectAgents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seededAgain.ProjectAgents != 1 {
+	if seededAgain.Agents != 1 {
 		t.Fatalf("expected one reactivated project agent, got %+v", seededAgain)
 	}
 
-	agents, err := store.ListProjectEnabledAgents(ctx, ids.ProjectID)
+	agents, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,10 +512,10 @@ func TestCreateInboundIMMessageCreatesSingleAgentRun(t *testing.T) {
 
 	assertMessageAndRuns(t, db, result.MessageID, 1)
 	flushAudit(t, auditIng)
-	assertAuditEventCount(t, db, result.ProjectID, "", 2)
-	assertAuditEvent(t, db, result.ProjectID, "im.message.created", "message", result.MessageID)
-	assertAuditEvent(t, db, result.ProjectID, "agent_run.created", "agent_run", result.RunIDs[0])
-	assertAuditMetadataOmitsSensitiveText(t, db, result.ProjectID, "看一下 API", "payload", "command")
+	assertAuditEventCount(t, db, result.WorkspaceID, "", 2)
+	assertAuditEvent(t, db, result.WorkspaceID, "im.message.created", "message", result.MessageID)
+	assertAuditEvent(t, db, result.WorkspaceID, "agent_run.created", "agent_run", result.RunIDs[0])
+	assertAuditMetadataOmitsSensitiveText(t, db, result.WorkspaceID, "看一下 API", "payload", "command")
 }
 
 func TestCreateGatewayMessagePersistsGatewaySource(t *testing.T) {
@@ -559,9 +550,9 @@ func TestCreateGatewayMessagePersistsGatewaySource(t *testing.T) {
 	}
 
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, result.ProjectID, "im.message.created", "message", result.MessageID)
-	assertAuditMetadata(t, db, result.ProjectID, "im.message.created", "source", "gateway")
-	assertAuditMetadata(t, db, result.ProjectID, "im.message.created", "gateway", "feishu")
+	assertAuditEvent(t, db, result.WorkspaceID, "im.message.created", "message", result.MessageID)
+	assertAuditMetadata(t, db, result.WorkspaceID, "im.message.created", "source", "gateway")
+	assertAuditMetadata(t, db, result.WorkspaceID, "im.message.created", "gateway", "feishu")
 }
 
 func TestGatewayMessageResolvesExternalConversationID(t *testing.T) {
@@ -597,7 +588,7 @@ func TestGatewayMessageResolvesExternalConversationID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ProjectID != ids.ProjectID {
+	if result.WorkspaceID != ids.WorkspaceID {
 		t.Fatalf("expected external conversation to resolve demo project, got %+v", result)
 	}
 
@@ -690,7 +681,7 @@ func TestTargetedFeishuInboundCreatesConversationAndSourceAppOutbound(t *testing
 	`, created.MessageID).Scan(&platform, &externalID, &sourceAppID, &primaryAgentID); err != nil {
 		t.Fatal(err)
 	}
-	if platform != "feishu" || externalID != "oc_new_targeted" || sourceAppID != "cli_targeted_bot" || primaryAgentID != ids.BackendProjectAgentID {
+	if platform != "feishu" || externalID != "oc_new_targeted" || sourceAppID != "cli_targeted_bot" || primaryAgentID != ids.BackendAgentID {
 		t.Fatalf("unexpected conversation route fields: platform=%s external=%s app=%s primary=%s", platform, externalID, sourceAppID, primaryAgentID)
 	}
 
@@ -877,7 +868,7 @@ func TestGatewayOutboundMessagesAndDelivery(t *testing.T) {
 	}
 }
 
-func TestListProjectEnabledAgentsReturnsSeededAgents(t *testing.T) {
+func TestListWorkspaceEnabledAgentsReturnsSeededAgents(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -886,24 +877,24 @@ func TestListProjectEnabledAgentsReturnsSeededAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	agents, err := store.ListProjectEnabledAgents(ctx, ids.ProjectID)
+	agents, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(agents) != 3 {
-		t.Fatalf("expected 3 project agents, got %d: %+v", len(agents), agents)
+		t.Fatalf("expected 3 agents, got %d: %+v", len(agents), agents)
 	}
 	for _, agent := range agents {
-		if agent.ProjectID != ids.ProjectID || agent.Status != "active" || agent.ConnectorType != "agent_daemon" {
-			t.Fatalf("expected active agent_daemon project agent in project, got %+v", agent)
+		if agent.Status != "active" || agent.ConnectorType != "agent_daemon" {
+			t.Fatalf("expected active agent_daemon agent, got %+v", agent)
 		}
 	}
 }
 
-// TestDaemonExecutionConfigIsProjectAgentScoped pins that daemon execution
-// placement is project-agent scoped; agents.config stays free of top-level
-// runtime or agent_kind values.
-func TestDaemonExecutionConfigIsProjectAgentScoped(t *testing.T) {
+// TestDaemonExecutionConfigIsAgentScoped pins that daemon execution
+// placement is agent scoped; the merged agents.config carries daemon keys
+// (daemon_mode, agent_kind) but never a top-level runtime value.
+func TestDaemonExecutionConfigIsAgentScoped(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -914,13 +905,12 @@ func TestDaemonExecutionConfigIsProjectAgentScoped(t *testing.T) {
 
 	created, err := store.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "DaemonConfigProbe",
 		Description:   "Step 5 daemon config check",
 		ConnectorType: "agent_daemon",
 		SystemPrompt:  "probe",
 		Slug:          "daemon-config-probe",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "opencode",
 			"runtime":     "local",
@@ -935,37 +925,34 @@ func TestDaemonExecutionConfigIsProjectAgentScoped(t *testing.T) {
 	if _, ok := created.Agent.Config["runtime"]; ok {
 		t.Fatalf("agents.config must not contain runtime for agent_daemon, got %#v", created.Agent.Config)
 	}
-	if _, ok := created.Agent.Config["agent_kind"]; ok {
-		t.Fatalf("agents.config must not contain agent_kind, got %#v", created.Agent.Config)
+	if got := created.Agent.Config["daemon_mode"]; got != "sandbox" {
+		t.Fatalf("agents.config daemon_mode = %#v, want sandbox", got)
 	}
-	if got := created.ProjectAgent.Config["daemon_mode"]; got != "sandbox" {
-		t.Fatalf("project_agents.config daemon_mode = %#v, want sandbox", got)
+	if got := created.Agent.Config["agent_kind"]; got != "opencode" {
+		t.Fatalf("agents.config agent_kind = %#v, want opencode", got)
 	}
-	if got := created.ProjectAgent.Config["agent_kind"]; got != "opencode" {
-		t.Fatalf("project_agents.config agent_kind = %#v, want opencode", got)
+	if _, ok := created.Agent.Config["runtime"]; ok {
+		t.Fatalf("agents.config must not persist stale runtime key: %#v", created.Agent.Config)
 	}
-	if _, ok := created.ProjectAgent.Config["runtime"]; ok {
-		t.Fatalf("project_agents.config must not persist stale runtime key: %#v", created.ProjectAgent.Config)
-	}
-	if _, ok := created.ProjectAgent.Config["ignored"]; ok {
-		t.Fatalf("project_agents.config must not persist unknown daemon key: %#v", created.ProjectAgent.Config)
+	if _, ok := created.Agent.Config["ignored"]; ok {
+		t.Fatalf("agents.config must not persist unknown daemon key: %#v", created.Agent.Config)
 	}
 
 	var rawAgentConfig string
 	if err := db.QueryRow(ctx, `select config::text from agents where id = $1::uuid`, created.Agent.ID).Scan(&rawAgentConfig); err != nil {
 		t.Fatalf("read agents.config: %v", err)
 	}
-	if strings.Contains(rawAgentConfig, `"runtime"`) || strings.Contains(rawAgentConfig, `"agent_kind"`) {
-		t.Fatalf("agents.config must not contain daemon execution keys, got %s", rawAgentConfig)
+	if strings.Contains(rawAgentConfig, `"runtime"`) {
+		t.Fatalf("agents.config must not contain top-level runtime key, got %s", rawAgentConfig)
 	}
 
-	enabled, err := store.ListProjectEnabledAgents(ctx, ids.ProjectID)
+	enabled, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
 	if err != nil {
-		t.Fatalf("ListProjectEnabledAgents: %v", err)
+		t.Fatalf("ListWorkspaceEnabledAgents: %v", err)
 	}
 	var sawCreated bool
 	for _, row := range enabled {
-		if row.ProjectAgentID != created.ProjectAgent.ID {
+		if row.AgentID != created.Agent.ID {
 			continue
 		}
 		sawCreated = true
@@ -980,11 +967,11 @@ func TestDaemonExecutionConfigIsProjectAgentScoped(t *testing.T) {
 		}
 	}
 	if !sawCreated {
-		t.Fatalf("ListProjectEnabledAgents did not include created ProjectAgent %s", created.ProjectAgent.ID)
+		t.Fatalf("ListWorkspaceEnabledAgents did not include created Agent %s", created.Agent.ID)
 	}
 }
 
-func TestConfigureDevProjectAgentConnectorRejectsInvalidInputs(t *testing.T) {
+func TestConfigureDevAgentConnectorRejectsInvalidInputs(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -993,19 +980,19 @@ func TestConfigureDevProjectAgentConnectorRejectsInvalidInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := store.ConfigureDevProjectAgentConnector(ctx, ConfigureDevProjectAgentConnectorInput{ProjectAgentID: ids.BackendProjectAgentID, ConnectorType: "bogus"})
+	_, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: ids.BackendAgentID, ConnectorType: "bogus"})
 	if !errors.Is(err, ErrInvalidConnectorType) {
 		t.Fatalf("expected ErrInvalidConnectorType, got %v", err)
 	}
 
-	_, err = store.ConfigureDevProjectAgentConnector(ctx, ConfigureDevProjectAgentConnectorInput{ProjectAgentID: ids.BackendProjectAgentID, ConnectorType: "opencode_local"})
+	_, err = store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: ids.BackendAgentID, ConnectorType: "opencode_local"})
 	if !errors.Is(err, ErrInvalidConnectorType) {
 		t.Fatalf("expected ErrInvalidConnectorType for retired opencode_local, got %v", err)
 	}
 
-	_, err = store.ConfigureDevProjectAgentConnector(ctx, ConfigureDevProjectAgentConnectorInput{ProjectAgentID: "00000000-0000-0000-0000-000000099999", ConnectorType: "http"})
-	if !errors.Is(err, ErrUnknownProjectAgent) {
-		t.Fatalf("expected ErrUnknownProjectAgent, got %v", err)
+	_, err = store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: "00000000-0000-0000-0000-000000099999", ConnectorType: "http"})
+	if !errors.Is(err, ErrUnknownAgent) {
+		t.Fatalf("expected ErrUnknownAgent, got %v", err)
 	}
 }
 
@@ -1017,10 +1004,10 @@ func TestClaimNextQueuedHTTPAgentRun(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ConfigureDevProjectAgentConnector(ctx, ConfigureDevProjectAgentConnectorInput{
-		ProjectAgentID: ids.BackendProjectAgentID,
-		ConnectorType:  "http",
-		Endpoint:       "http://127.0.0.1:19090/agent",
+	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
+		AgentID:       ids.BackendAgentID,
+		ConnectorType: "http",
+		Endpoint:      "http://127.0.0.1:19090/agent",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1067,10 +1054,10 @@ func TestFailAgentRunWritesFailedStatusAndAudit(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ConfigureDevProjectAgentConnector(ctx, ConfigureDevProjectAgentConnectorInput{
-		ProjectAgentID: ids.BackendProjectAgentID,
-		ConnectorType:  "http",
-		Endpoint:       "http://127.0.0.1:19090/agent",
+	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
+		AgentID:       ids.BackendAgentID,
+		ConnectorType: "http",
+		Endpoint:      "http://127.0.0.1:19090/agent",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1106,7 +1093,7 @@ func TestFailAgentRunWritesFailedStatusAndAudit(t *testing.T) {
 		t.Fatalf("expected user_facing_reason populated, got empty")
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, ids.ProjectID, "http_agent.failed", "agent_run", claim.RunID)
+	assertAuditEvent(t, db, ids.WorkspaceID, "http_agent.failed", "agent_run", claim.RunID)
 
 	detail, err := store.GetAgentRun(ctx, claim.RunID)
 	if err != nil {
@@ -1125,10 +1112,10 @@ func TestRequeueFailedAgentRun(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ConfigureDevProjectAgentConnector(ctx, ConfigureDevProjectAgentConnectorInput{
-		ProjectAgentID: ids.BackendProjectAgentID,
-		ConnectorType:  "http",
-		Endpoint:       "http://127.0.0.1:19090/agent",
+	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
+		AgentID:       ids.BackendAgentID,
+		ConnectorType: "http",
+		Endpoint:      "http://127.0.0.1:19090/agent",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1165,7 +1152,7 @@ func TestRequeueFailedAgentRun(t *testing.T) {
 		t.Fatalf("expected clean queued requeue, got status=%s by=%s reason=%s started=%v finished=%v", status, requeuedBy, reason, startedAt.Valid, finishedAt.Valid)
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, ids.ProjectID, "agent_run.requeued", "agent_run", claim.RunID)
+	assertAuditEvent(t, db, ids.WorkspaceID, "agent_run.requeued", "agent_run", claim.RunID)
 }
 
 func TestRequeueFailedAgentRunRejectsNonFailedRun(t *testing.T) {
@@ -1231,7 +1218,7 @@ func TestCancelAgentRunIsIdempotent(t *testing.T) {
 
 // TestDequeueNextRunPicksOldestQueuedSibling verifies the serial-queue
 // hand-off: when a run finishes, the oldest queued sibling on the same
-// (conversation, project_agent) is the next dispatch target.
+// (conversation, agent) is the next dispatch target.
 func TestDequeueNextRunPicksOldestQueuedSibling(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
@@ -1271,7 +1258,7 @@ func TestDequeueNextRunPicksOldestQueuedSibling(t *testing.T) {
 	if next.RunID != run2ID {
 		t.Fatalf("dequeued runID = %q, want %q (oldest queued)", next.RunID, run2ID)
 	}
-	// DequeueNextRun looks at the finished run's project_agent/conversation,
+	// DequeueNextRun looks at the finished run's agent/conversation,
 	// ignoring the finished run's own status.
 	if _, err := db.Exec(ctx, `update agent_runs set status = 'completed', finished_at = now() where id = $1`, run2ID); err != nil {
 		t.Fatal(err)
@@ -1435,8 +1422,8 @@ func TestCompleteHTTPAgentRunUsesHTTPAuditSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, completed.ProjectID, "http_agent.completed", "agent_run", completed.RunID)
-	assertAuditEvent(t, db, completed.ProjectID, "agent_to_agent.child_run.created", "agent_run", completed.ChildRunIDs[0])
+	assertAuditEvent(t, db, completed.WorkspaceID, "http_agent.completed", "agent_run", completed.RunID)
+	assertAuditEvent(t, db, completed.WorkspaceID, "agent_to_agent.child_run.created", "agent_run", completed.ChildRunIDs[0])
 
 	var completedBy, messageSource, usageSource string
 	if err := db.QueryRow(ctx, `select metadata->>'completed_by' from agent_runs where id = $1`, completed.RunID).Scan(&completedBy); err != nil {
@@ -1480,7 +1467,7 @@ func TestCompleteAgentRunWritesEmptyUsageWhenNoneReported(t *testing.T) {
 		t.Fatalf("expected empty usage in result, got %+v", completed.Usage)
 	}
 
-	usage, err := store.ListProjectUsageLogs(ctx, completed.ProjectID, completed.RunID, 10)
+	usage, err := store.ListWorkspaceUsageLogs(ctx, completed.WorkspaceID, completed.RunID, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1521,19 +1508,19 @@ func TestCompleteAgentRunMentionCreatesChildRun(t *testing.T) {
 
 	// trigger_source='agent' (who initiated it) + trigger_channel='internal'
 	// (synthesized server-side by the mention resolver).
-	var triggerSource, triggerChannel, requestedByType, requestedByID, triggerMessageID, projectAgentID, status string
+	var triggerSource, triggerChannel, requestedByType, requestedByID, triggerMessageID, agentID, status string
 	if err := db.QueryRow(ctx, `
-		select trigger_source, trigger_channel, requested_by_type, requested_by_id::text, trigger_message_id::text, project_agent_id::text, status
+		select trigger_source, trigger_channel, requested_by_type, requested_by_id::text, trigger_message_id::text, agent_id::text, status
 		from agent_runs
 		where id = $1
-	`, completed.ChildRunIDs[0]).Scan(&triggerSource, &triggerChannel, &requestedByType, &requestedByID, &triggerMessageID, &projectAgentID, &status); err != nil {
+	`, completed.ChildRunIDs[0]).Scan(&triggerSource, &triggerChannel, &requestedByType, &requestedByID, &triggerMessageID, &agentID, &status); err != nil {
 		t.Fatal(err)
 	}
-	if triggerSource != "agent" || triggerChannel != "internal" || requestedByType != "agent" || requestedByID != ids.BackendAgentID || triggerMessageID != completed.MessageID || projectAgentID != ids.TestProjectAgentID || status != "queued" {
-		t.Fatalf("unexpected child run fields: trigger=%s/%s requested=%s/%s trigger_msg=%s project_agent=%s status=%s", triggerSource, triggerChannel, requestedByType, requestedByID, triggerMessageID, projectAgentID, status)
+	if triggerSource != "agent" || triggerChannel != "internal" || requestedByType != "agent" || requestedByID != ids.BackendAgentID || triggerMessageID != completed.MessageID || agentID != ids.TestAgentID || status != "queued" {
+		t.Fatalf("unexpected child run fields: trigger=%s/%s requested=%s/%s trigger_msg=%s agent=%s status=%s", triggerSource, triggerChannel, requestedByType, requestedByID, triggerMessageID, agentID, status)
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, completed.ProjectID, "agent_to_agent.child_run.created", "agent_run", completed.ChildRunIDs[0])
+	assertAuditEvent(t, db, completed.WorkspaceID, "agent_to_agent.child_run.created", "agent_run", completed.ChildRunIDs[0])
 }
 
 func TestCompleteAgentRunSelfTriggerSkipped(t *testing.T) {
@@ -1563,7 +1550,7 @@ func TestCompleteAgentRunSelfTriggerSkipped(t *testing.T) {
 		t.Fatalf("expected self trigger skip, got %+v", completed)
 	}
 
-	assertNoChildRuns(t, db, completed.MessageID, ids.BackendProjectAgentID)
+	assertNoChildRuns(t, db, completed.MessageID, ids.BackendAgentID)
 }
 
 func TestCompleteAgentRunDuplicateTargetSkipped(t *testing.T) {
@@ -1594,7 +1581,7 @@ func TestCompleteAgentRunDuplicateTargetSkipped(t *testing.T) {
 	}
 
 	var childRuns int
-	if err := db.QueryRow(ctx, `select count(*) from agent_runs where trigger_message_id = $1 and project_agent_id = $2`, completed.MessageID, ids.TestProjectAgentID).Scan(&childRuns); err != nil {
+	if err := db.QueryRow(ctx, `select count(*) from agent_runs where trigger_message_id = $1 and agent_id = $2`, completed.MessageID, ids.TestAgentID).Scan(&childRuns); err != nil {
 		t.Fatal(err)
 	}
 	if childRuns != 1 {
@@ -1760,7 +1747,7 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 
 	runtimeID := newID()
 	managedModelID := "00000000-0000-0000-0000-00000000d0d1"
-	projectAgentConfig := fmt.Sprintf(
+	agentConfig := fmt.Sprintf(
 		`{"daemon_mode":"local","agent_kind":"opencode","device_id":"%s","work_dir":"/Users/test/work/parsar","model_id":"%s"}`,
 		runtimeID,
 		managedModelID,
@@ -1779,15 +1766,15 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 		t.Fatalf("seed run detail runtime: %v", err)
 	}
 	if _, err := db.Exec(ctx,
-		`update project_agents set config = $2::jsonb where id = $1::uuid`,
-		completed.ProjectAgentID, projectAgentConfig,
+		`update agents set config = $2::jsonb where id = $1::uuid`,
+		completed.AgentID, agentConfig,
 	); err != nil {
-		t.Fatalf("seed project agent runtime config: %v", err)
+		t.Fatalf("seed agent runtime config: %v", err)
 	}
 	if _, err := db.Exec(ctx,
 		`insert into connector_session_bindings(conversation_id, connector_type, binding_key, upstream_session_id, metadata, created_at, last_active_at)
 		 values ($1, 'agent_daemon', $2, $3, '{"agent_kind":"claude_code","work_dir":"/binding/workdir","sandbox_id":"sbx-known"}'::jsonb, $4, $4)`,
-		completed.ConversationID, completed.ProjectAgentID, runtimeID, now,
+		completed.ConversationID, completed.AgentID, runtimeID, now,
 	); err != nil {
 		t.Fatalf("seed connector binding metadata: %v", err)
 	}
@@ -1905,10 +1892,10 @@ func TestRecordAgentRunExecutionSnapshotFreezesRuntimeRead(t *testing.T) {
 		t.Fatalf("mutate runtime after snapshot: %v", err)
 	}
 	if _, err := db.Exec(ctx,
-		`update project_agents
+		`update agents
 		 set config = '{"daemon_mode":"sandbox","agent_kind":"claude_code","device_id":"00000000-0000-0000-0000-00000000aaaa","work_dir":"/mutated/workdir","model_id":"00000000-0000-0000-0000-00000000bbbb"}'::jsonb
 		 where id = $1::uuid`,
-		ids.BackendProjectAgentID,
+		ids.BackendAgentID,
 	); err != nil {
 		t.Fatalf("mutate project agent config after snapshot: %v", err)
 	}
@@ -1962,7 +1949,7 @@ func TestRecordAgentRunExecutionSnapshotFreezesRuntimeRead(t *testing.T) {
 	}
 }
 
-func TestListProjectUsageLogsUnknownProject(t *testing.T) {
+func TestListWorkspaceUsageLogsUnknownWorkspace(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -1970,13 +1957,13 @@ func TestListProjectUsageLogsUnknownProject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := store.ListProjectUsageLogs(ctx, "00000000-0000-0000-0000-000000099999", "", 10)
-	if !errors.Is(err, ErrUnknownProject) {
-		t.Fatalf("expected ErrUnknownProject, got %v", err)
+	_, err := store.ListWorkspaceUsageLogs(ctx, "00000000-0000-0000-0000-000000099999", "", 10)
+	if !errors.Is(err, ErrUnknownWorkspace) {
+		t.Fatalf("expected ErrUnknownWorkspace, got %v", err)
 	}
 }
 
-func TestListProjectAgentRunsFiltersByStatus(t *testing.T) {
+func TestListWorkspaceAgentRunsFiltersByStatus(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -1998,7 +1985,7 @@ func TestListProjectAgentRunsFiltersByStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	queued, err := store.ListProjectAgentRuns(ctx, ids.ProjectID, []string{"queued"}, 100, 0)
+	queued, err := store.ListWorkspaceAgentRuns(ctx, ids.WorkspaceID, []string{"queued"}, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2009,7 +1996,7 @@ func TestListProjectAgentRunsFiltersByStatus(t *testing.T) {
 		t.Fatalf("expected total=1 for queued filter, got %d", queued.Total)
 	}
 
-	completed, err := store.ListProjectAgentRuns(ctx, ids.ProjectID, []string{"completed"}, 100, 0)
+	completed, err := store.ListWorkspaceAgentRuns(ctx, ids.WorkspaceID, []string{"completed"}, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2018,7 +2005,7 @@ func TestListProjectAgentRunsFiltersByStatus(t *testing.T) {
 	}
 
 	// Union filter (running ∨ queued) keeps queued only; completed is excluded.
-	union, err := store.ListProjectAgentRuns(ctx, ids.ProjectID, []string{"running", "queued"}, 100, 0)
+	union, err := store.ListWorkspaceAgentRuns(ctx, ids.WorkspaceID, []string{"running", "queued"}, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2030,7 +2017,7 @@ func TestListProjectAgentRunsFiltersByStatus(t *testing.T) {
 	}
 
 	// nil statuses = no filter; verify DESC ordering and pagination.
-	first, err := store.ListProjectAgentRuns(ctx, ids.ProjectID, nil, 1, 0)
+	first, err := store.ListWorkspaceAgentRuns(ctx, ids.WorkspaceID, nil, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2040,7 +2027,7 @@ func TestListProjectAgentRunsFiltersByStatus(t *testing.T) {
 	if first.Total != 2 {
 		t.Fatalf("expected total=2 across both rows, got %d", first.Total)
 	}
-	second, err := store.ListProjectAgentRuns(ctx, ids.ProjectID, nil, 1, 1)
+	second, err := store.ListWorkspaceAgentRuns(ctx, ids.WorkspaceID, nil, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2128,7 +2115,7 @@ func TestCompleteAgentRunRejectsUnknownRun(t *testing.T) {
 	}
 }
 
-func TestCompleteAgentRunRejectsInvalidProjectAgentRelation(t *testing.T) {
+func TestCompleteAgentRunRejectsInvalidAgentRelation(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2145,13 +2132,13 @@ func TestCompleteAgentRunRejectsInvalidProjectAgentRelation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(ctx, `update project_agents set status = 'disabled' where id = (select project_agent_id from agent_runs where id = $1)`, created.RunIDs[0]); err != nil {
+	if _, err := db.Exec(ctx, `update agents set status = 'disabled' where id = (select agent_id from agent_runs where id = $1)`, created.RunIDs[0]); err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0]})
-	if !errors.Is(err, ErrInvalidProjectAgent) {
-		t.Fatalf("expected ErrInvalidProjectAgent, got %v", err)
+	if !errors.Is(err, ErrInvalidAgent) {
+		t.Fatalf("expected ErrInvalidAgent, got %v", err)
 	}
 
 	var outputMessageID pgtype.Text
@@ -2233,11 +2220,9 @@ func resetTestDB(t *testing.T, db *pgxpool.Pool) {
 			messages,
 			conversations,
 			gateway_sessions,
-			project_agents,
 			agents,
 			models,
 			secrets,
-			projects,
 			workspace_members,
 			workspaces,
 			auth_identities,
@@ -2276,22 +2261,22 @@ func assertMessageAndRuns(t *testing.T, db *pgxpool.Pool, messageID string, expe
 	}
 }
 
-func assertNoChildRuns(t *testing.T, db *pgxpool.Pool, triggerMessageID string, projectAgentID string) {
+func assertNoChildRuns(t *testing.T, db *pgxpool.Pool, triggerMessageID string, agentID string) {
 	t.Helper()
 	var childRuns int
-	if err := db.QueryRow(context.Background(), `select count(*) from agent_runs where trigger_message_id = $1 and project_agent_id = $2`, triggerMessageID, projectAgentID).Scan(&childRuns); err != nil {
+	if err := db.QueryRow(context.Background(), `select count(*) from agent_runs where trigger_message_id = $1 and agent_id = $2`, triggerMessageID, agentID).Scan(&childRuns); err != nil {
 		t.Fatal(err)
 	}
 	if childRuns != 0 {
-		t.Fatalf("expected no child runs for trigger_message=%s project_agent=%s, got %d", triggerMessageID, projectAgentID, childRuns)
+		t.Fatalf("expected no child runs for trigger_message=%s agent=%s, got %d", triggerMessageID, agentID, childRuns)
 	}
 }
 
-func assertAuditEventCount(t *testing.T, db *pgxpool.Pool, projectID string, targetType string, want int) {
+func assertAuditEventCount(t *testing.T, db *pgxpool.Pool, workspaceID string, targetType string, want int) {
 	t.Helper()
 	ctx := context.Background()
-	query := `select count(*) from audit_records where project_id = $1::uuid`
-	args := []any{projectID}
+	query := `select count(*) from audit_records where workspace_id = $1::uuid`
+	args := []any{workspaceID}
 	if targetType != "" {
 		query += ` and target_type = $2`
 		args = append(args, targetType)
@@ -2301,21 +2286,21 @@ func assertAuditEventCount(t *testing.T, db *pgxpool.Pool, projectID string, tar
 		t.Fatal(err)
 	}
 	if count != want {
-		t.Fatalf("expected %d audit events for project=%s target_type=%q, got %d", want, projectID, targetType, count)
+		t.Fatalf("expected %d audit events for project=%s target_type=%q, got %d", want, workspaceID, targetType, count)
 	}
 }
 
-func assertAuditEvent(t *testing.T, db *pgxpool.Pool, projectID string, eventType string, targetType string, targetID string) {
+func assertAuditEvent(t *testing.T, db *pgxpool.Pool, workspaceID string, eventType string, targetType string, targetID string) {
 	t.Helper()
 	var count int
 	if err := db.QueryRow(context.Background(), `
 		select count(*)
 		from audit_records
-		where project_id = $1::uuid
+		where workspace_id = $1::uuid
 			and event_type = $2
 			and target_type = $3
 			and target_id = $4::uuid
-	`, projectID, eventType, targetType, targetID).Scan(&count); err != nil {
+	`, workspaceID, eventType, targetType, targetID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -2323,17 +2308,17 @@ func assertAuditEvent(t *testing.T, db *pgxpool.Pool, projectID string, eventTyp
 	}
 }
 
-func assertAuditMetadata(t *testing.T, db *pgxpool.Pool, projectID string, eventType string, key string, want string) {
+func assertAuditMetadata(t *testing.T, db *pgxpool.Pool, workspaceID string, eventType string, key string, want string) {
 	t.Helper()
 	var got string
 	if err := db.QueryRow(context.Background(), `
 		select payload->>$3
 		from audit_records
-		where project_id = $1::uuid
+		where workspace_id = $1::uuid
 			and event_type = $2
 		order by occurred_at desc, id desc
 		limit 1
-	`, projectID, eventType, key).Scan(&got); err != nil {
+	`, workspaceID, eventType, key).Scan(&got); err != nil {
 		t.Fatal(err)
 	}
 	if got != want {
@@ -2341,9 +2326,9 @@ func assertAuditMetadata(t *testing.T, db *pgxpool.Pool, projectID string, event
 	}
 }
 
-func assertAuditMetadataOmitsSensitiveText(t *testing.T, db *pgxpool.Pool, projectID string, forbidden ...string) {
+func assertAuditMetadataOmitsSensitiveText(t *testing.T, db *pgxpool.Pool, workspaceID string, forbidden ...string) {
 	t.Helper()
-	rows, err := db.Query(context.Background(), `select payload::text from audit_records where project_id = $1::uuid`, projectID)
+	rows, err := db.Query(context.Background(), `select payload::text from audit_records where workspace_id = $1::uuid`, workspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2364,7 +2349,7 @@ func assertAuditMetadataOmitsSensitiveText(t *testing.T, db *pgxpool.Pool, proje
 	}
 }
 
-func TestConfigureProjectAgentProfileChecksModelStatus(t *testing.T) {
+func TestConfigureAgentProfileChecksModelStatus(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2387,16 +2372,16 @@ func TestConfigureProjectAgentProfileChecksModelStatus(t *testing.T) {
 	}
 
 	// Active model should succeed.
-	if _, err := store.ConfigureProjectAgentProfile(ctx, ConfigureProjectAgentProfileInput{
-		ProjectAgentID: ids.BackendProjectAgentID,
-		ModelID:        model.ID,
+	if _, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
+		AgentID: ids.BackendAgentID,
+		ModelID: model.ID,
 	}); err != nil {
 		t.Fatalf("expected active model to be accepted, got %v", err)
 	}
 
-	if _, err := store.ConfigureProjectAgentProfile(ctx, ConfigureProjectAgentProfileInput{
-		ProjectAgentID: ids.BackendProjectAgentID,
-		ModelID:        "00000000-0000-0000-0000-000000099999",
+	if _, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
+		AgentID: ids.BackendAgentID,
+		ModelID: "00000000-0000-0000-0000-000000099999",
 	}); !errors.Is(err, ErrUnknownModel) {
 		t.Fatalf("expected ErrUnknownModel for missing model, got %v", err)
 	}
@@ -2404,9 +2389,9 @@ func TestConfigureProjectAgentProfileChecksModelStatus(t *testing.T) {
 	if _, err := store.DisableModel(ctx, ids.WorkspaceID, model.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ConfigureProjectAgentProfile(ctx, ConfigureProjectAgentProfileInput{
-		ProjectAgentID: ids.BackendProjectAgentID,
-		ModelID:        model.ID,
+	if _, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
+		AgentID: ids.BackendAgentID,
+		ModelID: model.ID,
 	}); !errors.Is(err, ErrModelDisabled) {
 		t.Fatalf("expected ErrModelDisabled for disabled model, got %v", err)
 	}
@@ -2506,7 +2491,7 @@ func TestCompleteAgentRunSkipsTranscriptWhenAlreadyClean(t *testing.T) {
 	}
 }
 
-func TestCreateProjectConversationCreatesActiveWebConversation(t *testing.T) {
+func TestCreateWorkspaceConversationCreatesActiveWebConversation(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2515,15 +2500,15 @@ func TestCreateProjectConversationCreatesActiveWebConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID: ids.ProjectID,
-		Title:     "  排查 API 报错  ",
-		Metadata:  map[string]any{"source": "demo"},
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID: ids.WorkspaceID,
+		Title:       "  排查 API 报错  ",
+		Metadata:    map[string]any{"source": "demo"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if conv.ID == "" || conv.ProjectID != ids.ProjectID {
+	if conv.ID == "" || conv.WorkspaceID != ids.WorkspaceID {
 		t.Fatalf("unexpected conversation row: %+v", conv)
 	}
 	if conv.Title != "排查 API 报错" {
@@ -2539,7 +2524,7 @@ func TestCreateProjectConversationCreatesActiveWebConversation(t *testing.T) {
 		t.Fatalf("expected metadata persisted, got %+v", conv.Metadata)
 	}
 
-	roundtrip, err := store.GetProjectConversation(ctx, conv.ID)
+	roundtrip, err := store.GetConversation(ctx, conv.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2556,17 +2541,16 @@ func TestRuntimeErrorSystemMessagePersistsStructuredPayload(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "Runtime credential failure",
-		PrimaryAgentID: ids.ProductProjectAgentID,
+		PrimaryAgentID: ids.ProductAgentID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	messageID, err := store.CreateRuntimeErrorSystemMessage(ctx, CreateRuntimeErrorSystemMessageInput{
 		WorkspaceID:    ids.WorkspaceID,
-		ProjectID:      ids.ProjectID,
 		AgentID:        ids.ProductAgentID,
 		RunID:          "00000000-0000-0000-0000-0000000000aa",
 		ConversationID: conv.ID,
@@ -2598,7 +2582,7 @@ func TestRuntimeErrorSystemMessagePersistsStructuredPayload(t *testing.T) {
 	}
 }
 
-func TestCreateProjectConversationDefaultsAndValidates(t *testing.T) {
+func TestCreateWorkspaceConversationDefaultsAndValidates(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2607,7 +2591,7 @@ func TestCreateProjectConversationDefaultsAndValidates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{ProjectID: ids.ProjectID})
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{WorkspaceID: ids.WorkspaceID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2618,16 +2602,16 @@ func TestCreateProjectConversationDefaultsAndValidates(t *testing.T) {
 		t.Fatalf("expected default surface=web form=thread, got surface=%q form=%q", conv.Surface, conv.Form)
 	}
 
-	if _, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{ProjectID: ids.ProjectID, Surface: "bogus"}); err == nil {
+	if _, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{WorkspaceID: ids.WorkspaceID, Surface: "bogus"}); err == nil {
 		t.Fatal("expected invalid surface to be rejected")
 	}
 
-	if _, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{ProjectID: "00000000-0000-0000-0000-000000000000"}); !errors.Is(err, ErrUnknownProject) {
-		t.Fatalf("expected ErrUnknownProject for missing project, got %v", err)
+	if _, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{WorkspaceID: "00000000-0000-0000-0000-000000000000"}); !errors.Is(err, ErrUnknownWorkspace) {
+		t.Fatalf("expected ErrUnknownWorkspace for missing project, got %v", err)
 	}
 }
 
-func TestCreateProjectConversationBindsPrimaryAgent(t *testing.T) {
+func TestCreateWorkspaceConversationBindsPrimaryAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2636,41 +2620,41 @@ func TestCreateProjectConversationBindsPrimaryAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "评估文件附件功能",
-		PrimaryAgentID: ids.BackendProjectAgentID,
+		PrimaryAgentID: ids.BackendAgentID,
 		Metadata:       map[string]any{"source": "demo"},
 	})
 	if err != nil {
 		t.Fatalf("create conversation with primary agent: %v", err)
 	}
-	if got := conv.Metadata["primary_agent_id"]; got != ids.BackendProjectAgentID {
-		t.Fatalf("expected metadata.primary_agent_id=%s, got %v", ids.BackendProjectAgentID, got)
+	if got := conv.Metadata["primary_agent_id"]; got != ids.BackendAgentID {
+		t.Fatalf("expected metadata.primary_agent_id=%s, got %v", ids.BackendAgentID, got)
 	}
 	if conv.Metadata["source"] != "demo" {
 		t.Fatalf("expected metadata.source preserved alongside primary_agent_id, got %+v", conv.Metadata)
 	}
-	if conv.PrimaryAgentID != ids.BackendProjectAgentID {
-		t.Fatalf("expected derived PrimaryAgentID=%s, got %q", ids.BackendProjectAgentID, conv.PrimaryAgentID)
+	if conv.PrimaryAgentID != ids.BackendAgentID {
+		t.Fatalf("expected derived PrimaryAgentID=%s, got %q", ids.BackendAgentID, conv.PrimaryAgentID)
 	}
 	if conv.PrimaryAgentName == "" {
 		t.Fatalf("expected derived PrimaryAgentName non-empty for active backend agent, got empty")
 	}
 
-	roundtrip, err := store.GetProjectConversation(ctx, conv.ID)
+	roundtrip, err := store.GetConversation(ctx, conv.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := roundtrip.Metadata["primary_agent_id"]; got != ids.BackendProjectAgentID {
-		t.Fatalf("expected roundtrip metadata.primary_agent_id=%s, got %v", ids.BackendProjectAgentID, got)
+	if got := roundtrip.Metadata["primary_agent_id"]; got != ids.BackendAgentID {
+		t.Fatalf("expected roundtrip metadata.primary_agent_id=%s, got %v", ids.BackendAgentID, got)
 	}
-	if roundtrip.PrimaryAgentID != ids.BackendProjectAgentID || roundtrip.PrimaryAgentName == "" {
+	if roundtrip.PrimaryAgentID != ids.BackendAgentID || roundtrip.PrimaryAgentName == "" {
 		t.Fatalf("expected roundtrip derived fields populated, got id=%q name=%q", roundtrip.PrimaryAgentID, roundtrip.PrimaryAgentName)
 	}
 }
 
-func TestCreateProjectConversationRejectsForeignAgent(t *testing.T) {
+func TestCreateWorkspaceConversationRejectsForeignAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2679,29 +2663,29 @@ func TestCreateProjectConversationRejectsForeignAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Random UUID — not a project_agent in this project.
-	_, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	// Random UUID — not a agent in this project.
+	_, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "should fail",
 		PrimaryAgentID: "00000000-0000-0000-0000-0000000000ff",
 	})
 	if !errors.Is(err, ErrUnknownMention) {
-		t.Fatalf("expected ErrUnknownMention for foreign project_agent, got %v", err)
+		t.Fatalf("expected ErrUnknownMention for foreign agent, got %v", err)
 	}
 
-	_, err = store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	_, err = store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "should fail",
 		PrimaryAgentID: "not-a-uuid",
 	})
-	if !errors.Is(err, ErrInvalidProjectInput) {
-		t.Fatalf("expected ErrInvalidProjectInput for malformed primary_agent_id, got %v", err)
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for malformed primary_agent_id, got %v", err)
 	}
 }
 
-func TestCreateProjectConversationRejectsReservedMetadataKey(t *testing.T) {
+func TestCreateWorkspaceConversationRejectsReservedMetadataKey(t *testing.T) {
 	// primary_agent_id is server-written only; callers must not bypass
-	// project_agent validation by stuffing it into metadata.
+	// agent validation by stuffing it into metadata.
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2710,29 +2694,29 @@ func TestCreateProjectConversationRejectsReservedMetadataKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID: ids.ProjectID,
-		Title:     "should reject metadata bypass",
-		Metadata:  map[string]any{"primary_agent_id": ids.BackendProjectAgentID},
+	_, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID: ids.WorkspaceID,
+		Title:       "should reject metadata bypass",
+		Metadata:    map[string]any{"primary_agent_id": ids.BackendAgentID},
 	})
-	if !errors.Is(err, ErrInvalidProjectInput) {
-		t.Fatalf("expected ErrInvalidProjectInput for metadata.primary_agent_id, got %v", err)
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for metadata.primary_agent_id, got %v", err)
 	}
 
 	// Also rejected when paired with a valid top-level agent_id — the
 	// metadata key alone is the violation.
-	_, err = store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	_, err = store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "should reject metadata bypass even with top-level",
-		PrimaryAgentID: ids.BackendProjectAgentID,
+		PrimaryAgentID: ids.BackendAgentID,
 		Metadata:       map[string]any{"primary_agent_id": "anything", "source": "demo"},
 	})
-	if !errors.Is(err, ErrInvalidProjectInput) {
-		t.Fatalf("expected ErrInvalidProjectInput for metadata.primary_agent_id even with top-level agent_id, got %v", err)
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for metadata.primary_agent_id even with top-level agent_id, got %v", err)
 	}
 }
 
-func TestListProjectConversationsOrdersByRecentActivity(t *testing.T) {
+func TestListWorkspaceConversationsOrdersByRecentActivity(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2743,9 +2727,9 @@ func TestListProjectConversationsOrdersByRecentActivity(t *testing.T) {
 
 	// Seeded Demo Group has no messages yet. A fresh empty conversation
 	// should sort by created_at desc against Demo Group.
-	older, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID: ids.ProjectID,
-		Title:     "Older Empty",
+	older, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID: ids.WorkspaceID,
+		Title:       "Older Empty",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -2758,7 +2742,7 @@ func TestListProjectConversationsOrdersByRecentActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := store.ListProjectConversations(ctx, ids.ProjectID, "", 50)
+	items, err := store.ListWorkspaceConversations(ctx, ids.WorkspaceID, "", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2787,13 +2771,13 @@ func TestListProjectConversationsOrdersByRecentActivity(t *testing.T) {
 	}
 }
 
-func TestListProjectConversationsRejectsUnknownProject(t *testing.T) {
+func TestListWorkspaceConversationsRejectsUnknownWorkspace(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
 
-	if _, err := store.ListProjectConversations(ctx, "00000000-0000-0000-0000-000000000000", "", 10); !errors.Is(err, ErrUnknownProject) {
-		t.Fatalf("expected ErrUnknownProject, got %v", err)
+	if _, err := store.ListWorkspaceConversations(ctx, "00000000-0000-0000-0000-000000000000", "", 10); !errors.Is(err, ErrUnknownWorkspace) {
+		t.Fatalf("expected ErrUnknownWorkspace, got %v", err)
 	}
 }
 
@@ -2807,9 +2791,9 @@ func TestUpdateConversationTitleRenamesActiveConversation(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID: ids.ProjectID,
-		Title:     "原标题",
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID: ids.WorkspaceID,
+		Title:       "原标题",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -2817,15 +2801,15 @@ func TestUpdateConversationTitleRenamesActiveConversation(t *testing.T) {
 	if err := store.UpdateConversationTitle(ctx, conv.ID, "  新标题  "); err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	roundtrip, err := store.GetProjectConversation(ctx, conv.ID)
+	roundtrip, err := store.GetConversation(ctx, conv.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if roundtrip.Title != "新标题" {
 		t.Fatalf("title after rename = %q, want %q (trimmed)", roundtrip.Title, "新标题")
 	}
-	if err := store.UpdateConversationTitle(ctx, conv.ID, "   "); !errors.Is(err, ErrInvalidProjectInput) {
-		t.Fatalf("empty title: want ErrInvalidProjectInput, got %v", err)
+	if err := store.UpdateConversationTitle(ctx, conv.ID, "   "); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("empty title: want ErrInvalidInput, got %v", err)
 	}
 	if err := store.UpdateConversationTitle(ctx, "00000000-0000-0000-0000-000000000000", "x"); !errors.Is(err, ErrUnknownConversation) {
 		t.Fatalf("unknown conv: want ErrUnknownConversation, got %v", err)
@@ -2842,15 +2826,15 @@ func TestSoftDeleteConversationHidesFromUserSurfaces(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID: ids.ProjectID,
-		Title:     "to be deleted",
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID: ids.WorkspaceID,
+		Title:       "to be deleted",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Sanity: list includes it before delete.
-	before, err := store.ListProjectConversations(ctx, ids.ProjectID, "", 100)
+	before, err := store.ListWorkspaceConversations(ctx, ids.WorkspaceID, "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2869,10 +2853,10 @@ func TestSoftDeleteConversationHidesFromUserSurfaces(t *testing.T) {
 		t.Fatalf("first delete: %v", err)
 	}
 	// Row stays for FK integrity but is invisible to user-facing paths.
-	if _, err := store.GetProjectConversation(ctx, conv.ID); !errors.Is(err, ErrUnknownConversation) {
+	if _, err := store.GetConversation(ctx, conv.ID); !errors.Is(err, ErrUnknownConversation) {
 		t.Fatalf("get after delete: want ErrUnknownConversation, got %v", err)
 	}
-	after, err := store.ListProjectConversations(ctx, ids.ProjectID, "", 100)
+	after, err := store.ListWorkspaceConversations(ctx, ids.WorkspaceID, "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2889,7 +2873,7 @@ func TestSoftDeleteConversationHidesFromUserSurfaces(t *testing.T) {
 	}
 }
 
-func TestListProjectConversationsFiltersByAgent(t *testing.T) {
+func TestListWorkspaceConversationsFiltersByAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
@@ -2898,25 +2882,25 @@ func TestListProjectConversationsFiltersByAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Two new conversations bound to two different project_agents.
-	boundBackend, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	// Two new conversations bound to two different agents.
+	boundBackend, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "Backend bound conv",
-		PrimaryAgentID: ids.BackendProjectAgentID,
+		PrimaryAgentID: ids.BackendAgentID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	boundProduct, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	boundProduct, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "Product bound conv",
-		PrimaryAgentID: ids.ProductProjectAgentID,
+		PrimaryAgentID: ids.ProductAgentID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	items, err := store.ListProjectConversations(ctx, ids.ProjectID, ids.BackendProjectAgentID, 50)
+	items, err := store.ListWorkspaceConversations(ctx, ids.WorkspaceID, ids.BackendAgentID, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2929,8 +2913,8 @@ func TestListProjectConversationsFiltersByAgent(t *testing.T) {
 	for _, item := range items {
 		if item.ID == boundBackend.ID {
 			foundBackend = true
-			if item.PrimaryAgentID != ids.BackendProjectAgentID {
-				t.Fatalf("expected list item PrimaryAgentID=%s, got %q", ids.BackendProjectAgentID, item.PrimaryAgentID)
+			if item.PrimaryAgentID != ids.BackendAgentID {
+				t.Fatalf("expected list item PrimaryAgentID=%s, got %q", ids.BackendAgentID, item.PrimaryAgentID)
 			}
 			if item.PrimaryAgentName == "" {
 				t.Fatalf("expected list item PrimaryAgentName non-empty, got empty")
@@ -2941,7 +2925,7 @@ func TestListProjectConversationsFiltersByAgent(t *testing.T) {
 		t.Fatalf("filter agent=backend missed the backend-bound conv %s", boundBackend.ID)
 	}
 
-	all, err := store.ListProjectConversations(ctx, ids.ProjectID, "", 50)
+	all, err := store.ListWorkspaceConversations(ctx, ids.WorkspaceID, "", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2958,8 +2942,8 @@ func TestListProjectConversationsFiltersByAgent(t *testing.T) {
 		t.Fatalf("empty filter missed convs: backend=%v product=%v", seenBackend, seenProduct)
 	}
 
-	if _, err := store.ListProjectConversations(ctx, ids.ProjectID, "not-a-uuid", 50); !errors.Is(err, ErrInvalidProjectInput) {
-		t.Fatalf("expected ErrInvalidProjectInput for malformed agent_id, got %v", err)
+	if _, err := store.ListWorkspaceConversations(ctx, ids.WorkspaceID, "not-a-uuid", 50); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for malformed agent_id, got %v", err)
 	}
 }
 
@@ -3002,126 +2986,6 @@ func TestListUserWorkspacesEmptyForUnknownUser(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Fatalf("expected empty list for unknown user, got %d: %+v", len(rows), rows)
-	}
-}
-
-func TestListWorkspaceProjectsReturnsSeededProject(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-
-	rows, err := store.ListWorkspaceProjects(ctx, ids.WorkspaceID, ids.UserID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("expected exactly 1 project in seed workspace, got %d: %+v", len(rows), rows)
-	}
-	row := rows[0]
-	if row.ID != ids.ProjectID {
-		t.Fatalf("expected project id %s, got %s", ids.ProjectID, row.ID)
-	}
-	if row.Name != "Demo Project" || row.Slug != "demo-project" || row.Status != "active" {
-		t.Fatalf("expected name/slug/status, got %+v", row)
-	}
-	if row.WorkspaceID != ids.WorkspaceID {
-		t.Fatalf("expected workspace_id %s, got %s", ids.WorkspaceID, row.WorkspaceID)
-	}
-}
-
-func TestListWorkspaceProjectsRejectsUnknownWorkspace(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-
-	if _, err := store.ListWorkspaceProjects(ctx, "00000000-0000-0000-0000-0000000000aa", "00000000-0000-0000-0000-000000000001", 10); !errors.Is(err, ErrUnknownWorkspace) {
-		t.Fatalf("expected ErrUnknownWorkspace, got %v", err)
-	}
-}
-
-// TestListWorkspaceProjectsHidesNonWorkspaceMembers: the SQL join on
-// workspace_members must drop every project for a caller who is not an
-// active member of the workspace.
-func TestListWorkspaceProjectsHidesNonWorkspaceMembers(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-
-	// Outsider user exists but has no workspace_members row.
-	outsiderID := "00000000-0000-0000-0000-0000000000ff"
-	if _, err := db.Exec(ctx,
-		`insert into users(id, email, name, status, created_at, updated_at) values ($1::uuid, 'outsider@example.com', 'Outsider', 'active', now(), now())`,
-		outsiderID); err != nil {
-		t.Fatal(err)
-	}
-
-	rows, err := st.ListWorkspaceProjects(ctx, ids.WorkspaceID, outsiderID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 0 {
-		t.Fatalf("expected non-workspace-member to see 0 projects, got %d: %+v", len(rows), rows)
-	}
-
-	// Sanity: the owner still sees the seed project.
-	rows, err = st.ListWorkspaceProjects(ctx, ids.WorkspaceID, ids.UserID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 || rows[0].ID != ids.ProjectID {
-		t.Fatalf("expected owner to see seed project, got %+v", rows)
-	}
-}
-
-// TestListWorkspaceProjectsAnyMemberSeesAll: under the workspace-only
-// membership model every active workspace member sees every project —
-// admin, plain member, viewer alike.
-func TestListWorkspaceProjectsAnyMemberSeesAll(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
-
-	added, err := st.AddWorkspaceMember(ctx, AddWorkspaceMemberInput{
-		WorkspaceID: ids.WorkspaceID,
-		Email:       "member@example.com",
-		Name:        "Member",
-		Role:        "member",
-		Now:         now,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Second project owned by the seed user; the plain member never
-	// touched it.
-	if _, err := st.CreateProject(ctx, CreateProjectInput{
-		WorkspaceID: ids.WorkspaceID,
-		Name:        "Second Project",
-		CreatedBy:   ids.UserID,
-		Now:         now,
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	rows, err := st.ListWorkspaceProjects(ctx, ids.WorkspaceID, added.Member.UserID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 2 {
-		t.Fatalf("expected workspace member to see 2 projects, got %d: %+v", len(rows), rows)
 	}
 }
 
@@ -3303,7 +3167,7 @@ func TestArchiveWorkspaceRejectsMarketplaceDependents(t *testing.T) {
 		{`insert into workspace_members(id, workspace_id, user_id, role, created_at, updated_at) values (gen_random_uuid(), $1, $2, 'admin', now(), now())`, []any{sourceWorkspaceID, ids.UserID}},
 		{`insert into capability(id, workspace_id, type, name, description, visibility, status, creator_id, created_at, updated_at) values ($1, $2, 'mcp', 'Shared Capability', '', 'public', 'active', $3, now(), now())`, []any{capabilityID, sourceWorkspaceID, ids.UserID}},
 		{`insert into capability_version(id, capability_id, version, content, creator_id, created_at) values ($1, $2, '1.0.0', '{}'::jsonb, $3, now())`, []any{versionID, capabilityID, ids.UserID}},
-		{`insert into agent_capabilities(id, project_agent_id, capability_id, capability_version_id, enabled, created_at, updated_at) values (gen_random_uuid(), $1, $2, $3, true, now(), now())`, []any{ids.BackendProjectAgentID, capabilityID, versionID}},
+		{`insert into agent_capabilities(id, agent_id, capability_id, capability_version_id, enabled, created_at, updated_at) values (gen_random_uuid(), $1, $2, $3, true, now(), now())`, []any{ids.BackendAgentID, capabilityID, versionID}},
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(ctx, stmt.sql, stmt.args...); err != nil {
@@ -3318,142 +3182,6 @@ func TestArchiveWorkspaceRejectsMarketplaceDependents(t *testing.T) {
 	})
 	if !errors.Is(err, ErrMarketplaceDependents) {
 		t.Fatalf("expected ErrMarketplaceDependents, got %v", err)
-	}
-}
-
-func TestCreateProjectHappyPath(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-
-	result, err := st.CreateProject(ctx, CreateProjectInput{
-		WorkspaceID: ids.WorkspaceID,
-		Name:        "Second Project",
-		Description: "another one",
-		CreatedBy:   ids.UserID,
-		Now:         time.Now().UTC(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Project.Name != "Second Project" || result.Project.Status != "active" {
-		t.Fatalf("unexpected project: %+v", result.Project)
-	}
-	if !strings.HasPrefix(result.Project.Slug, "project-") || len(result.Project.Slug) != len("project-")+12 || strings.Trim(result.Project.Slug[len("project-"):], "0123456789abcdef") != "" {
-		t.Fatalf("expected auto slug 'project-<12hex>', got %q", result.Project.Slug)
-	}
-
-	projects, err := st.ListWorkspaceProjects(ctx, ids.WorkspaceID, ids.UserID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(projects) != 2 {
-		t.Fatalf("expected 2 projects after create, got %d: %+v", len(projects), projects)
-	}
-}
-
-func TestCreateProjectWithCJKNameStillSucceeds(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-
-	result, err := st.CreateProject(ctx, CreateProjectInput{
-		WorkspaceID: ids.WorkspaceID,
-		Name:        "中文项目",
-		CreatedBy:   ids.UserID,
-		Now:         time.Now().UTC(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Project.Name != "中文项目" {
-		t.Fatalf("expected CJK name preserved, got %q", result.Project.Name)
-	}
-	if !strings.HasPrefix(result.Project.Slug, "project-") {
-		t.Fatalf("expected auto slug, got %q", result.Project.Slug)
-	}
-}
-
-func TestCreateProjectRejectsUnknownWorkspace(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-
-	if _, err := st.CreateProject(ctx, CreateProjectInput{
-		WorkspaceID: "00000000-0000-0000-0000-0000000000aa",
-		Name:        "X",
-		CreatedBy:   "00000000-0000-0000-0000-000000000001",
-		Now:         time.Now().UTC(),
-	}); !errors.Is(err, ErrUnknownWorkspace) {
-		t.Fatalf("expected ErrUnknownWorkspace, got %v", err)
-	}
-}
-
-func TestUpdateProjectRenames(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-
-	newName := "Renamed Project"
-	newDesc := "updated description"
-	row, err := st.UpdateProject(ctx, UpdateProjectInput{
-		ProjectID:   ids.ProjectID,
-		Name:        &newName,
-		Description: &newDesc,
-		ActorID:     ids.UserID,
-		Now:         time.Now().UTC(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if row.Name != newName || row.Description != newDesc {
-		t.Fatalf("expected rename, got %+v", row)
-	}
-	if row.Slug != "demo-project" {
-		t.Fatalf("expected slug unchanged, got %q", row.Slug)
-	}
-}
-
-func TestArchiveProjectSetsStatus(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
-
-	row, err := st.ArchiveProject(ctx, ArchiveProjectInput{
-		ProjectID: ids.ProjectID,
-		ActorID:   ids.UserID,
-		Now:       time.Now().UTC(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if row.Status != "archived" {
-		t.Fatalf("expected status=archived, got %q", row.Status)
-	}
-
-	// Archived project must drop out of the active list
-	projects, err := st.ListWorkspaceProjects(ctx, ids.WorkspaceID, ids.UserID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(projects) != 0 {
-		t.Fatalf("expected 0 active projects after archive, got %d: %+v", len(projects), projects)
 	}
 }
 
@@ -3479,12 +3207,12 @@ func TestGenerateAutoSlugShape(t *testing.T) {
 	}
 }
 
-func TestGetProjectConversationRejectsUnknown(t *testing.T) {
+func TestGetConversationRejectsUnknown(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
 
-	if _, err := store.GetProjectConversation(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrUnknownConversation) {
+	if _, err := store.GetConversation(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrUnknownConversation) {
 		t.Fatalf("expected ErrUnknownConversation, got %v", err)
 	}
 }
@@ -3544,7 +3272,7 @@ func TestUserFacingReasonFromMetadataPrefersExplicit(t *testing.T) {
 	}
 }
 
-func TestDisableEnableProjectAgentRoundtripGuardsMentions(t *testing.T) {
+func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
@@ -3553,23 +3281,23 @@ func TestDisableEnableProjectAgentRoundtripGuardsMentions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	disabled, err := store.DisableProjectAgent(ctx, ids.BackendProjectAgentID)
+	disabled, err := store.DisableAgent(ctx, ids.BackendAgentID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if disabled.Status != "disabled" || disabled.ProjectAgentID != ids.BackendProjectAgentID {
+	if disabled.Status != "disabled" || disabled.AgentID != ids.BackendAgentID {
 		t.Fatalf("unexpected disable result: %+v", disabled)
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, ids.ProjectID, "project_agent.disabled", "project_agent", ids.BackendProjectAgentID)
+	assertAuditEvent(t, db, ids.WorkspaceID, "agent.disabled", "agent", ids.BackendAgentID)
 
 	// listing active project agents should drop the disabled one
-	agents, err := store.ListProjectEnabledAgents(ctx, ids.ProjectID)
+	agents, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, agent := range agents {
-		if agent.ProjectAgentID == ids.BackendProjectAgentID {
+		if agent.AgentID == ids.BackendAgentID {
 			t.Fatalf("expected disabled project agent excluded from list, got %+v", agent)
 		}
 	}
@@ -3587,7 +3315,7 @@ func TestDisableEnableProjectAgentRoundtripGuardsMentions(t *testing.T) {
 	}
 
 	// re-enable should restore matchability
-	enabled, err := store.EnableProjectAgent(ctx, ids.BackendProjectAgentID)
+	enabled, err := store.EnableAgent(ctx, ids.BackendAgentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3595,7 +3323,7 @@ func TestDisableEnableProjectAgentRoundtripGuardsMentions(t *testing.T) {
 		t.Fatalf("expected enable result active, got %+v", enabled)
 	}
 	flushAudit(t, auditIng)
-	assertAuditEvent(t, db, ids.ProjectID, "project_agent.enabled", "project_agent", ids.BackendProjectAgentID)
+	assertAuditEvent(t, db, ids.WorkspaceID, "agent.enabled", "agent", ids.BackendAgentID)
 
 	created2, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -3611,18 +3339,17 @@ func TestDisableEnableProjectAgentRoundtripGuardsMentions(t *testing.T) {
 	}
 }
 
-func TestDisableProjectAgentRejectsUnknown(t *testing.T) {
+func TestDisableAgentRejectsUnknown(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
 
-	if _, err := store.DisableProjectAgent(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrUnknownProjectAgent) {
-		t.Fatalf("expected ErrUnknownProjectAgent, got %v", err)
+	if _, err := store.DisableAgent(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrUnknownAgent) {
+		t.Fatalf("expected ErrUnknownAgent, got %v", err)
 	}
 }
 
-// assertWorkspaceAuditEvent verifies a workspace-scoped audit row exists
-// (NULL project_id, filtered separately from project-scoped events).
+// assertWorkspaceAuditEvent verifies a workspace-scoped audit row exists.
 func assertWorkspaceAuditEvent(t *testing.T, db *pgxpool.Pool, workspaceID string, eventType string, targetType string, targetID string) {
 	t.Helper()
 	var count int
@@ -3630,7 +3357,6 @@ func assertWorkspaceAuditEvent(t *testing.T, db *pgxpool.Pool, workspaceID strin
 		select count(*)
 		from audit_records
 		where workspace_id = $1::uuid
-			and project_id is null
 			and event_type = $2
 			and target_type = $3
 			and target_id = $4::uuid
@@ -3651,7 +3377,6 @@ func assertWorkspaceAuditMetadata(t *testing.T, db *pgxpool.Pool, workspaceID st
 		select payload->>$3
 		from audit_records
 		where workspace_id = $1::uuid
-			and project_id is null
 			and event_type = $2
 		order by occurred_at desc, id desc
 		limit 1
@@ -3829,10 +3554,10 @@ func TestSendUserMessageImplicitPrimaryAgentDispatchesWithoutMention(t *testing.
 		t.Fatal(err)
 	}
 
-	conv, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "1v1 implicit primary",
-		PrimaryAgentID: ids.ProductProjectAgentID,
+		PrimaryAgentID: ids.ProductAgentID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3851,11 +3576,11 @@ func TestSendUserMessageImplicitPrimaryAgentDispatchesWithoutMention(t *testing.
 	}
 
 	var paID string
-	if err := db.QueryRow(ctx, `select project_agent_id::text from agent_runs where id = $1`, sent.RunIDs[0]).Scan(&paID); err != nil {
+	if err := db.QueryRow(ctx, `select agent_id::text from agent_runs where id = $1`, sent.RunIDs[0]).Scan(&paID); err != nil {
 		t.Fatal(err)
 	}
-	if paID != ids.ProductProjectAgentID {
-		t.Fatalf("dispatched project_agent_id = %s, want %s (the bound primary)", paID, ids.ProductProjectAgentID)
+	if paID != ids.ProductAgentID {
+		t.Fatalf("dispatched agent_id = %s, want %s (the bound primary)", paID, ids.ProductAgentID)
 	}
 
 	// Explicit @-mention does not double-dispatch when the user mentions
@@ -3873,9 +3598,9 @@ func TestSendUserMessageImplicitPrimaryAgentDispatchesWithoutMention(t *testing.
 	}
 
 	// Unbound conversation + bare message → no dispatch.
-	convNoPrimary, err := store.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID: ids.ProjectID,
-		Title:     "no primary",
+	convNoPrimary, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID: ids.WorkspaceID,
+		Title:       "no primary",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3929,7 +3654,6 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Daemon Test Agent",
 		Slug:          "daemon-test-agent",
 		ConnectorType: "agent_daemon",
@@ -3943,10 +3667,10 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 		t.Fatalf("agent_daemon agents must not persist config.runtime, got %#v", created.Agent.Config)
 	}
 
-	conv, err := st.CreateProjectConversation(ctx, CreateProjectConversationInput{
-		ProjectID:      ids.ProjectID,
+	conv, err := st.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
+		WorkspaceID:    ids.WorkspaceID,
 		Title:          "daemon dispatch probe",
-		PrimaryAgentID: created.ProjectAgent.ID,
+		PrimaryAgentID: created.Agent.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3977,7 +3701,7 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 
 // TestCreateAgentDaemonRejectsRuntimeValue: agent_daemon agents have no
 // server-side runtime; passing a non-empty runtime returns
-// ErrInvalidProjectInput, and the no-runtime success path persists a
+// ErrInvalidInput, and the no-runtime success path persists a
 // config without the "runtime" key.
 func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 	db := openTestDB(t)
@@ -3991,25 +3715,23 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 	for _, badRuntime := range []string{"local", "sandbox"} {
 		_, err := st.CreateAgent(ctx, CreateAgentInput{
 			WorkspaceID:   ids.WorkspaceID,
-			ProjectID:     ids.ProjectID,
 			Name:          "daemon-bad-runtime-" + badRuntime,
 			Slug:          "daemon-bad-runtime-" + badRuntime,
 			ConnectorType: "agent_daemon",
 			Runtime:       badRuntime,
 			CreatedBy:     ids.UserID,
 		})
-		if !errors.Is(err, ErrInvalidProjectInput) {
-			t.Fatalf("CreateAgent(agent_daemon, runtime=%q) = %v, want ErrInvalidProjectInput", badRuntime, err)
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("CreateAgent(agent_daemon, runtime=%q) = %v, want ErrInvalidInput", badRuntime, err)
 		}
 	}
 
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "daemon-ok",
 		Slug:          "daemon-ok",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"device_id":   "00000000-0000-0000-0000-00000000d001",
 			"daemon_mode": "local",
 			"agent_kind":  "claude_code",
@@ -4023,14 +3745,14 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 	if _, ok := created.Agent.Config["runtime"]; ok {
 		t.Fatalf("agent_daemon config must omit runtime key, got %#v", created.Agent.Config)
 	}
-	if got := created.ProjectAgent.Config["device_id"]; got != "00000000-0000-0000-0000-00000000d001" {
-		t.Fatalf("project_agent.config device_id mismatch: got %#v", got)
+	if got := created.Agent.Config["device_id"]; got != "00000000-0000-0000-0000-00000000d001" {
+		t.Fatalf("agent.config device_id mismatch: got %#v", got)
 	}
-	if got := created.ProjectAgent.Config["daemon_mode"]; got != "local" {
-		t.Fatalf("project_agent.config daemon_mode mismatch: got %#v", got)
+	if got := created.Agent.Config["daemon_mode"]; got != "local" {
+		t.Fatalf("agent.config daemon_mode mismatch: got %#v", got)
 	}
-	if _, ok := created.ProjectAgent.Config["ignored"]; ok {
-		t.Fatalf("project_agent.config must not persist unknown daemon key: %#v", created.ProjectAgent.Config)
+	if _, ok := created.Agent.Config["ignored"]; ok {
+		t.Fatalf("agent.config must not persist unknown daemon key: %#v", created.Agent.Config)
 	}
 
 	// Persisted JSON is the ground truth — read back to make sure
@@ -4043,11 +3765,11 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 		t.Fatalf("agents.config must not contain runtime for agent_daemon, got %s", rawConfig)
 	}
 	var rawPAConfig string
-	if err := db.QueryRow(ctx, `select config::text from project_agents where id = $1::uuid`, created.ProjectAgent.ID).Scan(&rawPAConfig); err != nil {
+	if err := db.QueryRow(ctx, `select config::text from agents where id = $1::uuid`, created.Agent.ID).Scan(&rawPAConfig); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(rawPAConfig, `"device_id": "00000000-0000-0000-0000-00000000d001"`) || strings.Contains(rawPAConfig, `"ignored"`) {
-		t.Fatalf("project_agents.config did not persist only daemon keys, got %s", rawPAConfig)
+		t.Fatalf("agents.config did not persist only daemon keys, got %s", rawPAConfig)
 	}
 }
 
@@ -4128,7 +3850,7 @@ func TestCreateInboundIMMessageInitiatorUserIDShortCircuitsLookup(t *testing.T) 
 // TestResolveAgentNameForConversationReadsPrimaryAgentMetadata pins the
 // "what Agent is this conversation talking to" lookup against the
 // actual storage shape — conversations.metadata.primary_agent_id (a
-// project_agents.id) joined through to agents.name — instead of the
+// agents.id) joined through to agents.name — instead of the
 // non-existent conversations.selected_agent_id the query previously
 // referenced. The 42703 SQLSTATE the broken version surfaced in prod
 // took down the per-card header titles on every credential-form /

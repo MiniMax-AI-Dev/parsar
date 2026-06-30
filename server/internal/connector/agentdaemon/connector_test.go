@@ -135,7 +135,7 @@ func (f *fakeExecutionRecorder) Inputs() []store.RecordAgentRunExecutionSnapshot
 // newWiredHarness stands up a Registry, a Session backed by fakeConn, an
 // InMemoryBinder pre-seeded with one binding, and the Connector under
 // test.
-func newWiredHarness(t *testing.T, deviceID, conversationID, projectAgentID string) (*Connector, *gateway.Registry, *gateway.Session, *fakeConn, binding.Binder) {
+func newWiredHarness(t *testing.T, deviceID, conversationID, agentID string) (*Connector, *gateway.Registry, *gateway.Session, *fakeConn, binding.Binder) {
 	t.Helper()
 	reg := gateway.NewRegistry()
 	conn := newFakeConn()
@@ -148,7 +148,7 @@ func newWiredHarness(t *testing.T, deviceID, conversationID, projectAgentID stri
 	binder := binding.NewInMemoryBinder()
 	if err := binder.Bind(context.Background(), binding.Binding{
 		ConversationID: conversationID,
-		ProjectAgentID: projectAgentID,
+		AgentID:        agentID,
 		DeviceID:       deviceID,
 		AgentKind:      "claude_code",
 		WorkDir:        "/workspace",
@@ -163,10 +163,9 @@ func basicInput() connector.PromptInput {
 	return connector.PromptInput{
 		RunID:                 "run-1",
 		ConversationID:        "conv-1",
-		ProjectAgentID:        "pa-1",
+		AgentID:               "pa-1",
 		TriggerMessageContent: "hello",
 		AgentConfig:           map[string]any{},
-		ProjectAgentConfig:    map[string]any{},
 	}
 }
 
@@ -183,7 +182,7 @@ func TestStreamPrompt_AllowsOpenCodeWhenDeviceAdvertisesKind(t *testing.T) {
 	})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{"agent_kind": "opencode"}
+	in.AgentConfig = map[string]any{"agent_kind": "opencode"}
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
 		t.Fatalf("StreamPrompt: %v", err)
@@ -221,7 +220,7 @@ func TestStreamPrompt_RecordsExecutionSnapshotAfterAgentKindValidation(t *testin
 	})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{"agent_kind": "opencode"}
+	in.AgentConfig = map[string]any{"agent_kind": "opencode"}
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
 		t.Fatalf("StreamPrompt: %v", err)
@@ -262,7 +261,7 @@ func TestStreamPrompt_RejectsUnavailableAgentKindFromDeviceHeartbeat(t *testing.
 	})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{"agent_kind": "opencode"}
+	in.AgentConfig = map[string]any{"agent_kind": "opencode"}
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
 		t.Fatalf("StreamPrompt: %v", err)
@@ -289,7 +288,7 @@ func TestStreamPrompt_RejectsUnadvertisedAgentKindFromDeviceHeartbeat(t *testing
 	})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{"agent_kind": "opencode"}
+	in.AgentConfig = map[string]any{"agent_kind": "opencode"}
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
 		t.Fatalf("StreamPrompt: %v", err)
@@ -355,7 +354,7 @@ func TestStreamPrompt_DeviceOfflineReturnsErrorChannel(t *testing.T) {
 	reg := gateway.NewRegistry()
 	binder := binding.NewInMemoryBinder()
 	_ = binder.Bind(context.Background(), binding.Binding{
-		ConversationID: "conv-1", ProjectAgentID: "pa-1", DeviceID: "dev-offline",
+		ConversationID: "conv-1", AgentID: "pa-1", DeviceID: "dev-offline",
 		AgentKind: "claude_code",
 	})
 	c := New(Config{Registry: reg, Binder: binder})
@@ -763,7 +762,7 @@ func contains(s, substr string) bool {
 // stubSandboxProvider lets tests inject scripted Acquire/Release behaviour
 // for the connector's sandbox lazy-create path. Records every call so
 // assertions can check that Acquire fired (and only fired when the
-// project_agent was sandbox-mode).
+// agent was sandbox-mode).
 type stubSandboxProvider struct {
 	mu           sync.Mutex
 	acquireCalls int
@@ -804,7 +803,7 @@ func (s *stubSandboxProvider) SandboxRuntimeInfo(_ context.Context, _ string) (t
 func (s *stubSandboxProvider) Reap(_ context.Context) (int, error) { return 0, nil }
 
 // TestStreamPrompt_LocalModeNoBindingFallsThroughToErrorChannel: when
-// the project_agent has no binding and no configured device, the
+// the agent has no binding and no configured device, the
 // connector returns the "请绑定 Runtime" hint and the sandbox provider
 // is never asked.
 func TestStreamPrompt_LocalModeNoBindingFallsThroughToErrorChannel(t *testing.T) {
@@ -844,7 +843,7 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsConversation(t *testing.T) {
 	c := New(Config{Registry: reg, Binder: binder, Sandbox: &stubSandboxProvider{deviceID: "should-not-be-used"}})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{
+	in.AgentConfig = map[string]any{
 		"device_id":  "dev-picked",
 		"agent_kind": "claude_code",
 		"work_dir":   "/repo/parsar",
@@ -901,8 +900,8 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsConversation(t *testing.T) {
 
 // TestStreamPrompt_LocalModeConfiguredDeviceBindsWithWorkdirKey is the
 // sibling of LocalModeConfiguredDeviceBindsConversation but uses the
-// `workdir` (no underscore) key that store.ConfigureDevProjectAgentConnector
-// actually writes into project_agents.config. Locking this in keeps the
+// `workdir` (no underscore) key that store.ConfigureDevAgentConnector
+// actually writes into agents.config. Locking this in keeps the
 // "user sets work_dir once in the UI, all conversations use it" path from
 // silently breaking if someone re-tightens configuredDeviceBinding to only
 // read the snake_case alias.
@@ -920,7 +919,7 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsWithWorkdirKey(t *testing.T)
 	c := New(Config{Registry: reg, Binder: binder, Sandbox: &stubSandboxProvider{deviceID: "should-not-be-used"}})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{
+	in.AgentConfig = map[string]any{
 		"device_id":  "dev-picked",
 		"agent_kind": "claude_code",
 		"workdir":    "/repo/parsar",
@@ -968,10 +967,10 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsWithWorkdirKey(t *testing.T)
 }
 
 // TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired pins the
-// contract: even when ProjectAgentConfig.daemon_mode == "sandbox",
+// contract: even when AgentConfig.daemon_mode == "sandbox",
 // the connector does NOT auto-acquire a sandbox. The default dispatch
 // path requires an explicit runtime binding
-// (project_agents.runtime_id) surfaced via ProjectAgentConfig.device_id.
+// (agents.runtime_id) surfaced via AgentConfig.device_id.
 // The sandbox provider stays compiled for a future conversation-scoped
 // ephemeral path but is disconnected from the default first-prompt flow.
 //
@@ -986,7 +985,7 @@ func TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired(t *testing.T) {
 
 	in := basicInput()
 	// daemon_mode=sandbox alone is no longer a free pass to auto-Acquire.
-	in.ProjectAgentConfig = map[string]any{"daemon_mode": "sandbox"}
+	in.AgentConfig = map[string]any{"daemon_mode": "sandbox"}
 
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
@@ -1022,7 +1021,7 @@ func TestStreamPrompt_SandboxModeProviderDisabled_StillRefusesAutoAcquire(t *tes
 	c := New(Config{Registry: reg, Binder: binding.NewInMemoryBinder()})
 
 	in := basicInput()
-	in.ProjectAgentConfig = map[string]any{"daemon_mode": "sandbox"}
+	in.AgentConfig = map[string]any{"daemon_mode": "sandbox"}
 
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
@@ -1066,7 +1065,7 @@ func TestStreamPrompt_RoutesToRemoteOwnerPod(t *testing.T) {
 	binder := binding.NewInMemoryBinder()
 	if err := binder.Bind(context.Background(), binding.Binding{
 		ConversationID: "conv-1",
-		ProjectAgentID: "pa-1",
+		AgentID:        "pa-1",
 		DeviceID:       "11111111-1111-1111-1111-111111111111",
 		AgentKind:      "claude_code",
 	}); err != nil {
@@ -1107,12 +1106,12 @@ func TestStreamPrompt_RoutesToRemoteOwnerPod(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------
-// lazy bind from project_agent.config.device_id
+// lazy bind from agent.config.device_id
 // ----------------------------------------------------------------------
 
-// TestStreamPrompt_LazyBindsFromProjectAgentConfigDeviceID is the
+// TestStreamPrompt_LazyBindsFromAgentConfigDeviceID is the
 // connector half of the device_id roundtrip. store.CreateAgent persists
-// the picked device_id on project_agents.config; on first prompt the
+// the picked device_id on agents.config; on first prompt the
 // connector must materialize that into a connector_session_bindings
 // row (via binder.Bind) so subsequent turns Resolve() fast.
 //
@@ -1120,7 +1119,7 @@ func TestStreamPrompt_RoutesToRemoteOwnerPod(t *testing.T) {
 // the binder now contains the bound conversation — streaming alone
 // could mean lazy-bind ran but the binder mutation didn't stick;
 // Resolve alone wouldn't prove end-to-end health.
-func TestStreamPrompt_LazyBindsFromProjectAgentConfigDeviceID(t *testing.T) {
+func TestStreamPrompt_LazyBindsFromAgentConfigDeviceID(t *testing.T) {
 	reg := gateway.NewRegistry()
 	conn := newFakeConn()
 	sess := gateway.NewSession(conn, "dev-1", "wks-1", "0.1.0", reg, nil)
@@ -1136,7 +1135,7 @@ func TestStreamPrompt_LazyBindsFromProjectAgentConfigDeviceID(t *testing.T) {
 	in := basicInput()
 	// Empty binder + device_id in config = the lazy bind path. Sandbox
 	// is NOT set, so we strictly test that code.
-	in.ProjectAgentConfig = map[string]any{"device_id": "dev-1"}
+	in.AgentConfig = map[string]any{"device_id": "dev-1"}
 
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
@@ -1188,12 +1187,12 @@ loop:
 	if bind.DeviceID != "dev-1" {
 		t.Fatalf("lazy-bound DeviceID = %q, want %q", bind.DeviceID, "dev-1")
 	}
-	if bind.ConversationID != "conv-1" || bind.ProjectAgentID != "pa-1" {
-		t.Fatalf("lazy-bound key mismatch: conv=%q pa=%q", bind.ConversationID, bind.ProjectAgentID)
+	if bind.ConversationID != "conv-1" || bind.AgentID != "pa-1" {
+		t.Fatalf("lazy-bound key mismatch: conv=%q agent=%q", bind.ConversationID, bind.AgentID)
 	}
 	// AgentKind must be populated so the daemon's prompt_request
 	// envelope routes to the right runner. Default ("claude_code")
-	// flows through resolveAgentKind when ProjectAgentConfig doesn't
+	// flows through resolveAgentKind when AgentConfig doesn't
 	// override it.
 	if bind.AgentKind != "claude_code" {
 		t.Fatalf("lazy-bound AgentKind = %q, want %q", bind.AgentKind, "claude_code")
@@ -1205,7 +1204,7 @@ loop:
 // new lazy-bind case is a behavioral change in the ErrNotBound
 // fan-out; this test makes sure the historical fallback still fires
 // when neither sandbox mode nor a config device_id is present (i.e.
-// raw API callers / pre-fix project_agent rows still get the actionable
+// raw API callers / pre-fix agent rows still get the actionable
 // error instead of a silent failure or a panic on missing key).
 func TestStreamPrompt_NoDeviceConfigStillReportsPickDevice(t *testing.T) {
 	reg := gateway.NewRegistry()
@@ -1213,11 +1212,11 @@ func TestStreamPrompt_NoDeviceConfigStillReportsPickDevice(t *testing.T) {
 	c := New(Config{Registry: reg, Binder: binder})
 
 	in := basicInput()
-	// Non-empty ProjectAgentConfig but explicitly no device_id key —
+	// Non-empty AgentConfig but explicitly no device_id key —
 	// stronger than basicInput()'s empty map: it proves that
 	// defaultDeviceIDFromConfig handles the "key absent" map.(string,bool)
 	// branch the same as the empty-map case.
-	in.ProjectAgentConfig = map[string]any{"some_other_key": "value"}
+	in.AgentConfig = map[string]any{"some_other_key": "value"}
 
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
@@ -1245,7 +1244,7 @@ func TestStreamPrompt_NoDeviceConfigStillReportsPickDevice(t *testing.T) {
 	in2 := basicInput()
 	in2.RunID = "run-2"
 	in2.ConversationID = "conv-2"
-	in2.ProjectAgentConfig = map[string]any{"device_id": "   "}
+	in2.AgentConfig = map[string]any{"device_id": "   "}
 	ch2, err := c.StreamPrompt(context.Background(), in2)
 	if err != nil {
 		t.Fatalf("StreamPrompt #2: %v", err)

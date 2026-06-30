@@ -35,17 +35,14 @@ func (b CredentialBinding) IsShared() bool {
 }
 
 // ParseCredentialBindings extracts the credential_bindings map from the
-// merged agent_config + project_agent_config. ProjectAgentConfig wins on
-// key collision (project-level override), matching how model_id and
-// agent_kind already flow.
+// agent_config.
 //
 // Returns map[kind_code]CredentialBinding. Unknown source values are
 // dropped silently to avoid hard-failing a run on a malformed config;
 // callers fall back to personal in that case.
-func ParseCredentialBindings(agentConfig, projectAgentConfig map[string]any) map[string]CredentialBinding {
+func ParseCredentialBindings(agentConfig map[string]any) map[string]CredentialBinding {
 	out := map[string]CredentialBinding{}
 	mergeBindings(out, agentConfig)
-	mergeBindings(out, projectAgentConfig) // later wins
 	return out
 }
 
@@ -88,12 +85,9 @@ func mergeBindings(out map[string]CredentialBinding, cfg map[string]any) {
 }
 
 // ParseModelCredentialBinding extracts the optional model_credential_binding
-// object from agent/project_agent config. ProjectAgentConfig wins on
-// presence. Returns (binding, true) when a usable shared binding is found.
-func ParseModelCredentialBinding(agentConfig, projectAgentConfig map[string]any) (CredentialBinding, bool) {
-	if b, ok := pickModelBinding(projectAgentConfig); ok {
-		return b, true
-	}
+// object from agent_config. Returns (binding, true) when a usable shared
+// binding is found.
+func ParseModelCredentialBinding(agentConfig map[string]any) (CredentialBinding, bool) {
 	if b, ok := pickModelBinding(agentConfig); ok {
 		return b, true
 	}

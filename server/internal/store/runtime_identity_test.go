@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	sqlc "github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestResolveRuntimeIdentityRoundTrip exercises the bearer-only lookup
@@ -36,9 +36,8 @@ func TestResolveRuntimeIdentityRoundTrip(t *testing.T) {
 		Provider:    "agent_daemon",
 		OwnerUserID: ids.UserID,
 		Config: map[string]any{
-			"project_id":       ids.ProjectID,
-			"project_agent_id": ids.ProductProjectAgentID,
-			"connector":        "claude_code",
+			"agent_id":  ids.ProductAgentID,
+			"connector": "claude_code",
 		},
 	})
 	if err != nil {
@@ -76,11 +75,8 @@ func TestResolveRuntimeIdentityRoundTrip(t *testing.T) {
 	if id.OwnerUserID == nil || *id.OwnerUserID != ids.UserID {
 		t.Errorf("OwnerUserID = %v, want %q", id.OwnerUserID, ids.UserID)
 	}
-	if id.ProjectID == nil || *id.ProjectID != ids.ProjectID {
-		t.Errorf("ProjectID = %v, want %q", id.ProjectID, ids.ProjectID)
-	}
-	if id.ProjectAgentID == nil || *id.ProjectAgentID != ids.ProductProjectAgentID {
-		t.Errorf("ProjectAgentID = %v, want %q", id.ProjectAgentID, ids.ProductProjectAgentID)
+	if id.AgentID == nil || *id.AgentID != ids.ProductAgentID {
+		t.Errorf("AgentID = %v, want %q", id.AgentID, ids.ProductAgentID)
 	}
 	if id.ConnectorName == nil || *id.ConnectorName != "claude_code" {
 		t.Errorf("ConnectorName = %v, want claude_code", id.ConnectorName)
@@ -105,8 +101,8 @@ func TestResolveRuntimeIdentityRoundTrip(t *testing.T) {
 	}
 }
 
-// TestResolveRuntimeIdentityMinimalConfig: workspace-scoped CLIs without a
-// project binding rely on the nil-vs-empty distinction on pointer fields.
+// TestResolveRuntimeIdentityMinimalConfig: workspace-scoped CLIs without an
+// agent binding rely on the nil-vs-empty distinction on pointer fields.
 func TestResolveRuntimeIdentityMinimalConfig(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
@@ -148,11 +144,8 @@ func TestResolveRuntimeIdentityMinimalConfig(t *testing.T) {
 	if id.OwnerUserID != nil {
 		t.Errorf("OwnerUserID = %v, want nil", id.OwnerUserID)
 	}
-	if id.ProjectID != nil {
-		t.Errorf("ProjectID = %v, want nil", id.ProjectID)
-	}
-	if id.ProjectAgentID != nil {
-		t.Errorf("ProjectAgentID = %v, want nil", id.ProjectAgentID)
+	if id.AgentID != nil {
+		t.Errorf("AgentID = %v, want nil", id.AgentID)
 	}
 	if id.ConnectorName != nil {
 		t.Errorf("ConnectorName = %v, want nil", id.ConnectorName)
@@ -228,7 +221,7 @@ func TestResolveRuntimeIdentityHandlesNullConfig(t *testing.T) {
 		OwnerUserID: pgtype.UUID{Valid: false},
 	}
 	cfg := unmarshalJSONOrEmpty(row.Config)
-	if got := configString(cfg, "project_id"); got != nil {
+	if got := configString(cfg, "agent_id"); got != nil {
 		t.Errorf("configString(nil config) = %v, want nil", got)
 	}
 }
@@ -246,11 +239,11 @@ func jsonRoundTrip(t *testing.T, in map[string]any) map[string]any {
 
 func TestConfigStringSurvivesJSONRoundTrip(t *testing.T) {
 	cfg := jsonRoundTrip(t, map[string]any{
-		"project_id": "abc-123",
-		"connector":  "claude_code",
+		"agent_id":  "abc-123",
+		"connector": "claude_code",
 	})
-	if got := configString(cfg, "project_id"); got == nil || *got != "abc-123" {
-		t.Errorf("project_id after round trip: %v", got)
+	if got := configString(cfg, "agent_id"); got == nil || *got != "abc-123" {
+		t.Errorf("agent_id after round trip: %v", got)
 	}
 	if got := configString(cfg, "connector"); got == nil || *got != "claude_code" {
 		t.Errorf("connector after round trip: %v", got)

@@ -321,7 +321,6 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 		RunID:                   invocation.RunID,
 		WorkspaceID:             invocation.WorkspaceID,
 		ConversationID:          invocation.ConversationID,
-		ProjectAgentID:          invocation.AgentID,
 		AgentID:                 invocation.AgentID,
 		AgentName:               invocation.AgentName,
 		AgentSlug:               invocation.AgentSlug,

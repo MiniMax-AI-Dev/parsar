@@ -11,7 +11,7 @@ import (
 )
 
 // TestAgentKindToRenderTarget pins the mapping between agent_kind strings
-// (as written by resolveAgentKind from project_agent / agent config) and
+// (as written by resolveAgentKind from agent config) and
 // the render target the capability serializer should produce.
 //
 // Unknown / empty kinds must fall back to TargetClaudeCode so legacy rows
@@ -38,8 +38,8 @@ func TestAgentKindToRenderTarget(t *testing.T) {
 	}
 }
 
-// TestResolveCapabilityAdditions_CodexSkillSoftDegrades verifies that a
-// project_agent on the codex engine that lists a skill capability does
+// TestResolveCapabilityAdditions_CodexSkillSoftDegrades verifies that an
+// agent on the codex engine that lists a skill capability does
 // not hard-fail the prompt. The codex renderer returns render.ErrUnsupported
 // for KindSkill; the connector must skip the row and surface it as a
 // Disabled capability so the channel emits a runtime_error nudge.
@@ -176,7 +176,7 @@ func TestResolveCapabilityAdditions_PiMCPSoftDegrades(t *testing.T) {
 }
 
 // TestResolveCapabilityAdditions_EmptyAgentKindDefaultsClaudeCode pins
-// the back-compat default: a project_agent persisted before the
+// the back-compat default: an agent persisted before the
 // agent_kind column existed (or one whose config omits it) is treated
 // as claude_code. Otherwise an upgrade would silently disable every
 // skill/plugin on legacy agents.
@@ -224,13 +224,10 @@ func TestBuildAgentOptions_CodexSkillSurfacesDisabledNotice(t *testing.T) {
 	in := connector.PromptInput{
 		RunID:                   "run-1",
 		ConversationID:          "conv-1",
-		ProjectAgentID:          "pa-1",
 		WorkspaceID:             "ws-1",
-		ProjectID:               "proj-1",
 		AgentID:                 "agt-1",
 		ConversationInitiatorID: "user-1",
-		AgentConfig:             map[string]any{},
-		ProjectAgentConfig:      map[string]any{"agent_kind": "codex"},
+		AgentConfig:             map[string]any{"agent_kind": "codex"},
 	}
 
 	opts, err := c.buildAgentOptions(context.Background(), in)
@@ -275,13 +272,10 @@ func TestBuildAgentOptions_OpenCodeMCPDoesNotNotice(t *testing.T) {
 	in := connector.PromptInput{
 		RunID:                   "run-1",
 		ConversationID:          "conv-1",
-		ProjectAgentID:          "pa-1",
 		WorkspaceID:             "ws-1",
-		ProjectID:               "proj-1",
 		AgentID:                 "agt-1",
 		ConversationInitiatorID: "user-1",
-		AgentConfig:             map[string]any{},
-		ProjectAgentConfig:      map[string]any{"agent_kind": "opencode"},
+		AgentConfig:             map[string]any{"agent_kind": "opencode"},
 	}
 
 	opts, err := c.buildAgentOptions(context.Background(), in)

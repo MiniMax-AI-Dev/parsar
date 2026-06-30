@@ -2,17 +2,17 @@
 //
 // Beyond the "user runs parsar-daemon on their laptop" topology, the
 // connector supports a second deployment mode: the server spawns a
-// fresh e2b sandbox per project_agent, runs parsar-daemon inside it, and
+// fresh e2b sandbox per agent, runs parsar-daemon inside it, and
 // lets that sandbox dial back to the gateway over WS. The connector
 // treats both modes identically once the WS session is registered —
 // only the cold-start path differs.
 //
 // This file owns the sandbox half. Wired by main.go only when
 // AGENT_DAEMON_SANDBOX_TEMPLATE is set; otherwise the connector runs
-// in local-only mode and sandbox-mode project_agents fail fast at the
+// in local-only mode and sandbox-mode agents fail fast at the
 // configuration validation layer.
 //
-// Lifecycle (per project_agent):
+// Lifecycle (per agent):
 //
 //	first prompt  -> Connector hits ErrNotBound -> sees daemon_mode=sandbox
 //	             -> SandboxProvider.Acquire(ctx, in):
@@ -24,9 +24,9 @@
 //	                  5. Binder.Bind(conversation -> deviceID)     -> persist for next turn
 //	                  6. return deviceID
 //	          subsequent prompts in same conversation -> binder hit, no sandbox work
-//	          new conversation against same project_agent -> Acquire reuses the cached sandbox
+//	          new conversation against same agent -> Acquire reuses the cached sandbox
 //	          long idle period -> Reap() kills the sandbox + evicts cache; next Acquire cold-starts again
-//	          conversation archived / project_agent deleted -> Release() kills + evicts immediately
+//	          conversation archived / agent deleted -> Release() kills + evicts immediately
 package agentdaemon
 
 import (
@@ -101,24 +101,24 @@ type SandboxProvider interface {
 	Acquire(ctx context.Context, in connector.PromptInput) (deviceID string, err error)
 
 	// SandboxStatus returns the cached sandbox info for a
-	// project_agent. (zero, false, nil) when not cached.
+	// agent. (zero, false, nil) when not cached.
 	//
 	// info.ExpiresAt is populated best-effort by querying e2b for the
 	// live TTL; a transient e2b error leaves it zero and the admin
 	// handler renders zero as "unknown".
-	SandboxStatus(ctx context.Context, projectAgentID string) (connector.SandboxInfo, bool, error)
+	SandboxStatus(ctx context.Context, agentID string) (connector.SandboxInfo, bool, error)
 
-	// Release tears down the sandbox associated with a project_agent.
-	// Idempotent: releasing an unknown project_agent is a no-op.
-	Release(ctx context.Context, projectAgentID string) error
+	// Release tears down the sandbox associated with a agent.
+	// Idempotent: releasing an unknown agent is a no-op.
+	Release(ctx context.Context, agentID string) error
 
 	// Renew bumps the e2b-side TTL to SandboxDefaultTTL. Returns the
 	// refreshed expires_at. (zero, false, nil) when no live cache
 	// entry exists — the admin handler maps this to 404.
-	Renew(ctx context.Context, projectAgentID string) (expiresAt time.Time, found bool, err error)
+	Renew(ctx context.Context, agentID string) (expiresAt time.Time, found bool, err error)
 
 	// SandboxRuntimeInfo queries e2b directly for live expiry by
-	// sandboxID (not projectAgentID). Bypasses the in-memory cache so
+	// sandboxID (not agentID). Bypasses the in-memory cache so
 	// any pod can answer. Returns zero time on transient failures.
 	SandboxRuntimeInfo(ctx context.Context, sandboxID string) (expiresAt time.Time, err error)
 
@@ -170,7 +170,7 @@ type SandboxBindingPersister interface {
 	CreateSandboxBinding(ctx context.Context, input store.CreateSandboxBindingInput) (store.SandboxBindingRead, error)
 	ReserveSandboxBindingSlot(ctx context.Context, input store.ReserveSandboxBindingSlotInput) (store.SandboxBindingRead, bool, error)
 	FinalizeSandboxBindingSpawning(ctx context.Context, input store.FinalizeSandboxBindingSpawningInput) error
-	WaitForSandboxBindingActive(ctx context.Context, workspaceID, projectAgentID string, pollInterval time.Duration) (store.SandboxBindingRead, error)
+	WaitForSandboxBindingActive(ctx context.Context, workspaceID, agentID string, pollInterval time.Duration) (store.SandboxBindingRead, error)
 	TouchSandboxBinding(ctx context.Context, bindingID string) error
 	MarkSandboxBindingKilled(ctx context.Context, bindingID, status string) error
 }
@@ -222,11 +222,11 @@ type E2BProviderConfig struct {
 	Bindings      SandboxBindingPersister // nil = memory-only (local dev)
 	Template      string
 	// Templates maps a sandbox_size label (e.g. "standard", "xl") to the
-	// e2b template id for that size. The agent's project_agents.config
+	// e2b template id for that size. The agent's agents.config
 	// `sandbox_size` field selects which template gets used on cold start.
 	// When nil or empty, all acquires fall back to Template.
 	//
-	// Cache key remains keyed by project_agent_id only, so an agent at any
+	// Cache key remains keyed by agent_id only, so an agent at any
 	// time has at most one active sandbox. Changing sandbox_size on a hot
 	// agent takes effect only on the NEXT cold start (after TTL expiry or
 	// manual release) — see the comment in coldStart for the rationale.
@@ -246,7 +246,7 @@ type E2BProviderConfig struct {
 	Log       *slog.Logger
 }
 
-// sandboxEntry is the per-project_agent cached sandbox handle.
+// sandboxEntry is the per-agent cached sandbox handle.
 type sandboxEntry struct {
 	deviceID    string
 	sandbox     e2b.Sandbox
@@ -267,15 +267,15 @@ type E2BSandboxProvider struct {
 	cfg E2BProviderConfig
 
 	cacheMu sync.Mutex
-	cache   map[string]*sandboxEntry // key = project_agent_id
+	cache   map[string]*sandboxEntry // key = agent_id
 
 	// inflight serialises concurrent Acquire calls for the same
-	// project_agent so a thundering herd of new conversations only
+	// agent so a thundering herd of new conversations only
 	// triggers one Create.
 	inflight map[string]*acquirePromise
 }
 
-// acquirePromise is the per-project_agent serialisation primitive.
+// acquirePromise is the per-agent serialisation primitive.
 type acquirePromise struct {
 	done     chan struct{}
 	deviceID string
@@ -319,9 +319,8 @@ func NewE2BSandboxProvider(cfg E2BProviderConfig) (*E2BSandboxProvider, error) {
 // start by looking at the agent's `sandbox_size` config. The lookup
 // precedence is:
 //
-//  1. ProjectAgentConfig["sandbox_size"]   — workspace-level override
-//  2. AgentConfig["sandbox_size"]          — agent-template default
-//  3. cfg.DefaultSize                      — provider default ("standard")
+//  1. AgentConfig["sandbox_size"]          — agent config
+//  2. cfg.DefaultSize                      — provider default ("standard")
 //
 // Whichever size wins is then looked up in cfg.Templates. If the
 // resolved size has no entry (e.g. an agent requests "xl" but the
@@ -330,15 +329,12 @@ func NewE2BSandboxProvider(cfg E2BProviderConfig) (*E2BSandboxProvider, error) {
 // log a warn so the misconfiguration surfaces in mlogs. This keeps a
 // missing XL pool from breaking acquires entirely.
 //
-// Cache key stays projectAgentID-only (see Acquire), so an agent at
+// Cache key stays agentID-only (see Acquire), so an agent at
 // any moment has at most one active sandbox; the new size only takes
 // effect after the current sandbox is released and the next cold
 // start runs.
 func (p *E2BSandboxProvider) resolveTemplate(in connector.PromptInput) (size, templateID string) {
-	size = strings.TrimSpace(stringFromMap(in.ProjectAgentConfig, "sandbox_size"))
-	if size == "" {
-		size = strings.TrimSpace(stringFromMap(in.AgentConfig, "sandbox_size"))
-	}
+	size = strings.TrimSpace(stringFromMap(in.AgentConfig, "sandbox_size"))
 	if size == "" {
 		size = p.cfg.DefaultSize
 	}
@@ -364,16 +360,16 @@ func (p *E2BSandboxProvider) resolveTemplate(in connector.PromptInput) (size, te
 	return fallbackSize, p.cfg.Template
 }
 
-// Acquire returns a deviceID for the project_agent's sandbox. Cold
+// Acquire returns a deviceID for the agent's sandbox. Cold
 // starts go through the full mint-create-login-connect dance; warm
 // hits return the cached deviceID after a touch + Renew.
 //
-// Concurrency: two Acquire calls for the same project_agent serialise
-// on inflight[projectAgentID] so we never create more than one sandbox
-// per project_agent under contention.
+// Concurrency: two Acquire calls for the same agent serialise
+// on inflight[agentID] so we never create more than one sandbox
+// per agent under contention.
 func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInput) (string, error) {
-	if in.ProjectAgentID == "" {
-		return "", errors.New("E2BSandboxProvider.Acquire: ProjectAgentID required")
+	if in.AgentID == "" {
+		return "", errors.New("E2BSandboxProvider.Acquire: AgentID required")
 	}
 	if in.WorkspaceID == "" {
 		return "", errors.New("E2BSandboxProvider.Acquire: WorkspaceID required (needed for runtime pairing)")
@@ -381,7 +377,7 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 
 	// Fast path: warm cache hit.
 	p.cacheMu.Lock()
-	if entry, ok := p.cache[in.ProjectAgentID]; ok {
+	if entry, ok := p.cache[in.AgentID]; ok {
 		entry.lastUsed = time.Now().UTC()
 		deviceID := entry.deviceID
 		sandboxID := entry.sandbox.SandboxID
@@ -406,11 +402,11 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 		alive := p.checkDeviceAlive(ctx, deviceID, ownerPodID)
 		if !alive {
 			p.cfg.Log.Info("agent_daemon sandbox cache hit but device offline; recreating",
-				"project_agent_id", in.ProjectAgentID,
+				"agent_id", in.AgentID,
 				"device_id", deviceID,
 				"cached_owner_pod", ownerPodID,
 				"self_pod", p.cfg.SelfPodID)
-			p.evict(in.ProjectAgentID, sandboxID, bindingID)
+			p.evict(in.AgentID, sandboxID, bindingID)
 			// fall through to cold start
 		} else {
 			// Renew the sandbox TTL on every cache hit so an active
@@ -436,9 +432,9 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 		p.cacheMu.Unlock()
 	}
 
-	// Serialise concurrent cold starts for the same project_agent.
+	// Serialise concurrent cold starts for the same agent.
 	p.cacheMu.Lock()
-	if promise, ok := p.inflight[in.ProjectAgentID]; ok {
+	if promise, ok := p.inflight[in.AgentID]; ok {
 		p.cacheMu.Unlock()
 		select {
 		case <-promise.done:
@@ -448,18 +444,18 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 		}
 	}
 	promise := &acquirePromise{done: make(chan struct{})}
-	p.inflight[in.ProjectAgentID] = promise
+	p.inflight[in.AgentID] = promise
 	p.cacheMu.Unlock()
 
 	defer func() {
 		p.cacheMu.Lock()
-		delete(p.inflight, in.ProjectAgentID)
+		delete(p.inflight, in.AgentID)
 		p.cacheMu.Unlock()
 		close(promise.done)
 	}()
 
 	// Cross-pod coordination: race to claim the (workspace,
-	// project_agent) slot in the sandboxes table before doing any
+	// agent) slot in the sandboxes table before doing any
 	// expensive sandbox work. The uk_sandboxes_active_per_agent unique
 	// index decides the winner; losers wait for the winner's row to
 	// flip spawning → running and reuse the resulting deviceID.
@@ -510,11 +506,11 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 //     or MarkSandboxBindingKilled on failure.
 //   - ("", "", err)         — DB / wait failure; caller propagates.
 func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.PromptInput) (string, string, error) {
-	cacheKey := "agent_daemon:" + in.ProjectAgentID
+	cacheKey := "agent_daemon:" + in.AgentID
 	_, templateID := p.resolveTemplate(in)
 	row, won, err := p.cfg.Bindings.ReserveSandboxBindingSlot(ctx, store.ReserveSandboxBindingSlotInput{
 		WorkspaceID:    in.WorkspaceID,
-		AgentID:        in.ProjectAgentID,
+		AgentID:        in.AgentID,
 		CacheKey:       cacheKey,
 		TemplateID:     templateID,
 		Metadata: map[string]any{
@@ -527,18 +523,18 @@ func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.P
 	}
 	if won {
 		p.cfg.Log.Info("sandbox slot reserved (cold-start winner)",
-			"project_agent_id", in.ProjectAgentID,
+			"agent_id", in.AgentID,
 			"binding_id", row.ID)
 		return row.ID, "", nil
 	}
 	// Loser: wait for the winner.
 	p.cfg.Log.Info("sandbox slot already held; waiting for winner to finish cold-start",
-		"project_agent_id", in.ProjectAgentID,
+		"agent_id", in.AgentID,
 		"binding_id", row.ID,
 		"winner_status", row.Status)
 	waitCtx, cancel := context.WithTimeout(ctx, SandboxAcquireTimeout)
 	defer cancel()
-	finalRow, waitErr := p.cfg.Bindings.WaitForSandboxBindingActive(waitCtx, in.WorkspaceID, in.ProjectAgentID, 0)
+	finalRow, waitErr := p.cfg.Bindings.WaitForSandboxBindingActive(waitCtx, in.WorkspaceID, in.AgentID, 0)
 	if waitErr != nil {
 		return "", "", fmt.Errorf("%w: wait for winner: %v", ErrSandboxAcquireFailed, waitErr)
 	}
@@ -551,7 +547,7 @@ func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.P
 	// will Reserve, see the existing binding (still running), and
 	// Wait again — cheap.
 	p.cfg.Log.Info("sandbox slot resolved via cross-pod wait",
-		"project_agent_id", in.ProjectAgentID,
+		"agent_id", in.AgentID,
 		"binding_id", finalRow.ID,
 		"device_id", deviceID)
 	return "", deviceID, nil
@@ -597,7 +593,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	//    so the next INSERT doesn't hit uk_runtimes_workspace_name_active.
 	//    This happens when a previous sandbox was killed but its runtime
 	//    row was never soft-deleted (e.g. manual kill, idle reap, crash).
-	runtimeName := fmt.Sprintf("sandbox %s", shortID(in.ProjectAgentID))
+	runtimeName := fmt.Sprintf("sandbox %s", shortID(in.AgentID))
 	if err := p.cfg.Store.SoftDeleteRuntimeByWorkspaceName(bootCtx, in.WorkspaceID, runtimeName); err != nil {
 		releaseReservation(err)
 		return "", fmt.Errorf("%w: retire stale runtime: %v", ErrSandboxAcquireFailed, err)
@@ -611,11 +607,11 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		Provider:    store.RuntimeProviderAgentDaemonSandbox,
 		Name:        runtimeName,
 		// OwnerUserID intentionally empty: sandbox-mode rows are
-		// owned by the project_agent, not a human user.
+		// owned by the agent, not a human user.
 		TokenTTL: SandboxAcquireTimeout + 30*time.Second,
 		Config: map[string]any{
 			"created_by":       "sandbox_provider",
-			"project_agent_id": in.ProjectAgentID,
+			"agent_id": in.AgentID,
 			"sandbox_kind":     "agent_daemon_claude_code",
 		},
 	})
@@ -631,7 +627,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		TimeoutSeconds: int(SandboxDefaultTTL.Seconds()),
 		Metadata: map[string]string{
 			"parsar.workspace_id":     in.WorkspaceID,
-			"parsar.project_agent_id": in.ProjectAgentID,
+			"parsar.agent_id": in.AgentID,
 			"parsar.device_id":        deviceID,
 			"parsar.sandbox_kind":     "agent_daemon_claude_code",
 		},
@@ -644,7 +640,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		"sandbox_id", sandbox.SandboxID,
 		"domain", sandbox.Domain,
 		"envd_version", sandbox.EnvdVersion,
-		"project_agent_id", in.ProjectAgentID,
+		"agent_id", in.AgentID,
 		"sandbox_size", resolvedSize,
 		"template_id", templateID)
 
@@ -706,10 +702,8 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	//    The PARSAR_* env block exposes the runtime identity to the `parsar`
 	//    CLI (used by hook scripts). PARSAR_RUNNER_TOKEN is the same
 	//    string as the daemon pairing token, scoped server-side via
-	//    runtime_type checks. Empty fields (e.g. ProjectID for
-	//    workspace-only agents) are omitted rather than set to "" so
-	//    hook scripts can treat `os.environ.get("PARSAR_PROJECT_ID")` as
-	//    the "is this project scoped?" signal.
+	//    runtime_type checks. Empty fields are omitted rather than set to
+	//    "" so hook scripts can treat a missing var as "not set".
 	connectCmd := fmt.Sprintf("parsar-daemon connect --device-name %s -b", shellSingleQuote(deviceID))
 	connectEnv := map[string]string{
 		"PARSAR_DAEMON_CONNECT_URL":   p.cfg.ServerURL,
@@ -717,18 +711,15 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		// parsar CLI env — same token, presented under the name the CLI
 		// reads. Hook scripts shell out to `parsar inject ...` which
 		// expects PARSAR_RUNNER_TOKEN, not PARSAR_DAEMON_CONNECT_TOKEN.
-		"PARSAR_SERVER_URL":       p.cfg.ServerURL,
-		"PARSAR_RUNNER_TOKEN":     pair.PairingToken,
-		"PARSAR_RUNTIME_ID":       deviceID,
-		"PARSAR_WORKSPACE_ID":     in.WorkspaceID,
-		"PARSAR_PROJECT_AGENT_ID": in.ProjectAgentID,
-		"PARSAR_CONNECTOR":        connectorTagFor(p.cfg.Connector),
+		"PARSAR_SERVER_URL":   p.cfg.ServerURL,
+		"PARSAR_RUNNER_TOKEN": pair.PairingToken,
+		"PARSAR_RUNTIME_ID":   deviceID,
+		"PARSAR_WORKSPACE_ID": in.WorkspaceID,
+		"PARSAR_AGENT_ID":     in.AgentID,
+		"PARSAR_CONNECTOR":    connectorTagFor(p.cfg.Connector),
 	}
 	if in.ConversationInitiatorID != "" {
 		connectEnv["PARSAR_USER_ID"] = in.ConversationInitiatorID
-	}
-	if in.ProjectID != "" {
-		connectEnv["PARSAR_PROJECT_ID"] = in.ProjectID
 	}
 	if in.ConversationID != "" {
 		connectEnv["PARSAR_CONVERSATION_ID"] = in.ConversationID
@@ -795,7 +786,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	// 5. Cache so subsequent Acquires are O(1). Binder.Bind() happens
 	//    in the connector after Acquire returns; the provider stays
 	//    unaware of conversation_id so a single sandbox can serve
-	//    multiple conversations under the same project_agent.
+	//    multiple conversations under the same agent.
 	//
 	//    waitForDevice returns "" when the local Registry waiter won;
 	//    substitute SelfPodID so the fast-path health check can compare
@@ -835,7 +826,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 			})
 			if finalizeErr != nil {
 				p.cfg.Log.Warn("sandbox binding finalize failed (loser waits will time out; sandbox functional locally)",
-					"project_agent_id", in.ProjectAgentID,
+					"agent_id", in.AgentID,
 					"binding_id", reservedBindingID,
 					"sandbox_id", sandbox.SandboxID,
 					"err", finalizeErr)
@@ -845,8 +836,8 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		} else {
 			binding, bindErr := p.cfg.Bindings.CreateSandboxBinding(bootCtx, store.CreateSandboxBindingInput{
 				WorkspaceID:    in.WorkspaceID,
-				AgentID:        in.ProjectAgentID,
-				CacheKey:       "agent_daemon:" + in.ProjectAgentID,
+				AgentID:        in.AgentID,
+				CacheKey:       "agent_daemon:" + in.AgentID,
 				SandboxID:      sandbox.SandboxID,
 				TemplateID:     templateID,
 				Status:         store.SandboxBindingStatusActive,
@@ -858,7 +849,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 			})
 			if bindErr != nil {
 				p.cfg.Log.Warn("sandbox binding persist failed (sandbox functional, admin visibility degraded)",
-					"project_agent_id", in.ProjectAgentID,
+					"agent_id", in.AgentID,
 					"sandbox_id", sandbox.SandboxID,
 					"err", bindErr)
 			} else {
@@ -868,21 +859,21 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	}
 
 	p.cacheMu.Lock()
-	p.cache[in.ProjectAgentID] = entry
+	p.cache[in.AgentID] = entry
 	p.cacheMu.Unlock()
 
 	p.cfg.Log.Info("agent_daemon sandbox acquired",
-		"project_agent_id", in.ProjectAgentID,
+		"agent_id", in.AgentID,
 		"sandbox_id", sandbox.SandboxID,
 		"device_id", deviceID)
 	return deviceID, nil
 }
 
-// SandboxStatus returns the cached sandbox info for a project_agent.
+// SandboxStatus returns the cached sandbox info for a agent.
 // (zero, false, nil) when not cached.
-func (p *E2BSandboxProvider) SandboxStatus(ctx context.Context, projectAgentID string) (connector.SandboxInfo, bool, error) {
+func (p *E2BSandboxProvider) SandboxStatus(ctx context.Context, agentID string) (connector.SandboxInfo, bool, error) {
 	p.cacheMu.Lock()
-	entry, ok := p.cache[projectAgentID]
+	entry, ok := p.cache[agentID]
 	p.cacheMu.Unlock()
 	if !ok {
 		return connector.SandboxInfo{}, false, nil
@@ -908,16 +899,16 @@ func (p *E2BSandboxProvider) SandboxStatus(ctx context.Context, projectAgentID s
 	return info, true, nil
 }
 
-// Renew bumps the e2b TTL for the project_agent's sandbox to
+// Renew bumps the e2b TTL for the agent's sandbox to
 // SandboxDefaultTTL. (zero, false, nil) when no live cache entry exists
 // (admin panel renders "no sandbox"). Touches lastUsed so the cache
 // survives the next Reap window.
-func (p *E2BSandboxProvider) Renew(ctx context.Context, projectAgentID string) (time.Time, bool, error) {
-	if strings.TrimSpace(projectAgentID) == "" {
+func (p *E2BSandboxProvider) Renew(ctx context.Context, agentID string) (time.Time, bool, error) {
+	if strings.TrimSpace(agentID) == "" {
 		return time.Time{}, false, nil
 	}
 	p.cacheMu.Lock()
-	entry, ok := p.cache[projectAgentID]
+	entry, ok := p.cache[agentID]
 	if ok {
 		entry.lastUsed = time.Now().UTC()
 	}
@@ -949,7 +940,7 @@ func (p *E2BSandboxProvider) Renew(ctx context.Context, projectAgentID string) (
 		return time.Time{}, true, nil
 	}
 	p.cfg.Log.Info("agent_daemon sandbox renewed",
-		"project_agent_id", projectAgentID,
+		"agent_id", agentID,
 		"sandbox_id", sandboxID,
 		"expires_at", runtime.EndAt)
 	return runtime.EndAt, true, nil
@@ -982,16 +973,16 @@ func (p *E2BSandboxProvider) SandboxRuntimeInfo(ctx context.Context, sandboxID s
 	return runtime.EndAt, nil
 }
 
-// Release tears down the sandbox associated with a project_agent:
+// Release tears down the sandbox associated with a agent:
 // lookup → evict cache → kill → drop binder rows pointing at the device.
-func (p *E2BSandboxProvider) Release(ctx context.Context, projectAgentID string) error {
-	if projectAgentID == "" {
+func (p *E2BSandboxProvider) Release(ctx context.Context, agentID string) error {
+	if agentID == "" {
 		return nil
 	}
 	p.cacheMu.Lock()
-	entry, ok := p.cache[projectAgentID]
+	entry, ok := p.cache[agentID]
 	if ok {
-		delete(p.cache, projectAgentID)
+		delete(p.cache, agentID)
 	}
 	p.cacheMu.Unlock()
 	if !ok {
@@ -1017,7 +1008,7 @@ func (p *E2BSandboxProvider) Release(ctx context.Context, projectAgentID string)
 		}
 	}
 	p.cfg.Log.Info("agent_daemon sandbox released",
-		"project_agent_id", projectAgentID,
+		"agent_id", agentID,
 		"sandbox_id", entry.sandbox.SandboxID,
 		"device_id", entry.deviceID)
 	return nil
@@ -1029,14 +1020,14 @@ func (p *E2BSandboxProvider) Release(ctx context.Context, projectAgentID string)
 func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
 	cutoff := time.Now().UTC().Add(-SandboxIdleReapThreshold)
 	type victim struct {
-		projectAgentID string
+		agentID string
 		entry          *sandboxEntry
 	}
 	var victims []victim
 	p.cacheMu.Lock()
 	for pid, entry := range p.cache {
 		if entry.lastUsed.Before(cutoff) {
-			victims = append(victims, victim{projectAgentID: pid, entry: entry})
+			victims = append(victims, victim{agentID: pid, entry: entry})
 			delete(p.cache, pid)
 		}
 	}
@@ -1065,7 +1056,7 @@ func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
 			markCancel()
 		}
 		p.cfg.Log.Info("agent_daemon sandbox reaped (idle)",
-			"project_agent_id", v.projectAgentID,
+			"agent_id", v.agentID,
 			"sandbox_id", v.entry.sandbox.SandboxID,
 			"device_id", v.entry.deviceID,
 			"idle_for", time.Since(v.entry.lastUsed))
@@ -1132,9 +1123,9 @@ func (p *E2BSandboxProvider) checkDeviceAlive(ctx context.Context, deviceID, cac
 
 // evict drops a cache entry and best-efforts to kill the sandbox.
 // Used when a cached entry's device has gone offline.
-func (p *E2BSandboxProvider) evict(projectAgentID, sandboxID, bindingID string) {
+func (p *E2BSandboxProvider) evict(agentID, sandboxID, bindingID string) {
 	p.cacheMu.Lock()
-	delete(p.cache, projectAgentID)
+	delete(p.cache, agentID)
 	p.cacheMu.Unlock()
 	if sandboxID == "" {
 		return

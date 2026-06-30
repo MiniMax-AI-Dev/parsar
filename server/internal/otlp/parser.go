@@ -18,7 +18,6 @@ const (
 	AttrRequester     = "parsar.requester"
 	AttrExecutor      = "parsar.executor"
 	AttrWorkspaceID   = "parsar.workspace_id"
-	AttrProjectID     = "parsar.project_id"
 	AttrApprover      = "parsar.approver"
 	AttrCredentialID  = "parsar.credential.id"
 	AttrExternalURL   = "parsar.external_object.url"
