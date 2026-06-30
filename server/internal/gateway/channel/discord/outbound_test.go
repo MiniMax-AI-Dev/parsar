@@ -90,17 +90,22 @@ func TestReply_PostsPlainText(t *testing.T) {
 	}
 }
 
-func TestReply_PostsIntoThreadChannel(t *testing.T) {
+func TestReply_AlwaysPostsToChatChannel(t *testing.T) {
 	fake := &fakeSender{}
 	c := channelWithFake(fake)
 
-	// A Discord thread is a channel: posting into a thread targets its id.
+	// ExternalThreadID carries the conversation grouping key (ThreadKey, which
+	// falls back to the originating message id) — NOT a postable Discord
+	// channel. A Discord thread message already arrives with channel_id == the
+	// thread id, so ExternalChatID is always the correct post target and the
+	// thread slot must never override it (honouring it POSTed result cards to a
+	// message-id-as-channel → "Unknown Channel" 10003).
 	target := channel.ReplyTarget{ExternalChatID: "C1", ExternalThreadID: "TH9"}
 	if err := c.Reply(context.Background(), target, "ack"); err != nil {
 		t.Fatalf("Reply: %v", err)
 	}
-	if fake.postChannel != "TH9" {
-		t.Errorf("channel = %q, want TH9 (thread channel)", fake.postChannel)
+	if fake.postChannel != "C1" {
+		t.Errorf("channel = %q, want C1 (chat channel, never the thread/grouping key)", fake.postChannel)
 	}
 }
 

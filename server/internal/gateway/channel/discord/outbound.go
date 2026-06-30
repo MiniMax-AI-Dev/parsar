@@ -98,13 +98,19 @@ func (c *Channel) senderFor(ctx context.Context, target channel.ReplyTarget) (di
 	return c.newSender(cred.AppSecret), nil
 }
 
-// postChannel returns the channel id to post into: the thread channel when the
-// target carries one (a Discord thread is itself a channel), else the chat
-// channel. Edit reuses it so an edit lands on the same channel the send used.
+// postChannel returns the channel id to post into: always ExternalChatID.
+//
+// A Discord thread is itself a channel, so a message sent in a thread already
+// arrives with channel_id == the thread id — ExternalChatID therefore already
+// names the right post target for both top-level and in-thread origins.
+// ExternalThreadID is NOT a second post target: the neutral pipeline stores the
+// conversation's grouping key (InboundEvent.ThreadKey, which falls back to the
+// originating message id for a top-level message) into external_thread_id, and a
+// message id is not a postable channel. Honouring it made the inflight worker
+// POST result cards to a message-id-as-channel and Discord rejected them with
+// "Unknown Channel" (code 10003). Edit reuses this so an edit lands on the same
+// channel the send used.
 func postChannel(target channel.ReplyTarget) string {
-	if t := strings.TrimSpace(target.ExternalThreadID); t != "" {
-		return t
-	}
 	return strings.TrimSpace(target.ExternalChatID)
 }
 
