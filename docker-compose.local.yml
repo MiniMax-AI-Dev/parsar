@@ -113,6 +113,13 @@ services:
       PARSAR_MASTER_KEY: "parsar-dev-master-key-2026"
       PARSAR_FEISHU_WEBSOCKET: "true"
       PARSAR_FEISHU_OUTBOUND: "true"
+      # Workspace-dimension IM connector reconcilers (workspace_im_connectors
+      # table → one Socket Mode / Gateway runner per workspace|app_id, hot-
+      # reloading on token rotation). Opt-in gates read in main.go
+      # (buildSlackInboundManager / buildDiscordInboundManager); both reuse
+      # PARSAR_MASTER_KEY above to decrypt the vaulted bot tokens.
+      PARSAR_SLACK_CONNECTORS: "true"
+      PARSAR_DISCORD_CONNECTORS: "true"
       # Shared default Bot credentials. Values come from a gitignored .env
       # file next to this compose (NEVER hardcode the App Secret here — this
       # file is repo-tracked). The websocket manager reads these to open the

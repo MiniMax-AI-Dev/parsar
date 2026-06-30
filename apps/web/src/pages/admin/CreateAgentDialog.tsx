@@ -216,7 +216,7 @@ export function CreateAgentDialog({
   // picker's loading-state fallback option renders the right number
   // instead of mis-labelling the pinned row with the latest version.
   const [capabilityVersionChoices, setCapabilityVersionChoices] = useState<Record<string, { pinningMode: "latest" | "pinned"; versionID: string; pinnedVersion?: string }>>({})
-  const [visibility, setVisibility] = useState<"workspace" | "tenant" | "public">("workspace")
+  const [visibility, setVisibility] = useState<"workspace" | "tenant" | "public">("public")
   const [capabilitySearch, setCapabilitySearch] = useState("")
   const [capabilityTypeFilter, setCapabilityTypeFilter] = useState<"all" | "mcp" | "skill" | "plugin" | "system_prompt">("all")
   const [deviceID, setDeviceID] = useState("")
@@ -234,6 +234,9 @@ export function CreateAgentDialog({
   /** "personal" or "shared:<secret_id>" or "shared:new:<displayName>|<plaintext>". */
   const [modelBindingChoice, setModelBindingChoice] = useState<
     | { source: "personal" }
+    // Pending pick: shared selected, no secret chosen yet — required so a workspace
+    // with zero shared secrets can still flip source → "shared" and open the form.
+    | { source: "shared" }
     | { source: "shared"; existing_secret_id: string }
     | { source: "shared"; new_secret: { display_name: string; plaintext: string } }
   >({ source: "personal" })
@@ -423,7 +426,8 @@ export function CreateAgentDialog({
       setSelectedCapabilityIDs([])
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
-      setVisibility(cloneSource?.visibility ?? "workspace")
+      // Creation is locked to public; the visibility selector is hidden.
+      setVisibility("public")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
       setWorkDir(cloneSource ? workDirFromAgent(cloneSource) : "")
       // Clones explicitly drop the source agent's credential bindings: the
@@ -431,7 +435,10 @@ export function CreateAgentDialog({
       // previous clone's bindings would leak across dialog opens.
       setCredentialBindings({})
       setInitialCredentialBindings(undefined)
-      setModelBindingChoice({ source: "personal" })
+      // Create is locked to public, so personal binding is disabled — start on
+      // shared. Left as a pending pick here (secrets may still be loading); the
+      // resolver effect below upgrades it to the first existing secret if any.
+      setModelBindingChoice({ source: "shared" })
       setInlineNewSecrets([])
     } else if (agent) {
       setName(agent.name)
@@ -587,6 +594,18 @@ export function CreateAgentDialog({
   const hasModel = activeModels.length > 0
   const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
   const hasRequiredModel = !requiresModel || (hasModel && modelID !== "")
+  // Create opens model binding on a pending "shared" pick because secrets may
+  // still be loading; once they land, resolve to the first existing one. Gated
+  // on the credential_ref UI so no-credential models stay untouched; with zero
+  // secrets it stays pending and the inline new-secret form takes over.
+  useEffect(() => {
+    if (mode !== "create") return
+    if (!requiresModel || selectedModel?.credential_mode !== "credential_ref") return
+    if (modelBindingChoice.source !== "shared") return
+    if ("existing_secret_id" in modelBindingChoice || "new_secret" in modelBindingChoice) return
+    if (modelNewSecretExpanded || sharedSecrets.length === 0) return
+    setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
+  }, [mode, requiresModel, selectedModel, modelBindingChoice, modelNewSecretExpanded, sharedSecrets])
   const daemonExecutionEditable = connector === "agent_daemon"
   const showExecutionChoices = mode === "create" || daemonExecutionEditable
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
@@ -924,39 +943,6 @@ export function CreateAgentDialog({
               <Field label={t("agents.form.fields.description")}>
                 <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
               </Field>
-              {mode === "create" && (
-                <Field label={t("agents.table.visibility")} required>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {(["workspace", "tenant", "public"] as const).map((tier) => (
-                      <label key={tier} className={"flex cursor-pointer flex-col gap-1 rounded-md border px-3 py-2 text-sm " + (visibility === tier ? "border-line-strong bg-surface-subtle text-fg" : "border-line bg-surface text-fg-muted")}>
-                        <span className="flex items-center gap-2 font-medium">
-                          <input
-                            type="radio"
-                            name="agent-visibility"
-                            value={tier}
-                            checked={visibility === tier}
-                            onChange={() => setVisibility(tier)}
-                          />
-                          {t(`agents.visibility.${tier}` as never)}
-                        </span>
-                        <span className="pl-5 text-xs leading-4 text-fg-subtle">{t(`agents.visibility.${tier}Hint` as never)}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {visibility === "public" && (
-                    <div className="mt-2 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs leading-5 text-danger-emphasis">
-                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                      {t("credentialCheck.publicWarning")}
-                    </div>
-                  )}
-                  {visibility === "tenant" && (
-                    <div className="mt-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs leading-5 text-warning-emphasis">
-                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                      {t("credentialCheck.tenantHint")}
-                    </div>
-                  )}
-                </Field>
-              )}
             </section>
           )}
 
@@ -1173,10 +1159,12 @@ export function CreateAgentDialog({
                         className="mt-0.5"
                         checked={modelBindingChoice.source === "shared"}
                         onChange={() => {
-                          // Default selection on flip-in: existing secret if any, else open the new-secret form.
+                          // Default selection on flip-in: existing secret if any, else
+                          // mark shared "pending" so the radio selects + form renders.
                           if (sharedSecrets[0]) {
                             setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
                           } else {
+                            setModelBindingChoice({ source: "shared" })
                             setModelNewSecretExpanded(true)
                             setModelNewSecretDisplayName("")
                             setModelNewSecretPlaintext("")

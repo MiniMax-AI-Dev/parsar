@@ -1131,7 +1131,9 @@ select
   m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
-  m.sender_id::text,
+  -- system-authored messages (e.g. scheduled-task triggers) have a NULL
+  -- sender_id; coalesce so the row scans into a non-nullable string.
+  coalesce(m.sender_id::text, ''::text)::text as m_sender_id,
   m.kind,
   m.content_format,
   m.content,
@@ -4411,4 +4413,370 @@ left join agents a
  and a.deleted_at is null
 where c.id = @conversation_id::uuid;
 
+-- ============================================================
+-- scheduled_tasks
+-- ============================================================
 
+-- name: CreateScheduledTask :one
+insert into scheduled_tasks(
+  id, project_agent_id, name, prompt, cron_expr, timezone,
+  enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
+)
+values (@id::uuid, @project_agent_id::uuid, @name, @prompt, @cron_expr, @timezone,
+        @enabled, @feishu_chat_id, @feishu_chat_name, @next_run_at, @created_by, @now, @now)
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at;
+
+-- name: GetScheduledTask :one
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  -- Derive the display status from the linked run's live status so the
+  -- list/detail never get stuck on the 'queued' dispatch stamp. Task-level
+  -- states (skipped_overlap / auto_disabled) take precedence when set.
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = @id::uuid and t.deleted_at is null;
+
+-- name: ListScheduledTasksByProjectAgent :many
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.project_agent_id = @project_agent_id::uuid and t.deleted_at is null
+order by t.created_at desc;
+
+-- name: ListScheduledTasksByProjectPage :many
+-- Project-wide list (paginated): every scheduled task across all of the
+-- project's agents, newest first. last_status is derived from the linked run
+-- (see GetScheduledTask). The (created_at, id) tie-break keeps OFFSET paging
+-- stable; pair with CountScheduledTasksByProject for the page count.
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+left join agent_runs r on r.id = t.last_run_id
+where pa.project_id = @project_id::uuid and t.deleted_at is null
+order by t.created_at desc, t.id desc
+limit @item_limit offset @item_offset;
+
+-- name: CountScheduledTasksByProject :one
+-- Companion to ListScheduledTasksByProjectPage: total rows under the same
+-- filter so the pager can render "第 X-Y 条,共 N 条" and gate the Next button.
+select count(*)::bigint as total
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where pa.project_id = @project_id::uuid and t.deleted_at is null;
+
+-- name: GetScheduledTaskScope :one
+-- Resolve workspace/project/project_agent for RBAC gating from a task id.
+select
+  t.id::text             as id,
+  pa.id::text            as project_agent_id,
+  pa.project_id::text    as project_id,
+  pa.workspace_id::text  as workspace_id
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where t.id = @id::uuid and t.deleted_at is null;
+
+-- name: UpdateScheduledTask :one
+-- Re-enabling clears the failure state that tripped auto-disable. Without this,
+-- a task auto-disabled at the failure threshold keeps consecutive_failures >=
+-- threshold and last_status='auto_disabled'; the next cron fire would re-count
+-- the prior failed run and re-disable before dispatching, so flipping enabled
+-- back on via the UI would never actually run. Scoped to the disabled->enabled
+-- transition (old enabled=false, new enabled=true) so editing an already-
+-- enabled task doesn't wipe a meaningful in-flight failure count. last_run_id
+-- is intentionally left intact so the self-overlap guard still sees an active
+-- prior run.
+update scheduled_tasks
+set name = @name,
+    prompt = @prompt,
+    cron_expr = @cron_expr,
+    timezone = @timezone,
+    enabled = @enabled,
+    next_run_at = @next_run_at,
+    consecutive_failures = case
+      when enabled = false and @enabled = true then 0
+      else consecutive_failures
+    end,
+    last_status = case
+      when enabled = false and @enabled = true then ''
+      else last_status
+    end,
+    updated_at = @now::timestamptz
+where id = @id::uuid and deleted_at is null
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at;
+
+-- name: SoftDeleteScheduledTask :exec
+update scheduled_tasks
+set deleted_at = @now::timestamptz, updated_at = @now::timestamptz
+where id = @id::uuid and deleted_at is null;
+
+-- name: ClaimDueScheduledTasks :many
+-- Multi-pod-safe: FOR UPDATE OF t SKIP LOCKED so sibling pods get disjoint
+-- batches; claim lease (claimed_at/claimed_by) recovers crashed claims.
+-- Mirrors ClaimPendingQueuedFeishuRuns. Returns only what the scheduler
+-- needs to compute next_run_at; FireScheduledTaskRun re-reads FOR UPDATE.
+with picked as (
+  select t.id
+  from scheduled_tasks t
+  where t.enabled = true
+    and t.deleted_at is null
+    and t.next_run_at is not null
+    and t.next_run_at <= @now::timestamptz
+    and (
+      t.claimed_at is null
+      or t.claimed_at < @stale_before::timestamptz
+      or t.claimed_by = @claimed_by::text
+    )
+  order by t.next_run_at asc
+  limit @item_limit
+  for update of t skip locked
+),
+claimed as (
+  update scheduled_tasks t
+  set claimed_at = @now::timestamptz,
+      claimed_by = @claimed_by::text,
+      updated_at = @now::timestamptz
+  from picked
+  where t.id = picked.id
+  returning t.id, t.cron_expr, t.timezone
+)
+select claimed.id::text   as id,
+       claimed.cron_expr  as cron_expr,
+       claimed.timezone   as timezone
+from claimed;
+
+-- name: GetScheduledTaskForUpdate :one
+-- Row-lock the task and read the last run's terminal status for the
+-- self-overlap + failure-accounting decision in FireScheduledTaskRun.
+select
+  t.id::text                                   as id,
+  t.project_agent_id::text                     as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text  as conversation_id,
+  t.name                                       as name,
+  t.prompt                                     as prompt,
+  t.timezone                                   as timezone,
+  t.enabled                                    as enabled,
+  t.consecutive_failures                       as consecutive_failures,
+  coalesce(t.last_run_id::text, '')::text      as last_run_id,
+  coalesce(r.status, '')::text                 as last_run_status,
+  coalesce(t.created_by::text, '')::text       as created_by
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = @id::uuid and t.deleted_at is null
+for update of t;
+
+-- name: CreateScheduledAgentRun :exec
+-- 定时 run: trigger_source='scheduled_task', trigger_channel='cron',
+-- trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
+-- 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
+insert into agent_runs(
+  id, workspace_id, project_id, conversation_id,
+  trigger_message_id, trigger_source, trigger_channel, trigger_ref_type, trigger_ref_id,
+  requested_by_type, requested_by_id,
+  project_agent_id, connector_type, status, visibility, metadata,
+  created_at, updated_at
+)
+values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uuid,
+        @trigger_message_id::uuid, 'scheduled_task', 'cron', 'scheduled_task', @trigger_ref_id::uuid,
+        'user', @requested_by_id,
+        @project_agent_id::uuid, @connector_type, 'queued', 'project', @metadata::jsonb, @now, @now);
+
+-- name: MarkScheduledTaskDispatched :exec
+-- After a cron dispatch: stamp last run, set consecutive_failures to the
+-- recomputed value, advance next_run_at, release claim.
+update scheduled_tasks
+set last_run_at = @now::timestamptz,
+    last_run_id = @last_run_id::uuid,
+    conversation_id = @conversation_id::uuid,
+    last_status = 'queued',
+    consecutive_failures = @consecutive_failures::int,
+    next_run_at = @next_run_at,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: AdvanceScheduledTaskAfterSkip :exec
+-- Self-overlap skip: advance next_run_at, release claim, no run dispatched.
+update scheduled_tasks
+set next_run_at = @next_run_at,
+    last_status = 'skipped_overlap',
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: DisableScheduledTaskForFailures :exec
+-- Threshold reached: auto-disable, keep next_run_at advanced for re-enable.
+update scheduled_tasks
+set enabled = false,
+    last_status = 'auto_disabled',
+    consecutive_failures = @consecutive_failures::int,
+    next_run_at = @next_run_at,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: MarkScheduledTaskRunNow :exec
+-- run-now is out-of-band: stamp last run only, DO NOT touch next_run_at
+-- or consecutive_failures.
+update scheduled_tasks
+set last_run_at = @now::timestamptz,
+    last_run_id = @last_run_id::uuid,
+    conversation_id = @conversation_id::uuid,
+    last_status = 'queued',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: ListAgentRunsByScheduledTask :many
+select
+  id::text                                   as id,
+  conversation_id::text                      as conversation_id,
+  project_agent_id::text                     as project_agent_id,
+  connector_type,
+  status,
+  failure_reason,
+  trigger_source,
+  trigger_channel,
+  coalesce(trigger_ref_id::text, '')::text   as trigger_ref_id,
+  created_at, started_at, finished_at, updated_at
+from agent_runs
+where trigger_ref_type = 'scheduled_task' and trigger_ref_id = @task_id::uuid
+order by created_at desc
+limit @item_limit;
+
+
+
+-- ============================================================
+-- workspace_im_connectors — workspace 维度 IM 连接器(feishu/slack/discord)
+-- 见 migration 000002。凭据密文在 secrets(vault),本表 config 只存
+-- *_ref 与非敏感字段。app_id 是 workspace-bot 的通用 join key。
+-- ============================================================
+
+-- name: UpsertWorkspaceIMConnector :one
+-- 按 (workspace_id, platform) 唯一约束 upsert。冲突时更新 app_id /
+-- enabled / config / updated_at,保留 id / created_by / created_at。
+-- 若 (platform, app_id) 撞了别的 workspace,会触发 uk_wic_platform_appid
+-- 唯一冲突并报错(由 store 层映射成 *_app_id_in_use)。
+insert into workspace_im_connectors (
+  id, workspace_id, platform, app_id, enabled, config, created_by, created_at, updated_at
+) values (
+  @id::uuid, @workspace_id::uuid, @platform::text, @app_id::text,
+  @enabled::boolean, @config, nullif(@created_by::text, '')::uuid, @now, @now
+)
+on conflict (workspace_id, platform) where deleted_at is null
+do update set
+  app_id     = excluded.app_id,
+  enabled    = excluded.enabled,
+  config     = excluded.config,
+  updated_at = excluded.updated_at
+returning
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at;
+
+-- name: GetWorkspaceIMConnectors :many
+-- 拉取某 workspace 全部平台的有效连接器(前端面板初始化用)。
+select
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+from workspace_im_connectors
+where workspace_id = @workspace_id::uuid
+  and deleted_at is null
+order by platform;
+
+-- name: GetWorkspaceConnectorByAppID :one
+-- 出站 resolver 按 (platform, app_id) 反查启用的连接器,取 config 里的
+-- *_ref 解密 token。
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = @platform::text
+  and c.app_id = @app_id::text
+  and c.enabled = true
+  and c.deleted_at is null
+limit 1;
+
+-- name: ListWorkspaceConnectorsByPlatform :many
+-- 入站 reconciler 按平台扫描所有启用的连接器,为每条 (workspace_id,
+-- app_id) 维持一条长连接。
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = @platform::text
+  and c.enabled = true
+  and c.app_id <> ''
+  and c.deleted_at is null
+order by c.workspace_id, c.app_id;

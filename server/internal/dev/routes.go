@@ -189,6 +189,25 @@ type RuntimeStore interface {
 	ApproveJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	RejectJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error
+
+	// workspace 维度 IM 连接器(feishu/slack/discord 统一存储)。
+	// GET 面板初始化 + 三个平台的 upsert 写入。读取走 member 网关、
+	// 写入走 owner/admin 网关(见路由注册)。
+	GetWorkspaceIMConnectors(ctx context.Context, workspaceID string) ([]store.WorkspaceConnectorRead, error)
+	UpsertWorkspaceSlackConnector(ctx context.Context, input store.UpsertWorkspaceSlackConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+	UpsertWorkspaceDiscordConnector(ctx context.Context, input store.UpsertWorkspaceDiscordConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+	UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+
+	// 定时任务(scheduled tasks)
+	ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error)
+	ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error)
+	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error)
+	GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error)
+	UpdateScheduledTask(ctx context.Context, in store.UpdateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	SoftDeleteScheduledTask(ctx context.Context, taskID string) error
+	RunScheduledTaskNow(ctx context.Context, taskID string) (string, error)
+	ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error)
 }
 
 type FeishuAppRegistrationClient interface {
@@ -512,6 +531,14 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/project-agents/{projectAgentID}/disable", disableProjectAgent(runtimeStore))
 			r.Post("/project-agents/{projectAgentID}/enable", enableProjectAgent(runtimeStore))
 			r.Delete("/project-agents/{projectAgentID}", deleteProjectAgent(runtimeStore))
+			r.Get("/project-agents/{projectAgentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
+			r.Post("/project-agents/{projectAgentID}/scheduled-tasks", createScheduledTask(runtimeStore))
+			r.Get("/projects/{projectID}/scheduled-tasks", listScheduledTasksByProject(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}", getScheduledTask(runtimeStore))
+			r.Patch("/scheduled-tasks/{taskID}", updateScheduledTask(runtimeStore))
+			r.Delete("/scheduled-tasks/{taskID}", deleteScheduledTask(runtimeStore))
+			r.Post("/scheduled-tasks/{taskID}/run-now", runScheduledTaskNow(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
 			r.Get("/workspaces/{workspaceID}/project-agents/{projectAgentID}/runtime", getProjectAgentRuntimeBinding(runtimeStore))
@@ -520,6 +547,13 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Patch("/agents/{agentID}/visibility", updateAgentVisibility(runtimeStore))
 			r.Get("/agents/{agentID}/connector/feishu/diagnostics", getAgentFeishuConnectorDiagnostics(runtimeStore))
 			r.Patch("/agents/{agentID}/connector/feishu", updateAgentFeishuConnector(runtimeStore))
+			// Workspace-dimension IM connectors (feishu/slack/discord).
+			// Read = any member; write = owner/admin (a misconfigured bot
+			// can leak the workspace to the internet).
+			r.Get("/workspaces/{workspaceID}/connectors", gateWorkspaceMember(runtimeStore, listWorkspaceConnectors(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/slack", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceSlackConnector(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/discord", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceDiscordConnector(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/feishu", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceFeishuConnector(runtimeStore)))
 			r.Post("/agents/{agentID}/connector/feishu/provision/begin", beginAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Post("/agents/{agentID}/connector/feishu/provision/poll", pollAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Delete("/agents/{agentID}", deleteAgent(runtimeStore))
@@ -2266,6 +2300,158 @@ func updateAgentFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"feishu_connector": change})
+	}
+}
+
+// ============================================================
+// Workspace-dimension IM connectors (feishu / slack / discord)
+// ------------------------------------------------------------
+// Bound to the workspace, NOT to an agent: the same dimension as the
+// /list a user picks an agent from after @-summoning the shared bot.
+// Credentials live in the vault; the table stores only *_ref UUIDs +
+// non-secret fields. RBAC is enforced by the route gate middleware
+// (member for GET, owner/admin for PATCH), so the handlers trust the
+// URL workspaceID.
+// ============================================================
+
+type updateWorkspaceSlackConnectorBody struct {
+	Enabled          bool   `json:"enabled"`
+	AppID            string `json:"app_id"`
+	BotTokenRef      string `json:"bot_token_ref"`
+	AppTokenRef      string `json:"app_token_ref"`
+	SigningSecretRef string `json:"signing_secret_ref"`
+	EventMode        string `json:"event_mode"`
+}
+
+type updateWorkspaceDiscordConnectorBody struct {
+	Enabled      bool   `json:"enabled"`
+	AppID        string `json:"app_id"`
+	BotTokenRef  string `json:"bot_token_ref"`
+	PublicKeyRef string `json:"public_key_ref"`
+	Intents      string `json:"intents"`
+}
+
+type updateWorkspaceFeishuConnectorBody struct {
+	Enabled              bool   `json:"enabled"`
+	AppID                string `json:"app_id"`
+	AppSecretRef         string `json:"app_secret_ref"`
+	VerificationTokenRef string `json:"verification_token_ref"`
+	EncryptKeyRef        string `json:"encrypt_key_ref"`
+	BotOpenID            string `json:"bot_open_id"`
+	EventMode            string `json:"event_mode"`
+}
+
+// listWorkspaceConnectors returns all platforms' connector rows for the
+// workspace, decoded (config jsonb → map). Backs the admin panel's
+// initial state. Never exposes secret plaintext (only *_ref UUIDs).
+func listWorkspaceConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		connectors, err := runtimeStore.GetWorkspaceIMConnectors(r.Context(), workspaceID)
+		if err != nil {
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connectors": connectors})
+	}
+}
+
+func updateWorkspaceSlackConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceSlackConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceSlackConnector(r.Context(), store.UpsertWorkspaceSlackConnectorInput{
+			WorkspaceID:      workspaceID,
+			Enabled:          req.Enabled,
+			AppID:            req.AppID,
+			BotTokenRef:      req.BotTokenRef,
+			AppTokenRef:      req.AppTokenRef,
+			SigningSecretRef: req.SigningSecretRef,
+			EventMode:        req.EventMode,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrSlackConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "slack_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrSlackAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "slack_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
+	}
+}
+
+func updateWorkspaceDiscordConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceDiscordConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceDiscordConnector(r.Context(), store.UpsertWorkspaceDiscordConnectorInput{
+			WorkspaceID:  workspaceID,
+			Enabled:      req.Enabled,
+			AppID:        req.AppID,
+			BotTokenRef:  req.BotTokenRef,
+			PublicKeyRef: req.PublicKeyRef,
+			Intents:      req.Intents,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrDiscordConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "discord_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrDiscordAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "discord_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
+	}
+}
+
+func updateWorkspaceFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceFeishuConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceFeishuConnector(r.Context(), store.UpsertWorkspaceFeishuConnectorInput{
+			WorkspaceID:          workspaceID,
+			Enabled:              req.Enabled,
+			AppID:                req.AppID,
+			AppSecretRef:         req.AppSecretRef,
+			VerificationTokenRef: req.VerificationTokenRef,
+			EncryptKeyRef:        req.EncryptKeyRef,
+			BotOpenID:            req.BotOpenID,
+			EventMode:            req.EventMode,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrFeishuConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "feishu_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrFeishuAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "feishu_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
 	}
 }
 

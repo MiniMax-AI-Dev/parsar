@@ -157,6 +157,7 @@
       "approvals": "Inbox",
       "conversations": "Conversations",
       "runs": "Runs",
+      "scheduled": "Scheduled Tasks",
       "agents": "Agents",
       "connections": "Connections",
       "capabilities": "Capabilities",

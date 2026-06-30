@@ -17,8 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
 	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
@@ -46,6 +44,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/scheduler"
 	runtimesweeper "github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/sweeper"
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
@@ -53,6 +52,8 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const feishuStartupFatalMessage = "PARSAR_FEISHU_APP_ID/APP_SECRET/REDIRECT_URI and PARSAR_FEISHU_VERIFICATION_TOKEN required when not in mock mode; export PARSAR_FEISHU_MOCK=true for local dev"
@@ -732,6 +733,18 @@ func main() {
 		}
 	}
 
+	// Scheduled task scheduler: each cron fire dispatches an independent
+	// agent run (own session) into the task's container conversation.
+	if dbStore != nil {
+		if sc := buildScheduler(envLookup, dbStore); sc != nil {
+			go func() {
+				if err := sc.Run(ctx); err != nil {
+					log.Bg().Error("scheduled task scheduler exited with error", "error", err)
+				}
+			}()
+		}
+	}
+
 	// OSS lazy mode (PARSAR_FEISHU_OSS_SHARE_OAUTH_APP=true): collapses
 	// OAuth platform App and Feishu Bot onto a single App ID — only safe
 	// with ≤ 1 active Feishu-bot Agent. Refuse to start if more exist.
@@ -796,6 +809,39 @@ func main() {
 			go func() {
 				if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					log.Bg().Error("discord gateway runner exited", "error", err)
+				}
+			}()
+		}
+	}
+
+	// Slack workspace-dimension reconciler. Opt-in via PARSAR_SLACK_CONNECTORS=
+	// true. Reads workspace_im_connectors and keeps one Socket Mode runner per
+	// workspace|app_id, hot-reloading on token rotation — the DB-driven twin of
+	// the env-gated buildSlackRunner above.
+	if dbStore != nil {
+		if mgr, err := buildSlackInboundManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("slack connectors reconciler init failed", "error", err)
+			os.Exit(1)
+		} else if mgr != nil {
+			go func() {
+				if err := mgr.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("slack connectors reconciler exited", "error", err)
+				}
+			}()
+		}
+	}
+
+	// Discord workspace-dimension reconciler. Opt-in via PARSAR_DISCORD_CONNECTORS=
+	// true. Reads workspace_im_connectors and keeps one Gateway WebSocket runner
+	// per workspace|app_id — the DB-driven twin of buildDiscordRunner.
+	if dbStore != nil {
+		if mgr, err := buildDiscordInboundManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("discord connectors reconciler init failed", "error", err)
+			os.Exit(1)
+		} else if mgr != nil {
+			go func() {
+				if err := mgr.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					log.Bg().Error("discord connectors reconciler exited", "error", err)
 				}
 			}()
 		}
@@ -976,6 +1022,46 @@ func buildRuntimeHeartbeatSweeper(
 	}
 	log.Bg().Info("runtime heartbeat sweeper configured", "sweeper", sw.String())
 	return sw
+}
+
+// buildScheduler constructs the scheduled-task scheduler from env. Disabled by
+// PARSAR_SCHEDULER_ENABLED=false; tunables (optional, defaulted in
+// scheduler.New): PARSAR_SCHEDULER_INTERVAL_SECONDS,
+// PARSAR_SCHEDULER_CLAIM_STALE_SECONDS, PARSAR_SCHEDULER_CLAIM_BATCH.
+func buildScheduler(env func(string) string, st scheduler.Store) *scheduler.Scheduler {
+	if st == nil {
+		return nil
+	}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_ENABLED")); raw != "" && !truthy(raw) {
+		log.Bg().Info("scheduled task scheduler disabled by PARSAR_SCHEDULER_ENABLED")
+		return nil
+	}
+	opts := scheduler.Options{}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_INTERVAL_SECONDS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			opts.Interval = time.Duration(n) * time.Second
+		}
+	}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_CLAIM_STALE_SECONDS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			opts.ClaimStaleAfter = time.Duration(n) * time.Second
+		}
+	}
+	if raw := strings.TrimSpace(env("PARSAR_SCHEDULER_CLAIM_BATCH")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			opts.ClaimBatch = int32(n)
+		}
+	}
+	if host, err := os.Hostname(); err == nil && host != "" {
+		opts.ClaimedBy = "scheduler@" + host
+	}
+	sc, err := scheduler.New(st, opts)
+	if err != nil {
+		log.Bg().Error("scheduler construct failed", "error", err)
+		return nil
+	}
+	log.Bg().Info("scheduled task scheduler configured", "scheduler", sc.String())
+	return sc
 }
 
 // buildAgentDaemonWSURL returns the wss://.../agent-daemon/ws URL the
@@ -1390,6 +1476,7 @@ func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, 
 		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
 		JoinURLBuilder:            feishuJoinURLBuilder,
+		Connectors:                dbStore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("feishu websocket inbound: init manager: %w", err)
@@ -1597,6 +1684,154 @@ func buildDiscordRunner(env func(string) string, dbStore *store.Store, connector
 	return runner, nil
 }
 
+// buildSlackInboundManager constructs the workspace-dimension Slack Socket Mode
+// reconciler: it scans workspace_im_connectors for enabled slack rows and keeps
+// one Socket Mode runner per workspace|app_id, hot-reloading on token rotation.
+// This is the DB-driven multi-tenant twin of buildSlackRunner's single env bot.
+// Opt-in via PARSAR_SLACK_CONNECTORS=true; requires PARSAR_MASTER_KEY (vault
+// seal) since each bot's tokens are decrypted from the secret vault.
+//
+// The card-action router and the app_id credential resolver are built once and
+// shared across every per-bot adapter the NewAdapter factory mints — both
+// resolve by store lookup (card payload / app_id), not by a captured token, so a
+// single instance serves all workspace bots.
+func buildSlackInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*slackrunner.Manager, error) {
+	if !truthy(env("PARSAR_SLACK_CONNECTORS")) {
+		return nil, nil
+	}
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" {
+		return nil, errors.New("PARSAR_SLACK_CONNECTORS=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("slack connectors: init secrets service: %w", err)
+	}
+
+	var slackJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		slackJoinURLBuilder = func(workspaceID string) string {
+			return root + "/join-workspace?id=" + workspaceID + "&from=slack"
+		}
+	}
+
+	actionMgr, err := inbound.NewManager(inbound.Options{
+		Store:                     dbStore,
+		Secrets:                   secretsSvc,
+		Logger:                    slogFeishuInboundLogger{},
+		JoinURLBuilder:            slackJoinURLBuilder,
+		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		Connectors:                dbStore,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("slack connectors: init action manager: %w", err)
+	}
+	sharedOpts := []slackchannel.Option{slackchannel.WithActionRouter(actionMgr.CardActionRouter())}
+	resolver, err := buildSlackCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, fmt.Errorf("slack connectors: build credential resolver: %w", err)
+	}
+	if resolver != nil {
+		sharedOpts = append(sharedOpts, slackchannel.WithCredentialResolver(resolver))
+	}
+
+	newAdapter := func(appID, botToken, appToken string) *slackchannel.Channel {
+		return slackchannel.New(slackchannel.Config{
+			AppID:    appID,
+			BotToken: botToken,
+			AppToken: appToken,
+		}, sharedOpts...)
+	}
+
+	mgr, err := slackrunner.NewManager(slackrunner.ManagerConfig{
+		Store:       dbStore,
+		RouterStore: dbStore,
+		Secrets:     secretsSvc,
+		NewAdapter:  newAdapter,
+		GateConfig:  gatewaypkg.GateConfig{JoinURLBuilder: slackJoinURLBuilder},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("slack connectors: init manager: %w", err)
+	}
+	log.Bg().Info("slack connectors reconciler configured")
+	return mgr, nil
+}
+
+// buildDiscordInboundManager is the Discord twin of buildSlackInboundManager: it
+// scans workspace_im_connectors for enabled discord rows and keeps one Gateway
+// WebSocket runner per workspace|app_id. Opt-in via PARSAR_DISCORD_CONNECTORS=
+// true; requires PARSAR_MASTER_KEY. Discord uses one bot token (no app token),
+// so the NewAdapter factory takes only (appID, botToken). A MemoryPickStore is
+// injected per adapter so select-change interactions fold into the Submit click.
+func buildDiscordInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*discordrunner.Manager, error) {
+	if !truthy(env("PARSAR_DISCORD_CONNECTORS")) {
+		return nil, nil
+	}
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" {
+		return nil, errors.New("PARSAR_DISCORD_CONNECTORS=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("discord connectors: init secrets service: %w", err)
+	}
+
+	var discordJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		discordJoinURLBuilder = func(workspaceID string) string {
+			return root + "/join-workspace?id=" + workspaceID + "&from=discord"
+		}
+	}
+
+	actionMgr, err := inbound.NewManager(inbound.Options{
+		Store:                     dbStore,
+		Secrets:                   secretsSvc,
+		Logger:                    slogFeishuInboundLogger{},
+		JoinURLBuilder:            discordJoinURLBuilder,
+		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		Connectors:                dbStore,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discord connectors: init action manager: %w", err)
+	}
+	sharedActionRouter := actionMgr.CardActionRouter()
+	resolver, err := buildDiscordCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, fmt.Errorf("discord connectors: build credential resolver: %w", err)
+	}
+
+	newAdapter := func(appID, botToken string) *discordchannel.Channel {
+		opts := []discordchannel.Option{
+			discordchannel.WithPickStore(discordchannel.NewMemoryPickStore()),
+			discordchannel.WithActionRouter(sharedActionRouter),
+		}
+		if resolver != nil {
+			opts = append(opts, discordchannel.WithCredentialResolver(resolver))
+		}
+		return discordchannel.New(discordchannel.Config{
+			AppID:    appID,
+			BotToken: botToken,
+		}, opts...)
+	}
+
+	mgr, err := discordrunner.NewManager(discordrunner.ManagerConfig{
+		Store:       dbStore,
+		RouterStore: dbStore,
+		Secrets:     secretsSvc,
+		NewAdapter:  newAdapter,
+		GateConfig:  gatewaypkg.GateConfig{JoinURLBuilder: discordJoinURLBuilder},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discord connectors: init manager: %w", err)
+	}
+	log.Bg().Info("discord connectors reconciler configured")
+	return mgr, nil
+}
+
 // inboundPermissionRouter adapts the connector registry to the
 // inbound.PermissionRouter interface. The Feishu inbound
 // package can't depend on `connector` directly, so this adapter
@@ -1796,11 +2031,15 @@ func buildSlackCredentialResolver(env func(string) string, dbStore *store.Store)
 		strings.TrimSpace(env("PARSAR_SLACK_APP_ID")),
 		strings.TrimSpace(env("PARSAR_SLACK_BOT_TOKEN")),
 	)
-	return slackchannel.NewDBCredentialResolver(
+	legacy := slackchannel.NewDBCredentialResolver(
 		slackBotSecretLookupAdapter{store: dbStore},
 		secretsSvc,
 		fallback,
-	), nil
+	)
+	// Layer the workspace-dimension (app_id) resolver in front so a connector
+	// configured via the admin panel resolves first; legacy team_id/env is the
+	// fallback.
+	return wrapWithWorkspaceConnectorResolver(env, dbStore, "slack", legacy)
 }
 
 // discordBotSecretLookupAdapter bridges *store.Store to the discord channel's
@@ -1839,11 +2078,99 @@ func buildDiscordCredentialResolver(env func(string) string, dbStore *store.Stor
 		strings.TrimSpace(env("PARSAR_DISCORD_APP_ID")),
 		strings.TrimSpace(env("PARSAR_DISCORD_BOT_TOKEN")),
 	)
-	return discordchannel.NewDBCredentialResolver(
+	legacy := discordchannel.NewDBCredentialResolver(
 		discordBotSecretLookupAdapter{store: dbStore},
 		secretsSvc,
 		fallback,
-	), nil
+	)
+	return wrapWithWorkspaceConnectorResolver(env, dbStore, "discord", legacy)
+}
+
+// workspaceConnectorResolver is the workspace-dimension bot-token resolver.
+// It keys on the platform app_id (the join key into workspace_im_connectors
+// that is known at config-save time, unlike team_id/guild_id), reads the
+// connector's config.bot_token_ref, fetches that vault secret and decrypts
+// it per call so a rotated token takes effect without a restart. Any miss
+// (empty app_id, no enabled connector, missing ref) falls through to the
+// legacy team_id/guild_id (+ env) resolver, so existing deployments keep
+// working unchanged.
+type workspaceConnectorResolver struct {
+	store    *store.Store
+	secrets  *secrets.Service
+	platform string // "slack" | "discord"
+	tokenRef string // config key holding the secret id (e.g. "bot_token_ref")
+	fallback channel.CredentialResolver
+}
+
+func (r *workspaceConnectorResolver) Resolve(ctx context.Context, botID string) (channel.Credential, error) {
+	appID := strings.TrimSpace(botID)
+	if appID == "" {
+		return r.fallbackResolve(ctx, botID)
+	}
+	conn, err := r.store.GetWorkspaceConnectorByAppID(ctx, r.platform, appID)
+	if err != nil {
+		// botID may be a legacy team_id/guild_id rather than an app_id, or no
+		// workspace connector exists yet — defer to the legacy resolver.
+		return r.fallbackResolve(ctx, botID)
+	}
+	secretID, _ := conn.Config[r.tokenRef].(string)
+	secretID = strings.TrimSpace(secretID)
+	if secretID == "" {
+		return r.fallbackResolve(ctx, botID)
+	}
+	payload, err := r.store.GetSecretPayload(ctx, conn.WorkspaceID, secretID)
+	if err != nil {
+		return r.fallbackResolve(ctx, botID)
+	}
+	decrypted, err := r.secrets.Decrypt(payload.EncryptedPayload)
+	if err != nil {
+		return channel.Credential{}, fmt.Errorf("%s channel: decrypt bot token for app_id %s: %w", r.platform, appID, err)
+	}
+	token := strings.TrimSpace(botTokenFromPayload(decrypted))
+	if token == "" {
+		return channel.Credential{}, fmt.Errorf("%s channel: connector secret for app_id %s has no token value", r.platform, appID)
+	}
+	return channel.Credential{AppID: appID, AppSecret: token}, nil
+}
+
+func (r *workspaceConnectorResolver) fallbackResolve(ctx context.Context, botID string) (channel.Credential, error) {
+	if r.fallback == nil {
+		return channel.Credential{}, fmt.Errorf("%s channel: no workspace connector for app_id %q and no fallback resolver", r.platform, strings.TrimSpace(botID))
+	}
+	return r.fallback.Resolve(ctx, botID)
+}
+
+// botTokenFromPayload reads a bot token out of a decrypted secret payload
+// using the same key precedence the rest of the codebase uses for shared
+// credentials (api_key → token → access_token → value).
+func botTokenFromPayload(payload map[string]any) string {
+	for _, key := range []string{"bot_token", "api_key", "token", "access_token", "value"} {
+		if v, ok := payload[key].(string); ok && strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// wrapWithWorkspaceConnectorResolver layers the workspace-dimension (app_id)
+// resolver in front of an existing platform resolver. Returns the input
+// unchanged when no master key / store is available (resolver stays legacy).
+func wrapWithWorkspaceConnectorResolver(env func(string) string, dbStore *store.Store, platform string, legacy channel.CredentialResolver) (channel.CredentialResolver, error) {
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" || dbStore == nil {
+		return legacy, nil
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("%s workspace connector resolver: init secrets service: %w", platform, err)
+	}
+	return &workspaceConnectorResolver{
+		store:    dbStore,
+		secrets:  secretsSvc,
+		platform: platform,
+		tokenRef: "bot_token_ref",
+		fallback: legacy,
+	}, nil
 }
 
 // buildOutboundChannels assembles the neutral outbound channel registry the

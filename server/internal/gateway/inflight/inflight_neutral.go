@@ -86,6 +86,10 @@ func (w *Worker) handleNeutralInflightConversation(ctx context.Context, c store.
 		// multi-workspace adapter resolves the per-tenant bot token at send
 		// time. Empty for Feishu and single-tenant Slack, which ignore it.
 		TenantKey: c.TenantKey,
+		// SourceAppID is the workspace-bot app_id captured on inbound — the
+		// join key into workspace_im_connectors. The workspace-dimension
+		// resolver prefers it over TenantKey; empty for env-credential paths.
+		SourceAppID: c.SourceAppID,
 	}
 
 	if isCompleted || isFailed {
