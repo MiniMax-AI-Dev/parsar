@@ -36,7 +36,7 @@ import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAuditRecords } from "../../lib/api-governance"
 import type { AuditRecord, AuditSource } from "../../lib/api-types"
-import { useProjectId } from "../../lib/workspace"
+import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 
 /* ------------------------------------------------------------------ */
@@ -62,9 +62,7 @@ const SOURCE_TARGET_TYPES: Record<AuditSource, ReadonlyArray<string>> = {
   admin: [
     "workspace",
     "workspace_member",
-    "project",
-    "project_member",
-    "project_agent",
+    "agent",
     "secret",
     "model_provider",
     "model",
@@ -149,7 +147,7 @@ function ActorCell({ row }: { row: AuditRecord }) {
 
 export function AuditPage() {
   const { t } = useTranslation("admin")
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
   const [tab, setTab] = useState<SourceTab>("all")
   const [targetType, setTargetType] = useState<string>("")
   const [keyword, setKeyword] = useState("")
@@ -158,7 +156,7 @@ export function AuditPage() {
   const fmtAgo = useRelativeTime()
 
   // Backend filters server-side; client-side work is keyword search only.
-  const query = useAuditRecords(pid, {
+  const query = useAuditRecords(wsId, {
     source: tab === "all" ? undefined : tab,
     target_type: targetType || undefined,
   })
@@ -228,8 +226,8 @@ export function AuditPage() {
         description={t("audit.page.description")}
       />
       <SettingsTabs active="audit" />
-      {!pid ? (
-        <ScopeRequiredState scope="project" resourceName={t("audit.page.title")} />
+      {!wsId ? (
+        <ScopeRequiredState scope="workspace" resourceName={t("audit.page.title")} />
       ) : query.isLoading ? (
         <AuditLoadingSkeleton />
       ) : err ? (

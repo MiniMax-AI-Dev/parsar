@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiRequest, noUnreachableRetry } from "./api-client"
 import { KEY_AGENT_CAPABILITIES, KEY_CAPABILITIES_WORKSPACE, KEY_CAPABILITY_VERSIONS } from "./api-capabilities"
-import type { Capability, CapabilityVersion, ProjectAgent } from "./api-types"
+import type { Agent, Capability, CapabilityVersion } from "./api-types"
 
 export interface MarketplaceCapability extends Capability {
   capability_id?: string
@@ -39,7 +39,6 @@ export interface TargetMarketplaceInstall extends MarketplaceCapability {
 export interface EnabledMarketplaceAgent {
   id?: string
   agent_id?: string
-  project_agent_id?: string
   agent_name?: string
   name?: string
   capability_version_id?: string
@@ -144,9 +143,9 @@ async function deleteWorkspaceCapability(workspaceID: string, capabilityID: stri
   )
 }
 
-async function upgradeCapability(projectID: string, projectAgentID: string, capabilityID: string, versionID: string) {
+async function upgradeCapability(workspaceID: string, agentID: string, capabilityID: string, versionID: string) {
   return apiRequest(
-    `/api/v1/projects/${encodeURIComponent(projectID)}/agents/${encodeURIComponent(projectAgentID)}/capabilities/${encodeURIComponent(capabilityID)}/upgrade`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities/${encodeURIComponent(capabilityID)}/upgrade`,
     { method: "POST", body: { new_version_id: versionID } },
   )
 }
@@ -260,17 +259,17 @@ export function useUninstall(workspaceID: string | null) {
   })
 }
 
-export function useUpgrade(projectID: string | null, projectAgentID: string | null) {
+export function useUpgrade(workspaceID: string | null, agentID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ capabilityID, versionID }: { capabilityID: string; versionID: string }) => {
-      if (!projectID || !projectAgentID) throw new Error("project and agent are required")
-      return upgradeCapability(projectID, projectAgentID, capabilityID, versionID)
+      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
+      return upgradeCapability(workspaceID, agentID, capabilityID, versionID)
     },
     retry: noUnreachableRetry,
     onSuccess: () => {
-      if (projectID && projectAgentID) {
-        void qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(projectID, projectAgentID) })
+      if (workspaceID && agentID) {
+        void qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
       }
       void qc.invalidateQueries({ queryKey: ["admin", "targetMarketplaceInstalls"] })
     },
@@ -293,8 +292,7 @@ export function latestVersionOf(capability: Partial<MarketplaceCapability | Targ
   return versions?.[0]
 }
 
-export function agentDisplayID(agent: ProjectAgent | EnabledMarketplaceAgent): string {
-  if ("project_agent_id" in agent && agent.project_agent_id) return agent.project_agent_id
+export function agentDisplayID(agent: Agent | EnabledMarketplaceAgent): string {
   if ("agent_id" in agent && agent.agent_id) return agent.agent_id
   if ("id" in agent && agent.id) return agent.id
   return ""

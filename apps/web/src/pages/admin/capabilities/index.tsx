@@ -34,13 +34,13 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { ApiError } from "../../../lib/api-client"
 import { noUnreachableRetry } from "../../../lib/api-client"
-import { useProjectAgents } from "../../../lib/api-agents"
+import { useAgents } from "../../../lib/api-agents"
 import {
   KEY_AGENT_CAPABILITIES,
   KEY_CAPABILITY_VERSIONS,
   agentCapabilityVersionID,
   listCapabilityVersions,
-  listProjectAgentCapabilities,
+  listAgentCapabilities,
   skillVersionRef,
   useCapabilitiesQuery,
   useCapabilityQuery,
@@ -64,7 +64,7 @@ import {
 import { navigateAdmin, useAdminView } from "../../../lib/admin-router"
 import type { AgentCapability, Capability, CapabilityVersion } from "../../../lib/api-types"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
-import { useProjectId, useWorkspaceId } from "../../../lib/workspace"
+import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
 import { MarketplaceCapabilityDetail } from "./MarketplaceCapabilityDetail"
 import { MarketplaceTab } from "./MarketplaceTab"
@@ -90,7 +90,6 @@ type PageTab = "workspace" | "marketplace"
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
   const wid = useWorkspaceId()
-  const pid = useProjectId()
   const { navigate } = useAdminView()
   const [query, setQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<CapabilityTypeFilter>("all")
@@ -103,7 +102,7 @@ export function CapabilitiesPage() {
     setPage(1)
   }, [debouncedQuery, typeParam, pageSize])
   const capsQ = useCapabilitiesQuery(wid, debouncedQuery, typeParam, page, pageSize)
-  const agentsQ = useProjectAgents(pid)
+  const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
   const marketplaceInstallsQ = useTargetMarketplaceInstalls(wid)
   const publishMut = usePublish(wid)
@@ -127,9 +126,9 @@ export function CapabilitiesPage() {
   const agents = useMemo(() => agentsQ.data?.agents ?? [], [agentsQ.data])
   const agentCapabilityQueries = useQueries({
     queries: agents.map((agent) => ({
-      queryKey: KEY_AGENT_CAPABILITIES(pid ?? "_none", agent.project_agent_id),
-      queryFn: () => listProjectAgentCapabilities(pid, agent.project_agent_id),
-      enabled: !!pid,
+      queryKey: KEY_AGENT_CAPABILITIES(wid ?? "_none", agent.id),
+      queryFn: () => listAgentCapabilities(wid, agent.id),
+      enabled: !!wid,
       retry: noUnreachableRetry,
       staleTime: 30_000,
     })),
@@ -800,10 +799,9 @@ function CapabilityMenuItem({
 export function CapabilityDetailPage({ id }: { id: string }) {
   const { t, i18n } = useTranslation("admin")
   const wid = useWorkspaceId()
-  const pid = useProjectId()
   const capQ = useCapabilityQuery(wid, id)
   const versionsQ = useCapabilityVersionsQuery(wid, id)
-  const agentsQ = useProjectAgents(pid)
+  const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
   const updateMut = useUpdateCapability(wid)
   const publishMut = usePublish(wid)
@@ -821,7 +819,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const capability = capQ.data ?? null
   const latestVersion = versionsQ.data?.versions?.[0]
-  const installationSummary = useCapabilityEnabledAgents(pid, agentsQ.data?.agents ?? [], capability, versionsQ.data?.versions ?? [])
+  const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versionsQ.data?.versions ?? [])
   const enabledCount = installationSummary.installations.length
 
   const fromMarketplace = new URLSearchParams(window.location.search).get("from") === "marketplace"
@@ -1301,12 +1299,12 @@ function useCapabilityVersionSummary(workspaceID: string | null, capabilities: C
   }, [capabilities, queries.map((q) => q.dataUpdatedAt).join(":")])
 }
 
-function useCapabilityEnabledAgents(pid: string | null, agents: Array<{ project_agent_id: string; name: string }>, capability: Capability | null, versions: CapabilityVersion[]) {
+function useCapabilityEnabledAgents(wid: string | null, agents: Array<{ id: string; name: string }>, capability: Capability | null, versions: CapabilityVersion[]) {
   const queries = useQueries({
     queries: agents.map((agent) => ({
-      queryKey: KEY_AGENT_CAPABILITIES(pid ?? "_none", agent.project_agent_id),
-      queryFn: () => listProjectAgentCapabilities(pid, agent.project_agent_id),
-      enabled: !!pid && !!capability,
+      queryKey: KEY_AGENT_CAPABILITIES(wid ?? "_none", agent.id),
+      queryFn: () => listAgentCapabilities(wid, agent.id),
+      enabled: !!wid && !!capability,
       retry: noUnreachableRetry,
       staleTime: 30_000,
     })),
@@ -1322,7 +1320,7 @@ function useCapabilityEnabledAgents(pid: string | null, agents: Array<{ project_
         if (!item.enabled || item.capability_id !== capability.id) continue
         const versionID = agentCapabilityVersionID(item)
         versionCounts.set(versionID, (versionCounts.get(versionID) ?? 0) + 1)
-        installations.push({ agentID: agents[idx].project_agent_id, agentName: agents[idx].name, version: versionByID.get(versionID) ?? "—", latest: versionID === latest?.id })
+        installations.push({ agentID: agents[idx].id, agentName: agents[idx].name, version: versionByID.get(versionID) ?? "—", latest: versionID === latest?.id })
       }
     })
     return { installations, versionCounts, isLoading: queries.some((q) => q.isLoading) }

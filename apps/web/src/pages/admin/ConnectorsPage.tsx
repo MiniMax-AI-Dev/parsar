@@ -27,9 +27,9 @@ import {
 } from "../../components/ui/table"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
-import { useProjectConnectors } from "../../lib/api-registry"
+import { useWorkspaceConnectors } from "../../lib/api-registry"
 import type { ConnectorSummary } from "../../lib/api-types"
-import { useProjectId } from "../../lib/workspace"
+import { useWorkspaceId } from "../../lib/workspace"
 
 /* ------------------------------------------------------------------ */
 /*  Status badge                                                       */
@@ -56,10 +56,10 @@ function ConnectorStatusBadge({ status }: { status: ConnectorSummary["status"] }
 export function ConnectorsPage() {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
 
-  const query = useProjectConnectors(pid)
+  const query = useWorkspaceConnectors(wsId)
   const connectors = useMemo(() => query.data?.connectors ?? [], [query.data])
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
@@ -81,8 +81,8 @@ export function ConnectorsPage() {
       <p className="mb-4 rounded-lg border border-dashed border-line bg-surface-subtle/60 p-3 text-sm leading-relaxed text-fg-muted">
         {t("connectors.aggregateHint")}
       </p>
-      {!pid ? (
-        <ScopeRequiredState scope="project" resourceName={t("connectors.page.title")} />
+      {!wsId ? (
+        <ScopeRequiredState scope="workspace" resourceName={t("connectors.page.title")} />
       ) : query.isLoading ? (
         <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -174,9 +174,9 @@ export function ConnectorsPage() {
 export function ConnectorDetailPage({ id }: { id: string }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
 
-  const query = useProjectConnectors(pid)
+  const query = useWorkspaceConnectors(wsId)
   const connector = (query.data?.connectors ?? []).find((c) => c.connector_type === id)
 
   if (query.isLoading) {

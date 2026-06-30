@@ -84,7 +84,7 @@ function relativeAgo(iso: string): string {
 function sortBindings(bindings: SandboxBinding[], sortKey: SortKey): SandboxBinding[] {
   const copy = bindings.slice()
   if (sortKey === "agent") {
-    copy.sort((a, b) => (a.project_agent_id ?? "").localeCompare(b.project_agent_id ?? ""))
+    copy.sort((a, b) => (a.agent_id ?? "").localeCompare(b.agent_id ?? ""))
   } else if (sortKey === "created_at") {
     copy.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   } else {
@@ -144,7 +144,7 @@ export function RuntimePage() {
     [sandboxesQuery.data, sortKey],
   )
   const activeBindings = sandboxesQuery.error ? [] : bindings
-  // Offline rows are stale: runtime row is owned by project_agent
+  // Offline rows are stale: runtime row is owned by the agent
   // (deterministic name), not sandbox lifecycle, so when the sandbox
   // dies the row stays and the heartbeat sweeper just flips it offline.
   // Surfacing them as live daemons would mislead.
@@ -160,11 +160,11 @@ export function RuntimePage() {
     if (selected.size === 0 || !workspaceID) return
     setBulkPending(true)
     setBulkErrors([])
-    const toKill = activeBindings.filter((b) => selected.has(b.binding_id) && b.project_agent_id)
+    const toKill = activeBindings.filter((b) => selected.has(b.binding_id) && b.agent_id)
     const errors: { sandboxID: string; status: number | string; message: string }[] = []
     for (const b of toKill) {
       try {
-        await killSandboxRequestRaw(workspaceID, b.project_agent_id as string)
+        await killSandboxRequestRaw(workspaceID, b.agent_id as string)
       } catch (err) {
         const apiErr = err instanceof ApiError ? err : null
         errors.push({
@@ -405,10 +405,10 @@ function CloudInstancesPanel({
   const connTest = useSandboxConnectivityTest()
 
   function handleTestConnection(b: SandboxBinding) {
-    if (!workspaceID || !b.project_agent_id) return
+    if (!workspaceID || !b.agent_id) return
     setTestingId(b.binding_id)
     setTestResult(null)
-    connTest.mutateAsync({ workspaceID, projectAgentID: b.project_agent_id }).then(
+    connTest.mutateAsync({ workspaceID, agentID: b.agent_id }).then(
       (result) => {
         setTestResult({ bindingId: b.binding_id, result })
         setTestingId(null)
@@ -537,7 +537,7 @@ function CloudInstancesPanel({
           <TableBody>
             {bindings.map((b) => {
               const isTesting = testingId === b.binding_id
-              const canTest = isAdmin && b.status_kind !== "terminal" && Boolean(b.project_agent_id)
+              const canTest = isAdmin && b.status_kind !== "terminal" && Boolean(b.agent_id)
               const showResult = testResult?.bindingId === b.binding_id
               return (
                 <React.Fragment key={b.binding_id}>
@@ -553,7 +553,7 @@ function CloudInstancesPanel({
                       }
                     }}
                     role="link"
-                    aria-label={t("runtime.list.table.rowLabel", { agent: b.project_agent_id ?? b.sandbox_id })}
+                    aria-label={t("runtime.list.table.rowLabel", { agent: b.agent_id ?? b.sandbox_id })}
                     className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
                     data-testid={`runtime-row-${b.binding_id}`}
                   >
@@ -570,7 +570,7 @@ function CloudInstancesPanel({
                     <TableCell className="max-w-[180px] truncate font-mono text-sm text-fg-emphasis" title={b.sandbox_id}>
                       {b.sandbox_id}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-fg-subtle">{b.project_agent_id ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs text-fg-subtle">{b.agent_id ?? "—"}</TableCell>
                     <TableCell className="text-sm text-fg-muted">{b.template_id}</TableCell>
                     <TableCell><SandboxStatusBadge kind={b.status_kind} status={b.status} /></TableCell>
                     <TableCell>
@@ -678,7 +678,7 @@ function CloudDaemonRuntimesPanel({
         <TableHeader>
           <TableRow>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.projectAgent", { defaultValue: "Project Agent" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agent", { defaultValue: "Agent" })}</TableHead>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}</TableHead>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent engines" })}</TableHead>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "Status" })}</TableHead>
@@ -695,7 +695,7 @@ function CloudDaemonRuntimesPanel({
                 </div>
               </TableCell>
               <TableCell className="font-mono text-xs text-fg-subtle">
-                {runtimeConfigText(runtime, "project_agent_id") || "—"}
+                {runtimeConfigText(runtime, "agent_id") || "—"}
               </TableCell>
               <TableCell className="text-sm text-fg-muted">
                 {runtimeConfigText(runtime, "sandbox_kind") || runtime.provider}

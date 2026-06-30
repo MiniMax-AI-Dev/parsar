@@ -67,11 +67,11 @@ import { ApiError } from "../../lib/api-client"
 import { createConversation } from "../../lib/api-conversations"
 import {
   useCreateAgent,
-  useProjectAgents,
-  useSetProjectAgentStatus,
+  useAgents,
+  useSetAgentStatus,
   useUpdateAgent,
   useUpdateAgentVisibility,
-  useUpdateProjectAgentProfile,
+  useUpdateAgentProfile,
   useAgentMetrics,
   useAgentRuns,
   type AgentMetrics,
@@ -82,15 +82,15 @@ import { useSandboxBinding } from "../../lib/api-sandbox"
 import {
   useCapabilitiesQuery,
   useCapabilityVersionsQuery,
-  useDeleteProjectAgentCapabilityMutation,
-  useEnableProjectAgentCapabilityMutation,
-  useProjectAgentCapabilitiesQuery,
+  useDeleteAgentCapabilityMutation,
+  useEnableAgentCapabilityMutation,
+  useAgentCapabilitiesQuery,
 } from "../../lib/api-capabilities"
 import { useMyCredentials } from "../../lib/api-credentials"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useMarketplaceList } from "../../lib/api-marketplace"
-import type { AgentCapability, AgentRunStatus, AgentRunSummary, Capability, CapabilityVersion, Model, ProjectAgent, UserCredential } from "../../lib/api-types"
-import { useProjectId, useWorkspaceId } from "../../lib/workspace"
+import type { Agent, AgentCapability, AgentRunStatus, AgentRunSummary, Capability, CapabilityVersion, Model, UserCredential } from "../../lib/api-types"
+import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
 import { CapabilityTypeBadge } from "./CapabilitiesPage"
@@ -98,7 +98,7 @@ import { UpgradeCapabilityDialog } from "./capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "./capability-ui"
 
 /* ------------------------------------------------------------------ */
-/*  View-model derived from ProjectAgent                              */
+/*  View-model derived from Agent                              */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -106,8 +106,8 @@ import { credentialKindLabel } from "./capability-ui"
  * `default_model_id` (a UUID); falls back through legacy
  * `model_id` / `profile.model_id` shapes for older rows.
  */
-function defaultModelOf(a: ProjectAgent, models: Model[]): string {
-  const cfg = (a.agent_config as Record<string, unknown> | undefined) ?? {}
+function defaultModelOf(a: Agent, models: Model[]): string {
+  const cfg = (a.config as Record<string, unknown> | undefined) ?? {}
   const profile = (cfg.profile ?? {}) as Record<string, unknown>
   const id = String(cfg.default_model_id ?? cfg.model_id ?? profile.model_id ?? "")
   if (!id) return "—"
@@ -122,7 +122,7 @@ function connectorLabel(t: string): string {
   return t
 }
 
-function runtimeOf(a: ProjectAgent): "local" | "sandbox" {
+function runtimeOf(a: Agent): "local" | "sandbox" {
   // Backend zeroes out `a.runtime` for agent_daemon rows, so we can't
   // trust it alone — for agent_daemon the placement lives in
   // pa.config.daemon_mode. "unknown" fallback maps to "sandbox" so the
@@ -131,8 +131,8 @@ function runtimeOf(a: ProjectAgent): "local" | "sandbox" {
   return placement === "local" ? "local" : "sandbox"
 }
 
-function tagsOf(a: ProjectAgent): string[] {
-  const profile = ((a.agent_config as Record<string, unknown> | undefined)?.profile
+function tagsOf(a: Agent): string[] {
+  const profile = ((a.config as Record<string, unknown> | undefined)?.profile
     ?? {}) as Record<string, unknown>
   return Array.isArray(profile.skills) ? profile.skills.filter((v): v is string => typeof v === "string") : []
 }
@@ -147,7 +147,7 @@ function starterConversationTitle(agentName: string, language: string): string {
 /*  Status badge                                                       */
 /* ------------------------------------------------------------------ */
 
-function AgentStatusBadge({ status }: { status: ProjectAgent["status"] }) {
+function AgentStatusBadge({ status }: { status: Agent["status"] }) {
   const { t } = useTranslation("admin")
   if (status === "active") return <Badge variant="success" dot>{t("agents.status.active")}</Badge>
   if (status === "error") return <Badge variant="destructive" dot>{t("agents.status.error")}</Badge>
@@ -164,7 +164,7 @@ function AgentStatusBadge({ status }: { status: ProjectAgent["status"] }) {
  */
 type LivenessTone = "online" | "offline" | "pending"
 
-function runtimeLivenessTone(agent: ProjectAgent): LivenessTone | null {
+function runtimeLivenessTone(agent: Agent): LivenessTone | null {
   if (!agent.runtime_id) return null
   const lv = (agent.runtime_liveness ?? "").toLowerCase()
   if (lv === "online" || lv === "live") return "online"
@@ -177,7 +177,7 @@ function runtimeLivenessTone(agent: ProjectAgent): LivenessTone | null {
  * falls back to `pa.config.daemon_mode` (the backend zeroes the mirror
  * for `agent_daemon` rows). "unknown" only for pre-mirror legacy rows.
  */
-function executionPlacement(agent: ProjectAgent): "local" | "sandbox" | "unknown" {
+function executionPlacement(agent: Agent): "local" | "sandbox" | "unknown" {
   if (agent.runtime === "local") return "local"
   if (agent.runtime === "sandbox") return "sandbox"
   const pa = (agent.config as Record<string, unknown> | undefined) ?? {}
@@ -243,7 +243,7 @@ function TruncatedName({
  * `sandboxes.lifecycle_status` (running → green; spawning/renewing →
  * amber); Local dot follows `runtimes.liveness`.
  */
-function RuntimeCell({ agent }: { agent: ProjectAgent }) {
+function RuntimeCell({ agent }: { agent: Agent }) {
   const { t } = useTranslation("admin")
   const placement = executionPlacement(agent)
 
@@ -315,23 +315,22 @@ export function AgentsPage() {
   const { t, i18n } = useTranslation("admin")
   const { navigate } = useAdminView()
   const wid = useWorkspaceId()
-  const pid = useProjectId()
   const [keyword, setKeyword] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
-  const [editAgent, setEditAgent] = useState<ProjectAgent | null>(null)
-  const [cloneAgent, setCloneAgent] = useState<ProjectAgent | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<ProjectAgent | null>(null)
+  const [editAgent, setEditAgent] = useState<Agent | null>(null)
+  const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   // Spinning row icon + double-click guard for the Chat button.
   const [chatPendingID, setChatPendingID] = useState<string | null>(null)
 
-  const query = useProjectAgents(pid)
-  const createMut = useCreateAgent(wid, pid)
-  const cloneMut = useCreateAgent(wid, pid)
+  const query = useAgents(wid)
+  const createMut = useCreateAgent(wid)
+  const cloneMut = useCreateAgent(wid)
   const modelsQ = useModels(wid)
-  const updateMut = useUpdateAgent(pid)
-  const updateProfileMut = useUpdateProjectAgentProfile(pid)
-  const statusMut = useSetProjectAgentStatus(pid)
+  const updateMut = useUpdateAgent(wid)
+  const updateProfileMut = useUpdateAgentProfile(wid)
+  const statusMut = useSetAgentStatus(wid)
   const workspacesQ = useMyWorkspaces()
   const marketplaceQ = useMarketplaceList(wid)
   const agents = useMemo(() => query.data?.agents ?? [], [query.data])
@@ -350,21 +349,21 @@ export function AgentsPage() {
 
   // Spawns a fresh conversation rather than grafting onto unrelated
   // history; mirrors the post-create flow.
-  async function startChatWith(a: ProjectAgent) {
-    if (!pid || chatPendingID) return
-    setChatPendingID(a.project_agent_id)
+  async function startChatWith(a: Agent) {
+    if (!wid || chatPendingID) return
+    setChatPendingID(a.id)
     try {
-      const conversation = await createConversation(pid, {
+      const conversation = await createConversation(wid, {
         title: starterConversationTitle(a.name, i18n.language),
         surface: "web",
         form: "thread",
-        agent_id: a.project_agent_id,
+        agent_id: a.id,
       })
       navigate("conversations", { id: conversation.id, focus: "compose" })
     } catch {
       // Fall back to the detail page on failure — recoverable surface vs.
       // silent dead click.
-      navigate("agents", { id: a.project_agent_id })
+      navigate("agents", { id: a.id })
     } finally {
       setChatPendingID(null)
     }
@@ -392,8 +391,8 @@ export function AgentsPage() {
           <Button variant="outline" size="sm" onClick={() => navigate("agents", { pendingCapability: null })}>{t("agents.pendingCapability.cancel")}</Button>
         </div>
       )}
-      {!pid ? (
-        <ScopeRequiredState scope="project" resourceName={t("agents.page.title")} />
+      {!wid ? (
+        <ScopeRequiredState scope="workspace" resourceName={t("agents.page.title")} />
       ) : query.isLoading ? (
         <AgentsLoadingSkeleton />
       ) : err ? (
@@ -464,9 +463,9 @@ export function AgentsPage() {
                 <TableBody>
                   {filtered.map((a) => (
                     <TableRow
-                      key={a.project_agent_id}
+                      key={a.id}
                       className="cursor-pointer"
-                      onClick={() => navigate("agents", { id: a.project_agent_id })}
+                      onClick={() => navigate("agents", { id: a.id })}
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -486,8 +485,8 @@ export function AgentsPage() {
                             icon={MessageSquare}
                             label={t("agents.actions.chat")}
                             tone="primary"
-                            disabled={a.status !== "active" || !pid}
-                            busy={chatPendingID === a.project_agent_id}
+                            disabled={a.status !== "active" || !wid}
+                            busy={chatPendingID === a.id}
                             onClick={() => void startChatWith(a)}
                           />
                           <ActionIconButton
@@ -522,7 +521,6 @@ export function AgentsPage() {
         open={createOpen}
         mode="create"
         workspaceID={wid}
-        projectID={pid}
         workspaceRole={workspaceRole}
         models={modelsQ.data?.models ?? []}
         pending={createMut.isPending}
@@ -536,20 +534,20 @@ export function AgentsPage() {
             onSuccess: (created) => {
               setCreateOpen(false)
               void (async () => {
-                if (!pid) {
-                  navigate("agents", { id: created.project_agent_id })
+                if (!wid) {
+                  navigate("agents", { id: created.id })
                   return
                 }
                 try {
-                  const conversation = await createConversation(pid, {
+                  const conversation = await createConversation(wid, {
                     title: starterConversationTitle(created.name, i18n.language),
                     surface: "web",
                     form: "thread",
-                    agent_id: created.project_agent_id,
+                    agent_id: created.id,
                   })
                   navigate("conversations", { id: conversation.id, focus: "compose" })
                 } catch {
-                  navigate("agents", { id: created.project_agent_id })
+                  navigate("agents", { id: created.id })
                 }
               })()
             },
@@ -561,7 +559,6 @@ export function AgentsPage() {
         open={editAgent !== null}
         mode="edit"
         workspaceID={wid}
-        projectID={pid}
         workspaceRole={workspaceRole}
         models={modelsQ.data?.models ?? []}
         agent={editAgent ?? undefined}
@@ -574,15 +571,13 @@ export function AgentsPage() {
             updateProfileMut.reset()
           }
         }}
-        onSubmit={({ projectAgentID, body, projectAgentProfile }) => {
-          if (!projectAgentID) return
-          const agentID = agents.find((a) => a.project_agent_id === projectAgentID)?.agent_id
+        onSubmit={({ agentID, body, agentProfile }) => {
           if (!agentID) return
           void (async () => {
             try {
               await updateMut.mutateAsync({ agentID, body })
-              if (projectAgentProfile) {
-                await updateProfileMut.mutateAsync({ projectAgentID, body: projectAgentProfile })
+              if (agentProfile) {
+                await updateProfileMut.mutateAsync({ agentID, body: agentProfile })
               }
               setEditAgent(null)
             } catch {
@@ -597,7 +592,6 @@ export function AgentsPage() {
         open={cloneAgent !== null}
         mode="create"
         workspaceID={wid}
-        projectID={pid}
         workspaceRole={workspaceRole}
         models={modelsQ.data?.models ?? []}
         agent={cloneAgent ?? undefined}
@@ -638,7 +632,7 @@ export function AgentsPage() {
               onClick={() => {
                 if (!deleteTarget) return
                 statusMut.mutate(
-                  { projectAgentID: deleteTarget.project_agent_id, enabled: false },
+                  { agentID: deleteTarget.id, enabled: false },
                   {
                     onSuccess: () => {
                       setToast(t("agents.listActions.deletedToast", { name: deleteTarget.name }))
@@ -687,23 +681,22 @@ function AgentsLoadingSkeleton() {
 export function AgentDetailPage({ id }: { id: string }) {
   const { t } = useTranslation("admin")
   const { navigate, tab: requestedTab } = useAdminView()
-  const pid = useProjectId()
   const wid = useWorkspaceId()
   const [toast, setToast] = useState<string | null>(null)
   const pendingCapabilityID = new URLSearchParams(window.location.search).get("pendingCapability")
 
   // Detail reads from the cached list; no per-agent endpoint surfaced
   // in admin scope yet.
-  const query = useProjectAgents(pid)
+  const query = useAgents(wid)
   const modelsQ = useModels(wid)
   const workspacesQ = useMyWorkspaces()
-  const updateMut = useUpdateAgent(pid)
-  const statusMut = useSetProjectAgentStatus(pid)
+  const updateMut = useUpdateAgent(wid)
+  const statusMut = useSetAgentStatus(wid)
   const agents = query.data?.agents ?? []
-  const agent = agents.find((a) => a.project_agent_id === id) ?? agents[0]
+  const agent = agents.find((a) => a.id === id) ?? agents[0]
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
 
-  const agentCapabilitiesQ = useProjectAgentCapabilitiesQuery(pid, agent?.project_agent_id ?? null)
+  const agentCapabilitiesQ = useAgentCapabilitiesQuery(wid, agent?.id ?? null)
   const workspaceCapabilitiesQ = useCapabilitiesQuery(wid)
   const marketplaceQ = useMarketplaceList(wid)
 
@@ -754,7 +747,7 @@ export function AgentDetailPage({ id }: { id: string }) {
       {pendingCapabilityID && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-info-border bg-info-subtle px-3 py-2 text-sm text-info-emphasis">
           <span>{t("agents.pendingCapability.detailBanner", { name: (marketplaceQ.data ?? []).find((capability) => capability.id === pendingCapabilityID)?.name ?? pendingCapabilityID, source: (marketplaceQ.data ?? []).find((capability) => capability.id === pendingCapabilityID)?.source_workspace_name ?? "—" })}</span>
-          <Button variant="outline" size="sm" onClick={() => navigate("agents", { id: agent.project_agent_id, tab: "config", pendingCapability: null })}>{t("agents.pendingCapability.cancel")}</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("agents", { id: agent.id, tab: "config", pendingCapability: null })}>{t("agents.pendingCapability.cancel")}</Button>
         </div>
       )}
 
@@ -766,13 +759,12 @@ export function AgentDetailPage({ id }: { id: string }) {
         </TabsList>
 
         <TabsContent value="dynamics">
-          <AgentDynamicsTab projectID={pid} agent={agent} />
+          <AgentDynamicsTab workspaceID={wid} agent={agent} />
         </TabsContent>
 
         <TabsContent value="config">
           <AgentConfigTab
             agent={agent}
-            projectID={pid}
             workspaceID={wid}
             workspaceRole={workspaceRole}
             modelLabel={model}
@@ -788,9 +780,9 @@ export function AgentDetailPage({ id }: { id: string }) {
         <TabsContent value="audit">
           <Card title={t("agents.detail.audit.title")}>
             <ResourceAuditTimeline
-              pid={pid}
-              targetType="project_agent"
-              targetID={agent.project_agent_id}
+              wsId={wid}
+              targetType="agent"
+              targetID={agent.id}
             />
           </Card>
         </TabsContent>
@@ -856,7 +848,6 @@ function tCapabilityFallback(capabilityID: string) {
 function CapabilityCard({
   item,
   agent,
-  projectID,
   workspaceID,
   credentials,
   language,
@@ -864,8 +855,7 @@ function CapabilityCard({
   onToast,
 }: {
   item: { capability?: Capability; binding?: AgentCapability }
-  agent: ProjectAgent
-  projectID: string | null
+  agent: Agent
   workspaceID: string | null
   credentials: UserCredential[]
   language: string
@@ -898,7 +888,7 @@ function CapabilityCard({
           agent={agent}
           binding={binding}
           capabilityName={t("agents.detail.capabilities.deletedCapability.fallbackName")}
-          projectID={projectID}
+          workspaceID={workspaceID}
           onToast={onToast}
         />
       </div>
@@ -922,7 +912,6 @@ function CapabilityCard({
                 capability={capability}
                 binding={binding}
                 workspaceID={workspaceID}
-                projectID={projectID}
                 triggerLabel={t("agents.detail.capabilities.bindings.versionDeleted.switchAction")}
                 triggerVariant="link"
                 onToast={onToast}
@@ -946,7 +935,7 @@ function CapabilityCard({
           capability={capability}
           binding={binding}
           latestVersion={latest}
-          projectID={projectID}
+          workspaceID={workspaceID}
           disabled={deprecated}
           onToast={onToast}
         />
@@ -968,7 +957,6 @@ function CapabilityCard({
               agent={agent}
               capability={capability}
               workspaceID={workspaceID}
-              projectID={projectID}
               credentials={credentials}
               language={language}
               onToast={onToast}
@@ -981,7 +969,6 @@ function CapabilityCard({
                   capability={capability}
                   binding={binding}
                   workspaceID={workspaceID}
-                  projectID={projectID}
                   onToast={onToast}
                 />
               )}
@@ -989,7 +976,7 @@ function CapabilityCard({
                 agent={agent}
                 binding={binding}
                 capabilityName={capability.name}
-                projectID={projectID}
+                workspaceID={workspaceID}
                 onToast={onToast}
               />
             </>
@@ -1114,15 +1101,13 @@ function EnableCapabilityDialog({
   agent,
   capability,
   workspaceID,
-  projectID,
   credentials,
   language,
   onToast,
 }: {
-  agent: ProjectAgent
+  agent: Agent
   capability: Capability
   workspaceID: string | null
-  projectID: string | null
   credentials: UserCredential[]
   language: string
   onToast: (message: string) => void
@@ -1132,7 +1117,7 @@ function EnableCapabilityDialog({
   const [selected, setSelected] = useState("")
   const [allCredentialsSatisfied, setAllCredentialsSatisfied] = useState(true)
   const versionsQ = useCapabilityVersionsQuery(workspaceID, open ? capability.id : null)
-  const mut = useEnableProjectAgentCapabilityMutation(projectID, agent.project_agent_id)
+  const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
   const versions = versionsQ.data?.versions ?? []
   const requiredCreds = capability.required_credentials ?? []
   const requiredKinds = requiredCreds.filter((rc) => rc.required)
@@ -1202,16 +1187,14 @@ function SwitchVersionDialog({
   capability,
   binding,
   workspaceID,
-  projectID,
   triggerLabel,
   triggerVariant = "ghost",
   onToast,
 }: {
-  agent: ProjectAgent
+  agent: Agent
   capability: Capability
   binding: AgentCapability
   workspaceID: string | null
-  projectID: string | null
   triggerLabel?: string
   triggerVariant?: "ghost" | "link"
   onToast: (message: string) => void
@@ -1220,7 +1203,7 @@ function SwitchVersionDialog({
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState(binding.capability_version_id)
   const versionsQ = useCapabilityVersionsQuery(workspaceID, open ? capability.id : null)
-  const mut = useEnableProjectAgentCapabilityMutation(projectID, agent.project_agent_id)
+  const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
   const versions = versionsQ.data?.versions ?? []
   const selectedVersion = versions.find((version) => version.id === selected)
   const canSwitch = !!selectedVersion && selected !== binding.capability_version_id && !mut.isPending
@@ -1271,18 +1254,18 @@ function RemoveCapabilityDialog({
   agent,
   binding,
   capabilityName,
-  projectID,
+  workspaceID,
   onToast,
 }: {
-  agent: ProjectAgent
+  agent: Agent
   binding: AgentCapability
   capabilityName: string
-  projectID: string | null
+  workspaceID: string | null
   onToast: (message: string) => void
 }) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(false)
-  const mut = useDeleteProjectAgentCapabilityMutation(projectID, agent.project_agent_id)
+  const mut = useDeleteAgentCapabilityMutation(workspaceID, agent.id)
   const submit = () => {
     mut.mutate(binding.capability_version_id, {
       onSuccess: () => {
@@ -1339,19 +1322,19 @@ function Stat({ label, value }: { label: string; value: string }) {
  */
 function VisibilityCard({
   agentID,
-  projectID,
+  workspaceID,
   current,
   canEdit,
   onSuccess,
 }: {
   agentID: string
-  projectID: string | null
+  workspaceID: string | null
   current: AgentVisibility
   canEdit: boolean
   onSuccess: (next: AgentVisibility) => void
 }) {
   const { t } = useTranslation("admin")
-  const mut = useUpdateAgentVisibility(projectID)
+  const mut = useUpdateAgentVisibility(workspaceID)
   const [pendingDowngrade, setPendingDowngrade] = useState<AgentVisibility | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -1474,19 +1457,19 @@ function VisibilityCard({
 
 const RECENT_RUNS_LIMIT = 10
 
-function AgentDynamicsTab({ projectID, agent }: { projectID: string | null; agent: ProjectAgent }) {
+function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string | null; agent: Agent }) {
   const { t } = useTranslation("admin")
-  // Filter client-side: list-runs takes only project + status, no
+  // Filter client-side: list-runs takes only workspace + status, no
   // per-agent query option yet.
-  const inflightQ = useAgentRuns(projectID, { statuses: ["running", "queued"], limit: 50 })
-  const recentQ = useAgentRuns(projectID, { limit: 50 })
-  const metricsQ = useAgentMetrics(projectID, agent.project_agent_id, 30)
+  const inflightQ = useAgentRuns(workspaceID, { statuses: ["running", "queued"], limit: 50 })
+  const recentQ = useAgentRuns(workspaceID, { limit: 50 })
+  const metricsQ = useAgentMetrics(workspaceID, agent.id, 30)
 
   const inflight = (inflightQ.data?.agent_runs ?? []).filter(
-    (r) => r.project_agent_id === agent.project_agent_id,
+    (r) => r.agent_id === agent.id,
   )
   const recent = (recentQ.data?.agent_runs ?? [])
-    .filter((r) => r.project_agent_id === agent.project_agent_id)
+    .filter((r) => r.agent_id === agent.id)
     .slice(0, RECENT_RUNS_LIMIT)
 
   return (
@@ -1692,7 +1675,6 @@ function formatDurationMs(ms: number): string {
 
 function AgentConfigTab({
   agent,
-  projectID,
   workspaceID,
   workspaceRole,
   modelLabel,
@@ -1703,8 +1685,7 @@ function AgentConfigTab({
   capabilitiesError,
   onToast,
 }: {
-  agent: ProjectAgent
-  projectID: string | null
+  agent: Agent
   workspaceID: string | null
   workspaceRole?: string
   modelLabel: string
@@ -1760,12 +1741,11 @@ function AgentConfigTab({
       {/* sandbox-mode agents it IS the runtime surface. Skipped for  */}
       {/* local agents (no sandbox to manage).                        */}
       {runtimeOf(agent) === "sandbox" && (
-        <SandboxPanel workspaceID={workspaceID} projectAgentID={agent.project_agent_id} />
+        <SandboxPanel workspaceID={workspaceID} agentID={agent.id} />
       )}
 
       <ConfigCapabilitiesSection
         agent={agent}
-        projectID={projectID}
         workspaceID={workspaceID}
         isAdmin={isAdmin}
         enabledCaps={enabledCaps}
@@ -1782,7 +1762,6 @@ function AgentConfigTab({
 
 function ConfigCapabilitiesSection({
   agent,
-  projectID,
   workspaceID,
   isAdmin,
   enabledCaps,
@@ -1793,8 +1772,7 @@ function ConfigCapabilitiesSection({
   language,
   onToast,
 }: {
-  agent: ProjectAgent
-  projectID: string | null
+  agent: Agent
   workspaceID: string | null
   isAdmin: boolean
   enabledCaps: Array<{ binding: AgentCapability; capability?: Capability }>
@@ -1858,7 +1836,6 @@ function ConfigCapabilitiesSection({
               key={item.binding.id ?? item.capability?.id}
               item={item}
               agent={agent}
-              projectID={projectID}
               workspaceID={workspaceID}
               credentials={credentials}
               language={language}
@@ -1873,7 +1850,6 @@ function ConfigCapabilitiesSection({
         open={addOpen}
         onOpenChange={setAddOpen}
         agent={agent}
-        projectID={projectID}
         workspaceID={workspaceID}
         installable={installable}
         credentials={credentials}
@@ -1892,7 +1868,6 @@ function AddCapabilityDialog({
   open,
   onOpenChange,
   agent,
-  projectID,
   workspaceID,
   installable,
   credentials,
@@ -1901,8 +1876,7 @@ function AddCapabilityDialog({
 }: {
   open: boolean
   onOpenChange: (next: boolean) => void
-  agent: ProjectAgent
-  projectID: string | null
+  agent: Agent
   workspaceID: string | null
   installable: Capability[]
   credentials: UserCredential[]
@@ -1960,7 +1934,6 @@ function AddCapabilityDialog({
                       agent={agent}
                       capability={capability}
                       workspaceID={workspaceID}
-                      projectID={projectID}
                       credentials={credentials}
                       language={language}
                       onToast={(msg) => {

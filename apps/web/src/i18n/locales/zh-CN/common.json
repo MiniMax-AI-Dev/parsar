@@ -31,13 +31,10 @@
     "placeholder": "跳转到运行 / Agent / 对话…"
   },
   "workspaceSwitcher": {
-    "triggerAriaLabel": "切换工作区 / 项目",
+    "triggerAriaLabel": "切换工作区",
     "demoWorkspace": "演示工作区",
     "workspaceLabel": "工作区",
-    "projectsLabel": "项目",
-    "projectsInLabel": "{{workspace}} 下的项目",
     "noWorkspaces": "暂无可用工作区",
-    "noProjects": "该工作区下还没有项目",
     "pickWorkspaceFirst": "请先选择一个工作区",
     "discoverLabel": "其他工作区",
     "memberCount": "{{count}} 人",
@@ -81,24 +78,13 @@
     "workspace": {
       "createAction": "新建工作区",
       "createTitle": "新建工作区",
-      "createDescription": "工作区承载项目、成员和共享注册表。你将自动成为新建工作区的 Owner。系统标识会自动生成。",
+      "createDescription": "工作区承载 Agent、成员和共享注册表。你将自动成为新建工作区的 Owner。系统标识会自动生成。",
       "renameTitle": "重命名工作区",
       "renameDescription": "修改工作区显示名称。系统标识不可修改。",
       "archiveTitle": "归档工作区",
-      "archiveDescription": "确认归档「{{name}}」？归档后将从切换器中消失，原有成员和项目保留在数据库中，但通过工作区维度的查询都不会再返回。",
+      "archiveDescription": "确认归档「{{name}}」？归档后将从切换器中消失，原有成员和 Agent 保留在数据库中，但通过工作区维度的查询都不会再返回。",
       "archiveMarketplaceDependents": "如果这个工作区发布的市场能力仍被其它工作区的 Agent 使用，归档会被阻止。请先取消发布并等待对方移除后再归档。",
       "namePlaceholder": "例如：平台团队"
-    },
-    "project": {
-      "createAction": "新建项目",
-      "createTitle": "新建项目",
-      "createDescription": "项目用来组织对话、运行和审批，归属于一个工作区。你将自动成为新建项目的 Owner。系统标识会自动生成。",
-      "renameTitle": "重命名项目",
-      "renameDescription": "修改项目名称或描述。系统标识不可修改。",
-      "archiveTitle": "归档项目",
-      "archiveDescription": "确认归档「{{name}}」？项目会从切换器隐藏（status=archived），历史数据仍然保留。",
-      "namePlaceholder": "例如：Q3 迁移",
-      "descriptionPlaceholder": "可选的简短描述"
     },
     "join": {
       "title": "申请加入「{{name}}」",
@@ -132,7 +118,7 @@
   },
   "onboarding": {
     "title": "创建你的第一个工作区",
-    "subtitle": "工作区是团队协作处理项目和 Agent 的共享空间。你将自动成为它的 Owner。",
+    "subtitle": "工作区是团队协作处理 Agent 的共享空间。你将自动成为它的 Owner。",
     "fields": {
       "name": "工作区名称",
       "namePlaceholder": "例如：平台团队"
@@ -198,15 +184,6 @@
     "workspace": {
       "title": "选择 Workspace 查看{{resource}}",
       "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。"
-    },
-    "project": {
-      "noWorkspaceTitle": "先选择 Workspace",
-      "noWorkspaceDescription": "这些数据按 Project 展示。请先在顶部选择 Workspace，再选择 Project。",
-      "loadingTitle": "正在读取 Project",
-      "loadingDescription": "读取当前 Workspace 下的 Project 后，就能切换到对应数据范围。",
-      "noProjectsTitle": "当前 Workspace 还没有可用 Project",
-      "selectTitle": "选择 Project 查看{{resource}}",
-      "selectDescription": "Project 是当前页面的数据范围。选择后侧边栏保持不变，页面会切换到对应范围。"
     }
   }
 }

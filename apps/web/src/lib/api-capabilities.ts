@@ -10,7 +10,7 @@ import type {
   EnableAgentCapabilityRequest,
   ListCapabilitiesResponse,
   ListCapabilityVersionsResponse,
-  ListProjectAgentCapabilitiesResponse,
+  ListAgentCapabilitiesResponse,
   RequiredCredential,
 } from "./api-types"
 import type { CanonicalSpec, SystemPromptMode } from "../pages/admin/capabilities/types"
@@ -25,8 +25,8 @@ const KEY_CAPABILITY = (workspaceID: string, capabilityID: string) =>
   ["admin", "capability", workspaceID, capabilityID] as const
 export const KEY_CAPABILITY_VERSIONS = (workspaceID: string, capabilityID: string) =>
   ["admin", "capabilityVersions", workspaceID, capabilityID] as const
-export const KEY_AGENT_CAPABILITIES = (projectID: string, projectAgentID: string) =>
-  ["admin", "agentCapabilities", projectID, projectAgentID] as const
+export const KEY_AGENT_CAPABILITIES = (workspaceID: string, agentID: string) =>
+  ["admin", "agentCapabilities", workspaceID, agentID] as const
 
 export interface CreateCapabilityRequest {
   type: CapabilityType
@@ -183,15 +183,15 @@ async function createCapabilityVersion(
   )
 }
 
-export async function listProjectAgentCapabilities(
-  projectID: string | null,
-  projectAgentID: string | null
-): Promise<ListProjectAgentCapabilitiesResponse> {
-  if (!projectID || !projectAgentID) {
-    return { project_id: projectID ?? "", project_agent_id: projectAgentID ?? "", installed: [], available: [] }
+export async function listAgentCapabilities(
+  workspaceID: string | null,
+  agentID: string | null
+): Promise<ListAgentCapabilitiesResponse> {
+  if (!workspaceID || !agentID) {
+    return { workspace_id: workspaceID ?? "", agent_id: agentID ?? "", installed: [], available: [] }
   }
-  const data = await apiRequest<ListProjectAgentCapabilitiesResponse>(
-    `/api/v1/projects/${encodeURIComponent(projectID)}/agents/${encodeURIComponent(projectAgentID)}/capabilities`
+  const data = await apiRequest<ListAgentCapabilitiesResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities`
   )
   return { ...data, installed: data.installed.map(normalizeAgentCapability), available: data.available.map(normalizeCapability) }
 }
@@ -230,25 +230,25 @@ function noWorkspaceError(): ApiError {
   return new ApiError({ status: 0, code: "no_workspace", message: "no workspace selected" })
 }
 
-async function enableProjectAgentCapability(
-  projectID: string,
-  projectAgentID: string,
+async function enableAgentCapability(
+  workspaceID: string,
+  agentID: string,
   capabilityVersionID: string,
   body: EnableAgentCapabilityRequest,
 ) {
   return apiRequest(
-    `/api/v1/projects/${encodeURIComponent(projectID)}/agents/${encodeURIComponent(projectAgentID)}/capabilities/${encodeURIComponent(capabilityVersionID)}/enable`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities/${encodeURIComponent(capabilityVersionID)}/enable`,
     { method: "POST", body },
   )
 }
 
-async function deleteProjectAgentCapability(
-  projectID: string,
-  projectAgentID: string,
+async function deleteAgentCapability(
+  workspaceID: string,
+  agentID: string,
   capabilityVersionID: string,
 ) {
   return apiRequest<void>(
-    `/api/v1/projects/${encodeURIComponent(projectID)}/agents/${encodeURIComponent(projectAgentID)}/capabilities/${encodeURIComponent(capabilityVersionID)}`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities/${encodeURIComponent(capabilityVersionID)}`,
     { method: "DELETE" },
   )
 }
@@ -282,14 +282,14 @@ export function useCapabilityVersionsQuery(workspaceID: string | null, capabilit
   })
 }
 
-export function useProjectAgentCapabilitiesQuery(
-  projectID: string | null,
-  projectAgentID: string | null
+export function useAgentCapabilitiesQuery(
+  workspaceID: string | null,
+  agentID: string | null
 ) {
   return useQuery({
-    queryKey: KEY_AGENT_CAPABILITIES(projectID ?? "_none", projectAgentID ?? "_none"),
-    queryFn: () => listProjectAgentCapabilities(projectID, projectAgentID),
-    enabled: !!projectID && !!projectAgentID,
+    queryKey: KEY_AGENT_CAPABILITIES(workspaceID ?? "_none", agentID ?? "_none"),
+    queryFn: () => listAgentCapabilities(workspaceID, agentID),
+    enabled: !!workspaceID && !!agentID,
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })
@@ -324,20 +324,20 @@ export function useUpdateCapability(workspaceID: string | null) {
   })
 }
 
-export function useEnableProjectAgentCapabilityMutation(
-  projectID: string | null,
-  projectAgentID: string | null,
+export function useEnableAgentCapabilityMutation(
+  workspaceID: string | null,
+  agentID: string | null,
 ) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ capabilityVersionID, configuration, pinningMode }: { capabilityVersionID: string; configuration?: Record<string, unknown>; pinningMode?: "latest" | "pinned" }) => {
-      if (!projectID || !projectAgentID) throw new Error("project and agent are required")
-      return enableProjectAgentCapability(projectID, projectAgentID, capabilityVersionID, { configuration, pinning_mode: pinningMode })
+      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
+      return enableAgentCapability(workspaceID, agentID, capabilityVersionID, { configuration, pinning_mode: pinningMode })
     },
     retry: noUnreachableRetry,
     onSuccess: () => {
-      if (projectID && projectAgentID) {
-        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(projectID, projectAgentID) })
+      if (workspaceID && agentID) {
+        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
       }
     },
   })
@@ -373,20 +373,20 @@ export function aggregateRequiredCredentialsByID(
   return result
 }
 
-export function useDeleteProjectAgentCapabilityMutation(
-  projectID: string | null,
-  projectAgentID: string | null,
+export function useDeleteAgentCapabilityMutation(
+  workspaceID: string | null,
+  agentID: string | null,
 ) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (capabilityVersionID: string) => {
-      if (!projectID || !projectAgentID) throw new Error("project and agent are required")
-      return deleteProjectAgentCapability(projectID, projectAgentID, capabilityVersionID)
+      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
+      return deleteAgentCapability(workspaceID, agentID, capabilityVersionID)
     },
     retry: noUnreachableRetry,
     onSuccess: () => {
-      if (projectID && projectAgentID) {
-        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(projectID, projectAgentID) })
+      if (workspaceID && agentID) {
+        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
       }
     },
   })

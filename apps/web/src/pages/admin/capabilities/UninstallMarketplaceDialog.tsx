@@ -37,7 +37,7 @@ export function UninstallMarketplaceDialog({ capability, agents, open, pending, 
         <div className="space-y-3">
           <ul className="max-h-44 space-y-1 overflow-auto rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
             {(agents.length > 0 ? agents : [{ name: t("capabilities.uninstall.unknownAgent") }]).map((agent, index) => (
-              <li key={agent.project_agent_id ?? agent.agent_id ?? agent.id ?? index}>· {agent.name ?? agent.agent_name ?? t("capabilities.uninstall.unknownAgent")}</li>
+              <li key={agent.agent_id ?? agent.id ?? index}>· {agent.name ?? agent.agent_name ?? t("capabilities.uninstall.unknownAgent")}</li>
             ))}
           </ul>
           <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">

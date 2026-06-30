@@ -84,18 +84,32 @@ export interface UpdateModelRequest {
 
 export type AgentRuntime = "local" | "sandbox"
 
+/**
+ * Canonical workspace Agent envelope (CreateAgentResponse / DeleteAgentResponse).
+ * One row per agent — single `id`, single merged `config`.
+ */
 export interface AgentSummary {
-  runtime?: AgentRuntime | null
+  id: string
+  workspace_id: string
+  name: string
+  slug: string
+  description: string
+  connector_type: string
+  visibility: "workspace" | "tenant" | "public"
+  status: string
+  capabilities: string[]
+  config: Record<string, unknown>
+  created_at: string
+  updated_at: string
 }
 
 /**
- * Project-scoped agent ("project_agent") row — the binding between a
- * workspace Agent profile and a Project. Use `project_agent_id` for navigation.
+ * Workspace Agent row as returned by the admin list, enriched with derived
+ * runtime / sandbox / creator fields. Use `id` for navigation.
  */
-export interface ProjectAgent {
-  project_agent_id: string
-  project_id: string
-  agent_id: string
+export interface Agent {
+  id: string
+  workspace_id: string
   name: string
   slug: string
   description: string
@@ -103,7 +117,6 @@ export interface ProjectAgent {
   status: "active" | "disabled" | "error"
   runtime?: AgentRuntime | null
   config: Record<string, unknown>
-  agent_config: Record<string, unknown>
   /**
    * Workspace-level Agent visibility. Empty / missing → treat as
    * "workspace" (safe default).
@@ -128,8 +141,8 @@ export interface ProjectAgent {
   runtime_kind?: string
   runtime_liveness?: string
   /**
-   * Currently-bound sandbox for this project_agent. `sandbox_external_id` is
-   * the provider-issued id (e.g. E2B's). Empty when no sandbox is bound.
+   * Currently-bound sandbox for this agent. `sandbox_external_id` is the
+   * provider-issued id (e.g. E2B's). Empty when no sandbox is bound.
    *
    * `sandbox_status` mirrors `sandboxes.lifecycle_status`. Same
    * `allocation_status = 'bound' AND killed_at IS NULL` predicate as the
@@ -139,8 +152,8 @@ export interface ProjectAgent {
   sandbox_status?: string
 }
 
-export interface ListProjectAgentsResponse {
-  agents: ProjectAgent[]
+export interface ListAgentsResponse {
+  agents: Agent[]
 }
 
 export interface InitialAgentCapabilityRequest {
@@ -200,9 +213,13 @@ export interface UpdateAgentRequest {
   inline_new_secrets?: AgentInlineNewSecret[]
 }
 
+export interface CreateAgentResponse {
+  agent: AgentSummary
+  initial_capabilities?: AgentCapability[]
+}
+
 export interface DeleteAgentResponse {
-  deleted_agent_id: string
-  deleted_project_agent_ids: string[]
+  agent: AgentSummary
 }
 
 /* --- Capabilities -------------------------------------------------------- */
@@ -275,7 +292,7 @@ export interface CapabilityVersion {
 
 export interface AgentCapability {
   id: string
-  project_agent_id: string
+  agent_id: string
   capability_id: string
   workspace_id?: string
   source_workspace_name?: string
@@ -345,9 +362,9 @@ export interface ListCapabilityVersionsResponse {
   versions: CapabilityVersion[]
 }
 
-export interface ListProjectAgentCapabilitiesResponse {
-  project_id: string
-  project_agent_id: string
+export interface ListAgentCapabilitiesResponse {
+  workspace_id: string
+  agent_id: string
   installed: AgentCapability[]
   available: Capability[]
 }
@@ -392,11 +409,9 @@ export type AgentRunStatus =
 export interface AgentRunSummary {
   id: string
   workspace_id: string
-  project_id: string
   conversation_id?: string
   trigger_message_id?: string
   output_message_id?: string
-  project_agent_id?: string
   agent_id?: string
   agent_name?: string
   agent_slug?: string
@@ -442,7 +457,6 @@ export interface AgentRunRuntimeSnapshot {
 export interface AgentRunOutputMessage {
   id: string
   workspace_id: string
-  project_id: string
   conversation_id: string
   sender_type: string
   sender_id?: string
@@ -566,12 +580,10 @@ export interface AuditRecord {
   target_type?: string
   target_id?: string
   workspace_id?: string
-  project_id?: string
   payload?: Record<string, unknown>
 }
 
 export interface ListAuditRecordsResponse {
-  project_id?: string
   source?: string
   event_type?: string
   target_type?: string
@@ -583,7 +595,6 @@ export interface ListAuditRecordsResponse {
 export interface UsageLog {
   id: string
   workspace_id: string
-  project_id?: string
   agent_run_id?: string
   provider: string
   model: string
@@ -595,7 +606,6 @@ export interface UsageLog {
 }
 
 export interface ListUsageLogsResponse {
-  project_id?: string
   agent_run_id?: string
   usage_logs: UsageLog[]
 }
@@ -619,7 +629,6 @@ export type ConversationForm = "thread" | "group" | "dm" | "oneshot"
 export interface Conversation {
   id: string
   workspace_id: string
-  project_id: string
   surface: ConversationSurface
   form: ConversationForm
   title: string
@@ -646,7 +655,7 @@ export interface ListConversationsResponse {
   conversations: ConversationListItem[]
 }
 
-export type ConversationVisibility = "workspace" | "project" | "private"
+export type ConversationVisibility = "workspace" | "private"
 
 export interface CreateConversationRequest {
   title: string
@@ -658,7 +667,7 @@ export interface CreateConversationRequest {
    */
   form?: ConversationForm
   /**
-   * Optional project_agent id to bind as the conversation's primary agent.
+   * Optional agent id to bind as the conversation's primary agent.
    * Persisted to metadata.primary_agent_id; locked after creation.
    */
   agent_id?: string
@@ -706,8 +715,8 @@ export interface ConversationTimelineRun {
   connector_type?: string
   steps?: ToolStep[]
   /**
-   * 1-indexed position in the per-(conversation, project_agent) serial
-   * queue; populated only for status === "queued". Absent / 0 falls back
+   * 1-indexed position in the per-(conversation, agent) serial queue;
+   * populated only for status === "queued". Absent / 0 falls back
    * to a bare "排队中" badge.
    */
   queue_position?: number
@@ -757,7 +766,6 @@ export interface ConnectorSummary {
 }
 
 export interface ListConnectorsResponse {
-  project_id?: string
   connectors: ConnectorSummary[]
 }
 
@@ -880,7 +888,7 @@ export interface SearchUsersResponse {
   items: PlatformUser[]
 }
 
-/* --- Header switcher (workspace + project picker) ---------------------- */
+/* --- Header switcher (workspace picker) -------------------------------- */
 
 /** One workspace the calling user belongs to, joined with the membership role. */
 export type WorkspaceVisibility = "public" | "private"
@@ -895,29 +903,12 @@ export interface UserWorkspace {
   updated_at: string
 }
 
-/** One active project inside a workspace. */
-export interface WorkspaceProject {
-  id: string
-  workspace_id: string
-  name: string
-  slug: string
-  description: string
-  status: "active" | "archived"
-  created_at: string
-  updated_at: string
-}
-
 export interface ListMyWorkspacesResponse {
   user_id: string
   workspaces: UserWorkspace[]
 }
 
-export interface ListWorkspaceProjectsResponse {
-  workspace_id: string
-  projects: WorkspaceProject[]
-}
-
-/* --- Workspace + Project write requests --------------------------- */
+/* --- Workspace write requests ----------------------------------------- */
 
 export interface CreateWorkspaceRequest {
   name: string
@@ -994,21 +985,6 @@ export interface CreateJoinRequestResponse {
 export interface ListPendingJoinRequestsResponse {
   workspace_id: string
   requests: PendingJoinRequest[]
-}
-
-export interface CreateProjectRequest {
-  name: string
-  description?: string
-}
-
-export interface CreateProjectResponse {
-  project: WorkspaceProject
-}
-
-export interface UpdateProjectRequest {
-  /** Slug is system-generated and immutable; only `name` / `description` patch. */
-  name?: string
-  description?: string
 }
 
 /* --- Common UI envelope ------------------------------------------------- */

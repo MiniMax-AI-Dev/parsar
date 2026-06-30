@@ -195,7 +195,7 @@
     "loadError": {
       "title": "无法加载审批列表",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 存在。",
+      "hint": "确认 server 在跑、且当前工作区存在。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -204,7 +204,7 @@
     },
     "mockBanner": {
       "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace 或 Project。"
+      "hint": "请在顶部选择对应的 Workspace。"
     }
   },
   "conversations": {
@@ -286,7 +286,7 @@
     "loadError": {
       "title": "无法加载对话",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 存在。",
+      "hint": "确认 server 在跑、且当前工作区存在。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -369,7 +369,7 @@
     "loadError": {
       "title": "无法加载运行列表",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 在 dev seed 内。",
+      "hint": "确认 server 在跑、且当前工作区在 dev seed 内。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -378,7 +378,7 @@
     },
     "mockBanner": {
       "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace 或 Project。"
+      "hint": "请在顶部选择对应的 Workspace。"
     },
     "empty": {
       "title": "还没有 Agent Run",
@@ -725,7 +725,7 @@
     "none": "—",
     "empty": {
       "title": "本工作区还没添加能力。",
-      "descriptionAdmin": "能力属于工作区能力池，是 Agent 可用的外部工具（MCP）或可加载的 Skill 包。添加后，本工作区下各项目里的 Agent 可按需启用。",
+      "descriptionAdmin": "能力属于工作区能力池，是 Agent 可用的外部工具（MCP）或可加载的 Skill 包。添加后，本工作区下的 Agent 可按需启用。",
       "descriptionMember": "本工作区能力池还没有任何能力。请联系 owner / admin 添加。"
     },
     "loadError": {
@@ -1085,7 +1085,7 @@
     "loadError": {
       "title": "无法加载 Agent 列表",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 存在。",
+      "hint": "确认 server 在跑、且当前工作区存在。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -1094,7 +1094,7 @@
     },
     "mockBanner": {
       "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace 或 Project。"
+      "hint": "请在顶部选择对应的 Workspace。"
     },
     "empty": {
       "title": "还没有 Agent",
@@ -1416,7 +1416,6 @@
         "localHint": "选 latest 时,后续重新上传会自动生效;选具体版本会锁定到该版本",
         "marketplaceHint": "市场能力:latest 会自动跟随发布者的最新版本(可能引入不兼容改动)"
       },
-      "sharedBanner": "该 Agent 已接入 {{count}} 个 Project，修改会立刻对全部生效。",
       "wizard": {
         "stepOf": "第 {{current}} / {{total}} 步",
         "complete": "{{percent}}% 完成",
@@ -1449,9 +1448,9 @@
         "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。"
       },
       "workDir": {
-        "placeholder": "/Users/me/code/my-project",
+        "placeholder": "/Users/me/code/my-app",
         "hintLocal": "Agent 在你这台本地设备上运行时的目录。留空则每个会话各用一个临时目录。路径不存在时自动创建。",
-        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-project）。留空则每个会话各用一个临时目录。路径不存在时自动创建。"
+        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app）。留空则每个会话各用一个临时目录。路径不存在时自动创建。"
       }
     },
     "pendingCapability": {
@@ -1508,7 +1507,7 @@
       "title": "连接器 (Connectors)",
       "description": "Agent 的执行接入方式。Connector 是接入层抽象，一个 Connector 可以承载多个 Agent 的运行。"
     },
-    "aggregateHint": "当前展示的是 project 内 Agent 使用的 connector 类型聚合视图。Connector 没有独立的注册表/实例表（反过度设计：connector 身份直接长在每个 Project Agent 的 connector_type 字段上）。",
+    "aggregateHint": "当前展示的是当前工作区内 Agent 使用的 connector 类型聚合视图。Connector 没有独立的注册表/实例表（反过度设计：connector 身份直接长在每个 Agent 的 connector_type 字段上）。",
     "summary": "共 {{count}} 个 connector 类型在用",
     "actions": {
       "add": "接入连接器",
@@ -1534,7 +1533,7 @@
     "loadError": {
       "title": "无法加载连接器列表",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 存在。",
+      "hint": "确认 server 在跑、且当前工作区存在。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -1543,10 +1542,10 @@
     },
     "mockBanner": {
       "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace 或 Project。"
+      "hint": "请在顶部选择对应的 Workspace。"
     },
     "empty": {
-      "title": "项目内还没有 Agent 接入 connector",
+      "title": "当前工作区还没有 Agent 接入 connector",
       "description": "先在 Agents 页创建 Agent 并配置 connector_type，这里会自动聚合显示。"
     },
     "detail": {
@@ -1557,7 +1556,7 @@
       "noAgents": "暂无 Agent 使用此 connector。",
       "notFound": {
         "title": "连接器类型未找到",
-        "description": "可能已被移除或当前 project 没有 Agent 在用。"
+        "description": "可能已被移除或当前工作区没有 Agent 在用。"
       },
       "agentSummary": "查看 {{count}} 个 Agent"
     }
@@ -1844,7 +1843,7 @@
         "title": "实验性功能",
         "description": "未稳定的能力，开启前请评估风险。",
         "agentToAgent": "允许 Agent → Agent 调用",
-        "agentToAgentHint": "Agent 之间可以互相 @ 触发。链式深度由 project 配置控制。",
+        "agentToAgentHint": "Agent 之间可以互相 @ 触发。链式深度由工作区配置控制。",
         "memoryProposal": "Memory 写入提案审核",
         "memoryProposalHint": "Agent 写入团队记忆前需要人审通过。"
       },
@@ -1887,9 +1886,7 @@
       "permission_request": "审批请求",
       "workspace": "Workspace",
       "workspace_member": "Workspace 成员",
-      "project": "Project",
-      "project_member": "Project 成员",
-      "project_agent": "Project Agent",
+      "agent": "Agent",
       "secret": "密钥",
       "model_provider": "模型提供方",
       "model": "模型"
@@ -1920,7 +1917,7 @@
     "loadError": {
       "title": "无法加载审计日志",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 存在。",
+      "hint": "确认 server 在跑、且当前工作区存在。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -1929,11 +1926,11 @@
     },
     "mockBanner": {
       "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace 或 Project。"
+      "hint": "请在顶部选择对应的 Workspace。"
     },
     "empty": {
       "title": "暂无审计记录",
-      "description": "当前 project 还没有产生任何审计事件。等系统产生新动作。",
+      "description": "当前工作区还没有产生任何审计事件。等系统产生新动作。",
       "filteredDescription": "当前过滤条件下没有匹配记录。换个 tab、改 target 类型、或清空搜索关键词。",
       "clearFilters": "清空过滤"
     },
@@ -1977,7 +1974,7 @@
     "loadError": {
       "title": "无法加载用量数据",
       "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前 project 存在。",
+      "hint": "确认 server 在跑、且当前工作区存在。",
       "unreachable": {
         "title": "无法连接到 Parsar server",
         "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
@@ -1986,7 +1983,7 @@
     },
     "mockBanner": {
       "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace 或 Project。"
+      "hint": "请在顶部选择对应的 Workspace。"
     },
     "empty": {
       "title": "还没有用量数据",
@@ -2462,7 +2459,7 @@
         },
         "table": {
           "runtime": "Runtime",
-          "projectAgent": "Project Agent",
+          "agent": "Agent",
           "kind": "沙盒类型",
           "agentEngines": "Agent 引擎",
           "status": "状态",
@@ -2548,15 +2545,6 @@
     "workspace": {
       "title": "选择 Workspace 查看{{resource}}",
       "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。"
-    },
-    "project": {
-      "noWorkspaceTitle": "先选择 Workspace",
-      "noWorkspaceDescription": "这些数据按 Project 展示。请先在顶部选择 Workspace，再选择 Project。",
-      "loadingTitle": "正在读取 Project",
-      "loadingDescription": "读取当前 Workspace 下的 Project 后，就能切换到对应数据范围。",
-      "noProjectsTitle": "当前 Workspace 还没有可用 Project",
-      "selectTitle": "选择 Project 查看{{resource}}",
-      "selectDescription": "Project 是当前页面的数据范围。选择后侧边栏保持不变，页面会切换到对应范围。"
     }
   },
   "connections": {
@@ -2691,7 +2679,7 @@
     },
     "tabs": {
       "user": "我的记忆",
-      "project": "Project 记忆"
+      "workspace": "Workspace 记忆"
     },
     "filter": {
       "all": "全部"
@@ -2699,7 +2687,7 @@
     "type": {
       "user": "用户",
       "feedback": "反馈",
-      "project": "Project",
+      "workspace": "Workspace",
       "reference": "外部引用"
     },
     "source": {
@@ -2719,7 +2707,7 @@
     },
     "empty": {
       "user": "你还没有任何用户级记忆",
-      "project": "当前 Project 还没有记忆"
+      "workspace": "当前工作区还没有记忆"
     },
     "row": {
       "updatedAt": "更新于 {{time}}",
@@ -2729,14 +2717,14 @@
     },
     "editor": {
       "createTitleUser": "新建用户记忆",
-      "createTitleProject": "新建 Project 记忆",
+      "createTitleWorkspace": "新建 Workspace 记忆",
       "editTitle": "编辑记忆",
-      "description": "记忆按类型分组：feedback / project 推荐填写「Why」帮助未来你判断边界情况。",
+      "description": "记忆按类型分组：feedback / workspace 推荐填写「Why」帮助未来你判断边界情况。",
       "field": {
         "type": "类型",
         "title": "标题（可选）",
         "body": "正文",
-        "why": "Why（feedback / project 推荐）",
+        "why": "Why（feedback / workspace 推荐）",
         "tags": "标签（逗号分隔，可选）"
       },
       "placeholder": {

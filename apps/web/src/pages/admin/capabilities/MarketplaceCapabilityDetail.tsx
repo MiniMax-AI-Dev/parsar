@@ -73,7 +73,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
         ) : (
           <div className="space-y-2">
             {agents.map((agent) => {
-              const id = agent.project_agent_id ?? agent.agent_id ?? agent.id
+              const id = agent.agent_id ?? agent.id
               return (
                 <button key={id ?? agent.name} type="button" onClick={() => id && navigateAdmin("agents", { id, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-line p-3 text-left hover:bg-surface-subtle">
                   <span className="text-sm font-medium text-fg">{agent.name ?? agent.agent_name ?? "—"}</span>
