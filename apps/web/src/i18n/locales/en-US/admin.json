@@ -2133,8 +2133,6 @@
     "sharedPlaceholder": "Pick a shared secret…",
     "sharedNewQueued": "Will create: {{name}}",
     "sharedNewEdit": "Edit",
-    "publicWarning": "Public agents may be called by users without a Parsar account. Model and capability credentials must use shared secrets; personal options are disabled.",
-    "tenantHint": "Tenant agents may be called from other workspaces. Callers must configure their own credentials or the capability is disabled — use shared secrets to avoid this.",
     "modelBindingTitle": "Model credential",
     "modelBindingPersonal": "Each caller's own API key",
     "modelBindingShared": "Use a shared API key",
