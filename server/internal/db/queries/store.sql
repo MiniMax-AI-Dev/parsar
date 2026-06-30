@@ -4534,6 +4534,15 @@ join project_agents pa on pa.id = t.project_agent_id
 where t.id = @id::uuid and t.deleted_at is null;
 
 -- name: UpdateScheduledTask :one
+-- Re-enabling clears the failure state that tripped auto-disable. Without this,
+-- a task auto-disabled at the failure threshold keeps consecutive_failures >=
+-- threshold and last_status='auto_disabled'; the next cron fire would re-count
+-- the prior failed run and re-disable before dispatching, so flipping enabled
+-- back on via the UI would never actually run. Scoped to the disabled->enabled
+-- transition (old enabled=false, new enabled=true) so editing an already-
+-- enabled task doesn't wipe a meaningful in-flight failure count. last_run_id
+-- is intentionally left intact so the self-overlap guard still sees an active
+-- prior run.
 update scheduled_tasks
 set name = @name,
     prompt = @prompt,
@@ -4541,6 +4550,14 @@ set name = @name,
     timezone = @timezone,
     enabled = @enabled,
     next_run_at = @next_run_at,
+    consecutive_failures = case
+      when enabled = false and @enabled = true then 0
+      else consecutive_failures
+    end,
+    last_status = case
+      when enabled = false and @enabled = true then ''
+      else last_status
+    end,
     updated_at = @now::timestamptz
 where id = @id::uuid and deleted_at is null
 returning

@@ -11791,6 +11791,14 @@ set name = $1,
     timezone = $4,
     enabled = $5,
     next_run_at = $6,
+    consecutive_failures = case
+      when enabled = false and $5 = true then 0
+      else consecutive_failures
+    end,
+    last_status = case
+      when enabled = false and $5 = true then ''
+      else last_status
+    end,
     updated_at = $7::timestamptz
 where id = $8::uuid and deleted_at is null
 returning
@@ -11839,6 +11847,15 @@ type UpdateScheduledTaskRow struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Re-enabling clears the failure state that tripped auto-disable. Without this,
+// a task auto-disabled at the failure threshold keeps consecutive_failures >=
+// threshold and last_status='auto_disabled'; the next cron fire would re-count
+// the prior failed run and re-disable before dispatching, so flipping enabled
+// back on via the UI would never actually run. Scoped to the disabled->enabled
+// transition (old enabled=false, new enabled=true) so editing an already-
+// enabled task doesn't wipe a meaningful in-flight failure count. last_run_id
+// is intentionally left intact so the self-overlap guard still sees an active
+// prior run.
 func (q *Queries) UpdateScheduledTask(ctx context.Context, arg UpdateScheduledTaskParams) (UpdateScheduledTaskRow, error) {
 	row := q.db.QueryRow(ctx, updateScheduledTask,
 		arg.Name,

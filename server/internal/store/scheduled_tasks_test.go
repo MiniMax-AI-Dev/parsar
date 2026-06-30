@@ -190,6 +190,65 @@ func TestFireScheduledTaskAutoDisablesAtThreshold(t *testing.T) {
 	t.Fatal("expected task to auto-disable within threshold+1 iterations")
 }
 
+// TestReEnableAfterAutoDisableDispatchesAgain guards the re-enable path: once a
+// task auto-disables at the failure threshold, flipping enabled back on (the UI
+// toggle goes through UpdateScheduledTask) must clear the failure state so the
+// next cron fire actually dispatches a run instead of immediately re-disabling.
+func TestReEnableAfterAutoDisableDispatchesAgain(t *testing.T) {
+	db := openTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+	pa := seedProjectAgent(t, s)
+	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{ProjectAgentID: pa.ProjectAgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	disabled := false
+	for i := 0; i <= scheduledTaskFailureThreshold; i++ {
+		r, err := s.FireScheduledTaskRun(ctx, created.ID, time.Now().UTC().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Disabled {
+			disabled = true
+			break
+		}
+		markRunStatus(t, s, r.RunID, "failed")
+	}
+	if !disabled {
+		t.Fatal("expected task to auto-disable within threshold+1 iterations")
+	}
+
+	// Re-enable via the same update path the UI toggle uses.
+	upd, err := s.UpdateScheduledTask(ctx, UpdateScheduledTaskInput{TaskID: created.ID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, NextRunAt: time.Now().UTC().Add(-time.Minute)})
+	if err != nil {
+		t.Fatalf("re-enable: %v", err)
+	}
+	if !upd.Enabled {
+		t.Fatal("expected task enabled after re-enable")
+	}
+	// The disabled->enabled transition must clear the failure state, otherwise
+	// the next fire re-counts the prior failed run and re-disables.
+	if upd.ConsecutiveFailures != 0 {
+		t.Fatalf("expected consecutive_failures reset to 0 on re-enable, got %d", upd.ConsecutiveFailures)
+	}
+	if upd.LastStatus != "" {
+		t.Fatalf("expected last_status cleared on re-enable, got %q", upd.LastStatus)
+	}
+
+	r, err := s.FireScheduledTaskRun(ctx, created.ID, time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Disabled {
+		t.Fatal("re-enabled task re-disabled instead of dispatching")
+	}
+	if r.RunID == "" {
+		t.Fatalf("expected a dispatched run after re-enable, got %+v", r)
+	}
+}
+
 func TestScheduledTaskFireCreatesFreshConversation(t *testing.T) {
 	db := openTestDB(t)
 	s := New(db)
