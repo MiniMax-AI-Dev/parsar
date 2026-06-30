@@ -173,7 +173,7 @@ export function ImportSkillForm({
         prefix: "skill",
       })
       if (myReq !== requestSeq.current) return
-      await putToPresignedURL(presign.uploadUrl, picked)
+      await putToPresignedURL(presign, picked)
       if (myReq !== requestSeq.current) return
       const preview = await previewMut.mutateAsync({
         kind: "skill",

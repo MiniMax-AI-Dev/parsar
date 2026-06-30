@@ -121,7 +121,7 @@ export function ImportPluginForm({
         prefix: "plugin",
       })
       if (myReq !== requestSeq.current) return
-      await uploadPluginZipDirect(presign.uploadUrl, picked)
+      await uploadPluginZipDirect(presign, picked)
       if (myReq !== requestSeq.current) return
       const preview = await previewMut.mutateAsync({
         kind: "plugin",

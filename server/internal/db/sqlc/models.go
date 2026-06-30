@@ -256,6 +256,22 @@ type Capability struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+// capability plugin/skill zip 的 PG 存储后端(PARSAR_BLOB_BACKEND=pg 时启用)
+type CapabilityBlob struct {
+	// 不透明存储引用 = capability_version.oss_key 的值(PG 后端形如 pg:<uuid>)
+	StorageRef string `json:"storage_ref"`
+	// 归属 workspace;PG 后端据此做跨租户归属校验
+	WorkspaceID string `json:"workspace_id"`
+	// zip 原始字节(≤ 64 MiB,上限在应用层强制)
+	Bytes []byte `json:"bytes"`
+	// zip 的 SHA-256 摘要(64 字符 hex),写入时计算
+	Sha256 string `json:"sha256"`
+	// zip 字节数;Stat 用
+	SizeBytes int64 `json:"size_bytes"`
+	// 写入时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // capability 版本表
 type CapabilityVersion struct {
 	// 版本 ID
