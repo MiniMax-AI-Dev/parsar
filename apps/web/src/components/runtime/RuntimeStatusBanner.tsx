@@ -147,8 +147,8 @@ function BannerView({
     >
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`} strokeWidth={1.75} />
       <div className="min-w-0 flex-1">
-        <p className={`text-[13px] font-medium ${styles.title}`}>{title}</p>
-        {hint && <p className={`mt-0.5 text-[13px] leading-relaxed ${styles.hint}`}>{hint}</p>}
+        <p className={`text-sm font-medium ${styles.title}`}>{title}</p>
+        {hint && <p className={`mt-0.5 text-sm leading-relaxed ${styles.hint}`}>{hint}</p>}
       </div>
       {action}
     </div>
@@ -157,22 +157,22 @@ function BannerView({
 
 const SHAPE_STYLES: Record<Shape, { container: string; icon: string; title: string; hint: string }> = {
   ok: {
-    container: "border-emerald-200 bg-emerald-50/60",
-    icon: "text-emerald-600",
-    title: "text-emerald-900",
-    hint: "text-emerald-700",
+    container: "border-success-border bg-success-subtle/60",
+    icon: "text-success",
+    title: "text-success-emphasis",
+    hint: "text-success",
   },
   info: {
-    container: "border-slate-200 bg-slate-50/80",
-    icon: "text-slate-500",
-    title: "text-slate-800",
-    hint: "text-slate-600",
+    container: "border-line bg-surface-subtle/80",
+    icon: "text-fg-subtle",
+    title: "text-fg-emphasis",
+    hint: "text-fg-muted",
   },
   warn: {
-    container: "border-amber-200 bg-amber-50/70",
-    icon: "text-amber-600",
-    title: "text-amber-900",
-    hint: "text-amber-700",
+    container: "border-warning-border bg-warning-subtle/70",
+    icon: "text-warning",
+    title: "text-warning-emphasis",
+    hint: "text-warning",
   },
 }
 

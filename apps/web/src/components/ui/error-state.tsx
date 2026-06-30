@@ -23,18 +23,18 @@ export function ErrorState({
   return (
     <div
       className={cn(
-        "flex flex-col items-start gap-3 rounded-lg border border-red-200 bg-red-50/40 p-4 text-sm",
+        "flex flex-col items-start gap-3 rounded-lg border border-danger-border bg-danger-subtle/40 p-4 text-sm",
         className
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="rounded-full bg-red-100 p-1.5 text-red-700">
+        <div className="rounded-full bg-danger-subtle p-1.5 text-danger-emphasis">
           <AlertTriangle className="h-4 w-4" />
         </div>
         <div className="space-y-1">
-          <p className="font-medium text-red-900">{title}</p>
-          {description && <p className="text-red-700">{description}</p>}
-          {hint && <p className="text-xs text-red-600">{hint}</p>}
+          <p className="font-medium text-danger-emphasis">{title}</p>
+          {description && <p className="text-danger-emphasis">{description}</p>}
+          {hint && <p className="text-xs text-danger">{hint}</p>}
         </div>
       </div>
       {(onRetry || action) && (

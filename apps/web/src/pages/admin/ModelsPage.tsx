@@ -94,14 +94,14 @@ function CredentialModeBadge({ mode }: { mode: Model["credential_mode"] }) {
   const { t } = useTranslation("admin")
   if (mode === "inline_secret") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[12px] font-medium text-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-1.5 py-0.5 text-xs font-medium text-fg-muted">
         <KeyRound className="h-3 w-3" />
         {t("models.credentialMode.shared")}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[12px] font-medium text-indigo-700">
+    <span className="inline-flex items-center gap-1 rounded-md bg-info-subtle px-1.5 py-0.5 text-xs font-medium text-info-emphasis">
       <UserCircle className="h-3 w-3" />
       {t("models.credentialMode.personal")}
     </span>
@@ -144,10 +144,10 @@ function ProviderCompatibilityCell({ type }: { type: string }) {
 
   return (
     <span
-      className="inline-flex max-w-full items-center gap-1.5 text-[13px] text-slate-700"
+      className="inline-flex max-w-full items-center gap-1.5 text-sm text-fg-muted"
       title={label}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+      <Icon className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
       <span className="truncate">{label}</span>
     </span>
   )
@@ -182,8 +182,8 @@ function ConfirmDialog({
           <div
             className={
               destructive
-                ? "shrink-0 rounded-full bg-red-100 p-2 text-red-700"
-                : "shrink-0 rounded-full bg-amber-100 p-2 text-amber-700"
+                ? "shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis"
+                : "shrink-0 rounded-full bg-warning-subtle p-2 text-warning"
             }
           >
             <ShieldAlert className="h-4 w-4" />
@@ -195,7 +195,7 @@ function ConfirmDialog({
             </DialogDescription>
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>
             {t("actions.cancel")}
           </Button>
@@ -229,33 +229,33 @@ function TestResultBanner({
   const ok = data.success
   return (
     <div className={`fixed bottom-4 right-4 z-50 max-w-md rounded-md border shadow-md ${
-      ok ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"
+      ok ? "border-success-border bg-success-subtle" : "border-danger-border bg-danger-subtle"
     }`}>
       <div className="flex items-start gap-2 px-4 py-3">
         {ok ? (
-          <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-700" />
+          <CheckCircle2 className="mt-0.5 h-4 w-4 text-success" />
         ) : (
-          <AlertCircle className="mt-0.5 h-4 w-4 text-red-700" />
+          <AlertCircle className="mt-0.5 h-4 w-4 text-danger-emphasis" />
         )}
-        <div className="flex-1 text-[13px]">
+        <div className="flex-1 text-sm">
           {ok ? (
             <>
-              <div className="font-medium text-emerald-900">
+              <div className="font-medium text-success-emphasis">
                 {t("models.test.success", { ms: data.latency_ms })}
               </div>
               {data.sample && (
-                <div className="mt-1 text-[12px] text-emerald-800/80 line-clamp-2">
+                <div className="mt-1 text-xs text-success-emphasis/80 line-clamp-2">
                   {data.sample}
                 </div>
               )}
             </>
           ) : (
             <>
-              <div className="font-medium text-red-900">
+              <div className="font-medium text-danger-emphasis">
                 {data.supported ? t("models.test.failure") : t("models.test.unsupported")}
               </div>
               {data.error && (
-                <div className="mt-1 text-[12px] text-red-800/80 line-clamp-3">
+                <div className="mt-1 text-xs text-danger-emphasis/80 line-clamp-3">
                   {data.error}
                 </div>
               )}
@@ -265,7 +265,7 @@ function TestResultBanner({
         <button
           type="button"
           onClick={onClose}
-          className="text-[12px] text-slate-500 hover:text-slate-700"
+          className="text-xs text-fg-subtle hover:text-fg-muted"
         >
           ×
         </button>
@@ -299,14 +299,14 @@ function ModelsTable({
 
   if (data.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-[13px] text-slate-500">
+      <div className="rounded-md border border-dashed border-line bg-surface px-4 py-10 text-center text-sm text-fg-subtle">
         {t("models.empty.descriptionShort")}
       </div>
     )
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-lg border border-line bg-surface">
       <Table className="table-fixed">
         <colgroup>
           {/* name | model_key | compatibility | credential | status | actions
@@ -341,7 +341,7 @@ function ModelsTable({
               <TableRow key={m.id}>
                 <TableCell className="overflow-hidden">
                   <span
-                    className="block truncate text-sm font-medium text-slate-900"
+                    className="block truncate text-sm font-medium text-fg"
                     title={m.name}
                   >
                     {m.name}
@@ -349,7 +349,7 @@ function ModelsTable({
                 </TableCell>
                 <TableCell className="overflow-hidden">
                   <span
-                    className="block truncate font-mono text-[13px] text-slate-600"
+                    className="block truncate font-mono text-sm text-fg-muted"
                     title={m.model_key}
                   >
                     {m.model_key}
@@ -413,7 +413,7 @@ function ModelsTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      className="h-8 w-8 text-danger hover:bg-danger-subtle hover:text-danger-emphasis"
                       onClick={() => onRequestDisable(m)}
                       disabled={!canDisable}
                       title={

@@ -74,7 +74,7 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[13px] text-slate-500">
+        <p className="text-sm text-fg-subtle">
           {t("runtime.agentDaemon.intro", {
             defaultValue:
               "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
@@ -91,13 +91,13 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
       </div>
 
       {runtimes.length === 0 ? (
-        <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center text-[13px] text-slate-500">
+        <div className="rounded-md border border-dashed border-line bg-surface-subtle/60 p-6 text-center text-sm text-fg-subtle">
           {t("runtime.agentDaemon.empty", {
             defaultValue: "尚未接入任何本地设备。点击右上角按钮生成连接命令。",
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200">
+        <div className="rounded-lg border border-line">
           <Table>
             <TableHeader>
               <TableRow>
@@ -159,18 +159,18 @@ function DaemonRuntimeRow({
 
   return (
     <TableRow data-testid={`agent-daemon-row-${runtime.id}`}>
-      <TableCell className="font-mono text-[13px] text-slate-800">
+      <TableCell className="font-mono text-sm text-fg-emphasis">
         <div className="space-y-1">
           <div>{runtime.name}</div>
-          <div className="text-[12px] text-slate-500">{shortRuntimeID(runtime.id)}</div>
+          <div className="text-xs text-fg-subtle">{shortRuntimeID(runtime.id)}</div>
         </div>
       </TableCell>
-      <TableCell className="text-[13px] text-slate-600">{runtime.hostname || "—"}</TableCell>
-      <TableCell className="text-[13px] text-slate-600">
+      <TableCell className="text-sm text-fg-muted">{runtime.hostname || "—"}</TableCell>
+      <TableCell className="text-sm text-fg-muted">
         <div className="space-y-1">
           <div>{runtime.version || "—"}</div>
           {activeRequests !== null && (
-            <div className="text-[12px] text-slate-500">
+            <div className="text-xs text-fg-subtle">
               {activeRequests === 0
                 ? t("runtime.agentDaemon.load.idle", { defaultValue: "空闲" })
                 : t("runtime.agentDaemon.load.active", { count: activeRequests, defaultValue: "{{count}} 个运行中" })}
@@ -184,14 +184,14 @@ function DaemonRuntimeRow({
       <TableCell>
         <div className="space-y-1">
           <DaemonStatusBadge liveness={runtime.liveness} />
-          <p className="max-w-[240px] text-[12px] leading-4 text-slate-500">{daemonStatusDetail(runtime, t)}</p>
+          <p className="max-w-[240px] text-xs leading-4 text-fg-subtle">{daemonStatusDetail(runtime, t)}</p>
         </div>
       </TableCell>
-      <TableCell className="text-[13px] text-slate-600" title={lastHeartbeatExact ?? undefined}>
+      <TableCell className="text-sm text-fg-muted" title={lastHeartbeatExact ?? undefined}>
         {runtime.last_heartbeat_at ? (
           <div className="space-y-1">
             <div>{relativeAgo(runtime.last_heartbeat_at)}</div>
-            <div className="text-[12px] text-slate-500">{lastHeartbeatExact}</div>
+            <div className="text-xs text-fg-subtle">{lastHeartbeatExact}</div>
           </div>
         ) : (
           "—"
@@ -201,7 +201,7 @@ function DaemonRuntimeRow({
         <button
           type="button"
           onClick={onDelete}
-          className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
+          className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-faint hover:bg-danger-subtle hover:text-danger"
           title={t("runtime.agentDaemon.actions.delete", { defaultValue: "删除设备" })}
           data-testid={`agent-daemon-delete-${runtime.id}`}
         >
@@ -217,7 +217,7 @@ function AgentKindBadges({ runtime }: { runtime: Runtime }) {
   const kinds = supportedAgentKinds(runtime)
   const capabilities = daemonCapabilityLabels(runtime, t)
   if (kinds.length === 0) {
-    return <span className="text-[13px] text-slate-400">—</span>
+    return <span className="text-sm text-fg-faint">—</span>
   }
   return (
     <div className="space-y-1.5">
@@ -233,11 +233,11 @@ function AgentKindBadges({ runtime }: { runtime: Runtime }) {
           </Badge>
         ))}
       </div>
-      <div className="text-[12px] leading-4 text-slate-500">
+      <div className="text-xs leading-4 text-fg-subtle">
         {kinds.map((kind) => formatAgentKindSnapshot(kind, t)).join(" · ")}
       </div>
       {capabilities.length > 0 && (
-        <div className="text-[12px] leading-4 text-slate-500">{capabilities.join(" · ")}</div>
+        <div className="text-xs leading-4 text-fg-subtle">{capabilities.join(" · ")}</div>
       )}
     </div>
   )
@@ -387,7 +387,7 @@ function ConfirmDeleteRuntimeDialog({
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onCancel() }}>
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5">
-          <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
             <ShieldAlert className="h-4 w-4" />
           </div>
           <div className="space-y-1.5">
@@ -403,11 +403,11 @@ function ConfirmDeleteRuntimeDialog({
               })}
             </DialogDescription>
             {error && (
-              <p className="text-[13px] text-red-700">{error.message}</p>
+              <p className="text-sm text-danger-emphasis">{error.message}</p>
             )}
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button
             variant="outline"
             size="sm"

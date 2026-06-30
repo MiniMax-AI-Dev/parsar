@@ -46,12 +46,12 @@ export function JoinWorkspaceLanding({ workspaceId }: { workspaceId: string }) {
     // leave the user wondering why they're suddenly on a login page.
     return (
       <LandingShell>
-        <p className="text-[14px] text-slate-600">
+        <p className="text-base text-fg-muted">
           {t("workspaceCrud.join.landing.loginRequired", { name: workspaceId })}
         </p>
         <a
           href={feishuLoginUrl()}
-          className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-[#2952F8] px-4 text-[13px] font-medium text-white hover:bg-[#1f45db]"
+          className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-[#2952F8] px-4 text-sm font-medium text-white hover:bg-[#1f45db]"
         >
           {t("workspaceCrud.join.landing.loginCta")}
         </a>
@@ -120,15 +120,15 @@ function Authenticated({ workspaceId }: { workspaceId: string }) {
   if (!match) {
     return (
       <LandingShell>
-        <h1 className="text-[16px] font-semibold text-slate-900">
+        <h1 className="text-lg font-semibold text-fg">
           {t("workspaceCrud.join.landing.privateTitle")}
         </h1>
-        <p className="mt-2 text-[13px] text-slate-500">
+        <p className="mt-2 text-sm text-fg-subtle">
           {t("workspaceCrud.join.landing.privateDescription")}
         </p>
         <a
           href="/"
-          className="mt-4 inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-[13px] text-slate-700 hover:bg-slate-50"
+          className="mt-4 inline-flex h-9 items-center justify-center rounded-md border border-line px-4 text-sm text-fg-muted hover:bg-surface-subtle"
         >
           {t("workspaceCrud.join.landing.backToHome")}
         </a>
@@ -157,17 +157,17 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
   if (pending) {
     return (
       <LandingShell>
-        <h1 className="text-[16px] font-semibold text-slate-900">
+        <h1 className="text-lg font-semibold text-fg">
           {t("workspaceCrud.join.landing.successTitle")}
         </h1>
-        <p className="mt-2 text-[13px] text-slate-500">
+        <p className="mt-2 text-sm text-fg-subtle">
           {t("workspaceCrud.join.landing.successDescription")}
         </p>
-        <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+        <div className="mt-2 rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
           {t("workspaceCrud.join.landing.pendingTitle")}
         </div>
         {errMsg && (
-          <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+          <p className="mt-2 rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
             {errMsg}
           </p>
         )}
@@ -185,7 +185,7 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
           </Button>
           <a
             href="/"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-[13px] text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-line px-4 text-sm text-fg-muted hover:bg-surface-subtle"
           >
             {t("workspaceCrud.join.landing.backToHome")}
           </a>
@@ -196,7 +196,7 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
 
   return (
     <LandingShell>
-      <h1 className="text-[16px] font-semibold text-slate-900">
+      <h1 className="text-lg font-semibold text-fg">
         {t("workspaceCrud.join.title", { name: workspace.name })}
       </h1>
       <form
@@ -212,11 +212,11 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
       >
         <div className="grid gap-1.5">
           <label
-            className="text-[13px] font-medium text-slate-700"
+            className="text-sm font-medium text-fg-muted"
             htmlFor="join-reason"
           >
             {t("workspaceCrud.fields.reason")}
-            <span className="ml-1 text-[12px] font-normal text-slate-400">
+            <span className="ml-1 text-xs font-normal text-fg-faint">
               {t("workspaceCrud.fields.optional")}
             </span>
           </label>
@@ -227,17 +227,17 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
             rows={4}
             onChange={(e) => setReason(e.target.value)}
             placeholder={t("workspaceCrud.join.reasonPlaceholder")}
-            className="rounded-md border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-slate-400"
+            className="rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-line-strong"
           />
           {tooLong && (
-            <p className="text-[12px] text-red-600">
+            <p className="text-xs text-danger">
               {t("workspaceCrud.join.reasonTooLong")}
             </p>
           )}
         </div>
 
         {errMsg && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+          <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
             {errMsg}
           </p>
         )}
@@ -245,7 +245,7 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
         <div className="flex justify-end gap-2">
           <a
             href="/"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-[13px] text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-line px-4 text-sm text-fg-muted hover:bg-surface-subtle"
           >
             {t("actions.cancel")}
           </a>
@@ -262,13 +262,13 @@ function RequestForm({ workspace }: { workspace: DiscoverableWorkspace }) {
 
 function LandingShell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-white px-6 text-slate-900">
-      <section className="w-full max-w-[440px] rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <main className="grid min-h-screen place-items-center bg-surface px-6 text-fg">
+      <section className="w-full max-w-[440px] rounded-2xl border border-line bg-surface p-8 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-slate-900 text-[14px] font-bold text-white">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-surface-emphasis text-base font-bold text-white">
             T
           </div>
-          <span className="text-[13px] font-medium text-slate-500">
+          <span className="text-sm font-medium text-fg-subtle">
             Parsar
           </span>
         </div>

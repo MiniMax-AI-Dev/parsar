@@ -156,12 +156,12 @@ export function ImportMCPForm({
                   `{\n  "mcpServers": {\n    "github": {\n      "command": "docker",\n      "args": ["run", "-i", "ghcr.io/github/github-mcp-server"],\n      "env": {\n        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxx"\n      }\n    }\n  }\n}`,
                 )
           }
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-[12px] leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
         />
-        <p className="text-[12px] text-slate-500">
+        <p className="text-xs text-fg-subtle">
           {t(
             "capabilities.import.mcp.pasteHelp",
             "支持 Claude Code (env) / OpenCode (environment) JSON 与 Codex TOML。也可以只粘贴 mcpServers 内层对象。",
@@ -240,11 +240,11 @@ function FormatPicker({
     { value: "toml", label: "TOML" },
   ]
   return (
-    <div className="flex items-center gap-2 text-[13px]">
-      <span className="font-medium text-slate-700">
+    <div className="flex items-center gap-2 text-sm">
+      <span className="font-medium text-fg-muted">
         {t("capabilities.import.mcp.format", "格式")}
       </span>
-      <div className="flex overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+      <div className="flex overflow-hidden rounded-md border border-line bg-surface-subtle">
         {options.map((opt) => {
           const active = opt.value === value
           return (
@@ -252,10 +252,10 @@ function FormatPicker({
               key={opt.value}
               type="button"
               onClick={() => onChange(opt.value)}
-              className={`h-7 px-2.5 text-[12px] transition-colors ${
+              className={`h-7 px-2.5 text-xs transition-colors ${
                 active
-                  ? "bg-white text-slate-900 shadow-inner"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  ? "bg-surface text-fg shadow-inner"
+                  : "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted"
               }`}
               aria-pressed={active}
             >
@@ -327,17 +327,17 @@ function ServerCard({
     inlineSecrets.find((s) => s.server_name === server.name && s.env_key === envKey)?.plaintext
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-      <header className="flex min-w-0 flex-col gap-1 border-b border-slate-100 pb-2">
-        <h4 className="text-[13px] font-semibold text-slate-900">{server.name}</h4>
-        <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-[12px] text-slate-500">
+    <section className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface p-3">
+      <header className="flex min-w-0 flex-col gap-1 border-b border-line-muted pb-2">
+        <h4 className="text-sm font-semibold text-fg">{server.name}</h4>
+        <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-xs text-fg-subtle">
           {server.command}
           {server.args && server.args.length > 0 ? ` ${server.args.join(" ")}` : ""}
         </code>
       </header>
 
       {credentialEnvEntries.length === 0 ? (
-        <p className="mt-2 text-[13px] text-slate-500">
+        <p className="mt-2 text-sm text-fg-subtle">
           {t("capabilities.import.envEmpty.noCredentialPlaceholders", "无需要处理的凭据")}
         </p>
       ) : (

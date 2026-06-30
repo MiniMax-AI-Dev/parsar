@@ -50,7 +50,7 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, variant = "card" }
       return <Skeleton className="h-9 w-40 rounded-md" data-testid="runtime-credential-inline-loading" />
     }
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-4" data-testid="runtime-credential-card-loading">
+      <section className="rounded-lg border border-line bg-surface p-4" data-testid="runtime-credential-card-loading">
         <div className="flex items-center gap-2">
           <Skeleton className="h-5 w-32" />
         </div>
@@ -120,16 +120,16 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, variant = "card" }
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4" data-testid="runtime-credential-card">
+    <section className="rounded-lg border border-line bg-surface p-4" data-testid="runtime-credential-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
-            <h3 className="text-[14px] font-medium text-slate-900">
+            <Shield className="h-4 w-4 text-fg-subtle" strokeWidth={1.75} />
+            <h3 className="text-base font-medium text-fg">
               {t("runtime.credential.title")}
             </h3>
           </div>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate-500 max-w-xl">
+          <p className="mt-1 text-sm leading-relaxed text-fg-subtle max-w-xl">
             {t("runtime.credential.description")}
           </p>
         </div>
@@ -152,16 +152,16 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, variant = "card" }
           </div>
         )}
       </div>
-      <div className="mt-3 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2 text-[13px]">
+      <div className="mt-3 rounded-md border border-line bg-surface-subtle/60 px-3 py-2 text-sm">
         {hasCredential ? (
-          <div className="flex items-center gap-2 text-slate-700">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
+          <div className="flex items-center gap-2 text-fg-muted">
+            <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} />
             <span>{t("runtime.credential.state.hasCredential")}</span>
-            <code className="font-mono text-slate-900">{masked ?? "•••"}</code>
+            <code className="font-mono text-fg">{masked ?? "•••"}</code>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-slate-600">
-            <KeyRound className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+          <div className="flex items-center gap-2 text-fg-muted">
+            <KeyRound className="h-3.5 w-3.5 text-fg-subtle" strokeWidth={1.75} />
             <span>{t("runtime.credential.state.noCredential")}</span>
           </div>
         )}
@@ -218,16 +218,16 @@ function CredentialManageDialog({
           <DialogTitle>{t("runtime.credential.title")}</DialogTitle>
           <DialogDescription>{t("runtime.credential.description")}</DialogDescription>
         </DialogHeader>
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px]">
+        <div className="rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm">
           {hasCredential ? (
-            <div className="flex items-center gap-2 text-slate-700">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
+            <div className="flex items-center gap-2 text-fg-muted">
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} />
               <span>{t("runtime.credential.state.hasCredential")}</span>
-              <code className="font-mono text-slate-900">{masked ?? "•••"}</code>
+              <code className="font-mono text-fg">{masked ?? "•••"}</code>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-slate-600">
-              <KeyRound className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+            <div className="flex items-center gap-2 text-fg-muted">
+              <KeyRound className="h-3.5 w-3.5 text-fg-subtle" strokeWidth={1.75} />
               <span>{t("runtime.credential.state.noCredential")}</span>
             </div>
           )}
@@ -270,7 +270,7 @@ function ClearCredentialDialog({
           <AlertDialogDescription>{t("runtime.credential.delete.description")}</AlertDialogDescription>
         </AlertDialogHeader>
         {clearMut.error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+          <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
             {clearMut.error instanceof ApiError ? clearMut.error.envelope.message : t("runtime.credential.error.generic")}
           </p>
         )}
@@ -333,12 +333,12 @@ function SaveDialog({ open, pending, error, existing, onOpenChange, onSubmit }: 
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="e2b_..."
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-[13px] font-mono outline-none focus:border-slate-500"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm font-mono outline-none focus:border-line-strong"
               data-testid="runtime-credential-api-key-input"
             />
           </FieldLabel>
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{errMsg}</p>
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
           )}
         </div>
         <DialogFooter>
@@ -363,8 +363,8 @@ function SaveDialog({ open, pending, error, existing, onOpenChange, onSubmit }: 
 function FieldLabel({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[13px] font-medium text-slate-700">{label}</span>
-      {hint && <span className="ml-1 text-[12px] text-slate-500">{hint}</span>}
+      <span className="text-sm font-medium text-fg-muted">{label}</span>
+      {hint && <span className="ml-1 text-xs text-fg-subtle">{hint}</span>}
       <div className="mt-1.5">{children}</div>
     </label>
   )

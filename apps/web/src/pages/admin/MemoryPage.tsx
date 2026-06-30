@@ -15,6 +15,7 @@ import {
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimeline"
 import {
@@ -73,8 +74,9 @@ export function MemoryPage() {
   const [tab, setTab] = useState<MemoryScope>("user")
 
   return (
-    <AdminLayout activeMenu="memory">
+    <AdminLayout activeMenu="settings">
       <PageHeader title={t("memory.page.title")} />
+      <SettingsTabs active="memory" />
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as MemoryScope)}>
         <TabsList>
@@ -347,7 +349,7 @@ function MemoryRow({ memory, fmtAgo, onEdit, onDelete, onAudit }: MemoryRowProps
   const { t } = useTranslation("admin")
   const preview = memory.body.replace(/\s+/g, " ").trim().slice(0, 240)
   return (
-    <li className="rounded-lg border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-slate-300">
+    <li className="rounded-lg border border-line bg-surface px-4 py-3 transition-colors hover:border-line-strong">
       <button
         type="button"
         onClick={onEdit}
@@ -356,24 +358,24 @@ function MemoryRow({ memory, fmtAgo, onEdit, onDelete, onAudit }: MemoryRowProps
         <div className="flex w-full flex-wrap items-center gap-2">
           <MemoryTypeBadge type={memory.memory_type} />
           {memory.title && (
-            <span className="text-[14px] font-semibold text-slate-900">{memory.title}</span>
+            <span className="text-base font-semibold text-fg">{memory.title}</span>
           )}
           <MemorySourceBadge source={memory.source} />
           {memory.tags.map((tag) => (
-            <Badge key={tag} variant="neutral" className="font-mono text-[11px]">
+            <Badge key={tag} variant="neutral" className="font-mono text-xs">
               {tag}
             </Badge>
           ))}
         </div>
         {preview && (
-          <p className="line-clamp-2 text-[13px] text-slate-600">{preview}</p>
+          <p className="line-clamp-2 text-sm text-fg-muted">{preview}</p>
         )}
         {memory.why && (
-          <p className="line-clamp-2 text-[12px] italic text-slate-500">
+          <p className="line-clamp-2 text-xs italic text-fg-subtle">
             Why: {memory.why}
           </p>
         )}
-        <p className="text-[12px] text-slate-400">
+        <p className="text-xs text-fg-faint">
           {t("memory.row.updatedAt", { time: fmtAgo(memory.updated_at) })}
           {memory.agent_actor && (
             <>
@@ -397,7 +399,7 @@ function MemoryRow({ memory, fmtAgo, onEdit, onDelete, onAudit }: MemoryRowProps
           type="button"
           variant="ghost"
           size="sm"
-          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+          className="text-danger hover:bg-danger-subtle hover:text-danger-emphasis"
           onClick={onDelete}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -452,8 +454,8 @@ function TypeFilterChip({
       onClick={onClick}
       className={
         active
-          ? "rounded-full bg-slate-900 px-3 py-1 text-[12px] font-medium text-white"
-          : "rounded-full bg-slate-100 px-3 py-1 text-[12px] font-medium text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
+          ? "rounded-full bg-surface-emphasis px-3 py-1 text-xs font-medium text-white"
+          : "rounded-full bg-surface-muted px-3 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
       }
     >
       {label}
@@ -523,15 +525,15 @@ function MemoryEditorDialog({
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
       <DialogContent className="max-w-2xl gap-0 p-0">
         <form onSubmit={handleSubmit}>
-          <DialogHeader className="border-b border-slate-100 px-5 py-4 pr-10">
+          <DialogHeader className="border-b border-line-muted px-5 py-4 pr-10">
             <DialogTitle className="text-sm">{t(titleKey)}</DialogTitle>
             <DialogDescription>{t("memory.editor.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 px-5 py-4">
             <label className="block space-y-1">
-              <span className="text-[13px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("memory.editor.field.type")}
-                <span className="ml-0.5 text-red-500">*</span>
+                <span className="ml-0.5 text-danger">*</span>
               </span>
               <select
                 value={memoryType}
@@ -539,7 +541,7 @@ function MemoryEditorDialog({
                 // Backend PATCH doesn't accept memory_type changes; users
                 // re-create to change type.
                 disabled={mode === "edit"}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 text-[13px] text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:bg-slate-50 disabled:text-slate-500"
+                className="block w-full rounded-md border border-line px-3 py-2 text-sm text-fg-emphasis focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:bg-surface-subtle disabled:text-fg-subtle"
               >
                 {MEMORY_TYPES.map((type) => (
                   <option key={type} value={type}>
@@ -549,7 +551,7 @@ function MemoryEditorDialog({
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-[13px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("memory.editor.field.title")}
               </span>
               <Input
@@ -560,9 +562,9 @@ function MemoryEditorDialog({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[13px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("memory.editor.field.body")}
-                <span className="ml-0.5 text-red-500">*</span>
+                <span className="ml-0.5 text-danger">*</span>
               </span>
               <textarea
                 value={body}
@@ -570,11 +572,11 @@ function MemoryEditorDialog({
                 placeholder={t("memory.editor.placeholder.body")}
                 required
                 rows={8}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-line px-3 py-2 font-mono text-sm leading-relaxed text-fg-emphasis placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[13px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("memory.editor.field.why")}
               </span>
               <textarea
@@ -582,11 +584,11 @@ function MemoryEditorDialog({
                 onChange={(event) => setWhy(event.target.value)}
                 placeholder={t("memory.editor.placeholder.why")}
                 rows={3}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-line px-3 py-2 text-sm leading-relaxed text-fg-emphasis placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[13px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("memory.editor.field.tags")}
               </span>
               <Input
@@ -596,15 +598,15 @@ function MemoryEditorDialog({
               />
             </label>
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[13px] font-medium text-red-900">
+              <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">
                   {t("memory.editor.error.title")}
                 </p>
-                <p className="text-[12px] text-red-700">{error.message}</p>
+                <p className="text-xs text-danger-emphasis">{error.message}</p>
               </div>
             )}
           </div>
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={pending}>
               {t("memory.editor.cancel")}
             </Button>
@@ -642,13 +644,13 @@ function MemoryDeleteDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <div className="flex items-start gap-3">
-            <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+            <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="space-y-1.5">
               <AlertDialogTitle>{t("memory.delete.title")}</AlertDialogTitle>
               <AlertDialogDescription>{t("memory.delete.description")}</AlertDialogDescription>
-              {error && <p className="text-[13px] text-red-700">{error.message}</p>}
+              {error && <p className="text-sm text-danger-emphasis">{error.message}</p>}
             </div>
           </div>
         </AlertDialogHeader>

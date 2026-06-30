@@ -1,23 +1,24 @@
 import { useEffect, useState, useCallback } from "react"
 
 export type AdminView =
+  // Sidebar primary entries
   | "conversations"
   | "runs"
-  | "artifacts"
+  | "approvals"
   | "agents"
   | "capabilities"
   | "connections"
   | "models"
-  | "connectors"
+  | "members"
+  | "settings"
+  // Settings sub-pages — reachable via the settings tab strip
+  | "secrets"
   | "runtime"
+  | "connectors"
   | "specs"
   | "memory"
-  | "updates"
-  | "members"
-  | "secrets"
   | "usage"
   | "audit"
-  | "settings"
 
 export type RouteMode = "admin" | "profile"
 export type ProfileView = "credentials"
@@ -25,21 +26,20 @@ export type ProfileView = "credentials"
 const ALL_ADMIN_VIEWS: AdminView[] = [
   "conversations",
   "runs",
-  "artifacts",
+  "approvals",
   "agents",
   "capabilities",
   "connections",
   "models",
-  "connectors",
+  "members",
+  "settings",
+  "secrets",
   "runtime",
+  "connectors",
   "specs",
   "memory",
-  "updates",
-  "members",
-  "secrets",
   "usage",
   "audit",
-  "settings",
 ]
 
 interface AppRoute {

@@ -107,7 +107,7 @@ export function NewCredentialKindInlineDialog({
               autoFocus
             />
             {code.trim().length > 0 && !isValidCode && (
-              <p className="text-[12px] text-red-600">
+              <p className="text-xs text-danger">
                 {t(
                   "capabilities.import.newKind.code.invalid",
                   "code 必须以小写字母开头,只能包含小写字母、数字、下划线",
@@ -141,7 +141,7 @@ export function NewCredentialKindInlineDialog({
           {errMsg && (
             <div
               role="alert"
-              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+              className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
             >
               {errMsg}
             </div>
@@ -180,12 +180,12 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[13px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
       {children}
-      {help && <span className="text-[12px] leading-relaxed text-slate-500">{help}</span>}
+      {help && <span className="text-xs leading-relaxed text-fg-subtle">{help}</span>}
     </label>
   )
 }

@@ -28,7 +28,7 @@ void i18n
   .use(initReactI18next)
   .init({
     resources,
-    fallbackLng: "zh-CN",
+    fallbackLng: "en-US",
     supportedLngs: [...SUPPORTED_LANGUAGES],
     defaultNS,
     ns: ["common", "admin"],
@@ -36,7 +36,10 @@ void i18n
       escapeValue: false, // react already escapes
     },
     detection: {
-      order: ["localStorage", "navigator", "htmlTag"],
+      // Honour the user's prior choice; otherwise fall through to en-US.
+      // We deliberately ignore navigator/htmlTag — the product defaults
+      // to English regardless of OS locale until the user opts in.
+      order: ["localStorage"],
       caches: ["localStorage"],
       lookupLocalStorage: "parsar.lang",
     },

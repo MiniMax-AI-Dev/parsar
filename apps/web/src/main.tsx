@@ -33,7 +33,7 @@ void bootstrapWorkspace()
 
 function LoadingScreen({ message }: { message: string }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-white text-[14px] text-slate-500">
+    <main className="grid min-h-screen place-items-center bg-surface text-base text-fg-subtle">
       {message}
     </main>
   )

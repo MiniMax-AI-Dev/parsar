@@ -16,10 +16,10 @@ interface ActionIconButtonProps
 }
 
 const toneClasses: Record<ActionTone, string> = {
-  neutral: "text-slate-500 hover:bg-slate-100 hover:text-slate-950",
-  primary: "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
-  success: "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800",
-  danger: "text-slate-500 hover:bg-red-50 hover:text-red-700",
+  neutral: "text-fg-subtle hover:bg-surface-muted hover:text-fg",
+  primary: "text-fg-muted hover:bg-surface-muted hover:text-fg",
+  success: "text-success hover:bg-success-subtle hover:text-success-emphasis",
+  danger: "text-fg-subtle hover:bg-danger-subtle hover:text-danger-emphasis",
 }
 
 export function ActionIconButton({
@@ -60,7 +60,7 @@ export function ActionIconButton({
         </span>
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-600 shadow-md">
+        <Tooltip.Content className="z-50 rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
           {label}
           <Tooltip.Arrow className="fill-white" />
         </Tooltip.Content>

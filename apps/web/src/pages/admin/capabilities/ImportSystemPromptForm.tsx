@@ -41,7 +41,7 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
       </Field>
 
       <Field label={t("capabilities.import.systemPrompt.modeLabel", "注入模式")} required>
-        <div className="flex gap-4 text-[13px]">
+        <div className="flex gap-4 text-sm">
           <label className="inline-flex items-center gap-2">
             <input
               type="radio"
@@ -67,7 +67,7 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
 
       <Field label={t("capabilities.import.systemPrompt.promptLabel", "Prompt 内容")} required>
         <textarea
-          className="min-h-[260px] w-full rounded-md border border-slate-200 bg-white p-3 font-mono text-[13px] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="min-h-[260px] w-full rounded-md border border-line bg-surface p-3 font-mono text-sm leading-relaxed text-fg-emphasis focus:outline-none focus:ring-2 focus:ring-slate-300"
           value={value.prompt}
           onChange={(e) => set({ prompt: e.target.value })}
           placeholder={t(
@@ -91,9 +91,9 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[13px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
       {children}
     </label>

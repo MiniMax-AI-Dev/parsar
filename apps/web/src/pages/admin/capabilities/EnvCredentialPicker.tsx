@@ -75,22 +75,22 @@ export function EnvCredentialPicker({
   }
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-md border border-slate-200 bg-white p-3">
+    <div className="min-w-0 overflow-hidden rounded-md border border-line bg-surface p-3">
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <code
             title={envKey}
-            className="block max-w-full flex-1 break-all rounded bg-slate-50 px-1.5 py-1 font-mono text-[13px] font-medium text-slate-900"
+            className="block max-w-full flex-1 break-all rounded bg-surface-subtle px-1.5 py-1 font-mono text-sm font-medium text-fg"
           >
             {envKey}
           </code>
-          <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+          <span className="shrink-0 rounded bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">
             {t("capabilities.import.envBadge.credential", "凭据")}
           </span>
         </div>
 
         <div className="space-y-1.5">
-          <div className="text-[12px] font-medium text-slate-500">
+          <div className="text-xs font-medium text-fg-subtle">
             {t("capabilities.import.envMode.label", "凭据来源")}
           </div>
           <ModeToggle value={activeMode} onChange={setMode} />
@@ -104,13 +104,13 @@ export function EnvCredentialPicker({
               type="password"
               value={inlineSecretPlaintext ?? ""}
               onChange={(e) => onInlineSecretPlaintextChange(e.target.value)}
-              className="font-mono text-[13px]"
+              className="font-mono text-sm"
               placeholder={t(
                 "capabilities.import.envValue.inlineSecretPlaceholder",
                 "粘贴团队共用 token，导入时加密保存",
               )}
             />
-            <p className="flex items-center gap-1.5 text-[12px] text-emerald-700">
+            <p className="flex items-center gap-1.5 text-xs text-success">
               <Lock className="h-3 w-3" />
               {t(
                 "capabilities.import.envValue.inlineSecretNote",
@@ -128,7 +128,7 @@ export function EnvCredentialPicker({
               onChange={(code) => onChange({ mode: "credential_ref", credential_kind_code: code })}
               className="w-full"
             />
-            <p className="flex items-center gap-1.5 text-[12px] text-slate-500">
+            <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
               <KeyRound className="h-3 w-3" />
               {t(
                 "capabilities.import.envValue.credentialRefNote",
@@ -151,7 +151,7 @@ function ModeToggle({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="flex w-full flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+    <div className="flex w-full flex-wrap gap-1 rounded-md border border-line bg-surface-subtle p-1">
       {MODE_OPTIONS.map((opt) => {
         const active = opt.value === value
         return (
@@ -162,10 +162,10 @@ function ModeToggle({
             size="sm"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "h-7 flex-1 rounded px-2 text-[12px] sm:flex-none",
+              "h-7 flex-1 rounded px-2 text-xs sm:flex-none",
               active
-                ? "bg-white text-slate-900 shadow-inner"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+                ? "bg-surface text-fg shadow-inner"
+                : "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted",
             )}
             aria-pressed={active}
           >
