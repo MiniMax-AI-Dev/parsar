@@ -28,15 +28,26 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-env.sh"
 docker compose -f docker-compose.dev.yml down -v --remove-orphans >/dev/null 2>&1 || true
 docker compose -f docker-compose.dev.yml up -d postgres >/dev/null
 
-for _ in {1..30}; do
+# Wait for Postgres to actually accept connections. pg_isready can return
+# 0 (accepting) only after the entrypoint finishes initdb and the
+# postmaster binds 5432 — on cold cache CI that takes 5–15s. We poll
+# up to 60s and treat any non-zero exit as "not yet". The previous
+# loop double-checked outside the loop, which raced the initdb window
+# (#12 follow-up: CI hit "Postgres did not become ready" 1.5s after
+# Started because the very first probe transient-failed and a second
+# probe was issued before postmaster was up).
+pg_ready=0
+for _ in $(seq 1 60); do
   if docker compose -f docker-compose.dev.yml exec -T postgres pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
+    pg_ready=1
     break
   fi
   sleep 1
 done
 
-if ! docker compose -f docker-compose.dev.yml exec -T postgres pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
-  echo "Postgres did not become ready" >&2
+if [[ "$pg_ready" -ne 1 ]]; then
+  echo "Postgres did not become ready within 60s" >&2
+  docker compose -f docker-compose.dev.yml logs --tail=80 postgres >&2 || true
   exit 1
 fi
 
