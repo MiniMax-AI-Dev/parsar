@@ -216,7 +216,7 @@ export function CreateAgentDialog({
   // picker's loading-state fallback option renders the right number
   // instead of mis-labelling the pinned row with the latest version.
   const [capabilityVersionChoices, setCapabilityVersionChoices] = useState<Record<string, { pinningMode: "latest" | "pinned"; versionID: string; pinnedVersion?: string }>>({})
-  const [visibility, setVisibility] = useState<"workspace" | "tenant" | "public">("workspace")
+  const [visibility, setVisibility] = useState<"workspace" | "tenant" | "public">("public")
   const [capabilitySearch, setCapabilitySearch] = useState("")
   const [capabilityTypeFilter, setCapabilityTypeFilter] = useState<"all" | "mcp" | "skill" | "plugin" | "system_prompt">("all")
   const [deviceID, setDeviceID] = useState("")
@@ -423,7 +423,8 @@ export function CreateAgentDialog({
       setSelectedCapabilityIDs([])
       setCapabilityVersionChoices({})
       setCapabilitySearch("")
-      setVisibility(cloneSource?.visibility ?? "workspace")
+      // Creation is locked to public; the visibility selector is hidden.
+      setVisibility("public")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
       setWorkDir(cloneSource ? workDirFromAgent(cloneSource) : "")
       // Clones explicitly drop the source agent's credential bindings: the
@@ -924,39 +925,6 @@ export function CreateAgentDialog({
               <Field label={t("agents.form.fields.description")}>
                 <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
               </Field>
-              {mode === "create" && (
-                <Field label={t("agents.table.visibility")} required>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {(["workspace", "tenant", "public"] as const).map((tier) => (
-                      <label key={tier} className={"flex cursor-pointer flex-col gap-1 rounded-md border px-3 py-2 text-sm " + (visibility === tier ? "border-line-strong bg-surface-subtle text-fg" : "border-line bg-surface text-fg-muted")}>
-                        <span className="flex items-center gap-2 font-medium">
-                          <input
-                            type="radio"
-                            name="agent-visibility"
-                            value={tier}
-                            checked={visibility === tier}
-                            onChange={() => setVisibility(tier)}
-                          />
-                          {t(`agents.visibility.${tier}` as never)}
-                        </span>
-                        <span className="pl-5 text-xs leading-4 text-fg-subtle">{t(`agents.visibility.${tier}Hint` as never)}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {visibility === "public" && (
-                    <div className="mt-2 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs leading-5 text-danger-emphasis">
-                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                      {t("credentialCheck.publicWarning")}
-                    </div>
-                  )}
-                  {visibility === "tenant" && (
-                    <div className="mt-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs leading-5 text-warning-emphasis">
-                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                      {t("credentialCheck.tenantHint")}
-                    </div>
-                  )}
-                </Field>
-              )}
             </section>
           )}
 
