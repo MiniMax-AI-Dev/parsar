@@ -40,14 +40,14 @@ export function ImportPreview({
     <div className="space-y-2">
       {status === "idle" && (
         <p className="rounded-md border border-dashed border-line bg-surface-subtle px-3 py-2 text-sm text-fg-subtle">
-          {t("capabilities.import.preview.idle", "在左侧粘贴内容后,这里会显示解析结果")}
+          {t("capabilities.import.preview.idle", "Paste content on the left to see the parsed result here")}
         </p>
       )}
 
       {status === "loading" && (
         <p className="inline-flex items-center gap-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {t("capabilities.import.preview.loading", "正在解析…")}
+          {t("capabilities.import.preview.loading", "Parsing…")}
         </p>
       )}
 
@@ -80,7 +80,7 @@ export function ImportPreview({
         <div className="space-y-1 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
           <div className="flex items-center gap-1.5 font-medium">
             <AlertTriangle className="h-3.5 w-3.5" />
-            {t("capabilities.import.preview.warnings", "解析提示")}
+            {t("capabilities.import.preview.warnings", "Parse warnings")}
           </div>
           <ul className="list-disc space-y-0.5 pl-5">
             {warnings.map((w, i) => (

@@ -111,7 +111,7 @@ export function ImportMCPForm({
               ? err.envelope.message
               : err instanceof Error
                 ? err.message
-                : t("capabilities.import.preview.errorFallback", "解析失败")
+                : t("capabilities.import.preview.errorFallback", "Failed to parse")
             setErrorMessage(msg)
             setWarnings([])
             onChange(null)
@@ -164,7 +164,7 @@ export function ImportMCPForm({
         <p className="text-xs text-fg-subtle">
           {t(
             "capabilities.import.mcp.pasteHelp",
-            "支持 Claude Code (env) / OpenCode (environment) JSON 与 Codex TOML。也可以只粘贴 mcpServers 内层对象。",
+            "Supports Claude Code (env) / OpenCode (environment) JSON and Codex TOML. You can also paste just the inner mcpServers object.",
           )}
         </p>
       </div>
@@ -242,7 +242,7 @@ function FormatPicker({
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="font-medium text-fg-muted">
-        {t("capabilities.import.mcp.format", "格式")}
+        {t("capabilities.import.mcp.format", "Format")}
       </span>
       <div className="flex overflow-hidden rounded-md border border-line bg-surface-subtle">
         {options.map((opt) => {
@@ -338,7 +338,7 @@ function ServerCard({
 
       {credentialEnvEntries.length === 0 ? (
         <p className="mt-2 text-sm text-fg-subtle">
-          {t("capabilities.import.envEmpty.noCredentialPlaceholders", "无需要处理的凭据")}
+          {t("capabilities.import.envEmpty.noCredentialPlaceholders", "No credential placeholders to fill")}
         </p>
       ) : (
         <div className="mt-2 space-y-2">

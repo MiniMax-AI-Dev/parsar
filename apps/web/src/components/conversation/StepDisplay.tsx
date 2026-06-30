@@ -235,8 +235,8 @@ export function WorkingSteps({
             type="button"
             onClick={onCancel}
             disabled={cancelling}
-            aria-label={t("conversations.steps.cancelAria", { defaultValue: "取消当前任务" })}
-            title={t("conversations.steps.cancelAria", { defaultValue: "取消当前任务" })}
+            aria-label={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
+            title={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
             className="rounded p-0.5 text-fg-faint transition-colors hover:bg-surface-muted hover:text-danger disabled:opacity-40"
           >
             {cancelling ? (

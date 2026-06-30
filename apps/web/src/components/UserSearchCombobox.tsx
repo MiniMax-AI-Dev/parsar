@@ -84,7 +84,7 @@ export function UserSearchCombobox({
       ? t("members.add.search.placeholder")
       : t("members.add.search.selectedCount", {
           count: selected.length,
-          defaultValue: "已选 {{count}} 人",
+          defaultValue: "{{count}} selected",
         })
 
   return (

@@ -517,7 +517,7 @@ function AddMemberDialog({
                     success: successCount,
                     failed: failures.length,
                     defaultValue:
-                      "成功 {{success}} 个,失败 {{failed}} 个",
+                      "{{success}} succeeded, {{failed}} failed",
                   })}
                 </p>
                 <ul className="space-y-0.5">
@@ -550,12 +550,12 @@ function AddMemberDialog({
                 ? t("members.add.submitting", {
                     done: progress?.done ?? 0,
                     total: progress?.total ?? 0,
-                    defaultValue: "添加中 ({{done}}/{{total}})…",
+                    defaultValue: "Adding ({{done}}/{{total}})…",
                   })
                 : selected.length > 1
                   ? t("members.add.submitMany", {
                       count: selected.length,
-                      defaultValue: "添加 {{count}} 个",
+                      defaultValue: "Add {{count}}",
                     })
                   : t("members.add.submit")}
             </Button>

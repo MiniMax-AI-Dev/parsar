@@ -142,11 +142,11 @@ export function AddCapabilityVersionDialog({
         ? t("capabilities.errors.nameTooLong")
         : null
   const versionError = !trimmedVersion
-    ? t("capabilities.errors.versionRequired", { defaultValue: "请填写新版本号" })
+    ? t("capabilities.errors.versionRequired", { defaultValue: "Please enter a new version" })
     : versionConflict
       ? t("capabilities.errors.versionMustBump", {
           version: latestVersion?.version ?? "",
-          defaultValue: "新版本号必须不同于当前最新版本（{{version}}）",
+          defaultValue: "The new version must differ from the current latest ({{version}}).",
         })
       : null
 
@@ -270,7 +270,7 @@ export function AddCapabilityVersionDialog({
           <InfoBanner>
             {t("capabilities.versions.add.prefillFromLatest", {
               version: latestVersion?.version ?? "",
-              defaultValue: "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
+              defaultValue: "Pre-filled with the previous version ({{version}}). Edits will be submitted as a new version.",
             })}
           </InfoBanner>
         )}
@@ -278,7 +278,7 @@ export function AddCapabilityVersionDialog({
           <InfoBanner>
             {t("capabilities.versions.add.reuseExistingZip", {
               filename: inheritedOssLabel,
-              defaultValue: "当前版本的包：{{filename}}。如不重新上传，新版本将复用此包。",
+              defaultValue: "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package.",
             })}
           </InfoBanner>
         )}
@@ -288,7 +288,7 @@ export function AddCapabilityVersionDialog({
               keys: inheritedInlineSecrets
                 .map((e) => `${e.server}.${e.envKey}`)
                 .join(", "),
-              defaultValue: "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。",
+              defaultValue: "Previous-version inline secrets ({{keys}}) are hidden. Re-enter them in plaintext to keep, or switch to managed credentials.",
             })}
           </WarningBanner>
         )}

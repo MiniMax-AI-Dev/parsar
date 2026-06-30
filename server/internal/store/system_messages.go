@@ -80,7 +80,7 @@ func (s *Store) CreateCapabilityCredentialOwnerNoticeOnce(ctx context.Context, i
 		return false, fmt.Errorf("capability credential notice: marshal metadata: %w", err)
 	}
 	now := time.Now().UTC()
-	content := fmt.Sprintf("此 Agent 当前使用 @%s 的凭据进行外部调用。同 Conversation 中其他成员的请求也会用这份凭据。", displayName)
+	content := fmt.Sprintf("This Agent is currently using @%s's credentials for external calls. Other members' requests in the same conversation will use these credentials too.", displayName)
 	rows, err := sqlc.New(s.db).CreateSystemMessageOnce(ctx, sqlc.CreateSystemMessageOnceParams{
 		ID:             mustUUID(newID()),
 		WorkspaceID:    mustUUID(conversation.WorkspaceID),
@@ -166,8 +166,8 @@ func (s *Store) CreateSandboxOfflineNotice(ctx context.Context, input CreateSand
 	}
 	content := strings.TrimSpace(input.Content)
 	if content == "" {
-		content = "⚠️ 当前沙箱不可用，可能因长时间空闲被回收或网络异常。" +
-			"等待几分钟看是否恢复；若需立即重置，可在 Agent 设置中删除并重新创建该 Agent。"
+		content = "⚠️ Sandbox is unavailable — likely reclaimed after idle timeout or a network issue. " +
+			"Wait a few minutes for it to recover, or delete and recreate the Agent in its settings to reset immediately."
 	}
 	// Dedicated sqlc query — does NOT reuse runtime_error's INSERT
 	// because that one hard-codes kind='error' + folds
