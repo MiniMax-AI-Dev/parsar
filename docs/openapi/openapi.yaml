@@ -99,6 +99,7 @@ paths:
                   - owner_count
                   - http_enabled
                   - dev_auth_enabled
+                  - public_url
                 properties:
                   needed:
                     type: boolean
@@ -111,6 +112,15 @@ paths:
                     type: boolean
                   dev_auth_enabled:
                     type: boolean
+                  public_url:
+                    type: string
+                    description: |
+                      Operator-configured public base URL
+                      (`PARSAR_PUBLIC_URL`). The web UI mints the daemon
+                      one-line connect command from this value instead of
+                      the request Host header, which a client can spoof.
+                      Empty when unset (dev / mock); UI falls back to the
+                      browser origin.
         '503':
           description: Bootstrap service not wired (no database)
           content:

@@ -29,9 +29,10 @@ type Repo interface {
 }
 
 type Service struct {
-	repo  Repo
-	token []byte
-	clock func() time.Time
+	repo      Repo
+	token     []byte
+	clock     func() time.Time
+	publicURL string
 }
 
 type Option func(*Service)
@@ -41,6 +42,16 @@ func WithClock(now func() time.Time) Option {
 		if now != nil {
 			s.clock = now
 		}
+	}
+}
+
+// WithPublicURL records the operator-configured public URL so Status can
+// hand it to the web UI. The UI mints the daemon one-line connect command
+// from this value rather than the request Host / X-Forwarded-Host header,
+// which a client controls and could spoof to point pairing at an attacker.
+func WithPublicURL(u string) Option {
+	return func(s *Service) {
+		s.publicURL = u
 	}
 }
 
@@ -69,11 +80,12 @@ var ErrInvalidInput = errors.New("bootstrap: invalid input")
 // DevAuthEnabled lets the installer UI warn if the dev_auth
 // middleware shim is on in a production-ish env.
 type StatusResult struct {
-	Needed         bool  `json:"needed"`
-	HasOwners      bool  `json:"has_owners"`
-	OwnerCount     int64 `json:"owner_count"`
-	HTTPEnabled    bool  `json:"http_enabled"`
-	DevAuthEnabled bool  `json:"dev_auth_enabled"`
+	Needed         bool   `json:"needed"`
+	HasOwners      bool   `json:"has_owners"`
+	OwnerCount     int64  `json:"owner_count"`
+	HTTPEnabled    bool   `json:"http_enabled"`
+	DevAuthEnabled bool   `json:"dev_auth_enabled"`
+	PublicURL      string `json:"public_url"`
 }
 
 // Status returns the current bootstrap posture. devAuth is supplied
@@ -93,6 +105,7 @@ func (s *Service) Status(ctx context.Context, devAuth bool) (StatusResult, error
 		OwnerCount:     count,
 		HTTPEnabled:    len(s.token) > 0,
 		DevAuthEnabled: devAuth,
+		PublicURL:      s.publicURL,
 	}, nil
 }
 

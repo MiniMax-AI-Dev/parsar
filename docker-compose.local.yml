@@ -10,7 +10,7 @@
 # local Claude Code / OpenCode / Codex login is paired in.
 #
 # Profile not fork: this is the SAME image as the self-host deployment
-# (deploy/compose/compose.example.yml). Differences live only in this file
+# (deploy/compose/compose.selfhost.yml). Differences live only in this file
 # + the env values below. No separate "local" binary or image.
 #
 # Image source:
@@ -45,9 +45,10 @@ services:
       retries: 20
       start_period: 10s
 
-  # One-shot: run migrations, then provision the first owner as the mock
-  # identity (admin@example.com — see server/internal/auth/feishu/mock.go)
-  # so the very first mock login lands in a ready workspace. Tolerates
+  # One-shot: run migrations, then provision the first owner. Default email is
+  # the mock identity admin@example.com (see server/internal/auth/feishu/mock.go)
+  # so the first mock login lands in a ready workspace; in real-Feishu mode set
+  # PARSAR_OWNER_EMAIL to the email Feishu returns so YOU become owner. Tolerates
   # exit code 2 (store.ErrBootstrapClosed) so re-running `up` is idempotent.
   # Binaries live on $PATH at /usr/local/bin (WORKDIR is /var/lib/parsar),
   # so they are invoked by bare name, NOT ./parsar-migrate.
@@ -65,7 +66,7 @@ services:
         set -e
         parsar-migrate
         parsar-bootstrap \
-          --email=admin@example.com \
+          --email=${PARSAR_OWNER_EMAIL:-admin@example.com} \
           --workspace="Local Workspace" \
           --name="Local Admin" \
         || [ "$$?" -eq 2 ]
@@ -84,10 +85,36 @@ services:
       - "127.0.0.1:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
       DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
-      # Mock auth -> ProfileDev: full cookie login as admin@example.com with
-      # no IdP. (PARSAR_DEV_AUTH stays unset: we want real cookie login, not
-      # the header bypass.)
-      PARSAR_FEISHU_MOCK: "true"
+      # Auth mode. Default (no .env) = mock auth -> ProfileDev: full cookie
+      # login as admin@example.com, no IdP, zero secrets. To test REAL 飞书
+      # OIDC against this same 127.0.0.1 stack, drop a gitignored .env next to
+      # this file with the real values (compose auto-loads it):
+      #
+      #   PARSAR_FEISHU_MOCK=false
+      #   PARSAR_FEISHU_APP_ID=cli_xxx
+      #   PARSAR_FEISHU_APP_SECRET=xxx
+      #   PARSAR_OWNER_EMAIL=you@your-tenant.com   # email Feishu returns for YOU
+      #   PARSAR_FEISHU_VERIFICATION_TOKEN=xxx      # any non-empty value
+      #
+      # No PARSAR_MASTER_KEY / PARSAR_COOKIE_SECURE needed: a loopback
+      # PARSAR_PUBLIC_URL (127.0.0.1) keeps Profile()==ProfileDev even with
+      # real Feishu (see config.isLoopback), so the dev master key is
+      # auto-seeded and the secure-cookie check is skipped. Then register
+      # http://127.0.0.1:18080/api/v1/auth/feishu/callback as a redirect URL
+      # in the Feishu console and start from a fresh db (down -v) so
+      # first-owner bootstrap provisions PARSAR_OWNER_EMAIL. (PARSAR_DEV_AUTH
+      # stays unset: we want real cookie login, not the header bypass.)
+      PARSAR_FEISHU_MOCK: "${PARSAR_FEISHU_MOCK:-true}"
+      PARSAR_FEISHU_APP_ID: "${PARSAR_FEISHU_APP_ID:-}"
+      PARSAR_FEISHU_APP_SECRET: "${PARSAR_FEISHU_APP_SECRET:-}"
+      # Any non-empty value satisfies IsWebhookConfigured (needed to boot in
+      # real-Feishu mode); must match the Feishu console only when you actually
+      # exercise event subscription. Empty in mock mode — ignored there.
+      PARSAR_FEISHU_VERIFICATION_TOKEN: "${PARSAR_FEISHU_VERIFICATION_TOKEN:-}"
+      # Secure cookie can't ride plain http://127.0.0.1, so real-Feishu mode on
+      # localhost needs this false (server prints a harmless 'cookies will leak'
+      # warning). Mock/ProfileDev ignores it. Override to true behind https.
+      PARSAR_COOKIE_SECURE: "${PARSAR_COOKIE_SECURE:-false}"
       # Public URL must match the host port the browser hits so OAuth
       # callbacks AND the minted one-line connect command line up. Kept in
       # sync with the published port via the same variable.
@@ -148,7 +175,7 @@ services:
     # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
     # so the default probe reports the container "unhealthy" even though it
     # serves fine. Override with the same GET probe the self-host compose
-    # uses (deploy/compose/compose.example.yml) — profile not fork.
+    # uses (deploy/compose/compose.selfhost.yml) — profile not fork.
     healthcheck:
       test:
         - CMD-SHELL

@@ -27,7 +27,7 @@
 #      replace every <placeholder> with the real value.
 #   4. Adjust the bind-mount paths below to match where you put
 #      the config file and where you want runtime state to live.
-#   5. docker compose -f deploy/compose/compose.example.yml --env-file .env up -d
+#   5. docker compose -f deploy/compose/compose.selfhost.yml --env-file .env up -d
 #   6. Follow deploy-runbook.md §3 to bootstrap the first owner.
 #
 # Hard rules baked into this file:
@@ -78,11 +78,10 @@ services:
       start_period: 10s
 
   parsar-server:
-    # Image placeholder. Replace with your own registry path,
-    # e.g. registry.<your-domain>/parsar/parsar-server:<tag>.
-    # This compose file deliberately does not pin a real registry so
-    # the open-source repo carries no deployment-specific path.
-    image: ${PARSAR_SERVER_IMAGE}
+    # Defaults to the GHCR prebuilt image (same one docker-compose.local.yml
+    # uses — profile not fork). Override PARSAR_SERVER_IMAGE in .env to pull
+    # from your own registry (e.g. an Aliyun ACR mirror) or a pinned tag.
+    image: ${PARSAR_SERVER_IMAGE:-ghcr.io/MiniMax-ai-dev/parsar-server:latest}
     container_name: parsar-server
     restart: unless-stopped
     depends_on:
