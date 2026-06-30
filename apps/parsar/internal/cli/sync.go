@@ -31,9 +31,6 @@ func runSync(ctx *runContext, args []string) error {
 	if cfg.UserID != "" {
 		fmt.Fprintf(ctx.stdout, "user_id      : %s\n", cfg.UserID)
 	}
-	if cfg.ProjectID != "" {
-		fmt.Fprintf(ctx.stdout, "project_id   : %s\n", cfg.ProjectID)
-	}
 	fmt.Fprintln(ctx.stdout)
 	printSection(ctx, "spec", snap.SpecBlock)
 	printSection(ctx, "memory", snap.MemoryBlock)

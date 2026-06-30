@@ -50,7 +50,6 @@ func TestLoadConfigFromEnvHappyPath(t *testing.T) {
 	t.Setenv("PARSAR_RUNTIME_ID", "rt-1")
 	t.Setenv("PARSAR_WORKSPACE_ID", "ws-1")
 	t.Setenv("PARSAR_USER_ID", "user-1")
-	t.Setenv("PARSAR_PROJECT_ID", "")
 	t.Setenv("PARSAR_CONNECTOR", "claude")
 	cfg, err := loadConfigFromEnv()
 	if err != nil {
@@ -58,9 +57,6 @@ func TestLoadConfigFromEnvHappyPath(t *testing.T) {
 	}
 	if cfg.RuntimeID != "rt-1" || cfg.WorkspaceID != "ws-1" || cfg.UserID != "user-1" || cfg.Connector != "claude" {
 		t.Fatalf("informational fields not propagated: %+v", cfg)
-	}
-	if cfg.ProjectID != "" {
-		t.Errorf("ProjectID should be empty, got %q", cfg.ProjectID)
 	}
 }
 

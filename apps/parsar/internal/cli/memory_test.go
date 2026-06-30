@@ -57,14 +57,14 @@ func TestRunMemoryAddSuccess(t *testing.T) {
 	}
 }
 
-func TestRunMemoryAddProjectScope(t *testing.T) {
-	body := `{"id":"m1","scope":"project","user_id":"u","project_id":"p","memory_type":"feedback","body":"hi","why":"because","tags":[],"source":"agent","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+func TestRunMemoryAddWorkspaceScope(t *testing.T) {
+	body := `{"id":"m1","scope":"workspace","user_id":"u","workspace_id":"p","memory_type":"feedback","body":"hi","why":"because","tags":[],"source":"agent","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
 	ctx, _, _, rec := newTestCtx(t, http.StatusCreated, body)
-	err := runMemory(ctx, []string{"add", "--scope", "project", "--type", "feedback", "--body", "hi", "--why", "because"})
+	err := runMemory(ctx, []string{"add", "--scope", "workspace", "--type", "feedback", "--body", "hi", "--why", "because"})
 	if err != nil {
 		t.Fatalf("memory add: %v", err)
 	}
-	if !strings.Contains(rec.body, `"scope":"project"`) || !strings.Contains(rec.body, `"why":"because"`) {
+	if !strings.Contains(rec.body, `"scope":"workspace"`) || !strings.Contains(rec.body, `"why":"because"`) {
 		t.Errorf("request body = %s", rec.body)
 	}
 }

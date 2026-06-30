@@ -51,7 +51,7 @@ type Memory struct {
 	ID             string    `json:"id"`
 	Scope          string    `json:"scope"`
 	UserID         string    `json:"user_id"`
-	ProjectID      string    `json:"project_id,omitempty"`
+	WorkspaceID    string    `json:"workspace_id,omitempty"`
 	MemoryType     string    `json:"memory_type"`
 	Title          string    `json:"title,omitempty"`
 	Body           string    `json:"body"`
