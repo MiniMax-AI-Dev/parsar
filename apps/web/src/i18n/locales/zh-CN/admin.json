@@ -2134,8 +2134,6 @@
     "sharedPlaceholder": "选择一个共享密钥…",
     "sharedNewQueued": "将创建：{{name}}",
     "sharedNewEdit": "编辑",
-    "publicWarning": "公开 Agent 的调用者可能未注册 Parsar。Model 和能力凭据都必须使用共享密钥；个人凭据选项会被禁用。",
-    "tenantHint": "跨工作区调用者需在 Parsar 配置过自己的凭据，否则该能力会被自动禁用。可改用共享密钥避免此问题。",
     "modelBindingTitle": "Model 凭据",
     "modelBindingPersonal": "调用者各自的 API key",
     "modelBindingShared": "使用共享 API key",

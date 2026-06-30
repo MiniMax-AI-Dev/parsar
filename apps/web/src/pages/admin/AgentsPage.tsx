@@ -70,12 +70,10 @@ import {
   useProjectAgents,
   useSetProjectAgentStatus,
   useUpdateAgent,
-  useUpdateAgentVisibility,
   useUpdateProjectAgentProfile,
   useAgentMetrics,
   useAgentRuns,
   type AgentMetrics,
-  type AgentVisibility,
 } from "../../lib/api-agents"
 import { useModels } from "../../lib/api-models"
 import { useSandboxBinding } from "../../lib/api-sandbox"
@@ -1330,141 +1328,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xs uppercase tracking-wider text-fg-faint">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">{value}</div>
     </div>
-  )
-}
-
-/**
- * Agent visibility radio + confirmation dialog when tightening FROM
- * `public` to a stricter tier. RBAC-gated client-side; backend re-enforces.
- */
-function VisibilityCard({
-  agentID,
-  projectID,
-  current,
-  canEdit,
-  onSuccess,
-}: {
-  agentID: string
-  projectID: string | null
-  current: AgentVisibility
-  canEdit: boolean
-  onSuccess: (next: AgentVisibility) => void
-}) {
-  const { t } = useTranslation("admin")
-  const mut = useUpdateAgentVisibility(projectID)
-  const [pendingDowngrade, setPendingDowngrade] = useState<AgentVisibility | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-
-  const apply = (next: AgentVisibility) => {
-    setErrorMsg(null)
-    mut.mutate(
-      { agentID, visibility: next },
-      {
-        onSuccess: () => {
-          setPendingDowngrade(null)
-          onSuccess(next)
-        },
-        onError: (err) => {
-          setErrorMsg((err as Error)?.message ?? t("agents.visibility.updateError"))
-        },
-      },
-    )
-  }
-
-  const onSelect = (next: AgentVisibility) => {
-    if (next === current) return
-    // Tightening from public kicks out external users — confirm first.
-    if (current === "public" && next !== "public") {
-      setPendingDowngrade(next)
-      return
-    }
-    apply(next)
-  }
-
-  const tiers: { value: AgentVisibility; hint: string }[] = [
-    { value: "workspace", hint: t("agents.visibility.workspaceHint") },
-    { value: "tenant", hint: t("agents.visibility.tenantHint") },
-    { value: "public", hint: t("agents.visibility.publicHint") },
-  ]
-
-  return (
-    <Card title={t("agents.table.visibility")} className="mt-4">
-      <div className="space-y-2">
-        {tiers.map((tier) => (
-          <label
-            key={tier.value}
-            className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors ${
-              current === tier.value
-                ? "border-line-strong bg-surface-subtle"
-                : "border-line hover:bg-surface-subtle"
-            } ${!canEdit ? "cursor-not-allowed opacity-60" : ""}`}
-          >
-            <input
-              type="radio"
-              name="agent-visibility"
-              value={tier.value}
-              checked={current === tier.value}
-              disabled={!canEdit || mut.isPending}
-              onChange={() => onSelect(tier.value)}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-fg">
-                {t(`agents.visibility.${tier.value}`)}
-              </div>
-              <div className="mt-0.5 text-sm text-fg-subtle">{tier.hint}</div>
-            </div>
-          </label>
-        ))}
-      </div>
-      {!canEdit && (
-        <p className="mt-2 text-sm text-fg-faint">
-          {t("agents.visibility.ownerOnly")}
-        </p>
-      )}
-      {errorMsg && (
-        <p className="mt-2 text-sm text-danger" role="alert">
-          {errorMsg}
-        </p>
-      )}
-
-      {pendingDowngrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-emphasis/40 px-4">
-          <div className="w-full max-w-md rounded-lg bg-surface p-5 shadow-xl">
-            <h4 className="text-base font-semibold text-fg">
-              {t("agents.visibility.downgradeWarnTitle")}
-            </h4>
-            <p className="mt-2 text-sm text-fg-muted">
-              {t("agents.visibility.downgradeWarnBody", {
-                to: t(`agents.visibility.${pendingDowngrade}`),
-              })}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingDowngrade(null)}
-                className="rounded-md border border-line px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-subtle"
-                disabled={mut.isPending}
-              >
-                {t("agents.visibility.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => apply(pendingDowngrade)}
-                className="rounded-md bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:opacity-60"
-                disabled={mut.isPending}
-              >
-                {mut.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  t("agents.visibility.confirmDowngrade")
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
   )
 }
 
