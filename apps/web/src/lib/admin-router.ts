@@ -4,6 +4,7 @@ export type AdminView =
   // Sidebar primary entries
   | "conversations"
   | "runs"
+  | "scheduled"
   | "approvals"
   | "agents"
   | "capabilities"
@@ -26,6 +27,7 @@ export type ProfileView = "credentials"
 const ALL_ADMIN_VIEWS: AdminView[] = [
   "conversations",
   "runs",
+  "scheduled",
   "approvals",
   "agents",
   "capabilities",

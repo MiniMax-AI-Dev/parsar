@@ -188,6 +188,17 @@ type RuntimeStore interface {
 	ApproveJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	RejectJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error
+
+	// 定时任务(scheduled tasks)
+	ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error)
+	ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error)
+	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error)
+	GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error)
+	UpdateScheduledTask(ctx context.Context, in store.UpdateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	SoftDeleteScheduledTask(ctx context.Context, taskID string) error
+	RunScheduledTaskNow(ctx context.Context, taskID string) (string, error)
+	ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error)
 }
 
 type FeishuAppRegistrationClient interface {
@@ -511,6 +522,14 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/project-agents/{projectAgentID}/disable", disableProjectAgent(runtimeStore))
 			r.Post("/project-agents/{projectAgentID}/enable", enableProjectAgent(runtimeStore))
 			r.Delete("/project-agents/{projectAgentID}", deleteProjectAgent(runtimeStore))
+			r.Get("/project-agents/{projectAgentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
+			r.Post("/project-agents/{projectAgentID}/scheduled-tasks", createScheduledTask(runtimeStore))
+			r.Get("/projects/{projectID}/scheduled-tasks", listScheduledTasksByProject(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}", getScheduledTask(runtimeStore))
+			r.Patch("/scheduled-tasks/{taskID}", updateScheduledTask(runtimeStore))
+			r.Delete("/scheduled-tasks/{taskID}", deleteScheduledTask(runtimeStore))
+			r.Post("/scheduled-tasks/{taskID}/run-now", runScheduledTaskNow(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
 			r.Get("/workspaces/{workspaceID}/project-agents/{projectAgentID}/runtime", getProjectAgentRuntimeBinding(runtimeStore))

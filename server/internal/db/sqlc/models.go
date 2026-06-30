@@ -598,6 +598,42 @@ type Sandbox struct {
 	KilledAt pgtype.Timestamptz `json:"killed_at"`
 }
 
+// 定时任务: 锚定 project_agent, 到点用独立 session 触发一次 agent run
+type ScheduledTask struct {
+	ID pgtype.UUID `json:"id"`
+	// 触发的 project_agent (runnable 单元)
+	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	// 最近一次 run 的对话 (创建后为 NULL, 每次派发回填)
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	Name           string      `json:"name"`
+	Prompt         string      `json:"prompt"`
+	// 标准 5 段 cron 表达式
+	CronExpr string `json:"cron_expr"`
+	// IANA 时区, 解释 cron_expr
+	Timezone string `json:"timezone"`
+	Enabled  bool   `json:"enabled"`
+	// phase 2 投递目标群; null = web only
+	FeishuChatID   pgtype.Text `json:"feishu_chat_id"`
+	FeishuChatName pgtype.Text `json:"feishu_chat_name"`
+	// 调度器算出的下次触发 (UTC)
+	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt pgtype.Timestamptz `json:"last_run_at"`
+	// 最近一次派发的 agent_run
+	LastRunID  pgtype.UUID `json:"last_run_id"`
+	LastStatus string      `json:"last_status"`
+	// 连续失败计数, 到阈值自动停用
+	ConsecutiveFailures int32 `json:"consecutive_failures"`
+	// 多 pod claim 租约时间
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	// 多 pod claim 持有者
+	ClaimedBy string `json:"claimed_by"`
+	// 执行身份 = 创建者
+	CreatedBy pgtype.UUID        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
 // 组织级加密凭据表(共享 catalog)
 type Secret struct {
 	// secret 主键

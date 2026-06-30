@@ -12,6 +12,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.9.7
 	github.com/pressly/goose/v3 v3.27.1
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/slack-go/slack v0.17.3
 	go.opentelemetry.io/proto/otlp v1.10.0
 	golang.org/x/crypto v0.50.0
