@@ -7,6 +7,7 @@ import { BookText, Loader2, Plus, ShieldCheck, Trash2, Upload } from "lucide-rea
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import {
   AlertDialog,
@@ -95,7 +96,7 @@ export function SpecsPage() {
   }
 
   return (
-    <AdminLayout activeMenu="specs">
+    <AdminLayout activeMenu="settings">
       <PageHeader
         title={t("specs.page.title")}
         action={
@@ -122,6 +123,7 @@ export function SpecsPage() {
           </div>
         }
       />
+      <SettingsTabs active="specs" />
 
       {!wsId ? (
         <ScopeRequiredState scope="workspace" resourceName={t("specs.page.title")} />
@@ -219,25 +221,25 @@ function FragmentRow({ fragment, fmtAgo, onEdit, onDelete }: FragmentRowProps) {
   // list stays scannable. The full body is one click away in the editor.
   const preview = fragment.body.replace(/\s+/g, " ").trim().slice(0, 240)
   return (
-    <li className="rounded-lg border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-slate-300">
+    <li className="rounded-lg border border-line bg-surface px-4 py-3 transition-colors hover:border-line-strong">
       <button
         type="button"
         onClick={onEdit}
         className="flex w-full flex-col items-start gap-1.5 text-left"
       >
         <div className="flex w-full flex-wrap items-center gap-2">
-          <span className="text-[14px] font-semibold text-slate-900">{fragment.title}</span>
+          <span className="text-base font-semibold text-fg">{fragment.title}</span>
           <SourceBadge source={fragment.source} />
           {fragment.tags.map((tag) => (
-            <Badge key={tag} variant="neutral" className="font-mono text-[10.5px]">
+            <Badge key={tag} variant="neutral" className="font-mono text-xs">
               {tag}
             </Badge>
           ))}
         </div>
         {preview && (
-          <p className="line-clamp-2 text-[12.5px] text-slate-600">{preview}</p>
+          <p className="line-clamp-2 text-sm text-fg-muted">{preview}</p>
         )}
-        <p className="text-[11px] text-slate-400">
+        <p className="text-xs text-fg-faint">
           {t("specs.row.updatedAt", { time: fmtAgo(fragment.updated_at) })}
         </p>
       </button>
@@ -249,7 +251,7 @@ function FragmentRow({ fragment, fmtAgo, onEdit, onDelete }: FragmentRowProps) {
           type="button"
           variant="ghost"
           size="sm"
-          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+          className="text-danger hover:bg-danger-subtle hover:text-danger-emphasis"
           onClick={onDelete}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -306,7 +308,7 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
       <DialogContent className="max-w-2xl gap-0 p-0">
         <form onSubmit={handleSubmit}>
-          <DialogHeader className="border-b border-slate-100 px-5 py-4 pr-10">
+          <DialogHeader className="border-b border-line-muted px-5 py-4 pr-10">
             <DialogTitle className="text-sm">
               {mode === "create" ? t("specs.editor.createTitle") : t("specs.editor.editTitle")}
             </DialogTitle>
@@ -314,9 +316,9 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
           </DialogHeader>
           <div className="space-y-3 px-5 py-4">
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("specs.editor.field.title")}
-                <span className="ml-0.5 text-red-500">*</span>
+                <span className="ml-0.5 text-danger">*</span>
               </span>
               <Input
                 value={title}
@@ -327,9 +329,9 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("specs.editor.field.body")}
-                <span className="ml-0.5 text-red-500">*</span>
+                <span className="ml-0.5 text-danger">*</span>
               </span>
               <textarea
                 value={body}
@@ -337,11 +339,11 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
                 placeholder={t("specs.editor.placeholder.body")}
                 required
                 rows={12}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[12.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-line px-3 py-2 font-mono text-sm leading-relaxed text-fg-emphasis placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[12px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("specs.editor.field.tags")}
               </span>
               <Input
@@ -351,15 +353,15 @@ function EditorDialog({ mode, fragment, pending, error, onSubmit, onClose }: Edi
               />
             </label>
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">
+              <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">
                   {t("specs.editor.error.title")}
                 </p>
-                <p className="text-[11.5px] text-red-700">{error.message}</p>
+                <p className="text-xs text-danger-emphasis">{error.message}</p>
               </div>
             )}
           </div>
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={pending}>
               {t("specs.editor.cancel")}
             </Button>
@@ -397,7 +399,7 @@ function DeleteConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <div className="flex items-start gap-3">
-            <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+            <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="space-y-1.5">
@@ -405,7 +407,7 @@ function DeleteConfirmDialog({
                 {t("specs.delete.title", { title: fragment.title })}
               </AlertDialogTitle>
               <AlertDialogDescription>{t("specs.delete.description")}</AlertDialogDescription>
-              {error && <p className="text-[12px] text-red-700">{error.message}</p>}
+              {error && <p className="text-sm text-danger-emphasis">{error.message}</p>}
             </div>
           </div>
         </AlertDialogHeader>

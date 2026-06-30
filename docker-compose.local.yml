@@ -128,16 +128,47 @@ services:
       # Same service-name default the self-host compose uses (profile not
       # fork) — `parsar-server` is this service's network alias.
       PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"
-      # Master key. Left EMPTY by default: on this loopback stack
-      # Profile()==ProfileDev (mock auth OR a 127.0.0.1 PARSAR_PUBLIC_URL,
-      # see config.isLoopback), so the server auto-seeds the dev master key
-      # (parsar-dev-master-key-2026, see main.go:106 — empty string and unset
-      # are equivalent), which the web admin UI hardcodes
-      # (apps/web/src/lib/api-models.ts DEV_MASTER_KEY). This holds for
-      # real-Feishu-on-localhost too, so the dev key stays in sync and you do
-      # NOT set PARSAR_MASTER_KEY here. A real public deployment (non-loopback
-      # PARSAR_PUBLIC_URL) is ProfileProd and MUST set it explicitly.
-      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-}"
+      # Feishu Bot IM (local websocket path, not webhook — 127.0.0.1 is not
+      # reachable by Feishu's HTTPS event delivery). WEBSOCKET turns inbound
+      # @Bot messages into gateway runs; OUTBOUND drives the inflight reply
+      # cards back. Both read PARSAR_MASTER_KEY via os.Getenv (the dev
+      # auto-seed does NOT satisfy them), so it must be set explicitly here.
+      # Pinned to the SAME dev default the web admin UI hardcodes
+      # (apps/web/src/lib/api-models.ts DEV_MASTER_KEY) so the secret vault
+      # stays in sync. Bot App ID/Secret are NOT here — they go through the
+      # Web UI bind card into the encrypted vault.
+      PARSAR_MASTER_KEY: "parsar-dev-master-key-2026"
+      PARSAR_FEISHU_WEBSOCKET: "true"
+      PARSAR_FEISHU_OUTBOUND: "true"
+      # Workspace-dimension IM connector reconcilers (workspace_im_connectors
+      # table → one Socket Mode / Gateway runner per workspace|app_id, hot-
+      # reloading on token rotation). Opt-in gates read in main.go
+      # (buildSlackInboundManager / buildDiscordInboundManager); both reuse
+      # PARSAR_MASTER_KEY above to decrypt the vaulted bot tokens.
+      PARSAR_SLACK_CONNECTORS: "true"
+      PARSAR_DISCORD_CONNECTORS: "true"
+      # Shared default Bot credentials. Values come from a gitignored .env
+      # file next to this compose (NEVER hardcode the App Secret here — this
+      # file is repo-tracked). The websocket manager reads these to open the
+      # env-backed shared bot long-connection (defaultFeishuSharedBotEnv in
+      # server/cmd/server/main.go). Empty default keeps `up` working when the
+      # .env is absent (Feishu just stays off).
+      PARSAR_FEISHU_DEFAULT_BOT_APP_ID: "${PARSAR_FEISHU_DEFAULT_BOT_APP_ID:-}"
+      PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET: "${PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET:-}"
+      # Bot's own open_id. Needed so the shared bot recognizes it was the one
+      # @-mentioned in a group chat — without it, ShouldSkipGroupWithoutMention
+      # drops every group @ (botLocalID=="" → skip). Read from .env.
+      PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID: "${PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID:-}"
+      # Discord shared bot (Gateway WS, server-initiated — works on 127.0.0.1,
+      # no public callback). GATEWAY enables buildDiscordRunner; BOT_TOKEN is
+      # required (server refuses to start the runner without it). APP_ID is
+      # optional. Reads PARSAR_MASTER_KEY for button/permission routing (already
+      # set above). All values from the gitignored .env. ⚠️ MESSAGE CONTENT
+      # privileged intent must be ON in the Developer Portal or message bodies
+      # come through empty (main.go:1467).
+      PARSAR_DISCORD_GATEWAY: "${PARSAR_DISCORD_GATEWAY:-}"
+      PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
+      PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
     volumes:
       - parsar-local-data:/var/lib/parsar
     # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`

@@ -26,13 +26,19 @@ export const KEY_CREDENTIAL_KINDS = (workspaceID: string) =>
 /* ---------- uploads (plugin zip) ---------------------------------------- */
 
 /**
- * V4-signed PUT URL response. Browser uploads directly to OSS; the
- * server never sees the bytes. The ossKey is workspace-id-prefixed so a
- * later presign-download can refuse cross-tenant reads.
+ * Presigned upload response. The browser PUTs the bytes to uploadUrl
+ * directly; the server never sees them. ossKey is a backend ref
+ * (OSS key or pg:<uuid>), workspace-scoped so presign-download can
+ * refuse cross-tenant reads. method + headers are backend-specific:
+ * OSS returns PUT + a Content-Type pin; the PG proxy returns PUT with
+ * the token baked into uploadUrl and no required headers. Both are
+ * optional for back-compat with older servers (default PUT + octet).
  */
 export interface PresignUploadResponse {
   uploadUrl: string
   ossKey: string
+  method?: string
+  headers?: Record<string, string>
   expiresAt: string
 }
 
@@ -57,29 +63,30 @@ export function usePresignUploadMutation(workspaceID: string | null) {
 }
 
 /**
- * Direct PUT to a presigned URL. Bypasses apiRequest because OSS rejects
- * extra signed headers.
+ * Direct upload to a presigned URL. Bypasses apiRequest because OSS
+ * rejects extra signed headers (it signs Content-Type as a default
+ * signed header, so the bytes must go up with exactly the headers the
+ * server prescribed).
  *
- * Content-Type pin: must match server-side
- * oss.PresignPutContentType ("application/octet-stream"). Aliyun V4
- * signs content-type as a default signed header; fetch's auto-detected
- * "application/zip" would trigger SignatureDoesNotMatch.
+ * method + headers come from the backend: OSS pins
+ * Content-Type=application/octet-stream (matches oss.PresignPutContentType;
+ * fetch's auto-detected "application/zip" would trigger
+ * SignatureDoesNotMatch); the PG proxy authenticates via the token in the
+ * URL and needs no signed headers. Falls back to PUT + octet-stream for
+ * older servers that don't send method/headers.
  */
-export async function putToPresignedURL(uploadUrl: string, file: File): Promise<void> {
-  const resp = await fetch(uploadUrl, {
-    method: "PUT",
+export async function putToPresignedURL(presign: PresignUploadResponse, file: File): Promise<void> {
+  const resp = await fetch(presign.uploadUrl, {
+    method: presign.method ?? "PUT",
     body: file,
-    headers: {
-      // MUST match server-side oss.PresignPutContentType.
-      "Content-Type": "application/octet-stream",
-    },
+    headers: presign.headers ?? { "Content-Type": "application/octet-stream" },
   })
   if (!resp.ok) {
     const detail = await resp.text().catch(() => "")
     throw new ApiError({
       status: resp.status,
       code: "oss_put_failed",
-      message: `OSS upload failed: ${resp.status} ${resp.statusText}${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
+      message: `Upload failed: ${resp.status} ${resp.statusText}${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
     })
   }
 }

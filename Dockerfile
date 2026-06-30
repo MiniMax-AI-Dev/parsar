@@ -35,7 +35,7 @@
 # is copied in a later layer that re-runs only on source edits.
 ###############################################################################
 ARG NODE_VERSION=22-alpine
-ARG GO_VERSION=1.24-bookworm
+ARG GO_VERSION=1.25-bookworm
 ARG RUNTIME_BASE=debian:bookworm-slim
 
 FROM node:${NODE_VERSION} AS web-builder

@@ -976,8 +976,8 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsWithWorkdirKey(t *testing.T)
 // ephemeral path but is disconnected from the default first-prompt flow.
 //
 // Sandbox-mode agents that hit dispatch before runtime_id is written
-// see a sandbox-aware hint ("沙箱正在准备") instead of the generic
-// "未绑定 Runtime" copy.
+// see a sandbox-aware hint ("sandbox is preparing") instead of the generic
+// "no Runtime bound" copy.
 func TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired(t *testing.T) {
 	reg := gateway.NewRegistry()
 	sb := &stubSandboxProvider{deviceID: "dev-sbx-abc"}
@@ -1002,7 +1002,7 @@ func TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired(t *testing.T) {
 	// Sandbox-mode unbound surfaces a sandbox-preparation hint — the
 	// createAgent goroutine is racing to write runtime_id back, and a
 	// user retry in ~10s should land on a healthy binding.
-	if !contains(gotErr.Error, "沙箱") {
+	if !contains(gotErr.Error, "sandbox is preparing") {
 		t.Fatalf("expected sandbox-preparation hint, got %q", gotErr.Error)
 	}
 	// And nothing got bound.
@@ -1032,7 +1032,7 @@ func TestStreamPrompt_SandboxModeProviderDisabled_StillRefusesAutoAcquire(t *tes
 	if gotErr == nil || gotDone == nil {
 		t.Fatalf("expected EventError + EventDone, got err=%v done=%v", gotErr, gotDone)
 	}
-	if !contains(gotErr.Error, "沙箱") {
+	if !contains(gotErr.Error, "sandbox is preparing") {
 		t.Fatalf("expected sandbox-preparation hint, got %q", gotErr.Error)
 	}
 }

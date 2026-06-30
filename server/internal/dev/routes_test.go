@@ -516,9 +516,9 @@ func (s *feishuSecretRouteStore) GetAgentByFeishuAppID(ctx context.Context, appI
 	return s.route, nil
 }
 
-func (s *feishuSecretRouteStore) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
+func (s *feishuSecretRouteStore) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
 	if s.userID == "" {
-		return "", store.ErrUnknownFeishuUser
+		return "", store.ErrUnknownPlatformUser
 	}
 	return s.userID, nil
 }
@@ -2092,6 +2092,42 @@ func (s roleStubStore) roleForUser(userID string) (string, error) {
 	return role, nil
 }
 
+func (stubRuntimeStore) ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error) {
+	return nil, nil
+}
+
+func (stubRuntimeStore) ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error) {
+	return store.ListScheduledTasksByProjectResult{}, nil
+}
+
+func (stubRuntimeStore) CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error) {
+	return store.ScheduledTaskRead{}, nil
+}
+
+func (stubRuntimeStore) GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error) {
+	return store.ScheduledTaskRead{}, nil
+}
+
+func (stubRuntimeStore) GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error) {
+	return store.ScheduledTaskScope{}, nil
+}
+
+func (stubRuntimeStore) UpdateScheduledTask(ctx context.Context, in store.UpdateScheduledTaskInput) (store.ScheduledTaskRead, error) {
+	return store.ScheduledTaskRead{}, nil
+}
+
+func (stubRuntimeStore) SoftDeleteScheduledTask(ctx context.Context, taskID string) error {
+	return nil
+}
+
+func (stubRuntimeStore) RunScheduledTaskNow(ctx context.Context, taskID string) (string, error) {
+	return "", nil
+}
+
+func (stubRuntimeStore) ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error) {
+	return nil, nil
+}
+
 func (stubRuntimeStore) GetWorkspaceMemberRole(ctx context.Context, workspaceID string, userID string) (string, error) {
 	return "owner", nil
 }
@@ -2426,11 +2462,11 @@ func (stubRuntimeStore) ClearGatewaySessionSelection(ctx context.Context, platfo
 	return nil
 }
 
-func (stubRuntimeStore) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	if unionID == "on_test_user" || unionID == "ou_feishu_admin" {
+func (stubRuntimeStore) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	if subject == "on_test_user" || subject == "ou_feishu_admin" {
 		return store.DefaultDevFixtureIDs().UserID, nil
 	}
-	return "", store.ErrUnknownFeishuUser
+	return "", store.ErrUnknownPlatformUser
 }
 
 func (stubRuntimeStore) IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error) {
@@ -4445,4 +4481,20 @@ func (stubRuntimeStore) RejectJoinRequest(ctx context.Context, input store.Revie
 
 func (stubRuntimeStore) WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error {
 	return nil
+}
+
+func (stubRuntimeStore) GetWorkspaceIMConnectors(ctx context.Context, workspaceID string) ([]store.WorkspaceConnectorRead, error) {
+	return nil, nil
+}
+
+func (stubRuntimeStore) UpsertWorkspaceSlackConnector(ctx context.Context, input store.UpsertWorkspaceSlackConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
+}
+
+func (stubRuntimeStore) UpsertWorkspaceDiscordConnector(ctx context.Context, input store.UpsertWorkspaceDiscordConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
+}
+
+func (stubRuntimeStore) UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
 }

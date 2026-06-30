@@ -11,6 +11,7 @@ import {
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -108,9 +109,9 @@ function shortId(s: string | undefined | null, n = 10): string {
 function ActorCell({ row }: { row: AuditRecord }) {
   if (row.actor_type === "agent") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-700">
-        <Bot className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-        <span className="font-mono text-[11px] text-slate-500">
+      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
+        <Bot className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
+        <span className="font-mono text-xs text-fg-subtle">
           {shortId(row.actor_id, 10)}
         </span>
       </span>
@@ -118,9 +119,9 @@ function ActorCell({ row }: { row: AuditRecord }) {
   }
   if (row.actor_type === "user") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-700">
-        <UserIcon className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-        <span className="font-mono text-[11px] text-slate-500">
+      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
+        <UserIcon className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
+        <span className="font-mono text-xs text-fg-subtle">
           {shortId(row.actor_id, 10)}
         </span>
       </span>
@@ -128,15 +129,15 @@ function ActorCell({ row }: { row: AuditRecord }) {
   }
   if (row.actor_type === "external") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-600">
-        <Globe className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
+        <Globe className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
         external
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-600">
-      <Cog className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+    <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
+      <Cog className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
       system
     </span>
   )
@@ -221,11 +222,12 @@ export function AuditPage() {
   const hasActiveFilters = tab !== "all" || !!targetType || !!keyword.trim()
 
   return (
-    <AdminLayout activeMenu="audit">
+    <AdminLayout activeMenu="settings">
       <PageHeader
         title={t("audit.page.title")}
         description={t("audit.page.description")}
       />
+      <SettingsTabs active="audit" />
       {!pid ? (
         <ScopeRequiredState scope="project" resourceName={t("audit.page.title")} />
       ) : query.isLoading ? (
@@ -253,7 +255,7 @@ export function AuditPage() {
                   <TabsTrigger key={s} value={s}>
                     {t(`audit.tabs.${s}`)}
                     {counts && counts[s] > 0 && (
-                      <span className="ml-1.5 text-[11px] text-slate-400 tabular-nums">
+                      <span className="ml-1.5 text-xs text-fg-faint tabular-nums">
                         {counts[s]}
                       </span>
                     )}
@@ -268,7 +270,7 @@ export function AuditPage() {
                 onChange={(e) => setTargetType(e.target.value)}
                 aria-label={t("audit.filters.targetType")}
                 disabled={targetTypeOptions.length === 0}
-                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
               >
                 <option value="">
                   {targetTypeOptions.length === 0
@@ -284,7 +286,7 @@ export function AuditPage() {
 
               <div className="relative w-64">
                 <Search
-                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint"
                   strokeWidth={1.75}
                 />
                 <Input
@@ -315,7 +317,7 @@ export function AuditPage() {
               }
             />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -341,10 +343,10 @@ export function AuditPage() {
                         >
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="text-[12px] text-slate-700">
+                              <span className="text-sm text-fg-muted">
                                 {fmtAgo(r.occurred_at)}
                               </span>
-                              <span className="font-mono text-[10px] text-slate-400 tabular-nums">
+                              <span className="font-mono text-xs text-fg-faint tabular-nums">
                                 {fmtAbsTime(r.occurred_at)}
                               </span>
                             </div>
@@ -352,12 +354,12 @@ export function AuditPage() {
                           <TableCell><SourceBadge source={r.source} /></TableCell>
                           <TableCell><ActorCell row={r} /></TableCell>
                           <TableCell>
-                            <code className="text-[12px] text-slate-800">{r.event_type}</code>
+                            <code className="text-sm text-fg-emphasis">{r.event_type}</code>
                           </TableCell>
                           <TableCell>
                             {targetClickable ? (
                               <button
-                                className="font-mono text-[11px] text-slate-700 hover:underline"
+                                className="font-mono text-xs text-fg-muted hover:underline"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   navigate("runs", { id: r.target_id! })
@@ -366,11 +368,11 @@ export function AuditPage() {
                                 {r.target_type} · {shortId(r.target_id, 10)}
                               </button>
                             ) : r.target_type ? (
-                              <span className="font-mono text-[11px] text-slate-600">
+                              <span className="font-mono text-xs text-fg-muted">
                                 {r.target_type} · {shortId(r.target_id, 10)}
                               </span>
                             ) : (
-                              <span className="text-[11px] text-slate-400">—</span>
+                              <span className="text-xs text-fg-faint">—</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right pr-4">
@@ -379,13 +381,13 @@ export function AuditPage() {
                                 {t("audit.table.payloadFields", { count: payloadEntries })}
                               </Badge>
                             ) : (
-                              <span className="text-[11px] text-slate-400">—</span>
+                              <span className="text-xs text-fg-faint">—</span>
                             )}
                           </TableCell>
                         </TableRow>
                         {isOpen && (
                           <TableRow key={`${r.id}-payload`}>
-                            <TableCell colSpan={6} className="bg-slate-50/60">
+                            <TableCell colSpan={6} className="bg-surface-subtle/60">
                               <PayloadView record={r} />
                             </TableCell>
                           </TableRow>
@@ -399,7 +401,7 @@ export function AuditPage() {
           )}
 
           {rows.length > 0 && (
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-fg-faint">
               {t("audit.footer.shownCount", {
                 shown: filtered.length,
                 total: rows.length,
@@ -436,16 +438,16 @@ function PayloadView({ record }: { record: AuditRecord }) {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Field
           label={t("audit.detail.recordId")}
-          value={<span className="font-mono text-[11px]">{record.id}</span>}
+          value={<span className="font-mono text-xs">{record.id}</span>}
         />
         <Field
           label={t("audit.detail.actorType")}
-          value={<span className="font-mono text-[11px]">{record.actor_type}</span>}
+          value={<span className="font-mono text-xs">{record.actor_type}</span>}
         />
         <Field
           label={t("audit.detail.target")}
           value={
-            <span className="font-mono text-[11px] break-all">
+            <span className="font-mono text-xs break-all">
               {record.target_type ?? "—"} · {record.target_id ?? "—"}
             </span>
           }
@@ -468,10 +470,10 @@ function PayloadView({ record }: { record: AuditRecord }) {
       )}
 
       <div>
-        <p className="mb-1 text-[11px] uppercase tracking-wider text-slate-400">
+        <p className="mb-1 text-xs uppercase tracking-wider text-fg-faint">
           {t("audit.detail.payload")}
         </p>
-        <pre className="whitespace-pre-wrap rounded-md bg-white p-3 font-mono text-[11px] text-slate-700 ring-1 ring-slate-200">
+        <pre className="whitespace-pre-wrap rounded-md bg-surface p-3 font-mono text-xs text-fg-muted ring-1 ring-slate-200">
 {JSON.stringify(record.payload ?? {}, null, 2)}
         </pre>
       </div>
@@ -482,8 +484,8 @@ function PayloadView({ record }: { record: AuditRecord }) {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="mb-0.5 text-[11px] uppercase tracking-wider text-slate-400">{label}</dt>
-      <dd className="text-[13px] text-slate-800">{value}</dd>
+      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
+      <dd className="text-sm text-fg-emphasis">{value}</dd>
     </div>
   )
 }
@@ -505,7 +507,7 @@ function AuditLoadingSkeleton() {
         <Skeleton className="h-8 w-96" />
         <Skeleton className="h-8 w-64" />
       </div>
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-9 w-full" />
         ))}

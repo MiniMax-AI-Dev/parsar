@@ -256,6 +256,22 @@ type Capability struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+// capability plugin/skill zip 的 PG 存储后端(PARSAR_BLOB_BACKEND=pg 时启用)
+type CapabilityBlob struct {
+	// 不透明存储引用 = capability_version.oss_key 的值(PG 后端形如 pg:<uuid>)
+	StorageRef string `json:"storage_ref"`
+	// 归属 workspace;PG 后端据此做跨租户归属校验
+	WorkspaceID string `json:"workspace_id"`
+	// zip 原始字节(≤ 64 MiB,上限在应用层强制)
+	Bytes []byte `json:"bytes"`
+	// zip 的 SHA-256 摘要(64 字符 hex),写入时计算
+	Sha256 string `json:"sha256"`
+	// zip 字节数;Stat 用
+	SizeBytes int64 `json:"size_bytes"`
+	// 写入时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // capability 版本表
 type CapabilityVersion struct {
 	// 版本 ID
@@ -598,6 +614,42 @@ type Sandbox struct {
 	KilledAt pgtype.Timestamptz `json:"killed_at"`
 }
 
+// 定时任务: 锚定 project_agent, 到点用独立 session 触发一次 agent run
+type ScheduledTask struct {
+	ID pgtype.UUID `json:"id"`
+	// 触发的 project_agent (runnable 单元)
+	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	// 最近一次 run 的对话 (创建后为 NULL, 每次派发回填)
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	Name           string      `json:"name"`
+	Prompt         string      `json:"prompt"`
+	// 标准 5 段 cron 表达式
+	CronExpr string `json:"cron_expr"`
+	// IANA 时区, 解释 cron_expr
+	Timezone string `json:"timezone"`
+	Enabled  bool   `json:"enabled"`
+	// phase 2 投递目标群; null = web only
+	FeishuChatID   pgtype.Text `json:"feishu_chat_id"`
+	FeishuChatName pgtype.Text `json:"feishu_chat_name"`
+	// 调度器算出的下次触发 (UTC)
+	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt pgtype.Timestamptz `json:"last_run_at"`
+	// 最近一次派发的 agent_run
+	LastRunID  pgtype.UUID `json:"last_run_id"`
+	LastStatus string      `json:"last_status"`
+	// 连续失败计数, 到阈值自动停用
+	ConsecutiveFailures int32 `json:"consecutive_failures"`
+	// 多 pod claim 租约时间
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	// 多 pod claim 持有者
+	ClaimedBy string `json:"claimed_by"`
+	// 执行身份 = 创建者
+	CreatedBy pgtype.UUID        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
 // 组织级加密凭据表(共享 catalog)
 type Secret struct {
 	// secret 主键
@@ -756,6 +808,28 @@ type Workspace struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	// 软删除时间戳; NULL=未删除
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+// workspace 维度的 IM 连接器绑定(feishu/slack/discord 统一存储)
+type WorkspaceImConnector struct {
+	// 连接器主键
+	ID pgtype.UUID `json:"id"`
+	// 所属 workspace
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	// IM 平台: feishu / slack / discord
+	Platform string `json:"platform"`
+	// 平台应用 ID(配置时即可知, workspace-bot 的通用 join key)
+	AppID string `json:"app_id"`
+	// 是否启用(启用后 reconciler 才会为其建立入站连接)
+	Enabled bool `json:"enabled"`
+	// 非敏感配置 + 密钥引用(*_ref 指向 secrets.id; 含 event_mode/intents 等)
+	Config []byte `json:"config"`
+	// 创建人
+	CreatedBy pgtype.UUID        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 软删除时间戳; NULL=有效
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 

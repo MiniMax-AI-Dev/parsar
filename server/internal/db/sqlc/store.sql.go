@@ -236,6 +236,28 @@ func (q *Queries) AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMember
 	return i, err
 }
 
+const advanceScheduledTaskAfterSkip = `-- name: AdvanceScheduledTaskAfterSkip :exec
+update scheduled_tasks
+set next_run_at = $1,
+    last_status = 'skipped_overlap',
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = $2::timestamptz
+where id = $3::uuid
+`
+
+type AdvanceScheduledTaskAfterSkipParams struct {
+	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
+	Now       pgtype.Timestamptz `json:"now"`
+	ID        pgtype.UUID        `json:"id"`
+}
+
+// Self-overlap skip: advance next_run_at, release claim, no run dispatched.
+func (q *Queries) AdvanceScheduledTaskAfterSkip(ctx context.Context, arg AdvanceScheduledTaskAfterSkipParams) error {
+	_, err := q.db.Exec(ctx, advanceScheduledTaskAfterSkip, arg.NextRunAt, arg.Now, arg.ID)
+	return err
+}
+
 const agentRunExists = `-- name: AgentRunExists :one
 select exists(select 1 from agent_runs where id = $1::uuid)
 `
@@ -411,17 +433,28 @@ with run_event_max as (
   group by agent_run_id
 ),
 picked as (
-  select c.id, r.id as run_id
+  select c.id, c.platform, r.id as run_id
   from conversations c
   join agent_runs r on r.conversation_id = c.id
-  left join run_event_max rem on rem.agent_run_id = r.id
+  -- INNER (not LEFT) join: a run is only claimable once it has >=1
+  -- renderable event. Without a rem row the first-send branch below
+  -- (agent_run_id <> r.id) would otherwise claim a run carrying only
+  -- non-renderable lifecycle events (run.cancelled/requeued/superseded)
+  -- or a freshly-queued run with no events yet, and spam an empty card.
+  -- The sibling ListActive query reaches the same exclusion via its
+  -- ` + "`" + `seq_emitted < max_seq` + "`" + ` predicate.
+  join run_event_max rem on rem.agent_run_id = r.id
   left join messages m on m.id = r.output_message_id
-  where c.platform = 'feishu'
+  -- Platform predicate is parameterized (was hardcoded 'feishu') so the
+  -- driver can claim any platform whose neutral Channel is registered on
+  -- the worker. The worker passes only platforms it can actually deliver
+  -- to, so a row is never claimed without a sink.
+  where c.platform = any($1::text[])
     and c.status = 'active'
     and c.deleted_at is null
     and c.external_id <> ''
     and r.status in ('queued', 'running', 'completed', 'failed')
-    and (r.finished_at is null or r.finished_at > $1::timestamptz)
+    and (r.finished_at is null or r.finished_at > $2::timestamptz)
     and (
       -- Slot belongs to this run: only re-claim when there are new
       -- events past seq_emitted.
@@ -461,35 +494,45 @@ picked as (
       -- of the working set until next_retry_at is reached. Empty
       -- string means "no failure yet" — the normal happy path.
       coalesce(c.metadata->'gateway_inflight'->'working'->>'next_retry_at', '') = ''
-      or (c.metadata->'gateway_inflight'->'working'->>'next_retry_at')::timestamptz <= $2::timestamptz
+      or (c.metadata->'gateway_inflight'->'working'->>'next_retry_at')::timestamptz <= $3::timestamptz
     )
     and (
       coalesce(c.metadata->'gateway_inflight_claim'->>'claimed_at', '') = ''
       or (c.metadata->'gateway_inflight_claim'->>'claimed_at')::timestamptz
-         < $3::timestamptz
-      or coalesce(c.metadata->'gateway_inflight_claim'->>'claimed_by', '') = $4::text
+         < $4::timestamptz
+      or coalesce(c.metadata->'gateway_inflight_claim'->>'claimed_by', '') = $5::text
     )
   order by r.created_at desc
-  limit $5
+  limit $6
   for update of c skip locked
 ),
 claimed as (
+  -- Stamp the claim once PER CONVERSATION, then fan back out to one
+  -- row per run in the final SELECT. The previous shape did
+  -- ` + "`" + `update conversations c ... from picked ... returning picked.run_id` + "`" + `,
+  -- but Postgres UPDATE...FROM updates each target row once and emits a
+  -- single RETURNING row even when picked holds several runs for that
+  -- conversation — so a conv with two claimable runs (e.g. two failed
+  -- runs) returned only one. The dropped run never reached the
+  -- terminal_delivered fingerprint and got re-claimed every tick (the
+  -- other half of the prod 2026-06-22 card storm; see fingerprint note
+  -- above). Updating ` + "`" + `where c.id in (select id from picked)` + "`" + ` keeps the
+  -- claim stamp idempotent per conversation while the run fan-out moves
+  -- to the join below.
   update conversations c
   set metadata = jsonb_set(
         coalesce(c.metadata, '{}'::jsonb),
         '{gateway_inflight_claim}',
         jsonb_build_object(
-          'claimed_at', to_jsonb($2::timestamptz),
-          'claimed_by', $4::text
+          'claimed_at', to_jsonb($3::timestamptz),
+          'claimed_by', $5::text
         ),
         true
       ),
-      updated_at = $2::timestamptz
-  from picked
-  where c.id = picked.id
+      updated_at = $3::timestamptz
+  where c.id in (select id from picked)
   returning c.id, c.workspace_id, c.project_id, c.external_id,
-            c.external_thread_id, c.source_app_id, c.metadata,
-            picked.run_id
+            c.external_thread_id, c.source_app_id, c.metadata
 )
 select claimed.id::text                 as conversation_id,
        claimed.workspace_id::text       as workspace_id,
@@ -497,8 +540,9 @@ select claimed.id::text                 as conversation_id,
        claimed.external_id              as external_chat_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
+       picked.platform                  as platform,
        claimed.metadata                 as conversation_metadata,
-       claimed.run_id::text             as agent_run_id,
+       picked.run_id::text              as agent_run_id,
        r.status                         as run_status,
        r.started_at                     as run_started_at,
        r.finished_at                    as run_finished_at,
@@ -515,9 +559,19 @@ select claimed.id::text                 as conversation_id,
        -- Empty string when the trigger row is missing or carries no
        -- open_id (legacy fixtures, system-initiated runs); the ping
        -- helper degrades to a plain-text message.
-       coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id
-from claimed
-join agent_runs r on r.id = claimed.run_id
+       coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id,
+       -- tenant_key is the platform workspace id (Slack team_id, Feishu
+       -- tenant_key) the inbound router stamped onto the trigger message
+       -- metadata. The neutral outbound path threads it into the
+       -- ReplyTarget so a multi-workspace Slack channel resolves the
+       -- per-team bot token at send time. Feishu ignores it (its token
+       -- comes from the transport-injected cache, unchanged). Empty when
+       -- the trigger row is missing (legacy fixtures); the resolver falls
+       -- back to the static/env token.
+       coalesce(trig.metadata->>'tenant_key', '')::text as tenant_key
+from picked
+join claimed on claimed.id = picked.id
+join agent_runs r on r.id = picked.run_id
 left join messages trig on trig.id = r.trigger_message_id
 left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
 left join agents a on a.id = pa.agent_id and a.deleted_at is null
@@ -530,10 +584,11 @@ left join (
   -- seq_emitted compare gets confused. See same set ~line 1705.
   where event_kind in ('tool.call', 'message.delta', 'message.thinking', 'permission.asked', 'prompt_for_user_choice.asked', 'run.started', 'run.completed', 'run.failed')
   group by agent_run_id
-) rem on rem.agent_run_id = claimed.run_id
+) rem on rem.agent_run_id = picked.run_id
 `
 
 type ClaimActiveFeishuInflightConversationsParams struct {
+	Platforms      []string           `json:"platforms"`
 	FinishedCutoff pgtype.Timestamptz `json:"finished_cutoff"`
 	Now            pgtype.Timestamptz `json:"now"`
 	StaleBefore    pgtype.Timestamptz `json:"stale_before"`
@@ -548,6 +603,7 @@ type ClaimActiveFeishuInflightConversationsRow struct {
 	ExternalChatID       string             `json:"external_chat_id"`
 	ExternalThreadID     string             `json:"external_thread_id"`
 	SourceAppID          string             `json:"source_app_id"`
+	Platform             string             `json:"platform"`
 	ConversationMetadata []byte             `json:"conversation_metadata"`
 	AgentRunID           string             `json:"agent_run_id"`
 	RunStatus            string             `json:"run_status"`
@@ -557,6 +613,7 @@ type ClaimActiveFeishuInflightConversationsRow struct {
 	MaxEventSequence     int64              `json:"max_event_sequence"`
 	AgentName            string             `json:"agent_name"`
 	SenderOpenID         string             `json:"sender_open_id"`
+	TenantKey            string             `json:"tenant_key"`
 }
 
 // Multi-pod-safe sibling of ListActiveFeishuInflightConversations.
@@ -624,6 +681,7 @@ type ClaimActiveFeishuInflightConversationsRow struct {
 // patches keep flowing.
 func (q *Queries) ClaimActiveFeishuInflightConversations(ctx context.Context, arg ClaimActiveFeishuInflightConversationsParams) ([]ClaimActiveFeishuInflightConversationsRow, error) {
 	rows, err := q.db.Query(ctx, claimActiveFeishuInflightConversations,
+		arg.Platforms,
 		arg.FinishedCutoff,
 		arg.Now,
 		arg.StaleBefore,
@@ -644,6 +702,7 @@ func (q *Queries) ClaimActiveFeishuInflightConversations(ctx context.Context, ar
 			&i.ExternalChatID,
 			&i.ExternalThreadID,
 			&i.SourceAppID,
+			&i.Platform,
 			&i.ConversationMetadata,
 			&i.AgentRunID,
 			&i.RunStatus,
@@ -653,7 +712,82 @@ func (q *Queries) ClaimActiveFeishuInflightConversations(ctx context.Context, ar
 			&i.MaxEventSequence,
 			&i.AgentName,
 			&i.SenderOpenID,
+			&i.TenantKey,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const claimDueScheduledTasks = `-- name: ClaimDueScheduledTasks :many
+with picked as (
+  select t.id
+  from scheduled_tasks t
+  where t.enabled = true
+    and t.deleted_at is null
+    and t.next_run_at is not null
+    and t.next_run_at <= $1::timestamptz
+    and (
+      t.claimed_at is null
+      or t.claimed_at < $2::timestamptz
+      or t.claimed_by = $3::text
+    )
+  order by t.next_run_at asc
+  limit $4
+  for update of t skip locked
+),
+claimed as (
+  update scheduled_tasks t
+  set claimed_at = $1::timestamptz,
+      claimed_by = $3::text,
+      updated_at = $1::timestamptz
+  from picked
+  where t.id = picked.id
+  returning t.id, t.cron_expr, t.timezone
+)
+select claimed.id::text   as id,
+       claimed.cron_expr  as cron_expr,
+       claimed.timezone   as timezone
+from claimed
+`
+
+type ClaimDueScheduledTasksParams struct {
+	Now         pgtype.Timestamptz `json:"now"`
+	StaleBefore pgtype.Timestamptz `json:"stale_before"`
+	ClaimedBy   string             `json:"claimed_by"`
+	ItemLimit   int32              `json:"item_limit"`
+}
+
+type ClaimDueScheduledTasksRow struct {
+	ID       string `json:"id"`
+	CronExpr string `json:"cron_expr"`
+	Timezone string `json:"timezone"`
+}
+
+// Multi-pod-safe: FOR UPDATE OF t SKIP LOCKED so sibling pods get disjoint
+// batches; claim lease (claimed_at/claimed_by) recovers crashed claims.
+// Mirrors ClaimPendingQueuedFeishuRuns. Returns only what the scheduler
+// needs to compute next_run_at; FireScheduledTaskRun re-reads FOR UPDATE.
+func (q *Queries) ClaimDueScheduledTasks(ctx context.Context, arg ClaimDueScheduledTasksParams) ([]ClaimDueScheduledTasksRow, error) {
+	rows, err := q.db.Query(ctx, claimDueScheduledTasks,
+		arg.Now,
+		arg.StaleBefore,
+		arg.ClaimedBy,
+		arg.ItemLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimDueScheduledTasksRow{}
+	for rows.Next() {
+		var i ClaimDueScheduledTasksRow
+		if err := rows.Scan(&i.ID, &i.CronExpr, &i.Timezone); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1369,6 +1503,22 @@ func (q *Queries) CountSandboxAgentsInWorkspace(ctx context.Context, workspaceID
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const countScheduledTasksByProject = `-- name: CountScheduledTasksByProject :one
+select count(*)::bigint as total
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where pa.project_id = $1::uuid and t.deleted_at is null
+`
+
+// Companion to ListScheduledTasksByProjectPage: total rows under the same
+// filter so the pager can render "第 X-Y 条,共 N 条" and gate the Next button.
+func (q *Queries) CountScheduledTasksByProject(ctx context.Context, projectID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countScheduledTasksByProject, projectID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
 }
 
 const createAgentCRUD = `-- name: CreateAgentCRUD :one
@@ -2547,6 +2697,154 @@ func (q *Queries) CreateSandboxPoolEntry(ctx context.Context, arg CreateSandboxP
 	return err
 }
 
+const createScheduledAgentRun = `-- name: CreateScheduledAgentRun :exec
+insert into agent_runs(
+  id, workspace_id, project_id, conversation_id,
+  trigger_message_id, trigger_source, trigger_channel, trigger_ref_type, trigger_ref_id,
+  requested_by_type, requested_by_id,
+  project_agent_id, connector_type, status, visibility, metadata,
+  created_at, updated_at
+)
+values ($1::uuid, $2::uuid, $3::uuid, $4::uuid,
+        $5::uuid, 'scheduled_task', 'cron', 'scheduled_task', $6::uuid,
+        'user', $7,
+        $8::uuid, $9, 'queued', 'project', $10::jsonb, $11, $11)
+`
+
+type CreateScheduledAgentRunParams struct {
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	ConversationID   pgtype.UUID        `json:"conversation_id"`
+	TriggerMessageID pgtype.UUID        `json:"trigger_message_id"`
+	TriggerRefID     pgtype.UUID        `json:"trigger_ref_id"`
+	RequestedByID    pgtype.UUID        `json:"requested_by_id"`
+	ProjectAgentID   pgtype.UUID        `json:"project_agent_id"`
+	ConnectorType    string             `json:"connector_type"`
+	Metadata         []byte             `json:"metadata"`
+	Now              pgtype.Timestamptz `json:"now"`
+}
+
+// 定时 run: trigger_source='scheduled_task', trigger_channel='cron',
+// trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
+// 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
+func (q *Queries) CreateScheduledAgentRun(ctx context.Context, arg CreateScheduledAgentRunParams) error {
+	_, err := q.db.Exec(ctx, createScheduledAgentRun,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.ConversationID,
+		arg.TriggerMessageID,
+		arg.TriggerRefID,
+		arg.RequestedByID,
+		arg.ProjectAgentID,
+		arg.ConnectorType,
+		arg.Metadata,
+		arg.Now,
+	)
+	return err
+}
+
+const createScheduledTask = `-- name: CreateScheduledTask :one
+
+insert into scheduled_tasks(
+  id, project_agent_id, name, prompt, cron_expr, timezone,
+  enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
+)
+values ($1::uuid, $2::uuid, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12, $12)
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+`
+
+type CreateScheduledTaskParams struct {
+	ID             pgtype.UUID        `json:"id"`
+	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
+	Name           string             `json:"name"`
+	Prompt         string             `json:"prompt"`
+	CronExpr       string             `json:"cron_expr"`
+	Timezone       string             `json:"timezone"`
+	Enabled        bool               `json:"enabled"`
+	FeishuChatID   pgtype.Text        `json:"feishu_chat_id"`
+	FeishuChatName pgtype.Text        `json:"feishu_chat_name"`
+	NextRunAt      pgtype.Timestamptz `json:"next_run_at"`
+	CreatedBy      pgtype.UUID        `json:"created_by"`
+	Now            pgtype.Timestamptz `json:"now"`
+}
+
+type CreateScheduledTaskRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// ============================================================
+// scheduled_tasks
+// ============================================================
+func (q *Queries) CreateScheduledTask(ctx context.Context, arg CreateScheduledTaskParams) (CreateScheduledTaskRow, error) {
+	row := q.db.QueryRow(ctx, createScheduledTask,
+		arg.ID,
+		arg.ProjectAgentID,
+		arg.Name,
+		arg.Prompt,
+		arg.CronExpr,
+		arg.Timezone,
+		arg.Enabled,
+		arg.FeishuChatID,
+		arg.FeishuChatName,
+		arg.NextRunAt,
+		arg.CreatedBy,
+		arg.Now,
+	)
+	var i CreateScheduledTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.CronExpr,
+		&i.Timezone,
+		&i.Enabled,
+		&i.FeishuChatID,
+		&i.FeishuChatName,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.LastRunID,
+		&i.LastStatus,
+		&i.ConsecutiveFailures,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createSecret = `-- name: CreateSecret :one
 insert into secrets(
   id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at
@@ -3041,6 +3339,36 @@ func (q *Queries) DisableProjectAgent(ctx context.Context, arg DisableProjectAge
 	return i, err
 }
 
+const disableScheduledTaskForFailures = `-- name: DisableScheduledTaskForFailures :exec
+update scheduled_tasks
+set enabled = false,
+    last_status = 'auto_disabled',
+    consecutive_failures = $1::int,
+    next_run_at = $2,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = $3::timestamptz
+where id = $4::uuid
+`
+
+type DisableScheduledTaskForFailuresParams struct {
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	Now                 pgtype.Timestamptz `json:"now"`
+	ID                  pgtype.UUID        `json:"id"`
+}
+
+// Threshold reached: auto-disable, keep next_run_at advanced for re-enable.
+func (q *Queries) DisableScheduledTaskForFailures(ctx context.Context, arg DisableScheduledTaskForFailuresParams) error {
+	_, err := q.db.Exec(ctx, disableScheduledTaskForFailures,
+		arg.ConsecutiveFailures,
+		arg.NextRunAt,
+		arg.Now,
+		arg.ID,
+	)
+	return err
+}
+
 const disableSecret = `-- name: DisableSecret :one
 update secrets
 set status = 'disabled', updated_at = $1
@@ -3357,26 +3685,32 @@ func (q *Queries) FindLatestFeishuInboundReactionByConversation(ctx context.Cont
 	return i, err
 }
 
-const findUserByFeishuUnionID = `-- name: FindUserByFeishuUnionID :one
+const findUserByPlatformSubject = `-- name: FindUserByPlatformSubject :one
 
 select u.id::text
 from auth_identities ai
 join users u on u.id = ai.user_id
-where ai.provider = 'feishu'
-  and ai.subject = $1::text
+where ai.provider = $1::text
+  and ai.subject = $2::text
   and u.deleted_at is null
   and u.status = 'active'
 limit 1
 `
 
-// B phase Feishu IM routing (docs/feishu-routing.md §4.1):
-// FindUserByFeishuUnionID resolves an inbound Feishu sender to its
-// Parsar user_id. We key on union_id because the OAuth login flow
-// stores union_id (cross-tenant stable) in auth_identities.subject,
-// not per-app open_id. Returns pgx.ErrNoRows for unregistered senders;
-// the gate translates that into Visibility public/tenant decisions.
-func (q *Queries) FindUserByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	row := q.db.QueryRow(ctx, findUserByFeishuUnionID, unionID)
+type FindUserByPlatformSubjectParams struct {
+	Provider string `json:"provider"`
+	Subject  string `json:"subject"`
+}
+
+// Multi-platform IM routing (docs/feishu-routing.md §4.1):
+// FindUserByPlatformSubject resolves an inbound sender to its Parsar
+// user_id by (provider, subject). The subject is the cross-tenant stable
+// id the OAuth login flow stores in auth_identities.subject — Feishu keys
+// on union_id, Slack on its workspace user id — never a per-app local id.
+// Returns pgx.ErrNoRows for unregistered senders; the gate translates that
+// into Visibility public/tenant decisions.
+func (q *Queries) FindUserByPlatformSubject(ctx context.Context, arg FindUserByPlatformSubjectParams) (string, error) {
+	row := q.db.QueryRow(ctx, findUserByPlatformSubject, arg.Provider, arg.Subject)
 	var u_id string
 	err := row.Scan(&u_id)
 	return u_id, err
@@ -5555,6 +5889,164 @@ func (q *Queries) GetSandboxPoolEntry(ctx context.Context, arg GetSandboxPoolEnt
 	return i, err
 }
 
+const getScheduledTask = `-- name: GetScheduledTask :one
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  -- Derive the display status from the linked run's live status so the
+  -- list/detail never get stuck on the 'queued' dispatch stamp. Task-level
+  -- states (skipped_overlap / auto_disabled) take precedence when set.
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = $1::uuid and t.deleted_at is null
+`
+
+type GetScheduledTaskRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetScheduledTask(ctx context.Context, id pgtype.UUID) (GetScheduledTaskRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledTask, id)
+	var i GetScheduledTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.CronExpr,
+		&i.Timezone,
+		&i.Enabled,
+		&i.FeishuChatID,
+		&i.FeishuChatName,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.LastRunID,
+		&i.LastStatus,
+		&i.ConsecutiveFailures,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getScheduledTaskForUpdate = `-- name: GetScheduledTaskForUpdate :one
+select
+  t.id::text                                   as id,
+  t.project_agent_id::text                     as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text  as conversation_id,
+  t.name                                       as name,
+  t.prompt                                     as prompt,
+  t.timezone                                   as timezone,
+  t.enabled                                    as enabled,
+  t.consecutive_failures                       as consecutive_failures,
+  coalesce(t.last_run_id::text, '')::text      as last_run_id,
+  coalesce(r.status, '')::text                 as last_run_status,
+  coalesce(t.created_by::text, '')::text       as created_by
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = $1::uuid and t.deleted_at is null
+for update of t
+`
+
+type GetScheduledTaskForUpdateRow struct {
+	ID                  string `json:"id"`
+	ProjectAgentID      string `json:"project_agent_id"`
+	ConversationID      string `json:"conversation_id"`
+	Name                string `json:"name"`
+	Prompt              string `json:"prompt"`
+	Timezone            string `json:"timezone"`
+	Enabled             bool   `json:"enabled"`
+	ConsecutiveFailures int32  `json:"consecutive_failures"`
+	LastRunID           string `json:"last_run_id"`
+	LastRunStatus       string `json:"last_run_status"`
+	CreatedBy           string `json:"created_by"`
+}
+
+// Row-lock the task and read the last run's terminal status for the
+// self-overlap + failure-accounting decision in FireScheduledTaskRun.
+func (q *Queries) GetScheduledTaskForUpdate(ctx context.Context, id pgtype.UUID) (GetScheduledTaskForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledTaskForUpdate, id)
+	var i GetScheduledTaskForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.Timezone,
+		&i.Enabled,
+		&i.ConsecutiveFailures,
+		&i.LastRunID,
+		&i.LastRunStatus,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getScheduledTaskScope = `-- name: GetScheduledTaskScope :one
+select
+  t.id::text             as id,
+  pa.id::text            as project_agent_id,
+  pa.project_id::text    as project_id,
+  pa.workspace_id::text  as workspace_id
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+where t.id = $1::uuid and t.deleted_at is null
+`
+
+type GetScheduledTaskScopeRow struct {
+	ID             string `json:"id"`
+	ProjectAgentID string `json:"project_agent_id"`
+	ProjectID      string `json:"project_id"`
+	WorkspaceID    string `json:"workspace_id"`
+}
+
+// Resolve workspace/project/project_agent for RBAC gating from a task id.
+func (q *Queries) GetScheduledTaskScope(ctx context.Context, id pgtype.UUID) (GetScheduledTaskScopeRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledTaskScope, id)
+	var i GetScheduledTaskScopeRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ProjectID,
+		&i.WorkspaceID,
+	)
+	return i, err
+}
+
 const getSecretPayload = `-- name: GetSecretPayload :one
 select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
 from secrets
@@ -5731,6 +6223,106 @@ func (q *Queries) GetUserDisplayName(ctx context.Context, id pgtype.UUID) (strin
 	var display_name string
 	err := row.Scan(&display_name)
 	return display_name, err
+}
+
+const getWorkspaceConnectorByAppID = `-- name: GetWorkspaceConnectorByAppID :one
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = $1::text
+  and c.app_id = $2::text
+  and c.enabled = true
+  and c.deleted_at is null
+limit 1
+`
+
+type GetWorkspaceConnectorByAppIDParams struct {
+	Platform string `json:"platform"`
+	AppID    string `json:"app_id"`
+}
+
+type GetWorkspaceConnectorByAppIDRow struct {
+	CID           string             `json:"c_id"`
+	CWorkspaceID  string             `json:"c_workspace_id"`
+	WorkspaceName string             `json:"workspace_name"`
+	Platform      string             `json:"platform"`
+	AppID         string             `json:"app_id"`
+	Enabled       bool               `json:"enabled"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 出站 resolver 按 (platform, app_id) 反查启用的连接器,取 config 里的
+// *_ref 解密 token。
+func (q *Queries) GetWorkspaceConnectorByAppID(ctx context.Context, arg GetWorkspaceConnectorByAppIDParams) (GetWorkspaceConnectorByAppIDRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceConnectorByAppID, arg.Platform, arg.AppID)
+	var i GetWorkspaceConnectorByAppIDRow
+	err := row.Scan(
+		&i.CID,
+		&i.CWorkspaceID,
+		&i.WorkspaceName,
+		&i.Platform,
+		&i.AppID,
+		&i.Enabled,
+		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkspaceIMConnectors = `-- name: GetWorkspaceIMConnectors :many
+select
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+from workspace_im_connectors
+where workspace_id = $1::uuid
+  and deleted_at is null
+order by platform
+`
+
+type GetWorkspaceIMConnectorsRow struct {
+	ID          string             `json:"id"`
+	WorkspaceID string             `json:"workspace_id"`
+	Platform    string             `json:"platform"`
+	AppID       string             `json:"app_id"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 拉取某 workspace 全部平台的有效连接器(前端面板初始化用)。
+func (q *Queries) GetWorkspaceIMConnectors(ctx context.Context, workspaceID pgtype.UUID) ([]GetWorkspaceIMConnectorsRow, error) {
+	rows, err := q.db.Query(ctx, getWorkspaceIMConnectors, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetWorkspaceIMConnectorsRow{}
+	for rows.Next() {
+		var i GetWorkspaceIMConnectorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Platform,
+			&i.AppID,
+			&i.Enabled,
+			&i.Config,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getWorkspaceMemberRole = `-- name: GetWorkspaceMemberRole :one
@@ -6613,6 +7205,79 @@ func (q *Queries) ListAgentRunEventsByRun(ctx context.Context, arg ListAgentRunE
 	return items, nil
 }
 
+const listAgentRunsByScheduledTask = `-- name: ListAgentRunsByScheduledTask :many
+select
+  id::text                                   as id,
+  conversation_id::text                      as conversation_id,
+  project_agent_id::text                     as project_agent_id,
+  connector_type,
+  status,
+  failure_reason,
+  trigger_source,
+  trigger_channel,
+  coalesce(trigger_ref_id::text, '')::text   as trigger_ref_id,
+  created_at, started_at, finished_at, updated_at
+from agent_runs
+where trigger_ref_type = 'scheduled_task' and trigger_ref_id = $1::uuid
+order by created_at desc
+limit $2
+`
+
+type ListAgentRunsByScheduledTaskParams struct {
+	TaskID    pgtype.UUID `json:"task_id"`
+	ItemLimit int32       `json:"item_limit"`
+}
+
+type ListAgentRunsByScheduledTaskRow struct {
+	ID             string             `json:"id"`
+	ConversationID string             `json:"conversation_id"`
+	ProjectAgentID string             `json:"project_agent_id"`
+	ConnectorType  string             `json:"connector_type"`
+	Status         string             `json:"status"`
+	FailureReason  string             `json:"failure_reason"`
+	TriggerSource  string             `json:"trigger_source"`
+	TriggerChannel string             `json:"trigger_channel"`
+	TriggerRefID   string             `json:"trigger_ref_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	StartedAt      pgtype.Timestamptz `json:"started_at"`
+	FinishedAt     pgtype.Timestamptz `json:"finished_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListAgentRunsByScheduledTask(ctx context.Context, arg ListAgentRunsByScheduledTaskParams) ([]ListAgentRunsByScheduledTaskRow, error) {
+	rows, err := q.db.Query(ctx, listAgentRunsByScheduledTask, arg.TaskID, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAgentRunsByScheduledTaskRow{}
+	for rows.Next() {
+		var i ListAgentRunsByScheduledTaskRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.ProjectAgentID,
+			&i.ConnectorType,
+			&i.Status,
+			&i.FailureReason,
+			&i.TriggerSource,
+			&i.TriggerChannel,
+			&i.TriggerRefID,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAgentRunsByTriggerMessage = `-- name: ListAgentRunsByTriggerMessage :many
 select id::text
 from agent_runs
@@ -7140,7 +7805,9 @@ select
   m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
-  m.sender_id::text,
+  -- system-authored messages (e.g. scheduled-task triggers) have a NULL
+  -- sender_id; coalesce so the row scans into a non-nullable string.
+  coalesce(m.sender_id::text, ''::text)::text as m_sender_id,
   m.kind,
   m.content_format,
   m.content,
@@ -8351,6 +9018,186 @@ func (q *Queries) ListSandboxPoolEntriesDueForAutoRenew(ctx context.Context, wor
 	return items, nil
 }
 
+const listScheduledTasksByProjectAgent = `-- name: ListScheduledTasksByProjectAgent :many
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.project_agent_id = $1::uuid and t.deleted_at is null
+order by t.created_at desc
+`
+
+type ListScheduledTasksByProjectAgentRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID pgtype.UUID) ([]ListScheduledTasksByProjectAgentRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledTasksByProjectAgent, projectAgentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledTasksByProjectAgentRow{}
+	for rows.Next() {
+		var i ListScheduledTasksByProjectAgentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectAgentID,
+			&i.ConversationID,
+			&i.Name,
+			&i.Prompt,
+			&i.CronExpr,
+			&i.Timezone,
+			&i.Enabled,
+			&i.FeishuChatID,
+			&i.FeishuChatName,
+			&i.NextRunAt,
+			&i.LastRunAt,
+			&i.LastRunID,
+			&i.LastStatus,
+			&i.ConsecutiveFailures,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listScheduledTasksByProjectPage = `-- name: ListScheduledTasksByProjectPage :many
+select
+  t.id::text                                  as id,
+  t.project_agent_id::text                    as project_agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+join project_agents pa on pa.id = t.project_agent_id
+left join agent_runs r on r.id = t.last_run_id
+where pa.project_id = $1::uuid and t.deleted_at is null
+order by t.created_at desc, t.id desc
+limit $3 offset $2
+`
+
+type ListScheduledTasksByProjectPageParams struct {
+	ProjectID  pgtype.UUID `json:"project_id"`
+	ItemOffset int32       `json:"item_offset"`
+	ItemLimit  int32       `json:"item_limit"`
+}
+
+type ListScheduledTasksByProjectPageRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Project-wide list (paginated): every scheduled task across all of the
+// project's agents, newest first. last_status is derived from the linked run
+// (see GetScheduledTask). The (created_at, id) tie-break keeps OFFSET paging
+// stable; pair with CountScheduledTasksByProject for the page count.
+func (q *Queries) ListScheduledTasksByProjectPage(ctx context.Context, arg ListScheduledTasksByProjectPageParams) ([]ListScheduledTasksByProjectPageRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledTasksByProjectPage, arg.ProjectID, arg.ItemOffset, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledTasksByProjectPageRow{}
+	for rows.Next() {
+		var i ListScheduledTasksByProjectPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectAgentID,
+			&i.ConversationID,
+			&i.Name,
+			&i.Prompt,
+			&i.CronExpr,
+			&i.Timezone,
+			&i.Enabled,
+			&i.FeishuChatID,
+			&i.FeishuChatName,
+			&i.NextRunAt,
+			&i.LastRunAt,
+			&i.LastRunID,
+			&i.LastStatus,
+			&i.ConsecutiveFailures,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSecrets = `-- name: ListSecrets :many
 select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
 from secrets
@@ -8759,6 +9606,63 @@ func (q *Queries) ListUserWorkspaces(ctx context.Context, arg ListUserWorkspaces
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceConnectorsByPlatform = `-- name: ListWorkspaceConnectorsByPlatform :many
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = $1::text
+  and c.enabled = true
+  and c.app_id <> ''
+  and c.deleted_at is null
+order by c.workspace_id, c.app_id
+`
+
+type ListWorkspaceConnectorsByPlatformRow struct {
+	CID           string             `json:"c_id"`
+	CWorkspaceID  string             `json:"c_workspace_id"`
+	WorkspaceName string             `json:"workspace_name"`
+	Platform      string             `json:"platform"`
+	AppID         string             `json:"app_id"`
+	Enabled       bool               `json:"enabled"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 入站 reconciler 按平台扫描所有启用的连接器,为每条 (workspace_id,
+// app_id) 维持一条长连接。
+func (q *Queries) ListWorkspaceConnectorsByPlatform(ctx context.Context, platform string) ([]ListWorkspaceConnectorsByPlatformRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceConnectorsByPlatform, platform)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceConnectorsByPlatformRow{}
+	for rows.Next() {
+		var i ListWorkspaceConnectorsByPlatformRow
+		if err := rows.Scan(
+			&i.CID,
+			&i.CWorkspaceID,
+			&i.WorkspaceName,
+			&i.Platform,
+			&i.AppID,
+			&i.Enabled,
+			&i.Config,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -9201,6 +10105,72 @@ func (q *Queries) MarkSandboxPoolEntryKilled(ctx context.Context, arg MarkSandbo
 	return err
 }
 
+const markScheduledTaskDispatched = `-- name: MarkScheduledTaskDispatched :exec
+update scheduled_tasks
+set last_run_at = $1::timestamptz,
+    last_run_id = $2::uuid,
+    conversation_id = $3::uuid,
+    last_status = 'queued',
+    consecutive_failures = $4::int,
+    next_run_at = $5,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = $1::timestamptz
+where id = $6::uuid
+`
+
+type MarkScheduledTaskDispatchedParams struct {
+	Now                 pgtype.Timestamptz `json:"now"`
+	LastRunID           pgtype.UUID        `json:"last_run_id"`
+	ConversationID      pgtype.UUID        `json:"conversation_id"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	ID                  pgtype.UUID        `json:"id"`
+}
+
+// After a cron dispatch: stamp last run, set consecutive_failures to the
+// recomputed value, advance next_run_at, release claim.
+func (q *Queries) MarkScheduledTaskDispatched(ctx context.Context, arg MarkScheduledTaskDispatchedParams) error {
+	_, err := q.db.Exec(ctx, markScheduledTaskDispatched,
+		arg.Now,
+		arg.LastRunID,
+		arg.ConversationID,
+		arg.ConsecutiveFailures,
+		arg.NextRunAt,
+		arg.ID,
+	)
+	return err
+}
+
+const markScheduledTaskRunNow = `-- name: MarkScheduledTaskRunNow :exec
+update scheduled_tasks
+set last_run_at = $1::timestamptz,
+    last_run_id = $2::uuid,
+    conversation_id = $3::uuid,
+    last_status = 'queued',
+    updated_at = $1::timestamptz
+where id = $4::uuid
+`
+
+type MarkScheduledTaskRunNowParams struct {
+	Now            pgtype.Timestamptz `json:"now"`
+	LastRunID      pgtype.UUID        `json:"last_run_id"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	ID             pgtype.UUID        `json:"id"`
+}
+
+// run-now is out-of-band: stamp last run only, DO NOT touch next_run_at
+// or consecutive_failures.
+func (q *Queries) MarkScheduledTaskRunNow(ctx context.Context, arg MarkScheduledTaskRunNowParams) error {
+	_, err := q.db.Exec(ctx, markScheduledTaskRunNow,
+		arg.Now,
+		arg.LastRunID,
+		arg.ConversationID,
+		arg.ID,
+	)
+	return err
+}
+
 const projectSlugExistsInWorkspace = `-- name: ProjectSlugExistsInWorkspace :one
 select exists(
   select 1 from projects
@@ -9512,6 +10482,59 @@ func (q *Queries) ResolveAgentNameForConversation(ctx context.Context, conversat
 	return agent_name, err
 }
 
+const resolveDiscordBotSecretByGuild = `-- name: ResolveDiscordBotSecretByGuild :one
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'discord_bot'
+  and status = 'active'
+  and metadata->>'guild_id' = $1::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1
+`
+
+type ResolveDiscordBotSecretByGuildRow struct {
+	ID               string             `json:"id"`
+	Slug             string             `json:"slug"`
+	Name             string             `json:"name"`
+	Kind             string             `json:"kind"`
+	Provider         string             `json:"provider"`
+	AuthType         string             `json:"auth_type"`
+	EncryptedPayload []byte             `json:"encrypted_payload"`
+	KeyVersion       string             `json:"key_version"`
+	Status           string             `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Resolve the active Discord bot-token secret for a guild, keyed by the Discord
+// guild_id stamped in metadata at install time. kind='discord_bot' is a
+// free-text convention (the secrets table has no kind CHECK), so no migration
+// is needed; metadata->>'guild_id' scopes the row to one guild. The neutral
+// Discord channel decrypts encrypted_payload to mint the per-call API/Gateway
+// bearer, so a re-installed bot rotates without a process restart. Newest active
+// row wins when two installs share a guild (re-install supersedes).
+func (q *Queries) ResolveDiscordBotSecretByGuild(ctx context.Context, guildID string) (ResolveDiscordBotSecretByGuildRow, error) {
+	row := q.db.QueryRow(ctx, resolveDiscordBotSecretByGuild, guildID)
+	var i ResolveDiscordBotSecretByGuildRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Kind,
+		&i.Provider,
+		&i.AuthType,
+		&i.EncryptedPayload,
+		&i.KeyVersion,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const resolveModelRuntime = `-- name: ResolveModelRuntime :one
 select
   m.id::text as model_id,
@@ -9570,6 +10593,59 @@ func (q *Queries) ResolveModelRuntime(ctx context.Context, id pgtype.UUID) (Reso
 		&i.CredentialKindCode,
 		&i.SecretEncryptedPayload,
 		&i.SecretStatus,
+	)
+	return i, err
+}
+
+const resolveSlackBotSecretByTeam = `-- name: ResolveSlackBotSecretByTeam :one
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'slack_bot'
+  and status = 'active'
+  and metadata->>'team_id' = $1::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1
+`
+
+type ResolveSlackBotSecretByTeamRow struct {
+	ID               string             `json:"id"`
+	Slug             string             `json:"slug"`
+	Name             string             `json:"name"`
+	Kind             string             `json:"kind"`
+	Provider         string             `json:"provider"`
+	AuthType         string             `json:"auth_type"`
+	EncryptedPayload []byte             `json:"encrypted_payload"`
+	KeyVersion       string             `json:"key_version"`
+	Status           string             `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Resolve the active Slack bot-token secret for a workspace, keyed by the
+// Slack team_id stamped in metadata at install time. kind='slack_bot' is a
+// free-text convention (the secrets table has no kind CHECK), so no migration
+// is needed; metadata->>'team_id' scopes the row to one workspace. The neutral
+// Slack channel decrypts encrypted_payload to mint the per-call Web API bearer,
+// so a re-installed app rotates without a process restart. Newest active row
+// wins when two installs share a team (re-install supersedes).
+func (q *Queries) ResolveSlackBotSecretByTeam(ctx context.Context, teamID string) (ResolveSlackBotSecretByTeamRow, error) {
+	row := q.db.QueryRow(ctx, resolveSlackBotSecretByTeam, teamID)
+	var i ResolveSlackBotSecretByTeamRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Kind,
+		&i.Provider,
+		&i.AuthType,
+		&i.EncryptedPayload,
+		&i.KeyVersion,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -10003,6 +11079,22 @@ func (q *Queries) SoftDeleteRejectedJoinRequest(ctx context.Context, arg SoftDel
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const softDeleteScheduledTask = `-- name: SoftDeleteScheduledTask :exec
+update scheduled_tasks
+set deleted_at = $1::timestamptz, updated_at = $1::timestamptz
+where id = $2::uuid and deleted_at is null
+`
+
+type SoftDeleteScheduledTaskParams struct {
+	Now pgtype.Timestamptz `json:"now"`
+	ID  pgtype.UUID        `json:"id"`
+}
+
+func (q *Queries) SoftDeleteScheduledTask(ctx context.Context, arg SoftDeleteScheduledTaskParams) error {
+	_, err := q.db.Exec(ctx, softDeleteScheduledTask, arg.Now, arg.ID)
+	return err
 }
 
 const softDeleteUserCredential = `-- name: SoftDeleteUserCredential :one
@@ -10848,6 +11940,114 @@ func (q *Queries) UpdateProjectAgentConfig(ctx context.Context, arg UpdateProjec
 	return i, err
 }
 
+const updateScheduledTask = `-- name: UpdateScheduledTask :one
+update scheduled_tasks
+set name = $1,
+    prompt = $2,
+    cron_expr = $3,
+    timezone = $4,
+    enabled = $5,
+    next_run_at = $6,
+    consecutive_failures = case
+      when enabled = false and $5 = true then 0
+      else consecutive_failures
+    end,
+    last_status = case
+      when enabled = false and $5 = true then ''
+      else last_status
+    end,
+    updated_at = $7::timestamptz
+where id = $8::uuid and deleted_at is null
+returning
+  id::text                                  as id,
+  project_agent_id::text                    as project_agent_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at
+`
+
+type UpdateScheduledTaskParams struct {
+	Name      string             `json:"name"`
+	Prompt    string             `json:"prompt"`
+	CronExpr  string             `json:"cron_expr"`
+	Timezone  string             `json:"timezone"`
+	Enabled   bool               `json:"enabled"`
+	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
+	Now       pgtype.Timestamptz `json:"now"`
+	ID        pgtype.UUID        `json:"id"`
+}
+
+type UpdateScheduledTaskRow struct {
+	ID                  string             `json:"id"`
+	ProjectAgentID      string             `json:"project_agent_id"`
+	ConversationID      string             `json:"conversation_id"`
+	Name                string             `json:"name"`
+	Prompt              string             `json:"prompt"`
+	CronExpr            string             `json:"cron_expr"`
+	Timezone            string             `json:"timezone"`
+	Enabled             bool               `json:"enabled"`
+	FeishuChatID        string             `json:"feishu_chat_id"`
+	FeishuChatName      string             `json:"feishu_chat_name"`
+	NextRunAt           pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID           string             `json:"last_run_id"`
+	LastStatus          string             `json:"last_status"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CreatedBy           string             `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Re-enabling clears the failure state that tripped auto-disable. Without this,
+// a task auto-disabled at the failure threshold keeps consecutive_failures >=
+// threshold and last_status='auto_disabled'; the next cron fire would re-count
+// the prior failed run and re-disable before dispatching, so flipping enabled
+// back on via the UI would never actually run. Scoped to the disabled->enabled
+// transition (old enabled=false, new enabled=true) so editing an already-
+// enabled task doesn't wipe a meaningful in-flight failure count. last_run_id
+// is intentionally left intact so the self-overlap guard still sees an active
+// prior run.
+func (q *Queries) UpdateScheduledTask(ctx context.Context, arg UpdateScheduledTaskParams) (UpdateScheduledTaskRow, error) {
+	row := q.db.QueryRow(ctx, updateScheduledTask,
+		arg.Name,
+		arg.Prompt,
+		arg.CronExpr,
+		arg.Timezone,
+		arg.Enabled,
+		arg.NextRunAt,
+		arg.Now,
+		arg.ID,
+	)
+	var i UpdateScheduledTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectAgentID,
+		&i.ConversationID,
+		&i.Name,
+		&i.Prompt,
+		&i.CronExpr,
+		&i.Timezone,
+		&i.Enabled,
+		&i.FeishuChatID,
+		&i.FeishuChatName,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.LastRunID,
+		&i.LastStatus,
+		&i.ConsecutiveFailures,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserCredential = `-- name: UpdateUserCredential :one
 update user_credentials
 set display_name = $1,
@@ -11415,6 +12615,81 @@ func (q *Queries) UpsertUserByEmail(ctx context.Context, arg UpsertUserByEmailPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Created,
+	)
+	return i, err
+}
+
+const upsertWorkspaceIMConnector = `-- name: UpsertWorkspaceIMConnector :one
+
+insert into workspace_im_connectors (
+  id, workspace_id, platform, app_id, enabled, config, created_by, created_at, updated_at
+) values (
+  $1::uuid, $2::uuid, $3::text, $4::text,
+  $5::boolean, $6, nullif($7::text, '')::uuid, $8, $8
+)
+on conflict (workspace_id, platform) where deleted_at is null
+do update set
+  app_id     = excluded.app_id,
+  enabled    = excluded.enabled,
+  config     = excluded.config,
+  updated_at = excluded.updated_at
+returning
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+`
+
+type UpsertWorkspaceIMConnectorParams struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Platform    string             `json:"platform"`
+	AppID       string             `json:"app_id"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedBy   string             `json:"created_by"`
+	Now         pgtype.Timestamptz `json:"now"`
+}
+
+type UpsertWorkspaceIMConnectorRow struct {
+	ID          string             `json:"id"`
+	WorkspaceID string             `json:"workspace_id"`
+	Platform    string             `json:"platform"`
+	AppID       string             `json:"app_id"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// ============================================================
+// workspace_im_connectors — workspace 维度 IM 连接器(feishu/slack/discord)
+// 见 migration 000002。凭据密文在 secrets(vault),本表 config 只存
+// *_ref 与非敏感字段。app_id 是 workspace-bot 的通用 join key。
+// ============================================================
+// 按 (workspace_id, platform) 唯一约束 upsert。冲突时更新 app_id /
+// enabled / config / updated_at,保留 id / created_by / created_at。
+// 若 (platform, app_id) 撞了别的 workspace,会触发 uk_wic_platform_appid
+// 唯一冲突并报错(由 store 层映射成 *_app_id_in_use)。
+func (q *Queries) UpsertWorkspaceIMConnector(ctx context.Context, arg UpsertWorkspaceIMConnectorParams) (UpsertWorkspaceIMConnectorRow, error) {
+	row := q.db.QueryRow(ctx, upsertWorkspaceIMConnector,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Platform,
+		arg.AppID,
+		arg.Enabled,
+		arg.Config,
+		arg.CreatedBy,
+		arg.Now,
+	)
+	var i UpsertWorkspaceIMConnectorRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Platform,
+		&i.AppID,
+		&i.Enabled,
+		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

@@ -9,6 +9,7 @@ import {
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ConnectivityResultPanel } from "../../components/runtime/ConnectivityResultPanel"
 import { RuntimeCredentialCard } from "../../components/runtime/RuntimeCredentialCard"
 import { LocalDeviceRuntimesPanel } from "./runtimes/LocalDeviceRuntimesPanel"
@@ -195,8 +196,9 @@ export function RuntimePage() {
   }
 
   return (
-    <AdminLayout activeMenu="runtime">
+    <AdminLayout activeMenu="settings">
       <PageHeader title={t("runtime.page.title")} />
+      <SettingsTabs active="runtime" />
 
       <RuntimeTabs tab={tab} onChange={setTab} />
 
@@ -232,7 +234,7 @@ export function RuntimePage() {
       )}
 
       {tab === "local_device" && (
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <section className="rounded-lg border border-line bg-surface p-4">
           <LocalDeviceRuntimesPanel />
         </section>
       )}
@@ -305,18 +307,18 @@ function CloudSandboxPanel({
 
   return (
     <section className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-lg border border-line bg-surface p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
+            <div className="rounded-md border border-line bg-surface-subtle p-2 text-fg-muted">
               <Cloud className="h-4 w-4" strokeWidth={1.9} />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[15px] font-semibold text-slate-900">{t("runtime.providers.sandbox.title")}</h2>
+                <h2 className="text-base font-semibold text-fg">{t("runtime.providers.sandbox.title")}</h2>
                 <CloudStateBadge state={cloudState} />
               </div>
-              <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-slate-600">
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-fg-muted">
                 {stateBody}
               </p>
             </div>
@@ -438,19 +440,19 @@ function CloudInstancesPanel({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+    <section className="rounded-lg border border-line bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
         <div>
-          <h3 className="text-[14px] font-medium text-slate-900">{t("runtime.cloud.instances.title")}</h3>
-          <p className="mt-0.5 text-[12px] text-slate-500">
+          <h3 className="text-base font-medium text-fg">{t("runtime.cloud.instances.title")}</h3>
+          <p className="mt-0.5 text-sm text-fg-subtle">
             {t("runtime.list.summary", { count: bindings.length })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-[12px] text-slate-500">
+          <label className="flex items-center gap-2 text-sm text-fg-subtle">
             {t("runtime.list.sort.label")}
             <select
-              className="rounded border border-slate-200 bg-white px-2 py-1 text-[12px]"
+              className="rounded border border-line bg-surface px-2 py-1 text-sm"
               value={sortKey}
               onChange={(e) => onSortChange(e.target.value as SortKey)}
               data-testid="runtime-sort"
@@ -462,7 +464,7 @@ function CloudInstancesPanel({
           </label>
           <Button
             aria-label={t("runtime.list.actions.bulkKill", { count: selected.size })}
-            className="h-8 w-8 rounded-full p-0 text-red-500 hover:bg-red-50 hover:text-red-700 disabled:text-slate-400"
+            className="h-8 w-8 rounded-full p-0 text-danger hover:bg-danger-subtle hover:text-danger-emphasis disabled:text-fg-faint"
             size="icon"
             title={t("runtime.list.actions.bulkKill", { count: selected.size })}
             variant="ghost"
@@ -476,26 +478,26 @@ function CloudInstancesPanel({
       </div>
 
       {bulkErrors.length > 0 && (
-        <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50/70 p-3">
+        <div className="mx-4 mt-3 rounded-md border border-danger-border bg-danger-subtle/70 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-red-900">
+            <span className="text-sm font-medium text-danger-emphasis">
               {t("runtime.list.errors.bulkKillPartial")} ({bulkErrors.length})
             </span>
             <button
               type="button"
               onClick={onClearBulkErrors}
-              className="text-[11px] text-red-700 hover:underline"
+              className="text-xs text-danger-emphasis hover:underline"
               data-testid="runtime-bulk-error-dismiss"
             >
               {t("runtime.list.errors.bulkKillDismiss")}
             </button>
           </div>
-          <ul className="max-h-40 space-y-1 overflow-y-auto text-[11px] text-red-800">
+          <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-danger-emphasis">
             {bulkErrors.map((e) => (
               <li key={e.sandboxID} className="flex items-start gap-2 font-mono">
-                <span className="shrink-0 rounded bg-red-200/70 px-1.5 py-0.5 text-[10px] text-red-900">{e.status}</span>
-                <span className="shrink-0 text-red-900">{e.sandboxID}</span>
-                <span className="text-red-700">{e.message}</span>
+                <span className="shrink-0 rounded bg-danger-subtle/70 px-1.5 py-0.5 text-xs text-danger-emphasis">{e.status}</span>
+                <span className="shrink-0 text-danger-emphasis">{e.sandboxID}</span>
+                <span className="text-danger-emphasis">{e.message}</span>
               </li>
             ))}
           </ul>
@@ -504,8 +506,8 @@ function CloudInstancesPanel({
 
       {bindings.length === 0 ? (
         <div className="px-4 py-10 text-center">
-          <p className="text-sm font-medium text-slate-900">{t("runtime.cloud.instances.emptyTitle")}</p>
-          <p className="mt-1 text-xs text-slate-500">{t("runtime.cloud.instances.emptyBody")}</p>
+          <p className="text-sm font-medium text-fg">{t("runtime.cloud.instances.emptyTitle")}</p>
+          <p className="mt-1 text-xs text-fg-subtle">{t("runtime.cloud.instances.emptyBody")}</p>
         </div>
       ) : (
         <Table>
@@ -552,7 +554,7 @@ function CloudInstancesPanel({
                     }}
                     role="link"
                     aria-label={t("runtime.list.table.rowLabel", { agent: b.project_agent_id ?? b.sandbox_id })}
-                    className="cursor-pointer hover:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
                     data-testid={`runtime-row-${b.binding_id}`}
                   >
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -565,19 +567,19 @@ function CloudInstancesPanel({
                         data-testid={`runtime-select-${b.binding_id}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-[180px] truncate font-mono text-[12px] text-slate-800" title={b.sandbox_id}>
+                    <TableCell className="max-w-[180px] truncate font-mono text-sm text-fg-emphasis" title={b.sandbox_id}>
                       {b.sandbox_id}
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-slate-500">{b.project_agent_id ?? "—"}</TableCell>
-                    <TableCell className="text-[12px] text-slate-600">{b.template_id}</TableCell>
+                    <TableCell className="font-mono text-xs text-fg-subtle">{b.project_agent_id ?? "—"}</TableCell>
+                    <TableCell className="text-sm text-fg-muted">{b.template_id}</TableCell>
                     <TableCell><SandboxStatusBadge kind={b.status_kind} status={b.status} /></TableCell>
                     <TableCell>
-                      <span title={b.last_active_at} className="text-[12px] text-slate-600">
+                      <span title={b.last_active_at} className="text-sm text-fg-muted">
                         {relativeAgo(b.last_active_at)}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span title={b.created_at} className="text-[12px] text-slate-600">
+                      <span title={b.created_at} className="text-sm text-fg-muted">
                         {relativeAgo(b.created_at)}
                       </span>
                     </TableCell>
@@ -585,7 +587,7 @@ function CloudInstancesPanel({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 gap-1 px-2 text-[12px]"
+                        className="h-7 gap-1 px-2 text-sm"
                         disabled={!canTest || isTesting || (testingId !== null && testingId !== b.binding_id)}
                         onClick={() => handleTestConnection(b)}
                         data-testid={`runtime-test-conn-${b.binding_id}`}
@@ -600,7 +602,7 @@ function CloudInstancesPanel({
                   {showResult && (
                     <TableRow className="hover:bg-transparent">
                       <TableCell colSpan={8} className="p-0">
-                        <div className="border-t border-slate-100 px-4 py-3">
+                        <div className="border-t border-line-muted px-4 py-3">
                           <ConnectivityResultPanel
                             result={testResult.result}
                             checkLabelFor={checkLabelFor}
@@ -635,7 +637,7 @@ function CloudDaemonRuntimesPanel({
 
   if (loading) {
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <section className="rounded-lg border border-line bg-surface p-4">
         <Skeleton className="h-8 w-full" />
         <Skeleton className="mt-2 h-8 w-full" />
       </section>
@@ -645,7 +647,7 @@ function CloudDaemonRuntimesPanel({
   if (error) {
     return (
       <ErrorState
-        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "无法加载沙盒内 Daemon" })}
+        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "Failed to load sandbox daemons" })}
         description={error instanceof Error ? error.message : String(error)}
         onRetry={onRefresh}
       />
@@ -655,21 +657,21 @@ function CloudDaemonRuntimesPanel({
   if (runtimes.length === 0) return null
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+    <section className="rounded-lg border border-line bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
         <div>
-          <h3 className="text-[14px] font-medium text-slate-900">
-            {t("runtime.cloud.daemonRuntimes.title", { defaultValue: "沙盒内 Daemon" })}
+          <h3 className="text-base font-medium text-fg">
+            {t("runtime.cloud.daemonRuntimes.title", { defaultValue: "Sandbox daemons" })}
           </h3>
-          <p className="mt-0.5 max-w-3xl text-[12px] leading-relaxed text-slate-500">
+          <p className="mt-0.5 max-w-3xl text-sm leading-relaxed text-fg-subtle">
             {t("runtime.cloud.daemonRuntimes.description", {
               count: runtimes.length,
-              defaultValue: "运行在云端沙盒里的 parsar-daemon 进程。它们属于云端沙盒，不是本地设备。",
+              defaultValue: "parsar-daemon processes running inside cloud sandboxes — these belong to the sandbox, not a physical device.",
             })}
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={onRefresh}>
-          {t("runtime.list.actions.refresh", { defaultValue: "刷新" })}
+          {t("runtime.list.actions.refresh", { defaultValue: "Refresh" })}
         </Button>
       </div>
       <Table>
@@ -677,34 +679,34 @@ function CloudDaemonRuntimesPanel({
           <TableRow>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}</TableHead>
             <TableHead>{t("runtime.cloud.daemonRuntimes.table.projectAgent", { defaultValue: "Project Agent" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "沙盒类型" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent 引擎" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "状态" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "最后心跳" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent engines" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "Status" })}</TableHead>
+            <TableHead>{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "Last heartbeat" })}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {runtimes.map((runtime) => (
             <TableRow key={runtime.id} data-testid={`sandbox-daemon-runtime-row-${runtime.id}`}>
-              <TableCell className="font-mono text-[12px] text-slate-800">
+              <TableCell className="font-mono text-sm text-fg-emphasis">
                 <div className="space-y-1">
                   <div>{runtime.name || shortID(runtime.id)}</div>
-                  <div className="text-[11px] text-slate-500">{shortID(runtime.id)}</div>
+                  <div className="text-xs text-fg-subtle">{shortID(runtime.id)}</div>
                 </div>
               </TableCell>
-              <TableCell className="font-mono text-[11px] text-slate-500">
+              <TableCell className="font-mono text-xs text-fg-subtle">
                 {runtimeConfigText(runtime, "project_agent_id") || "—"}
               </TableCell>
-              <TableCell className="text-[12px] text-slate-600">
+              <TableCell className="text-sm text-fg-muted">
                 {runtimeConfigText(runtime, "sandbox_kind") || runtime.provider}
               </TableCell>
-              <TableCell className="text-[12px] text-slate-600">
+              <TableCell className="text-sm text-fg-muted">
                 {formatRuntimeAgentKinds(runtime)}
               </TableCell>
               <TableCell>
                 <RuntimeLivenessBadge runtime={runtime} />
               </TableCell>
-              <TableCell className="text-[12px] text-slate-600" title={runtime.last_heartbeat_at ?? undefined}>
+              <TableCell className="text-sm text-fg-muted" title={runtime.last_heartbeat_at ?? undefined}>
                 {runtime.last_heartbeat_at ? relativeAgo(runtime.last_heartbeat_at) : "—"}
               </TableCell>
             </TableRow>
@@ -719,13 +721,13 @@ function RuntimeLivenessBadge({ runtime }: { runtime: Runtime }) {
   const { t } = useTranslation("admin")
   switch (runtime.liveness) {
     case "online":
-      return <Badge variant="success" dot>{t("runtime.agentDaemon.status.online", { defaultValue: "在线" })}</Badge>
+      return <Badge variant="success" dot>{t("runtime.agentDaemon.status.online", { defaultValue: "Online" })}</Badge>
     case "pending_pairing":
-      return <Badge variant="warning">{t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "等待配对" })}</Badge>
+      return <Badge variant="warning">{t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "Pairing" })}</Badge>
     case "error":
-      return <Badge variant="destructive">{t("runtime.agentDaemon.status.error", { defaultValue: "错误" })}</Badge>
+      return <Badge variant="destructive">{t("runtime.agentDaemon.status.error", { defaultValue: "Error" })}</Badge>
     default:
-      return <Badge variant="neutral">{t("runtime.agentDaemon.status.offline", { defaultValue: "离线" })}</Badge>
+      return <Badge variant="neutral">{t("runtime.agentDaemon.status.offline", { defaultValue: "Offline" })}</Badge>
   }
 }
 
@@ -749,7 +751,7 @@ function formatAgentKindLabel(kind: string): string {
       return "OpenCode"
     case "codex":
       return "Codex"
-    case "pi_agent":
+    case "pi":
       return "PI Agent"
     default:
       return kind
@@ -769,7 +771,7 @@ function RuntimeTabs({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="mb-4 border-b border-slate-200" role="tablist" aria-label={t("runtime.page.title")}>
+    <div className="mb-4 border-b border-line" role="tablist" aria-label={t("runtime.page.title")}>
       <div className="flex flex-wrap items-end gap-1">
         <RuntimeTabButton
           active={tab === "sandbox"}
@@ -816,10 +818,10 @@ function RuntimeTabButton({
       onClick={onClick}
       data-testid={testId}
       className={
-        "mb-[-1px] inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-[13px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 " +
+        "mb-[-1px] inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 " +
         (active
-          ? "border-slate-900 text-slate-900"
-          : "border-transparent text-slate-500 hover:text-slate-800")
+          ? "border-line-strong text-fg"
+          : "border-transparent text-fg-subtle hover:text-fg-emphasis")
       }
     >
       {children}
@@ -843,14 +845,14 @@ function CloudStateBadge({ state }: { state: CloudState }) {
 function ExternalAgentPanel() {
   const { t } = useTranslation("admin")
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
+    <section className="rounded-lg border border-line bg-surface p-4">
       <div className="flex items-start gap-3">
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
+        <div className="rounded-md border border-line bg-surface-subtle p-2 text-fg-muted">
           <PlugZap className="h-4 w-4" strokeWidth={1.9} />
         </div>
         <div>
-          <h2 className="text-[15px] font-semibold text-slate-900">{t("runtime.providers.external.title")}</h2>
-          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-600">
+          <h2 className="text-base font-semibold text-fg">{t("runtime.providers.external.title")}</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-fg-muted">
             {t("runtime.external.body")}
           </p>
         </div>
@@ -880,7 +882,7 @@ function ConfirmBulkKillDialog({
     <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
             <Skull className="h-4 w-4" />
           </div>
           <div className="space-y-1.5">
@@ -891,10 +893,10 @@ function ConfirmBulkKillDialog({
               {t("runtime.list.confirmBulkKill.description")}
             </DialogDescription>
             {preview.length > 0 && (
-              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[12px] text-slate-600">
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
                 {preview.map((id) => <li key={id} className="font-mono">{id}</li>)}
                 {count > preview.length && (
-                  <li className="list-none text-slate-400">
+                  <li className="list-none text-fg-faint">
                     {t("runtime.list.confirmBulkKill.andMore", { count: count - preview.length })}
                   </li>
                 )}
@@ -902,7 +904,7 @@ function ConfirmBulkKillDialog({
             )}
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>
             {tc("actions.cancel")}
           </Button>

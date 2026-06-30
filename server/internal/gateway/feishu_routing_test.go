@@ -19,7 +19,7 @@ type fakeFeishuRouter struct {
 	memberErr     error
 	gotMemberWS   string
 	gotMemberUser string
-	gotUnionID    string
+	gotSubject    string
 	gotAppID      string
 
 	// Visibility-rejection auxiliary reads. Both default to "not
@@ -48,8 +48,8 @@ func (f *fakeFeishuRouter) GetAgentByID(ctx context.Context, agentID string) (Fe
 	return f.agent, nil
 }
 
-func (f *fakeFeishuRouter) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	f.gotUnionID = unionID
+func (f *fakeFeishuRouter) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	f.gotSubject = subject
 	if f.userErr != nil {
 		return "", f.userErr
 	}
@@ -135,7 +135,7 @@ func TestRouteFeishuInbound_UnregisteredAgainstWorkspaceRejected(t *testing.T) {
 			AgentID: "agent-1", WorkspaceID: "ws-1", WorkspaceName: "Eng",
 			Visibility: VisibilityWorkspace,
 		},
-		userErr: ErrFeishuRouterUnknownUser,
+		userErr: ErrRouterUnknownUser,
 	}
 	decision, err := RouteFeishuInbound(context.Background(), r, FeishuInboundEvent{
 		AppID:         "cli_x",
@@ -165,7 +165,7 @@ func TestRouteFeishuInbound_PublicGuestPasses(t *testing.T) {
 			AgentID: "agent-1", WorkspaceID: "ws-1",
 			Visibility: VisibilityPublic,
 		},
-		userErr: ErrFeishuRouterUnknownUser,
+		userErr: ErrRouterUnknownUser,
 	}
 	decision, err := RouteFeishuInbound(context.Background(), r, FeishuInboundEvent{
 		AppID:         "cli_x",
@@ -199,8 +199,8 @@ func TestRouteFeishuInbound_FallsBackToOpenIDWhenUnionMissing(t *testing.T) {
 	}, GateConfig{}); err != nil {
 		t.Fatalf("RouteFeishuInbound: %v", err)
 	}
-	if r.gotUnionID != "ou_only_open_id" {
-		t.Errorf("router should fall back to open_id when union_id absent; got %q", r.gotUnionID)
+	if r.gotSubject != "ou_only_open_id" {
+		t.Errorf("router should fall back to open_id when union_id absent; got %q", r.gotSubject)
 	}
 }
 

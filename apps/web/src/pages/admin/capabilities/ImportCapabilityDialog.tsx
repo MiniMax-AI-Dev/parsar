@@ -240,27 +240,27 @@ export function ImportCapabilityDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {t("capabilities.import.dialog.title", "导入能力")}
+            {t("capabilities.import.dialog.title", "Import capability")}
           </DialogTitle>
           <DialogDescription>
             {kind === "skill"
               ? t(
                   "capabilities.import.dialog.descriptionSkill",
-                  "粘贴 SKILL.md 或上传 zip 包。Skill 的名称和描述由 frontmatter 决定,正文会作为 instruction 注入模型。",
+                  "Paste a SKILL.md or upload a zip. The Skill name and description come from the frontmatter; the body is injected into the model as the instruction.",
                 )
               : kind === "plugin"
                 ? t(
                     "capabilities.import.dialog.descriptionPlugin",
-                    "上传 .claude-plugin 打包好的 zip,服务端会校验 manifest 并解析。",
+                    "Upload a .claude-plugin zip. The server validates the manifest and parses it.",
                   )
                 : kind === "system_prompt"
                   ? t(
                       "capabilities.import.dialog.descriptionSystemPrompt",
-                      "把一段 system prompt 注册成可复用的能力。Append 模式拼在用户 system prompt 前;Override 模式完全替换。",
+                      "Register a system prompt as a reusable capability. Append prepends to the user system prompt; Override replaces it entirely.",
                     )
                   : t(
                       "capabilities.import.dialog.description",
-                      "粘贴第三方 MCP 配置(JSON / TOML),会自动解析并预览。普通 env 值原样导入;只有 env 值以 $ 开头时才会提示凭据处理。",
+                      "Paste a third-party MCP config (JSON / TOML); we parse and preview it. Plain env values are imported as-is; only env values starting with $ trigger the credential prompt.",
                     )}
           </DialogDescription>
         </DialogHeader>
@@ -288,7 +288,7 @@ export function ImportCapabilityDialog({
           {kind !== "skill" && (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <Field
-                label={t("capabilities.import.dialog.name", "名称")}
+                label={t("capabilities.import.dialog.name", "Name")}
                 required
               >
                 <Input
@@ -299,19 +299,19 @@ export function ImportCapabilityDialog({
                   }}
                   placeholder={t(
                     "capabilities.import.dialog.namePlaceholder",
-                    "如 github-mcp",
+                    "e.g. github-mcp",
                   )}
                 />
               </Field>
               <Field
-                label={t("capabilities.import.dialog.descriptionLabel", "描述")}
+                label={t("capabilities.import.dialog.descriptionLabel", "Description")}
               >
                 <Input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={t(
                     "capabilities.import.dialog.descriptionPlaceholder",
-                    "用一句话说明这个能力做什么,Claude 会用它判断是否调用",
+                    "One sentence describing what this capability does — Claude uses it to decide when to invoke.",
                   )}
                 />
               </Field>
@@ -375,7 +375,7 @@ export function ImportCapabilityDialog({
         {errMsg && (
           <div
             role="alert"
-            className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="break-all rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
           >
             {errMsg}
           </div>
@@ -388,13 +388,13 @@ export function ImportCapabilityDialog({
             disabled={commitMut.isPending || createMut.isPending}
             onClick={() => onOpenChange(false)}
           >
-            {t("capabilities.actions.cancel", "取消")}
+            {t("capabilities.actions.cancel", "Cancel")}
           </Button>
           <Button size="sm" disabled={!canSubmit} onClick={submit}>
             {(commitMut.isPending || createMut.isPending) && (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             )}
-            {t("capabilities.import.dialog.submit", "导入")}
+            {t("capabilities.import.dialog.submit", "Import")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -413,9 +413,9 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
       {children}
     </label>

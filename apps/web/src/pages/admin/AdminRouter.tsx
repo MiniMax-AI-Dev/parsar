@@ -2,8 +2,7 @@ import { useTranslation } from "react-i18next"
 import {
   Bot,
   HelpCircle,
-  PackageSearch,
-  Sparkles,
+  Inbox,
 } from "lucide-react"
 
 import { useAdminView, useAppRoute } from "../../lib/admin-router"
@@ -29,6 +28,7 @@ import { ConnectionsPage } from "./ConnectionsPage"
 import { MyCredentialsPage } from "./MyCredentialsPage"
 import { SpecsPage } from "./SpecsPage"
 import { MemoryPage } from "./MemoryPage"
+import { ScheduledTasksPage } from "./ScheduledTasksPage"
 
 /**
  * Top-level admin router. Reads `?admin=<view>&id=<entity?>` and renders
@@ -68,15 +68,14 @@ export function AdminRouter() {
   if (v === "runs") {
     return entityId ? <RunDetailPage id={entityId} /> : <RunsPage />
   }
+  if (v === "scheduled") return <ScheduledTasksPage />
   if (v === "connectors") {
     return entityId ? <ConnectorDetailPage id={entityId} /> : <ConnectorsPage />
   }
 
   switch (v) {
-    case "artifacts":
-      return <StubPage view={v} itemKey="artifacts" icon={PackageSearch} />
-    case "updates":
-      return <StubPage view={v} itemKey="updates" icon={Sparkles} />
+    case "approvals":
+      return <StubPage view={v} itemKey="approvals" icon={Inbox} />
     case "members":
       return <MembersPage />
     case "secrets":

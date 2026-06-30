@@ -97,12 +97,12 @@ export function ImportPluginForm({
   const acceptFile = async (picked: File) => {
     setLocalErr(null)
     if (!picked.name.toLowerCase().endsWith(ACCEPTED_EXT)) {
-      setLocalErr(t("capabilities.import.plugin.errors.notZip", "请选择 .zip 文件"))
+      setLocalErr(t("capabilities.import.plugin.errors.notZip", "Please choose a .zip file"))
       return
     }
     if (picked.size > MAX_BYTES) {
       setLocalErr(
-        t("capabilities.import.plugin.errors.tooLarge", "文件超过 32 MiB,服务端会拒绝"),
+        t("capabilities.import.plugin.errors.tooLarge", "File exceeds 32 MiB — the server will reject it"),
       )
       return
     }
@@ -121,7 +121,7 @@ export function ImportPluginForm({
         prefix: "plugin",
       })
       if (myReq !== requestSeq.current) return
-      await uploadPluginZipDirect(presign.uploadUrl, picked)
+      await uploadPluginZipDirect(presign, picked)
       if (myReq !== requestSeq.current) return
       const preview = await previewMut.mutateAsync({
         kind: "plugin",
@@ -167,22 +167,22 @@ export function ImportPluginForm({
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div className="grid gap-3">
-        <span className="text-[12px] font-medium text-slate-700">
-          {t("capabilities.import.plugin.uploadLabel", "上传 Plugin zip")}
+        <span className="text-sm font-medium text-fg-muted">
+          {t("capabilities.import.plugin.uploadLabel", "Upload Plugin zip")}
         </span>
         {!file ? (
           <label
             htmlFor="plugin-zip-input"
             onDrop={onDrop}
             onDragOver={onDragOver}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center hover:border-slate-400"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-line-strong bg-surface-subtle px-4 py-8 text-center hover:border-line-strong"
           >
-            <Upload className="h-5 w-5 text-slate-500" />
-            <span className="text-[13px] text-slate-700">
-              {t("capabilities.import.plugin.dropHint", "拖拽或点击上传 .zip 文件")}
+            <Upload className="h-5 w-5 text-fg-subtle" />
+            <span className="text-sm text-fg-muted">
+              {t("capabilities.import.plugin.dropHint", "Drag or click to upload a .zip file")}
             </span>
-            <span className="text-[11px] text-slate-500">
-              {t("capabilities.import.plugin.sizeHint", "最大 32 MiB")}
+            <span className="text-xs text-fg-subtle">
+              {t("capabilities.import.plugin.sizeHint", "Up to 32 MiB")}
             </span>
             <input
               id="plugin-zip-input"
@@ -197,21 +197,21 @@ export function ImportPluginForm({
             />
           </label>
         ) : (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2.5">
             <div className="flex min-w-0 items-center gap-2">
-              <FileArchive className="h-4 w-4 shrink-0 text-slate-500" />
+              <FileArchive className="h-4 w-4 shrink-0 text-fg-subtle" />
               <div className="min-w-0">
-                <p className="truncate text-[13px] text-slate-900">{file.name}</p>
-                <p className="text-[11px] text-slate-500">
+                <p className="truncate text-sm text-fg">{file.name}</p>
+                <p className="text-xs text-fg-subtle">
                   {formatBytes(file.size)}
                   {busy && (
                     <>
                       {" · "}
-                      <span className="inline-flex items-center gap-1 text-slate-600">
+                      <span className="inline-flex items-center gap-1 text-fg-muted">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         {presignMut.isPending
-                          ? t("capabilities.import.plugin.uploading", "上传中…")
-                          : t("capabilities.import.plugin.validating", "校验中…")}
+                          ? t("capabilities.import.plugin.uploading", "Uploading…")
+                          : t("capabilities.import.plugin.validating", "Validating…")}
                       </span>
                     </>
                   )}
@@ -223,7 +223,7 @@ export function ImportPluginForm({
               size="sm"
               onClick={reset}
               disabled={busy}
-              aria-label={t("capabilities.actions.cancel", "取消")}
+              aria-label={t("capabilities.actions.cancel", "Cancel")}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -233,7 +233,7 @@ export function ImportPluginForm({
         {errMsg && (
           <div
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
           >
             {errMsg}
           </div>
@@ -242,12 +242,12 @@ export function ImportPluginForm({
 
       {/* ---- validation preview pane ----------------------------------- */}
       <div className="grid gap-3">
-        <span className="text-[12px] font-medium text-slate-700">
-          {t("capabilities.import.plugin.previewLabel", "校验结果")}
+        <span className="text-sm font-medium text-fg-muted">
+          {t("capabilities.import.plugin.previewLabel", "Validation result")}
         </span>
         {!validation && !busy && (
-          <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-[12px] text-slate-500">
-            {t("capabilities.import.plugin.previewEmpty", "上传一个 zip 文件后在这里看到校验结果")}
+          <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-3 py-6 text-center text-sm text-fg-subtle">
+            {t("capabilities.import.plugin.previewEmpty", "Upload a zip file to see the validation result here")}
           </div>
         )}
         {validation && <ValidationPanel validation={validation} preview={previewMut.data ?? null} />}
@@ -287,33 +287,33 @@ function ValidationPanel({
     : null
 
   return (
-    <div className="grid gap-3 rounded-md border border-slate-200 bg-white p-3">
+    <div className="grid gap-3 rounded-md border border-line bg-surface p-3">
       {validation.valid ? (
-        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-[12px] text-green-800">
-          {t("capabilities.import.plugin.passed", "校验通过")}
+        <div className="rounded-md border border-success-border bg-success-subtle px-3 py-1.5 text-sm text-success-emphasis">
+          {t("capabilities.import.plugin.passed", "Validation passed")}
         </div>
       ) : (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] text-red-800">
-          {t("capabilities.import.plugin.failed", "校验失败,请修复后重新上传")}
+        <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-1.5 text-sm text-danger-emphasis">
+          {t("capabilities.import.plugin.failed", "Validation failed — fix the issues and upload again")}
         </div>
       )}
 
       {m && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
-          <dt className="text-slate-500">name</dt>
-          <dd className="font-mono text-slate-900">{m.name}</dd>
-          <dt className="text-slate-500">version</dt>
-          <dd className="font-mono text-slate-900">{m.version}</dd>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+          <dt className="text-fg-subtle">name</dt>
+          <dd className="font-mono text-fg">{m.name}</dd>
+          <dt className="text-fg-subtle">version</dt>
+          <dd className="font-mono text-fg">{m.version}</dd>
           {m.description && (
             <>
-              <dt className="text-slate-500">description</dt>
-              <dd className="text-slate-700">{m.description}</dd>
+              <dt className="text-fg-subtle">description</dt>
+              <dd className="text-fg-muted">{m.description}</dd>
             </>
           )}
           {m.author && (
             <>
-              <dt className="text-slate-500">author</dt>
-              <dd className="text-slate-700">{m.author}</dd>
+              <dt className="text-fg-subtle">author</dt>
+              <dd className="text-fg-muted">{m.author}</dd>
             </>
           )}
         </dl>
@@ -321,10 +321,10 @@ function ValidationPanel({
 
       {errors.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-red-700">
-            {t("capabilities.import.plugin.errorsHeader", "错误")}
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-danger-emphasis">
+            {t("capabilities.import.plugin.errorsHeader", "Errors")}
           </p>
-          <ul className="ml-4 list-disc space-y-0.5 text-[12px] text-red-800">
+          <ul className="ml-4 list-disc space-y-0.5 text-sm text-danger-emphasis">
             {errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
@@ -334,10 +334,10 @@ function ValidationPanel({
 
       {warnings.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-amber-700">
-            {t("capabilities.import.plugin.warningsHeader", "警告")}
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-warning">
+            {t("capabilities.import.plugin.warningsHeader", "Warnings")}
           </p>
-          <ul className="ml-4 list-disc space-y-0.5 text-[12px] text-amber-800">
+          <ul className="ml-4 list-disc space-y-0.5 text-sm text-warning-emphasis">
             {warnings.map((wn, i) => (
               <li key={i}>{wn}</li>
             ))}

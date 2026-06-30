@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
 )
 
@@ -93,16 +94,23 @@ type uploadsTestRuntime struct {
 	userID      string
 }
 
-func newUploadsTestRouter(t *testing.T, client OSSClient) (http.Handler, *uploadsTestRuntime) {
+// newUploadsTestRouter wires the presign handlers. A nil client yields a
+// nil store so the "OSS not configured" 503 paths fire; a non-nil fake is
+// wrapped via blob.NewOSSStore to drive the OSS backend end-to-end.
+func newUploadsTestRouter(t *testing.T, client *fakeOSSClient) (http.Handler, *uploadsTestRuntime) {
 	t.Helper()
 	rt := &uploadsTestRuntime{
 		roleStubStore: newRoleStubStore(map[string]string{uploadsTestUserID: "admin"}),
 		workspaceID:   uploadsTestWorkspaceID,
 		userID:        uploadsTestUserID,
 	}
+	var store blob.Store
+	if client != nil {
+		store = blob.NewOSSStore(client)
+	}
 	r := chi.NewRouter()
-	r.Post("/api/v1/workspaces/{workspaceID}/uploads/presign-upload", presignUpload(rt, client))
-	r.Post("/api/v1/workspaces/{workspaceID}/uploads/presign-download", presignDownload(rt, client))
+	r.Post("/api/v1/workspaces/{workspaceID}/uploads/presign-upload", presignUpload(rt, store))
+	r.Post("/api/v1/workspaces/{workspaceID}/uploads/presign-download", presignDownload(rt, store))
 	return r, rt
 }
 

@@ -186,6 +186,8 @@ func agentKindToRenderTarget(agentKind string) render.Target {
 		return render.TargetOpenCode
 	case "codex":
 		return render.TargetCodex
+	case "pi":
+		return render.TargetPi
 	default:
 		return render.TargetClaudeCode
 	}

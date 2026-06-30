@@ -21,7 +21,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/parser"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -99,7 +99,7 @@ type commitCapabilityImportResponse struct {
 // Pure parse for mcp/skill (no DB writes). The plugin branch downloads
 // the just-uploaded zip from OSS so ValidatePluginZip can run against
 // the actual bytes.
-func previewCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) http.HandlerFunc {
+func previewCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
 		if !ok {
@@ -119,9 +119,9 @@ func previewCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) htt
 		case "mcp":
 			previewMCPOrSkillImport(w, body, parseAsMCP)
 		case "skill":
-			previewSkillImport(r.Context(), w, workspaceID, body, ossClient)
+			previewSkillImport(r.Context(), w, workspaceID, body, blobStore)
 		case "plugin":
-			previewPluginImport(r.Context(), w, workspaceID, body, ossClient)
+			previewPluginImport(r.Context(), w, workspaceID, body, blobStore)
 		default:
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill|plugin)", kind)})
 		}
@@ -133,11 +133,11 @@ func previewCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) htt
 // the OSS upload and runs parser.ParseSkillZip. The zip branch
 // enforces workspace ownership on the OSS key (403 on cross-tenant).
 // Empty/unknown source_format defaults to markdown for back-compat.
-func previewSkillImport(ctx context.Context, w http.ResponseWriter, workspaceID string, body previewCapabilityImportBody, ossClient OSSClient) {
+func previewSkillImport(ctx context.Context, w http.ResponseWriter, workspaceID string, body previewCapabilityImportBody, blobStore blob.Store) {
 	format := parser.SourceFormat(strings.ToLower(strings.TrimSpace(body.SourceFormat)))
 	switch format {
 	case parser.SourceFormatZip:
-		previewSkillZipImport(ctx, w, workspaceID, body, ossClient)
+		previewSkillZipImport(ctx, w, workspaceID, body, blobStore)
 		return
 	case "", parser.SourceFormatMarkdown:
 		previewMCPOrSkillImport(w, body, parseAsSkill)
@@ -149,8 +149,8 @@ func previewSkillImport(ctx context.Context, w http.ResponseWriter, workspaceID 
 	}
 }
 
-func previewSkillZipImport(ctx context.Context, w http.ResponseWriter, workspaceID string, body previewCapabilityImportBody, ossClient OSSClient) {
-	if ossClient == nil {
+func previewSkillZipImport(ctx context.Context, w http.ResponseWriter, workspaceID string, body previewCapabilityImportBody, blobStore blob.Store) {
+	if blobStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "object storage is not configured on this deployment", "code": "OSS_NOT_CONFIGURED"})
 		return
 	}
@@ -162,11 +162,16 @@ func previewSkillZipImport(ctx context.Context, w http.ResponseWriter, workspace
 	// Cross-tenant check: RBAC proved caller is admin in workspaceID
 	// but not that oss_key was minted under it; without this gate
 	// preview would happily download another tenant's zip.
-	if !oss.KeyBelongsToWorkspace(ossKey, workspaceID) {
+	owned, err := blobStore.BelongsToWorkspace(ctx, ossKey, workspaceID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not verify storage reference"})
+		return
+	}
+	if !owned {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oss key does not belong to this workspace"})
 		return
 	}
-	zipBytes, err := ossClient.Download(ctx, ossKey)
+	zipBytes, err := blobStore.Download(ctx, ossKey)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not fetch uploaded zip from object storage: " + err.Error()})
 		return
@@ -234,8 +239,8 @@ func previewMCPOrSkillImport(w http.ResponseWriter, body previewCapabilityImport
 // with valid=false in plugin_validation so the UI can render each error
 // inline; Commit button stays disabled. Workspace ownership on the OSS
 // key is enforced (403) to prevent cross-tenant read.
-func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID string, body previewCapabilityImportBody, ossClient OSSClient) {
-	if ossClient == nil {
+func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID string, body previewCapabilityImportBody, blobStore blob.Store) {
+	if blobStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "object storage is not configured on this deployment", "code": "OSS_NOT_CONFIGURED"})
 		return
 	}
@@ -259,12 +264,17 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "oss_key is required for plugin upload (call /uploads/presign-upload first)"})
 		return
 	}
-	if !oss.KeyBelongsToWorkspace(ossKey, workspaceID) {
+	owned, err := blobStore.BelongsToWorkspace(ctx, ossKey, workspaceID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not verify storage reference"})
+		return
+	}
+	if !owned {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "oss key does not belong to this workspace"})
 		return
 	}
 
-	zipBytes, err := ossClient.Download(ctx, ossKey)
+	zipBytes, err := blobStore.Download(ctx, ossKey)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not fetch uploaded zip from object storage: " + err.Error()})
 		return
@@ -301,7 +311,7 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 // Encrypts inline_secrets, then hands the spec to store.ImportCapability
 // which runs the whole import in a single tx. For kind=plugin the spec
 // is rebuilt from OSS bytes (the on-disk zip is authoritative).
-func commitCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) http.HandlerFunc {
+func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
 		if !ok {
@@ -343,7 +353,7 @@ func commitCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) http
 			(strings.TrimSpace(body.OssKey) != "" && strings.TrimSpace(body.UploadSource) != "")
 		switch {
 		case skillZipShaped:
-			rebuilt, sum, httpErr := rebuildSkillSpecFromOSS(r.Context(), workspaceID, body.OssKey, ossClient)
+			rebuilt, sum, httpErr := rebuildSkillSpecFromOSS(r.Context(), workspaceID, body.OssKey, blobStore)
 			if httpErr != nil {
 				writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
 				return
@@ -353,7 +363,7 @@ func commitCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) http
 		case pluginShaped:
 			// Lock kind to plugin so any later read sees the real shape.
 			kind = string(canonical.KindPlugin)
-			rebuilt, httpErr := rebuildPluginSpecFromOSS(r.Context(), workspaceID, body, ossClient)
+			rebuilt, httpErr := rebuildPluginSpecFromOSS(r.Context(), workspaceID, body, blobStore)
 			if httpErr != nil {
 				writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
 				return
@@ -421,8 +431,8 @@ func commitCapabilityImport(runtimeStore RuntimeStore, ossClient OSSClient) http
 // rebuildPluginSpecFromOSS re-runs the plugin parser against the OSS-hosted
 // zip; client-supplied CanonicalSpec is discarded so a forged sha256 cannot
 // reach the DB. workspaceID scopes the oss_key ownership check.
-func rebuildPluginSpecFromOSS(ctx context.Context, workspaceID string, body commitCapabilityImportBody, ossClient OSSClient) (canonical.Spec, *importHTTPError) {
-	if ossClient == nil {
+func rebuildPluginSpecFromOSS(ctx context.Context, workspaceID string, body commitCapabilityImportBody, blobStore blob.Store) (canonical.Spec, *importHTTPError) {
+	if blobStore == nil {
 		return canonical.Spec{}, &importHTTPError{
 			status:  http.StatusServiceUnavailable,
 			message: "object storage is not configured on this deployment",
@@ -458,14 +468,21 @@ func rebuildPluginSpecFromOSS(ctx context.Context, workspaceID string, body comm
 	// Keys minted by this workspace MUST start with
 	// capabilities/plugins/<workspaceID>/. 403 over 404 because the key
 	// path already encodes the workspace.
-	if !oss.KeyBelongsToWorkspace(ossKey, workspaceID) {
+	owned, err := blobStore.BelongsToWorkspace(ctx, ossKey, workspaceID)
+	if err != nil {
+		return canonical.Spec{}, &importHTTPError{
+			status:  http.StatusInternalServerError,
+			message: "could not verify storage reference",
+		}
+	}
+	if !owned {
 		return canonical.Spec{}, &importHTTPError{
 			status:  http.StatusForbidden,
 			message: "oss key does not belong to this workspace",
 		}
 	}
 
-	zipBytes, err := ossClient.Download(ctx, ossKey)
+	zipBytes, err := blobStore.Download(ctx, ossKey)
 	if err != nil {
 		return canonical.Spec{}, &importHTTPError{
 			status:  http.StatusBadGateway,
@@ -492,8 +509,8 @@ func rebuildPluginSpecFromOSS(ctx context.Context, workspaceID string, body comm
 // Re-fetches the zip from OSS and re-runs ParseSkillZip; client-supplied
 // spec is discarded. Also returns the SHA-256 of the zip body so the
 // caller can write it into capability_version.sha256.
-func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, ossClient OSSClient) (canonical.Spec, string, *importHTTPError) {
-	if ossClient == nil {
+func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, blobStore blob.Store) (canonical.Spec, string, *importHTTPError) {
+	if blobStore == nil {
 		return canonical.Spec{}, "", &importHTTPError{
 			status:  http.StatusServiceUnavailable,
 			message: "object storage is not configured on this deployment",
@@ -506,13 +523,20 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, os
 			message: "oss_key is required for skill zip commit",
 		}
 	}
-	if !oss.KeyBelongsToWorkspace(ossKey, workspaceID) {
+	owned, err := blobStore.BelongsToWorkspace(ctx, ossKey, workspaceID)
+	if err != nil {
+		return canonical.Spec{}, "", &importHTTPError{
+			status:  http.StatusInternalServerError,
+			message: "could not verify storage reference",
+		}
+	}
+	if !owned {
 		return canonical.Spec{}, "", &importHTTPError{
 			status:  http.StatusForbidden,
 			message: "oss key does not belong to this workspace",
 		}
 	}
-	zipBytes, err := ossClient.Download(ctx, ossKey)
+	zipBytes, err := blobStore.Download(ctx, ossKey)
 	if err != nil {
 		return canonical.Spec{}, "", &importHTTPError{
 			status:  http.StatusBadGateway,
@@ -534,7 +558,7 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, os
 // Wire shape mirrors commitCapabilityImportBody but Name/Description/Visibility/
 // Type are ignored (they live on the capability row). Spec.Kind must match
 // capability.type or the store returns ErrCapabilityKindMismatch.
-func commitCapabilityVersionImport(runtimeStore RuntimeStore, ossClient OSSClient) http.HandlerFunc {
+func commitCapabilityVersionImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
 		if !ok {
@@ -600,7 +624,7 @@ func commitCapabilityVersionImport(runtimeStore RuntimeStore, ossClient OSSClien
 			(strings.TrimSpace(body.OssKey) != "" && strings.TrimSpace(body.UploadSource) != "")
 		switch {
 		case skillZipShaped:
-			rebuilt, sum, httpErr := rebuildSkillSpecFromOSS(r.Context(), workspaceID, body.OssKey, ossClient)
+			rebuilt, sum, httpErr := rebuildSkillSpecFromOSS(r.Context(), workspaceID, body.OssKey, blobStore)
 			if httpErr != nil {
 				writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
 				return
@@ -608,7 +632,7 @@ func commitCapabilityVersionImport(runtimeStore RuntimeStore, ossClient OSSClien
 			spec = rebuilt
 			skillSHA256 = sum
 		case pluginShaped:
-			rebuilt, httpErr := rebuildPluginSpecFromOSS(r.Context(), workspaceID, body, ossClient)
+			rebuilt, httpErr := rebuildPluginSpecFromOSS(r.Context(), workspaceID, body, blobStore)
 			if httpErr != nil {
 				writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
 				return

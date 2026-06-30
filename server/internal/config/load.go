@@ -74,6 +74,9 @@ const (
 	EnvOSSAccessKeyID     = "PARSAR_OSS_ACCESS_KEY_ID"     // #nosec G101 -- env var name, not a credential
 	EnvOSSAccessKeySecret = "PARSAR_OSS_ACCESS_KEY_SECRET" // #nosec G101 -- env var name, not a credential
 	EnvOSSBaseURL         = "PARSAR_OSS_BASE_URL"
+
+	// Capability blob backend selector: "pg" (default) or "oss".
+	EnvBlobBackend = "PARSAR_BLOB_BACKEND"
 )
 
 // ErrInvalidConfig wraps every validation failure so callers can
@@ -195,6 +198,7 @@ func applyEnv(cfg *Config, env EnvFunc) {
 	stringSetter(EnvOSSAccessKeyID, &cfg.Storage.OSS.AccessKeyID)
 	stringSetter(EnvOSSAccessKeySecret, &cfg.Storage.OSS.AccessKeySecret)
 	stringSetter(EnvOSSBaseURL, &cfg.Storage.OSS.BaseURL)
+	stringSetter(EnvBlobBackend, &cfg.Storage.BlobBackend)
 }
 
 // resolveConfigPath enforces the absolute-or-~/ rule.

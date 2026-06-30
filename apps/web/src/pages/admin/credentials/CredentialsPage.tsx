@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 
 import { AdminLayout } from "../../../components/layout/AdminLayout"
 import { PageHeader } from "../../../components/layout/PageHeader"
+import { SettingsTabs } from "../../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../../components/admin/ScopeRequiredState"
 import {
   Tabs,
@@ -44,11 +45,12 @@ export function CredentialsPage() {
   }, [tab])
 
   return (
-    <AdminLayout activeMenu="secrets">
+    <AdminLayout activeMenu="settings">
       <PageHeader
         title={t("credentialsPage.title")}
         description={t("credentialsPage.description")}
       />
+      <SettingsTabs active="credentials" />
 
       {!wsId ? (
         <ScopeRequiredState scope="workspace" resourceName={t("credentialsPage.title")} />

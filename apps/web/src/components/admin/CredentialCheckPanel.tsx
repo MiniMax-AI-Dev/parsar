@@ -233,15 +233,15 @@ export function CredentialCheckPanel({
         })
 
         return (
-          <div key={rc.kind} className="rounded-md border border-slate-200 bg-white">
-            <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
-              <span className="text-[13px] font-medium text-slate-900">{displayName}</span>
-              <span className="text-[11px] text-slate-500">({rc.kind})</span>
-              {rc.required && <span className="ml-auto rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">{t("credentialCheck.requiredBadge")}</span>}
+          <div key={rc.kind} className="rounded-md border border-line bg-surface">
+            <div className="flex items-center gap-2 border-b border-line-muted px-3 py-2">
+              <span className="text-sm font-medium text-fg">{displayName}</span>
+              <span className="text-xs text-fg-subtle">({rc.kind})</span>
+              {rc.required && <span className="ml-auto rounded bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">{t("credentialCheck.requiredBadge")}</span>}
             </div>
             <div className="space-y-1.5 px-3 py-2">
               {/* Option 1: personal */}
-              <label className={`flex items-start gap-2 rounded px-2 py-1.5 ${personalDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-slate-50"}`}>
+              <label className={`flex items-start gap-2 rounded px-2 py-1.5 ${personalDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-surface-subtle"}`}>
                 <input
                   type="radio"
                   name={`cred-${rc.kind}`}
@@ -250,9 +250,9 @@ export function CredentialCheckPanel({
                   disabled={personalDisabled}
                   onChange={() => setKindChoice(rc.kind, { source: "personal" })}
                 />
-                <span className="text-[12px]">
-                  <span className="block text-slate-800">{t("credentialCheck.sourcePersonal")}</span>
-                  <span className="block text-[11px] text-slate-500">
+                <span className="text-sm">
+                  <span className="block text-fg-emphasis">{t("credentialCheck.sourcePersonal")}</span>
+                  <span className="block text-xs text-fg-subtle">
                     {personalDisabled
                       ? t("credentialCheck.personalDisabledHint")
                       : hasPersonalCredential
@@ -260,7 +260,7 @@ export function CredentialCheckPanel({
                         : t("credentialCheck.personalYouMissing")}
                   </span>
                   {!personalDisabled && !hasPersonalCredential && getUrl && (
-                    <a href={getUrl} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-amber-700 underline underline-offset-2">
+                    <a href={getUrl} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-warning underline underline-offset-2">
                       {t("credentialCheck.form.getToken")}
                       <ExternalLink className="h-3 w-3" />
                     </a>
@@ -269,7 +269,7 @@ export function CredentialCheckPanel({
               </label>
 
               {/* Option 2: shared (combines existing-secret picker + new-secret form) */}
-              <label className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-slate-50 cursor-pointer">
+              <label className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-subtle cursor-pointer">
                 <input
                   type="radio"
                   name={`cred-${rc.kind}`}
@@ -296,8 +296,8 @@ export function CredentialCheckPanel({
                     }
                   }}
                 />
-                <span className="flex-1 text-[12px]">
-                  <span className="flex items-center gap-1 text-slate-800">
+                <span className="flex-1 text-sm">
+                  <span className="flex items-center gap-1 text-fg-emphasis">
                     <Users className="h-3 w-3" />
                     {t("credentialCheck.sourceShared")}
                   </span>
@@ -320,7 +320,7 @@ export function CredentialCheckPanel({
                             }
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="h-7 w-full rounded border border-slate-200 bg-white px-2 text-[12px]"
+                          className="h-7 w-full rounded border border-line bg-surface px-2 text-sm"
                         >
                           {kindSecrets.map((s) => (
                             <option key={s.id} value={s.id}>{s.name}</option>
@@ -331,7 +331,7 @@ export function CredentialCheckPanel({
                       {kindSecrets.length === 0 && expandedNewSecretFor !== rc.kind && !("new_secret" in choice) && (
                         <button
                           type="button"
-                          className="inline-flex h-7 items-center gap-1 rounded border border-dashed border-slate-300 px-2 text-[12px] text-slate-700 hover:bg-slate-50"
+                          className="inline-flex h-7 items-center gap-1 rounded border border-dashed border-line-strong px-2 text-sm text-fg-muted hover:bg-surface-subtle"
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
@@ -345,14 +345,14 @@ export function CredentialCheckPanel({
                         </button>
                       )}
                       {"new_secret" in choice && expandedNewSecretFor !== rc.kind && (
-                        <div className="flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800">
+                        <div className="flex items-center gap-2 rounded border border-success-border bg-success-subtle px-2 py-1 text-xs text-success-emphasis">
                           <Check className="h-3 w-3 shrink-0" />
                           <span className="flex-1 truncate">
                             {t("credentialCheck.sharedNewQueued", { name: choice.new_secret.display_name || rc.kind })}
                           </span>
                           <button
                             type="button"
-                            className="text-slate-600 underline"
+                            className="text-fg-muted underline"
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
@@ -371,20 +371,20 @@ export function CredentialCheckPanel({
               </label>
 
               {expandedNewSecretFor === rc.kind && (
-                <div className="ml-6 mt-1 space-y-2 rounded border border-slate-200 bg-slate-50 p-2" onClick={(e) => e.stopPropagation()}>
+                <div className="ml-6 mt-1 space-y-2 rounded border border-line bg-surface-subtle p-2" onClick={(e) => e.stopPropagation()}>
                   <div className="grid gap-1">
-                    <label className="text-[11px] font-medium text-slate-600">{t("credentialCheck.form.displayName")}</label>
+                    <label className="text-xs font-medium text-fg-muted">{t("credentialCheck.form.displayName")}</label>
                     <Input
                       value={newSecretDisplayName}
                       onChange={(e) => setNewSecretDisplayName(e.target.value)}
                       placeholder={displayName}
-                      className="h-7 text-[12px]"
+                      className="h-7 text-sm"
                     />
                   </div>
                   <div className="grid gap-1">
-                    <label className="text-[11px] font-medium text-slate-600">
+                    <label className="text-xs font-medium text-fg-muted">
                       {t("credentialCheck.form.value")}
-                      <span className="ml-0.5 text-red-500">*</span>
+                      <span className="ml-0.5 text-danger">*</span>
                     </label>
                     <div className="relative">
                       <Input
@@ -392,12 +392,12 @@ export function CredentialCheckPanel({
                         value={newSecretPlaintext}
                         onChange={(e) => setNewSecretPlaintext(e.target.value)}
                         placeholder={placeholder}
-                        className="h-7 pr-8 text-[12px]"
+                        className="h-7 pr-8 text-sm"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPlaintext(!showPlaintext)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-faint hover:text-fg-muted"
                       >
                         {showPlaintext ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                       </button>
@@ -408,7 +408,7 @@ export function CredentialCheckPanel({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-[11px]"
+                      className="h-6 text-xs"
                       onClick={() => {
                         setExpandedNewSecretFor(null)
                         // Same fallback as the model binding cancel: if the user cancels and no
@@ -437,7 +437,7 @@ export function CredentialCheckPanel({
                     <Button
                       type="button"
                       size="sm"
-                      className="h-6 text-[11px]"
+                      className="h-6 text-xs"
                       disabled={!newSecretPlaintext.trim()}
                       onClick={() => commitNewSecret(rc.kind)}
                     >

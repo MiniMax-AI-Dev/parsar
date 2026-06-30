@@ -15,6 +15,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/codex"
 	opencodeagent "github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/opencode"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/pi"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/daemonize"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/dispatch"
@@ -193,12 +194,14 @@ type agentCLIDiscovery struct {
 	ClaudeCode proto.SupportedAgentKind
 	OpenCode   proto.SupportedAgentKind
 	Codex      proto.SupportedAgentKind
+	Pi         proto.SupportedAgentKind
 }
 
 type agentCLIChecks struct {
 	ClaudeCode func(context.Context, string) (string, error)
 	OpenCode   func(context.Context, string) (string, error)
 	Codex      func(context.Context, string) (string, error)
+	Pi         func(context.Context, string) (string, error)
 }
 
 func defaultAgentCLIChecks() agentCLIChecks {
@@ -206,6 +209,7 @@ func defaultAgentCLIChecks() agentCLIChecks {
 		ClaudeCode: claudecode.CheckCLIAvailable,
 		OpenCode:   opencodeagent.CheckCLIAvailable,
 		Codex:      codex.CheckCLIAvailable,
+		Pi:         pi.CheckCLIAvailable,
 	}
 }
 
@@ -222,6 +226,9 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 	}
 	if checks.Codex == nil {
 		checks.Codex = codex.CheckCLIAvailable
+	}
+	if checks.Pi == nil {
+		checks.Pi = pi.CheckCLIAvailable
 	}
 	out := agentCLIDiscovery{
 		ClaudeCode: proto.SupportedAgentKind{
@@ -246,6 +253,16 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 				// First-cut adapter runs silent (no permission cards),
 				// but streaming + usage + resume are all wired via
 				// the JSON-RPC notification stream + thread/resume RPC.
+				Streaming: true,
+				Usage:     true,
+				Resume:    true,
+			},
+		},
+		Pi: proto.SupportedAgentKind{
+			Kind: "pi",
+			Capabilities: proto.AgentKindCapabilities{
+				// pi runs --no-approve, so no permission cards; streaming,
+				// usage, and --session resume are all wired.
 				Streaming: true,
 				Usage:     true,
 				Resume:    true,
@@ -298,8 +315,23 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", codex.InstallURL)
 	}
 
-	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available {
-		return out, fmt.Errorf("connect: no supported agent CLI available (install Claude Code, OpenCode, or Codex)")
+	piCtx, cancelPi := context.WithTimeout(context.Background(), cliVersionTimeout)
+	piVersion, piErr := checks.Pi(piCtx, "")
+	cancelPi()
+	if piErr == nil {
+		out.Pi.Available = true
+		out.Pi.Version = piVersion
+		fmt.Fprintf(rc.stdout, "pi preflight ok (%s)\n", piVersion)
+	} else if errors.Is(piErr, pi.ErrCLINotFound) {
+		fmt.Fprintln(rc.stderr, "parsar-daemon: pi CLI not found on PATH; pi unavailable.")
+		fmt.Fprintf(rc.stderr, "  Install instructions: %s\n", pi.InstallURL)
+	} else {
+		fmt.Fprintf(rc.stderr, "parsar-daemon: `pi --version` failed; pi unavailable: %v\n", piErr)
+		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", pi.InstallURL)
+	}
+
+	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available {
+		return out, fmt.Errorf("connect: no supported agent CLI available (install Claude Code, OpenCode, Codex, or pi)")
 	}
 	return out, nil
 }
@@ -308,6 +340,7 @@ func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery) {
 	registry.RegisterKind(agentCLIs.ClaudeCode, claudecode.Factory)
 	registry.RegisterKind(agentCLIs.OpenCode, opencodeagent.Factory)
 	registry.RegisterKind(agentCLIs.Codex, codex.Factory)
+	registry.RegisterKind(agentCLIs.Pi, pi.Factory)
 }
 
 // spawnBackground forks the daemon into the background. Parent

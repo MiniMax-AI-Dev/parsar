@@ -147,6 +147,10 @@ type SandboxConfig struct {
 // surface "OSS not configured" rather than failing server boot.
 type StorageConfig struct {
 	OSS OSSConfig `yaml:"oss"`
+	// BlobBackend selects the capability-blob backend: "pg" (default,
+	// stores zips in Postgres — zero external infra) or "oss" (Aliyun
+	// OSS; requires storage.oss.* configured). Env PARSAR_BLOB_BACKEND.
+	BlobBackend string `yaml:"blob_backend"`
 }
 
 // OSSConfig is the Aliyun OSS connection knobs. Fields map 1:1 to
@@ -224,6 +228,9 @@ func Default() Config {
 				Enabled: false,
 				Addr:    ":4318",
 			},
+		},
+		Storage: StorageConfig{
+			BlobBackend: "pg",
 		},
 		Gateway: GatewayConfig{
 			Feishu: FeishuConfig{

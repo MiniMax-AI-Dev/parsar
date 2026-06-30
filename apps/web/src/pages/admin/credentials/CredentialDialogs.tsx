@@ -104,7 +104,7 @@ export function CredentialDialog({
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
       <DialogContent className="max-w-lg gap-0 p-0">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-slate-100 px-5 py-4 pr-10">
+          <DialogHeader className="border-b border-line-muted px-5 py-4 pr-10">
             <DialogTitle className="text-sm">
               {mode === "create" ? t("myCredentials.dialog.createTitle") : t("myCredentials.dialog.editTitle")}
             </DialogTitle>
@@ -117,7 +117,7 @@ export function CredentialDialog({
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
                 disabled={kindLocked}
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-slate-50 disabled:text-slate-500"
+                className="h-9 w-full rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle disabled:text-fg-subtle"
               >
                 {/* A locked kind may not be in the live options list
                     (legacy data, admin-added kind, in-flight prefill);
@@ -136,15 +136,15 @@ export function CredentialDialog({
             </Field>
 
             {seedMeta?.getUrl && (
-              <a className="inline-flex text-[12px] text-slate-600 underline-offset-4 hover:underline" href={seedMeta.getUrl} target="_blank" rel="noopener noreferrer">
+              <a className="inline-flex text-sm text-fg-muted underline-offset-4 hover:underline" href={seedMeta.getUrl} target="_blank" rel="noopener noreferrer">
                 {t("myCredentials.dialog.openProvider")}
               </a>
             )}
 
             {mode === "edit" && !replaceToken ? (
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="rounded-md border border-line bg-surface-subtle px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[12.5px] text-slate-600">{t("myCredentials.dialog.tokenSet")}</span>
+                  <span className="text-sm text-fg-muted">{t("myCredentials.dialog.tokenSet")}</span>
                   <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setReplaceToken(true)}>
                     {t("myCredentials.dialog.replaceToken")}
                   </Button>
@@ -170,14 +170,14 @@ export function CredentialDialog({
             )}
 
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">{t("myCredentials.dialog.errorTitle")}</p>
-                <p className="text-[11.5px] text-red-700">{error.message}</p>
+              <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">{t("myCredentials.dialog.errorTitle")}</p>
+                <p className="text-xs text-danger-emphasis">{error.message}</p>
               </div>
             )}
           </div>
 
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={pending}>
               {t("myCredentials.dialog.cancel")}
             </Button>
@@ -237,7 +237,7 @@ export function DeleteCredentialDialog({ target, pending, error, onCancel, onCon
     <AlertDialog open onOpenChange={(next) => { if (!next && !pending) onCancel() }}>
       <AlertDialogContent className="max-w-md gap-0 p-0">
         <AlertDialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5">
-          <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
             <ShieldAlert className="h-4 w-4" />
           </div>
           <div className="space-y-2">
@@ -245,25 +245,25 @@ export function DeleteCredentialDialog({ target, pending, error, onCancel, onCon
             <AlertDialogDescription className="text-sm leading-relaxed">
               {t("myCredentials.delete.description", { kind: kindLabel })}
             </AlertDialogDescription>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[12px] font-medium text-slate-800">{t("myCredentials.delete.impactTitle")}</p>
+            <div className="rounded-md border border-line bg-surface-subtle p-3">
+              <p className="text-sm font-medium text-fg-emphasis">{t("myCredentials.delete.impactTitle")}</p>
               {loadingImpact ? (
                 <div className="mt-2 space-y-2">
                   <Skeleton className="h-4 w-44" />
-                  <p className="text-[11.5px] text-slate-500">{t("myCredentials.delete.loadingImpact")}</p>
+                  <p className="text-xs text-fg-subtle">{t("myCredentials.delete.loadingImpact")}</p>
                 </div>
               ) : impact.length === 0 ? (
-                <p className="mt-2 text-[12px] text-slate-600">{t("myCredentials.delete.noImpact")}</p>
+                <p className="mt-2 text-sm text-fg-muted">{t("myCredentials.delete.noImpact")}</p>
               ) : (
-                <p className="mt-2 text-[12px] text-red-700">
+                <p className="mt-2 text-sm text-danger-emphasis">
                   {t("myCredentials.delete.hasImpact", { count: impact.length, workspaceCount })}
                 </p>
               )}
             </div>
-            {error && <p className="text-[12px] text-red-700">{error.message}</p>}
+            {error && <p className="text-sm text-danger-emphasis">{error.message}</p>}
           </div>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <AlertDialogCancel asChild>
             <Button variant="outline" size="sm" onClick={onCancel} disabled={pending}>
               {t("myCredentials.delete.cancel")}
@@ -294,12 +294,12 @@ function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
       {children}
-      {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
+      {hint && <span className="block text-xs text-fg-subtle">{hint}</span>}
     </label>
   )
 }

@@ -1111,7 +1111,8 @@
         "runs": "Runs",
         "audit": "Audit",
         "dynamics": "动态",
-        "config": "配置"
+        "config": "配置",
+        "scheduled": "定时任务"
       },
       "dynamics": {
         "current": {
@@ -1401,7 +1402,8 @@
         "all": "全部",
         "mcp": "MCP",
         "skill": "Skill",
-        "plugin": "插件"
+        "plugin": "插件",
+        "systemPrompt": "系统提示词"
       },
       "capabilitySections": {
         "workspace": "本 Workspace",
@@ -1491,6 +1493,10 @@
       "codex": {
         "title": "Codex",
         "description": "通过 app-server 协议运行 OpenAI Codex（codex-rs）。"
+      },
+      "pi": {
+        "title": "Pi",
+        "description": "通过 parsar-daemon 运行 pi coding agent CLI。"
       },
       "opencode": {
         "title": "OpenCode",
@@ -2128,8 +2134,6 @@
     "sharedPlaceholder": "选择一个共享密钥…",
     "sharedNewQueued": "将创建：{{name}}",
     "sharedNewEdit": "编辑",
-    "publicWarning": "公开 Agent 的调用者可能未注册 Parsar。Model 和能力凭据都必须使用共享密钥；个人凭据选项会被禁用。",
-    "tenantHint": "跨工作区调用者需在 Parsar 配置过自己的凭据，否则该能力会被自动禁用。可改用共享密钥避免此问题。",
     "modelBindingTitle": "Model 凭据",
     "modelBindingPersonal": "调用者各自的 API key",
     "modelBindingShared": "使用共享 API key",
@@ -2593,6 +2597,161 @@
       "submit": "创建",
       "cancel": "取消",
       "errorGeneric": "创建失败,请稍后再试"
+    },
+    "connector": {
+      "adminOnly": "仅工作区所有者和管理员可以编辑连接器设置。",
+      "savedBadge": "已保存",
+      "actions": {
+        "save": "保存",
+        "reset": "重置"
+      },
+      "platformSelect": {
+        "label": "平台",
+        "options": {
+          "feishu": "飞书",
+          "slack": "Slack",
+          "discord": "Discord"
+        }
+      },
+      "feishu": {
+        "title": "飞书连接器",
+        "description": "为本工作区绑定一个飞书机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "飞书连接器已保存。",
+        "docLink": {
+          "label": "前往飞书开放平台创建 / 管理机器人",
+          "href": "https://open.feishu.cn/app"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,飞书消息将通过此机器人路由。",
+            "toggle": "启用飞书机器人"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "「凭证与基础信息」页 → App ID(以 cli_ 开头)。"
+          },
+          "appSecret": {
+            "label": "App Secret",
+            "hint": "「凭证与基础信息」页 → App Secret。加密存储。",
+            "savedHint": "已保存 App Secret(凭证与基础信息 → App Secret)。如需更换请输入新值。"
+          },
+          "verificationToken": {
+            "label": "Verification Token",
+            "hint": "「事件订阅」页 → Verification Token。webhook 模式必填。加密存储。",
+            "savedHint": "已保存 Verification Token(事件订阅 → Verification Token)。如需更换请输入新值。"
+          },
+          "encryptKey": {
+            "label": "Encrypt Key",
+            "hint": "「事件订阅」页 → Encrypt Key。可选,用于解密事件回调。加密存储。",
+            "savedHint": "已保存 Encrypt Key(事件订阅 → Encrypt Key)。如需更换请输入新值。"
+          },
+          "botOpenId": {
+            "label": "Bot open ID",
+            "hint": "可选。机器人的 open_id(以 ou_ 开头),可在机器人菜单或通讯录 API 获取,用于跳过机器人自己发的消息。"
+          },
+          "eventMode": {
+            "label": "事件模式",
+            "hint": "WebSocket 建立长连接(本地可用);webhook 通过 HTTP 回调接收。",
+            "options": {
+              "websocket": "WebSocket",
+              "webhook": "Webhook"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "该飞书 App ID 已绑定到另一个工作区。",
+          "incomplete": "飞书连接器信息不完整,请填写所有必填项。",
+          "generic": "保存飞书连接器失败,请重试。"
+        }
+      },
+      "slack": {
+        "title": "Slack 连接器",
+        "description": "为本工作区绑定一个 Slack 机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "Slack 连接器已保存。",
+        "docLink": {
+          "label": "前往 api.slack.com/apps 创建 Slack 应用",
+          "href": "https://api.slack.com/apps"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,Slack 消息将通过此机器人路由。",
+            "toggle": "启用 Slack 机器人"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "「Basic Information」页 → App Credentials → App ID(以 A 开头)。"
+          },
+          "botToken": {
+            "label": "Bot Token",
+            "hint": "「OAuth & Permissions」标签页 → Bot User OAuth Token(以 xoxb- 开头)。需先 Install to Workspace。加密存储。",
+            "savedHint": "已保存 Bot Token(OAuth & Permissions → Bot User OAuth Token)。如需更换请输入新的 xoxb 令牌。"
+          },
+          "appToken": {
+            "label": "App-Level Token",
+            "hint": "「Basic Information」→ App-Level Tokens → Generate Token,勾选 connections:write 权限(以 xapp- 开头)。socket 模式必填。加密存储。",
+            "savedHint": "已保存 App-Level Token(Basic Information → App-Level Tokens)。如需更换请输入新的 xapp 令牌。"
+          },
+          "signingSecret": {
+            "label": "Signing Secret",
+            "hint": "「Basic Information」→ App Credentials → Signing Secret。events 模式必填。加密存储。",
+            "savedHint": "已保存 Signing Secret(Basic Information → App Credentials → Signing Secret)。如需更换请输入新值。"
+          },
+          "eventMode": {
+            "label": "事件模式",
+            "hint": "Socket 建立长连接(本地可用,需 xapp 令牌);events 通过 HTTP 回调接收(需 Signing Secret)。",
+            "options": {
+              "socket": "Socket 模式",
+              "events": "Events API"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "该 Slack App ID 已绑定到另一个工作区。",
+          "incomplete": "Slack 连接器信息不完整,请填写所有必填项。",
+          "generic": "保存 Slack 连接器失败,请重试。"
+        }
+      },
+      "discord": {
+        "title": "Discord 连接器",
+        "description": "为本工作区绑定一个 Discord 机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "Discord 连接器已保存。",
+        "docLink": {
+          "label": "前往 Discord 开发者门户创建应用",
+          "href": "https://discord.com/developers/applications"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,Discord 消息将通过此机器人路由。",
+            "toggle": "启用 Discord 机器人"
+          },
+          "appId": {
+            "label": "Application ID",
+            "hint": "「General Information」页 → Application ID。"
+          },
+          "botToken": {
+            "label": "Bot Token",
+            "hint": "「Bot」标签页 → Reset Token 获取机器人令牌。加密存储。",
+            "savedHint": "已保存 Bot Token(Bot 标签页 → Token)。如需更换请输入新值。"
+          },
+          "publicKey": {
+            "label": "Public Key",
+            "hint": "「General Information」页 → Public Key,用于校验交互签名。加密存储。",
+            "savedHint": "已保存 Public Key(General Information → Public Key)。如需更换请输入新值。"
+          },
+          "intents": {
+            "label": "Gateway Intents",
+            "hint": "在「Bot」→ Privileged Gateway Intents 打开对应意图(如 MESSAGE CONTENT),否则消息正文会为空。"
+          }
+        },
+        "errors": {
+          "appIdInUse": "该 Discord Application ID 已绑定到另一个工作区。",
+          "incomplete": "Discord 连接器信息不完整,请填写所有必填项。",
+          "generic": "保存 Discord 连接器失败,请重试。"
+        }
+      }
     }
   },
   "specs": {
@@ -2760,6 +2919,62 @@
       "dialogTitle": "审计记录",
       "dialogDescription": "这条记忆的所有变更（创建 / 修改 / 删除）。",
       "unavailableUserScope": "用户级记忆的审计入口需要 Workspace 范围的审计接口，将在后续版本提供。"
+    }
+  },
+  "scheduledTasks": {
+    "title": "定时任务",
+    "subtitle": "到点用独立 session 自动触发一次 agent run，结果落到运行历史。",
+    "new": "新建任务",
+    "empty": "还没有定时任务，点右上角新建一个。",
+    "loadError": "加载定时任务失败",
+    "noAgents": "当前项目还没有可用的 Agent，请先创建并启用一个 Agent 再配置定时任务。",
+    "never": "—",
+    "enabled": "已启用",
+    "disabled": "已停用",
+    "col": { "name": "任务名", "frequency": "频率", "status": "状态", "nextRun": "下次运行", "actions": "操作" },
+    "action": { "edit": "编辑", "runNow": "立即运行", "delete": "删除" },
+    "runNowOk": "已触发一次运行",
+    "runNowErr": "触发失败",
+    "deleteConfirm": "确认删除该定时任务？历史运行记录会保留。",
+    "status": { "queued": "排队中", "running": "运行中", "completed": "成功", "failed": "失败", "cancelled": "已取消", "interrupted": "已中断", "skipped_overlap": "跳过(上次未完成)", "auto_disabled": "已自动停用", "none": "未运行" },
+    "pagination": { "prev": "上一页", "next": "下一页", "range": "第 {{from}}-{{to}} 条,共 {{total}} 条" },
+    "freq": { "hourly": "每小时", "daily": "每天", "weekly": "每周", "monthly": "每月", "weekday": "工作日", "custom": "自定义" },
+    "desc": {
+      "hourly": "每小时第 {{minute}} 分",
+      "daily": "每天 {{time}}",
+      "weekly": "每周{{day}} {{time}}",
+      "monthly": "每月 {{dom}} 日 {{time}}",
+      "weekday": "工作日 {{time}}",
+      "custom": "cron：{{cron}}",
+      "withTz": "{{desc}}（{{tz}}）"
+    },
+    "weekdays": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+    "dialog": {
+      "createTitle": "新建定时任务",
+      "editTitle": "编辑定时任务",
+      "name": "任务名",
+      "agent": "执行 Agent",
+      "namePlaceholder": "每日晨会总结",
+      "prompt": "Prompt",
+      "promptPlaceholder": "总结昨天的提交，列出今天待办…",
+      "frequency": "频率",
+      "time": "时间",
+      "dayOfWeek": "星期",
+      "dayOfMonth": "每月第几天",
+      "minute": "分钟",
+      "timezone": "时区",
+      "cronLabel": "cron 表达式",
+      "cronPlaceholder": "0 9 * * *",
+      "preview": "频率预览",
+      "feishu": "推送到飞书群",
+      "feishuDisabledHint": "后续版本开放，当前仅 Web 查看。",
+      "save": "保存",
+      "saving": "保存中…",
+      "cancel": "取消",
+      "nameRequired": "请填写任务名",
+      "agentRequired": "请选择执行 Agent",
+      "promptRequired": "请填写 Prompt",
+      "cronInvalid": "cron 表达式需为 5 段（分 时 日 月 周）"
     }
   }
 }

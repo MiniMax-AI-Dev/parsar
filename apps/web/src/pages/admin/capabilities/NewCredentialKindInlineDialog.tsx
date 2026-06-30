@@ -88,7 +88,7 @@ export function NewCredentialKindInlineDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("capabilities.import.newKind.title", "新建凭据类型")}</DialogTitle>
+          <DialogTitle>{t("capabilities.import.newKind.title", "New credential kind")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -96,7 +96,7 @@ export function NewCredentialKindInlineDialog({
             label={t("capabilities.import.newKind.code.label", "Code")}
             help={t(
               "capabilities.import.newKind.code.help",
-              "小写字母 + 数字 + 下划线,如 linear_api_key",
+              "Lowercase letters, digits, and underscores — e.g. linear_api_key",
             )}
             required
           >
@@ -107,17 +107,17 @@ export function NewCredentialKindInlineDialog({
               autoFocus
             />
             {code.trim().length > 0 && !isValidCode && (
-              <p className="text-[11px] text-red-600">
+              <p className="text-xs text-danger">
                 {t(
                   "capabilities.import.newKind.code.invalid",
-                  "code 必须以小写字母开头,只能包含小写字母、数字、下划线",
+                  "code must start with a lowercase letter and contain only lowercase letters, digits, and underscores",
                 )}
               </p>
             )}
           </Field>
 
           <Field
-            label={t("capabilities.import.newKind.displayName.label", "显示名")}
+            label={t("capabilities.import.newKind.displayName.label", "Display name")}
             required
           >
             <Input
@@ -127,13 +127,13 @@ export function NewCredentialKindInlineDialog({
             />
           </Field>
 
-          <Field label={t("capabilities.import.newKind.description.label", "说明")}>
+          <Field label={t("capabilities.import.newKind.description.label", "Description")}>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t(
                 "capabilities.import.newKind.description.placeholder",
-                "可选,告诉用户去哪里获取这个 token",
+                "Optional — tell users where to get this token",
               )}
             />
           </Field>
@@ -141,7 +141,7 @@ export function NewCredentialKindInlineDialog({
           {errMsg && (
             <div
               role="alert"
-              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+              className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
             >
               {errMsg}
             </div>
@@ -159,7 +159,7 @@ export function NewCredentialKindInlineDialog({
           </Button>
           <Button size="sm" disabled={disabled} onClick={submit}>
             {mut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {t("capabilities.import.newKind.submit", "新建")}
+            {t("capabilities.import.newKind.submit", "Create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -180,12 +180,12 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
       {children}
-      {help && <span className="text-[11px] leading-relaxed text-slate-500">{help}</span>}
+      {help && <span className="text-xs leading-relaxed text-fg-subtle">{help}</span>}
     </label>
   )
 }
