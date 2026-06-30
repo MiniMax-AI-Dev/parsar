@@ -2597,6 +2597,161 @@
       "submit": "创建",
       "cancel": "取消",
       "errorGeneric": "创建失败,请稍后再试"
+    },
+    "connector": {
+      "adminOnly": "仅工作区所有者和管理员可以编辑连接器设置。",
+      "savedBadge": "已保存",
+      "actions": {
+        "save": "保存",
+        "reset": "重置"
+      },
+      "platformSelect": {
+        "label": "平台",
+        "options": {
+          "feishu": "飞书",
+          "slack": "Slack",
+          "discord": "Discord"
+        }
+      },
+      "feishu": {
+        "title": "飞书连接器",
+        "description": "为本工作区绑定一个飞书机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "飞书连接器已保存。",
+        "docLink": {
+          "label": "前往飞书开放平台创建 / 管理机器人",
+          "href": "https://open.feishu.cn/app"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,飞书消息将通过此机器人路由。",
+            "toggle": "启用飞书机器人"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "「凭证与基础信息」页 → App ID(以 cli_ 开头)。"
+          },
+          "appSecret": {
+            "label": "App Secret",
+            "hint": "「凭证与基础信息」页 → App Secret。加密存储。",
+            "savedHint": "已保存 App Secret(凭证与基础信息 → App Secret)。如需更换请输入新值。"
+          },
+          "verificationToken": {
+            "label": "Verification Token",
+            "hint": "「事件订阅」页 → Verification Token。webhook 模式必填。加密存储。",
+            "savedHint": "已保存 Verification Token(事件订阅 → Verification Token)。如需更换请输入新值。"
+          },
+          "encryptKey": {
+            "label": "Encrypt Key",
+            "hint": "「事件订阅」页 → Encrypt Key。可选,用于解密事件回调。加密存储。",
+            "savedHint": "已保存 Encrypt Key(事件订阅 → Encrypt Key)。如需更换请输入新值。"
+          },
+          "botOpenId": {
+            "label": "Bot open ID",
+            "hint": "可选。机器人的 open_id(以 ou_ 开头),可在机器人菜单或通讯录 API 获取,用于跳过机器人自己发的消息。"
+          },
+          "eventMode": {
+            "label": "事件模式",
+            "hint": "WebSocket 建立长连接(本地可用);webhook 通过 HTTP 回调接收。",
+            "options": {
+              "websocket": "WebSocket",
+              "webhook": "Webhook"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "该飞书 App ID 已绑定到另一个工作区。",
+          "incomplete": "飞书连接器信息不完整,请填写所有必填项。",
+          "generic": "保存飞书连接器失败,请重试。"
+        }
+      },
+      "slack": {
+        "title": "Slack 连接器",
+        "description": "为本工作区绑定一个 Slack 机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "Slack 连接器已保存。",
+        "docLink": {
+          "label": "前往 api.slack.com/apps 创建 Slack 应用",
+          "href": "https://api.slack.com/apps"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,Slack 消息将通过此机器人路由。",
+            "toggle": "启用 Slack 机器人"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "「Basic Information」页 → App Credentials → App ID(以 A 开头)。"
+          },
+          "botToken": {
+            "label": "Bot Token",
+            "hint": "「OAuth & Permissions」标签页 → Bot User OAuth Token(以 xoxb- 开头)。需先 Install to Workspace。加密存储。",
+            "savedHint": "已保存 Bot Token(OAuth & Permissions → Bot User OAuth Token)。如需更换请输入新的 xoxb 令牌。"
+          },
+          "appToken": {
+            "label": "App-Level Token",
+            "hint": "「Basic Information」→ App-Level Tokens → Generate Token,勾选 connections:write 权限(以 xapp- 开头)。socket 模式必填。加密存储。",
+            "savedHint": "已保存 App-Level Token(Basic Information → App-Level Tokens)。如需更换请输入新的 xapp 令牌。"
+          },
+          "signingSecret": {
+            "label": "Signing Secret",
+            "hint": "「Basic Information」→ App Credentials → Signing Secret。events 模式必填。加密存储。",
+            "savedHint": "已保存 Signing Secret(Basic Information → App Credentials → Signing Secret)。如需更换请输入新值。"
+          },
+          "eventMode": {
+            "label": "事件模式",
+            "hint": "Socket 建立长连接(本地可用,需 xapp 令牌);events 通过 HTTP 回调接收(需 Signing Secret)。",
+            "options": {
+              "socket": "Socket 模式",
+              "events": "Events API"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "该 Slack App ID 已绑定到另一个工作区。",
+          "incomplete": "Slack 连接器信息不完整,请填写所有必填项。",
+          "generic": "保存 Slack 连接器失败,请重试。"
+        }
+      },
+      "discord": {
+        "title": "Discord 连接器",
+        "description": "为本工作区绑定一个 Discord 机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "Discord 连接器已保存。",
+        "docLink": {
+          "label": "前往 Discord 开发者门户创建应用",
+          "href": "https://discord.com/developers/applications"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,Discord 消息将通过此机器人路由。",
+            "toggle": "启用 Discord 机器人"
+          },
+          "appId": {
+            "label": "Application ID",
+            "hint": "「General Information」页 → Application ID。"
+          },
+          "botToken": {
+            "label": "Bot Token",
+            "hint": "「Bot」标签页 → Reset Token 获取机器人令牌。加密存储。",
+            "savedHint": "已保存 Bot Token(Bot 标签页 → Token)。如需更换请输入新值。"
+          },
+          "publicKey": {
+            "label": "Public Key",
+            "hint": "「General Information」页 → Public Key,用于校验交互签名。加密存储。",
+            "savedHint": "已保存 Public Key(General Information → Public Key)。如需更换请输入新值。"
+          },
+          "intents": {
+            "label": "Gateway Intents",
+            "hint": "在「Bot」→ Privileged Gateway Intents 打开对应意图(如 MESSAGE CONTENT),否则消息正文会为空。"
+          }
+        },
+        "errors": {
+          "appIdInUse": "该 Discord Application ID 已绑定到另一个工作区。",
+          "incomplete": "Discord 连接器信息不完整,请填写所有必填项。",
+          "generic": "保存 Discord 连接器失败,请重试。"
+        }
+      }
     }
   },
   "specs": {

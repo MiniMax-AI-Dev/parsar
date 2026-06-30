@@ -4715,3 +4715,68 @@ order by created_at desc
 limit @item_limit;
 
 
+
+-- ============================================================
+-- workspace_im_connectors — workspace 维度 IM 连接器(feishu/slack/discord)
+-- 见 migration 000002。凭据密文在 secrets(vault),本表 config 只存
+-- *_ref 与非敏感字段。app_id 是 workspace-bot 的通用 join key。
+-- ============================================================
+
+-- name: UpsertWorkspaceIMConnector :one
+-- 按 (workspace_id, platform) 唯一约束 upsert。冲突时更新 app_id /
+-- enabled / config / updated_at,保留 id / created_by / created_at。
+-- 若 (platform, app_id) 撞了别的 workspace,会触发 uk_wic_platform_appid
+-- 唯一冲突并报错(由 store 层映射成 *_app_id_in_use)。
+insert into workspace_im_connectors (
+  id, workspace_id, platform, app_id, enabled, config, created_by, created_at, updated_at
+) values (
+  @id::uuid, @workspace_id::uuid, @platform::text, @app_id::text,
+  @enabled::boolean, @config, nullif(@created_by::text, '')::uuid, @now, @now
+)
+on conflict (workspace_id, platform) where deleted_at is null
+do update set
+  app_id     = excluded.app_id,
+  enabled    = excluded.enabled,
+  config     = excluded.config,
+  updated_at = excluded.updated_at
+returning
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at;
+
+-- name: GetWorkspaceIMConnectors :many
+-- 拉取某 workspace 全部平台的有效连接器(前端面板初始化用)。
+select
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+from workspace_im_connectors
+where workspace_id = @workspace_id::uuid
+  and deleted_at is null
+order by platform;
+
+-- name: GetWorkspaceConnectorByAppID :one
+-- 出站 resolver 按 (platform, app_id) 反查启用的连接器,取 config 里的
+-- *_ref 解密 token。
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = @platform::text
+  and c.app_id = @app_id::text
+  and c.enabled = true
+  and c.deleted_at is null
+limit 1;
+
+-- name: ListWorkspaceConnectorsByPlatform :many
+-- 入站 reconciler 按平台扫描所有启用的连接器,为每条 (workspace_id,
+-- app_id) 维持一条长连接。
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = @platform::text
+  and c.enabled = true
+  and c.app_id <> ''
+  and c.deleted_at is null
+order by c.workspace_id, c.app_id;

@@ -2597,6 +2597,161 @@
       "submit": "Create",
       "cancel": "Cancel",
       "errorGeneric": "Failed to create, please try again later"
+    },
+    "connector": {
+      "adminOnly": "Only workspace owners and admins can edit connector settings.",
+      "savedBadge": "Saved",
+      "actions": {
+        "save": "Save",
+        "reset": "Reset"
+      },
+      "platformSelect": {
+        "label": "Platform",
+        "options": {
+          "feishu": "Feishu",
+          "slack": "Slack",
+          "discord": "Discord"
+        }
+      },
+      "feishu": {
+        "title": "Feishu connector",
+        "description": "Bind one Feishu bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Feishu connector saved.",
+        "docLink": {
+          "label": "Open the Feishu Open Platform to create / manage your bot",
+          "href": "https://open.feishu.cn/app"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Feishu messages through this bot.",
+            "toggle": "Enable Feishu bot"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "Credentials & Basic Info page → App ID (starts with cli_)."
+          },
+          "appSecret": {
+            "label": "App secret",
+            "hint": "Credentials & Basic Info page → App Secret. Stored encrypted.",
+            "savedHint": "A saved app secret is in place (Credentials & Basic Info → App Secret). Enter a new value to replace it."
+          },
+          "verificationToken": {
+            "label": "Verification token",
+            "hint": "Event Subscriptions page → Verification Token. Required for webhook mode. Stored encrypted.",
+            "savedHint": "A saved verification token is in place (Event Subscriptions → Verification Token). Enter a new value to replace it."
+          },
+          "encryptKey": {
+            "label": "Encrypt key",
+            "hint": "Event Subscriptions page → Encrypt Key. Optional; decrypts event payloads. Stored encrypted.",
+            "savedHint": "A saved encrypt key is in place (Event Subscriptions → Encrypt Key). Enter a new value to replace it."
+          },
+          "botOpenId": {
+            "label": "Bot open ID",
+            "hint": "Optional. The bot's open_id (ou_…), from the Bot menu or contact API; used to skip self-sent messages."
+          },
+          "eventMode": {
+            "label": "Event mode",
+            "hint": "WebSocket opens a long-lived connection (works on localhost); webhook receives HTTP callbacks.",
+            "options": {
+              "websocket": "WebSocket",
+              "webhook": "Webhook"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Feishu app ID is already bound to another workspace.",
+          "incomplete": "The Feishu connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Feishu connector. Please try again."
+        }
+      },
+      "slack": {
+        "title": "Slack connector",
+        "description": "Bind one Slack bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Slack connector saved.",
+        "docLink": {
+          "label": "Create a Slack app at api.slack.com/apps",
+          "href": "https://api.slack.com/apps"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Slack messages through this bot.",
+            "toggle": "Enable Slack bot"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "Basic Information page → App Credentials → App ID (starts with A)."
+          },
+          "botToken": {
+            "label": "Bot token",
+            "hint": "OAuth & Permissions tab → Bot User OAuth Token (xoxb-…). Install the app to your workspace first. Stored encrypted.",
+            "savedHint": "A saved bot token is in place (OAuth & Permissions → Bot User OAuth Token). Enter a new xoxb token to replace it."
+          },
+          "appToken": {
+            "label": "App-level token",
+            "hint": "Basic Information → App-Level Tokens → Generate Token with the connections:write scope (xapp-…). Required for socket mode. Stored encrypted.",
+            "savedHint": "A saved app-level token is in place (Basic Information → App-Level Tokens). Enter a new xapp token to replace it."
+          },
+          "signingSecret": {
+            "label": "Signing secret",
+            "hint": "Basic Information → App Credentials → Signing Secret. Required for events mode. Stored encrypted.",
+            "savedHint": "A saved signing secret is in place (Basic Information → App Credentials → Signing Secret). Enter a new value to replace it."
+          },
+          "eventMode": {
+            "label": "Event mode",
+            "hint": "Socket opens a long-lived connection (works on localhost, needs an xapp token); events receives HTTP callbacks (needs a signing secret).",
+            "options": {
+              "socket": "Socket mode",
+              "events": "Events API"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Slack app ID is already bound to another workspace.",
+          "incomplete": "The Slack connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Slack connector. Please try again."
+        }
+      },
+      "discord": {
+        "title": "Discord connector",
+        "description": "Bind one Discord bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Discord connector saved.",
+        "docLink": {
+          "label": "Create a Discord app in the Developer Portal",
+          "href": "https://discord.com/developers/applications"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Discord messages through this bot.",
+            "toggle": "Enable Discord bot"
+          },
+          "appId": {
+            "label": "Application ID",
+            "hint": "General Information page → Application ID."
+          },
+          "botToken": {
+            "label": "Bot token",
+            "hint": "Bot tab → Reset Token to reveal the bot token. Stored encrypted.",
+            "savedHint": "A saved bot token is in place (Bot tab → Token). Enter a new value to replace it."
+          },
+          "publicKey": {
+            "label": "Public key",
+            "hint": "General Information page → Public Key. Verifies interaction signatures. Stored encrypted.",
+            "savedHint": "A saved public key is in place (General Information → Public Key). Enter a new value to replace it."
+          },
+          "intents": {
+            "label": "Gateway intents",
+            "hint": "Enable matching intents under Bot → Privileged Gateway Intents (e.g. MESSAGE CONTENT) or message bodies arrive empty."
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Discord application ID is already bound to another workspace.",
+          "incomplete": "The Discord connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Discord connector. Please try again."
+        }
+      }
     }
   },
   "specs": {

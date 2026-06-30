@@ -76,6 +76,13 @@ type ReplyTarget struct {
 	// single-tenant deployments and the Feishu path, which resolve a static
 	// credential and ignore this field.
 	TenantKey string
+	// SourceAppID is the platform application id captured on the inbound
+	// side (Slack/Discord/Feishu app_id). Unlike TenantKey it is known at
+	// config-save time, so it is the join key into workspace_im_connectors
+	// the outbound resolver uses to fetch the per-workspace bot token. A
+	// workspace-dimension resolver prefers this over TenantKey; empty for
+	// legacy single-tenant / env-credential paths.
+	SourceAppID string
 }
 
 // Card is a platform-native rendered payload (Feishu interactive card,

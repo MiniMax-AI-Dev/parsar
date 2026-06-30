@@ -151,6 +151,18 @@ type SecretDecrypter interface {
 	Encrypt(payload map[string]any) ([]byte, error)
 }
 
+// ConnectorReader is the optional workspace_im_connectors source (the new,
+// three-platform-unified storage). When set, Reconcile opens websocket clients
+// for workspace-dimension Feishu connectors (new-table-first), and handleMessage
+// routes their inbound as a workspace-scoped shared bot when the legacy
+// agents.config lookup misses. Nil-tolerant: an unset reader leaves the manager
+// legacy-only (agents.config), so existing deployments and the manager's test
+// fakes are unaffected.
+type ConnectorReader interface {
+	ListWorkspaceConnectorsByPlatform(ctx context.Context, platform string) ([]store.WorkspaceConnectorRead, error)
+	GetWorkspaceConnectorByAppID(ctx context.Context, platform, appID string) (store.WorkspaceConnectorRead, error)
+}
+
 // DefaultSharedBotConfig describes the instance-level default Feishu Bot.
 // It is not stored on any Agent; Agents without their own dedicated Bot
 // connector are selected through this shared entry point.
@@ -200,6 +212,13 @@ type Options struct {
 	// visibility=workspace rejection card surfaces as a "申请加入" link.
 	// Nil falls back to "请联系上述管理员加入".
 	JoinURLBuilder func(workspaceID string) string
+
+	// Connectors, when non-nil, is the workspace_im_connectors source. It
+	// makes Reconcile new-table-first for Feishu (workspace-dimension bots
+	// open a websocket alongside the legacy agents.config ones) and lets
+	// handleMessage route a workspace-bot inbound as a shared bot when the
+	// legacy app_id lookup misses. Nil keeps the manager legacy-only.
+	Connectors ConnectorReader
 }
 
 // Manager reconciles configured websocket Bots and keeps one SDK WS client per
@@ -222,6 +241,10 @@ type Manager struct {
 	pfucRouter PromptForUserChoiceRouter
 
 	joinURLBuilder func(workspaceID string) string
+
+	// connectors is the optional workspace_im_connectors source (nil =
+	// legacy agents.config only). See ConnectorReader.
+	connectors ConnectorReader
 
 	mu      sync.Mutex
 	clients map[string]*clientHandle
@@ -281,6 +304,7 @@ func NewManager(opts Options) (*Manager, error) {
 		permRouter:     opts.PermissionRouter,
 		pfucRouter:     opts.PromptForUserChoiceRouter,
 		joinURLBuilder: opts.JoinURLBuilder,
+		connectors:     opts.Connectors,
 		clients:        make(map[string]*clientHandle),
 	}, nil
 }
@@ -327,6 +351,35 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 		}
 	}
 
+	// New-table-first: workspace_im_connectors is the three-platform unified
+	// store. A Feishu connector configured via the admin panel opens a
+	// workspace-scoped shared-bot websocket here; its app_id is remembered so
+	// the legacy agents.config loop below skips a duplicate socket for the same
+	// bot (new table wins).
+	newTableAppIDs := map[string]struct{}{}
+	if m.connectors != nil {
+		conns, err := m.connectors.ListWorkspaceConnectorsByPlatform(ctx, "feishu")
+		if err != nil {
+			m.logger.Warn("feishu websocket inbound: list workspace connectors failed", "err", err.Error())
+		}
+		for _, conn := range conns {
+			route, cfg, ok := m.workspaceFeishuRoute(conn)
+			if !ok {
+				continue
+			}
+			appID := strings.TrimSpace(cfg.AppID)
+			newTableAppIDs[appID] = struct{}{}
+			key := clientKey(conn.WorkspaceID, appID)
+			wanted[key] = struct{}{}
+			if m.hasClient(key) {
+				continue
+			}
+			if err := m.startClient(ctx, route, cfg, key); err != nil {
+				m.logger.Warn("feishu websocket inbound: start workspace connector client failed", "workspace_id", conn.WorkspaceID, "app_id", appID, "err", err.Error())
+			}
+		}
+	}
+
 	for _, route := range routes {
 		cfg, ok, err := gateway.DecodeFeishuConnectorConfig(route.Config)
 		if err != nil {
@@ -339,6 +392,11 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 		appID := strings.TrimSpace(cfg.AppID)
 		if appID == "" || strings.TrimSpace(cfg.AppSecretRef) == "" {
 			m.logger.Warn("feishu websocket inbound: connector missing app_id or app_secret_ref", "agent_id", route.AgentID)
+			continue
+		}
+		// New table wins: skip the legacy socket when the same app_id is already
+		// owned by a workspace_im_connectors row.
+		if _, claimed := newTableAppIDs[appID]; claimed {
 			continue
 		}
 		key := clientKey(route.WorkspaceID, appID)
@@ -537,6 +595,12 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	host, err := r.GetAgentByFeishuAppID(ctx, inbound.AppID)
 	if err != nil {
 		if errors.Is(err, gateway.ErrFeishuRouterUnknownAgent) {
+			// New-table fallback: a workspace_im_connectors Feishu bot has no
+			// agents.config row, so the legacy lookup misses. Resolve it from
+			// the workspace connector table and dispatch via the shared path.
+			if handled := m.handleWorkspaceFeishuInbound(ctx, &inbound); handled {
+				return nil
+			}
 			m.logger.Warn("feishu websocket inbound: unknown app_id", "app_id", inbound.AppID)
 			return nil
 		}
@@ -719,6 +783,58 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	}
 	m.logger.Info("feishu websocket inbound accepted", "app_id", inbound.AppID, "message_id", inbound.MessageID, "agent_id", decision.Agent.AgentID)
 	return nil
+}
+
+// handleWorkspaceFeishuInbound dispatches an inbound whose app_id has no legacy
+// agents.config route but does have a workspace_im_connectors row. It mirrors
+// the isDefaultSharedBotApp shared path, but the synthetic route is scoped to
+// the connector's workspace. Returns false (not handled) when there is no
+// workspace connector for the app_id, so the caller logs the unknown-app_id
+// warning and drops the message as before.
+func (m *Manager) handleWorkspaceFeishuInbound(ctx context.Context, inbound *gateway.FeishuInboundEvent) bool {
+	if m.connectors == nil {
+		return false
+	}
+	conn, err := m.connectors.GetWorkspaceConnectorByAppID(ctx, "feishu", inbound.AppID)
+	if err != nil {
+		// No workspace connector for this app_id (the common miss case), or a
+		// transient read error — either way this manager can't route it.
+		return false
+	}
+	route, _, ok := m.workspaceFeishuRoute(conn)
+	if !ok {
+		return false
+	}
+	host := routeFromStore(route)
+	botOpenID := botOpenIDFromConfig(host.Config)
+	filterEv := gateway.NeutralFromFeishuEvent(*inbound)
+	if gateway.IsSelfSender(filterEv, botOpenID) {
+		m.logger.Info("feishu websocket inbound: workspace shared self message skipped", "app_id", inbound.AppID, "message_id", inbound.MessageID)
+		return true
+	}
+	if gateway.ShouldSkipGroupWithoutMention(ctx, neutralThreadHist{m.store}, filterEv, botOpenID) {
+		m.logger.Info("feishu websocket inbound: workspace shared group message without bot mention skipped", "app_id", inbound.AppID, "message_id", inbound.MessageID)
+		return true
+	}
+	m.enrichInboundAttachments(ctx, host, inbound)
+	neutral := gateway.NeutralFromFeishuEvent(*inbound)
+	reply := neutralReplyBridge(m, *inbound)
+	quoted := neutralQuotedChainBridge(m, inbound)
+	outcome, err := sharedrouter.HandleInbound(ctx, m.store, host, neutral, reply, quoted, m.gateConfig())
+	if err != nil {
+		m.logger.Warn("feishu websocket inbound: handle workspace shared bot failed", "app_id", inbound.AppID, "message_id", inbound.MessageID, "err", err.Error())
+		return true
+	}
+	if outcome.Accepted && outcome.InboundMessageID != "" {
+		if rAppID, rAppSecret, secErr := m.resolveImmediateReplyCredentials(ctx, host, *inbound); secErr == nil {
+			m.asyncAddTypingReaction(outcome.InboundMessageID, inbound.MessageID, rAppID, rAppSecret)
+		} else {
+			m.logger.Warn("feishu websocket inbound: skip typing reaction, credential resolve failed",
+				"app_id", inbound.AppID, "external_message_id", inbound.MessageID, "err", secErr.Error())
+		}
+	}
+	m.logger.Info("feishu websocket workspace shared bot handled", "app_id", inbound.AppID, "message_id", inbound.MessageID, "accepted", outcome.Accepted, "replied", outcome.Replied, "reason", outcome.Reason, "agent_id", outcome.AgentID)
+	return true
 }
 
 // neutralReplyBridge adapts the manager's Feishu-typed sendImmediateText to
@@ -2120,6 +2236,60 @@ func (m *Manager) defaultSharedRouteAndConfig() (store.FeishuAgentRoute, gateway
 
 func (m *Manager) isDefaultSharedBotApp(appID string) bool {
 	return m.defaultBot.configured() && strings.TrimSpace(appID) == m.defaultBot.AppID
+}
+
+// workspaceFeishuRoute turns a workspace_im_connectors Feishu row into the
+// synthetic shared-bot route + config the websocket loop and the shared-routing
+// path consume. A workspace bot is inherently shared (its agents are picked from
+// /list), so RoutingMode is "shared" and Visibility is public — the same shape
+// defaultSharedRouteAndConfig builds, but scoped to the connector's workspace
+// and backed by its vault app_secret_ref. ok=false skips a row that is disabled,
+// not websocket-mode, or missing app_id / app_secret_ref.
+func (m *Manager) workspaceFeishuRoute(conn store.WorkspaceConnectorRead) (store.FeishuAgentRoute, gateway.FeishuConnectorConfig, bool) {
+	appID := strings.TrimSpace(conn.AppID)
+	if !conn.Enabled || appID == "" {
+		return store.FeishuAgentRoute{}, gateway.FeishuConnectorConfig{}, false
+	}
+	if !strings.EqualFold(connectorConfigString(conn.Config, "event_mode"), "websocket") {
+		return store.FeishuAgentRoute{}, gateway.FeishuConnectorConfig{}, false
+	}
+	secretRef := connectorConfigString(conn.Config, "app_secret_ref")
+	if secretRef == "" {
+		m.logger.Warn("feishu websocket inbound: workspace connector missing app_secret_ref", "workspace_id", conn.WorkspaceID, "app_id", appID)
+		return store.FeishuAgentRoute{}, gateway.FeishuConnectorConfig{}, false
+	}
+	cfg := gateway.FeishuConnectorConfig{
+		Enabled:              true,
+		AppID:                appID,
+		AppSecretRef:         secretRef,
+		VerificationTokenRef: connectorConfigString(conn.Config, "verification_token_ref"),
+		EncryptKeyRef:        connectorConfigString(conn.Config, "encrypt_key_ref"),
+		BotOpenID:            connectorConfigString(conn.Config, "bot_open_id"),
+		EventMode:            "websocket",
+		RoutingMode:          "shared",
+	}
+	raw, _ := json.Marshal(map[string]any{
+		"connectors": map[string]any{"feishu": cfg},
+	})
+	route := store.FeishuAgentRoute{
+		WorkspaceID:   conn.WorkspaceID,
+		WorkspaceName: conn.WorkspaceName,
+		AgentName:     "Workspace Feishu Bot",
+		AgentSlug:     "workspace-feishu-bot",
+		Visibility:    string(gateway.VisibilityPublic),
+		Config:        raw,
+	}
+	return route, cfg, true
+}
+
+// connectorConfigString reads a trimmed string field out of a decoded
+// workspace connector config map.
+func connectorConfigString(config map[string]any, key string) string {
+	if config == nil {
+		return ""
+	}
+	v, _ := config[key].(string)
+	return strings.TrimSpace(v)
 }
 
 func clientKey(workspaceID, appID string) string {
