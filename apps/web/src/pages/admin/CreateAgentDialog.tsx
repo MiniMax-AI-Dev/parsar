@@ -234,6 +234,9 @@ export function CreateAgentDialog({
   /** "personal" or "shared:<secret_id>" or "shared:new:<displayName>|<plaintext>". */
   const [modelBindingChoice, setModelBindingChoice] = useState<
     | { source: "personal" }
+    // Pending pick: shared selected, no secret chosen yet — required so a workspace
+    // with zero shared secrets can still flip source → "shared" and open the form.
+    | { source: "shared" }
     | { source: "shared"; existing_secret_id: string }
     | { source: "shared"; new_secret: { display_name: string; plaintext: string } }
   >({ source: "personal" })
@@ -432,7 +435,10 @@ export function CreateAgentDialog({
       // previous clone's bindings would leak across dialog opens.
       setCredentialBindings({})
       setInitialCredentialBindings(undefined)
-      setModelBindingChoice({ source: "personal" })
+      // Create is locked to public, so personal binding is disabled — start on
+      // shared. Left as a pending pick here (secrets may still be loading); the
+      // resolver effect below upgrades it to the first existing secret if any.
+      setModelBindingChoice({ source: "shared" })
       setInlineNewSecrets([])
     } else if (agent) {
       setName(agent.name)
@@ -588,6 +594,18 @@ export function CreateAgentDialog({
   const hasModel = activeModels.length > 0
   const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
   const hasRequiredModel = !requiresModel || (hasModel && modelID !== "")
+  // Create opens model binding on a pending "shared" pick because secrets may
+  // still be loading; once they land, resolve to the first existing one. Gated
+  // on the credential_ref UI so no-credential models stay untouched; with zero
+  // secrets it stays pending and the inline new-secret form takes over.
+  useEffect(() => {
+    if (mode !== "create") return
+    if (!requiresModel || selectedModel?.credential_mode !== "credential_ref") return
+    if (modelBindingChoice.source !== "shared") return
+    if ("existing_secret_id" in modelBindingChoice || "new_secret" in modelBindingChoice) return
+    if (modelNewSecretExpanded || sharedSecrets.length === 0) return
+    setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
+  }, [mode, requiresModel, selectedModel, modelBindingChoice, modelNewSecretExpanded, sharedSecrets])
   const daemonExecutionEditable = connector === "agent_daemon"
   const showExecutionChoices = mode === "create" || daemonExecutionEditable
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
@@ -1141,10 +1159,12 @@ export function CreateAgentDialog({
                         className="mt-0.5"
                         checked={modelBindingChoice.source === "shared"}
                         onChange={() => {
-                          // Default selection on flip-in: existing secret if any, else open the new-secret form.
+                          // Default selection on flip-in: existing secret if any, else
+                          // mark shared "pending" so the radio selects + form renders.
                           if (sharedSecrets[0]) {
                             setModelBindingChoice({ source: "shared", existing_secret_id: sharedSecrets[0].id })
                           } else {
+                            setModelBindingChoice({ source: "shared" })
                             setModelNewSecretExpanded(true)
                             setModelNewSecretDisplayName("")
                             setModelNewSecretPlaintext("")
