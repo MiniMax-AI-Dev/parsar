@@ -40,7 +40,6 @@ type Event struct {
 	TargetType  string         // free-form, e.g. "model", "agent_run"
 	TargetID    string         // empty => NULL
 	WorkspaceID string         // empty => NULL
-	ProjectID   string         // empty => NULL
 	Payload     map[string]any // marshalled to jsonb
 }
 

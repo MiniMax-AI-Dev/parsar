@@ -25,10 +25,10 @@ const (
 )
 
 type SandboxBindingRead struct {
-	ID             string
-	WorkspaceID    string
-	ProjectAgentID *string
-	Name           *string
+	ID           string
+	WorkspaceID  string
+	AgentID      *string
+	Name         *string
 	CacheKey       string
 	SandboxID      string
 	TemplateID     string
@@ -40,17 +40,17 @@ type SandboxBindingRead struct {
 }
 
 type CreateSandboxBindingInput struct {
-	WorkspaceID    string
-	ProjectAgentID string
-	CacheKey       string
-	SandboxID      string
-	TemplateID     string
-	Status         string
-	Metadata       map[string]any
+	WorkspaceID string
+	AgentID     string
+	CacheKey    string
+	SandboxID   string
+	TemplateID  string
+	Status      string
+	Metadata    map[string]any
 }
 
 // CreateSandboxBinding inserts a new active binding row. Caller must ensure no
-// other active binding exists for the same (workspace, project_agent) —
+// other active binding exists for the same (workspace, agent) —
 // otherwise the partial unique index trips and the pg conflict error is
 // returned verbatim.
 func (s *Store) CreateSandboxBinding(ctx context.Context, input CreateSandboxBindingInput) (SandboxBindingRead, error) {
@@ -58,9 +58,9 @@ func (s *Store) CreateSandboxBinding(ctx context.Context, input CreateSandboxBin
 	if err != nil {
 		return SandboxBindingRead{}, fmt.Errorf("sandbox binding: workspace_id: %w", err)
 	}
-	projectAgentUUID, err := uuid(input.ProjectAgentID)
+	agentUUID, err := uuid(input.AgentID)
 	if err != nil {
-		return SandboxBindingRead{}, fmt.Errorf("sandbox binding: project_agent_id: %w", err)
+		return SandboxBindingRead{}, fmt.Errorf("sandbox binding: agent_id: %w", err)
 	}
 	status := strings.TrimSpace(input.Status)
 	if status == "" {
@@ -77,7 +77,7 @@ func (s *Store) CreateSandboxBinding(ctx context.Context, input CreateSandboxBin
 	row, err := sqlc.New(s.db).CreateSandboxBinding(ctx, sqlc.CreateSandboxBindingParams{
 		ID:             mustUUID(newID()),
 		WorkspaceID:    workspaceUUID,
-		ProjectAgentID: projectAgentUUID,
+		AgentID: agentUUID,
 		CacheKey:       pgtype.Text{String: strings.TrimSpace(input.CacheKey), Valid: true},
 		SandboxID:      strings.TrimSpace(input.SandboxID),
 		TemplateID:     strings.TrimSpace(input.TemplateID),
@@ -93,14 +93,14 @@ func (s *Store) CreateSandboxBinding(ctx context.Context, input CreateSandboxBin
 
 type ReserveSandboxBindingSlotInput struct {
 	WorkspaceID    string
-	ProjectAgentID string
+	AgentID string
 	CacheKey       string
 	TemplateID     string
 	Metadata       map[string]any
 }
 
 // ReserveSandboxBindingSlot is the cluster-wide cold-start coordinator: exactly
-// one caller wins the (workspace, project_agent) slot via the partial unique
+// one caller wins the (workspace, agent) slot via the partial unique
 // index and drives cold-start; losers must call WaitForSandboxBindingActive.
 // Returns (row, true, nil) on win, (existing row, false, nil) on conflict,
 // (zero, false, err) on unrelated DB errors. sandbox_id is a placeholder
@@ -110,9 +110,9 @@ func (s *Store) ReserveSandboxBindingSlot(ctx context.Context, input ReserveSand
 	if err != nil {
 		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: workspace_id: %w", err)
 	}
-	projectAgentUUID, err := uuid(input.ProjectAgentID)
+	agentUUID, err := uuid(input.AgentID)
 	if err != nil {
-		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: project_agent_id: %w", err)
+		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: agent_id: %w", err)
 	}
 	metadata := input.Metadata
 	if metadata == nil {
@@ -126,7 +126,7 @@ func (s *Store) ReserveSandboxBindingSlot(ctx context.Context, input ReserveSand
 	row, err := sqlc.New(s.db).ReserveSandboxBindingSlot(ctx, sqlc.ReserveSandboxBindingSlotParams{
 		ID:                   mustUUID(newID()),
 		WorkspaceID:          workspaceUUID,
-		ProjectAgentID:       projectAgentUUID,
+		AgentID:       agentUUID,
 		CacheKey:             pgtype.Text{String: strings.TrimSpace(input.CacheKey), Valid: true},
 		PlaceholderSandboxID: placeholder,
 		TemplateID:           strings.TrimSpace(input.TemplateID),
@@ -139,7 +139,7 @@ func (s *Store) ReserveSandboxBindingSlot(ctx context.Context, input ReserveSand
 	if !isUniqueViolation(err) {
 		return SandboxBindingRead{}, false, err
 	}
-	existing, ok, lookupErr := s.getActiveSandboxBindingForAgentAnyStatus(ctx, input.WorkspaceID, input.ProjectAgentID)
+	existing, ok, lookupErr := s.getActiveSandboxBindingForAgentAnyStatus(ctx, input.WorkspaceID, input.AgentID)
 	if lookupErr != nil {
 		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: lookup after conflict: %w", lookupErr)
 	}
@@ -190,7 +190,7 @@ func (s *Store) FinalizeSandboxBindingSpawning(ctx context.Context, input Finali
 // pollInterval ≤ 0 is normalised to 250ms.
 func (s *Store) WaitForSandboxBindingActive(
 	ctx context.Context,
-	workspaceID, projectAgentID string,
+	workspaceID, agentID string,
 	pollInterval time.Duration,
 ) (SandboxBindingRead, error) {
 	if pollInterval <= 0 {
@@ -199,7 +199,7 @@ func (s *Store) WaitForSandboxBindingActive(
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 	for {
-		row, ok, err := s.getActiveSandboxBindingForAgentAnyStatus(ctx, workspaceID, projectAgentID)
+		row, ok, err := s.getActiveSandboxBindingForAgentAnyStatus(ctx, workspaceID, agentID)
 		if err != nil {
 			return SandboxBindingRead{}, fmt.Errorf("sandbox binding: wait lookup: %w", err)
 		}
@@ -223,18 +223,18 @@ func (s *Store) WaitForSandboxBindingActive(
 
 // getActiveSandboxBindingForAgentAnyStatus sees in-flight `spawning` rows that
 // the admin-facing GetActiveSandboxBindingForAgent filters out.
-func (s *Store) getActiveSandboxBindingForAgentAnyStatus(ctx context.Context, workspaceID, projectAgentID string) (SandboxBindingRead, bool, error) {
+func (s *Store) getActiveSandboxBindingForAgentAnyStatus(ctx context.Context, workspaceID, agentID string) (SandboxBindingRead, bool, error) {
 	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: workspace_id: %w", err)
 	}
-	projectAgentUUID, err := uuid(projectAgentID)
+	agentUUID, err := uuid(agentID)
 	if err != nil {
-		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: project_agent_id: %w", err)
+		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: agent_id: %w", err)
 	}
 	row, err := sqlc.New(s.db).GetActiveSandboxBindingByAgentForWait(ctx, sqlc.GetActiveSandboxBindingByAgentForWaitParams{
 		WorkspaceID:    workspaceUUID,
-		ProjectAgentID: projectAgentUUID,
+		AgentID: agentUUID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -253,19 +253,19 @@ var ErrSandboxBindingFailed = errors.New("sandbox binding: holder failed cold-st
 var ErrSandboxBindingVanished = errors.New("sandbox binding: reservation vanished mid-wait")
 
 // GetActiveSandboxBindingForAgent returns the live binding for the
-// (workspace, project_agent) tuple, or (zero, false, nil) when none exists.
-func (s *Store) GetActiveSandboxBindingForAgent(ctx context.Context, workspaceID, projectAgentID string) (SandboxBindingRead, bool, error) {
+// (workspace, agent) tuple, or (zero, false, nil) when none exists.
+func (s *Store) GetActiveSandboxBindingForAgent(ctx context.Context, workspaceID, agentID string) (SandboxBindingRead, bool, error) {
 	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: workspace_id: %w", err)
 	}
-	projectAgentUUID, err := uuid(projectAgentID)
+	agentUUID, err := uuid(agentID)
 	if err != nil {
-		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: project_agent_id: %w", err)
+		return SandboxBindingRead{}, false, fmt.Errorf("sandbox binding: agent_id: %w", err)
 	}
 	row, err := sqlc.New(s.db).GetActiveSandboxBindingForAgent(ctx, sqlc.GetActiveSandboxBindingForAgentParams{
 		WorkspaceID:    workspaceUUID,
-		ProjectAgentID: projectAgentUUID,
+		AgentID: agentUUID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -377,7 +377,7 @@ func sandboxBindingReadFromCreateRow(r sqlc.CreateSandboxBindingRow) SandboxBind
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
-		ProjectAgentID: nullableUUIDString(r.ProjectAgentID),
+		AgentID: nullableUUIDString(r.AgentID),
 		Name:           nullableText(r.Name),
 		CacheKey:       nullableTextValue(r.CacheKey),
 		SandboxID:      r.SandboxID,
@@ -394,7 +394,7 @@ func sandboxBindingReadFromReserveRow(r sqlc.ReserveSandboxBindingSlotRow) Sandb
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
-		ProjectAgentID: nullableUUIDString(r.ProjectAgentID),
+		AgentID: nullableUUIDString(r.AgentID),
 		Name:           nullableText(r.Name),
 		CacheKey:       nullableTextValue(r.CacheKey),
 		SandboxID:      r.SandboxID,
@@ -411,7 +411,7 @@ func sandboxBindingReadFromWaitRow(r sqlc.GetActiveSandboxBindingByAgentForWaitR
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
-		ProjectAgentID: nullableUUIDString(r.ProjectAgentID),
+		AgentID: nullableUUIDString(r.AgentID),
 		Name:           nullableText(r.Name),
 		CacheKey:       nullableTextValue(r.CacheKey),
 		SandboxID:      r.SandboxID,
@@ -428,7 +428,7 @@ func sandboxBindingReadFromGetActiveRow(r sqlc.GetActiveSandboxBindingForAgentRo
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
-		ProjectAgentID: nullableUUIDString(r.ProjectAgentID),
+		AgentID: nullableUUIDString(r.AgentID),
 		Name:           nullableText(r.Name),
 		CacheKey:       nullableTextValue(r.CacheKey),
 		SandboxID:      r.SandboxID,
@@ -445,7 +445,7 @@ func sandboxBindingReadFromListRow(r sqlc.ListActiveSandboxBindingsForWorkspaceR
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
-		ProjectAgentID: nullableUUIDString(r.ProjectAgentID),
+		AgentID: nullableUUIDString(r.AgentID),
 		Name:           nullableText(r.Name),
 		CacheKey:       nullableTextValue(r.CacheKey),
 		SandboxID:      r.SandboxID,
@@ -462,7 +462,7 @@ func sandboxBindingReadFromIdleRow(r sqlc.ListIdleSandboxBindingsRow) SandboxBin
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
-		ProjectAgentID: nullableUUIDString(r.ProjectAgentID),
+		AgentID: nullableUUIDString(r.AgentID),
 		Name:           nullableText(r.Name),
 		CacheKey:       nullableTextValue(r.CacheKey),
 		SandboxID:      r.SandboxID,

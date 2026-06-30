@@ -16,7 +16,6 @@ import (
 type AgentRunEventRead struct {
 	ID          string         `json:"id"`
 	WorkspaceID string         `json:"workspace_id"`
-	ProjectID   string         `json:"project_id"`
 	AgentRunID  string         `json:"agent_run_id"`
 	Sequence    int64          `json:"sequence"`
 	EventKind   string         `json:"event_kind"`
@@ -86,8 +85,7 @@ func (s *Store) ListAgentRunEvents(ctx context.Context, runID string, afterSeque
 		return nil, err
 	}
 	queries := sqlc.New(s.db)
-	run, err := queries.GetAgentRunForRead(ctx, runUUID)
-	if err != nil {
+	if _, err := queries.GetAgentRunForRead(ctx, runUUID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: %s", ErrUnknownAgentRun, runID)
 		}
@@ -95,7 +93,6 @@ func (s *Store) ListAgentRunEvents(ctx context.Context, runID string, afterSeque
 	}
 	rows, err := queries.ListAgentRunEventsByRun(ctx, sqlc.ListAgentRunEventsByRunParams{
 		AgentRunID:    runUUID,
-		ProjectID:     mustUUID(run.RProjectID),
 		AfterSequence: afterSequence,
 	})
 	if err != nil {
@@ -103,7 +100,7 @@ func (s *Store) ListAgentRunEvents(ctx context.Context, runID string, afterSeque
 	}
 	out := make([]AgentRunEventRead, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, agentRunEventFromRow(row.ID, row.WorkspaceID, row.ProjectID, row.AgentRunID, row.Sequence, row.EventKind, row.Payload, row.OccurredAt, row.CreatedAt))
+		out = append(out, agentRunEventFromRow(row.ID, row.WorkspaceID, row.AgentRunID, row.Sequence, row.EventKind, row.Payload, row.OccurredAt, row.CreatedAt))
 	}
 	return out, nil
 }
@@ -115,11 +112,10 @@ func lockAgentRunEventSequence(ctx context.Context, tx pgx.Tx, runID string) err
 	return err
 }
 
-func agentRunEventFromRow(id, workspaceID, projectID, runID string, sequence int64, kind string, payload []byte, occurredAt, createdAt pgtype.Timestamptz) AgentRunEventRead {
+func agentRunEventFromRow(id, workspaceID, runID string, sequence int64, kind string, payload []byte, occurredAt, createdAt pgtype.Timestamptz) AgentRunEventRead {
 	return AgentRunEventRead{
 		ID:          id,
 		WorkspaceID: workspaceID,
-		ProjectID:   projectID,
 		AgentRunID:  runID,
 		Sequence:    sequence,
 		EventKind:   kind,

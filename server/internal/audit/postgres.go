@@ -37,7 +37,6 @@ func (s *PostgresSink) Write(ctx context.Context, ev Event) error {
 		TargetType:  ev.TargetType,
 		TargetID:    pgUUID(ev.TargetID),
 		WorkspaceID: pgUUID(ev.WorkspaceID),
-		ProjectID:   pgUUID(ev.ProjectID),
 		Payload:     payload,
 	})
 }

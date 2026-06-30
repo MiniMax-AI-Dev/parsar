@@ -16,13 +16,13 @@ import (
 // fields throughout; specmemory.Service validates scope/memory_type/
 // source against the typed enums at the call boundary.
 //
-// ProjectID is "" when scope='user'; ConversationID is "" when the
+// WorkspaceID is "" when scope='user'; ConversationID is "" when the
 // memory wasn't written inside an agent session turn.
 type MemoryRead struct {
 	ID             string
 	Scope          string
 	UserID         string
-	ProjectID      string
+	WorkspaceID    string
 	MemoryType     string
 	Title          string
 	Body           string
@@ -37,13 +37,13 @@ type MemoryRead struct {
 
 // InsertMemoryInput collects the columns the caller controls at insert
 // time. Caller has already validated scope/memory_type/source via the
-// specmemory enums. ProjectID must match Scope per the
-// memories_scope_project_id_match_check DB CHECK.
+// specmemory enums. WorkspaceID must match Scope per the
+// memories_scope_workspace_id_match_check DB CHECK.
 type InsertMemoryInput struct {
 	ID             string
 	Scope          string
 	UserID         string
-	ProjectID      string // required when Scope='project', "" when 'user'
+	WorkspaceID    string // required when Scope='workspace', "" when 'user'
 	MemoryType     string
 	Title          string
 	Body           string
@@ -75,11 +75,11 @@ type ListUserMemoriesInput struct {
 	Limit            int32    // <= 0 -> defaultReadLimit
 }
 
-// ListProjectMemoriesInput drives the project-scope Memory tab +
-// SessionStart snapshot. Project memories are shared across users on
-// the project — no user_id filter.
-type ListProjectMemoriesInput struct {
-	ProjectID        string
+// ListWorkspaceMemoriesInput drives the workspace-scope Memory tab +
+// SessionStart snapshot. Workspace memories are shared across users on
+// the workspace — no user_id filter.
+type ListWorkspaceMemoriesInput struct {
+	WorkspaceID      string
 	MemoryTypeFilter string
 	TagFilter        []string
 	Limit            int32
@@ -93,12 +93,12 @@ type ListUserMemoriesSinceInput struct {
 	Limit  int32
 }
 
-// ListProjectMemoriesSinceInput is the per-turn incremental cursor for
-// project-scope memories.
-type ListProjectMemoriesSinceInput struct {
-	ProjectID string
-	Since     time.Time
-	Limit     int32
+// ListWorkspaceMemoriesSinceInput is the per-turn incremental cursor for
+// workspace-scope memories.
+type ListWorkspaceMemoriesSinceInput struct {
+	WorkspaceID string
+	Since       time.Time
+	Limit       int32
 }
 
 // InsertMemory persists a new memory row. The store only enforces
@@ -116,7 +116,7 @@ func (s *Store) InsertMemory(ctx context.Context, input InsertMemoryInput) (Memo
 	if err != nil {
 		return MemoryRead{}, fmt.Errorf("memory: user_id: %w", err)
 	}
-	projectID, err := optionalUUID(input.ProjectID, "memory: project_id")
+	workspaceID, err := optionalUUID(input.WorkspaceID, "memory: workspace_id")
 	if err != nil {
 		return MemoryRead{}, err
 	}
@@ -143,7 +143,7 @@ func (s *Store) InsertMemory(ctx context.Context, input InsertMemoryInput) (Memo
 		ID:             id,
 		Scope:          scope,
 		UserID:         userID,
-		ProjectID:      projectID,
+		WorkspaceID:    workspaceID,
 		MemoryType:     memoryType,
 		Title:          strings.TrimSpace(input.Title),
 		Body:           input.Body,
@@ -204,30 +204,30 @@ func (s *Store) ListUserMemories(ctx context.Context, input ListUserMemoriesInpu
 	return out, nil
 }
 
-// ListProjectMemories returns active project-scope memories for the
-// given project (shared across all users on the project), ordered by
+// ListWorkspaceMemories returns active workspace-scope memories for the
+// given workspace (shared across all users on the workspace), ordered by
 // updated_at desc.
-func (s *Store) ListProjectMemories(ctx context.Context, input ListProjectMemoriesInput) ([]MemoryRead, error) {
-	projectID, err := uuid(input.ProjectID)
+func (s *Store) ListWorkspaceMemories(ctx context.Context, input ListWorkspaceMemoriesInput) ([]MemoryRead, error) {
+	workspaceID, err := uuid(input.WorkspaceID)
 	if err != nil {
-		return nil, fmt.Errorf("memory: project_id: %w", err)
+		return nil, fmt.Errorf("memory: workspace_id: %w", err)
 	}
 	limit := input.Limit
 	if limit <= 0 {
 		limit = defaultReadLimit
 	}
-	rows, err := sqlc.New(s.db).ListProjectMemories(ctx, sqlc.ListProjectMemoriesParams{
-		ProjectID:  projectID,
-		MemoryType: strings.TrimSpace(input.MemoryTypeFilter),
-		TagFilter:  normalizeTags(input.TagFilter),
-		ItemLimit:  limit,
+	rows, err := sqlc.New(s.db).ListWorkspaceMemories(ctx, sqlc.ListWorkspaceMemoriesParams{
+		WorkspaceID: workspaceID,
+		MemoryType:  strings.TrimSpace(input.MemoryTypeFilter),
+		TagFilter:   normalizeTags(input.TagFilter),
+		ItemLimit:   limit,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("memory: list project: %w", err)
+		return nil, fmt.Errorf("memory: list workspace: %w", err)
 	}
 	out := make([]MemoryRead, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, memoryFromListProjectRow(r))
+		out = append(out, memoryFromListWorkspaceRow(r))
 	}
 	return out, nil
 }
@@ -261,12 +261,12 @@ func (s *Store) ListUserMemoriesSince(ctx context.Context, input ListUserMemorie
 	return out, nil
 }
 
-// ListProjectMemoriesSince returns project-scope memories updated
+// ListWorkspaceMemoriesSince returns workspace-scope memories updated
 // strictly after the cursor.
-func (s *Store) ListProjectMemoriesSince(ctx context.Context, input ListProjectMemoriesSinceInput) ([]MemoryRead, error) {
-	projectID, err := uuid(input.ProjectID)
+func (s *Store) ListWorkspaceMemoriesSince(ctx context.Context, input ListWorkspaceMemoriesSinceInput) ([]MemoryRead, error) {
+	workspaceID, err := uuid(input.WorkspaceID)
 	if err != nil {
-		return nil, fmt.Errorf("memory: project_id: %w", err)
+		return nil, fmt.Errorf("memory: workspace_id: %w", err)
 	}
 	if input.Since.IsZero() {
 		return nil, errors.New("memory: since cursor is required")
@@ -275,17 +275,17 @@ func (s *Store) ListProjectMemoriesSince(ctx context.Context, input ListProjectM
 	if limit <= 0 {
 		limit = defaultReadLimit
 	}
-	rows, err := sqlc.New(s.db).ListProjectMemoriesSince(ctx, sqlc.ListProjectMemoriesSinceParams{
-		ProjectID: projectID,
-		Since:     timestamptz(input.Since.UTC()),
-		ItemLimit: limit,
+	rows, err := sqlc.New(s.db).ListWorkspaceMemoriesSince(ctx, sqlc.ListWorkspaceMemoriesSinceParams{
+		WorkspaceID: workspaceID,
+		Since:       timestamptz(input.Since.UTC()),
+		ItemLimit:   limit,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("memory: list project since: %w", err)
+		return nil, fmt.Errorf("memory: list workspace since: %w", err)
 	}
 	out := make([]MemoryRead, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, memoryFromListProjectSinceRow(r))
+		out = append(out, memoryFromListWorkspaceSinceRow(r))
 	}
 	return out, nil
 }
@@ -345,7 +345,7 @@ func memoryFromInsertRow(r sqlc.InsertMemoryRow) MemoryRead {
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,
@@ -364,7 +364,7 @@ func memoryFromGetRow(r sqlc.GetMemoryRow) MemoryRead {
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,
@@ -383,7 +383,7 @@ func memoryFromListUserRow(r sqlc.ListUserMemoriesRow) MemoryRead {
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,
@@ -397,12 +397,12 @@ func memoryFromListUserRow(r sqlc.ListUserMemoriesRow) MemoryRead {
 	}
 }
 
-func memoryFromListProjectRow(r sqlc.ListProjectMemoriesRow) MemoryRead {
+func memoryFromListWorkspaceRow(r sqlc.ListWorkspaceMemoriesRow) MemoryRead {
 	return MemoryRead{
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,
@@ -421,7 +421,7 @@ func memoryFromListUserSinceRow(r sqlc.ListUserMemoriesSinceRow) MemoryRead {
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,
@@ -435,12 +435,12 @@ func memoryFromListUserSinceRow(r sqlc.ListUserMemoriesSinceRow) MemoryRead {
 	}
 }
 
-func memoryFromListProjectSinceRow(r sqlc.ListProjectMemoriesSinceRow) MemoryRead {
+func memoryFromListWorkspaceSinceRow(r sqlc.ListWorkspaceMemoriesSinceRow) MemoryRead {
 	return MemoryRead{
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,
@@ -459,7 +459,7 @@ func memoryFromUpdateRow(r sqlc.UpdateMemoryRow) MemoryRead {
 		ID:             r.ID,
 		Scope:          r.Scope,
 		UserID:         r.UserID,
-		ProjectID:      pgUUIDString(r.ProjectID),
+		WorkspaceID:    pgUUIDString(r.WorkspaceID),
 		MemoryType:     r.MemoryType,
 		Title:          r.Title,
 		Body:           r.Body,

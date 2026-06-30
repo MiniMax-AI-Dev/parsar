@@ -165,7 +165,6 @@ func (s PromptForUserChoiceInflightSlot) EffectiveQuestions() []PromptForUserCho
 type FeishuInflightConversation struct {
 	ConversationID       string
 	WorkspaceID          string
-	ProjectID            string
 	ExternalChatID       string
 	ExternalThreadID     string
 	SourceAppID          string
@@ -176,7 +175,7 @@ type FeishuInflightConversation struct {
 	RunFinishedAt        time.Time
 	OutputMessageID      string
 	MaxEventSequence     int64
-	// AgentName is the display name via project_agents → agents. Empty
+	// AgentName is the display name via agents. Empty
 	// when the binding is missing/soft-deleted; callers fall back to
 	// FeishuCardTitle.
 	AgentName string
@@ -214,7 +213,6 @@ func (s *Store) ListActiveFeishuInflightConversations(ctx context.Context, cutof
 		out = append(out, FeishuInflightConversation{
 			ConversationID:       row.ConversationID,
 			WorkspaceID:          row.WorkspaceID,
-			ProjectID:            row.ProjectID,
 			ExternalChatID:       row.ExternalChatID,
 			ExternalThreadID:     row.ExternalThreadID,
 			SourceAppID:          row.SourceAppID,
@@ -270,7 +268,6 @@ func (s *Store) ClaimActiveFeishuInflightConversations(ctx context.Context, inpu
 		out = append(out, FeishuInflightConversation{
 			ConversationID:       row.ConversationID,
 			WorkspaceID:          row.WorkspaceID,
-			ProjectID:            row.ProjectID,
 			ExternalChatID:       row.ExternalChatID,
 			ExternalThreadID:     row.ExternalThreadID,
 			SourceAppID:          row.SourceAppID,
@@ -474,7 +471,6 @@ func (s *Store) FindConversationByPromptForUserChoiceRequestID(ctx context.Conte
 	out := ConversationInflightCards{
 		ConversationID: row.ID,
 		WorkspaceID:    row.WorkspaceID,
-		ProjectID:      row.ProjectID,
 		ExternalChatID: row.ExternalChatID,
 		SourceAppID:    row.SourceAppID,
 	}
@@ -505,7 +501,6 @@ func (s *Store) ListStaleFeishuPromptForUserChoiceInflightCards(ctx context.Cont
 		entry := ConversationInflightCards{
 			ConversationID: row.ConversationID,
 			WorkspaceID:    row.WorkspaceID,
-			ProjectID:      row.ProjectID,
 			ExternalChatID: row.ExternalChatID,
 			SourceAppID:    row.SourceAppID,
 		}
@@ -552,7 +547,6 @@ func (s *Store) MarkConversationInflightTerminalDelivered(ctx context.Context, c
 type ConversationInflightCards struct {
 	ConversationID         string
 	WorkspaceID            string
-	ProjectID              string
 	ExternalChatID         string
 	ExternalThreadID       string
 	SourceAppID            string
@@ -582,7 +576,6 @@ func (s *Store) GetConversationInflightCards(ctx context.Context, conversationID
 	out := ConversationInflightCards{
 		ConversationID:   row.ID,
 		WorkspaceID:      row.WorkspaceID,
-		ProjectID:        row.ProjectID,
 		ExternalChatID:   row.ExternalChatID,
 		ExternalThreadID: row.ExternalThreadID,
 		SourceAppID:      row.SourceAppID,
@@ -617,7 +610,6 @@ func (s *Store) FindConversationByPermissionRequestID(ctx context.Context, permi
 	out := ConversationInflightCards{
 		ConversationID: row.ID,
 		WorkspaceID:    row.WorkspaceID,
-		ProjectID:      row.ProjectID,
 		ExternalChatID: row.ExternalChatID,
 		SourceAppID:    row.SourceAppID,
 	}
@@ -672,7 +664,6 @@ func (s *Store) ListStaleFeishuPermissionInflightCards(ctx context.Context, cuto
 		entry := ConversationInflightCards{
 			ConversationID: row.ConversationID,
 			WorkspaceID:    row.WorkspaceID,
-			ProjectID:      row.ProjectID,
 			ExternalChatID: row.ExternalChatID,
 			SourceAppID:    row.SourceAppID,
 		}
@@ -692,12 +683,11 @@ func (s *Store) ListStaleFeishuPermissionInflightCards(ctx context.Context, cuto
 type PendingQueuedFeishuRun struct {
 	RunID            string
 	WorkspaceID      string
-	ProjectID        string
 	ConversationID   string
 	ExternalChatID   string
 	ExternalThreadID string
 	SourceAppID      string
-	// AgentName via project_agents → agents. Empty when binding is
+	// AgentName via agents. Empty when binding is
 	// missing/soft-deleted; callers fall back to FeishuCardTitle.
 	AgentName string
 }
@@ -738,7 +728,6 @@ func (s *Store) ClaimPendingQueuedFeishuRuns(ctx context.Context, input ClaimPen
 		out = append(out, PendingQueuedFeishuRun{
 			RunID:            row.RunID,
 			WorkspaceID:      row.WorkspaceID,
-			ProjectID:        row.ProjectID,
 			ConversationID:   row.ConversationID,
 			ExternalChatID:   row.ExternalChatID,
 			ExternalThreadID: row.ExternalThreadID,

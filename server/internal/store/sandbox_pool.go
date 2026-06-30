@@ -114,14 +114,14 @@ func (s *Store) SetSandboxPoolAutoRenewThreshold(ctx context.Context, sandboxID 
 // MarkSandboxPoolEntryClaimed transitions an idle entry to claimed and bumps
 // last_renewed_at. killed_at stays NULL — the sandbox is still alive inside
 // a Persistent binding and must remain visible in admin until really killed.
-func (s *Store) MarkSandboxPoolEntryClaimed(ctx context.Context, workspaceID, projectAgentID, cacheKey, sandboxID string) error {
+func (s *Store) MarkSandboxPoolEntryClaimed(ctx context.Context, workspaceID, agentID, cacheKey, sandboxID string) error {
 	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return fmt.Errorf("sandbox pool: workspace_id: %w", err)
 	}
-	projectAgentUUID, err := uuid(projectAgentID)
+	agentUUID, err := uuid(agentID)
 	if err != nil {
-		return fmt.Errorf("sandbox pool: project_agent_id: %w", err)
+		return fmt.Errorf("sandbox pool: agent_id: %w", err)
 	}
 	cacheKey = strings.TrimSpace(cacheKey)
 	if cacheKey == "" {
@@ -132,11 +132,11 @@ func (s *Store) MarkSandboxPoolEntryClaimed(ctx context.Context, workspaceID, pr
 		return fmt.Errorf("sandbox pool: sandbox_id is required")
 	}
 	return sqlc.New(s.db).MarkSandboxPoolEntryClaimed(ctx, sqlc.MarkSandboxPoolEntryClaimedParams{
-		WorkspaceID:    workspaceUUID,
-		ProjectAgentID: projectAgentUUID,
-		CacheKey:       pgtype.Text{String: cacheKey, Valid: true},
-		SandboxID:      sandboxID,
-		Now:            timestamptz(time.Now().UTC()),
+		WorkspaceID: workspaceUUID,
+		AgentID:     agentUUID,
+		CacheKey:    pgtype.Text{String: cacheKey, Valid: true},
+		SandboxID:   sandboxID,
+		Now:         timestamptz(time.Now().UTC()),
 	})
 }
 

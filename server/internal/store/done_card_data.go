@@ -50,11 +50,10 @@ type DoneCardRunData struct {
 }
 
 // LoadDoneCardRunData fetches everything the DoneCard footer needs.
-// projectID is required for multi-tenant safety on ListUsageLogsByRun.
+// workspaceID is required for multi-tenant safety on ListUsageLogsByRun.
 // An empty runID returns a zero DoneCardRunData with no error so the
 // caller can render a best-effort fallback.
-func (s *Store) LoadDoneCardRunData(ctx context.Context, workspaceID, projectID, runID string) (DoneCardRunData, error) {
-	_ = workspaceID
+func (s *Store) LoadDoneCardRunData(ctx context.Context, workspaceID, runID string) (DoneCardRunData, error) {
 	runID = strings.TrimSpace(runID)
 	if runID == "" {
 		return DoneCardRunData{}, nil
@@ -80,14 +79,14 @@ func (s *Store) LoadDoneCardRunData(ctx context.Context, workspaceID, projectID,
 		AgentName:  strings.TrimSpace(runRow.AgentName),
 	}
 
-	projUUID, err := uuid(projectID)
+	wsUUID, err := uuid(workspaceID)
 	if err != nil {
 		return DoneCardRunData{}, err
 	}
 	usageRows, err := queries.ListUsageLogsByRun(ctx, sqlc.ListUsageLogsByRunParams{
-		AgentRunID: runUUID,
-		ProjectID:  projUUID,
-		ItemLimit:  200,
+		AgentRunID:  runUUID,
+		WorkspaceID: wsUUID,
+		ItemLimit:   200,
 	})
 	if err != nil {
 		return DoneCardRunData{}, fmt.Errorf("LoadDoneCardRunData: list usage: %w", err)
