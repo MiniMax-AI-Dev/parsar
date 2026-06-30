@@ -113,7 +113,7 @@ docker compose -f docker-compose.local.yml up -d
 
 ## Security
 
-Found a vulnerability? Please email **security@your-org.com** instead of opening a public issue.
+Found a vulnerability? Please file a private report via [GitHub Security Advisories](https://github.com/MiniMax-AI-Dev/parsar/security/advisories/new) — see [`SECURITY.md`](SECURITY.md) for the full policy. Do not open a public issue.
 
 ## License
 
