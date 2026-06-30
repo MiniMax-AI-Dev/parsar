@@ -52,7 +52,7 @@ A single Go binary, a single Postgres database, and one worker process per agent
 
 |              | Choice                                                                                                       |
 |--------------|--------------------------------------------------------------------------------------------------------------|
-| **Server**   | [Go 1.22](https://go.dev) + [Chi](https://github.com/go-chi/chi)                                             |
+| **Server**   | [Go 1.25](https://go.dev) + [Chi](https://github.com/go-chi/chi)                                             |
 | **Database** | [PostgreSQL 16](https://www.postgresql.org) — single source of truth                                         |
 | **DB layer** | [goose](https://github.com/pressly/goose) migrations · [sqlc](https://sqlc.dev) queries · [pgx](https://github.com/jackc/pgx) pool |
 | **Web**      | [Vite](https://vitejs.dev) + [React 18](https://react.dev) SPA                                               |
@@ -63,20 +63,33 @@ A single Go binary, a single Postgres database, and one worker process per agent
 
 ## Quick Start
 
-Three paths — pick what matches your goal.
+Requires only `git` and `docker` (with the `docker compose` subcommand). Go, Node, and pnpm are **not** needed on the host — the full toolchain lives inside the build image.
+
+```bash
+git clone https://github.com/MiniMax-AI-Dev/parsar.git
+cd parsar
+docker build -t parsar:local .
+PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
+```
+
+Open <http://127.0.0.1:18080>. Mock auth signs you in as `admin@example.com` in a freshly bootstrapped workspace — no secrets, no `.env`, no config.
+
+> First build is ~3–5 min (Go modules + pnpm install + Vite build). Subsequent builds are seconds thanks to layer cache. Once the GHCR image is public, the `docker build` step drops and it becomes a true one-liner.
+
+### Other paths
 
 | Goal | Read | Time |
 |------|------|------|
-| **Try it on my laptop** (mock auth, Docker Compose) | [`INSTALL.md`](INSTALL.md) | ~5 min |
 | **Hack on the code** (hot-reload server + web) | [Development](#development) below | ~10 min |
 | **Self-host for a real team** (real auth, persistent host, your chat provider) | [`docs/deploy/deploy-runbook.md`](docs/deploy/deploy-runbook.md) | 30–60 min |
+| **Have an AI agent install it** (fresh clone → running) | [`INSTALL.md`](INSTALL.md) | ~5 min |
 
 > [!TIP]
 > `INSTALL.md` is written for an **AI coding agent** to follow from a fresh clone. Open Cursor / Claude Code in the repo and say *"read INSTALL.md and get this running"* — it will.
 
 ## Development
 
-**Prerequisites:** Go ≥ 1.22 · Node ≥ 20 · pnpm ≥ 9 · Docker (for Postgres)
+**Prerequisites:** Go ≥ 1.25 · Node ≥ 20 · pnpm ≥ 9 · Docker (for Postgres)
 
 ```bash
 make setup        # bootstrap deps and start a Postgres container
@@ -88,7 +101,7 @@ Open <http://localhost:5173> for the web UI, <http://localhost:8080> for the ser
 
 ### Runtime paths
 
-Parsar **never** writes to the current working directory. All runtime state — config, logs, sqlite cache, worker scratch space — lives under `~/.parsar/`. See [`docs/runtime-paths.md`](docs/runtime-paths.md).
+Parsar **never** writes to the current working directory. All runtime state — config, logs, sqlite cache, worker scratch space — lives under `~/.parsar/`.
 
 ### Project layout
 
@@ -102,14 +115,17 @@ deploy/     Helm chart, systemd units, sample Compose files
 
 ## Self-Hosting
 
-Production deploy is a single Docker Compose file plus credentials for whichever surface(s) your team uses. Follow [`docs/deploy/deploy-runbook.md`](docs/deploy/deploy-runbook.md) end-to-end — it covers reverse proxy, TLS, secrets, backup, and upgrade.
+Production deploy is a single Docker Compose file plus credentials for whichever surface(s) your team uses. Start from [`deploy/compose/compose.example.yml`](deploy/compose/compose.example.yml) and follow [`docs/deploy/deploy-runbook.md`](docs/deploy/deploy-runbook.md) end-to-end — it covers reverse proxy, TLS, secrets, backup, and upgrade.
 
-For a one-host evaluation deploy:
+For a one-host evaluation deploy with real (non-mock) auth, copy the env template and edit the values your surface needs:
 
 ```bash
-cp .env.example .env   # set agent credentials, surface credentials, POSTGRES_PASSWORD
-docker compose -f docker-compose.local.yml up -d
+cp .env.example .env
+# edit .env — set agent credentials, surface credentials, POSTGRES_PASSWORD
+docker compose -f deploy/compose/compose.example.yml --env-file .env up -d
 ```
+
+If you just want to try Parsar on your laptop with mock auth, use the [Quick Start](#quick-start) above instead — no `.env` needed.
 
 ## Security
 
