@@ -1765,7 +1765,12 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 		runtimeID,
 		managedModelID,
 	)
-	now := time.Now().UTC()
+	// Truncate to microseconds because PostgreSQL `timestamptz` stores
+	// 6 fractional-second digits (no nanoseconds). A raw time.Now() carries
+	// nanoseconds that get rounded on insert, so the post-read .Equal(now)
+	// assertion below would fail on runs where the dropped sub-microsecond
+	// bits would have rounded differently.
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	if _, err := db.Exec(ctx,
 		`insert into runtimes(id, workspace_id, type, name, liveness, provider, version, hostname, config, last_heartbeat_at, created_at, updated_at)
 		 values ($1::uuid, $2::uuid, 'agent_daemon', 'Mac Mini Runner', 'online', 'agent_daemon', '1.2.3', 'test.local', '{"supported_agent_kinds":["claude_code","opencode"],"daemon_capabilities":{"streaming":true,"permissions":true,"usage":true,"resume":false,"artifacts":false}}'::jsonb, $3, $3, $3)`,
