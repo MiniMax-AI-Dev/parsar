@@ -1,5 +1,5 @@
 -- blob.sql — capability plugin/skill zip storage for the Postgres
--- blob backend (migration 000002, PARSAR_BLOB_BACKEND=pg).
+-- blob backend (migration 000003, PARSAR_BLOB_BACKEND=pg).
 --
 -- Conventions match the rest of this dir:
 --   * @param::type cast on every parameter
