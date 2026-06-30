@@ -617,3 +617,58 @@ func TestPlatformAdminUserIDsEnvEmpty(t *testing.T) {
 		t.Fatalf("unset env should leave allowlist empty; got %v", res.Config.Auth.PlatformAdminUserIDs)
 	}
 }
+
+func TestProfileLoopbackPublicURL(t *testing.T) {
+	cases := []struct {
+		name      string
+		publicURL string
+		want      Profile
+	}{
+		{"http loopback ipv4", "http://127.0.0.1:18088", ProfileDev},
+		{"https loopback localhost", "https://localhost", ProfileDev},
+		{"http loopback 127.x non-.1", "http://127.0.0.2:8080", ProfileDev},
+		{"http loopback ipv6", "http://[::1]:8080", ProfileDev},
+		{"https loopback ipv4", "https://127.0.0.1", ProfileDev},
+		{"real domain", "https://parsar.example.com", ProfileProd},
+		{"empty", "", ProfileProd},
+		{"unparseable", "://bad", ProfileProd},
+		{"non-loopback ip", "http://10.0.0.5:8080", ProfileProd},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Server.PublicURL = tc.publicURL
+			if got := cfg.Profile(); got != tc.want {
+				t.Fatalf("Profile() with public_url=%q = %s, want %s", tc.publicURL, got, tc.want)
+			}
+		})
+	}
+}
+
+// Real-Feishu (Mock=false, DevAuth unset) on a loopback PublicURL must
+// load cleanly WITHOUT a master key or secure cookie — that is the whole
+// point of the loopback dev signal. A non-loopback PublicURL with the
+// same (absent) secrets must still be rejected, proving the relaxation
+// is scoped to loopback.
+func TestLoadRealFeishuLoopbackIsDev(t *testing.T) {
+	env := envMap{
+		EnvDatabaseURL:             "postgres://localhost/parsar",
+		EnvPublicURL:               "http://127.0.0.1:18088",
+		EnvFeishuMock:              "false",
+		EnvFeishuAppID:             "cli_test",
+		EnvFeishuAppSecret:         "secret_test",
+		EnvFeishuVerificationToken: "tok",
+	}
+	res, err := Load(env.get, nil)
+	if err != nil {
+		t.Fatalf("loopback real-Feishu should load without master key / secure cookie: %v", err)
+	}
+	if res.Config.Profile() != ProfileDev {
+		t.Fatalf("loopback real-Feishu Profile = %s, want dev", res.Config.Profile())
+	}
+
+	env[EnvPublicURL] = "https://parsar.example.com"
+	if _, err := Load(env.get, nil); err == nil {
+		t.Fatal("non-loopback real-Feishu without master key / secure cookie should be rejected")
+	}
+}
