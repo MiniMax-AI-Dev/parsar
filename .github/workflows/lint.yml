@@ -21,19 +21,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           # Pinned to match go.mod. Bump both together when upgrading.
           go-version: "1.25"
+          # Module cache only — golangci-lint-action below brings its
+          # own analysis cache that subsumes ~/.cache/go-build for
+          # this job.
           cache: true
 
       - name: Run golangci-lint
-        # golangci-lint-action@v7 is required for golangci-lint v2
-        # (v6 only drives v1 and rejects a v2.x `version:` string).
-        uses: golangci/golangci-lint-action@v7
+        # golangci-lint-action@v8+ drives golangci-lint v2; v6 only drives
+        # v1 and rejects a v2.x `version:` string. v9 is the current
+        # major (Sept 2025) — bumped together with the rest of the
+        # actions group.
+        uses: golangci/golangci-lint-action@v9
         with:
           # Pinned to a v2 release that matches the .golangci.yml v2
           # schema. Newer minors are safe; major bumps need a config
