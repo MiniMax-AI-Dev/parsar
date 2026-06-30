@@ -2,6 +2,7 @@
   "appName": "Parsar",
   "languageSwitcher": {
     "label": "语言",
+    "description": "用于整个管理界面。你的选择会记忆在本机。",
     "zh-CN": "中文",
     "en-US": "English"
   },
@@ -149,31 +150,30 @@
     "back": "返回上一页"
   },
   "nav": {
-    "collaborationGroup": "协作现场",
-    "agentManagementGroup": "Agent 管理",
-    "ingressGroup": "入口与执行",
-    "assetsGroup": "沉淀资产",
-    "governanceGroup": "治理与安全",
+    "collaborationGroup": "协作",
+    "agentGroup": "Agent",
+    "teamGroup": "团队",
     "items": {
-      "approvals": "收件箱 / 审批",
+      "approvals": "收件箱",
       "conversations": "对话",
       "runs": "运行",
       "scheduled": "定时任务",
-      "artifacts": "产物",
       "agents": "Agent",
       "connections": "连接",
       "capabilities": "能力",
       "models": "模型",
-      "connectors": "连接器",
+      "members": "成员",
+      "settings": "设置"
+    },
+    "settingsTabs": {
+      "general": "通用",
+      "credentials": "凭据",
       "runtime": "运行环境",
+      "connectors": "连接器",
       "specs": "Spec",
       "memory": "记忆",
-      "updates": "进展",
-      "members": "成员与用户组",
-      "secrets": "凭据",
       "usage": "用量",
-      "audit": "审计日志",
-      "settings": "设置"
+      "audit": "审计"
     },
     "p1Hint": "P1"
   },

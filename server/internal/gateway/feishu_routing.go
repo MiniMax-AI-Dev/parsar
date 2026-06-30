@@ -22,9 +22,9 @@ type FeishuRouter interface {
 	// dispatching.
 	GetAgentByID(ctx context.Context, agentID string) (FeishuRouteAgent, error)
 
-	// FindUserIDByFeishuUnionID resolves a Feishu sender to a Parsar
-	// user_id. Returns ErrFeishuRouterUnknownUser for guests.
-	FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error)
+	// FindUserIDByPlatformSubject resolves an inbound sender to a Parsar
+	// user_id by (platform, subject). Returns ErrRouterUnknownUser for guests.
+	FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error)
 
 	// IsActiveWorkspaceMember returns true when user_id is an active
 	// member. False (with nil error) means "registered but not a
@@ -60,9 +60,9 @@ type FeishuRouteAgent struct {
 // the Bot App ID. Normally translates into HTTP 400.
 var ErrFeishuRouterUnknownAgent = errors.New("no agent registered for feishu app_id")
 
-// ErrFeishuRouterUnknownUser signals the inbound sender is not a
+// ErrRouterUnknownUser signals the inbound sender is not a
 // Parsar user (visibility gate treats them as guest).
-var ErrFeishuRouterUnknownUser = errors.New("no parsar user linked to feishu sender")
+var ErrRouterUnknownUser = errors.New("no parsar user linked to platform sender")
 
 // FeishuConnectorConfig is the agents.config.connectors.feishu subtree.
 // Secret material lives in vault via *_ref pointers, never plain text.
@@ -172,10 +172,76 @@ type FeishuInboundDecision struct {
 	NormalizedText string
 }
 
-// RouteFeishuInbound stitches agent lookup, sender lookup, and
-// visibility gate evaluation.
+// NeutralFromFeishuEvent bridges a Feishu-typed inbound event to the neutral
+// gateway.InboundEvent at the router boundary. It is the struct-level twin of
+// the channel adapter's Normalize (which starts from raw webhook bytes): the
+// N2 inbound manager still decodes the Lark SDK type into a FeishuInboundEvent,
+// then calls this to feed the now-neutral routing core. Platform-rich fields
+// the shared router persists as message metadata (message_type, raw_content,
+// sender_type) are folded into ev.Metadata alongside the parser metadata
+// (mention_keys, parsed image refs). Slated for removal once every caller
+// produces the neutral event directly (N3).
+func NeutralFromFeishuEvent(fe FeishuInboundEvent) InboundEvent {
+	meta := make(map[string]any, len(fe.Metadata)+3)
+	for k, v := range fe.Metadata {
+		meta[k] = v
+	}
+	// These three live as typed fields on FeishuInboundEvent but have no
+	// neutral slot; carry them in Metadata so sharedMetadata reproduces the
+	// stored jsonb byte-for-byte (sender_type only surfaces on the bot path).
+	meta["message_type"] = fe.MessageType
+	meta["raw_content"] = fe.RawContent
+	meta["sender_type"] = fe.SenderType
+	return InboundEvent{
+		Platform:          "feishu",
+		BotID:             fe.AppID,
+		ExternalMessageID: fe.MessageID,
+		ExternalChatID:    fe.ChatID,
+		ExternalThreadID:  fe.ThreadID,
+		ExternalRootID:    fe.RootID,
+		Sender: ExternalIdentity{
+			PlatformUserID: fe.SenderUnionID,
+			LocalUserID:    fe.SenderOpenID,
+			TenantKey:      fe.TenantKey,
+		},
+		Text:             fe.Text,
+		ChatType:         neutralChatTypeFromFeishu(fe.ChatType),
+		SenderIsBot:      fe.IsBotSender(),
+		MentionedUserIDs: fe.MentionOpenIDs,
+		ReplyTo:          fe.ParentID,
+		Metadata:         meta,
+	}
+}
+
+// neutralChatTypeFromFeishu maps Feishu chat_type to the neutral vocabulary
+// (p2p→dm, anything else non-empty→group). Mirrors the channel/feishu
+// adapter helper of the same purpose; duplicated because gateway must not
+// import the channel package (import cycle).
+func neutralChatTypeFromFeishu(feishuChatType string) string {
+	switch strings.ToLower(strings.TrimSpace(feishuChatType)) {
+	case "":
+		return ""
+	case "p2p":
+		return "dm"
+	default:
+		return "group"
+	}
+}
+
+// RouteFeishuInbound is the Feishu adapter entry to the neutral routing
+// core: bridge the Feishu-typed event and delegate to RouteInbound. Retained
+// (as a thin shim) so the Feishu-typed gate tests keep exercising the gate
+// end to end; production callers already speak neutral
+// (RouteInbound / RouteInboundToAgent). Retire it with the Feishu-typed gate
+// tests when the gateway Feishu* types are renamed neutral.
 func RouteFeishuInbound(ctx context.Context, router FeishuRouter, event FeishuInboundEvent, cfg GateConfig) (FeishuInboundDecision, error) {
-	appID := strings.TrimSpace(event.AppID)
+	return RouteInbound(ctx, router, NeutralFromFeishuEvent(event), cfg)
+}
+
+// RouteInbound stitches agent lookup (by ev.BotID), sender lookup, and
+// visibility-gate evaluation on a neutral inbound event.
+func RouteInbound(ctx context.Context, router FeishuRouter, event InboundEvent, cfg GateConfig) (FeishuInboundDecision, error) {
+	appID := strings.TrimSpace(event.BotID)
 	if appID == "" {
 		return FeishuInboundDecision{}, fmt.Errorf("%w: empty app_id on inbound event", ErrFeishuRouterUnknownAgent)
 	}
@@ -184,19 +250,19 @@ func RouteFeishuInbound(ctx context.Context, router FeishuRouter, event FeishuIn
 	if err != nil {
 		return FeishuInboundDecision{}, err
 	}
-	return RouteFeishuInboundToAgent(ctx, router, event, agent, cfg)
+	return RouteInboundToAgent(ctx, router, event, agent, cfg)
 }
 
-// RouteFeishuInboundToAgent runs sender resolution and visibility-gate
-// evaluation for a known Agent route. Shared Bot command routers use
-// this after resolving /select state.
-func RouteFeishuInboundToAgent(ctx context.Context, router FeishuRouter, event FeishuInboundEvent, agent FeishuRouteAgent, cfg GateConfig) (FeishuInboundDecision, error) {
-	// union_id is the cross-tenant stable id matching
-	// auth_identities.subject; fall back to open_id only when absent
-	// (legacy event shapes).
-	subject := strings.TrimSpace(event.SenderUnionID)
+// RouteInboundToAgent runs sender resolution and visibility-gate evaluation
+// for a known Agent route on a neutral inbound event. Shared Bot command
+// routers use this after resolving /select state.
+func RouteInboundToAgent(ctx context.Context, router FeishuRouter, event InboundEvent, agent FeishuRouteAgent, cfg GateConfig) (FeishuInboundDecision, error) {
+	// PlatformUserID is the cross-tenant stable id (Feishu union_id)
+	// matching auth_identities.subject; fall back to the platform-local id
+	// (Feishu open_id) only when absent (legacy event shapes).
+	subject := strings.TrimSpace(event.Sender.PlatformUserID)
 	if subject == "" {
-		subject = strings.TrimSpace(event.SenderOpenID)
+		subject = strings.TrimSpace(event.Sender.LocalUserID)
 	}
 
 	var (
@@ -204,12 +270,12 @@ func RouteFeishuInboundToAgent(ctx context.Context, router FeishuRouter, event F
 		registered   bool
 	)
 	if subject != "" {
-		uid, err := router.FindUserIDByFeishuUnionID(ctx, subject)
+		uid, err := router.FindUserIDByPlatformSubject(ctx, event.Platform, subject)
 		switch {
 		case err == nil:
 			senderUserID = uid
 			registered = true
-		case errors.Is(err, ErrFeishuRouterUnknownUser):
+		case errors.Is(err, ErrRouterUnknownUser):
 			// unregistered — leave senderUserID empty.
 		default:
 			return FeishuInboundDecision{}, fmt.Errorf("router resolve sender: %w", err)

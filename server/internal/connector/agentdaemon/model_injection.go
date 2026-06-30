@@ -148,7 +148,7 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 	//                                         (per-user for credential_ref;
 	//                                         a no-op for inline_secret).
 	// store.ResolveModelRuntimeForUser still rejects credential_ref + empty
-	// initiator — that surfaces the "缺凭据" notice via the err branch below.
+	// initiator — that surfaces the "missing credentials" notice via the err branch below.
 	// Mirrors capability_runtime.resolveCredentialValues: binding wins over
 	// initiator presence, never the other way.
 	modelBinding, hasModelBinding := ParseModelCredentialBinding(in.AgentConfig, in.ProjectAgentConfig)
@@ -806,12 +806,12 @@ func buildModelCredentialCapabilityName(mr store.ModelRuntime) string {
 	modelKey := strings.TrimSpace(mr.ModelKey)
 	switch {
 	case provider != "" && modelKey != "":
-		return "模型 · " + provider + "/" + modelKey
+		return "Model · " + provider + "/" + modelKey
 	case modelKey != "":
-		return "模型 · " + modelKey
+		return "Model · " + modelKey
 	case strings.TrimSpace(mr.ModelName) != "":
-		return "模型 · " + strings.TrimSpace(mr.ModelName)
+		return "Model · " + strings.TrimSpace(mr.ModelName)
 	default:
-		return "模型"
+		return "Model"
 	}
 }

@@ -99,7 +99,7 @@ export function OrgSecretsTab({ workspaceID }: OrgSecretsTabProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[12.5px] leading-relaxed text-slate-500">
+        <p className="text-sm leading-relaxed text-fg-subtle">
           {t("credentialsPage.org.scopeNote")}
         </p>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -215,32 +215,32 @@ function CredentialSection({
 }: SectionProps) {
   const { t } = useTranslation("admin")
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+    <section className="rounded-lg border border-line bg-surface">
+      <div className="flex items-start justify-between gap-3 border-b border-line-muted px-4 py-3">
         <div className="flex items-start gap-2">
-          <Icon className="mt-0.5 h-4 w-4 text-slate-400" />
+          <Icon className="mt-0.5 h-4 w-4 text-fg-faint" />
           <div>
-            <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
-            <p className="mt-0.5 text-[12px] text-slate-500">{description}</p>
+            <h3 className="text-base font-semibold text-fg">{title}</h3>
+            <p className="mt-0.5 text-sm text-fg-subtle">{description}</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <span className="text-[12px] text-slate-400">{items.length}</span>
+          <span className="text-sm text-fg-faint">{items.length}</span>
           {readOnly && readOnlyAction}
         </div>
       </div>
       {items.length === 0 ? (
-        <div className="px-4 py-8 text-center text-[13px] text-slate-500">{empty}</div>
+        <div className="px-4 py-8 text-center text-sm text-fg-subtle">{empty}</div>
       ) : (
         <div className="divide-y divide-slate-100">
           {items.map((secret) => (
             <div key={secret.id} className="flex items-center justify-between gap-4 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-[13px] font-medium text-slate-900">{secret.name}</span>
+                  <span className="truncate text-sm font-medium text-fg">{secret.name}</span>
                   <StatusBadge status={secret.status} />
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-fg-subtle">
                   <span>{kindLabel(secret.kind)}</span>
                   <span>·</span>
                   <span>{secret.provider || t("secrets.none")}</span>
@@ -249,19 +249,19 @@ function CredentialSection({
                   {secret.slug && (
                     <>
                       <span>·</span>
-                      <code className="text-[11px] text-slate-400">{secret.slug}</code>
+                      <code className="text-xs text-fg-faint">{secret.slug}</code>
                     </>
                   )}
                 </div>
-                <p className="mt-1 text-[12px] text-slate-500">{usageText(secret, t)}</p>
+                <p className="mt-1 text-sm text-fg-subtle">{usageText(secret, t)}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-[12px] text-slate-400">{fmtAgo(secret.updated_at)}</span>
+                <span className="text-sm text-fg-faint">{fmtAgo(secret.updated_at)}</span>
                 {!readOnly && (
                   secret.status === "active" ? (
                     <Button variant="outline" size="sm" onClick={() => onDisable(secret)}>{t("secrets.actions.disable")}</Button>
                   ) : (
-                    <span className="text-[11px] text-slate-400">{t("secrets.actions.alreadyDisabled")}</span>
+                    <span className="text-xs text-fg-faint">{t("secrets.actions.alreadyDisabled")}</span>
                   )
                 )}
               </div>
@@ -307,14 +307,14 @@ function CreateDialog({ onClose, onSubmit, pending, error }: CreateDialogProps) 
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
       <DialogContent className="max-w-lg gap-0 p-0">
         <form onSubmit={handleSubmit}>
-          <DialogHeader className="border-b border-slate-100 px-5 py-4 pr-10">
+          <DialogHeader className="border-b border-line-muted px-5 py-4 pr-10">
             <DialogTitle className="text-sm">{t("credentialsPage.org.create.title")}</DialogTitle>
             <DialogDescription>{t("credentialsPage.org.create.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 px-5 py-4">
             <Field label={t("secrets.create.field.purpose")} required>
               <select
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px]"
+                className="h-9 w-full rounded-md border border-line bg-surface px-3 text-sm"
                 value={purpose}
                 onChange={(event) => {
                   const next = event.target.value as "runtime" | "custom_api"
@@ -337,13 +337,13 @@ function CreateDialog({ onClose, onSubmit, pending, error }: CreateDialogProps) 
               <Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-..." autoComplete="off" required />
             </Field>
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[12px] font-medium text-red-900">{t("secrets.create.error.title")}</p>
-                <p className="text-[11.5px] text-red-700">{error.message}</p>
+              <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">{t("secrets.create.error.title")}</p>
+                <p className="text-xs text-danger-emphasis">{error.message}</p>
               </div>
             )}
           </div>
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={pending}>{t("secrets.create.cancel")}</Button>
             <Button type="submit" size="sm" disabled={pending}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("secrets.create.submit")}</Button>
           </DialogFooter>
@@ -356,9 +356,9 @@ function CreateDialog({ onClose, onSubmit, pending, error }: CreateDialogProps) 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[12px] font-medium text-slate-700">{label}{required && <span className="ml-0.5 text-red-500">*</span>}</span>
+      <span className="text-sm font-medium text-fg-muted">{label}{required && <span className="ml-0.5 text-danger">*</span>}</span>
       {children}
-      {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
+      {hint && <span className="block text-xs text-fg-subtle">{hint}</span>}
     </label>
   )
 }
@@ -369,14 +369,14 @@ function ConfirmDialog({ target, loading, error, onCancel, onConfirm }: { target
     <Dialog open onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5">
-          <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700"><ShieldAlert className="h-4 w-4" /></div>
+          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis"><ShieldAlert className="h-4 w-4" /></div>
           <div className="space-y-1.5">
             <DialogTitle className="text-sm">{t("secrets.disable.title", { name: target.name })}</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed">{t("secrets.disable.description")}</DialogDescription>
-            {error && <p className="text-[12px] text-red-700">{error.message}</p>}
+            {error && <p className="text-sm text-danger-emphasis">{error.message}</p>}
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>{t("secrets.disable.cancel")}</Button>
           <Button variant="destructive" size="sm" onClick={onConfirm} disabled={loading}>{loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("secrets.disable.confirm")}</Button>
         </DialogFooter>

@@ -516,9 +516,9 @@ func (s *feishuSecretRouteStore) GetAgentByFeishuAppID(ctx context.Context, appI
 	return s.route, nil
 }
 
-func (s *feishuSecretRouteStore) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
+func (s *feishuSecretRouteStore) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
 	if s.userID == "" {
-		return "", store.ErrUnknownFeishuUser
+		return "", store.ErrUnknownPlatformUser
 	}
 	return s.userID, nil
 }
@@ -2462,11 +2462,11 @@ func (stubRuntimeStore) ClearGatewaySessionSelection(ctx context.Context, platfo
 	return nil
 }
 
-func (stubRuntimeStore) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	if unionID == "on_test_user" || unionID == "ou_feishu_admin" {
+func (stubRuntimeStore) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	if subject == "on_test_user" || subject == "ou_feishu_admin" {
 		return store.DefaultDevFixtureIDs().UserID, nil
 	}
-	return "", store.ErrUnknownFeishuUser
+	return "", store.ErrUnknownPlatformUser
 }
 
 func (stubRuntimeStore) IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error) {

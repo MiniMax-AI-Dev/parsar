@@ -64,25 +64,25 @@ export function SkillZipDropzone({
           {...getRootProps()}
           className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-8 text-center transition-colors ${
             isDragActive
-              ? "border-slate-500 bg-slate-100"
-              : "border-slate-300 bg-slate-50 hover:border-slate-400"
+              ? "border-line-strong bg-surface-muted"
+              : "border-line-strong bg-surface-subtle hover:border-line-strong"
           }`}
         >
           <input {...getInputProps()} />
-          <Upload className="h-5 w-5 text-slate-500" />
-          <span className="text-[13px] text-slate-700">
+          <Upload className="h-5 w-5 text-fg-subtle" />
+          <span className="text-sm text-fg-muted">
             {isDragActive
-              ? t("capabilities.import.skill.dropActive", "松开导入 .zip")
-              : t("capabilities.import.skill.dropHint", "拖拽或点击上传 .zip(SKILL.md + references / scripts)")}
+              ? t("capabilities.import.skill.dropActive", "Release to import the .zip")
+              : t("capabilities.import.skill.dropHint", "Drag or click to upload a .zip (SKILL.md + references / scripts)")}
           </span>
-          <span className="text-[11px] text-slate-500">
-            {t("capabilities.import.skill.sizeHint", "最大 8 MiB")}
+          <span className="text-xs text-fg-subtle">
+            {t("capabilities.import.skill.sizeHint", "Up to 8 MiB")}
           </span>
         </div>
         {localError && (
           <div
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
           >
             {localError}
           </div>
@@ -93,19 +93,19 @@ export function SkillZipDropzone({
 
   return (
     <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
-          <FileArchive className="h-4 w-4 shrink-0 text-slate-500" />
+          <FileArchive className="h-4 w-4 shrink-0 text-fg-subtle" />
           <div className="min-w-0">
-            <p className="truncate text-[13px] text-slate-900">{file.name}</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="truncate text-sm text-fg">{file.name}</p>
+            <p className="text-xs text-fg-subtle">
               {formatBytes(file.size)}
               {busy && (
                 <>
                   {" · "}
-                  <span className="inline-flex items-center gap-1 text-slate-600">
+                  <span className="inline-flex items-center gap-1 text-fg-muted">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    {busyLabel ?? t("capabilities.import.skill.uploading", "上传中…")}
+                    {busyLabel ?? t("capabilities.import.skill.uploading", "Uploading…")}
                   </span>
                 </>
               )}
@@ -117,7 +117,7 @@ export function SkillZipDropzone({
           size="sm"
           onClick={onClear}
           disabled={busy}
-          aria-label={t("capabilities.actions.cancel", "取消")}
+          aria-label={t("capabilities.actions.cancel", "Cancel")}
         >
           <X className="h-4 w-4" />
         </Button>
@@ -125,7 +125,7 @@ export function SkillZipDropzone({
       {localError && (
         <div
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+          className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
         >
           {localError}
         </div>

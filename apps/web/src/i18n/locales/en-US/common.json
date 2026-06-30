@@ -2,6 +2,7 @@
   "appName": "Parsar",
   "languageSwitcher": {
     "label": "Language",
+    "description": "Used across the admin UI. Your choice is remembered on this device.",
     "zh-CN": "中文",
     "en-US": "English"
   },
@@ -149,31 +150,30 @@
     "back": "Go back"
   },
   "nav": {
-    "collaborationGroup": "Collaboration",
-    "agentManagementGroup": "Agent Management",
-    "ingressGroup": "Ingress & Execution",
-    "assetsGroup": "Assets",
-    "governanceGroup": "Governance & Security",
+    "collaborationGroup": "Collaborate",
+    "agentGroup": "Agent",
+    "teamGroup": "Team",
     "items": {
-      "approvals": "Inbox / Approvals",
+      "approvals": "Inbox",
       "conversations": "Conversations",
       "runs": "Runs",
       "scheduled": "Scheduled Tasks",
-      "artifacts": "Artifacts",
       "agents": "Agents",
       "connections": "Connections",
       "capabilities": "Capabilities",
       "models": "Models",
-      "connectors": "Connectors",
-      "runtime": "Runtime",
-      "specs": "Spec",
-      "memory": "Memory",
-      "updates": "Updates",
-      "members": "Members & Groups",
-      "secrets": "Credentials",
-      "usage": "Usage",
-      "audit": "Audit Logs",
+      "members": "Members",
       "settings": "Settings"
+    },
+    "settingsTabs": {
+      "general": "General",
+      "credentials": "Credentials",
+      "runtime": "Runtime",
+      "connectors": "Connectors",
+      "specs": "Specs",
+      "memory": "Memory",
+      "usage": "Usage",
+      "audit": "Audit"
     },
     "p1Hint": "P1"
   },

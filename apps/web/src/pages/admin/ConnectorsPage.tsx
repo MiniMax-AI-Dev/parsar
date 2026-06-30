@@ -9,6 +9,7 @@ import {
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -70,19 +71,20 @@ export function ConnectorsPage() {
   })
 
   return (
-    <AdminLayout activeMenu="connectors">
+    <AdminLayout activeMenu="settings">
       <PageHeader
         title={t("connectors.page.title")}
         description={t("connectors.page.description")}
       />
+      <SettingsTabs active="connectors" />
 
-      <p className="mb-4 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-3 text-[12px] leading-relaxed text-slate-600">
+      <p className="mb-4 rounded-lg border border-dashed border-line bg-surface-subtle/60 p-3 text-sm leading-relaxed text-fg-muted">
         {t("connectors.aggregateHint")}
       </p>
       {!pid ? (
         <ScopeRequiredState scope="project" resourceName={t("connectors.page.title")} />
       ) : query.isLoading ? (
-        <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
         </div>
       ) : err ? (
@@ -101,11 +103,11 @@ export function ConnectorsPage() {
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[12px] text-slate-500">
+            <span className="text-sm text-fg-subtle">
               {t("connectors.summary", { count: connectors.length })}
             </span>
             <div className="relative w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" strokeWidth={1.75} />
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" strokeWidth={1.75} />
               <Input
                 placeholder={t("connectors.search.placeholder")}
                 className="pl-8 text-xs"
@@ -122,7 +124,7 @@ export function ConnectorsPage() {
               description={t("connectors.empty.description")}
             />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -141,15 +143,15 @@ export function ConnectorsPage() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Cable className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
-                          <span className="text-[14px] font-medium text-slate-900">{c.label}</span>
-                          <code className="text-[11px] text-slate-400">{c.connector_type}</code>
+                          <Cable className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
+                          <span className="text-base font-medium text-fg">{c.label}</span>
+                          <code className="text-xs text-fg-faint">{c.connector_type}</code>
                         </div>
                       </TableCell>
                       <TableCell><ConnectorStatusBadge status={c.status} /></TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-700">{c.agent_count}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{c.agent_count}</TableCell>
                       <TableCell className="text-right pr-4">
-                        <span className="text-[11px] text-slate-500">
+                        <span className="text-xs text-fg-subtle">
                           {c.agent_count === 0 ? "—" : t("connectors.table.agentSummary", { count: c.agent_count })}
                         </span>
                       </TableCell>
@@ -179,7 +181,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 
   if (query.isLoading) {
     return (
-      <AdminLayout activeMenu="connectors">
+      <AdminLayout activeMenu="settings">
         <Skeleton className="h-64 w-full" />
       </AdminLayout>
     )
@@ -187,7 +189,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 
   if (!connector) {
     return (
-      <AdminLayout activeMenu="connectors">
+      <AdminLayout activeMenu="settings">
         <PageHeader
           backLink={
             <button onClick={() => navigate("connectors")} className="hover:underline">
@@ -196,6 +198,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
           }
           title={id}
         />
+        <SettingsTabs active="connectors" />
         <EmptyState
           icon={Cable}
           title={t("connectors.detail.notFound.title")}
@@ -206,17 +209,18 @@ export function ConnectorDetailPage({ id }: { id: string }) {
   }
 
   return (
-    <AdminLayout activeMenu="connectors">
+    <AdminLayout activeMenu="settings">
       <PageHeader
         backLink={
-          <button onClick={() => navigate("connectors")} className="hover:text-slate-900 hover:underline">
+          <button onClick={() => navigate("connectors")} className="hover:text-fg hover:underline">
             ← {t("connectors.page.title")}
           </button>
         }
         title={connector.label}
-        description={<code className="font-mono text-[12px]">{connector.connector_type}</code>}
+        description={<code className="font-mono text-sm">{connector.connector_type}</code>}
         action={<ConnectorStatusBadge status={connector.status} />}
       />
+      <SettingsTabs active="connectors" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Stat label={t("connectors.detail.agentCount")} value={String(connector.agent_count)} />
@@ -224,12 +228,12 @@ export function ConnectorDetailPage({ id }: { id: string }) {
         <Stat label={t("connectors.detail.type")} value={connector.connector_type} mono />
       </div>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-        <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">
+      <section className="mt-6 rounded-lg border border-line bg-surface p-4">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">
           {t("connectors.detail.agents")}
         </h3>
         {connector.agent_count === 0 ? (
-          <p className="text-[12px] text-slate-500">{t("connectors.detail.noAgents")}</p>
+          <p className="text-sm text-fg-subtle">{t("connectors.detail.noAgents")}</p>
         ) : (
           <Button
             variant="ghost"
@@ -237,9 +241,9 @@ export function ConnectorDetailPage({ id }: { id: string }) {
             onClick={() => navigate("agents")}
             className="justify-start px-0"
           >
-            <Bot className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+            <Bot className="h-3.5 w-3.5 text-fg-faint" strokeWidth={1.75} />
             {t("connectors.detail.agentSummary", { count: connector.agent_count })}
-            <ArrowUpRight className="ml-auto h-3 w-3 text-slate-400" />
+            <ArrowUpRight className="ml-auto h-3 w-3 text-fg-faint" />
           </Button>
         )}
       </section>
@@ -249,9 +253,9 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] uppercase tracking-wider text-slate-400">{label}</div>
-      <div className={`mt-1 text-[20px] font-semibold tabular-nums text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div>
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="text-xs uppercase tracking-wider text-fg-faint">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums text-fg ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   )
 }

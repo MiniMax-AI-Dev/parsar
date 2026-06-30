@@ -1,0 +1,50 @@
+name: shellcheck
+
+# Bash is the glue holding this project together: dev-stack.sh, check.sh,
+# dev-env.sh, the e2e drivers and the daemon installer all live in scripts/
+# and get exercised by humans on macOS and by CI on Linux. Low-level shell
+# mistakes — unquoted $vars, `[ ]` vs `[[ ]]`, accidental word-splitting,
+# missing `set -e` guards — are notoriously hard to debug once they trip in
+# the middle of a long dev session, and shellcheck is the cheapest possible
+# guard rail against them.
+#
+# We deliberately run with `severity: error` only. Warnings and info-level
+# findings are useful but plentiful; gating CI on them would turn this job
+# into noise and train the team to ignore it. Errors are rare and almost
+# always real bugs, so an error-only signal stays high quality.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "**.sh"
+      - ".github/workflows/shellcheck.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "**.sh"
+      - ".github/workflows/shellcheck.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: shellcheck-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: ./scripts
+          severity: error

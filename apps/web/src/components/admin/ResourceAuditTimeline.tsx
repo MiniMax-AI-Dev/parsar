@@ -25,10 +25,10 @@ function shortId(s: string | undefined | null, n = 10): string {
 }
 
 function ActorIcon({ type }: { type: AuditActorType }) {
-  if (type === "agent") return <Bot className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-  if (type === "user") return <UserIcon className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-  if (type === "external") return <Globe className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-  return <Cog className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+  if (type === "agent") return <Bot className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
+  if (type === "user") return <UserIcon className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
+  if (type === "external") return <Globe className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
+  return <Cog className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
 }
 
 function PayloadPreview({ payload }: { payload?: Record<string, unknown> }) {
@@ -37,7 +37,7 @@ function PayloadPreview({ payload }: { payload?: Record<string, unknown> }) {
   if (entries.length === 0) return null
   const preview = entries.slice(0, 3).map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · ")
   return (
-    <p className="mt-1 truncate font-mono text-[11px] text-slate-500" title={preview}>
+    <p className="mt-1 truncate font-mono text-xs text-fg-subtle" title={preview}>
       {preview}
     </p>
   )
@@ -45,9 +45,9 @@ function PayloadPreview({ payload }: { payload?: Record<string, unknown> }) {
 
 function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: string | null | undefined) => string }) {
   return (
-    <li className="flex gap-3 border-b border-slate-100 px-1 py-2.5 last:border-b-0">
+    <li className="flex gap-3 border-b border-line-muted px-1 py-2.5 last:border-b-0">
       <div className="flex w-32 shrink-0 flex-col gap-0.5 pt-0.5">
-        <span className="text-[12px] text-slate-700" title={record.occurred_at}>
+        <span className="text-sm text-fg-muted" title={record.occurred_at}>
           {fmtAgo(record.occurred_at)}
         </span>
         <Badge variant={SOURCE_BADGE[record.source]} className="w-fit">
@@ -55,10 +55,10 @@ function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: st
         </Badge>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium text-slate-800" title={record.event_type}>
+        <p className="truncate text-sm font-medium text-fg-emphasis" title={record.event_type}>
           {record.event_type}
         </p>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-subtle">
           <ActorIcon type={record.actor_type} />
           <span className="font-mono">
             {record.actor_type}

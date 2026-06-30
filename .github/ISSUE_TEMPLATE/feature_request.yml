@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose a change or a new capability.
+title: "feat: <short summary>"
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case, not the solution. Who hits this, and when?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: A rough sketch is fine. Mention alternatives you considered.
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope notes
+      description: Anything that helps reviewers gauge impact — API change? schema? new dependency? UI surface?

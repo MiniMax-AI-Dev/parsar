@@ -65,9 +65,9 @@ export function ConnectionsPage() {
       ) : (
         <div className="space-y-8">
           <section>
-            <h2 className="mb-3 text-[14px] font-semibold text-slate-900">{t("connections.oauth.title")}</h2>
+            <h2 className="mb-3 text-base font-semibold text-fg">{t("connections.oauth.title")}</h2>
             {oauthKinds.length === 0 ? (
-              <p className="text-[12.5px] text-slate-500">{t("connections.oauth.empty")}</p>
+              <p className="text-sm text-fg-subtle">{t("connections.oauth.empty")}</p>
             ) : (
               <div className="grid gap-3 lg:grid-cols-3">
                 {oauthKinds.map((kind) => {
@@ -89,7 +89,7 @@ export function ConnectionsPage() {
 
           <section>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-slate-900">{t("connections.model.title")}</h2>
+              <h2 className="text-base font-semibold text-fg">{t("connections.model.title")}</h2>
               {canCreateKind && (
                 <Button size="sm" variant="outline" onClick={() => setCreateKindOpen(true)}>
                   <Plus className="h-3.5 w-3.5" />
@@ -98,7 +98,7 @@ export function ConnectionsPage() {
               )}
             </div>
             {modelKinds.length === 0 ? (
-              <p className="text-[12.5px] text-slate-500">{t("connections.model.empty")}</p>
+              <p className="text-sm text-fg-subtle">{t("connections.model.empty")}</p>
             ) : (
               <div className="grid gap-3 lg:grid-cols-3">
                 {modelKinds.map((kind) => {
@@ -249,15 +249,15 @@ function OAuthConnectionCard({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="flex min-h-[168px] flex-col rounded-lg border border-slate-200 bg-white p-4">
+    <div className="flex min-h-[168px] flex-col rounded-lg border border-line bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="rounded-md bg-slate-100 p-2 text-slate-600">
+          <div className="rounded-md bg-surface-muted p-2 text-fg-muted">
             <Github className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
-            <p className="mt-0.5 min-h-10 text-[12px] leading-5 text-slate-500">{description}</p>
+            <h3 className="text-base font-semibold text-fg">{title}</h3>
+            <p className="mt-0.5 min-h-10 text-sm leading-5 text-fg-subtle">{description}</p>
           </div>
         </div>
         {loading ? (
@@ -304,16 +304,16 @@ function ModelKeyCard({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="flex min-h-[168px] flex-col rounded-lg border border-slate-200 bg-white p-4">
+    <div className="flex min-h-[168px] flex-col rounded-lg border border-line bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="rounded-md bg-slate-100 p-2 text-slate-600">
+          <div className="rounded-md bg-surface-muted p-2 text-fg-muted">
             <KeyRound className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
+            <h3 className="text-base font-semibold text-fg">{title}</h3>
             {description && (
-              <p className="mt-0.5 min-h-10 text-[12px] leading-5 text-slate-500">{description}</p>
+              <p className="mt-0.5 min-h-10 text-sm leading-5 text-fg-subtle">{description}</p>
             )}
           </div>
         </div>
@@ -385,7 +385,7 @@ function CreateModelKindDialog({
           }}
         >
           <div className="space-y-1.5">
-            <label htmlFor="create-kind-code" className="text-[12px] font-medium text-slate-700">
+            <label htmlFor="create-kind-code" className="text-sm font-medium text-fg-muted">
               {t("connections.createKind.code")}
             </label>
             <Input
@@ -397,11 +397,11 @@ function CreateModelKindDialog({
               autoComplete="off"
               spellCheck={false}
             />
-            <p className="text-[11px] text-slate-500">{t("connections.createKind.codeHint")}</p>
+            <p className="text-xs text-fg-subtle">{t("connections.createKind.codeHint")}</p>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="create-kind-name" className="text-[12px] font-medium text-slate-700">
+            <label htmlFor="create-kind-name" className="text-sm font-medium text-fg-muted">
               {t("connections.createKind.displayName")}
             </label>
             <Input
@@ -413,7 +413,7 @@ function CreateModelKindDialog({
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="create-kind-desc" className="text-[12px] font-medium text-slate-700">
+            <label htmlFor="create-kind-desc" className="text-sm font-medium text-fg-muted">
               {t("connections.createKind.descriptionField")}
             </label>
             <Input
@@ -425,7 +425,7 @@ function CreateModelKindDialog({
           </div>
 
           {error && (
-            <p className="text-[12px] text-red-600">
+            <p className="text-sm text-danger">
               {error.envelope.message || t("connections.createKind.errorGeneric")}
             </p>
           )}

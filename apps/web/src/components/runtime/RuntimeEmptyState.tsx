@@ -81,9 +81,9 @@ function EmptyShell({
         <div className={`rounded-full p-2 ${styles.iconWrap}`}>
           <Icon className={`h-4 w-4 ${styles.icon}`} strokeWidth={1.75} />
         </div>
-        <p className={`text-[14px] font-medium ${styles.title}`}>{title}</p>
+        <p className={`text-base font-medium ${styles.title}`}>{title}</p>
       </div>
-      <div className="max-w-xl space-y-2 text-[12.5px] leading-relaxed text-slate-600">
+      <div className="max-w-xl space-y-2 text-sm leading-relaxed text-fg-muted">
         {children}
       </div>
     </div>
@@ -92,16 +92,16 @@ function EmptyShell({
 
 const SHAPE_STYLES: Record<Shape, { container: string; iconWrap: string; icon: string; title: string }> = {
   info: {
-    container: "border-slate-200 bg-slate-50/60",
-    iconWrap: "bg-slate-200/60",
-    icon: "text-slate-600",
-    title: "text-slate-900",
+    container: "border-line bg-surface-subtle/60",
+    iconWrap: "bg-surface-muted/60",
+    icon: "text-fg-muted",
+    title: "text-fg",
   },
   warn: {
-    container: "border-amber-200 bg-amber-50/60",
-    iconWrap: "bg-amber-200/60",
-    icon: "text-amber-700",
-    title: "text-amber-900",
+    container: "border-warning-border bg-warning-subtle/60",
+    iconWrap: "bg-warning-subtle/60",
+    icon: "text-warning",
+    title: "text-warning-emphasis",
   },
 }
 
@@ -111,7 +111,7 @@ function DocsLink({ href, children }: { href: string; children: ReactNode }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-0.5 text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900 hover:decoration-slate-500"
+      className="inline-flex items-center gap-0.5 text-fg-muted underline decoration-slate-300 underline-offset-2 hover:text-fg hover:decoration-slate-500"
     >
       {children}
       <ExternalLink className="h-3 w-3" />
@@ -123,20 +123,20 @@ function NewDeploymentCell({ tryCta }: { tryCta?: ReactNode }) {
   const { t } = useTranslation("admin")
   return (
     <div
-      className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-slate-200 bg-white px-6 py-12 text-center"
+      className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center"
       data-testid="runtime-empty-new-deployment"
     >
-      <div className="rounded-full bg-slate-100 p-3 text-slate-500">
+      <div className="rounded-full bg-surface-muted p-3 text-fg-subtle">
         <Box className="h-5 w-5" />
       </div>
       <div className="max-w-md space-y-1.5">
-        <p className="text-sm font-medium text-slate-900">
+        <p className="text-sm font-medium text-fg">
           {t("runtime.list.empty.newDeployment.title")}
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-fg-subtle">
           {t("runtime.list.empty.newDeployment.description")}
         </p>
-        <p className="pt-1 text-xs text-slate-500">
+        <p className="pt-1 text-xs text-fg-subtle">
           {t("runtime.list.empty.newDeployment.tryCta")}
         </p>
       </div>
@@ -178,7 +178,7 @@ function LocalManagedCell() {
       testId="runtime-empty-local-managed"
     >
       <p>{t("runtime.list.empty.localManaged.description")}</p>
-      <p className="text-slate-500">{t("runtime.list.empty.localManaged.fallback")}</p>
+      <p className="text-fg-subtle">{t("runtime.list.empty.localManaged.fallback")}</p>
     </EmptyShell>
   )
 }
@@ -192,7 +192,7 @@ function LocalSelfhostCell() {
       testId="runtime-empty-local-selfhost"
     >
       <p>{t("runtime.list.empty.localSelfhost.description")}</p>
-      <p className="text-slate-500">{t("runtime.list.empty.localSelfhost.afterSnippet")}</p>
+      <p className="text-fg-subtle">{t("runtime.list.empty.localSelfhost.afterSnippet")}</p>
     </EmptyShell>
   )
 }

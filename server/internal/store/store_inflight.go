@@ -163,12 +163,17 @@ func (s PromptForUserChoiceInflightSlot) EffectiveQuestions() []PromptForUserCho
 // the full conversations.metadata jsonb; consume via the typed
 // WorkingInflightSlot / PermissionInflightSlot helpers.
 type FeishuInflightConversation struct {
-	ConversationID       string
-	WorkspaceID          string
-	ProjectID            string
-	ExternalChatID       string
-	ExternalThreadID     string
-	SourceAppID          string
+	ConversationID   string
+	WorkspaceID      string
+	ProjectID        string
+	ExternalChatID   string
+	ExternalThreadID string
+	SourceAppID      string
+	// Platform is the IM platform the conversation belongs to
+	// (conversations.platform: "feishu", "slack", ...). The outbound
+	// driver dispatches by this field — Feishu rows take the legacy
+	// terminal path; other platforms take the neutral Channel path.
+	Platform             string
 	ConversationMetadata map[string]any
 	AgentRunID           string
 	RunStatus            string
@@ -185,6 +190,13 @@ type FeishuInflightConversation struct {
 	// after each terminal/permission card. Empty for legacy /
 	// system-initiated runs; helper degrades to plain text.
 	SenderOpenID string
+	// TenantKey is the platform workspace id (Slack team_id, Feishu
+	// tenant_key) captured from the inbound trigger message metadata. The
+	// neutral outbound path threads it into channel.ReplyTarget so a
+	// multi-workspace Slack channel resolves the per-team bot token at
+	// send time. Empty on the list (debug) path and for legacy rows; the
+	// resolver falls back to the static/env token. Feishu ignores it.
+	TenantKey string
 }
 
 // AgentRunEvent is one row from ListAgentRunEventsAfterSeq.
@@ -212,12 +224,15 @@ func (s *Store) ListActiveFeishuInflightConversations(ctx context.Context, cutof
 	out := make([]FeishuInflightConversation, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, FeishuInflightConversation{
-			ConversationID:       row.ConversationID,
-			WorkspaceID:          row.WorkspaceID,
-			ProjectID:            row.ProjectID,
-			ExternalChatID:       row.ExternalChatID,
-			ExternalThreadID:     row.ExternalThreadID,
-			SourceAppID:          row.SourceAppID,
+			ConversationID:   row.ConversationID,
+			WorkspaceID:      row.WorkspaceID,
+			ProjectID:        row.ProjectID,
+			ExternalChatID:   row.ExternalChatID,
+			ExternalThreadID: row.ExternalThreadID,
+			SourceAppID:      row.SourceAppID,
+			// List query is not platform-parameterized (feishu-only debug
+			// path), so the row carries no platform column — literal here.
+			Platform:             "feishu",
 			ConversationMetadata: decodeJSONMap(row.ConversationMetadata),
 			AgentRunID:           row.AgentRunID,
 			RunStatus:            row.RunStatus,
@@ -237,6 +252,10 @@ func (s *Store) ListActiveFeishuInflightConversations(ctx context.Context, cutof
 // ticks (avoids flapping when staleBefore drifts past claim_at).
 // staleBefore = now - 30s, past which a claim is treated as recoverable.
 type ClaimActiveFeishuInflightConversationsInput struct {
+	// Platforms restricts the claim to these conversation platforms. The
+	// worker passes only platforms whose neutral Channel it can deliver
+	// to. Empty defaults to {"feishu"} so legacy callers are unchanged.
+	Platforms      []string
 	FinishedCutoff time.Time
 	StaleBefore    time.Time
 	ClaimedBy      string
@@ -254,8 +273,15 @@ func (s *Store) ClaimActiveFeishuInflightConversations(ctx context.Context, inpu
 	if limit <= 0 {
 		limit = 32
 	}
+	platforms := input.Platforms
+	if len(platforms) == 0 {
+		// Backward-compatible default: Feishu-only. Keeps every existing
+		// caller's behavior identical until a platform set is supplied.
+		platforms = []string{"feishu"}
+	}
 	now := time.Now().UTC()
 	rows, err := sqlc.New(s.db).ClaimActiveFeishuInflightConversations(ctx, sqlc.ClaimActiveFeishuInflightConversationsParams{
+		Platforms:      platforms,
 		FinishedCutoff: timestamptz(input.FinishedCutoff),
 		StaleBefore:    timestamptz(input.StaleBefore),
 		ClaimedBy:      input.ClaimedBy,
@@ -274,6 +300,7 @@ func (s *Store) ClaimActiveFeishuInflightConversations(ctx context.Context, inpu
 			ExternalChatID:       row.ExternalChatID,
 			ExternalThreadID:     row.ExternalThreadID,
 			SourceAppID:          row.SourceAppID,
+			Platform:             row.Platform,
 			ConversationMetadata: decodeJSONMap(row.ConversationMetadata),
 			AgentRunID:           row.AgentRunID,
 			RunStatus:            row.RunStatus,
@@ -283,6 +310,7 @@ func (s *Store) ClaimActiveFeishuInflightConversations(ctx context.Context, inpu
 			MaxEventSequence:     row.MaxEventSequence,
 			AgentName:            row.AgentName,
 			SenderOpenID:         row.SenderOpenID,
+			TenantKey:            row.TenantKey,
 		})
 	}
 	return out, nil

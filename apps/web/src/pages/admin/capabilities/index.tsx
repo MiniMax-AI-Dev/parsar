@@ -242,7 +242,7 @@ export function CapabilitiesPage() {
                   </span>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="z-50 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-600 shadow-md">
+                  <Tooltip.Content className="z-50 rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
                     {t("capabilities.permission.adminOnly")}
                     <Tooltip.Arrow className="fill-white" />
                   </Tooltip.Content>
@@ -317,7 +317,7 @@ export function CapabilitiesPage() {
               />
             ) : (
               <>
-                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="overflow-hidden rounded-lg border border-line bg-surface">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -346,23 +346,23 @@ export function CapabilitiesPage() {
                               <button
                                 type="button"
                                 onClick={() => navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })}
-                                className="flex w-full flex-col items-start text-left transition-colors hover:text-slate-950"
+                                className="flex w-full flex-col items-start text-left transition-colors hover:text-fg"
                               >
-                                <span className="flex flex-wrap items-center gap-2 text-[14px] font-medium text-slate-900 hover:underline">
+                                <span className="flex flex-wrap items-center gap-2 text-base font-medium text-fg hover:underline">
                                   {cap.name}
                                   {cap.deprecated_at && <Badge variant="destructive">{fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}</Badge>}
                                 </span>
                                 {fromMarketplace && (
-                                  <span className="truncate text-[11px] text-slate-400">{sourceLine}</span>
+                                  <span className="truncate text-xs text-fg-faint">{sourceLine}</span>
                                 )}
                                 {cap.description && (
                                   <Tooltip.Root>
                                     <Tooltip.Trigger asChild>
-                                      <span className="block w-full truncate text-[12px] text-slate-500">{cap.description}</span>
+                                      <span className="block w-full truncate text-sm text-fg-subtle">{cap.description}</span>
                                     </Tooltip.Trigger>
                                     <Tooltip.Portal>
                                       <Tooltip.Content
-                                        className="z-50 max-w-[420px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] leading-snug text-slate-700 shadow-md"
+                                        className="z-50 max-w-[420px] rounded-md border border-line bg-surface px-2 py-1 text-sm leading-snug text-fg-muted shadow-md"
                                         sideOffset={4}
                                       >
                                         {cap.description}
@@ -374,9 +374,9 @@ export function CapabilitiesPage() {
                               </button>
                             </TableCell>
                             <TableCell><CapabilityTypeBadge type={cap.type} /></TableCell>
-                            <TableCell className="font-mono text-[12px] text-slate-600">{fromMarketplace ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version ?? t("capabilities.none") : latestVersions.get(cap.id)?.version ?? t("capabilities.none")}</TableCell>
-                            <TableCell className="text-[12px] text-slate-600">{enabledCount}</TableCell>
-                            <TableCell className="text-[12px] text-slate-600">
+                            <TableCell className="font-mono text-sm text-fg-muted">{fromMarketplace ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version ?? t("capabilities.none") : latestVersions.get(cap.id)?.version ?? t("capabilities.none")}</TableCell>
+                            <TableCell className="text-sm text-fg-muted">{enabledCount}</TableCell>
+                            <TableCell className="text-sm text-fg-muted">
                               {requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
                             </TableCell>
                             <TableCell className="pr-4">
@@ -529,7 +529,7 @@ function CapabilitiesFilterBar({
         </TabsList>
       </Tabs>
       <div className="relative ml-auto w-full max-w-[280px]">
-        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-fg-faint" />
         <Input
           className="pl-8"
           value={query}
@@ -595,13 +595,13 @@ function CapabilitiesPagination({
   const startIdx = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIdx = Math.min(safePage * pageSize, total)
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-[12px] text-slate-600">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm text-fg-muted">
       <div>{t("capabilities.pagination.range", { start: startIdx, end: endIdx, total })}</div>
       <div className="flex items-center gap-2">
         <label className="flex items-center gap-1">
           <span>{t("capabilities.pagination.perPage")}</span>
           <select
-            className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[12px]"
+            className="rounded border border-line bg-surface px-1.5 py-1 text-sm"
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
           >
@@ -721,7 +721,7 @@ function CapabilityRowMoreMenu({
         <button
           type="button"
           aria-label={t("capabilities.rowActions.more")}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-slate-100"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-subtle hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-surface-muted"
         >
           {menuPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
         </button>
@@ -730,13 +730,13 @@ function CapabilityRowMoreMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 min-w-[180px] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-[12.5px] text-slate-700 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          className="z-50 min-w-[180px] overflow-hidden rounded-md border border-line bg-surface p-1 text-sm text-fg-muted shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         >
           <CapabilityMenuItem icon={Eye} label={t("capabilities.rowActions.view")} onSelect={onView} />
 
           {!disabledByRole && (
             <>
-              <DropdownMenu.Separator className="my-1 h-px bg-slate-100" />
+              <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
 
               <CapabilityMenuItem
                 icon={Share2}
@@ -782,10 +782,10 @@ function CapabilityMenuItem({
 }) {
   const toneClass =
     tone === "danger"
-      ? "text-rose-600 data-[highlighted]:bg-rose-50 data-[highlighted]:text-rose-700"
+      ? "text-danger data-[highlighted]:bg-danger-subtle data-[highlighted]:text-danger-emphasis"
       : tone === "success"
-        ? "text-emerald-700 data-[highlighted]:bg-emerald-50 data-[highlighted]:text-emerald-800"
-        : "text-slate-600 data-[highlighted]:bg-slate-100 data-[highlighted]:text-slate-900"
+        ? "text-success data-[highlighted]:bg-success-subtle data-[highlighted]:text-success-emphasis"
+        : "text-fg-muted data-[highlighted]:bg-surface-muted data-[highlighted]:text-fg"
   return (
     <DropdownMenu.Item
       onSelect={onSelect}
@@ -883,7 +883,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   return (
     <AdminLayout activeMenu="capabilities">
       <PageHeader
-        backLink={<button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 hover:text-slate-900 hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>}
+        backLink={<button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>}
         title={<span className="inline-flex items-center gap-2">{capability.name}<CapabilityTypeBadge type={capability.type} /></span>}
         description={capability.description || t("capabilities.detail.noDescription")}
         action={
@@ -928,11 +928,11 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                   const count = installationSummary.versionCounts.get(version.id) ?? 0
                   return (
                     <TableRow key={version.id}>
-                      <TableCell className="font-mono text-[12px] text-slate-700">
+                      <TableCell className="font-mono text-sm text-fg-muted">
                         {version.version} {index === 0 && <Badge className="ml-2" variant="neutral">{t("capabilities.versions.latest")}</Badge>}
                       </TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{formatDate(version.created_at)}</TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{count}</TableCell>
+                      <TableCell className="text-sm text-fg-muted">{formatDate(version.created_at)}</TableCell>
+                      <TableCell className="text-sm text-fg-muted">{count}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="ghost" onClick={() => setViewVersion(version)}>
@@ -952,13 +952,13 @@ export function CapabilityDetailPage({ id }: { id: string }) {
           {installationSummary.isLoading ? (
             <Skeleton className="h-12 w-full" />
           ) : enabledCount === 0 ? (
-            <p className="text-[12px] text-slate-500">{t("capabilities.detail.enabledAgents.empty")}</p>
+            <p className="text-sm text-fg-subtle">{t("capabilities.detail.enabledAgents.empty")}</p>
           ) : (
             <div className="space-y-2">
               {installationSummary.installations.map((item) => (
-                <button key={item.agentID} type="button" onClick={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-slate-200 p-3 text-left hover:bg-slate-50">
-                  <span className="text-[13px] font-medium text-slate-900">{item.agentName}</span>
-                  <span className="flex items-center gap-2 text-[12px] text-slate-500">
+                <button key={item.agentID} type="button" onClick={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-line p-3 text-left hover:bg-surface-subtle">
+                  <span className="text-sm font-medium text-fg">{item.agentName}</span>
+                  <span className="flex items-center gap-2 text-sm text-fg-subtle">
                     <span className="font-mono">{item.version}</span>
                     {!item.latest && <Badge variant="neutral">{t("capabilities.detail.enabledAgents.old")}</Badge>}
                     <ArrowUpRight className="h-3.5 w-3.5" />
@@ -979,7 +979,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                   </Badge>
                   {capability.deprecated_at && <Badge variant="destructive">{t("capabilities.deprecated.badgeSource")}</Badge>}
                 </div>
-                <p className="text-[12px] text-slate-500">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
+                <p className="text-sm text-fg-subtle">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {/*
@@ -1003,7 +1003,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                       </span>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
-                      <Tooltip.Content className="z-50 max-w-xs rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-600 shadow-md">
+                      <Tooltip.Content className="z-50 max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
                         {capability.deprecated_at ? t("capabilities.marketStatus.undeprecateTooltip") : t("capabilities.marketStatus.deprecateTooltip")}
                         <Tooltip.Arrow className="fill-white" />
                       </Tooltip.Content>
@@ -1181,12 +1181,12 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (capability.type === "system_prompt") {
     const sp = canonicalSpec?.system_prompt
     return (
-      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
         <DetailField label="mode" value={sp?.mode ?? "append"} mono />
         <DetailField
           label="prompt"
           value={
-            <pre className="whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-slate-700">
+            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-fg-muted">
               {sp?.prompt ?? t("capabilities.none")}
             </pre>
           }
@@ -1198,13 +1198,13 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (capability.type === "mcp") {
     if (canonicalSpec?.mcp) {
       return (
-        <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-700">
+        <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-line bg-surface-subtle p-3 font-mono text-sm leading-relaxed text-fg-muted">
           {JSON.stringify(canonicalSpec.mcp, null, 2)}
         </pre>
       )
     }
     return (
-      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-700">
+      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-line bg-surface-subtle p-3 font-mono text-sm leading-relaxed text-fg-muted">
         {JSON.stringify(version.content ?? {}, null, 2)}
       </pre>
     )
@@ -1213,7 +1213,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (capability.type === "plugin") {
     const plugin = canonicalSpec?.plugin
     return (
-      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
         {plugin?.name && <DetailField label="name" value={plugin.name} mono />}
         {plugin?.version && <DetailField label="version" value={plugin.version} mono />}
         {plugin?.description && <DetailField label="description" value={plugin.description} />}
@@ -1223,7 +1223,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         {plugin?.sha256 && <DetailField label="sha256" value={plugin.sha256} mono />}
         {plugin?.github_repo && <DetailField label="github_repo" value={plugin.github_repo} mono />}
         {!plugin && (
-          <p className="text-[12px] text-slate-500">{t("capabilities.none")}</p>
+          <p className="text-sm text-fg-subtle">{t("capabilities.none")}</p>
         )}
       </div>
     )
@@ -1233,7 +1233,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (canonicalSpec?.skill) {
     const skill = canonicalSpec.skill
     return (
-      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
         {skill.slug && <DetailField label="slug" value={skill.slug} mono />}
         {skill.title && <DetailField label="title" value={skill.title} />}
         {skill.description && <DetailField label="description" value={skill.description} />}
@@ -1241,14 +1241,14 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         {skill.instruction && (
           <DetailField
             label="instruction"
-            value={<pre className="whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-slate-700">{skill.instruction}</pre>}
+            value={<pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-fg-muted">{skill.instruction}</pre>}
           />
         )}
       </div>
     )
   }
   return (
-    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+    <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
       <DetailField label={t("capabilities.fields.gitRepoUrl.label")} value={version.git_repo_url || t("capabilities.none")} mono />
       <DetailField label={t("capabilities.fields.gitRef.label")} value={skillVersionRef(version) || t("capabilities.none")} mono />
       <DetailField label={t("capabilities.fields.path.label")} value={version.path || t("capabilities.none")} mono />
@@ -1354,27 +1354,27 @@ function containsPlaintextSecretPattern(value: string) {
 }
 
 function FormField({ label, help, required, children }: { label: string; help?: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="grid gap-1.5"><span className="text-[12px] font-medium text-slate-700">{label}{required && <span className="text-red-500"> *</span>}</span>{children}{help && <span className="text-[11px] leading-relaxed text-slate-500">{help}</span>}</label>
+  return <label className="grid gap-1.5"><span className="text-sm font-medium text-fg-muted">{label}{required && <span className="text-danger"> *</span>}</span>{children}{help && <span className="text-xs leading-relaxed text-fg-subtle">{help}</span>}</label>
 }
 
 function DetailField({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return <div className="rounded-md border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">{label}</p><div className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div></div>
+  return <div className="rounded-md border border-line bg-surface p-3"><p className="text-xs text-fg-subtle">{label}</p><div className={`mt-1 text-sm text-fg ${mono ? "font-mono" : ""}`}>{value}</div></div>
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-slate-200 bg-white p-4"><h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>{children}</section>
+  return <section className="rounded-lg border border-line bg-surface p-4"><h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>{children}</section>
 }
 
 function ErrorBanner({ message }: { message: string }) {
-  return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800" role="alert">{message}</div>
+  return <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis" role="alert">{message}</div>
 }
 
 function ToastBanner({ message }: { message: string }) {
-  return <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">{message}</div>
+  return <div className="mb-4 rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">{message}</div>
 }
 
 function CapabilitiesLoading() {
-  return <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="flex items-center gap-3"><Wrench className="h-4 w-4 text-slate-300" /><Skeleton className="h-5 flex-1" /></div>)}</div>
+  return <div className="space-y-2 rounded-lg border border-line bg-surface p-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="flex items-center gap-3"><Wrench className="h-4 w-4 text-fg-faint" /><Skeleton className="h-5 flex-1" /></div>)}</div>
 }
 
 function CapabilityDetailLoading() {

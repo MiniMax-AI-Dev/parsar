@@ -4,6 +4,7 @@ import { LineChart as LineChartIcon } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { Badge } from "../../components/ui/badge"
 import { EmptyState } from "../../components/ui/empty-state"
@@ -124,10 +125,11 @@ export function UsagePage() {
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
 
   return (
-    <AdminLayout activeMenu="usage">
+    <AdminLayout activeMenu="settings">
       <PageHeader
         title={t("usage.page.title")}
       />
+      <SettingsTabs active="usage" />
       {!pid ? (
         <ScopeRequiredState scope="project" resourceName={t("usage.page.title")} />
       ) : query.isLoading ? (
@@ -163,8 +165,8 @@ export function UsagePage() {
 
           {/* By model */}
           <section>
-            <h2 className="mb-3 text-[13px] font-semibold text-slate-900">{t("usage.byModel.title")}</h2>
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <h2 className="mb-3 text-sm font-semibold text-fg">{t("usage.byModel.title")}</h2>
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -179,12 +181,12 @@ export function UsagePage() {
                 <TableBody>
                   {byModel.map((m) => (
                     <TableRow key={m.key}>
-                      <TableCell className="text-[12px] text-slate-600">{m.provider}</TableCell>
-                      <TableCell><code className="text-[12px] text-slate-800">{m.model}</code></TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{m.callCount}</TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(m.inputTokens)}</TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(m.outputTokens)}</TableCell>
-                      <TableCell className="text-right pr-4 font-mono text-[12px] tabular-nums text-slate-700">{fmtUsd(m.costUsd)}</TableCell>
+                      <TableCell className="text-sm text-fg-muted">{m.provider}</TableCell>
+                      <TableCell><code className="text-sm text-fg-emphasis">{m.model}</code></TableCell>
+                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{m.callCount}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(m.inputTokens)}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(m.outputTokens)}</TableCell>
+                      <TableCell className="text-right pr-4 font-mono text-sm tabular-nums text-fg-muted">{fmtUsd(m.costUsd)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -194,8 +196,8 @@ export function UsagePage() {
 
           {/* Recent calls */}
           <section>
-            <h2 className="mb-3 text-[13px] font-semibold text-slate-900">{t("usage.recent.title")}</h2>
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <h2 className="mb-3 text-sm font-semibold text-fg">{t("usage.recent.title")}</h2>
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -211,11 +213,11 @@ export function UsagePage() {
                 <TableBody>
                   {logs.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-mono text-[11px] text-slate-500 tabular-nums">{fmtTime(u.created_at)}</TableCell>
+                      <TableCell className="font-mono text-xs text-fg-subtle tabular-nums">{fmtTime(u.created_at)}</TableCell>
                       <TableCell>
                         {u.agent_run_id ? (
                           <button
-                            className="font-mono text-[11px] text-slate-700 hover:underline"
+                            className="font-mono text-xs text-fg-muted hover:underline"
                             onClick={() => navigate("runs", { id: u.agent_run_id! })}
                           >
                             {shortId(u.agent_run_id)}
@@ -224,11 +226,11 @@ export function UsagePage() {
                           <Badge variant="neutral">{t("usage.recent.noRun")}</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-[12px] text-slate-600">{u.provider}</TableCell>
-                      <TableCell><code className="text-[12px] text-slate-800">{u.model}</code></TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(u.input_tokens)}</TableCell>
-                      <TableCell className="text-right text-[12px] tabular-nums text-slate-600">{fmtInt(u.output_tokens)}</TableCell>
-                      <TableCell className="text-right pr-4 font-mono text-[12px] tabular-nums text-slate-700">{fmtUsd(u.cost_usd)}</TableCell>
+                      <TableCell className="text-sm text-fg-muted">{u.provider}</TableCell>
+                      <TableCell><code className="text-sm text-fg-emphasis">{u.model}</code></TableCell>
+                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(u.input_tokens)}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(u.output_tokens)}</TableCell>
+                      <TableCell className="text-right pr-4 font-mono text-sm tabular-nums text-fg-muted">{fmtUsd(u.cost_usd)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -243,9 +245,9 @@ export function UsagePage() {
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="text-[11px] uppercase tracking-wider text-slate-400">{label}</div>
-      <div className={`mt-1 text-[22px] font-semibold tabular-nums text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</div>
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="text-xs uppercase tracking-wider text-fg-faint">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums text-fg ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   )
 }

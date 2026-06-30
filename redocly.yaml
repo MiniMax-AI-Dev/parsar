@@ -1,0 +1,12 @@
+extends:
+  - minimal
+rules:
+  # The contract is hand-maintained OpenAPI 3.1; many operations
+  # intentionally omit explicit security blocks, and several schemas
+  # still use `nullable: true` (a 3.0 idiom). A follow-up PR will
+  # tighten the spec — until then CI guards only what cannot drift:
+  # syntax, $ref integrity, enum sanity, duplicate operationIds.
+  security-defined: off
+  struct: warn
+  path-parameters-defined: warn
+  no-empty-servers: warn

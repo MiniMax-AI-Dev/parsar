@@ -105,7 +105,7 @@ type SandboxProvider interface {
 	//
 	// info.ExpiresAt is populated best-effort by querying e2b for the
 	// live TTL; a transient e2b error leaves it zero and the admin
-	// handler renders zero as "未知".
+	// handler renders zero as "unknown".
 	SandboxStatus(ctx context.Context, projectAgentID string) (connector.SandboxInfo, bool, error)
 
 	// Release tears down the sandbox associated with a project_agent.

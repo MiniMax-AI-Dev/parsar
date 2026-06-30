@@ -128,7 +128,7 @@ func (s HTTPRemoteStreamer) StreamPromptRemote(ctx context.Context, owner store.
 
 // SubmitPermissionRemote POSTs the verdict to the owner pod's internal
 // submit-permission endpoint. Errors surface to the feishu webhook
-// handler as "更新失败" toasts so the user can retry.
+// handler as "update failed" toasts so the user can retry.
 func (s HTTPRemoteStreamer) SubmitPermissionRemote(ctx context.Context, owner store.AgentDaemonDeviceOwnerRead, decision connector.PermissionDecision) error {
 	body, err := json.Marshal(remoteSubmitPermissionRequest{Generation: owner.Generation, Decision: decision})
 	if err != nil {
