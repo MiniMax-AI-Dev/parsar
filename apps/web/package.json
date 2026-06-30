@@ -40,7 +40,7 @@
     "vite": "^7.0.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.0",
     "@types/qrcode": "^1.5.6",
     "eslint": "^9.39.4",
