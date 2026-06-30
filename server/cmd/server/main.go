@@ -90,6 +90,17 @@ func main() {
 		"platform_admin_count", len(cfg.Auth.PlatformAdminUserIDs),
 	)
 
+	// Loopback PublicURL is the sole remaining dev trigger here (mock /
+	// dev-auth already excluded), so secure-cookie and master-key checks
+	// get relaxed purely on the URL. The listen addr is independent of
+	// PublicURL, so that does NOT keep the service off the network — warn
+	// loudly so fronting it with a public proxy isn't a silent footgun.
+	if cfg.Profile() == config.ProfileDev && !cfg.Auth.DevAuth && !cfg.Gateway.Feishu.Mock {
+		log.Bg().Warn("dev profile active via loopback PARSAR_PUBLIC_URL — secure-cookie and master-key checks are relaxed; do NOT expose this behind a public reverse proxy. Set PARSAR_PUBLIC_URL to your real https:// URL for production.",
+			"public_url", cfg.Server.PublicURL,
+			"addr", cfg.Server.Addr)
+	}
+
 	auth.SetPlatformAdminIDs(cfg.Auth.PlatformAdminUserIDs)
 
 	// envLookup returns YAML+env merged values for keys the config
