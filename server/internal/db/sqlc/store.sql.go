@@ -6225,6 +6225,106 @@ func (q *Queries) GetUserDisplayName(ctx context.Context, id pgtype.UUID) (strin
 	return display_name, err
 }
 
+const getWorkspaceConnectorByAppID = `-- name: GetWorkspaceConnectorByAppID :one
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = $1::text
+  and c.app_id = $2::text
+  and c.enabled = true
+  and c.deleted_at is null
+limit 1
+`
+
+type GetWorkspaceConnectorByAppIDParams struct {
+	Platform string `json:"platform"`
+	AppID    string `json:"app_id"`
+}
+
+type GetWorkspaceConnectorByAppIDRow struct {
+	CID           string             `json:"c_id"`
+	CWorkspaceID  string             `json:"c_workspace_id"`
+	WorkspaceName string             `json:"workspace_name"`
+	Platform      string             `json:"platform"`
+	AppID         string             `json:"app_id"`
+	Enabled       bool               `json:"enabled"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 出站 resolver 按 (platform, app_id) 反查启用的连接器,取 config 里的
+// *_ref 解密 token。
+func (q *Queries) GetWorkspaceConnectorByAppID(ctx context.Context, arg GetWorkspaceConnectorByAppIDParams) (GetWorkspaceConnectorByAppIDRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceConnectorByAppID, arg.Platform, arg.AppID)
+	var i GetWorkspaceConnectorByAppIDRow
+	err := row.Scan(
+		&i.CID,
+		&i.CWorkspaceID,
+		&i.WorkspaceName,
+		&i.Platform,
+		&i.AppID,
+		&i.Enabled,
+		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkspaceIMConnectors = `-- name: GetWorkspaceIMConnectors :many
+select
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+from workspace_im_connectors
+where workspace_id = $1::uuid
+  and deleted_at is null
+order by platform
+`
+
+type GetWorkspaceIMConnectorsRow struct {
+	ID          string             `json:"id"`
+	WorkspaceID string             `json:"workspace_id"`
+	Platform    string             `json:"platform"`
+	AppID       string             `json:"app_id"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 拉取某 workspace 全部平台的有效连接器(前端面板初始化用)。
+func (q *Queries) GetWorkspaceIMConnectors(ctx context.Context, workspaceID pgtype.UUID) ([]GetWorkspaceIMConnectorsRow, error) {
+	rows, err := q.db.Query(ctx, getWorkspaceIMConnectors, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetWorkspaceIMConnectorsRow{}
+	for rows.Next() {
+		var i GetWorkspaceIMConnectorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Platform,
+			&i.AppID,
+			&i.Enabled,
+			&i.Config,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWorkspaceMemberRole = `-- name: GetWorkspaceMemberRole :one
 select role
 from workspace_members
@@ -9517,6 +9617,63 @@ func (q *Queries) ListUserWorkspaces(ctx context.Context, arg ListUserWorkspaces
 	return items, nil
 }
 
+const listWorkspaceConnectorsByPlatform = `-- name: ListWorkspaceConnectorsByPlatform :many
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = $1::text
+  and c.enabled = true
+  and c.app_id <> ''
+  and c.deleted_at is null
+order by c.workspace_id, c.app_id
+`
+
+type ListWorkspaceConnectorsByPlatformRow struct {
+	CID           string             `json:"c_id"`
+	CWorkspaceID  string             `json:"c_workspace_id"`
+	WorkspaceName string             `json:"workspace_name"`
+	Platform      string             `json:"platform"`
+	AppID         string             `json:"app_id"`
+	Enabled       bool               `json:"enabled"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 入站 reconciler 按平台扫描所有启用的连接器,为每条 (workspace_id,
+// app_id) 维持一条长连接。
+func (q *Queries) ListWorkspaceConnectorsByPlatform(ctx context.Context, platform string) ([]ListWorkspaceConnectorsByPlatformRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceConnectorsByPlatform, platform)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceConnectorsByPlatformRow{}
+	for rows.Next() {
+		var i ListWorkspaceConnectorsByPlatformRow
+		if err := rows.Scan(
+			&i.CID,
+			&i.CWorkspaceID,
+			&i.WorkspaceName,
+			&i.Platform,
+			&i.AppID,
+			&i.Enabled,
+			&i.Config,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaceMarketplaceInstalls = `-- name: ListWorkspaceMarketplaceInstalls :many
 select distinct
   c.id::text as capability_id,
@@ -12458,6 +12615,81 @@ func (q *Queries) UpsertUserByEmail(ctx context.Context, arg UpsertUserByEmailPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Created,
+	)
+	return i, err
+}
+
+const upsertWorkspaceIMConnector = `-- name: UpsertWorkspaceIMConnector :one
+
+insert into workspace_im_connectors (
+  id, workspace_id, platform, app_id, enabled, config, created_by, created_at, updated_at
+) values (
+  $1::uuid, $2::uuid, $3::text, $4::text,
+  $5::boolean, $6, nullif($7::text, '')::uuid, $8, $8
+)
+on conflict (workspace_id, platform) where deleted_at is null
+do update set
+  app_id     = excluded.app_id,
+  enabled    = excluded.enabled,
+  config     = excluded.config,
+  updated_at = excluded.updated_at
+returning
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+`
+
+type UpsertWorkspaceIMConnectorParams struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Platform    string             `json:"platform"`
+	AppID       string             `json:"app_id"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedBy   string             `json:"created_by"`
+	Now         pgtype.Timestamptz `json:"now"`
+}
+
+type UpsertWorkspaceIMConnectorRow struct {
+	ID          string             `json:"id"`
+	WorkspaceID string             `json:"workspace_id"`
+	Platform    string             `json:"platform"`
+	AppID       string             `json:"app_id"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// ============================================================
+// workspace_im_connectors — workspace 维度 IM 连接器(feishu/slack/discord)
+// 见 migration 000002。凭据密文在 secrets(vault),本表 config 只存
+// *_ref 与非敏感字段。app_id 是 workspace-bot 的通用 join key。
+// ============================================================
+// 按 (workspace_id, platform) 唯一约束 upsert。冲突时更新 app_id /
+// enabled / config / updated_at,保留 id / created_by / created_at。
+// 若 (platform, app_id) 撞了别的 workspace,会触发 uk_wic_platform_appid
+// 唯一冲突并报错(由 store 层映射成 *_app_id_in_use)。
+func (q *Queries) UpsertWorkspaceIMConnector(ctx context.Context, arg UpsertWorkspaceIMConnectorParams) (UpsertWorkspaceIMConnectorRow, error) {
+	row := q.db.QueryRow(ctx, upsertWorkspaceIMConnector,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Platform,
+		arg.AppID,
+		arg.Enabled,
+		arg.Config,
+		arg.CreatedBy,
+		arg.Now,
+	)
+	var i UpsertWorkspaceIMConnectorRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Platform,
+		&i.AppID,
+		&i.Enabled,
+		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

@@ -795,6 +795,28 @@ type Workspace struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+// workspace 维度的 IM 连接器绑定(feishu/slack/discord 统一存储)
+type WorkspaceImConnector struct {
+	// 连接器主键
+	ID pgtype.UUID `json:"id"`
+	// 所属 workspace
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	// IM 平台: feishu / slack / discord
+	Platform string `json:"platform"`
+	// 平台应用 ID(配置时即可知, workspace-bot 的通用 join key)
+	AppID string `json:"app_id"`
+	// 是否启用(启用后 reconciler 才会为其建立入站连接)
+	Enabled bool `json:"enabled"`
+	// 非敏感配置 + 密钥引用(*_ref 指向 secrets.id; 含 event_mode/intents 等)
+	Config []byte `json:"config"`
+	// 创建人
+	CreatedBy pgtype.UUID        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 软删除时间戳; NULL=有效
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
 // workspace 成员与角色表(含申请状态机)
 type WorkspaceMember struct {
 	ID pgtype.UUID `json:"id"`

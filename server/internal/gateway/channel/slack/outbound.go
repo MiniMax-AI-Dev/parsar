@@ -74,12 +74,16 @@ func defaultSenderFactory(token string) slackSender {
 }
 
 // senderFor resolves the bot token and builds a sender via the injected
-// factory. Per-call resolution keeps token rotation hot. The target's
-// TenantKey (Slack team_id) is passed as the resolver botID so a
-// multi-workspace deployment mints the per-team token; the static/env
-// resolver ignores it and returns the one configured token.
+// factory. Per-call resolution keeps token rotation hot. The resolver botID
+// is the workspace-bot's app_id when the inbound side captured one
+// (SourceAppID) — the join key into workspace_im_connectors — falling back
+// to the legacy TenantKey (Slack team_id) and finally the channel's static
+// appID. The static/env resolver ignores the key and returns its one token.
 func (c *Channel) senderFor(ctx context.Context, target channel.ReplyTarget) (slackSender, error) {
-	botID := strings.TrimSpace(target.TenantKey)
+	botID := strings.TrimSpace(target.SourceAppID)
+	if botID == "" {
+		botID = strings.TrimSpace(target.TenantKey)
+	}
 	if botID == "" {
 		botID = c.appID
 	}

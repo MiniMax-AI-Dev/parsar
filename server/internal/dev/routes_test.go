@@ -4482,3 +4482,19 @@ func (stubRuntimeStore) RejectJoinRequest(ctx context.Context, input store.Revie
 func (stubRuntimeStore) WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error {
 	return nil
 }
+
+func (stubRuntimeStore) GetWorkspaceIMConnectors(ctx context.Context, workspaceID string) ([]store.WorkspaceConnectorRead, error) {
+	return nil, nil
+}
+
+func (stubRuntimeStore) UpsertWorkspaceSlackConnector(ctx context.Context, input store.UpsertWorkspaceSlackConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
+}
+
+func (stubRuntimeStore) UpsertWorkspaceDiscordConnector(ctx context.Context, input store.UpsertWorkspaceDiscordConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
+}
+
+func (stubRuntimeStore) UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
+}
