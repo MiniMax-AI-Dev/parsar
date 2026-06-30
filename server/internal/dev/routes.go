@@ -28,6 +28,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -235,10 +236,10 @@ type routerConfig struct {
 	// ctx so background goroutines exit cleanly on shutdown. Defaults
 	// to context.Background() when unwired (fine for unit tests).
 	dispatchCtx context.Context
-	// ossClient backs the capability-plugin upload/download flow. Nil
-	// means OSS is not configured — upload presign + plugin import
-	// 503 with "OSS not configured" rather than failing boot.
-	ossClient OSSClient
+	// blobStore backs the capability plugin/skill upload + import flow.
+	// Nil means the selected backend is unavailable — upload presign +
+	// import 503 rather than failing boot.
+	blobStore blob.Store
 
 	// feishuJoinURLBuilder is invoked by the visibility=workspace
 	// rejection card so the Feishu rejection surfaces a markdown
@@ -546,14 +547,14 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/capabilities", createWorkspaceCapability(runtimeStore))
 			// Capability import — preview is a pure parse; commit runs
 			// the all-or-nothing materialization.
-			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.ossClient))
-			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.ossClient))
+			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.blobStore))
+			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
 			// Plugin upload presign — browser PUTs the zip directly to
-			// OSS, then calls import/commit with the returned ossKey.
-			// presign-download checks ossKey belongs to the calling
+			// the blob backend, then calls import/commit with the returned
+			// ossKey. presign-download checks ossKey belongs to the calling
 			// workspace to close the cross-tenant read hole.
-			r.Post("/workspaces/{workspaceID}/uploads/presign-upload", presignUpload(runtimeStore, cfg.ossClient))
-			r.Post("/workspaces/{workspaceID}/uploads/presign-download", presignDownload(runtimeStore, cfg.ossClient))
+			r.Post("/workspaces/{workspaceID}/uploads/presign-upload", presignUpload(runtimeStore, cfg.blobStore))
+			r.Post("/workspaces/{workspaceID}/uploads/presign-download", presignDownload(runtimeStore, cfg.blobStore))
 			// Workspace-scoped credential_kinds CRUD (table is global;
 			// scoped for RBAC consistency with import endpoints).
 			r.Get("/workspaces/{workspaceID}/credential-kinds", listCredentialKinds(runtimeStore))
@@ -571,7 +572,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/undeprecate", undeprecateWorkspaceCapability(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions", listWorkspaceCapabilityVersions(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions", createWorkspaceCapabilityVersion(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit", commitCapabilityVersionImport(runtimeStore, cfg.ossClient))
+			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit", commitCapabilityVersionImport(runtimeStore, cfg.blobStore))
 			r.Post("/agent-runs/{runID}/cancel", cancelAgentRun(runtimeStore, cfg))
 			r.Post("/conversations/{conversationID}/cancel-all", cancelConversationRuns(runtimeStore, cfg))
 			r.Put("/workspaces/{workspaceID}/runtime/credential", gateWorkspaceOwnerOrAdmin(runtimeStore, putRuntimeCredential(runtimeStore)))

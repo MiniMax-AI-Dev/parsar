@@ -50,6 +50,7 @@ import (
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/specmemory"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -196,6 +197,38 @@ func main() {
 		log.Bg().Info("OSS not configured (storage.oss.bucket empty); plugin capability disabled")
 	}
 
+	// Capability blob storage. Default backend is Postgres (zero external
+	// infra); operators opt into OSS with PARSAR_BLOB_BACKEND=oss. blobStore
+	// is nil when the chosen backend isn't usable (no pool / no OSS) —
+	// upload routes then 503 exactly like the old OSS-not-configured path.
+	var blobStore blob.Store
+	var blobProxy *blob.ProxyHandler
+	switch strings.ToLower(strings.TrimSpace(cfg.Storage.BlobBackend)) {
+	case "oss":
+		if ossClient != nil {
+			blobStore = blob.NewOSSStore(ossClient)
+			log.Bg().Info("capability blob backend: oss")
+		} else {
+			log.Bg().Warn("PARSAR_BLOB_BACKEND=oss but OSS is not configured; capability upload disabled")
+		}
+	default: // "pg" and anything unrecognized fall back to Postgres.
+		if pool != nil {
+			signer := blob.NewProxySigner(cfg.Secret.MasterKey)
+			if !signer.Enabled() {
+				log.Bg().Warn("capability blob backend pg: master key empty; proxy tokens cannot be signed (set PARSAR_MASTER_KEY)")
+			}
+			// baseURL must be daemon-reachable; reuse the public-URL builder
+			// (dev fallback http://127.0.0.1:18080; prod requires PublicURL).
+			baseURL := strings.TrimSuffix(cfg.BuildPublicURL("/"), "/")
+			pgStore := blob.NewPGStore(sqlc.New(pool), signer, baseURL)
+			blobStore = pgStore
+			blobProxy = blob.NewProxyHandler(pgStore, signer)
+			log.Bg().Info("capability blob backend: pg", "base_url", baseURL)
+		} else {
+			log.Bg().Warn("capability blob backend pg: no database pool; capability upload disabled")
+		}
+	}
+
 	// Spec/memory service: reused by connectors and HTTP routes so
 	// admin writes and runtime writes land on the same audit ingester.
 	// Nil dbStore → connectors treat nil SpecMemory as "injection disabled".
@@ -210,6 +243,13 @@ func main() {
 	// Trace middleware first so every downstream handler emits log
 	// lines tagged with a stable trace_id.
 	r.Use(log.HTTPMiddleware)
+	// PG blob proxy: authenticated PUT/GET for capability zips when the
+	// Postgres backend is active. Token-authenticated inside the handler;
+	// intentionally NOT behind session middleware (the daemon and the
+	// browser presigned-PUT both call it with a signed token).
+	if blobProxy != nil {
+		r.Handle(blob.ProxyPathPrefix+"*", blobProxy)
+	}
 	// Wrap pool in a local var so the Pinger interface ends up nil
 	// when pool is nil — assigning a typed-nil *pgxpool.Pool would
 	// otherwise produce a non-nil interface holding a nil pointer and
@@ -353,12 +393,13 @@ func main() {
 			SandboxBindingReader: dbStore,
 			Log:                  log.Bg(),
 		}
-		// Only assign OSS when ossClient is a real, non-nil pointer —
-		// assigning a typed-nil interface field would silently defeat
-		// the `c.oss == nil` skip check in resolvePluginCapability /
-		// resolveSkillCapability.
-		if ossClient != nil {
-			agentDaemonCfg.OSS = ossClient
+		// The daemon only needs a short-lived GET URL per capability ref.
+		// blobDownloadAdapter bridges blob.Store onto the daemon's existing
+		// OSSPresigner surface so the agentdaemon package is backend-agnostic
+		// without any churn. Guarded so a nil store stays a nil interface and
+		// the connector's `c.oss == nil` skip still fires.
+		if blobStore != nil {
+			agentDaemonCfg.OSS = blobDownloadAdapter{store: blobStore}
 		}
 		agentDaemonConn := connagentdaemon.New(agentDaemonCfg)
 		connagentdaemon.RegisterInternalRoutes(r, agentDaemonConn, agentDaemonInternalToken)
@@ -483,8 +524,8 @@ func main() {
 		"profile", runtimeProfile,
 		"managed_sandbox_provider", managedSandboxProviderWired)
 	opts = append(opts, dev.WithRuntimeStatus(runtimeStatusDeps))
-	if ossClient != nil {
-		opts = append(opts, dev.WithOSSClient(ossClient))
+	if blobStore != nil {
+		opts = append(opts, dev.WithBlobStore(blobStore))
 	}
 
 	// Wire the audit ingester for dev handlers that emit directly.
@@ -1966,4 +2007,17 @@ func (a streamingDispatcherAdapter) Start(ctx context.Context, in store.Streamin
 	if a.failRun != nil {
 		a.failRun(ctx, in.RunID, in.ConnectorType, "auto-start failed: "+err.Error())
 	}
+}
+
+// blobDownloadAdapter exposes blob.Store on the agent-daemon connector's
+// narrow OSSPresigner interface (PresignGet → short-lived GET URL). The
+// daemon discards the expiry; we still return it for signature parity.
+type blobDownloadAdapter struct{ store blob.Store }
+
+func (a blobDownloadAdapter) PresignGet(ctx context.Context, ref string, ttl time.Duration) (string, time.Time, error) {
+	spec, err := a.store.DownloadURL(ctx, ref, ttl)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return spec.URL, spec.Expires, nil
 }
