@@ -2,8 +2,7 @@ import { useTranslation } from "react-i18next"
 import {
   Bot,
   HelpCircle,
-  PackageSearch,
-  Sparkles,
+  Inbox,
 } from "lucide-react"
 
 import { useAdminView, useAppRoute } from "../../lib/admin-router"
@@ -73,10 +72,8 @@ export function AdminRouter() {
   }
 
   switch (v) {
-    case "artifacts":
-      return <StubPage view={v} itemKey="artifacts" icon={PackageSearch} />
-    case "updates":
-      return <StubPage view={v} itemKey="updates" icon={Sparkles} />
+    case "approvals":
+      return <StubPage view={v} itemKey="approvals" icon={Inbox} />
     case "members":
       return <MembersPage />
     case "secrets":

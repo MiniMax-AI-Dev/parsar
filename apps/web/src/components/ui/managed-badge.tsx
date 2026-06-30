@@ -27,8 +27,8 @@ export function ManagedBadge({ unmanaged, className }: ManagedBadgeProps) {
             className={cn(
               "inline-flex cursor-help items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
               unmanaged
-                ? "border-slate-200 bg-slate-50 text-slate-600"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                ? "border-line bg-surface-subtle text-fg-muted"
+                : "border-success-border bg-success-subtle text-success",
               className
             )}
           >
@@ -39,7 +39,7 @@ export function ManagedBadge({ unmanaged, className }: ManagedBadgeProps) {
         <Tooltip.Portal>
           <Tooltip.Content
             side="top"
-            className="z-50 max-w-xs rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] leading-relaxed text-slate-700 shadow-lg"
+            className="z-50 max-w-xs rounded-md border border-line bg-surface px-3 py-2 text-sm leading-relaxed text-fg-muted shadow-lg"
           >
             {tooltip}
             <Tooltip.Arrow className="fill-white" />

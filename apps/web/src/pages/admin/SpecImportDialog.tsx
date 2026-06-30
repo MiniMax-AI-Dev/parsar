@@ -71,7 +71,7 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
   return (
     <Dialog open onOpenChange={(next) => { if (!next && !busy) onClose() }}>
       <DialogContent className="max-w-3xl gap-0 p-0">
-        <DialogHeader className="border-b border-slate-100 px-5 py-4 pr-10">
+        <DialogHeader className="border-b border-line-muted px-5 py-4 pr-10">
           <DialogTitle className="text-sm">{t("specs.import.title")}</DialogTitle>
           <DialogDescription>{t("specs.import.description")}</DialogDescription>
         </DialogHeader>
@@ -79,7 +79,7 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
         {stage.kind === "edit" ? (
           <div className="space-y-3 px-5 py-4">
             <label className="block space-y-1">
-              <span className="text-[13px] font-medium text-slate-700">
+              <span className="text-sm font-medium text-fg-muted">
                 {t("specs.import.field.text")}
               </span>
               <textarea
@@ -87,36 +87,36 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
                 onChange={(event) => setText(event.target.value)}
                 placeholder={t("specs.import.placeholder.text")}
                 rows={18}
-                className="block w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                className="block w-full rounded-md border border-line px-3 py-2 font-mono text-sm leading-relaxed text-fg-emphasis placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
             </label>
             {previewErr && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[13px] font-medium text-red-900">
+              <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">
                   {t("specs.import.error.previewTitle")}
                 </p>
-                <p className="text-[12px] text-red-700">{previewErr.message}</p>
+                <p className="text-xs text-danger-emphasis">{previewErr.message}</p>
               </div>
             )}
           </div>
         ) : (
           <div className="space-y-3 px-5 py-4">
-            <p className="text-[13px] font-medium text-slate-700">
+            <p className="text-sm font-medium text-fg-muted">
               {t("specs.import.preview.title", { count: stage.pieces.length })}
             </p>
             {stage.pieces.length === 0 ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+              <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
                 {t("specs.import.preview.empty")}
               </div>
             ) : (
-              <ul className="max-h-[420px] space-y-2 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-3">
+              <ul className="max-h-[420px] space-y-2 overflow-y-auto rounded-md border border-line bg-surface-subtle p-3">
                 {stage.pieces.map((piece, idx) => (
                   <li
                     key={`${piece.title}-${idx}`}
-                    className="rounded-md border border-slate-200 bg-white px-3 py-2"
+                    className="rounded-md border border-line bg-surface px-3 py-2"
                   >
-                    <p className="text-[13px] font-semibold text-slate-900">{piece.title}</p>
-                    <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-slate-600">
+                    <p className="text-sm font-semibold text-fg">{piece.title}</p>
+                    <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted">
                       {piece.body}
                     </pre>
                   </li>
@@ -124,17 +124,17 @@ export function SpecImportDialog({ workspaceID, onClose }: SpecImportDialogProps
               </ul>
             )}
             {confirmErr && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[13px] font-medium text-red-900">
+              <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">
                   {t("specs.import.error.confirmTitle")}
                 </p>
-                <p className="text-[12px] text-red-700">{confirmErr.message}</p>
+                <p className="text-xs text-danger-emphasis">{confirmErr.message}</p>
               </div>
             )}
           </div>
         )}
 
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           {stage.kind === "edit" ? (
             <>
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy}>

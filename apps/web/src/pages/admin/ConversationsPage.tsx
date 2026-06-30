@@ -293,25 +293,25 @@ function ConversationSidebar(p: SidebarProps) {
   }
 
   return (
-    <aside className="relative flex w-[244px] shrink-0 flex-col border-r border-slate-200/70 bg-slate-50/70 px-2.5 py-2.5">
+    <aside className="relative flex w-[244px] shrink-0 flex-col border-r border-line/70 bg-surface-subtle/70 px-2.5 py-2.5">
       {/* Current agent header (click to switch) */}
       <button
         type="button"
         onClick={() => setPickerOpen((v) => !v)}
-        className="flex w-full items-start gap-2.5 rounded-lg border border-transparent bg-white/70 px-2.5 py-2 text-left shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition-colors hover:border-slate-200 hover:bg-white"
+        className="flex w-full items-start gap-2.5 rounded-lg border border-transparent bg-surface/70 px-2.5 py-2 text-left shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition-colors hover:border-line hover:bg-surface"
         aria-haspopup="listbox"
         aria-expanded={pickerOpen}
         aria-label={t("conversations.sidebar.switchAgent")}
       >
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-1">
-            <span className="truncate text-[14px] font-semibold text-slate-900">
+            <span className="truncate text-base font-semibold text-fg">
               {selectedAgent?.name || t("conversations.sidebar.allAgentsHint")}
             </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" strokeWidth={2} />
+            <ChevronDown className="h-3 w-3 shrink-0 text-fg-faint" strokeWidth={2} />
           </div>
           {selectedAgent && (
-            <span className="mt-0.5 truncate text-[12px] text-slate-500">
+            <span className="mt-0.5 truncate text-xs text-fg-subtle">
               {selectedAgent.description || t("conversations.sidebar.currentAgentDesc")}
             </span>
           )}
@@ -321,12 +321,12 @@ function ConversationSidebar(p: SidebarProps) {
       {pickerOpen && (
         <div
           role="listbox"
-          className="absolute left-2 right-2 top-[54px] z-10 max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg"
+          className="absolute left-2 right-2 top-[54px] z-10 max-h-72 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg"
         >
           {p.agentsLoading ? (
             <div className="p-3"><Skeleton className="h-8 w-full" /></div>
           ) : p.agents.length === 0 ? (
-            <p className="p-3 text-[13px] text-slate-500">{t("conversations.sidebar.allAgentsHint")}</p>
+            <p className="p-3 text-sm text-fg-subtle">{t("conversations.sidebar.allAgentsHint")}</p>
           ) : (
             p.agents.map((a) => (
               <button
@@ -339,13 +339,13 @@ function ConversationSidebar(p: SidebarProps) {
                   setPickerOpen(false)
                 }}
                 className={cn(
-                  "block w-full px-3 py-2 text-left text-[13px] transition-colors hover:bg-slate-50",
-                  a.project_agent_id === p.selectedAgentId && "bg-blue-50 text-blue-700",
+                  "block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-surface-subtle",
+                  a.project_agent_id === p.selectedAgentId && "bg-info-subtle text-info",
                 )}
               >
                 <div className="font-medium">{a.name}</div>
                 {a.description && (
-                  <div className="mt-0.5 truncate text-[12px] text-slate-500">{a.description}</div>
+                  <div className="mt-0.5 truncate text-xs text-fg-subtle">{a.description}</div>
                 )}
               </button>
             ))
@@ -359,8 +359,8 @@ function ConversationSidebar(p: SidebarProps) {
         onClick={p.onNewConversation}
         disabled={!p.selectedAgentId}
         className={cn(
-          "mt-2 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-2.5 text-[14px] font-medium text-white shadow-sm transition-colors",
-          "hover:bg-slate-800",
+          "mt-2 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-surface-emphasis px-2.5 text-base font-medium text-white shadow-sm transition-colors",
+          "hover:bg-surface-emphasis",
           "disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
@@ -377,7 +377,7 @@ function ConversationSidebar(p: SidebarProps) {
             ))}
           </div>
         ) : p.conversations.length === 0 ? (
-          <p className="px-3 pt-4 text-[13px] leading-relaxed text-slate-400">
+          <p className="px-3 pt-4 text-sm leading-relaxed text-fg-faint">
             {t("conversations.sidebar.emptyForAgent")}
           </p>
         ) : (
@@ -402,7 +402,7 @@ function ConversationSidebar(p: SidebarProps) {
                 }}
                 className={cn(
                   "group/row relative block w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
-                  isActive ? "border-slate-200 bg-white shadow-sm" : "border-transparent hover:border-slate-200 hover:bg-white/80",
+                  isActive ? "border-line bg-surface shadow-sm" : "border-transparent hover:border-line hover:bg-surface/80",
                   isRenaming ? "cursor-default" : "cursor-pointer",
                 )}
               >
@@ -426,12 +426,12 @@ function ConversationSidebar(p: SidebarProps) {
                       }}
                       onClick={(e) => e.stopPropagation()}
                       disabled={renameBusy}
-                      className="h-7 text-[13px]"
+                      className="h-7 text-sm"
                       aria-label={t("conversations.sidebar.renameAria")}
                     />
                     <div className="flex items-center justify-end gap-1">
                       {renameError && (
-                        <span className="mr-auto text-[12px] text-red-500">
+                        <span className="mr-auto text-xs text-danger">
                           {renameError}
                         </span>
                       )}
@@ -443,7 +443,7 @@ function ConversationSidebar(p: SidebarProps) {
                         }}
                         disabled={renameBusy}
                         aria-label={t("conversations.sidebar.renameCancel")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted disabled:opacity-50"
                       >
                         <X className="h-3.5 w-3.5" strokeWidth={2} />
                       </button>
@@ -455,7 +455,7 @@ function ConversationSidebar(p: SidebarProps) {
                         }}
                         disabled={renameBusy}
                         aria-label={t("conversations.sidebar.renameCommit")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-info transition-colors hover:bg-info-subtle disabled:opacity-50"
                       >
                         {renameBusy ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -468,17 +468,17 @@ function ConversationSidebar(p: SidebarProps) {
                 ) : (
                   <>
                     <div className="flex items-center gap-1.5 pr-12">
-                      {isActive && <CircleDot className="h-3 w-3 shrink-0 text-emerald-500" strokeWidth={2.4} />}
+                      {isActive && <CircleDot className="h-3 w-3 shrink-0 text-success" strokeWidth={2.4} />}
                       <div
                         className={cn(
-                          "truncate text-[13px]",
-                          isActive ? "font-semibold text-slate-950" : "font-medium text-slate-700",
+                          "truncate text-sm",
+                          isActive ? "font-semibold text-fg" : "font-medium text-fg-muted",
                         )}
                       >
                         {truncate(c.title || "", 18)}
                       </div>
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-[12px] text-slate-400">
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-faint">
                       <span className="min-w-0 flex-1 truncate">
                         {c.last_message_preview || (c.last_message_at ? fmtAgo(c.last_message_at) : fmtAgo(c.created_at))}
                       </span>
@@ -493,7 +493,7 @@ function ConversationSidebar(p: SidebarProps) {
                           startRename(c)
                         }}
                         aria-label={t("conversations.sidebar.renameAria")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted"
                       >
                         <Pencil className="h-3 w-3" strokeWidth={2} />
                       </button>
@@ -505,7 +505,7 @@ function ConversationSidebar(p: SidebarProps) {
                           setDeleteConvId(c.id)
                         }}
                         aria-label={t("conversations.sidebar.deleteAria")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-danger-subtle hover:text-danger"
                       >
                         <Trash2 className="h-3 w-3" strokeWidth={2} />
                       </button>
@@ -526,7 +526,7 @@ function ConversationSidebar(p: SidebarProps) {
       >
         <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
           <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-            <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+            <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
               <ShieldAlert className="h-4 w-4" />
             </div>
             <div className="space-y-1.5">
@@ -540,9 +540,9 @@ function ConversationSidebar(p: SidebarProps) {
               </DialogDescription>
             </div>
           </DialogHeader>
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
             {deleteError && (
-              <span className="mr-auto text-[13px] text-red-600">{deleteError}</span>
+              <span className="mr-auto text-sm text-danger">{deleteError}</span>
             )}
             <Button
               variant="outline"
@@ -570,7 +570,7 @@ function ConversationSidebar(p: SidebarProps) {
         type="button"
         onClick={p.onFold}
         aria-label={t("conversations.sidebar.foldAria")}
-        className="absolute -right-[11px] top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition-opacity hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100 [aside:hover_&]:opacity-100"
+        className="absolute -right-[11px] top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-surface text-fg-subtle opacity-0 shadow-sm transition-opacity hover:border-info-border hover:bg-info-subtle hover:text-info group-hover:opacity-100 [aside:hover_&]:opacity-100"
       >
         <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
       </button>
@@ -611,7 +611,7 @@ function ConversationMain(p: MainProps) {
           type="button"
           onClick={p.onExpand}
           aria-label={t("conversations.sidebar.expandAria")}
-          className="absolute left-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+          className="absolute left-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface text-fg-subtle shadow-sm transition-colors hover:border-line-strong hover:bg-surface-subtle hover:text-fg"
         >
           <ChevronRight className="h-4 w-4" strokeWidth={2} />
         </button>
@@ -689,12 +689,12 @@ function EmptyChat({
   return (
     <div className="flex flex-1 flex-col bg-[radial-gradient(circle_at_58%_28%,rgba(226,232,240,0.72),transparent_34%),linear-gradient(180deg,#fbfcfd_0%,#ffffff_72%)] px-5 py-6 sm:px-8">
       <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 text-[12px] text-slate-500">
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/80 px-2 py-1 font-medium shadow-sm">
-            <Bot className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} />
+        <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface/80 px-2 py-1 font-medium shadow-sm">
+            <Bot className="h-3.5 w-3.5 text-fg-subtle" strokeWidth={2} />
             {agent?.name || t("conversations.sidebar.allAgentsHint")}
           </span>
-          <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+          <span className="rounded-md border border-success-border bg-success-subtle px-2 py-1 font-medium text-success">
             {t("conversations.empty.mode")}
           </span>
         </div>
@@ -702,10 +702,10 @@ function EmptyChat({
         <div className="grid flex-1 place-items-center py-8">
           <div className="w-full max-w-3xl">
             <div className="mb-7 text-center">
-              <h2 className="text-[25px] font-semibold tracking-display text-slate-950 sm:text-[28px]">
+              <h2 className="text-2xl font-semibold tracking-display text-fg">
                 {t("conversations.empty.greet")}
               </h2>
-              <p className="mx-auto mt-2 max-w-md text-[13px] leading-6 text-slate-500">
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-fg-subtle">
                 {pageDescription}
               </p>
             </div>
@@ -800,18 +800,18 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
 
   return (
     <>
-      <div className={cn("border-b border-slate-200/70 bg-white/80 px-5 py-3 sm:px-6 lg:px-10", sidebarFolded && "pl-14 sm:pl-16 lg:pl-[72px]")}>
+      <div className={cn("border-b border-line/70 bg-surface/80 px-5 py-3 sm:px-6 lg:px-10", sidebarFolded && "pl-14 sm:pl-16 lg:pl-[72px]")}>
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[12px] font-medium uppercase text-slate-400">{t("conversations.detail.kind")}</p>
-            <h2 className="truncate text-[15px] font-semibold text-slate-950">
+            <p className="text-xs font-medium uppercase text-fg-faint">{t("conversations.detail.kind")}</p>
+            <h2 className="truncate text-base font-semibold text-fg">
               {agent?.name || t("conversations.sidebar.allAgentsHint")}
             </h2>
           </div>
-          <div className="flex shrink-0 items-center gap-2 text-[12px] text-slate-500">
+          <div className="flex shrink-0 items-center gap-2 text-xs text-fg-subtle">
             <span className={cn(
               "rounded-md border px-2 py-1 font-medium",
-              someRunActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-500",
+              someRunActive ? "border-success-border bg-success-subtle text-success" : "border-line bg-surface text-fg-subtle",
             )}>
               {someRunActive ? t("conversations.stream.thinking") : t("conversations.stream.ready")}
             </span>
@@ -835,7 +835,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
                   setActiveRunId(null)
                   cancelConvMut.mutate({ conversationID: conversationId, reason: "user_clicked_cancel_all" })
                 }}
-                className="h-7 gap-1 px-2 text-[12px] text-red-600 hover:text-red-700"
+                className="h-7 gap-1 px-2 text-xs text-danger hover:text-danger-emphasis"
                 title={t("conversations.detail.cancelAllAria", { defaultValue: "取消该会话所有进行中的任务" })}
               >
                 {cancelConvMut.isPending ? (
@@ -855,7 +855,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
           {timelineQ.isLoading ? (
             <Skeleton className="h-24 w-3/4" />
           ) : messages.length === 0 ? (
-            <p className="text-center text-[13px] text-slate-400">
+            <p className="text-center text-sm text-fg-faint">
               {t("conversations.detail.emptyTimeline")}
             </p>
           ) : (
@@ -884,7 +884,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
             />
           )}
           {stream.status === "error" && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <div className="rounded-lg border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {t("conversations.stream.error", { error: stream.error ?? "" })}
             </div>
           )}
@@ -902,11 +902,11 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
                 }
               />
             ) : (
-              <div className="flex w-fit items-center gap-2 rounded-md bg-white px-3 py-2 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200/70">
+              <div className="flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-slate-200/70">
                 <span className="flex items-center gap-1" aria-hidden="true">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-300ms]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-150ms]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-300ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-150ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success" />
                 </span>
                 {hasActiveStream
                   ? t("conversations.stream.thinking")
@@ -927,7 +927,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
             .map((r) => (
               <div
                 key={r.id}
-                className="flex w-fit items-center gap-2 rounded-md border border-slate-200/70 bg-slate-50 px-3 py-2 text-[13px] text-slate-500 shadow-sm"
+                className="flex w-fit items-center gap-2 rounded-md border border-line/70 bg-surface-subtle px-3 py-2 text-sm text-fg-subtle shadow-sm"
               >
                 <Clock className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden="true" />
                 {r.queue_position && r.queue_position > 1
@@ -982,12 +982,12 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
  */
 function ChatErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
-    <div className="mb-2 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+    <div className="mb-2 flex items-start justify-between gap-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
       <span className="break-words">{message}</span>
       <button
         type="button"
         onClick={onDismiss}
-        className="shrink-0 rounded px-1.5 py-0.5 text-[12px] font-medium text-red-700 hover:bg-red-100"
+        className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-danger-emphasis hover:bg-danger-subtle"
       >
         ×
       </button>
@@ -1022,10 +1022,10 @@ function MessageRow({
     return (
       <div className="flex justify-end">
         <div className="flex max-w-[88%] flex-col items-end sm:max-w-[78%]">
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-[14px] leading-relaxed text-emerald-950 shadow-sm">
+          <div className="rounded-lg border border-success-border bg-success-subtle px-4 py-2.5 text-base leading-relaxed text-success-emphasis shadow-sm">
             <p className="whitespace-pre-wrap">{content}</p>
           </div>
-          <div className="mt-1.5 text-right text-[12px] text-slate-400">{stamp}</div>
+          <div className="mt-1.5 text-right text-xs text-fg-faint">{stamp}</div>
         </div>
       </div>
     )
@@ -1035,23 +1035,23 @@ function MessageRow({
     return (
       <div className="flex">
         <div className="max-w-[78%]">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium text-red-700">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-danger-emphasis">
             <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
             <span>{t("conversations.runtime_error.badge")}</span>
           </div>
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[14px] leading-relaxed text-red-950 shadow-sm">
+          <div className="rounded-xl border border-danger-border bg-danger-subtle px-3 py-2.5 text-base leading-relaxed text-danger-emphasis shadow-sm">
             <p className="font-medium">{runtimeError.message}</p>
             {runtimeError.href && runtimeError.action && (
               <a
                 href={runtimeError.href}
-                className="mt-2 inline-flex items-center rounded-md border border-red-200 bg-white px-2.5 py-1 text-[13px] font-medium text-red-700 transition-colors hover:bg-red-100"
+                className="mt-2 inline-flex items-center rounded-md border border-danger-border bg-surface px-2.5 py-1 text-sm font-medium text-danger-emphasis transition-colors hover:bg-danger-subtle"
               >
                 {runtimeError.action}
               </a>
             )}
-            <p className="mt-2 text-[13px] text-red-700/80">{t("conversations.runtime_error.retryHint")}</p>
+            <p className="mt-2 text-sm text-danger-emphasis/80">{t("conversations.runtime_error.retryHint")}</p>
           </div>
-          <div className="mt-1.5 text-[12px] text-slate-400">
+          <div className="mt-1.5 text-xs text-fg-faint">
             {agentName ? `${stamp} · ${agentName}` : stamp}
           </div>
         </div>
@@ -1070,11 +1070,11 @@ function MessageRow({
   const failedRun = (outputRuns ?? []).find((r) => r.status === "failed")
   return (
     <div className="flex">
-      <div className="max-w-[82%] border-l border-slate-200 pl-4">
-        <div className="mb-1.5 text-[12px] font-medium text-slate-400">
+      <div className="max-w-[82%] border-l border-line pl-4">
+        <div className="mb-1.5 text-xs font-medium text-fg-faint">
           {agentName || "Agent"}
         </div>
-        <div className="text-[14px] leading-[1.7] text-slate-900">
+        <div className="text-base leading-[1.7] text-fg">
           <p className="whitespace-pre-wrap">{content}</p>
         </div>
         {allSteps.length > 0 && <StepTrace steps={allSteps} />}
@@ -1082,12 +1082,12 @@ function MessageRow({
           <button
             type="button"
             onClick={() => onOpenRun(failedRun.id)}
-            className="mt-1.5 text-[13px] text-slate-500 hover:text-slate-700 hover:underline"
+            className="mt-1.5 text-sm text-fg-subtle hover:text-fg-muted hover:underline"
           >
             {t("conversations.detail.viewRunLink")} →
           </button>
         )}
-        <div className="mt-1.5 text-[12px] text-slate-400">{stamp}</div>
+        <div className="mt-1.5 text-xs text-fg-faint">{stamp}</div>
       </div>
     </div>
   )
@@ -1268,7 +1268,7 @@ function ComposerForm({
     <form onSubmit={submit}>
       <div
         className={cn(
-          "flex min-h-[64px] items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04),_0_12px_34px_rgba(15,23,42,0.08)] transition-shadow",
+          "flex min-h-[64px] items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04),_0_12px_34px_rgba(15,23,42,0.08)] transition-shadow",
           "hover:shadow-[0_1px_2px_rgba(15,23,42,0.06),_0_16px_40px_rgba(15,23,42,0.10)]",
           disabled && "opacity-60",
         )}
@@ -1279,7 +1279,7 @@ function ComposerForm({
           onChange={(e) => setContent(e.target.value)}
           placeholder={placeholder}
           disabled={disabled || (!conversationId && !onSendDirect)}
-          className="flex-1 border-0 bg-transparent px-2 text-[14px] shadow-none focus-visible:ring-0"
+          className="flex-1 border-0 bg-transparent px-2 text-base shadow-none focus-visible:ring-0"
         />
         {showStop ? (
           <button
@@ -1290,7 +1290,7 @@ function ComposerForm({
             title={t("conversations.composer.stopAria", { defaultValue: "停止生成" })}
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-colors",
-              "bg-slate-950 text-white hover:bg-slate-800",
+              "bg-surface-inverse text-white hover:bg-surface-emphasis",
               cancelling && "opacity-60",
             )}
           >
@@ -1307,8 +1307,8 @@ function ComposerForm({
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-colors",
               canSubmit
-                ? "bg-slate-950 text-white hover:bg-slate-800"
-                : "bg-slate-100 text-slate-300",
+                ? "bg-surface-inverse text-white hover:bg-surface-emphasis"
+                : "bg-surface-muted text-fg-faint",
             )}
             aria-label="send"
           >

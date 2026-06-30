@@ -20,8 +20,8 @@ import { useNow } from "../../lib/use-now"
 
 function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
-    <section className={`rounded-lg border border-slate-200 bg-white p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
       {children}
     </section>
   )
@@ -30,8 +30,8 @@ function Card({ title, className, children }: { title: string; className?: strin
 function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
-      <dd className={`text-[13px] text-slate-800 ${mono ? "font-mono break-all" : ""}`}>{value}</dd>
+      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
+      <dd className={`text-sm text-fg-emphasis ${mono ? "font-mono break-all" : ""}`}>{value}</dd>
     </div>
   )
 }
@@ -59,7 +59,7 @@ function Timestamp({ iso }: { iso: string }) {
   // Subscribe to the ticking clock so "Xm ago" advances; the value itself is unused.
   useNow()
   return (
-    <span title={iso} className="text-[13px] text-slate-800">
+    <span title={iso} className="text-sm text-fg-emphasis">
       {relativeAgo(iso)}
     </span>
   )
@@ -95,13 +95,13 @@ function ExpiresValue({ iso }: { iso?: string }) {
   const { t } = useTranslation("admin")
   const now = useNow()
   if (!iso) {
-    return <span className="text-[13px] text-slate-500">{t("agents.detail.sandbox.fields.expiresAtUnknown")}</span>
+    return <span className="text-sm text-fg-subtle">{t("agents.detail.sandbox.fields.expiresAtUnknown")}</span>
   }
   const desc = describeRemaining(iso, now)
   const toneClass =
-    desc?.tone === "red" ? "text-red-600"
-    : desc?.tone === "amber" ? "text-amber-600"
-    : "text-emerald-700"
+    desc?.tone === "red" ? "text-danger"
+    : desc?.tone === "amber" ? "text-warning"
+    : "text-success"
   const absolute = new Date(iso).toLocaleString()
   const label = desc?.state === "expired"
     ? t("agents.detail.sandbox.expires.expired")
@@ -109,9 +109,9 @@ function ExpiresValue({ iso }: { iso?: string }) {
       ? t("agents.detail.sandbox.expires.remaining", { value: desc.value })
       : null
   return (
-    <span title={iso} className="text-[13px] text-slate-800">
+    <span title={iso} className="text-sm text-fg-emphasis">
       {absolute}
-      {label && <span className={`ml-2 text-[13px] ${toneClass}`}>({label})</span>}
+      {label && <span className={`ml-2 text-sm ${toneClass}`}>({label})</span>}
     </span>
   )
 }
@@ -145,8 +145,8 @@ function ConfirmDialog({
           <div
             className={
               destructive
-                ? "shrink-0 rounded-full bg-red-100 p-2 text-red-700"
-                : "shrink-0 rounded-full bg-amber-100 p-2 text-amber-700"
+                ? "shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis"
+                : "shrink-0 rounded-full bg-warning-subtle p-2 text-warning"
             }
           >
             <ShieldAlert className="h-4 w-4" />
@@ -158,7 +158,7 @@ function ConfirmDialog({
             </DialogDescription>
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>
             {t("actions.cancel")}
           </Button>
@@ -237,7 +237,7 @@ export function SandboxPanel({
           </Button>
         </div>
         {acquireMut.isSuccess && (
-          <p className="mt-2 text-center text-[13px] text-slate-500">
+          <p className="mt-2 text-center text-sm text-fg-subtle">
             {t("agents.detail.sandbox.provisioningHint")}
           </p>
         )}
@@ -290,7 +290,7 @@ export function SandboxPanel({
           <Field label={t("agents.detail.sandbox.fields.cacheKey")} value={binding.cache_key} mono />
         </dl>
         {binding.status_kind !== "live" && (
-          <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+          <p className="mt-3 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
             {t("agents.detail.sandbox.notLiveHint")}
           </p>
         )}
@@ -309,7 +309,7 @@ export function SandboxPanel({
         />
       )}
       {renewMut.isSuccess && renewMut.data?.expires_at && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
+        <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
           {t("agents.detail.sandbox.renewedToast", { expiresAt: new Date(renewMut.data.expires_at).toLocaleString() })}
         </div>
       )}

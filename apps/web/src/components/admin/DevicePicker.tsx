@@ -68,12 +68,12 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
 
   if (q.isLoading) {
     return (
-      <div className="h-9 animate-pulse rounded-md border border-slate-200 bg-slate-50" />
+      <div className="h-9 animate-pulse rounded-md border border-line bg-surface-subtle" />
     )
   }
   if (q.error) {
     return (
-      <p className="text-[13px] text-red-600">
+      <p className="text-sm text-danger">
         {(q.error as Error).message}
       </p>
     )
@@ -82,8 +82,8 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
   if (selectableDevices.length === 0) {
     const hasOnlineDevices = onlineDevices.length > 0
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
-        <p className="text-[13px] font-medium text-slate-900">
+      <div className="rounded-lg border border-dashed border-line-strong bg-surface-subtle p-3">
+        <p className="text-sm font-medium text-fg">
           {t(
             hasOnlineDevices
               ? "agents.form.devicePicker.noCompatibleTitle"
@@ -101,7 +101,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
             onClick={onAddDevice}
             disabled={disabled}
             data-testid="device-picker-add-empty"
-            className="mt-2 inline-flex items-center gap-1 rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-2 inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-3 w-3" />
             {t("agents.form.devicePicker.addDevice", {
@@ -109,7 +109,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
             })}
           </button>
         ) : (
-          <p className="mt-1 text-[13px] text-slate-500">
+          <p className="mt-1 text-sm text-fg-subtle">
             {t(
               hasOnlineDevices
                 ? "agents.form.devicePicker.noCompatibleDescription"
@@ -133,7 +133,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         data-testid="agent-daemon-device-picker"
-        className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-slate-50"
+        className="h-9 min-w-0 flex-1 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-surface-subtle"
       >
         <option value="">
           {t("agents.form.devicePicker.placeholder", {
@@ -153,7 +153,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
           disabled={disabled}
           data-testid="device-picker-add"
           title={t("agents.form.devicePicker.addDevice", { defaultValue: "接入新设备" })}
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-3 text-[13px] text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-line bg-surface px-3 text-sm text-fg-muted shadow-sm hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-3 w-3" />
           {t("agents.form.devicePicker.addDevice", { defaultValue: "接入新设备" })}

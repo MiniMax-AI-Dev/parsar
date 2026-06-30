@@ -458,7 +458,7 @@ export function RunsPage() {
               </TabsList>
             </Tabs>
             <div className="relative w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" strokeWidth={1.75} />
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" strokeWidth={1.75} />
               <Input
                 placeholder={t("runs.search.placeholder")}
                 className="pl-8 text-xs"
@@ -475,7 +475,7 @@ export function RunsPage() {
               description={t("runs.emptyFiltered.description")}
             />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -533,7 +533,7 @@ function RunsPager({
   const onFirstPage = offset === 0
   const onLastPage = offset + limit >= total
   return (
-    <div className="flex items-center justify-between gap-3 px-1 text-[13px] text-slate-600">
+    <div className="flex items-center justify-between gap-3 px-1 text-sm text-fg-muted">
       <span className="tabular-nums">
         {t("runs.table.pagination.range", { from, to, total })}
       </span>
@@ -559,25 +559,25 @@ function RunRow({ run, onClick }: { run: AgentRunSummary; onClick: () => void })
       <TableCell>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <Bot className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
-            <span className="text-[14px] font-medium text-slate-900">{run.agent_name ?? run.agent_slug ?? "(unknown)"}</span>
+            <Bot className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
+            <span className="text-base font-medium text-fg">{run.agent_name ?? run.agent_slug ?? "(unknown)"}</span>
           </div>
-          <span className="font-mono text-[12px] text-slate-500">
+          <span className="font-mono text-xs text-fg-subtle">
             {shortId(run.id)} · {fmtAgo(run.created_at)}
           </span>
           {errorSummary && (
-            <span className="mt-0.5 line-clamp-1 text-[12px] text-red-600">{errorSummary}</span>
+            <span className="mt-0.5 line-clamp-1 text-xs text-danger">{errorSummary}</span>
           )}
         </div>
       </TableCell>
       <TableCell><RunStatusBadge status={run.status} /></TableCell>
       <TableCell>
-        <span className="font-mono text-[12px] text-slate-500">{shortId(run.conversation_id)}</span>
+        <span className="font-mono text-xs text-fg-subtle">{shortId(run.conversation_id)}</span>
       </TableCell>
-      <TableCell className="text-right text-[13px] tabular-nums text-slate-600">
+      <TableCell className="text-right text-sm tabular-nums text-fg-muted">
         {fmtDuration(run.started_at, run.finished_at)}
       </TableCell>
-      <TableCell className="text-right pr-4 text-[13px] tabular-nums text-slate-400">—</TableCell>
+      <TableCell className="text-right pr-4 text-sm tabular-nums text-fg-faint">—</TableCell>
     </TableRow>
   )
 }
@@ -589,7 +589,7 @@ function RunsLoadingSkeleton() {
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-8 w-72" />
       </div>
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-10 w-full" />
         ))}
@@ -671,14 +671,14 @@ export function RunDetailPage({ id }: { id: string }) {
         backLink={
           <button
             onClick={() => navigate("runs")}
-            className="hover:text-slate-900 hover:underline"
+            className="hover:text-fg hover:underline"
           >
             ← {t("runs.page.title")}
           </button>
         }
         title={run.agent_name ?? run.agent_slug ?? "(unknown agent)"}
         description={
-          <span className="font-mono text-[13px]">
+          <span className="font-mono text-sm">
             {shortId(run.id, 12)} · {connectorLabel(run.connector_type)}
           </span>
         }
@@ -695,7 +695,7 @@ export function RunDetailPage({ id }: { id: string }) {
         }
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg border border-line bg-surface p-4 md:grid-cols-4">
         <Field
           label={t("runs.detail.duration")}
           value={fmtDuration(run.started_at, run.finished_at)}
@@ -709,8 +709,8 @@ export function RunDetailPage({ id }: { id: string }) {
                 className="inline-flex items-center gap-1 hover:underline"
                 onClick={() => navigate("conversations", { id: run.conversation_id! })}
               >
-                <span className="font-mono text-[13px]">{shortId(run.conversation_id, 10)}</span>
-                <ArrowUpRight className="h-3 w-3 text-slate-400" />
+                <span className="font-mono text-sm">{shortId(run.conversation_id, 10)}</span>
+                <ArrowUpRight className="h-3 w-3 text-fg-faint" />
               </button>
             ) : (
               "—"
@@ -721,18 +721,18 @@ export function RunDetailPage({ id }: { id: string }) {
       </div>
 
       {cancelError && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/40 p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" strokeWidth={2} />
-          <p className="font-mono text-[13px] text-red-700">{cancelError}</p>
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-danger-border bg-danger-subtle/40 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" strokeWidth={2} />
+          <p className="font-mono text-sm text-danger-emphasis">{cancelError}</p>
         </div>
       )}
 
       {errorSummary && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/40 p-4">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" strokeWidth={2} />
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-danger-border bg-danger-subtle/40 p-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" strokeWidth={2} />
           <div className="space-y-1">
-            <p className="text-[13px] font-medium text-red-900">{t("runs.detail.errorTitle")}</p>
-            <p className="text-[13px] text-red-700/85">{t("runs.detail.errorHint")}</p>
+            <p className="text-sm font-medium text-danger-emphasis">{t("runs.detail.errorTitle")}</p>
+            <p className="text-sm text-danger-emphasis/85">{t("runs.detail.errorHint")}</p>
           </div>
         </div>
       )}
@@ -788,7 +788,7 @@ export function RunDetailPage({ id }: { id: string }) {
                       <div>
                         <span>{run.runtime.name || shortId(run.runtime.id, 12)}</span>
                         {run.runtime.id && run.runtime.name ? (
-                          <div className="font-mono text-[12px] text-slate-500">{shortId(run.runtime.id, 12)}</div>
+                          <div className="font-mono text-xs text-fg-subtle">{shortId(run.runtime.id, 12)}</div>
                         ) : null}
                       </div>
                     }
@@ -851,7 +851,7 @@ export function RunDetailPage({ id }: { id: string }) {
                     value={<ToneBadge tone={runtimeDiagnosis.tone} label={runtimeDiagnosis.health} />}
                   />
                   <Field label={t("runs.detail.runtime.action")} value={runtimeDiagnosis.action} />
-                  <p className="text-[13px] text-slate-500">{t("runs.detail.runtime.empty")}</p>
+                  <p className="text-sm text-fg-subtle">{t("runs.detail.runtime.empty")}</p>
                 </>
               )}
             </Card>
@@ -863,13 +863,13 @@ export function RunDetailPage({ id }: { id: string }) {
         </TabsContent>
 
         <TabsContent value="artifacts">
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-lg border border-line bg-surface">
             {run.artifacts && run.artifacts.length > 0 ? (
               run.artifacts.map((a) => (
                 <ArtifactRow key={a.id} medium={a.medium} kind={a.kind} name={a.name} meta={a.uri || undefined} />
               ))
             ) : (
-              <div className="p-6 text-center text-[13px] text-slate-500">No artifacts.</div>
+              <div className="p-6 text-center text-sm text-fg-subtle">No artifacts.</div>
             )}
           </div>
         </TabsContent>
@@ -898,7 +898,7 @@ function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean
     <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div className="space-y-1.5">
@@ -908,7 +908,7 @@ function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean
             </DialogDescription>
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>{tc("actions.cancel")}</Button>
           <Button variant="destructive" size="sm" onClick={onConfirm} disabled={loading}>
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -941,17 +941,17 @@ function RuntimeCapabilities({ capabilities }: { capabilities?: Record<string, b
 function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-[12px] uppercase tracking-wider text-slate-400">{label}</dt>
-      <dd className={["min-w-0 text-[13px] text-slate-800 [overflow-wrap:anywhere]", mono ? "font-mono" : ""].filter(Boolean).join(" ")}>{value}</dd>
+      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
+      <dd className={["min-w-0 text-sm text-fg-emphasis [overflow-wrap:anywhere]", mono ? "font-mono" : ""].filter(Boolean).join(" ")}>{value}</dd>
     </div>
   )
 }
 
 function Card({ title, actions, className, children }: { title: string; actions?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
-    <section className={`rounded-lg border border-slate-200 bg-white p-4 ${className ?? ""}`}>
+    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
         {actions}
       </div>
       {children}
@@ -985,7 +985,7 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
           <button
             type="button"
             onClick={toggleAll}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
           >
             <Code className="h-3.5 w-3.5" strokeWidth={1.9} />
             {allOpen ? t("runs.detail.steps.hideAllRaw") : t("runs.detail.steps.viewAllRaw")}
@@ -999,20 +999,20 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
           <Skeleton className="h-10 w-3/4" />
         </div>
       ) : steps.length === 0 ? (
-        <p className="text-[13px] text-slate-500">{t("runs.detail.steps.empty")}</p>
+        <p className="text-sm text-fg-subtle">{t("runs.detail.steps.empty")}</p>
       ) : (
         <ol className="space-y-3">
           {steps.map((step) => {
             const open = expandedKeys.has(step.key)
             return (
-              <li key={step.key} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+              <li key={step.key} className="rounded-lg border border-line-muted bg-surface-subtle/50 p-3">
                 <div className="flex gap-3">
                   <step.icon className={`mt-0.5 h-4 w-4 shrink-0 ${step.color}`} strokeWidth={1.9} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                      <p className="text-[13px] font-medium text-slate-900">{step.title}</p>
+                      <p className="text-sm font-medium text-fg">{step.title}</p>
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className="whitespace-nowrap font-mono text-[12px] text-slate-400">
+                        <span className="whitespace-nowrap font-mono text-xs text-fg-faint">
                           {"#" + step.sequence + (step.occurredAt ? " · " + fmtDateTime(step.occurredAt) : "")}
                         </span>
                         {step.rawEvents.length > 0 && (
@@ -1024,8 +1024,8 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
                             onClick={() => toggle(step.key)}
                             className={`inline-flex items-center rounded-md border p-1 transition-colors ${
                               open
-                                ? "border-slate-300 bg-slate-100 text-slate-700"
-                                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
+                                ? "border-line-strong bg-surface-muted text-fg-muted"
+                                : "border-line bg-surface text-fg-subtle hover:border-line-strong hover:bg-surface-muted hover:text-fg-emphasis"
                             }`}
                           >
                             <Code className="h-3 w-3" strokeWidth={2} />
@@ -1033,13 +1033,13 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
                         )}
                       </div>
                     </div>
-                    {step.detail && <p className="mt-1 break-words text-[13px] text-slate-500">{step.detail}</p>}
+                    {step.detail && <p className="mt-1 break-words text-sm text-fg-subtle">{step.detail}</p>}
                   </div>
                 </div>
                 {open && step.rawEvents.length > 0 && (
                   <div className="mt-2 space-y-2">
                     {step.rawEvents.map((ev) => (
-                      <pre key={ev.id} className="whitespace-pre-wrap break-all rounded-md bg-slate-950 p-3 text-[12px] leading-relaxed text-slate-100">
+                      <pre key={ev.id} className="whitespace-pre-wrap break-all rounded-md bg-surface-inverse p-3 text-xs leading-relaxed text-fg-on-emphasis">
                         {`#${ev.sequence} ${ev.event_kind}\n${JSON.stringify(ev.payload ?? {}, null, 2)}`}
                       </pre>
                     ))}
@@ -1082,7 +1082,7 @@ function buildSteps(events: AgentRunEvent[], t: RunStepT): BuiltStep[] {
       continue
     }
     if (deltaCount > 0) {
-      steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-blue-600", rawEvents: deltaEvents })
+      steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-info", rawEvents: deltaEvents })
       deltaCount = 0
       deltaOccurredAt = ""
       deltaEvents = []
@@ -1091,7 +1091,7 @@ function buildSteps(events: AgentRunEvent[], t: RunStepT): BuiltStep[] {
     if (mapped) steps.push({ ...mapped, rawEvents: [ev] })
   }
   if (deltaCount > 0) {
-    steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-blue-600", rawEvents: deltaEvents })
+    steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-info", rawEvents: deltaEvents })
   }
   return steps
 }
@@ -1100,21 +1100,21 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
   const withTime = { occurredAt: ev.occurred_at }
   switch (ev.event_kind) {
     case "message.complete":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.messageComplete"), detail: payloadValue(ev, "message_id"), icon: Bot, color: "text-blue-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.messageComplete"), detail: payloadValue(ev, "message_id"), icon: Bot, color: "text-info", ...withTime }
     case "tool.call":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolCall"), detail: payloadValue(ev, "name") || payloadValue(ev, "action") || "tool", icon: TerminalSquare, color: "text-slate-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolCall"), detail: payloadValue(ev, "name") || payloadValue(ev, "action") || "tool", icon: TerminalSquare, color: "text-fg-muted", ...withTime }
     case "tool.result":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolResult"), detail: payloadValue(ev, "name") || "tool", icon: Wrench, color: "text-slate-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolResult"), detail: payloadValue(ev, "name") || "tool", icon: Wrench, color: "text-fg-muted", ...withTime }
     case "permission.asked":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permission"), detail: payloadValue(ev, "resource") || payloadValue(ev, "action") || "approval", icon: KeyRound, color: "text-amber-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permission"), detail: payloadValue(ev, "resource") || payloadValue(ev, "action") || "approval", icon: KeyRound, color: "text-warning", ...withTime }
     case "permission.replied":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionReplied"), detail: payloadValue(ev, "decision") || payloadValue(ev, "status"), icon: KeyRound, color: "text-emerald-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionReplied"), detail: payloadValue(ev, "decision") || payloadValue(ev, "status"), icon: KeyRound, color: "text-success", ...withTime }
     case "model.changed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.modelChanged"), detail: [payloadValue(ev, "from"), payloadValue(ev, "to")].filter(Boolean).join(" -> "), icon: Bot, color: "text-indigo-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.modelChanged"), detail: [payloadValue(ev, "from"), payloadValue(ev, "to")].filter(Boolean).join(" -> "), icon: Bot, color: "text-info", ...withTime }
     case "session.error":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.error"), detail: payloadValue(ev, "error"), icon: AlertTriangle, color: "text-red-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.error"), detail: payloadValue(ev, "error"), icon: AlertTriangle, color: "text-danger", ...withTime }
     case "run.started":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.started"), detail: payloadValue(ev, "source"), icon: Play, color: "text-blue-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.started"), detail: payloadValue(ev, "source"), icon: Play, color: "text-info", ...withTime }
     case "run.queued": {
       // run.queued payload may carry { position: N }; degrades to plain
       // "排队中" when absent.
@@ -1123,16 +1123,16 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
       const detail = position > 1
         ? t("runs.detail.steps.queuedWithPosition", { position })
         : t("runs.detail.steps.queued")
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.queued"), detail, icon: Clock, color: "text-slate-500", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.queued"), detail, icon: Clock, color: "text-fg-subtle", ...withTime }
     }
     case "run.completed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.completed"), icon: CheckCircle2, color: "text-emerald-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.completed"), icon: CheckCircle2, color: "text-success", ...withTime }
     case "run.failed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.failed"), detail: payloadValue(ev, "error"), icon: XCircle, color: "text-red-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.failed"), detail: payloadValue(ev, "error"), icon: XCircle, color: "text-danger", ...withTime }
     case "run.cancelled":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.cancelled"), detail: payloadValue(ev, "reason"), icon: XCircle, color: "text-slate-500", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.cancelled"), detail: payloadValue(ev, "reason"), icon: XCircle, color: "text-fg-subtle", ...withTime }
     case "run.requeued":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.requeued"), detail: payloadValue(ev, "reason"), icon: Play, color: "text-amber-600", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.requeued"), detail: payloadValue(ev, "reason"), icon: Play, color: "text-warning", ...withTime }
     default:
       return null
   }
@@ -1142,17 +1142,17 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
 // (what the artifact represents). Icon keys off kind.
 function ArtifactRow({ medium, kind, name, meta }: { medium: string; kind: string; name: string; meta?: string }) {
   return (
-    <button className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50/60">
+    <button className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-subtle/60">
       {kind === "diff" || kind === "patch" ? (
-        <FileText className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+        <FileText className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
       ) : (
-        <Database className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+        <Database className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
       )}
       <div className="flex-1">
-        <code className="text-[13px] font-medium text-slate-900">{name}</code>
-        {meta && <p className="text-[12px] text-slate-500">{kind} · {medium} · {meta}</p>}
+        <code className="text-sm font-medium text-fg">{name}</code>
+        {meta && <p className="text-xs text-fg-subtle">{kind} · {medium} · {meta}</p>}
       </div>
-      <ArrowUpRight className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+      <ArrowUpRight className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
     </button>
   )
 }

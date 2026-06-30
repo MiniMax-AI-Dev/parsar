@@ -127,23 +127,23 @@ export function WorkspaceSwitcher() {
           <button
             type="button"
             aria-label={t("workspaceSwitcher.triggerAriaLabel")}
-            className="ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 data-[state=open]:bg-slate-100"
+            className="ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-fg-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 data-[state=open]:bg-surface-muted"
           >
             <span className="font-medium">{triggerLabel}</span>
             {triggerProjectLabel && (
-              <span className="rounded bg-slate-100 px-1 py-0 text-[11px] font-mono text-slate-600">
+              <span className="rounded bg-surface-muted px-1 py-0 text-xs font-mono text-fg-muted">
                 {triggerProjectLabel}
               </span>
             )}
             {!wsId && (
               <span
                 title={t("workspace.mockTooltip")}
-                className="rounded bg-amber-100 px-1 py-0 text-[11px] font-medium text-amber-700"
+                className="rounded bg-warning-subtle px-1 py-0 text-xs font-medium text-warning"
               >
                 {t("workspace.mockBadge")}
               </span>
             )}
-            <ChevronsUpDown className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+            <ChevronsUpDown className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
           </button>
         </DropdownMenu.Trigger>
 
@@ -151,15 +151,15 @@ export function WorkspaceSwitcher() {
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            className="z-50 min-w-[300px] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-[13px] text-slate-700 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+            className="z-50 min-w-[300px] overflow-hidden rounded-md border border-line bg-surface p-1 text-sm text-fg-muted shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           >
-            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
               <Layers className="h-3 w-3" strokeWidth={1.75} />
               {t("workspaceSwitcher.workspaceLabel")}
             </DropdownMenu.Label>
 
             {workspaces.length === 0 && (
-              <div className="px-2 py-2 text-[13px] text-slate-400">
+              <div className="px-2 py-2 text-sm text-fg-faint">
                 {workspacesQuery.isLoading
                   ? t("states.loading")
                   : t("workspaceSwitcher.noWorkspaces")}
@@ -181,21 +181,21 @@ export function WorkspaceSwitcher() {
                       setProjectId(null)
                     }}
                     className={cn(
-                      "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-slate-100",
-                      isActive && "font-medium text-slate-900"
+                      "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-surface-muted",
+                      isActive && "font-medium text-fg"
                     )}
                   >
                     <div className="flex flex-1 flex-col min-w-0">
                       <span className="truncate">{ws.name}</span>
-                      <span className="truncate font-mono text-[11px] text-slate-400">
+                      <span className="truncate font-mono text-xs text-fg-faint">
                         {ws.slug}
                       </span>
                     </div>
-                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                    <span className="text-xs uppercase tracking-wider text-fg-faint">
                       {ws.role}
                     </span>
                     {isActive && (
-                      <Check className="h-3.5 w-3.5 text-slate-700" strokeWidth={2} />
+                      <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />
                     )}
                   </DropdownMenu.Item>
                   <RowAction
@@ -218,7 +218,7 @@ export function WorkspaceSwitcher() {
                 e.preventDefault()
                 setCreateWsOpen(true)
               }}
-              className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-slate-600 outline-none data-[highlighted]:bg-slate-100"
+              className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-fg-muted outline-none data-[highlighted]:bg-surface-muted"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2} />
               <span>{t("workspaceCrud.workspace.createAction")}</span>
@@ -226,8 +226,8 @@ export function WorkspaceSwitcher() {
 
             {discoverable.length > 0 && (
               <>
-                <DropdownMenu.Separator className="my-1 h-px bg-slate-100" />
-                <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
+                <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
                   <Globe className="h-3 w-3" strokeWidth={1.75} />
                   {t("workspaceSwitcher.discoverLabel")}
                 </DropdownMenu.Label>
@@ -239,11 +239,11 @@ export function WorkspaceSwitcher() {
                     <div className="flex flex-1 items-center gap-2 rounded-sm px-2 py-1.5">
                       <div className="flex flex-1 flex-col min-w-0">
                         <span className="truncate">{ws.name}</span>
-                        <span className="truncate font-mono text-[11px] text-slate-400">
+                        <span className="truncate font-mono text-xs text-fg-faint">
                           {ws.slug}
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-xs text-fg-faint">
                         {t("workspaceSwitcher.memberCount", {
                           count: ws.member_count,
                         })}
@@ -252,7 +252,7 @@ export function WorkspaceSwitcher() {
                     {ws.has_pending_request ? (
                       <div className="flex items-center gap-1">
                         <span
-                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-[12px] text-amber-700"
+                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-warning"
                           title={t("workspaceSwitcher.pendingRequestTitle")}
                         >
                           <Clock className="h-3 w-3" strokeWidth={1.75} />
@@ -264,7 +264,7 @@ export function WorkspaceSwitcher() {
                             withdrawJoinMut.mutate({ wsId: ws.id })
                           }}
                           disabled={withdrawJoinMut.isPending}
-                          className="flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-[12px] text-slate-500 outline-none data-[highlighted]:bg-slate-100 data-[disabled]:opacity-50"
+                          className="flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-xs text-fg-subtle outline-none data-[highlighted]:bg-surface-muted data-[disabled]:opacity-50"
                           title={t("workspaceSwitcher.withdrawRequestTitle")}
                         >
                           <X className="h-3 w-3" strokeWidth={1.75} />
@@ -279,7 +279,7 @@ export function WorkspaceSwitcher() {
                           e.preventDefault()
                           setJoinTarget(ws)
                         }}
-                        className="flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-[12px] text-slate-700 outline-none data-[highlighted]:bg-slate-100"
+                        className="flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-xs text-fg-muted outline-none data-[highlighted]:bg-surface-muted"
                         title={t("workspaceSwitcher.requestJoinTitle")}
                       >
                         <Send className="h-3 w-3" strokeWidth={1.75} />
@@ -294,7 +294,7 @@ export function WorkspaceSwitcher() {
                       e.preventDefault()
                       setDiscoverDialogOpen(true)
                     }}
-                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-slate-600 outline-none data-[highlighted]:bg-slate-100"
+                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-fg-muted outline-none data-[highlighted]:bg-surface-muted"
                   >
                     <Globe className="h-3.5 w-3.5" strokeWidth={1.75} />
                     <span>
@@ -308,14 +308,14 @@ export function WorkspaceSwitcher() {
             )}
 
             {joinToast && (
-              <div className="mx-1 my-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[12px] text-emerald-800">
+              <div className="mx-1 my-1 rounded-md border border-success-border bg-success-subtle px-2 py-1.5 text-xs text-success-emphasis">
                 {joinToast}
               </div>
             )}
 
-            <DropdownMenu.Separator className="my-1 h-px bg-slate-100" />
+            <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
 
-            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
               <FolderKanban className="h-3 w-3" strokeWidth={1.75} />
               {currentWorkspace?.name
                 ? t("workspaceSwitcher.projectsInLabel", {
@@ -325,13 +325,13 @@ export function WorkspaceSwitcher() {
             </DropdownMenu.Label>
 
             {!wsId && (
-              <div className="px-2 py-2 text-[13px] text-slate-400">
+              <div className="px-2 py-2 text-sm text-fg-faint">
                 {t("workspaceSwitcher.pickWorkspaceFirst")}
               </div>
             )}
 
             {wsId && projects.length === 0 && (
-              <div className="px-2 py-2 text-[13px] text-slate-400">
+              <div className="px-2 py-2 text-sm text-fg-faint">
                 {projectsQuery.isLoading
                   ? t("states.loading")
                   : t("workspaceSwitcher.noProjects")}
@@ -349,18 +349,18 @@ export function WorkspaceSwitcher() {
                         setProjectId(p.id)
                       }}
                       className={cn(
-                        "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-slate-100",
-                        isActive && "font-medium text-slate-900"
+                        "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-surface-muted",
+                        isActive && "font-medium text-fg"
                       )}
                     >
                       <div className="flex flex-1 flex-col min-w-0">
                         <span className="truncate">{p.name}</span>
-                        <span className="truncate font-mono text-[11px] text-slate-400">
+                        <span className="truncate font-mono text-xs text-fg-faint">
                           {p.slug}
                         </span>
                       </div>
                       {isActive && (
-                        <Check className="h-3.5 w-3.5 text-slate-700" strokeWidth={2} />
+                        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />
                       )}
                     </DropdownMenu.Item>
                     <RowAction
@@ -384,7 +384,7 @@ export function WorkspaceSwitcher() {
                   e.preventDefault()
                   setCreateProjOpen(true)
                 }}
-                className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-slate-600 outline-none data-[highlighted]:bg-slate-100"
+                className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-fg-muted outline-none data-[highlighted]:bg-surface-muted"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 <span>{t("workspaceCrud.project.createAction")}</span>
@@ -633,8 +633,8 @@ function RowAction({ title, icon, onSelect, danger }: RowActionProps) {
       title={title}
       aria-label={title}
       className={cn(
-        "invisible flex h-7 w-7 cursor-pointer items-center justify-center rounded outline-none text-slate-400 hover:text-slate-700 data-[highlighted]:text-slate-700 group-hover/row:visible",
-        danger && "hover:text-red-600 data-[highlighted]:text-red-600"
+        "invisible flex h-7 w-7 cursor-pointer items-center justify-center rounded outline-none text-fg-faint hover:text-fg-muted data-[highlighted]:text-fg-muted group-hover/row:visible",
+        danger && "hover:text-danger data-[highlighted]:text-danger"
       )}
     >
       {icon}

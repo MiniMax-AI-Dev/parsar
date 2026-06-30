@@ -102,14 +102,14 @@ function UserStatusBadge({ status }: { status: UserStatus }) {
 function UserCell({ name, email }: { name: string; email: string }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="rounded-full bg-slate-100 p-1.5">
-        <UserCircle2 className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
+      <div className="rounded-full bg-surface-muted p-1.5">
+        <UserCircle2 className="h-4 w-4 text-fg-subtle" strokeWidth={1.75} />
       </div>
       <div className="min-w-0">
-        <div className="truncate text-[13px] font-medium text-slate-900">
+        <div className="truncate text-sm font-medium text-fg">
           {name || "—"}
         </div>
-        <div className="truncate text-[12px] text-slate-500">{email}</div>
+        <div className="truncate text-xs text-fg-subtle">{email}</div>
       </div>
     </div>
   )
@@ -167,7 +167,7 @@ export function MembersPage() {
             <Users className="h-3.5 w-3.5" />
             {t("members.tabs.workspace")}
             {wsQ.data && (
-              <span className="ml-1 text-[12px] text-slate-500">
+              <span className="ml-1 text-xs text-fg-subtle">
                 ({wsQ.data.members.length})
               </span>
             )}
@@ -285,7 +285,7 @@ function MembersTable({
 
   if (loading) {
     return (
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-10 w-full" />
         ))}
@@ -327,7 +327,7 @@ function MembersTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-lg border border-line bg-surface">
       <Table>
         <TableHeader>
           <TableRow>
@@ -356,7 +356,7 @@ function MembersTable({
                     onChange={(e) =>
                       onChangeRole(m, e.target.value as MemberRole)
                     }
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                    className="rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
@@ -372,7 +372,7 @@ function MembersTable({
                 <UserStatusBadge status={m.user_status} />
               </TableCell>
               <TableCell>
-                <span className="text-[13px] text-slate-500">
+                <span className="text-sm text-fg-subtle">
                   {fmtAgo(m.created_at)}
                 </span>
               </TableCell>
@@ -385,10 +385,10 @@ function MembersTable({
                       onClick={() => onRemove(m)}
                       title={t("members.remove.cta")}
                     >
-                      <UserMinus className="h-3.5 w-3.5 text-slate-500" />
+                      <UserMinus className="h-3.5 w-3.5 text-fg-subtle" />
                     </Button>
                   ) : (
-                    <MoreHorizontal className="ml-auto h-4 w-4 text-slate-300" />
+                    <MoreHorizontal className="ml-auto h-4 w-4 text-fg-faint" />
                   )}
                 </TableCell>
               )}
@@ -479,7 +479,7 @@ function AddMemberDialog({
     >
       <DialogContent className="max-w-md gap-0 p-0">
         <form onSubmit={handleSubmit}>
-          <DialogHeader className="border-b border-slate-100 px-5 py-3 pr-10">
+          <DialogHeader className="border-b border-line-muted px-5 py-3 pr-10">
             <DialogTitle className="text-sm">
               {t("members.add.title")}
             </DialogTitle>
@@ -500,7 +500,7 @@ function AddMemberDialog({
                 value={role}
                 onChange={(e) => setRole(e.target.value as MemberRole)}
                 disabled={pending}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
@@ -511,8 +511,8 @@ function AddMemberDialog({
             </DialogField>
 
             {failures.length > 0 && (
-              <div className="space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[13px] font-medium text-red-900">
+              <div className="space-y-1 rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+                <p className="text-sm font-medium text-danger-emphasis">
                   {t("members.add.partialError.title", {
                     success: successCount,
                     failed: failures.length,
@@ -524,7 +524,7 @@ function AddMemberDialog({
                   {failures.map((f) => (
                     <li
                       key={f.user.id}
-                      className="text-[12px] text-red-700"
+                      className="text-xs text-danger-emphasis"
                     >
                       {f.user.email}: {f.message}
                     </li>
@@ -534,7 +534,7 @@ function AddMemberDialog({
             )}
           </div>
 
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
             <Button
               type="button"
               variant="outline"
@@ -577,9 +577,9 @@ function DialogField({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[13px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
       {children}
     </label>
@@ -612,7 +612,7 @@ function ConfirmRemoveDialog({
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onCancel() }}>
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5">
-          <div className="shrink-0 rounded-full bg-red-100 p-2 text-red-700">
+          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
             <ShieldAlert className="h-4 w-4" />
           </div>
           <div className="space-y-1.5">
@@ -623,11 +623,11 @@ function ConfirmRemoveDialog({
               {description}
             </DialogDescription>
             {error && (
-              <p className="text-[13px] text-red-700">{error.message}</p>
+              <p className="text-sm text-danger-emphasis">{error.message}</p>
             )}
           </div>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
           <Button
             variant="outline"
             size="sm"
@@ -658,11 +658,11 @@ function ConfirmRemoveDialog({
 function ErrorBanner({ message }: { message: string }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
-      <p className="text-[13px] font-medium text-red-900">
+    <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
+      <p className="text-sm font-medium text-danger-emphasis">
         {t("members.mutation.errorTitle")}
       </p>
-      <p className="text-[12px] text-red-700">{message}</p>
+      <p className="text-xs text-danger-emphasis">{message}</p>
     </div>
   )
 }
@@ -678,18 +678,18 @@ function MockBanner({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+    <div className="flex items-start gap-2.5 rounded-lg border border-warning-border bg-warning-subtle/40 p-3">
       <WifiOff
-        className="mt-0.5 h-4 w-4 shrink-0 text-amber-600"
+        className="mt-0.5 h-4 w-4 shrink-0 text-warning"
         strokeWidth={2}
       />
       <div className="space-y-0.5">
-        <p className="text-[13px] font-medium text-amber-900">
+        <p className="text-sm font-medium text-warning-emphasis">
           {t("members.mockBanner.title", {
             scope: t("members.tabs.workspace"),
           })}
         </p>
-        <p className="text-[13px] leading-relaxed text-amber-800">{hint}</p>
+        <p className="text-sm leading-relaxed text-warning-emphasis">{hint}</p>
       </div>
     </div>
   )
@@ -711,7 +711,7 @@ function PendingBadge({ wsId }: { wsId: string | null }) {
   const count = q.data?.requests.length ?? 0
   if (count === 0) return null
   return (
-    <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0 text-[11px] font-medium text-amber-700">
+    <span className="ml-1 rounded-full bg-warning-subtle px-1.5 py-0 text-xs font-medium text-warning">
       {count}
     </span>
   )
@@ -859,20 +859,20 @@ function PendingRequestRow({
     <TableRow>
       <TableCell>
         <div className="flex flex-col">
-          <span className="text-[13px] font-medium text-slate-900">
+          <span className="text-sm font-medium text-fg">
             {req.user_name || req.user_email}
           </span>
-          <span className="text-[12px] text-slate-500">{req.user_email}</span>
+          <span className="text-xs text-fg-subtle">{req.user_email}</span>
         </div>
       </TableCell>
-      <TableCell className="text-[13px] text-slate-700">
+      <TableCell className="text-sm text-fg-muted">
         {req.request_reason || (
-          <span className="text-slate-400">
+          <span className="text-fg-faint">
             {t("members.pendingRequests.noReason")}
           </span>
         )}
       </TableCell>
-      <TableCell className="text-[13px] text-slate-500">
+      <TableCell className="text-sm text-fg-subtle">
         {fmtAgo(req.requested_at)}
       </TableCell>
       <TableCell className="text-right">

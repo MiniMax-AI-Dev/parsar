@@ -265,7 +265,7 @@ export function ImportSkillForm({
         <div className={`min-w-0 space-y-2 ${source === "paste" ? "max-w-3xl" : ""}`}>
           {source === "paste" ? (
             <>
-              <p className="text-[13px] font-medium text-slate-700">
+              <p className="text-sm font-medium text-fg-muted">
                 {t("capabilities.import.skill.markdown", "Markdown 内容")}
               </p>
               <textarea
@@ -276,12 +276,12 @@ export function ImportSkillForm({
                   "capabilities.import.skill.placeholder",
                   `---\nname: code-reviewer\ndescription: Review a diff and call out risky changes\n---\n\nYou are a careful code reviewer. When the user pastes a diff, walk through:\n\n1. Correctness — does the change do what it claims?\n2. Risk — what could break in production?\n3. Style — does it match the surrounding conventions?\n\nKeep responses concise.`,
                 )}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-[12px] leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
               />
-              <p className="text-[12px] text-slate-500">
+              <p className="text-xs text-fg-subtle">
                 {t(
                   "capabilities.import.skill.pasteHelp",
                   "支持带 YAML frontmatter 的 Markdown。name + description 来自 frontmatter,正文作为 instruction 注入到模型。",
@@ -290,7 +290,7 @@ export function ImportSkillForm({
             </>
           ) : (
             <>
-              <p className="text-[13px] font-medium text-slate-700">
+              <p className="text-sm font-medium text-fg-muted">
                 {t("capabilities.import.skill.zipLabel", "上传 Skill zip")}
               </p>
               <SkillZipDropzone
@@ -307,7 +307,7 @@ export function ImportSkillForm({
                 onClear={clearZip}
                 localError={zipError}
               />
-              <p className="text-[12px] text-slate-500">
+              <p className="text-xs text-fg-subtle">
                 {t(
                   "capabilities.import.skill.zipHelp",
                   "zip 内需包含 SKILL.md(可在根目录或一层子目录)。references/、scripts/ 等子目录会一并导入。",
@@ -362,7 +362,7 @@ function SourceModeSwitch({
   const { t } = useTranslation("admin")
   return (
     <div
-      className="inline-flex items-center gap-1 self-start rounded-md border border-slate-200 bg-slate-50 p-0.5"
+      className="inline-flex items-center gap-1 self-start rounded-md border border-line bg-surface-subtle p-0.5"
       role="tablist"
       aria-label={t("capabilities.import.skill.source.label", "导入方式")}
     >
@@ -399,10 +399,10 @@ function ModeButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[13px] transition-colors ${
+      className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-sm transition-colors ${
         active
-          ? "bg-white text-slate-900 shadow-sm"
-          : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          ? "bg-surface text-fg shadow-sm"
+          : "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted"
       }`}
     >
       {icon}
@@ -418,12 +418,12 @@ function SinglePreviewCard({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
-      <header className="border-b border-slate-100 pb-2">
-        <h4 className="text-[13px] font-semibold text-slate-900">
+    <section className="space-y-3 rounded-lg border border-line bg-surface p-3">
+      <header className="border-b border-line-muted pb-2">
+        <h4 className="text-sm font-semibold text-fg">
           {skill.title || skill.slug}
         </h4>
-        <code className="font-mono text-[12px] text-slate-500">{skill.slug}</code>
+        <code className="font-mono text-xs text-fg-subtle">{skill.slug}</code>
       </header>
 
       {/* description intentionally omitted — ImportPreview above already
@@ -431,7 +431,7 @@ function SinglePreviewCard({
 
       {skill.trigger && (
         <Field label={t("capabilities.import.skill.trigger", "触发条件")}>
-          <code className="block whitespace-pre-wrap rounded bg-slate-50 px-2 py-1.5 font-mono text-[12px] text-slate-700">
+          <code className="block whitespace-pre-wrap rounded bg-surface-subtle px-2 py-1.5 font-mono text-xs text-fg-muted">
             {skill.trigger}
           </code>
         </Field>
@@ -440,7 +440,7 @@ function SinglePreviewCard({
       <Field
         label={t("capabilities.import.skill.instruction", "Instruction(注入到模型)")}
       >
-        <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap rounded bg-slate-50 px-2 py-1.5 font-mono text-[12px] leading-relaxed text-slate-700">
+        <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap rounded bg-surface-subtle px-2 py-1.5 font-mono text-xs leading-relaxed text-fg-muted">
           {skill.instruction}
         </pre>
       </Field>
@@ -457,7 +457,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <span className="text-[12px] font-medium uppercase tracking-wide text-slate-500">
+      <span className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
         {label}
       </span>
       {children}

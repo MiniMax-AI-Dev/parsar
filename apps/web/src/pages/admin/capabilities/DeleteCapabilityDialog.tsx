@@ -37,7 +37,7 @@ export function DeleteCapabilityDialog({ capability, pending, error, onOpenChang
           <AlertDialogTitle>{t("capabilities.delete.dialog.title", { name: capability.name })}</AlertDialogTitle>
           <AlertDialogDescription>{t("capabilities.delete.dialog.description")}</AlertDialogDescription>
         </AlertDialogHeader>
-        {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{errMsg}</p>}
+        {errMsg && <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>}
         <AlertDialogFooter>
           <Button variant="outline" size="sm" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>
           <Button variant="destructive" size="sm" disabled={pending} onClick={onConfirm}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("capabilities.delete.dialog.confirm")}</Button>

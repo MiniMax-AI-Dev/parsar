@@ -37,21 +37,21 @@ export function SkillFileTree({ skill }: Props) {
 
       {grouped.references.length > 0 && (
         <GroupCard
-          icon={<FolderOpen className="h-4 w-4 text-slate-500" />}
+          icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
           title={t("capabilities.import.skill.fileTree.references", "references/")}
           files={grouped.references}
         />
       )}
       {grouped.scripts.length > 0 && (
         <GroupCard
-          icon={<FolderOpen className="h-4 w-4 text-slate-500" />}
+          icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
           title={t("capabilities.import.skill.fileTree.scripts", "scripts/")}
           files={grouped.scripts}
         />
       )}
       {grouped.other.length > 0 && (
         <GroupCard
-          icon={<FolderOpen className="h-4 w-4 text-slate-500" />}
+          icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
           title={t("capabilities.import.skill.fileTree.other", "其它文件")}
           files={grouped.other}
         />
@@ -70,14 +70,14 @@ function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-slate-100 bg-emerald-50/50 px-3 py-2 text-left">
+      <div className="overflow-hidden rounded-lg border border-success-border bg-surface">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-line-muted bg-success-subtle/50 px-3 py-2 text-left">
           <ChevronRight
-            className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-90" : ""}`}
+            className={`h-4 w-4 shrink-0 text-fg-subtle transition-transform ${open ? "rotate-90" : ""}`}
           />
-          <FileText className="h-4 w-4 shrink-0 text-emerald-600" />
-          <code className="font-mono text-[13px] text-slate-900">SKILL.md</code>
-          <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-800">
+          <FileText className="h-4 w-4 shrink-0 text-success" />
+          <code className="font-mono text-sm text-fg">SKILL.md</code>
+          <span className="ml-auto rounded-full bg-success-subtle px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-success-emphasis">
             {t("capabilities.import.skill.fileTree.entry", "入口")}
           </span>
         </CollapsibleTrigger>
@@ -127,14 +127,14 @@ function GroupCard({
   const [open, setOpen] = useState(false)
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-left">
+      <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-line-muted bg-surface-subtle px-3 py-2 text-left">
           <ChevronRight
-            className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-90" : ""}`}
+            className={`h-4 w-4 shrink-0 text-fg-subtle transition-transform ${open ? "rotate-90" : ""}`}
           />
           {icon}
-          <span className="font-mono text-[13px] text-slate-700">{title}</span>
-          <span className="ml-auto text-[12px] text-slate-500">
+          <span className="font-mono text-sm text-fg-muted">{title}</span>
+          <span className="ml-auto text-xs text-fg-subtle">
             {files.length}
           </span>
         </CollapsibleTrigger>
@@ -155,13 +155,13 @@ function FileRow({ file }: { file: SkillFile }) {
   return (
     <li>
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-left hover:bg-slate-50">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5 text-left hover:bg-surface-subtle">
           <ChevronRight
-            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
+            className={`h-3.5 w-3.5 shrink-0 text-fg-faint transition-transform ${open ? "rotate-90" : ""}`}
           />
-          <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-          <code className="truncate font-mono text-[12px] text-slate-800">{file.path}</code>
-          <span className="ml-auto text-[11px] uppercase tracking-wide text-slate-400">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
+          <code className="truncate font-mono text-xs text-fg-emphasis">{file.path}</code>
+          <span className="ml-auto text-xs uppercase tracking-wide text-fg-faint">
             {file.kind}
           </span>
         </CollapsibleTrigger>
@@ -204,7 +204,7 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
 
   if (err || html === null) {
     return (
-      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all bg-slate-50 px-3 py-2 font-mono text-[12px] leading-relaxed text-slate-700">
+      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all bg-surface-subtle px-3 py-2 font-mono text-xs leading-relaxed text-fg-muted">
         {content}
       </pre>
     )
@@ -213,7 +213,7 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
     <div
       // Force shiki's <pre> to wrap — default overflow-x: auto pushes
       // long URLs / minified JSON into horizontal dialog scroll.
-      className="max-h-[420px] overflow-y-auto text-[12px] leading-relaxed [&_pre]:!m-0 [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:!bg-slate-50 [&_pre]:!px-3 [&_pre]:!py-2"
+      className="max-h-[420px] overflow-y-auto text-xs leading-relaxed [&_pre]:!m-0 [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:!bg-surface-subtle [&_pre]:!px-3 [&_pre]:!py-2"
       // shiki output is sanitized server-controlled markup.
       dangerouslySetInnerHTML={{ __html: html }}
     />

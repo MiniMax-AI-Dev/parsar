@@ -92,7 +92,7 @@ export function WorkspaceFormDialog({
           }}
         >
           <div className="grid gap-1.5">
-            <label className="text-[13px] font-medium text-slate-700" htmlFor="ws-name">
+            <label className="text-sm font-medium text-fg-muted" htmlFor="ws-name">
               {t("workspaceCrud.fields.name")}
             </label>
             <Input
@@ -106,7 +106,7 @@ export function WorkspaceFormDialog({
           </div>
 
           <fieldset className="grid gap-1.5">
-            <legend className="text-[13px] font-medium text-slate-700">
+            <legend className="text-sm font-medium text-fg-muted">
               {t("workspaceCrud.fields.visibility")}
             </legend>
             <div className="grid grid-cols-2 gap-2">
@@ -114,10 +114,10 @@ export function WorkspaceFormDialog({
                 <label
                   key={v}
                   className={
-                    "flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-[13px] " +
+                    "flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm " +
                     (visibility === v
-                      ? "border-slate-700 bg-slate-50 text-slate-900"
-                      : "border-slate-200 text-slate-700 hover:bg-slate-50")
+                      ? "border-line-strong bg-surface-subtle text-fg"
+                      : "border-line text-fg-muted hover:bg-surface-subtle")
                   }
                 >
                   <input
@@ -135,7 +135,7 @@ export function WorkspaceFormDialog({
           </fieldset>
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {errMsg}
             </p>
           )}
@@ -225,7 +225,7 @@ export function ProjectFormDialog({
         >
           <div className="grid gap-1.5">
             <label
-              className="text-[13px] font-medium text-slate-700"
+              className="text-sm font-medium text-fg-muted"
               htmlFor="proj-name"
             >
               {t("workspaceCrud.fields.name")}
@@ -242,11 +242,11 @@ export function ProjectFormDialog({
 
           <div className="grid gap-1.5">
             <label
-              className="text-[13px] font-medium text-slate-700"
+              className="text-sm font-medium text-fg-muted"
               htmlFor="proj-desc"
             >
               {t("workspaceCrud.fields.description")}
-              <span className="ml-1 text-[12px] font-normal text-slate-400">
+              <span className="ml-1 text-xs font-normal text-fg-faint">
                 {t("workspaceCrud.fields.optional")}
               </span>
             </label>
@@ -259,7 +259,7 @@ export function ProjectFormDialog({
           </div>
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {errMsg}
             </p>
           )}
@@ -313,7 +313,7 @@ export function ConfirmArchiveDialog({
         </DialogHeader>
 
         {errMsg && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+          <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
             {errMsg}
           </p>
         )}
@@ -391,11 +391,11 @@ export function JoinRequestDialog({
         >
           <div className="grid gap-1.5">
             <label
-              className="text-[13px] font-medium text-slate-700"
+              className="text-sm font-medium text-fg-muted"
               htmlFor="join-reason"
             >
               {t("workspaceCrud.fields.reason")}
-              <span className="ml-1 text-[12px] font-normal text-slate-400">
+              <span className="ml-1 text-xs font-normal text-fg-faint">
                 {t("workspaceCrud.fields.optional")}
               </span>
             </label>
@@ -406,17 +406,17 @@ export function JoinRequestDialog({
               rows={3}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("workspaceCrud.join.reasonPlaceholder")}
-              className="rounded-md border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-slate-400"
+              className="rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-line-strong"
             />
             {tooLong && (
-              <p className="text-[12px] text-red-600">
+              <p className="text-xs text-danger">
                 {t("workspaceCrud.join.reasonTooLong")}
               </p>
             )}
           </div>
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {errMsg}
             </p>
           )}

@@ -39,13 +39,13 @@ export function ImportPreview({
   return (
     <div className="space-y-2">
       {status === "idle" && (
-        <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
+        <p className="rounded-md border border-dashed border-line bg-surface-subtle px-3 py-2 text-sm text-fg-subtle">
           {t("capabilities.import.preview.idle", "在左侧粘贴内容后,这里会显示解析结果")}
         </p>
       )}
 
       {status === "loading" && (
-        <p className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+        <p className="inline-flex items-center gap-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {t("capabilities.import.preview.loading", "正在解析…")}
         </p>
@@ -54,22 +54,22 @@ export function ImportPreview({
       {status === "error" && errorMessage && (
         <div
           role="alert"
-          className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800"
+          className="break-all rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
         >
           {errorMessage}
         </div>
       )}
 
       {status === "ready" && suggestedName && (
-        <div className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2.5">
+        <div className="min-w-0 rounded-md border border-line bg-surface px-3 py-2.5">
           <div className="flex items-center gap-2">
-            <code className="break-all font-mono text-[14px] font-semibold text-slate-900">
+            <code className="break-all font-mono text-base font-semibold text-fg">
               {suggestedName}
             </code>
             {kind && <KindBadge kind={kind} />}
           </div>
           {description && (
-            <p className="mt-1 break-words text-[13px] leading-relaxed text-slate-600">
+            <p className="mt-1 break-words text-sm leading-relaxed text-fg-muted">
               {description}
             </p>
           )}
@@ -77,7 +77,7 @@ export function ImportPreview({
       )}
 
       {warnings.length > 0 && (
-        <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+        <div className="space-y-1 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
           <div className="flex items-center gap-1.5 font-medium">
             <AlertTriangle className="h-3.5 w-3.5" />
             {t("capabilities.import.preview.warnings", "解析提示")}
@@ -96,7 +96,7 @@ export function ImportPreview({
 function KindBadge({ kind }: { kind: CanonicalKind }) {
   const label = kind.toUpperCase()
   return (
-    <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-white">
+    <span className="rounded-full bg-surface-emphasis px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-white">
       {label}
     </span>
   )

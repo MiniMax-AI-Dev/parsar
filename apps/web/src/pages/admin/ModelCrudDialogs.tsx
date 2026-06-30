@@ -164,20 +164,20 @@ function HeadersEditor({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-[13px] font-medium text-slate-700">{label}</label>
+      <label className="text-sm font-medium text-fg-muted">{label}</label>
       {rows.map((row) => (
         <div key={row.id} className="flex gap-2">
           <Input
             value={row.key}
             onChange={(e) => updateRow(row.id, "key", e.target.value)}
             placeholder="Header"
-            className="flex-1 font-mono text-[13px]"
+            className="flex-1 font-mono text-sm"
           />
           <Input
             value={row.value}
             onChange={(e) => updateRow(row.id, "value", e.target.value)}
             placeholder="value"
-            className="flex-1 font-mono text-[13px]"
+            className="flex-1 font-mono text-sm"
           />
           <Button
             type="button"
@@ -225,9 +225,9 @@ function Field({
 }: FieldProps) {
   return (
     <div className="grid gap-1.5">
-      <label className="text-[13px] font-medium text-slate-700" htmlFor={id}>
+      <label className="text-sm font-medium text-fg-muted" htmlFor={id}>
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </label>
       <Input
         id={id}
@@ -237,9 +237,9 @@ function Field({
         required={required}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={mono ? "font-mono text-[13px]" : undefined}
+        className={mono ? "font-mono text-sm" : undefined}
       />
-      {hint && <span className="text-[12px] text-slate-400">{hint}</span>}
+      {hint && <span className="text-xs text-fg-faint">{hint}</span>}
     </div>
   )
 }
@@ -466,15 +466,15 @@ export function CreateModelDialog({
 
           {/* --- Provider type + endpoint --- */}
           <div className="grid gap-1.5">
-            <label className="text-[13px] font-medium text-slate-700" htmlFor="model-provider-type">
+            <label className="text-sm font-medium text-fg-muted" htmlFor="model-provider-type">
               {t("models.createProvider.fields.providerType")}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ml-0.5 text-danger">*</span>
             </label>
             <select
               id="model-provider-type"
               value={providerType}
               onChange={(e) => handleProviderTypeChange(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
             >
               {PROVIDER_TYPES.map((p) => (
                 <option key={p.key} value={p.key}>
@@ -482,7 +482,7 @@ export function CreateModelDialog({
                 </option>
               ))}
             </select>
-            <span className="text-[12px] text-slate-400">
+            <span className="text-xs text-fg-faint">
               {t("models.createProvider.fields.adapterHint", { adapter })}
             </span>
           </div>
@@ -522,14 +522,14 @@ export function CreateModelDialog({
           {/* --- Auth scheme (only for anthropic-compatible) --- */}
           {showAuthSchemeSelector && (
             <div className="grid gap-1.5">
-              <label className="text-[13px] font-medium text-slate-700" htmlFor="model-auth-scheme">
+              <label className="text-sm font-medium text-fg-muted" htmlFor="model-auth-scheme">
                 {t("models.createProvider.fields.authScheme")}
               </label>
               <select
                 id="model-auth-scheme"
                 value={authScheme}
                 onChange={(e) => setAuthScheme(e.target.value as "api-key" | "bearer")}
-                className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
               >
                 <option value="api-key">x-api-key</option>
                 <option value="bearer">Authorization: Bearer</option>
@@ -538,13 +538,13 @@ export function CreateModelDialog({
           )}
 
           {/* --- Credential mode --- */}
-          <fieldset className="rounded-md border border-slate-200 p-3">
-            <legend className="px-1 text-[13px] font-medium text-slate-700">
+          <fieldset className="rounded-md border border-line p-3">
+            <legend className="px-1 text-sm font-medium text-fg-muted">
               {t("models.createModel.fields.credentialMode")}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ml-0.5 text-danger">*</span>
             </legend>
             <div className="mt-2 grid gap-2">
-              <label className="flex items-center gap-2 text-[13px]">
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"
                   name="credential-mode"
@@ -552,11 +552,11 @@ export function CreateModelDialog({
                   checked={credentialMode === "inline_secret"}
                   onChange={() => setCredentialMode("inline_secret")}
                 />
-                <span className="font-medium text-slate-800">
+                <span className="font-medium text-fg-emphasis">
                   {t("models.createModel.credentialMode.inlineSecret.title")}
                 </span>
               </label>
-              <label className="flex items-center gap-2 text-[13px]">
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"
                   name="credential-mode"
@@ -564,7 +564,7 @@ export function CreateModelDialog({
                   checked={credentialMode === "credential_ref"}
                   onChange={() => setCredentialMode("credential_ref")}
                 />
-                <span className="font-medium text-slate-800">
+                <span className="font-medium text-fg-emphasis">
                   {t("models.createModel.credentialMode.credentialRef.title")}
                 </span>
               </label>
@@ -573,7 +573,7 @@ export function CreateModelDialog({
 
           {/* --- inline_secret branch fields --- */}
           {credentialMode === "inline_secret" && (
-            <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
+            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <Field
                 id="model-api-key"
                 label={t("models.createProvider.fields.apiKey")}
@@ -588,7 +588,7 @@ export function CreateModelDialog({
               />
               {(activeSecrets.length > 0 || sourceSecretMissing) && (
                 <div className="grid gap-1.5">
-                  <label className="text-[13px] font-medium text-slate-700" htmlFor="model-existing-secret">
+                  <label className="text-sm font-medium text-fg-muted" htmlFor="model-existing-secret">
                     {t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
                   </label>
                   <select
@@ -598,7 +598,7 @@ export function CreateModelDialog({
                       setExistingSecretID(e.target.value)
                       if (e.target.value !== "") setApiKey("")
                     }}
-                    className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
                   >
                     <option value="">
                       {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
@@ -620,7 +620,7 @@ export function CreateModelDialog({
                     ))}
                   </select>
                   {sourceSecretMissing && (
-                    <span className="text-[12px] text-red-600">
+                    <span className="text-xs text-danger">
                       {t("models.copy.secretInaccessible")}
                     </span>
                   )}
@@ -631,11 +631,11 @@ export function CreateModelDialog({
 
           {/* --- credential_ref branch fields --- */}
           {credentialMode === "credential_ref" && (
-            <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
+            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-[13px] font-medium text-slate-700" htmlFor="model-credential-kind">
+                <label className="text-sm font-medium text-fg-muted" htmlFor="model-credential-kind">
                   {t("models.createModel.credentialMode.credentialRef.kindLabel")}
-                  <span className="ml-0.5 text-red-500">*</span>
+                  <span className="ml-0.5 text-danger">*</span>
                 </label>
                 <CredentialKindCombobox
                   workspaceID={workspaceID}
@@ -643,7 +643,7 @@ export function CreateModelDialog({
                   onChange={setCredentialKindCode}
                   className="w-full"
                 />
-                <span className="text-[12px] text-slate-400">
+                <span className="text-xs text-fg-faint">
                   {t("models.createModel.credentialMode.credentialRef.kindHint")}
                 </span>
               </div>
@@ -651,7 +651,7 @@ export function CreateModelDialog({
           )}
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {errMsg}
             </p>
           )}
@@ -801,26 +801,26 @@ export function EditModelDialog({
         </DialogHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           {/* --- Locked identity --- */}
-          <div className="grid grid-cols-2 gap-3 rounded-md bg-slate-50/60 p-3 text-[13px]">
+          <div className="grid grid-cols-2 gap-3 rounded-md bg-surface-subtle/60 p-3 text-sm">
             <div>
-              <div className="text-slate-500">{t("models.editModel.locked.providerType")}</div>
-              <div className="mt-0.5 font-medium text-slate-700">{model.provider_type}</div>
+              <div className="text-fg-subtle">{t("models.editModel.locked.providerType")}</div>
+              <div className="mt-0.5 font-medium text-fg-muted">{model.provider_type}</div>
             </div>
             <div>
-              <div className="text-slate-500">{t("models.editModel.locked.adapter")}</div>
-              <div className="mt-0.5 font-mono text-slate-700">{model.adapter}</div>
+              <div className="text-fg-subtle">{t("models.editModel.locked.adapter")}</div>
+              <div className="mt-0.5 font-mono text-fg-muted">{model.adapter}</div>
             </div>
             <div>
-              <div className="text-slate-500">{t("models.editModel.locked.credentialMode")}</div>
-              <div className="mt-0.5 font-medium text-slate-700">
+              <div className="text-fg-subtle">{t("models.editModel.locked.credentialMode")}</div>
+              <div className="mt-0.5 font-medium text-fg-muted">
                 {isInline
                   ? t("models.createModel.credentialMode.inlineSecret.title")
                   : t("models.createModel.credentialMode.credentialRef.title")}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">{t("models.editModel.locked.slug")}</div>
-              <div className="mt-0.5 font-mono text-slate-700">{model.slug}</div>
+              <div className="text-fg-subtle">{t("models.editModel.locked.slug")}</div>
+              <div className="mt-0.5 font-mono text-fg-muted">{model.slug}</div>
             </div>
           </div>
 
@@ -863,16 +863,16 @@ export function EditModelDialog({
 
           {/* --- Credential binding (mode-specific) --- */}
           {isInline && (
-            <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
+            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-[13px] font-medium text-slate-700" htmlFor="edit-model-secret">
+                <label className="text-sm font-medium text-fg-muted" htmlFor="edit-model-secret">
                   {t("models.editModel.credentialBinding.boundSecret")}
                 </label>
                 <select
                   id="edit-model-secret"
                   value={secretID}
                   onChange={(e) => setSecretID(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                  className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
                   disabled={newAPIKey.trim() !== ""}
                 >
                   <option value="">
@@ -898,11 +898,11 @@ export function EditModelDialog({
           )}
 
           {isCredentialRef && (
-            <div className="grid gap-3 rounded-md bg-slate-50/60 p-3">
+            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-[13px] font-medium text-slate-700" htmlFor="edit-model-credential-kind">
+                <label className="text-sm font-medium text-fg-muted" htmlFor="edit-model-credential-kind">
                   {t("models.editModel.credentialBinding.kindCode")}
-                  <span className="ml-0.5 text-red-500">*</span>
+                  <span className="ml-0.5 text-danger">*</span>
                 </label>
                 <CredentialKindCombobox
                   workspaceID={workspaceID}
@@ -910,7 +910,7 @@ export function EditModelDialog({
                   onChange={setCredentialKindCode}
                   className="w-full"
                 />
-                <span className="text-[12px] text-slate-400">
+                <span className="text-xs text-fg-faint">
                   {t("models.editModel.credentialBinding.kindCodeHint")}
                 </span>
               </div>
@@ -918,7 +918,7 @@ export function EditModelDialog({
           )}
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {errMsg}
             </p>
           )}
