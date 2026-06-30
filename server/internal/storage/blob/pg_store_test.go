@@ -110,3 +110,58 @@ func TestPGStoreBelongsToWorkspace(t *testing.T) {
 		t.Fatal("must not belong to ws-2")
 	}
 }
+
+// TestPGStoreZeroTTLUsesDefault guards the default-upload path: the browser
+// presign flow sends no expiresSeconds, so the handler delegates ttl=0 to
+// the store. Before normalizeProxyTTL this hit the signer's ttl<=0 guard and
+// 500'd every PG upload. Both URL kinds must now mint a verifiable token
+// carrying the 1h default expiry.
+func TestPGStoreZeroTTLUsesDefault(t *testing.T) {
+	signer := NewProxySigner("k")
+	s := NewPGStore(newFakePGQ(), signer, "https://api.test")
+
+	for _, tc := range []struct {
+		name   string
+		spec   func() (URLSpec, error)
+		method string
+	}{
+		{"upload", func() (URLSpec, error) { return s.UploadURL(context.Background(), "pg:abc", "ws-1", 0) }, "PUT"},
+		{"download", func() (URLSpec, error) { return s.DownloadURL(context.Background(), "pg:abc", 0) }, "GET"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := tc.spec()
+			if err != nil {
+				t.Fatalf("ttl=0 must not error, got %v", err)
+			}
+			tok := spec.URL[strings.Index(spec.URL, "token=")+len("token="):]
+			claims, err := signer.Verify(tok)
+			if err != nil {
+				t.Fatalf("token from ttl=0 must verify: %v", err)
+			}
+			if claims.Method != tc.method {
+				t.Fatalf("method = %q, want %q", claims.Method, tc.method)
+			}
+			lifetime := time.Unix(claims.ExpiresAt, 0).Sub(time.Unix(claims.IssuedAt, 0))
+			if lifetime != DefaultProxyTTL {
+				t.Fatalf("token lifetime = %s, want DefaultProxyTTL %s", lifetime, DefaultProxyTTL)
+			}
+		})
+	}
+}
+
+func TestNormalizeProxyTTL(t *testing.T) {
+	for _, tc := range []struct {
+		in   time.Duration
+		want time.Duration
+	}{
+		{0, DefaultProxyTTL},
+		{-time.Hour, DefaultProxyTTL},
+		{30 * time.Second, time.Minute},
+		{10 * time.Minute, 10 * time.Minute},
+		{MaxProxyTokenLifetime + time.Hour, MaxProxyTokenLifetime},
+	} {
+		if got := normalizeProxyTTL(tc.in); got != tc.want {
+			t.Errorf("normalizeProxyTTL(%s) = %s, want %s", tc.in, got, tc.want)
+		}
+	}
+}

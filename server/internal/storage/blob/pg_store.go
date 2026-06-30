@@ -100,6 +100,12 @@ func (s *PGStore) DownloadURL(ctx context.Context, ref string, ttl time.Duration
 }
 
 func (s *PGStore) proxyURL(ref, workspaceID, method string, ttl time.Duration) (URLSpec, error) {
+	// The browser presign flow omits expiresSeconds, so the handler hands
+	// ttl=0 to the store. OSS absorbs that (oss.normalizeTTL); the PG signer
+	// rejects ttl<=0, which would 500 every default upload. Normalise here so
+	// both backends share one default-TTL contract and Expires matches the
+	// lifetime actually signed into the token.
+	ttl = normalizeProxyTTL(ttl)
 	tok, err := s.signer.Sign(ProxyClaims{Ref: ref, WorkspaceID: workspaceID, Method: method}, ttl)
 	if err != nil {
 		return URLSpec{}, err
@@ -109,4 +115,24 @@ func (s *PGStore) proxyURL(ref, workspaceID, method string, ttl time.Duration) (
 		Method:  method,
 		Expires: time.Now().Add(ttl),
 	}, nil
+}
+
+// DefaultProxyTTL mirrors oss.DefaultPresignTTL so PG and OSS hand out
+// equal-lifetime URLs when the client omits expiresSeconds.
+const DefaultProxyTTL = time.Hour
+
+// normalizeProxyTTL clamps a caller TTL with the same rules as
+// oss.normalizeTTL (ttl<=0 → default, sub-minute → a minute, over-cap →
+// MaxProxyTokenLifetime) so switching backends never changes URL lifetimes.
+func normalizeProxyTTL(ttl time.Duration) time.Duration {
+	switch {
+	case ttl <= 0:
+		return DefaultProxyTTL
+	case ttl < time.Minute:
+		return time.Minute
+	case ttl > MaxProxyTokenLifetime:
+		return MaxProxyTokenLifetime
+	default:
+		return ttl
+	}
 }
