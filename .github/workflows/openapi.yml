@@ -1,0 +1,42 @@
+# OpenAPI contract lint
+#
+# docs/openapi/openapi.yaml is the hand-written source of truth for the
+# Parsar HTTP contract (6k+ lines, OpenAPI 3.1). It is edited by humans,
+# so this workflow exists purely as a structural/syntactic safety net:
+# it guarantees the spec parses and conforms to the OpenAPI rules
+# Redocly enforces, catching typos before they reach reviewers or
+# downstream codegen.
+
+name: openapi
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/openapi/**'
+      - 'redocly.yaml'
+      - '.github/workflows/openapi.yml'
+  pull_request:
+    paths:
+      - 'docs/openapi/**'
+      - 'redocly.yaml'
+      - '.github/workflows/openapi.yml'
+
+concurrency:
+  group: openapi-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Lint OpenAPI spec
+        run: npx --yes @redocly/cli@2.35.1 lint docs/openapi/openapi.yaml

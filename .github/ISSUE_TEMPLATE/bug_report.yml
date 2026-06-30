@@ -1,0 +1,56 @@
+name: Bug report
+description: Something isn't working as documented.
+title: "bug: <short summary>"
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you see, what did you expect?
+      placeholder: |
+        Steps:
+        1. …
+        2. …
+
+        Expected: …
+        Got: …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Output of `git rev-parse HEAD` (server) or version shown in the web UI footer.
+      placeholder: "e.g. 9263ef5 or v0.1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy-mode
+    attributes:
+      label: How are you running Parsar?
+      options:
+        - Local dev (make dev)
+        - Docker Compose (deploy/compose)
+        - Self-hosted (other)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Server log lines, browser console, anything that helps. Redact secrets.
+      render: shell
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I have removed any secrets from the logs above.
+          required: true

@@ -136,7 +136,7 @@ type Config struct {
 
 	// SandboxBindingReader, when non-nil, lets the connector
 	// distinguish spawning / failed / never-attempted sandbox states
-	// for the user-facing "未绑定 Runtime" message instead of using a
+	// for the user-facing "no Runtime bound" message instead of using a
 	// generic line. Nil keeps legacy behaviour for tests.
 	SandboxBindingReader SandboxBindingReader
 
@@ -409,8 +409,8 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 		// in the web UI).
 		if isSandboxMode(in) && c.systemMessages != nil {
 			notice := fmt.Sprintf(
-				"⚠️ 当前沙箱 %s 不可用，可能因长时间空闲被回收或网络异常。"+
-					"等待几分钟看是否恢复；若需立即重置，可在 Agent 设置中删除并重新创建该 Agent。",
+				"⚠️ Sandbox %s is unavailable — likely reclaimed after idle timeout or a network issue. "+
+					"Wait a few minutes for it to recover, or delete and recreate the Agent in its settings to reset immediately.",
 				bind.DeviceID,
 			)
 			if _, sysErr := c.systemMessages.CreateSandboxOfflineNotice(ctx, store.CreateSandboxOfflineNoticeInput{
@@ -952,33 +952,33 @@ func isSandboxMode(in connector.PromptInput) bool {
 // never-attempted so the message matches reality.
 //
 // SandboxBindingReader is optional; a nil reader falls back to a
-// generic "正在准备" line under sandbox mode (the settings page
+// generic "preparing" line under sandbox mode (the settings page
 // pointer no longer applies under the eager-Acquire flow).
 func (c *Connector) unboundRuntimeMessage(ctx context.Context, in connector.PromptInput) string {
 	if !isSandboxMode(in) {
-		return "Agent 未绑定 Runtime,请在 Agent 设置页选择一个 Runtime 后重试。"
+		return "This Agent has no Runtime bound. Pick one in the Agent settings and retry."
 	}
 	if c.sandboxBindings == nil {
-		return "Agent 沙箱正在准备,请稍后再发。"
+		return "This Agent's sandbox is preparing — please retry shortly."
 	}
 	bindingRow, found, err := c.sandboxBindings.GetActiveSandboxBindingForAgent(ctx, in.WorkspaceID, in.ProjectAgentID)
 	if err != nil {
 		c.log.Warn("agent_daemon: sandbox binding lookup for unbound-runtime hint failed",
 			"err", err, "project_agent_id", in.ProjectAgentID)
-		return "Agent 沙箱正在准备,请稍后再发。"
+		return "This Agent's sandbox is preparing — please retry shortly."
 	}
 	if !found {
-		return "Agent 尚未准备运行环境,请联系管理员重建 Agent。"
+		return "This Agent has no runtime yet — ask an admin to rebuild it."
 	}
 	switch bindingRow.Status {
 	case store.SandboxBindingStatusKilledError:
-		return "Agent 沙箱准备失败,请在 Agent 设置页点击 Rebuild 重试。"
+		return "This Agent's sandbox failed to start — click Rebuild in the Agent settings to retry."
 	case store.SandboxBindingStatusKilled, store.SandboxBindingStatusKilledOrphaned:
-		return "Agent 沙箱已被回收,请在 Agent 设置页点击 Rebuild 重试。"
+		return "This Agent's sandbox was reclaimed — click Rebuild in the Agent settings to retry."
 	default:
 		// spawning / killing / running-but-runtime_id-not-yet-written
 		// are all transient.
-		return "Agent 沙箱正在准备(约需 10 秒),请稍后再发。"
+		return "This Agent's sandbox is starting up (~10s) — please retry shortly."
 	}
 }
 

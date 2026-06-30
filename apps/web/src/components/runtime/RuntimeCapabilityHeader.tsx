@@ -122,8 +122,8 @@ function Chip({
     >
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`} strokeWidth={1.75} />
       <div className="min-w-0">
-        <p className={`text-[12px] font-medium leading-tight ${styles.title}`}>{title}</p>
-        <p className={`mt-0.5 text-[11.5px] leading-snug ${styles.body}`}>{body}</p>
+        <p className={`text-sm font-medium leading-tight ${styles.title}`}>{title}</p>
+        <p className={`mt-0.5 text-xs leading-snug ${styles.body}`}>{body}</p>
       </div>
     </div>
   )
@@ -131,21 +131,21 @@ function Chip({
 
 const TONE_STYLES: Record<ChipTone, { container: string; icon: string; title: string; body: string }> = {
   info: {
-    container: "border-slate-200 bg-slate-50/80",
-    icon: "text-slate-500",
-    title: "text-slate-800",
-    body: "text-slate-600",
+    container: "border-line bg-surface-subtle/80",
+    icon: "text-fg-subtle",
+    title: "text-fg-emphasis",
+    body: "text-fg-muted",
   },
   ok: {
-    container: "border-emerald-200 bg-emerald-50/70",
-    icon: "text-emerald-600",
-    title: "text-emerald-900",
-    body: "text-emerald-700",
+    container: "border-success-border bg-success-subtle/70",
+    icon: "text-success",
+    title: "text-success-emphasis",
+    body: "text-success",
   },
   warn: {
-    container: "border-amber-200 bg-amber-50/70",
-    icon: "text-amber-600",
-    title: "text-amber-900",
-    body: "text-amber-700",
+    container: "border-warning-border bg-warning-subtle/70",
+    icon: "text-warning",
+    title: "text-warning-emphasis",
+    body: "text-warning",
   },
 }

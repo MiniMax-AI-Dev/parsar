@@ -26,19 +26,19 @@ export function OnboardingPage() {
   const errMsg = extractErrorMessage(create.error)
 
   return (
-    <main className="grid min-h-screen place-items-center bg-white px-6 text-slate-900">
+    <main className="grid min-h-screen place-items-center bg-surface px-6 text-fg">
       <section className="w-full max-w-[440px]">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold tracking-display">
             {t("onboarding.title")}
           </h1>
-          <p className="mt-2 text-[14px] text-slate-500">
+          <p className="mt-2 text-base text-fg-subtle">
             {t("onboarding.subtitle")}
           </p>
         </div>
 
         <form
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-2xl border border-line bg-surface p-6 shadow-sm"
           onSubmit={(e) => {
             e.preventDefault()
             const trimmed = name.trim()
@@ -59,7 +59,7 @@ export function OnboardingPage() {
         >
           <div className="grid gap-1.5">
             <label
-              className="text-[13px] font-medium text-slate-700"
+              className="text-sm font-medium text-fg-muted"
               htmlFor="onboarding-ws-name"
             >
               {t("onboarding.fields.name")}
@@ -76,7 +76,7 @@ export function OnboardingPage() {
           </div>
 
           {errMsg && (
-            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700">
+            <p className="mt-3 rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {errMsg}
             </p>
           )}

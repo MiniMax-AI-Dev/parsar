@@ -1,10 +1,91 @@
 @import "tailwindcss";
 
-/* Inter variable font (rsms/inter — author-maintained, small, fast) */
-@import url("https://rsms.me/inter/inter.css");
+/* Geist + Geist Mono are loaded via <link> in index.html (see note there) —
+   not here, because Tailwind v4 inlines its own @import above this point,
+   which would make a CSS @import spec-invalid and silently dropped. */
 
 @theme {
   --animate-fade-out: fade-out 2s ease-out forwards;
+
+  /* ------------------------------------------------------------
+   * Type scale — 5 ticks, deliberately spartan. Every value below
+   * maps to a Tailwind utility (`text-xs`, …, `text-2xl`).
+   * Arbitrary sizes (`text-[13px]`) are forbidden by lint.
+   * ---------------------------------------------------------- */
+  --text-xs:   0.75rem;    /* 12px — meta, table footnotes, badges */
+  --text-sm:   0.8125rem;  /* 13px — default body in a dense admin UI */
+  --text-base: 0.875rem;   /* 14px — form labels, buttons */
+  --text-lg:   1rem;       /* 16px — card / section titles */
+  --text-2xl:  1.375rem;   /* 22px — page titles (used sparingly) */
+
+  /* Line heights pinned per step so we don't fight `leading-*`. */
+  --text-xs--line-height:   1rem;
+  --text-sm--line-height:   1.125rem;
+  --text-base--line-height: 1.25rem;
+  --text-lg--line-height:   1.5rem;
+  --text-2xl--line-height:  1.875rem;
+
+  /* ------------------------------------------------------------
+   * Semantic colors. Every color used in TSX MUST go through one
+   * of these tokens. Raw palette (text-slate-500, text-red-700,
+   * …) is forbidden by lint.
+   *
+   * `fg-*`     — text / icon foreground
+   * `bg-*`     — surface backgrounds
+   * `border-*` — borders & dividers
+   * `danger / warning / success / info / accent` — semantic
+   * ---------------------------------------------------------- */
+
+  /* Foreground */
+  --color-fg:          oklch(0.21 0.034 264.665);  /* slate-900  */
+  --color-fg-emphasis: oklch(0.28 0.037 259.97);   /* slate-800  */
+  --color-fg-muted:    oklch(0.45 0.04 257.28);    /* slate-600  */
+  --color-fg-subtle:   oklch(0.55 0.046 257.42);   /* slate-500  */
+  --color-fg-faint:    oklch(0.71 0.035 256.79);   /* slate-400  */
+  --color-fg-on-emphasis: oklch(0.985 0 0);        /* white      */
+
+  /* Background → produces bg-surface / bg-surface-subtle / etc. */
+  --color-surface:         oklch(1 0 0);               /* white      */
+  --color-surface-subtle:  oklch(0.98 0.003 247.86);   /* slate-50   */
+  --color-surface-muted:   oklch(0.96 0.006 247.9);    /* slate-100  */
+  --color-surface-emphasis: oklch(0.21 0.034 264.665); /* slate-900  */
+  --color-surface-inverse: oklch(0.13 0.028 261.69);   /* slate-950  */
+
+  /* Border → produces border-line / border-line-muted / etc. The token is
+     called `line` instead of `border` so utilities read border-line not
+     border-border. */
+  --color-line:         oklch(0.93 0.013 255.51);  /* slate-200 */
+  --color-line-muted:   oklch(0.97 0.003 247.86);  /* slate-100 */
+  --color-line-strong:  oklch(0.87 0.022 252.89);  /* slate-300 */
+
+  /* Semantic — every state has a `*-subtle` background + `*-strong` border
+     + `*` foreground triad so callsites pick one set and stop tasting
+     numbers (red-500 vs red-700 vs red-900 etc). */
+  --color-danger:           oklch(0.58 0.22 27.27);   /* red-600  */
+  --color-danger-emphasis:  oklch(0.51 0.21 27.49);   /* red-700  */
+  --color-danger-subtle:    oklch(0.97 0.013 17.38);  /* red-50   */
+  --color-danger-border:    oklch(0.88 0.06 18.33);   /* red-200  */
+
+  --color-warning:          oklch(0.55 0.16 60.06);   /* amber-700 */
+  --color-warning-emphasis: oklch(0.47 0.13 56.43);   /* amber-800 */
+  --color-warning-subtle:   oklch(0.98 0.022 95.28);  /* amber-50  */
+  --color-warning-border:   oklch(0.88 0.07 84.04);   /* amber-200 */
+
+  --color-success:          oklch(0.5 0.14 159.85);   /* emerald-700 */
+  --color-success-emphasis: oklch(0.43 0.12 160.74);  /* emerald-800 */
+  --color-success-subtle:   oklch(0.97 0.025 154.97); /* emerald-50  */
+  --color-success-border:   oklch(0.86 0.07 153.65);  /* emerald-200 */
+
+  --color-info:             oklch(0.55 0.19 252.5);   /* blue-600 */
+  --color-info-emphasis:    oklch(0.49 0.18 254.55);  /* blue-700 */
+  --color-info-subtle:      oklch(0.97 0.013 236.96); /* blue-50  */
+  --color-info-border:      oklch(0.88 0.06 246.86);  /* blue-200 */
+
+  /* Accent = primary action color. Currently mirrors fg so CTA stays
+     ink-black; if we re-skin (brand color) only this token changes. */
+  --color-accent:           var(--color-fg);
+  --color-accent-emphasis:  oklch(0.13 0.028 261.69); /* slate-950 */
+  --color-accent-fg:        var(--color-fg-on-emphasis);
 }
 
 @keyframes fade-out {
@@ -13,39 +94,52 @@
 }
 
 :root {
-  color: #202124;
+  color: #121212;
   background: #ffffff;
-  /* Linear-style stack: Inter variable on top, then platform UI fonts */
-  font-family:
-    "Inter var", "Inter", ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", sans-serif;
-  /* Linear's OpenType features — toggles Inter's stylistic alternates */
-  font-feature-settings:
-    "cv02", "cv03", "cv04", "cv11", /* curvier a, g, i, l */
-    "ss03",                          /* alt punctuation */
-    "calt",                          /* contextual alternates */
-    "ss01";
+  /* Kimi-style type system: clean sans for everything (no serif display).
+     Inter renders Latin; Noto Sans SC renders Chinese (Inter has no CJK
+     glyphs); system fonts are the final fallback. */
+  --font-sans:
+    "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    system-ui, Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "calt", "ss01";
   font-variation-settings: normal;
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   letter-spacing: -0.011em;
 }
 
-@supports (font-variation-settings: normal) {
-  :root {
-    font-family:
-      "Inter var", "Inter", ui-sans-serif, system-ui, -apple-system,
-      BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-      "Microsoft YaHei", sans-serif;
-  }
+/* Display headings (page/hero titles). Kimi has no serif — titles are a
+   tight, heavy sans. Keeps the `.font-display` hook so existing markup that
+   opted in still gets the intended treatment, just sans now. */
+.font-display {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
-/* Slightly tighter tracking on display text (page titles, section headings).
-   Tailwind's `tracking-tight` is -0.025em which is a touch too tight for Inter. */
+/* Slightly tighter tracking on display text (page titles, section headings). */
 .tracking-display {
-  letter-spacing: -0.018em;
+  letter-spacing: -0.02em;
+}
+
+/* This is a control plane: run ids, durations, token counts. Geist Mono with
+   slashed zeros + tabular figures so 0/O never read alike and numbers stay
+   column-aligned as they tick. */
+code,
+kbd,
+pre,
+samp,
+.font-mono {
+  font-family:
+    "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-feature-settings: "tnum", "zero", "ss01";
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 
 * {
@@ -61,6 +155,40 @@ button,
 select,
 textarea {
   font: inherit;
+}
+
+/* Brand-tinted text selection (default is a flat grey-blue). */
+::selection {
+  background: #c7d6ff;
+  color: #0f172a;
+}
+
+/* Thin, unobtrusive scrollbars for the admin shell — the default OS bars are
+   chunky against the light-grey chrome. Firefox via scrollbar-* ; WebKit via
+   ::-webkit-scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: #cbd5e1;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .conversation-app {
@@ -118,29 +246,12 @@ p {
   margin-top: 0;
 }
 
-h1 {
-  margin-bottom: 0;
-  font-size: 19px;
-  line-height: 1.25;
-}
-
-h2 {
-  margin-bottom: 0;
-  font-size: 20px;
-}
-
-h3 {
-  margin-bottom: 6px;
-  font-size: 17px;
-}
-
-h4 {
-  margin-bottom: 10px;
-  color: #475569;
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
+/* NOTE: heading font-size/line-height are intentionally NOT set here.
+   They used to be (h1:19px, h2:20px, h3:17px, h4:13px) but these are
+   unlayered rules, so per the CSS cascade they beat every Tailwind
+   `text-*` utility (which lives in @layer utilities) regardless of
+   specificity — silently capping every page title. Sizes now come from
+   the Tailwind classes on each element. */
 
 .hero-copy {
   max-width: 820px;

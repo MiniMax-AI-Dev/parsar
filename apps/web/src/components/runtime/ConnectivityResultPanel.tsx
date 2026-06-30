@@ -61,7 +61,7 @@ export function ConnectivityResultPanel({
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className={`flex min-w-0 flex-1 items-center gap-1 text-left text-[13px] font-medium ${styles.title} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
+          className={`flex min-w-0 flex-1 items-center gap-1 text-left text-sm font-medium ${styles.title} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
           aria-expanded={expanded}
           data-testid="connectivity-result-toggle"
         >
@@ -75,7 +75,7 @@ export function ConnectivityResultPanel({
         <button
           type="button"
           onClick={onDismiss}
-          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
+          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
           data-testid="connectivity-result-dismiss"
         >
           <X className="h-3 w-3" />
@@ -108,22 +108,22 @@ function CheckRow({
   const { t } = useTranslation("admin")
   const seconds = (check.duration_ms / 1000).toFixed(1)
   const Icon = check.pass ? CheckCircle2 : XCircle
-  const iconClr = check.pass ? "text-emerald-600" : "text-red-600"
+  const iconClr = check.pass ? "text-success" : "text-danger"
   const isSkipped = !check.pass && !check.error
   return (
-    <li className="flex items-start gap-2 text-[12px]">
+    <li className="flex items-start gap-2 text-sm">
       {isSkipped ? (
-        <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-slate-200" aria-hidden />
+        <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-surface-muted" aria-hidden />
       ) : (
         <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconClr}`} strokeWidth={2} />
       )}
-      <span className={isSkipped ? "text-slate-400" : "text-slate-700"}>
+      <span className={isSkipped ? "text-fg-faint" : "text-fg-muted"}>
         {label}
       </span>
-      <span className="text-slate-400">{seconds}s</span>
+      <span className="text-fg-faint">{seconds}s</span>
       {check.error && (
         <span
-          className="text-red-700"
+          className="text-danger-emphasis"
           title={check.error.detail ?? ""}
           data-testid={`connectivity-error-${check.name}`}
         >
@@ -131,7 +131,7 @@ function CheckRow({
         </span>
       )}
       {isSkipped && (
-        <span className="text-slate-400">
+        <span className="text-fg-faint">
           — {t("runtime.connectivity.checks.notRun")}
         </span>
       )}
@@ -147,13 +147,13 @@ function FailureSuggestion({ checks }: { checks: ConnectivityCheck[] }): ReactNo
   const failIdx = checks.findIndex((c) => c === firstFail)
   const hasSkipped = checks.slice(failIdx + 1).some((c) => !c.pass && !c.error)
   return (
-    <div className="mt-2 rounded-md bg-slate-50/70 px-2.5 py-2 text-[12px] text-slate-700">
-      <span className="font-medium text-slate-800">
+    <div className="mt-2 rounded-md bg-surface-subtle/70 px-2.5 py-2 text-sm text-fg-muted">
+      <span className="font-medium text-fg-emphasis">
         {t("runtime.connectivity.suggestionLabel")}：
       </span>
       <span className="ml-1">{t(nextStepsKey(category))}</span>
       {hasSkipped && (
-        <p className="mt-1 text-slate-500">{t("runtime.connectivity.notRunAfter")}</p>
+        <p className="mt-1 text-fg-subtle">{t("runtime.connectivity.notRunAfter")}</p>
       )}
     </div>
   )
@@ -185,24 +185,24 @@ const SHAPE_FOR_OVERALL: Record<
   { container: string; icon: string; title: string; dismiss: string; detailBorder: string }
 > = {
   pass: {
-    container: "border-emerald-200 bg-emerald-50/60",
-    icon: "text-emerald-600",
-    title: "text-emerald-900",
-    dismiss: "text-emerald-700 hover:bg-emerald-100/60",
-    detailBorder: "border-emerald-200",
+    container: "border-success-border bg-success-subtle/60",
+    icon: "text-success",
+    title: "text-success-emphasis",
+    dismiss: "text-success hover:bg-success-subtle/60",
+    detailBorder: "border-success-border",
   },
   partial: {
-    container: "border-amber-200 bg-amber-50/70",
-    icon: "text-amber-600",
-    title: "text-amber-900",
-    dismiss: "text-amber-700 hover:bg-amber-100/60",
-    detailBorder: "border-amber-200",
+    container: "border-warning-border bg-warning-subtle/70",
+    icon: "text-warning",
+    title: "text-warning-emphasis",
+    dismiss: "text-warning hover:bg-warning-subtle/60",
+    detailBorder: "border-warning-border",
   },
   fail: {
-    container: "border-red-200 bg-red-50/60",
-    icon: "text-red-600",
-    title: "text-red-900",
-    dismiss: "text-red-700 hover:bg-red-100/60",
-    detailBorder: "border-red-200",
+    container: "border-danger-border bg-danger-subtle/60",
+    icon: "text-danger",
+    title: "text-danger-emphasis",
+    dismiss: "text-danger-emphasis hover:bg-danger-subtle/60",
+    detailBorder: "border-danger-border",
   },
 }

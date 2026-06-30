@@ -84,7 +84,7 @@ export function UserSearchCombobox({
       ? t("members.add.search.placeholder")
       : t("members.add.search.selectedCount", {
           count: selected.length,
-          defaultValue: "已选 {{count}} 人",
+          defaultValue: "{{count}} selected",
         })
 
   return (
@@ -97,14 +97,14 @@ export function UserSearchCombobox({
             size="sm"
             className={cn(
               "w-full justify-between font-normal",
-              selected.length === 0 && "text-slate-500"
+              selected.length === 0 && "text-fg-subtle"
             )}
           >
             <span className="flex min-w-0 items-center gap-2">
-              <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span className="truncate text-[12px]">{triggerLabel}</span>
+              <Search className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+              <span className="truncate text-sm">{triggerLabel}</span>
             </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
           </Button>
         </DropdownMenu.Trigger>
 
@@ -112,12 +112,12 @@ export function UserSearchCombobox({
           <DropdownMenu.Content
             align="start"
             sideOffset={4}
-            className="z-50 max-h-[360px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] overflow-hidden rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+            className="z-50 max-h-[360px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
             // Stay open across multiple selections — picking several
             // teammates at once is the expected flow.
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="border-b border-slate-100 p-1">
+            <div className="border-b border-line-muted p-1">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -126,25 +126,25 @@ export function UserSearchCombobox({
                 // Content level; without stopPropagation those steal
                 // the input's cursor movement.
                 onKeyDown={(e) => e.stopPropagation()}
-                className="h-8 text-[12px]"
+                className="h-8 text-sm"
                 autoFocus
               />
             </div>
 
             <div className="max-h-[280px] overflow-auto py-1">
               {trimmed.length === 0 ? (
-                <p className="px-3 py-2 text-[12px] text-slate-500">
+                <p className="px-3 py-2 text-sm text-fg-subtle">
                   {t("members.add.search.typeToSearch")}
                 </p>
               ) : isLoading ? (
-                <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-slate-500">
+                <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   {t("members.add.search.loading")}
                 </div>
               ) : errMsg ? (
-                <p className="px-3 py-2 text-[12px] text-red-700">{errMsg}</p>
+                <p className="px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
               ) : showEmpty ? (
-                <p className="px-3 py-2 text-[12px] text-slate-500">
+                <p className="px-3 py-2 text-sm text-fg-subtle">
                   {t("members.add.search.empty")}
                 </p>
               ) : (
@@ -170,13 +170,13 @@ export function UserSearchCombobox({
               type="button"
               onClick={() => remove(u.id)}
               disabled={disabled}
-              className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11.5px] text-slate-700 hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-subtle px-2 py-0.5 text-xs text-fg-muted hover:border-line-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <UserAvatar user={u} size="xs" />
               <span className="max-w-[140px] truncate">
                 {u.name || u.email}
               </span>
-              <X className="h-3 w-3 text-slate-400 group-hover:text-slate-600" />
+              <X className="h-3 w-3 text-fg-faint group-hover:text-fg-muted" />
             </button>
           ))}
         </div>
@@ -203,21 +203,21 @@ function UserRow({
       }}
       className={cn(
         "flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 outline-none",
-        selected ? "bg-slate-100" : "hover:bg-slate-50 focus:bg-slate-50"
+        selected ? "bg-surface-muted" : "hover:bg-surface-subtle focus:bg-surface-subtle"
       )}
     >
       <UserAvatar user={user} size="sm" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12.5px] font-medium text-slate-900">
+        <div className="truncate text-sm font-medium text-fg">
           {user.name || user.email.split("@")[0]}
         </div>
         {user.name && (
-          <div className="truncate text-[11px] text-slate-500">
+          <div className="truncate text-xs text-fg-subtle">
             {user.email}
           </div>
         )}
       </div>
-      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-slate-700" />}
+      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
     </DropdownMenu.Item>
   )
 }
@@ -229,7 +229,7 @@ function UserAvatar({
   user: PlatformUser
   size: "xs" | "sm"
 }) {
-  const dims = size === "xs" ? "h-4 w-4 text-[8px]" : "h-6 w-6 text-[10px]"
+  const dims = size === "xs" ? "h-4 w-4 text-xs" : "h-6 w-6 text-xs"
   if (user.avatar_url) {
     return (
       <img
@@ -244,7 +244,7 @@ function UserAvatar({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-medium text-slate-600",
+        "flex shrink-0 items-center justify-center rounded-full bg-surface-muted font-medium text-fg-muted",
         dims
       )}
     >

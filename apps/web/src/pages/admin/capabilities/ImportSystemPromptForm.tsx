@@ -30,7 +30,7 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
   return (
     <div className="space-y-4">
       <Field
-        label={t("capabilities.import.systemPrompt.versionLabel", "版本号")}
+        label={t("capabilities.import.systemPrompt.versionLabel", "Version")}
         required
       >
         <Input
@@ -40,8 +40,8 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
         />
       </Field>
 
-      <Field label={t("capabilities.import.systemPrompt.modeLabel", "注入模式")} required>
-        <div className="flex gap-4 text-[13px]">
+      <Field label={t("capabilities.import.systemPrompt.modeLabel", "Injection mode")} required>
+        <div className="flex gap-4 text-sm">
           <label className="inline-flex items-center gap-2">
             <input
               type="radio"
@@ -50,7 +50,7 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
               checked={value.mode === "append"}
               onChange={() => set({ mode: "append" })}
             />
-            {t("capabilities.import.systemPrompt.modeAppend", "Append（拼到用户 system prompt 前）")}
+            {t("capabilities.import.systemPrompt.modeAppend", "Append (prepended to the user system prompt)")}
           </label>
           <label className="inline-flex items-center gap-2">
             <input
@@ -60,19 +60,19 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
               checked={value.mode === "override"}
               onChange={() => set({ mode: "override" })}
             />
-            {t("capabilities.import.systemPrompt.modeOverride", "Override（完全替换）")}
+            {t("capabilities.import.systemPrompt.modeOverride", "Override (replaces the default system prompt)")}
           </label>
         </div>
       </Field>
 
-      <Field label={t("capabilities.import.systemPrompt.promptLabel", "Prompt 内容")} required>
+      <Field label={t("capabilities.import.systemPrompt.promptLabel", "Prompt content")} required>
         <textarea
-          className="min-h-[260px] w-full rounded-md border border-slate-200 bg-white p-3 font-mono text-[12.5px] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="min-h-[260px] w-full rounded-md border border-line bg-surface p-3 font-mono text-sm leading-relaxed text-fg-emphasis focus:outline-none focus:ring-2 focus:ring-slate-300"
           value={value.prompt}
           onChange={(e) => set({ prompt: e.target.value })}
           placeholder={t(
             "capabilities.import.systemPrompt.promptPlaceholder",
-            "在这里写你想注入到 agent 的 system prompt 文本。Override 模式会替换默认 system prompt;append 模式会拼到用户自己写的 system_prompt 前面。",
+            "Write the system prompt text you want injected into the agent. Override replaces the default system prompt; append prepends it to the user-supplied system_prompt.",
           )}
         />
       </Field>
@@ -91,9 +91,9 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
       {children}
     </label>

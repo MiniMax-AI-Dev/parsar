@@ -219,6 +219,11 @@ func main() {
 		dbPinger = pool
 	}
 	api.RegisterHealthRoutes(r, api.HealthDeps{DB: dbPinger})
+	api.RegisterDocsRoutes(r, api.DocsOptions{
+		SpecPath: api.ResolveOpenAPISpecPath(),
+		Title:    "Parsar API",
+		Logger:   func(format string, args ...any) { log.Bg().Warn(fmt.Sprintf(format, args...)) },
+	})
 	api.RegisterParsarDaemonInstallRoute(r, api.ParsarDaemonInstallConfig{
 		Repo: strings.TrimSpace(os.Getenv("PARSAR_DAEMON_REPO")),
 	})

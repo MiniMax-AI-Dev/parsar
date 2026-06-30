@@ -142,11 +142,11 @@ export function AddCapabilityVersionDialog({
         ? t("capabilities.errors.nameTooLong")
         : null
   const versionError = !trimmedVersion
-    ? t("capabilities.errors.versionRequired", { defaultValue: "请填写新版本号" })
+    ? t("capabilities.errors.versionRequired", { defaultValue: "Please enter a new version" })
     : versionConflict
       ? t("capabilities.errors.versionMustBump", {
           version: latestVersion?.version ?? "",
-          defaultValue: "新版本号必须不同于当前最新版本（{{version}}）",
+          defaultValue: "The new version must differ from the current latest ({{version}}).",
         })
       : null
 
@@ -270,7 +270,7 @@ export function AddCapabilityVersionDialog({
           <InfoBanner>
             {t("capabilities.versions.add.prefillFromLatest", {
               version: latestVersion?.version ?? "",
-              defaultValue: "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
+              defaultValue: "Pre-filled with the previous version ({{version}}). Edits will be submitted as a new version.",
             })}
           </InfoBanner>
         )}
@@ -278,7 +278,7 @@ export function AddCapabilityVersionDialog({
           <InfoBanner>
             {t("capabilities.versions.add.reuseExistingZip", {
               filename: inheritedOssLabel,
-              defaultValue: "当前版本的包：{{filename}}。如不重新上传，新版本将复用此包。",
+              defaultValue: "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package.",
             })}
           </InfoBanner>
         )}
@@ -288,7 +288,7 @@ export function AddCapabilityVersionDialog({
               keys: inheritedInlineSecrets
                 .map((e) => `${e.server}.${e.envKey}`)
                 .join(", "),
-              defaultValue: "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。",
+              defaultValue: "Previous-version inline secrets ({{keys}}) are hidden. Re-enter them in plaintext to keep, or switch to managed credentials.",
             })}
           </WarningBanner>
         )}
@@ -327,7 +327,7 @@ export function AddCapabilityVersionDialog({
         {(nameError || versionError) && (
           <div
             role="alert"
-            className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="mt-2 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
           >
             {nameError ?? versionError}
           </div>
@@ -381,7 +381,7 @@ export function AddCapabilityVersionDialog({
         {errMsg && (
           <div
             role="alert"
-            className="break-all rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800"
+            className="break-all rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
           >
             {errMsg}
           </div>
@@ -470,9 +470,9 @@ function Field({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[12px] font-medium text-slate-700">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-danger"> *</span>}
       </span>
       {children}
     </label>
@@ -481,7 +481,7 @@ function Field({
 
 function InfoBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
+    <div className="mt-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
       {children}
     </div>
   )
@@ -491,7 +491,7 @@ function WarningBanner({ children }: { children: React.ReactNode }) {
   return (
     <div
       role="alert"
-      className="mt-2 break-all rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900"
+      className="mt-2 break-all rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis"
     >
       {children}
     </div>

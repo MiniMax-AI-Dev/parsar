@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Kimi-style: clean sans. Inter for Latin, Noto Sans SC for Chinese
+         (Inter has NO CJK glyphs, so Chinese must have its own webfont or it
+         silently falls back to the OS font). Geist Mono for ids. Loaded via
+         <link> not CSS @import: Tailwind v4 inlines its own @import above,
+         which would make a CSS @import spec-invalid (silently dropped). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Noto+Sans+SC:wght@400;500;700&family=Geist+Mono:wght@400..600&display=swap"
+    />
     <title>Parsar</title>
   </head>
   <body>

@@ -67,17 +67,17 @@ export function MarketplaceTab({ itemID, onSelectItem, onInstall }: MarketplaceT
             <TabsTrigger value="system_prompt">System Prompt</TabsTrigger>
           </TabsList>
         </Tabs>
-        <label className="inline-flex select-none items-center gap-1.5 text-[12px] text-slate-600">
+        <label className="inline-flex select-none items-center gap-1.5 text-sm text-fg-muted">
           <input
             type="checkbox"
-            className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+            className="h-3.5 w-3.5 rounded border-line-strong text-fg focus:ring-slate-400"
             checked={hideInstalled}
             onChange={(event) => setHideInstalled(event.target.checked)}
           />
           {t("capabilities.marketplace.filters.hideInstalled")}
         </label>
         <div className="relative ml-auto w-full max-w-[280px]">
-          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-fg-faint" />
           <Input
             className="pl-8"
             value={query}
@@ -130,22 +130,22 @@ function MarketplaceCard({ capability, language, onOpen, onInstall }: {
   const source = marketplaceSourceName(capability)
   const count = capability.installed_agent_count ?? capability.enabled_agent_count ?? capability.install_count ?? 0
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm">
+    <div className="rounded-lg border border-line bg-surface p-4 transition hover:border-line-strong hover:shadow-sm">
       <button type="button" className="w-full text-left" onClick={onOpen}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[14px] font-medium text-slate-900">{capability.name}</h3>
+              <h3 className="text-base font-medium text-fg">{capability.name}</h3>
               <CapabilityTypeBadge type={capability.type} />
               {capability.self_published && <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge>}
               {!capability.self_published && capability.installed && <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge>}
             </div>
-            {source && <p className="mt-1 text-[12px] text-slate-500">{t("capabilities.marketplace.card.source", { source })}</p>}
+            {source && <p className="mt-1 text-sm text-fg-subtle">{t("capabilities.marketplace.card.source", { source })}</p>}
           </div>
-          <ArrowRight className="mt-1 h-3.5 w-3.5 text-slate-400" />
+          <ArrowRight className="mt-1 h-3.5 w-3.5 text-fg-faint" />
         </div>
-        {capability.description && <p className="mt-3 line-clamp-2 text-[13px] leading-5 text-slate-600">{capability.description}</p>}
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+        {capability.description && <p className="mt-3 line-clamp-2 text-sm leading-5 text-fg-muted">{capability.description}</p>}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-fg-subtle">
           <span>{t("capabilities.marketplace.card.latest", { version: capability.latest_version ?? "—" })}</span>
           <span>·</span>
           <span>{t("capabilities.marketplace.card.added", { count })}</span>
@@ -180,13 +180,13 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
         <ArrowLeft className="h-3.5 w-3.5" />
         {t("capabilities.marketplace.detail.back")}
       </Button>
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="rounded-lg border border-line bg-surface p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[18px] font-semibold text-slate-900">{capability.name}</h3>
+          <h3 className="text-lg font-semibold text-fg">{capability.name}</h3>
           <CapabilityTypeBadge type={capability.type} />
         </div>
-        {source && <p className="mt-2 text-[12px] text-slate-500">{t("capabilities.marketplace.card.source", { source })}</p>}
-        {capability.description && <p className="mt-4 text-[13px] leading-5 text-slate-600">{capability.description}</p>}
+        {source && <p className="mt-2 text-sm text-fg-subtle">{t("capabilities.marketplace.card.source", { source })}</p>}
+        {capability.description && <p className="mt-4 text-sm leading-5 text-fg-muted">{capability.description}</p>}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <Detail label={t("capabilities.table.latestVersion")} value={capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")} mono />
           <Detail label={t("capabilities.table.credentials")} value={requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))} />
@@ -204,9 +204,9 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
 
 function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-md border border-slate-200 p-3">
-      <p className="text-[11px] text-slate-500">{label}</p>
-      <p className={`mt-1 text-[13px] text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</p>
+    <div className="rounded-md border border-line p-3">
+      <p className="text-xs text-fg-subtle">{label}</p>
+      <p className={`mt-1 text-sm text-fg ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   )
 }

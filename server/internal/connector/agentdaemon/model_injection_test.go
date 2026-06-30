@@ -814,22 +814,22 @@ func TestBuildModelCredentialCapabilityName_Fallbacks(t *testing.T) {
 		{
 			name: "provider and model_key",
 			mr:   store.ModelRuntime{ProviderType: "anthropic", ModelKey: "claude-sonnet-4-5"},
-			want: "模型 · anthropic/claude-sonnet-4-5",
+			want: "Model · anthropic/claude-sonnet-4-5",
 		},
 		{
 			name: "only model_key",
 			mr:   store.ModelRuntime{ModelKey: "claude-sonnet-4-5"},
-			want: "模型 · claude-sonnet-4-5",
+			want: "Model · claude-sonnet-4-5",
 		},
 		{
 			name: "only model_name",
 			mr:   store.ModelRuntime{ModelName: "Claude Sonnet 4.5"},
-			want: "模型 · Claude Sonnet 4.5",
+			want: "Model · Claude Sonnet 4.5",
 		},
 		{
 			name: "no identifiers",
 			mr:   store.ModelRuntime{},
-			want: "模型",
+			want: "Model",
 		},
 	}
 	for _, tc := range cases {

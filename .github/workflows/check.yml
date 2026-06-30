@@ -1,0 +1,75 @@
+# The single source of truth for "what does CI run" lives in the Makefile
+# (`make check`). That target chains sqlc generate, go test, the migration
+# drift check (which spins up postgres via docker compose), and the pnpm
+# typecheck. Re-expressing those steps in YAML would inevitably drift from
+# the Makefile and break local/CI parity, so this workflow deliberately
+# stays thin: install toolchains, then delegate to `make check`.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Allow Go to fetch a newer toolchain on demand. sqlc v1.31.1+
+      # has its module declare `go >= 1.26` even when the binary
+      # builds fine under 1.25; setup-go pins GOTOOLCHAIN=local by
+      # default which would block `go run sqlc@v1.31.1`. The
+      # transient 1.26 download is cached by setup-go's mod cache.
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          # setup-go's built-in cache covers ~/go/pkg/mod only. The
+          # block below adds ~/.cache/go-build so test-binary
+          # compilation is incremental across runs — the dominant cost
+          # of `make check` is `go test ./server/...`, which builds a
+          # large pile of test binaries from scratch every time
+          # without it.
+          cache: true
+
+      - name: Cache Go build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+          # Key on go.sum so a dependency bump invalidates; restore-keys
+          # let an unrelated push reuse the previous tree's build cache.
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: make check
+        env:
+          # setup-go@v6 exports GOTOOLCHAIN=local into the runner
+          # environment, which would shadow the job-level
+          # GOTOOLCHAIN=auto above. Re-export it here so
+          # `go run sqlc@v1.31.1` (which declares `go >= 1.26`) can
+          # auto-fetch a newer toolchain instead of failing.
+          GOTOOLCHAIN: auto
