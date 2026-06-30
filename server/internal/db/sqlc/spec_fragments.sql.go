@@ -132,7 +132,7 @@ type InsertSpecFragmentRow struct {
 // Single insert path for both UI ("manual"/"import") and agent
 // ("agent") writes. Caller is responsible for setting created_by
 // (UI: signed-in user; agent: pgtype.UUID{Valid:false}) and
-// agent_actor (UI: ”; agent: 'connector:projectAgentID').
+// agent_actor (UI: ”; agent: 'connector:agentID').
 func (q *Queries) InsertSpecFragment(ctx context.Context, arg InsertSpecFragmentParams) (InsertSpecFragmentRow, error) {
 	row := q.db.QueryRow(ctx, insertSpecFragment,
 		arg.ID,

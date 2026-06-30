@@ -13,7 +13,7 @@ import (
 
 const getAuditRecord = `-- name: GetAuditRecord :one
 select id, occurred_at, source, event_type, actor_type, actor_id,
-       target_type, target_id, workspace_id, project_id, payload
+       target_type, target_id, workspace_id, payload
 from audit_records
 where id = $1::bigint
 `
@@ -28,7 +28,6 @@ type GetAuditRecordRow struct {
 	TargetType  string             `json:"target_type"`
 	TargetID    pgtype.UUID        `json:"target_id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
 	Payload     []byte             `json:"payload"`
 }
 
@@ -45,7 +44,6 @@ func (q *Queries) GetAuditRecord(ctx context.Context, id int64) (GetAuditRecordR
 		&i.TargetType,
 		&i.TargetID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.Payload,
 	)
 	return i, err
@@ -55,11 +53,11 @@ const insertAuditRecord = `-- name: InsertAuditRecord :exec
 
 insert into audit_records (
   occurred_at, source, event_type, actor_type, actor_id,
-  target_type, target_id, workspace_id, project_id, payload
+  target_type, target_id, workspace_id, payload
 )
 values (
   $1, $2, $3, $4, $5::uuid,
-  $6, $7::uuid, $8::uuid, $9::uuid, $10::jsonb
+  $6, $7::uuid, $8::uuid, $9::jsonb
 )
 `
 
@@ -72,7 +70,6 @@ type InsertAuditRecordParams struct {
 	TargetType  string             `json:"target_type"`
 	TargetID    pgtype.UUID        `json:"target_id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
 	Payload     []byte             `json:"payload"`
 }
 
@@ -90,7 +87,6 @@ func (q *Queries) InsertAuditRecord(ctx context.Context, arg InsertAuditRecordPa
 		arg.TargetType,
 		arg.TargetID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.Payload,
 	)
 	return err
@@ -98,24 +94,22 @@ func (q *Queries) InsertAuditRecord(ctx context.Context, arg InsertAuditRecordPa
 
 const listAuditRecords = `-- name: ListAuditRecords :many
 select id, occurred_at, source, event_type, actor_type, actor_id,
-       target_type, target_id, workspace_id, project_id, payload
+       target_type, target_id, workspace_id, payload
 from audit_records
 where ($1::uuid is null or workspace_id = $1::uuid)
-  and ($2::uuid is null or project_id = $2::uuid)
-  and ($3::text = '' or source = $3::text)
-  and ($4::text = '' or event_type = $4::text)
-  and ($5::uuid is null or actor_id = $5::uuid)
-  and ($6::text = '' or target_type = $6::text)
-  and ($7::uuid is null or target_id = $7::uuid)
-  and ($8::timestamptz is null or occurred_at >= $8::timestamptz)
-  and ($9::timestamptz is null or occurred_at <= $9::timestamptz)
+  and ($2::text = '' or source = $2::text)
+  and ($3::text = '' or event_type = $3::text)
+  and ($4::uuid is null or actor_id = $4::uuid)
+  and ($5::text = '' or target_type = $5::text)
+  and ($6::uuid is null or target_id = $6::uuid)
+  and ($7::timestamptz is null or occurred_at >= $7::timestamptz)
+  and ($8::timestamptz is null or occurred_at <= $8::timestamptz)
 order by occurred_at desc, id desc
-limit $10::int
+limit $9::int
 `
 
 type ListAuditRecordsParams struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
 	Source      string             `json:"source"`
 	EventType   string             `json:"event_type"`
 	ActorID     pgtype.UUID        `json:"actor_id"`
@@ -136,19 +130,17 @@ type ListAuditRecordsRow struct {
 	TargetType  string             `json:"target_type"`
 	TargetID    pgtype.UUID        `json:"target_id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
 	Payload     []byte             `json:"payload"`
 }
 
 // Generic filter list. Pass empty/null for any filter you want to skip.
-// workspace_id / project_id / actor_id / target_id are pgtype.UUID — pass
+// workspace_id / actor_id / target_id are pgtype.UUID — pass
 // {Valid:false} to skip. source / event_type / target_type are text — pass
 // empty string to skip. since / until are pgtype.Timestamptz — pass
 // {Valid:false} to skip.
 func (q *Queries) ListAuditRecords(ctx context.Context, arg ListAuditRecordsParams) ([]ListAuditRecordsRow, error) {
 	rows, err := q.db.Query(ctx, listAuditRecords,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.Source,
 		arg.EventType,
 		arg.ActorID,
@@ -175,7 +167,6 @@ func (q *Queries) ListAuditRecords(ctx context.Context, arg ListAuditRecordsPara
 			&i.TargetType,
 			&i.TargetID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.Payload,
 		); err != nil {
 			return nil, err

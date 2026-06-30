@@ -28,6 +28,8 @@ type Agent struct {
 	Status string `json:"status"`
 	// Agent JSON 配置
 	Config []byte `json:"config"`
+	// 显式绑定的 runtime; NULL=未绑定(dispatch 时报错引导用户去 agent 设置页选择)
+	RuntimeID pgtype.UUID `json:"runtime_id"`
 	// 创建人
 	CreatedBy pgtype.UUID `json:"created_by"`
 	// 创建时间
@@ -42,8 +44,8 @@ type Agent struct {
 type AgentCapability struct {
 	// 绑定记录 ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 project_agent
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	// 所属 agent
+	AgentID pgtype.UUID `json:"agent_id"`
 	// 绑定的 capability
 	CapabilityID pgtype.UUID `json:"capability_id"`
 	// 锁定的版本; RESTRICT 防止误删仍被使用的版本
@@ -89,8 +91,6 @@ type AgentRun struct {
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 Project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 所属会话
 	ConversationID pgtype.UUID `json:"conversation_id"`
 	// 触发消息 ID
@@ -107,8 +107,8 @@ type AgentRun struct {
 	RequestedByType string `json:"requested_by_type"`
 	// 请求方 ID
 	RequestedByID pgtype.UUID `json:"requested_by_id"`
-	// 本次 run 使用的 project_agent
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	// 本次 run 使用的 agent
+	AgentID pgtype.UUID `json:"agent_id"`
 	// 执行连接器类型快照
 	ConnectorType string `json:"connector_type"`
 	// 外部运行 ID
@@ -143,8 +143,6 @@ type AgentRunArtifact struct {
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 所属 run
 	AgentRunID pgtype.UUID `json:"agent_run_id"`
 	// 产物显示名
@@ -169,8 +167,6 @@ type AgentRunEvent struct {
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 所属 run
 	AgentRunID pgtype.UUID `json:"agent_run_id"`
 	// run 内事件序号
@@ -203,8 +199,6 @@ type AuditRecord struct {
 	TargetID pgtype.UUID `json:"target_id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 脱敏事件上下文
 	Payload []byte `json:"payload"`
 	// 事件发生时间
@@ -310,14 +304,12 @@ type ConnectorSessionBinding struct {
 	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
 }
 
-// Project 会话表
+// 会话表
 type Conversation struct {
 	// 会话 ID
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 Project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 会话顶层入口: web=内置 UI; im=即时通讯(具体平台见 platform 列); api=外部 API 触发
 	Surface string `json:"surface"`
 	// 会话形态: thread=单线程对话(web 默认); group=群聊; dm=私聊; oneshot=一次性请求(api 默认)
@@ -383,29 +375,29 @@ type GatewaySession struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// user/project 级 memory,agent 自觉写入 + 用户事后审计
+// user/workspace 级 memory,agent 自觉写入 + 用户事后审计
 type Memory struct {
 	// memory 内部 ID
 	ID pgtype.UUID `json:"id"`
-	// 作用域 (user/project); 取值由 specmemory.Scope 管理
+	// 作用域 (user/workspace); 取值由 specmemory.Scope 管理
 	Scope string `json:"scope"`
-	// memory 归属用户; scope=project 时也填,用于排重与审计
+	// memory 归属用户; scope=workspace 时也填,用于排重与审计
 	UserID pgtype.UUID `json:"user_id"`
-	// 所属 project; scope=user 时为 NULL,scope=project 时必填
-	ProjectID pgtype.UUID `json:"project_id"`
-	// 类型 (user/feedback/project/reference); 取值由 specmemory.MemoryType 管理
+	// 所属 workspace; scope=user 时为 NULL,scope=workspace 时必填
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	// 类型 (user/feedback/workspace/reference); 取值由 specmemory.MemoryType 管理
 	MemoryType string `json:"memory_type"`
 	// 简短标题,可选
 	Title string `json:"title"`
 	// 主体内容
 	Body string `json:"body"`
-	// feedback/project 类推荐填写的动因说明
+	// feedback/workspace 类推荐填写的动因说明
 	Why string `json:"why"`
 	// 标签数组
 	Tags []string `json:"tags"`
 	// 来源 (user/agent/auto-review); 取值由 specmemory.Source 管理
 	Source string `json:"source"`
-	// agent 写入时记录 connector:projectAgentID; 人工写入为空
+	// agent 写入时记录 connector:agentID; 人工写入为空
 	AgentActor string `json:"agent_actor"`
 	// agent 写入时关联的会话 ID; 会话被删时置 NULL,不连带删 memory
 	ConversationID pgtype.UUID        `json:"conversation_id"`
@@ -421,8 +413,6 @@ type Message struct {
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 所属会话
 	ConversationID pgtype.UUID `json:"conversation_id"`
 	// 发送方类型: user=真人; agent=Agent 输出; system=Parsar 系统事件; external=外部 IM 用户(未注册)
@@ -479,53 +469,6 @@ type Model struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 项目表, 最小业务权限边界
-type Project struct {
-	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 项目展示名
-	Name string `json:"name"`
-	// workspace 内项目标识
-	Slug string `json:"slug"`
-	// 项目描述, 展示用
-	Description string `json:"description"`
-	// 状态: active=活跃 / archived=已归档(只读)
-	Status string `json:"status"`
-	// 项目级配置
-	Config []byte `json:"config"`
-	// 创建人
-	CreatedBy pgtype.UUID        `json:"created_by"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=未删除
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-}
-
-// Agent 与 Project 绑定表
-type ProjectAgent struct {
-	// 绑定记录 ID
-	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 Project; Project 删则级联删绑定
-	ProjectID pgtype.UUID `json:"project_id"`
-	// 引用的 Agent; Agent 删则级联删绑定
-	AgentID pgtype.UUID `json:"agent_id"`
-	// 显式绑定的 runtime; NULL=未绑定(dispatch 时报错引导用户去 agent 设置页选择)
-	RuntimeID pgtype.UUID `json:"runtime_id"`
-	// Project 内 Agent 启用状态
-	Status string `json:"status"`
-	// Project 级 Agent 覆写配置
-	Config []byte `json:"config"`
-	// 操作绑定的人
-	CreatedBy pgtype.UUID        `json:"created_by"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=有效绑定
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-}
-
 // Agent runtime 注册表
 type Runtime struct {
 	// runtime 主键, 由 server 端生成
@@ -560,14 +503,14 @@ type Runtime struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 统一沙盒实例表。记录 workspace 范围内所有 provider 沙盒(如 E2B): 预热池沙盒(allocation_status=pooled)、已绑定到 project_agent 的持久沙盒(bound)、以及历史终止行(released)。不存 envd_access_token / endpoint URL 等敏感运行态信息; 这些只在进程内存中保存。
+// 统一沙盒实例表。记录 workspace 范围内所有 provider 沙盒(如 E2B): 预热池沙盒(allocation_status=pooled)、已绑定到 agent 的持久沙盒(bound)、以及历史终止行(released)。不存 envd_access_token / endpoint URL 等敏感运行态信息; 这些只在进程内存中保存。
 type Sandbox struct {
 	// 沙盒实例主键
 	ID pgtype.UUID `json:"id"`
 	// 归属 workspace; 预热池也按 workspace 隔离, 防止 credential / usage / permission 跨租户
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 绑定的 project_agent; pooled 行为空, bound 行必填
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	// 绑定的 agent; pooled 行为空, bound 行必填
+	AgentID pgtype.UUID `json:"agent_id"`
 	// 沙盒人类可读名(可空), 主要用于 admin UI 展示
 	Name pgtype.Text `json:"name"`
 	// 与 connector 的 buildPoolKey 输出对齐; pooled 行为空, bound 行必填
@@ -578,7 +521,7 @@ type Sandbox struct {
 	TemplateID string `json:"template_id"`
 	// 生命周期: spawning=创建中 / running=可用 / renewing=续期中 / killing=终止中 / killed=已正常终止 / killed_orphaned=启动扫描清理 / killed_error=异常终止
 	LifecycleStatus string `json:"lifecycle_status"`
-	// 归属状态: pooled=workspace 预热池可 claim / bound=已绑定到 project_agent / released=已释放历史行
+	// 归属状态: pooled=workspace 预热池可 claim / bound=已绑定到 agent / released=已释放历史行
 	AllocationStatus string `json:"allocation_status"`
 	// 沙盒续期秒数; Renew 后 provider 生命周期延长到 now + timeout_seconds
 	TimeoutSeconds int32 `json:"timeout_seconds"`
@@ -644,7 +587,7 @@ type SpecFragment struct {
 	Source string `json:"source"`
 	// 人工创建者 user_id; agent 写入时为 NULL
 	CreatedBy pgtype.UUID `json:"created_by"`
-	// agent 写入时记录 connector:projectAgentID; 人工创建时为空字符串
+	// agent 写入时记录 connector:agentID; 人工创建时为空字符串
 	AgentActor string             `json:"agent_actor"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
@@ -658,8 +601,6 @@ type UsageLog struct {
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 project
-	ProjectID pgtype.UUID `json:"project_id"`
 	// 关联 run
 	AgentRunID pgtype.UUID `json:"agent_run_id"`
 	// provider 标识

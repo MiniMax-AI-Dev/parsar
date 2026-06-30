@@ -11,29 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const activateDevProjectAgent = `-- name: ActivateDevProjectAgent :execrows
-update project_agents
-set status = 'active', updated_at = $1
-where project_id = $2::uuid
-  and agent_id = $3::uuid
-  and deleted_at is null
-  and status <> 'active'
-`
-
-type ActivateDevProjectAgentParams struct {
-	Now       pgtype.Timestamptz `json:"now"`
-	ProjectID pgtype.UUID        `json:"project_id"`
-	AgentID   pgtype.UUID        `json:"agent_id"`
-}
-
-func (q *Queries) ActivateDevProjectAgent(ctx context.Context, arg ActivateDevProjectAgentParams) (int64, error) {
-	result, err := q.db.Exec(ctx, activateDevProjectAgent, arg.Now, arg.ProjectID, arg.AgentID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const activeAgentSlugExists = `-- name: ActiveAgentSlugExists :one
 select exists(
   select 1 from agents
@@ -61,14 +38,9 @@ const activeConversationExists = `-- name: ActiveConversationExists :one
 select exists(
   select 1
   from conversations c
-  join projects p on p.id = c.project_id
   where c.id = $1::uuid
-    and c.workspace_id = p.workspace_id
-    and c.project_id = p.id
     and c.status = 'active'
     and c.deleted_at is null
-    and p.status = 'active'
-    and p.deleted_at is null
 )
 `
 
@@ -92,23 +64,6 @@ func (q *Queries) ActiveModelSlugExists(ctx context.Context, slug string) (bool,
 	var exists_active bool
 	err := row.Scan(&exists_active)
 	return exists_active, err
-}
-
-const activeProjectExists = `-- name: ActiveProjectExists :one
-select exists(
-  select 1
-  from projects
-  where id = $1::uuid
-    and status = 'active'
-    and deleted_at is null
-)
-`
-
-func (q *Queries) ActiveProjectExists(ctx context.Context, id pgtype.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, activeProjectExists, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const activeSecretSlugExists = `-- name: ActiveSecretSlugExists :one
@@ -320,51 +275,6 @@ func (q *Queries) ApproveJoinRequest(ctx context.Context, arg ApproveJoinRequest
 	return i, err
 }
 
-const archiveProject = `-- name: ArchiveProject :one
-update projects
-set status = 'archived', updated_at = $1
-where id = $2::uuid
-  and status = 'active'
-  and deleted_at is null
-returning id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at
-`
-
-type ArchiveProjectParams struct {
-	Now pgtype.Timestamptz `json:"now"`
-	ID  pgtype.UUID        `json:"id"`
-}
-
-type ArchiveProjectRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-// Soft-archive a project (sets status = 'archived'; not deleted_at, so
-// the row stays joinable for historical lookups). Active=true list
-// queries (ListWorkspaceProjects) filter status, so this hides it from
-// the switcher without breaking past references.
-func (q *Queries) ArchiveProject(ctx context.Context, arg ArchiveProjectParams) (ArchiveProjectRow, error) {
-	row := q.db.QueryRow(ctx, archiveProject, arg.Now, arg.ID)
-	var i ArchiveProjectRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const archiveWorkspace = `-- name: ArchiveWorkspace :one
 update workspaces
 set deleted_at = $1, updated_at = $1
@@ -388,8 +298,8 @@ type ArchiveWorkspaceRow struct {
 
 // Soft-delete a workspace (sets deleted_at). The caller is responsible
 // for cascading any UI side effects (e.g. clearing the active workspace
-// in localStorage). Children rows in workspace_members / projects are
-// left intact; queries already filter them via the workspaces JOIN.
+// in localStorage). Children rows in workspace_members are left intact;
+// queries already filter them via the workspaces JOIN.
 func (q *Queries) ArchiveWorkspace(ctx context.Context, arg ArchiveWorkspaceParams) (ArchiveWorkspaceRow, error) {
 	row := q.db.QueryRow(ctx, archiveWorkspace, arg.Now, arg.ID)
 	var i ArchiveWorkspaceRow
@@ -504,12 +414,11 @@ claimed as (
       ),
       updated_at = $2::timestamptz
   where c.id in (select id from picked)
-  returning c.id, c.workspace_id, c.project_id, c.external_id,
+  returning c.id, c.workspace_id, c.external_id,
             c.external_thread_id, c.source_app_id, c.metadata
 )
 select claimed.id::text                 as conversation_id,
        claimed.workspace_id::text       as workspace_id,
-       claimed.project_id::text         as project_id,
        claimed.external_id              as external_chat_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
@@ -520,10 +429,9 @@ select claimed.id::text                 as conversation_id,
        r.finished_at                    as run_finished_at,
        coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
        coalesce(rem.max_seq, 0::bigint) as max_event_sequence,
-       -- Per-card Agent display name resolved via the run's
-       -- project_agent binding. LEFT JOINs so a soft-deleted /
-       -- detached binding doesn't drop the row entirely — the
-       -- driver falls back to FeishuCardTitle on empty.
+       -- Per-card Agent display name resolved via the run's agent.
+       -- LEFT JOIN so a soft-deleted agent doesn't drop the row
+       -- entirely — the driver falls back to FeishuCardTitle on empty.
        coalesce(a.name, '')::text       as agent_name,
        -- sender_open_id mirrors ListActiveFeishuInflightConversations
        -- — captured from the inbound trigger message so the driver
@@ -536,8 +444,7 @@ from picked
 join claimed on claimed.id = picked.id
 join agent_runs r on r.id = picked.run_id
 left join messages trig on trig.id = r.trigger_message_id
-left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
-left join agents a on a.id = pa.agent_id and a.deleted_at is null
+left join agents a on a.id = r.agent_id and a.deleted_at is null
 left join (
   select agent_run_id, max(sequence)::bigint as max_seq
   from agent_run_events
@@ -561,7 +468,6 @@ type ClaimActiveFeishuInflightConversationsParams struct {
 type ClaimActiveFeishuInflightConversationsRow struct {
 	ConversationID       string             `json:"conversation_id"`
 	WorkspaceID          string             `json:"workspace_id"`
-	ProjectID            string             `json:"project_id"`
 	ExternalChatID       string             `json:"external_chat_id"`
 	ExternalThreadID     string             `json:"external_thread_id"`
 	SourceAppID          string             `json:"source_app_id"`
@@ -657,7 +563,6 @@ func (q *Queries) ClaimActiveFeishuInflightConversations(ctx context.Context, ar
 		if err := rows.Scan(
 			&i.ConversationID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.ExternalChatID,
 			&i.ExternalThreadID,
 			&i.SourceAppID,
@@ -686,23 +591,13 @@ with picked as (
   select r.id
   from agent_runs r
   join conversations c on c.id = r.conversation_id
-  join projects p on p.id = r.project_id
-  join project_agents pa on pa.id = r.project_agent_id
-  join agents a on a.id = pa.agent_id
+  join agents a on a.id = r.agent_id
   where r.connector_type = 'http'
     and r.status = 'queued'
     and r.workspace_id = c.workspace_id
-    and r.workspace_id = p.workspace_id
-    and r.project_id = c.project_id
-    and r.project_id = pa.project_id
-    and r.workspace_id = pa.workspace_id
     and r.workspace_id = a.workspace_id
-    and p.status = 'active'
-    and p.deleted_at is null
     and c.status = 'active'
     and c.deleted_at is null
-    and pa.status = 'active'
-    and pa.deleted_at is null
     and a.status = 'active'
     and a.deleted_at is null
   order by r.created_at asc, r.id asc
@@ -760,24 +655,21 @@ claimed as (
       updated_at = $5::timestamptz
   from picked
   where r.id = picked.id
-  returning r.id, r.workspace_id, r.project_id, r.conversation_id, r.project_agent_id
+  returning r.id, r.workspace_id, r.conversation_id, r.agent_id
 )
 select claimed.id::text               as run_id,
        claimed.workspace_id::text     as workspace_id,
-       claimed.project_id::text       as project_id,
        claimed.conversation_id::text  as conversation_id,
        c.external_id                  as external_chat_id,
        c.external_thread_id           as external_thread_id,
        c.source_app_id                as source_app_id,
-       -- Per-card Agent display name resolved via the run's
-       -- project_agent binding. LEFT JOINs so a soft-deleted /
-       -- detached binding doesn't drop the row entirely — the
-       -- driver falls back to FeishuCardTitle on empty.
+       -- Per-card Agent display name resolved via the run's agent.
+       -- LEFT JOIN so a soft-deleted agent doesn't drop the row
+       -- entirely — the driver falls back to FeishuCardTitle on empty.
        coalesce(a.name, '')::text    as agent_name
 from claimed
 join conversations c on c.id = claimed.conversation_id
-left join project_agents pa on pa.id = claimed.project_agent_id and pa.deleted_at is null
-left join agents a on a.id = pa.agent_id and a.deleted_at is null
+left join agents a on a.id = claimed.agent_id and a.deleted_at is null
 `
 
 type ClaimPendingQueuedFeishuRunsParams struct {
@@ -791,7 +683,6 @@ type ClaimPendingQueuedFeishuRunsParams struct {
 type ClaimPendingQueuedFeishuRunsRow struct {
 	RunID            string `json:"run_id"`
 	WorkspaceID      string `json:"workspace_id"`
-	ProjectID        string `json:"project_id"`
 	ConversationID   string `json:"conversation_id"`
 	ExternalChatID   string `json:"external_chat_id"`
 	ExternalThreadID string `json:"external_thread_id"`
@@ -857,7 +748,6 @@ func (q *Queries) ClaimPendingQueuedFeishuRuns(ctx context.Context, arg ClaimPen
 		if err := rows.Scan(
 			&i.RunID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.ConversationID,
 			&i.ExternalChatID,
 			&i.ExternalThreadID,
@@ -979,6 +869,97 @@ func (q *Queries) CompleteAgentRun(ctx context.Context, arg CompleteAgentRunPara
 	return err
 }
 
+const configureAgentProfile = `-- name: ConfigureAgentProfile :one
+update agents a
+set config = $1::jsonb,
+    updated_at = $2
+where a.id = $3::uuid
+  and a.status = 'active'
+  and a.deleted_at is null
+returning
+  a.id::text as agent_id,
+  a.name,
+  a.slug,
+  a.connector_type,
+  a.config as agent_config
+`
+
+type ConfigureAgentProfileParams struct {
+	AgentConfig []byte             `json:"agent_config"`
+	Now         pgtype.Timestamptz `json:"now"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+}
+
+type ConfigureAgentProfileRow struct {
+	AgentID       string `json:"agent_id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	ConnectorType string `json:"connector_type"`
+	AgentConfig   []byte `json:"agent_config"`
+}
+
+func (q *Queries) ConfigureAgentProfile(ctx context.Context, arg ConfigureAgentProfileParams) (ConfigureAgentProfileRow, error) {
+	row := q.db.QueryRow(ctx, configureAgentProfile, arg.AgentConfig, arg.Now, arg.AgentID)
+	var i ConfigureAgentProfileRow
+	err := row.Scan(
+		&i.AgentID,
+		&i.Name,
+		&i.Slug,
+		&i.ConnectorType,
+		&i.AgentConfig,
+	)
+	return i, err
+}
+
+const configureDevAgentConnector = `-- name: ConfigureDevAgentConnector :one
+update agents a
+set connector_type = $1,
+    config = $2::jsonb,
+    updated_at = $3
+where a.id = $4::uuid
+  and a.status = 'active'
+  and a.deleted_at is null
+returning
+  a.id::text as agent_id,
+  a.name,
+  a.slug,
+  a.connector_type,
+  a.config as agent_config
+`
+
+type ConfigureDevAgentConnectorParams struct {
+	ConnectorType string             `json:"connector_type"`
+	AgentConfig   []byte             `json:"agent_config"`
+	Now           pgtype.Timestamptz `json:"now"`
+	AgentID       pgtype.UUID        `json:"agent_id"`
+}
+
+type ConfigureDevAgentConnectorRow struct {
+	AgentID       string `json:"agent_id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	ConnectorType string `json:"connector_type"`
+	AgentConfig   []byte `json:"agent_config"`
+}
+
+func (q *Queries) ConfigureDevAgentConnector(ctx context.Context, arg ConfigureDevAgentConnectorParams) (ConfigureDevAgentConnectorRow, error) {
+	row := q.db.QueryRow(ctx, configureDevAgentConnector,
+		arg.ConnectorType,
+		arg.AgentConfig,
+		arg.Now,
+		arg.AgentID,
+	)
+	var i ConfigureDevAgentConnectorRow
+	err := row.Scan(
+		&i.AgentID,
+		&i.Name,
+		&i.Slug,
+		&i.ConnectorType,
+		&i.AgentConfig,
+	)
+	return i, err
+}
+
 const configureDevConversationExternalRef = `-- name: ConfigureDevConversationExternalRef :one
 update conversations
 set surface = 'im',
@@ -990,7 +971,7 @@ set surface = 'im',
     updated_at = $6
 where id = $7::uuid
   and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, platform, external_id, external_thread_id
+returning id::text, workspace_id::text, platform, external_id, external_thread_id
 `
 
 type ConfigureDevConversationExternalRefParams struct {
@@ -1006,7 +987,6 @@ type ConfigureDevConversationExternalRefParams struct {
 type ConfigureDevConversationExternalRefRow struct {
 	ID               string `json:"id"`
 	WorkspaceID      string `json:"workspace_id"`
-	ProjectID        string `json:"project_id"`
 	Platform         string `json:"platform"`
 	ExternalID       string `json:"external_id"`
 	ExternalThreadID string `json:"external_thread_id"`
@@ -1028,126 +1008,9 @@ func (q *Queries) ConfigureDevConversationExternalRef(ctx context.Context, arg C
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.Platform,
 		&i.ExternalID,
 		&i.ExternalThreadID,
-	)
-	return i, err
-}
-
-const configureDevProjectAgentConnector = `-- name: ConfigureDevProjectAgentConnector :one
-update agents a
-set connector_type = $1,
-    config = $2::jsonb,
-    updated_at = $3
-from project_agents pa
-where pa.id = $4::uuid
-  and pa.agent_id = a.id
-  and pa.workspace_id = a.workspace_id
-  and pa.status = 'active'
-  and pa.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
-returning
-  pa.id::text as project_agent_id,
-  pa.project_id::text,
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.connector_type,
-  a.config as agent_config
-`
-
-type ConfigureDevProjectAgentConnectorParams struct {
-	ConnectorType  string             `json:"connector_type"`
-	AgentConfig    []byte             `json:"agent_config"`
-	Now            pgtype.Timestamptz `json:"now"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-}
-
-type ConfigureDevProjectAgentConnectorRow struct {
-	ProjectAgentID string `json:"project_agent_id"`
-	PaProjectID    string `json:"pa_project_id"`
-	AgentID        string `json:"agent_id"`
-	Name           string `json:"name"`
-	Slug           string `json:"slug"`
-	ConnectorType  string `json:"connector_type"`
-	AgentConfig    []byte `json:"agent_config"`
-}
-
-func (q *Queries) ConfigureDevProjectAgentConnector(ctx context.Context, arg ConfigureDevProjectAgentConnectorParams) (ConfigureDevProjectAgentConnectorRow, error) {
-	row := q.db.QueryRow(ctx, configureDevProjectAgentConnector,
-		arg.ConnectorType,
-		arg.AgentConfig,
-		arg.Now,
-		arg.ProjectAgentID,
-	)
-	var i ConfigureDevProjectAgentConnectorRow
-	err := row.Scan(
-		&i.ProjectAgentID,
-		&i.PaProjectID,
-		&i.AgentID,
-		&i.Name,
-		&i.Slug,
-		&i.ConnectorType,
-		&i.AgentConfig,
-	)
-	return i, err
-}
-
-const configureProjectAgentProfile = `-- name: ConfigureProjectAgentProfile :one
-update project_agents pa
-set config = $1::jsonb,
-    updated_at = $2
-from agents a
-where pa.id = $3::uuid
-  and pa.agent_id = a.id
-  and pa.workspace_id = a.workspace_id
-  and pa.status = 'active'
-  and pa.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
-returning
-  pa.id::text as project_agent_id,
-  pa.project_id::text,
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.connector_type,
-  a.config as agent_config,
-  pa.config as project_agent_config
-`
-
-type ConfigureProjectAgentProfileParams struct {
-	ProjectAgentConfig []byte             `json:"project_agent_config"`
-	Now                pgtype.Timestamptz `json:"now"`
-	ProjectAgentID     pgtype.UUID        `json:"project_agent_id"`
-}
-
-type ConfigureProjectAgentProfileRow struct {
-	ProjectAgentID     string `json:"project_agent_id"`
-	PaProjectID        string `json:"pa_project_id"`
-	AgentID            string `json:"agent_id"`
-	Name               string `json:"name"`
-	Slug               string `json:"slug"`
-	ConnectorType      string `json:"connector_type"`
-	AgentConfig        []byte `json:"agent_config"`
-	ProjectAgentConfig []byte `json:"project_agent_config"`
-}
-
-func (q *Queries) ConfigureProjectAgentProfile(ctx context.Context, arg ConfigureProjectAgentProfileParams) (ConfigureProjectAgentProfileRow, error) {
-	row := q.db.QueryRow(ctx, configureProjectAgentProfile, arg.ProjectAgentConfig, arg.Now, arg.ProjectAgentID)
-	var i ConfigureProjectAgentProfileRow
-	err := row.Scan(
-		&i.ProjectAgentID,
-		&i.PaProjectID,
-		&i.AgentID,
-		&i.Name,
-		&i.Slug,
-		&i.ConnectorType,
-		&i.AgentConfig,
-		&i.ProjectAgentConfig,
 	)
 	return i, err
 }
@@ -1218,7 +1081,7 @@ func (q *Queries) CountActiveWorkspaceOwners(ctx context.Context) (int64, error)
 }
 
 const countAgentBindingsForCapability = `-- name: CountAgentBindingsForCapability :one
-select count(distinct ac.project_agent_id)::bigint
+select count(distinct ac.agent_id)::bigint
 from agent_capabilities ac
 where ac.capability_id = $1::uuid
 `
@@ -1279,8 +1142,7 @@ func (q *Queries) CountDiscoverableWorkspaces(ctx context.Context, arg CountDisc
 const countInFlightRunsByAgent = `-- name: CountInFlightRunsByAgent :one
 select count(1)::bigint
 from agent_runs r
-join project_agents pa on pa.id = r.project_agent_id
-where pa.agent_id = $1::uuid
+where r.agent_id = $1::uuid
   and r.status in ('running', 'queued')
 `
 
@@ -1293,13 +1155,12 @@ func (q *Queries) CountInFlightRunsByAgent(ctx context.Context, agentID pgtype.U
 }
 
 const countInstalls = `-- name: CountInstalls :one
-select count(distinct p.workspace_id)::bigint
+select count(distinct a.workspace_id)::bigint
 from agent_capabilities ac
-join project_agents pa on ac.project_agent_id = pa.id
-join projects p on pa.project_id = p.id
+join agents a on ac.agent_id = a.id
 join capability c on c.id = ac.capability_id
 where ac.capability_id = $1::uuid
-  and p.workspace_id != c.workspace_id
+  and a.workspace_id != c.workspace_id
 `
 
 func (q *Queries) CountInstalls(ctx context.Context, sourceCapabilityID pgtype.UUID) (int64, error) {
@@ -1325,67 +1186,54 @@ func (q *Queries) CountPendingJoinRequests(ctx context.Context, workspaceID pgty
 	return pending_count, err
 }
 
-const countProjectAgentRuns = `-- name: CountProjectAgentRuns :one
-select count(*)::bigint as total
-from agent_runs r
-join projects p on p.id = r.project_id
-join conversations c on c.id = r.conversation_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
-where r.project_id = $1::uuid
-  and r.workspace_id = p.workspace_id
-  and r.workspace_id = c.workspace_id
-  and r.workspace_id = pa.workspace_id
-  and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and c.deleted_at is null
-  and pa.deleted_at is null
-  and a.deleted_at is null
-  and (cardinality($2::text[]) = 0
-       or r.status = ANY($2::text[]))
-`
-
-type CountProjectAgentRunsParams struct {
-	ProjectID pgtype.UUID `json:"project_id"`
-	Statuses  []string    `json:"statuses"`
-}
-
-// Companion to ListProjectAgentRunsPage. Returns the total row count
-// under the SAME filter so the UI can render "第 X-Y 条,共 N 条" and
-// decide when to disable the "next page" button. Joins mirror the list
-// query (same active-project guard) so counts and rows never disagree.
-func (q *Queries) CountProjectAgentRuns(ctx context.Context, arg CountProjectAgentRunsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countProjectAgentRuns, arg.ProjectID, arg.Statuses)
-	var total int64
-	err := row.Scan(&total)
-	return total, err
-}
-
 const countSandboxAgentsInWorkspace = `-- name: CountSandboxAgentsInWorkspace :one
 select count(*)::bigint
-from project_agents pa
-join agents a on a.id = pa.agent_id
-  and a.workspace_id = pa.workspace_id
-where pa.workspace_id = $1::uuid
-  and pa.deleted_at is null
-  and pa.status = 'active'
+from agents a
+where a.workspace_id = $1::uuid
   and a.deleted_at is null
   and a.status = 'active'
   and a.connector_type = 'agent_daemon'
-  and coalesce(pa.config->>'daemon_mode', '') = 'sandbox'
+  and coalesce(a.config->>'daemon_mode', '') = 'sandbox'
 `
 
-// Step 5: number of active project-agent bindings in this workspace whose
-// daemon execution mode is sandbox. The execution mode now lives in
-// project_agents.config.daemon_mode rather than agents.config.runtime.
+// Step 5: number of active agents in this workspace whose daemon
+// execution mode is sandbox. The execution mode lives in
+// agents.config.daemon_mode.
 func (q *Queries) CountSandboxAgentsInWorkspace(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countSandboxAgentsInWorkspace, workspaceID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const countWorkspaceAgentRuns = `-- name: CountWorkspaceAgentRuns :one
+select count(*)::bigint as total
+from agent_runs r
+join conversations c on c.id = r.conversation_id
+join agents a on a.id = r.agent_id
+where r.workspace_id = $1::uuid
+  and r.workspace_id = c.workspace_id
+  and r.workspace_id = a.workspace_id
+  and c.deleted_at is null
+  and a.deleted_at is null
+  and (cardinality($2::text[]) = 0
+       or r.status = ANY($2::text[]))
+`
+
+type CountWorkspaceAgentRunsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Statuses    []string    `json:"statuses"`
+}
+
+// Companion to ListWorkspaceAgentRunsPage. Returns the total row count
+// under the SAME filter so the UI can render "第 X-Y 条,共 N 条" and
+// decide when to disable the "next page" button. Joins mirror the list
+// query so counts and rows never disagree.
+func (q *Queries) CountWorkspaceAgentRuns(ctx context.Context, arg CountWorkspaceAgentRunsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countWorkspaceAgentRuns, arg.WorkspaceID, arg.Statuses)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
 }
 
 const createAgentCRUD = `-- name: CreateAgentCRUD :one
@@ -1452,7 +1300,7 @@ func (q *Queries) CreateAgentCRUD(ctx context.Context, arg CreateAgentCRUDParams
 
 const createAgentCapability = `-- name: CreateAgentCapability :one
 insert into agent_capabilities(
-  id, project_agent_id, capability_id, capability_version_id,
+  id, agent_id, capability_id, capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at
 )
 values (
@@ -1460,14 +1308,14 @@ values (
   $4::uuid, $5::bool, $6::jsonb,
   $7::text, $8, $8
 )
-returning id::text as id, project_agent_id::text as project_agent_id,
+returning id::text as id, agent_id::text as agent_id,
   capability_id::text as capability_id, capability_version_id::text as capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at
 `
 
 type CreateAgentCapabilityParams struct {
 	ID                  pgtype.UUID        `json:"id"`
-	ProjectAgentID      pgtype.UUID        `json:"project_agent_id"`
+	AgentID             pgtype.UUID        `json:"agent_id"`
 	CapabilityID        pgtype.UUID        `json:"capability_id"`
 	CapabilityVersionID pgtype.UUID        `json:"capability_version_id"`
 	Enabled             bool               `json:"enabled"`
@@ -1478,7 +1326,7 @@ type CreateAgentCapabilityParams struct {
 
 type CreateAgentCapabilityRow struct {
 	ID                  string             `json:"id"`
-	ProjectAgentID      string             `json:"project_agent_id"`
+	AgentID             string             `json:"agent_id"`
 	CapabilityID        string             `json:"capability_id"`
 	CapabilityVersionID string             `json:"capability_version_id"`
 	Enabled             bool               `json:"enabled"`
@@ -1491,7 +1339,7 @@ type CreateAgentCapabilityRow struct {
 func (q *Queries) CreateAgentCapability(ctx context.Context, arg CreateAgentCapabilityParams) (CreateAgentCapabilityRow, error) {
 	row := q.db.QueryRow(ctx, createAgentCapability,
 		arg.ID,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.CapabilityID,
 		arg.CapabilityVersionID,
 		arg.Enabled,
@@ -1502,7 +1350,7 @@ func (q *Queries) CreateAgentCapability(ctx context.Context, arg CreateAgentCapa
 	var i CreateAgentCapabilityRow
 	err := row.Scan(
 		&i.ID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.CapabilityID,
 		&i.CapabilityVersionID,
 		&i.Enabled,
@@ -1516,23 +1364,22 @@ func (q *Queries) CreateAgentCapability(ctx context.Context, arg CreateAgentCapa
 
 const createAgentRun = `-- name: CreateAgentRun :exec
 insert into agent_runs(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   trigger_message_id, trigger_source, trigger_channel, requested_by_type, requested_by_id,
-  project_agent_id, connector_type, status, visibility, metadata,
+  agent_id, connector_type, status, visibility, metadata,
   created_at, updated_at
 )
-values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, 'message', $6, 'user', $7::uuid, $8::uuid, $9, 'queued', 'project', $10::jsonb, $11, $11)
+values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'message', $5, 'user', $6::uuid, $7::uuid, $8, 'queued', 'workspace', $9::jsonb, $10, $10)
 `
 
 type CreateAgentRunParams struct {
 	ID               pgtype.UUID        `json:"id"`
 	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
-	ProjectID        pgtype.UUID        `json:"project_id"`
 	ConversationID   pgtype.UUID        `json:"conversation_id"`
 	TriggerMessageID pgtype.UUID        `json:"trigger_message_id"`
 	TriggerChannel   string             `json:"trigger_channel"`
 	RequestedByID    pgtype.UUID        `json:"requested_by_id"`
-	ProjectAgentID   pgtype.UUID        `json:"project_agent_id"`
+	AgentID          pgtype.UUID        `json:"agent_id"`
 	ConnectorType    string             `json:"connector_type"`
 	Metadata         []byte             `json:"metadata"`
 	Now              pgtype.Timestamptz `json:"now"`
@@ -1545,12 +1392,11 @@ func (q *Queries) CreateAgentRun(ctx context.Context, arg CreateAgentRunParams) 
 	_, err := q.db.Exec(ctx, createAgentRun,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.ConversationID,
 		arg.TriggerMessageID,
 		arg.TriggerChannel,
 		arg.RequestedByID,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.ConnectorType,
 		arg.Metadata,
 		arg.Now,
@@ -1732,22 +1578,21 @@ func (q *Queries) CreateCapabilityVersion(ctx context.Context, arg CreateCapabil
 
 const createChildAgentRun = `-- name: CreateChildAgentRun :exec
 insert into agent_runs(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   trigger_message_id, trigger_source, trigger_channel, requested_by_type, requested_by_id,
-  project_agent_id, connector_type, status, visibility, metadata,
+  agent_id, connector_type, status, visibility, metadata,
   created_at, updated_at
 )
-values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, 'agent', 'internal', 'agent', $6::uuid, $7::uuid, $8, 'queued', 'project', $9::jsonb, $10, $10)
+values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'agent', 'internal', 'agent', $5::uuid, $6::uuid, $7, 'queued', 'workspace', $8::jsonb, $9, $9)
 `
 
 type CreateChildAgentRunParams struct {
 	ID               pgtype.UUID        `json:"id"`
 	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
-	ProjectID        pgtype.UUID        `json:"project_id"`
 	ConversationID   pgtype.UUID        `json:"conversation_id"`
 	TriggerMessageID pgtype.UUID        `json:"trigger_message_id"`
 	RequestedByID    pgtype.UUID        `json:"requested_by_id"`
-	ProjectAgentID   pgtype.UUID        `json:"project_agent_id"`
+	AgentID          pgtype.UUID        `json:"agent_id"`
 	ConnectorType    string             `json:"connector_type"`
 	Metadata         []byte             `json:"metadata"`
 	Now              pgtype.Timestamptz `json:"now"`
@@ -1759,11 +1604,10 @@ func (q *Queries) CreateChildAgentRun(ctx context.Context, arg CreateChildAgentR
 	_, err := q.db.Exec(ctx, createChildAgentRun,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.ConversationID,
 		arg.TriggerMessageID,
 		arg.RequestedByID,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.ConnectorType,
 		arg.Metadata,
 		arg.Now,
@@ -1809,12 +1653,11 @@ func (q *Queries) CreateDevAgent(ctx context.Context, arg CreateDevAgentParams) 
 }
 
 const createDevConversation = `-- name: CreateDevConversation :execrows
-insert into conversations(id, workspace_id, project_id, surface, form, title, status, metadata, created_at, updated_at)
-select $1::uuid, $2::uuid, $3::uuid, 'web', 'group', 'Demo Group', 'active', '{}', $4, $4
+insert into conversations(id, workspace_id, surface, form, title, status, metadata, created_at, updated_at)
+select $1::uuid, $2::uuid, 'web', 'group', 'Demo Group', 'active', '{}', $3, $3
 where not exists (
   select 1 from conversations
   where workspace_id = $2::uuid
-    and project_id = $3::uuid
     and surface = 'web'
     and form = 'group'
     and title = 'Demo Group'
@@ -1825,7 +1668,6 @@ where not exists (
 type CreateDevConversationParams struct {
 	ID          pgtype.UUID        `json:"id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
 	Now         pgtype.Timestamptz `json:"now"`
 }
 
@@ -1833,12 +1675,7 @@ type CreateDevConversationParams struct {
 // (web/im/api × thread/group/dm/oneshot)。Dev seed 是内置 web 的群聊
 // (Demo Group),所以 surface='web', form='group'。
 func (q *Queries) CreateDevConversation(ctx context.Context, arg CreateDevConversationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createDevConversation,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.ProjectID,
-		arg.Now,
-	)
+	result, err := q.db.Exec(ctx, createDevConversation, arg.ID, arg.WorkspaceID, arg.Now)
 	if err != nil {
 		return 0, err
 	}
@@ -1859,68 +1696,6 @@ type CreateDevFeishuAuthIdentityParams struct {
 
 func (q *Queries) CreateDevFeishuAuthIdentity(ctx context.Context, arg CreateDevFeishuAuthIdentityParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createDevFeishuAuthIdentity, arg.ID, arg.UserID, arg.Now)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const createDevProject = `-- name: CreateDevProject :execrows
-insert into projects(id, workspace_id, name, slug, description, status, config, created_by, created_at, updated_at)
-select $1::uuid, $2::uuid, 'Demo Project', 'demo-project', 'Development fixture project', 'active', '{}', $3::uuid, $4, $4
-where not exists (
-  select 1 from projects
-  where workspace_id = $2::uuid and slug = 'demo-project' and deleted_at is null
-)
-`
-
-type CreateDevProjectParams struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	CreatedBy   pgtype.UUID        `json:"created_by"`
-	Now         pgtype.Timestamptz `json:"now"`
-}
-
-func (q *Queries) CreateDevProject(ctx context.Context, arg CreateDevProjectParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createDevProject,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.CreatedBy,
-		arg.Now,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const createDevProjectAgent = `-- name: CreateDevProjectAgent :execrows
-insert into project_agents(id, workspace_id, project_id, agent_id, status, config, created_by, created_at, updated_at)
-select $1::uuid, $2::uuid, $3::uuid, $4::uuid, 'active', '{"daemon_mode":"sandbox","agent_kind":"opencode"}'::jsonb, $5::uuid, $6, $6
-where not exists (
-  select 1 from project_agents
-  where project_id = $3::uuid and agent_id = $4::uuid and deleted_at is null
-)
-`
-
-type CreateDevProjectAgentParams struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
-	AgentID     pgtype.UUID        `json:"agent_id"`
-	CreatedBy   pgtype.UUID        `json:"created_by"`
-	Now         pgtype.Timestamptz `json:"now"`
-}
-
-func (q *Queries) CreateDevProjectAgent(ctx context.Context, arg CreateDevProjectAgentParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createDevProjectAgent,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.ProjectID,
-		arg.AgentID,
-		arg.CreatedBy,
-		arg.Now,
-	)
 	if err != nil {
 		return 0, err
 	}
@@ -2000,17 +1775,16 @@ func (q *Queries) CreateDevWorkspaceMember(ctx context.Context, arg CreateDevWor
 
 const createMessage = `-- name: CreateMessage :exec
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
-values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6::uuid, 'message', 'text', 'project', $7, $8::jsonb, $9, $9)
+values ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, 'message', 'text', 'workspace', $6, $7::jsonb, $8, $8)
 `
 
 type CreateMessageParams struct {
 	ID             pgtype.UUID        `json:"id"`
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
 	ConversationID pgtype.UUID        `json:"conversation_id"`
 	SenderType     string             `json:"sender_type"`
 	SenderID       pgtype.UUID        `json:"sender_id"`
@@ -2026,7 +1800,6 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) er
 	_, err := q.db.Exec(ctx, createMessage,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.ConversationID,
 		arg.SenderType,
 		arg.SenderID,
@@ -2133,181 +1906,9 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Creat
 	return i, err
 }
 
-const createProject = `-- name: CreateProject :one
-insert into projects(id, workspace_id, name, slug, description, status, config, created_by, created_at, updated_at)
-values ($1::uuid, $2::uuid, $3, $4, $5, 'active', '{}', $6::uuid, $7, $7)
-returning id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at
-`
-
-type CreateProjectParams struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	CreatedBy   pgtype.UUID        `json:"created_by"`
-	Now         pgtype.Timestamptz `json:"now"`
-}
-
-type CreateProjectRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-// Admin-side project create inside a workspace (Phase 2 dev path).
-// (workspace_id, slug) is unique among non-deleted rows, so duplicate
-// slugs are caught by the partial unique index; callers probe with
-// ProjectSlugExistsInWorkspace beforehand to return a friendly 409.
-func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
-	row := q.db.QueryRow(ctx, createProject,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.Name,
-		arg.Slug,
-		arg.Description,
-		arg.CreatedBy,
-		arg.Now,
-	)
-	var i CreateProjectRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const createProjectAgentCRUD = `-- name: CreateProjectAgentCRUD :one
-insert into project_agents(id, workspace_id, project_id, agent_id, status, config, created_by, created_at, updated_at)
-select $1::uuid, p.workspace_id, p.id, $2::uuid, 'active', $3::jsonb, $4::uuid, $5, $5
-from projects p
-where p.id = $6::uuid
-  and p.workspace_id = $7::uuid
-  and p.status = 'active'
-  and p.deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-`
-
-type CreateProjectAgentCRUDParams struct {
-	ID          pgtype.UUID        `json:"id"`
-	AgentID     pgtype.UUID        `json:"agent_id"`
-	Config      []byte             `json:"config"`
-	CreatedBy   pgtype.UUID        `json:"created_by"`
-	Now         pgtype.Timestamptz `json:"now"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-}
-
-type CreateProjectAgentCRUDRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) CreateProjectAgentCRUD(ctx context.Context, arg CreateProjectAgentCRUDParams) (CreateProjectAgentCRUDRow, error) {
-	row := q.db.QueryRow(ctx, createProjectAgentCRUD,
-		arg.ID,
-		arg.AgentID,
-		arg.Config,
-		arg.CreatedBy,
-		arg.Now,
-		arg.ProjectID,
-		arg.WorkspaceID,
-	)
-	var i CreateProjectAgentCRUDRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.Status,
-		&i.Config,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const createProjectConversation = `-- name: CreateProjectConversation :one
-insert into conversations(id, workspace_id, project_id, surface, form, title, status, metadata, created_at, updated_at)
-values ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, 'active', $7::jsonb, $8, $8)
-returning id::text, workspace_id::text, project_id::text, surface, form, title, status, metadata, created_at, updated_at
-`
-
-type CreateProjectConversationParams struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ProjectID   pgtype.UUID        `json:"project_id"`
-	Surface     string             `json:"surface"`
-	Form        string             `json:"form"`
-	Title       string             `json:"title"`
-	Metadata    []byte             `json:"metadata"`
-	Now         pgtype.Timestamptz `json:"now"`
-}
-
-type CreateProjectConversationRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	Surface     string             `json:"surface"`
-	Form        string             `json:"form"`
-	Title       string             `json:"title"`
-	Status      string             `json:"status"`
-	Metadata    []byte             `json:"metadata"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-// surface ∈ {web, im, api}; form ∈ {thread, group, dm, oneshot}。
-// 调用方负责传合法组合(e.g. surface='web' 通常配 form='thread',
-// surface='im' + form='group' 是飞书群,surface='api' + form='oneshot'
-// 是外部回调一次性触发)。
-func (q *Queries) CreateProjectConversation(ctx context.Context, arg CreateProjectConversationParams) (CreateProjectConversationRow, error) {
-	row := q.db.QueryRow(ctx, createProjectConversation,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.ProjectID,
-		arg.Surface,
-		arg.Form,
-		arg.Title,
-		arg.Metadata,
-		arg.Now,
-	)
-	var i CreateProjectConversationRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.Surface,
-		&i.Form,
-		&i.Title,
-		&i.Status,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const createRuntimeErrorSystemMessage = `-- name: CreateRuntimeErrorSystemMessage :exec
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
@@ -2315,23 +1916,21 @@ values (
   $1::uuid,
   $2::uuid,
   $3::uuid,
-  $4::uuid,
   'system',
   null,
   'error',
   'text',
+  $4,
   $5,
-  $6,
-  $7::jsonb || jsonb_build_object('error', jsonb_build_object('source', 'runtime')),
-  $8,
-  $8
+  $6::jsonb || jsonb_build_object('error', jsonb_build_object('source', 'runtime')),
+  $7,
+  $7
 )
 `
 
 type CreateRuntimeErrorSystemMessageParams struct {
 	ID             pgtype.UUID        `json:"id"`
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
 	ConversationID pgtype.UUID        `json:"conversation_id"`
 	Visibility     string             `json:"visibility"`
 	Content        string             `json:"content"`
@@ -2347,7 +1946,6 @@ func (q *Queries) CreateRuntimeErrorSystemMessage(ctx context.Context, arg Creat
 	_, err := q.db.Exec(ctx, createRuntimeErrorSystemMessage,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.ConversationID,
 		arg.Visibility,
 		arg.Content,
@@ -2360,7 +1958,7 @@ func (q *Queries) CreateRuntimeErrorSystemMessage(ctx context.Context, arg Creat
 const createSandboxBinding = `-- name: CreateSandboxBinding :one
 
 insert into sandboxes(
-  id, workspace_id, project_agent_id, cache_key,
+  id, workspace_id, agent_id, cache_key,
   sandbox_id, template_id, lifecycle_status, allocation_status,
   created_at, last_active_at, metadata
 )
@@ -2372,7 +1970,7 @@ values (
 returning
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -2385,30 +1983,30 @@ returning
 `
 
 type CreateSandboxBindingParams struct {
-	ID             pgtype.UUID        `json:"id"`
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	Now            pgtype.Timestamptz `json:"now"`
-	Metadata       []byte             `json:"metadata"`
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	CacheKey    pgtype.Text        `json:"cache_key"`
+	SandboxID   string             `json:"sandbox_id"`
+	TemplateID  string             `json:"template_id"`
+	Status      string             `json:"status"`
+	Now         pgtype.Timestamptz `json:"now"`
+	Metadata    []byte             `json:"metadata"`
 }
 
 type CreateSandboxBindingRow struct {
-	ID             string             `json:"id"`
-	WorkspaceID    string             `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	Name           pgtype.Text        `json:"name"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt   pgtype.Timestamptz `json:"last_active_at"`
-	KilledAt       pgtype.Timestamptz `json:"killed_at"`
-	Metadata       []byte             `json:"metadata"`
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	Name         pgtype.Text        `json:"name"`
+	CacheKey     pgtype.Text        `json:"cache_key"`
+	SandboxID    string             `json:"sandbox_id"`
+	TemplateID   string             `json:"template_id"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	KilledAt     pgtype.Timestamptz `json:"killed_at"`
+	Metadata     []byte             `json:"metadata"`
 }
 
 // ============================================================
@@ -2418,22 +2016,22 @@ type CreateSandboxBindingRow struct {
 // These queries back PersistentSandboxProvider's DB-side audit
 // + admin lookup. The in-memory cache is the source of truth at
 // runtime; the DB row is "sandbox X currently exists and is bound
-// to this project agent" for admin UI listings and post-restart sweep.
+// to this agent" for admin UI listings and post-restart sweep.
 // Pool entries use the same table with allocation_status='pooled'.
 //
 // envd_access_token / endpoint are intentionally NOT in the
 // schema — see migration 000008 for the rationale.
 // Insert a new binding row when the provider just spawned a
-// sandbox for a (workspace, project_agent) key. Caller MUST
+// sandbox for a (workspace, agent) key. Caller MUST
 // ensure no other live bound sandbox exists for the same
-// (workspace_id, project_agent_id) — the partial unique index
+// (workspace_id, agent_id) — the partial unique index
 // enforces this and the insert will fail loudly if a stale
 // binding was not killed first.
 func (q *Queries) CreateSandboxBinding(ctx context.Context, arg CreateSandboxBindingParams) (CreateSandboxBindingRow, error) {
 	row := q.db.QueryRow(ctx, createSandboxBinding,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.CacheKey,
 		arg.SandboxID,
 		arg.TemplateID,
@@ -2445,7 +2043,7 @@ func (q *Queries) CreateSandboxBinding(ctx context.Context, arg CreateSandboxBin
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.Name,
 		&i.CacheKey,
 		&i.SandboxID,
@@ -2461,7 +2059,7 @@ func (q *Queries) CreateSandboxBinding(ctx context.Context, arg CreateSandboxBin
 
 const createSandboxOfflineNotice = `-- name: CreateSandboxOfflineNotice :exec
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
@@ -2469,23 +2067,21 @@ values (
   $1::uuid,
   $2::uuid,
   $3::uuid,
-  $4::uuid,
   'system',
   null,
   'system_event',
   'text',
+  $4,
   $5,
-  $6,
-  $7::jsonb,
-  $8,
-  $8
+  $6::jsonb,
+  $7,
+  $7
 )
 `
 
 type CreateSandboxOfflineNoticeParams struct {
 	ID             pgtype.UUID        `json:"id"`
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
 	ConversationID pgtype.UUID        `json:"conversation_id"`
 	Visibility     string             `json:"visibility"`
 	Content        string             `json:"content"`
@@ -2501,7 +2097,6 @@ func (q *Queries) CreateSandboxOfflineNotice(ctx context.Context, arg CreateSand
 	_, err := q.db.Exec(ctx, createSandboxOfflineNotice,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.ConversationID,
 		arg.Visibility,
 		arg.Content,
@@ -2670,7 +2265,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 
 const createSystemMessageOnce = `-- name: CreateSystemMessageOnce :execrows
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
@@ -2678,23 +2273,22 @@ select
   $1::uuid,
   $2::uuid,
   $3::uuid,
-  $4::uuid,
   'system',
   null,
   'system_event',
   'text',
+  $4,
   $5,
-  $6,
-  $7::jsonb,
-  $8,
-  $8
+  $6::jsonb,
+  $7,
+  $7
 where not exists (
   select 1
   from messages m
-  where m.conversation_id = $4::uuid
+  where m.conversation_id = $3::uuid
     and m.sender_type = 'system'
     and m.kind = 'system_event'
-    and m.metadata->>'kind' = $9::text
+    and m.metadata->>'kind' = $8::text
     and m.deleted_at is null
 )
 `
@@ -2702,7 +2296,6 @@ where not exists (
 type CreateSystemMessageOnceParams struct {
 	ID             pgtype.UUID        `json:"id"`
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
 	ConversationID pgtype.UUID        `json:"conversation_id"`
 	Visibility     string             `json:"visibility"`
 	Content        string             `json:"content"`
@@ -2719,7 +2312,6 @@ func (q *Queries) CreateSystemMessageOnce(ctx context.Context, arg CreateSystemM
 	result, err := q.db.Exec(ctx, createSystemMessageOnce,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.ConversationID,
 		arg.Visibility,
 		arg.Content,
@@ -2735,19 +2327,18 @@ func (q *Queries) CreateSystemMessageOnce(ctx context.Context, arg CreateSystemM
 
 const createUsageLog = `-- name: CreateUsageLog :exec
 insert into usage_logs(
-  id, workspace_id, project_id, agent_run_id,
+  id, workspace_id, agent_run_id,
   provider, model, input_tokens, output_tokens, cost_usd, raw, created_at
 )
 values (
-  $1::uuid, $2::uuid, $3::uuid, $4::uuid,
-  $5, $6, $7, $8, $9, $10::jsonb, $11
+  $1::uuid, $2::uuid, $3::uuid,
+  $4, $5, $6, $7, $8, $9::jsonb, $10
 )
 `
 
 type CreateUsageLogParams struct {
 	ID           pgtype.UUID        `json:"id"`
 	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
-	ProjectID    pgtype.UUID        `json:"project_id"`
 	AgentRunID   pgtype.UUID        `json:"agent_run_id"`
 	Provider     string             `json:"provider"`
 	Model        string             `json:"model"`
@@ -2762,7 +2353,6 @@ func (q *Queries) CreateUsageLog(ctx context.Context, arg CreateUsageLogParams) 
 	_, err := q.db.Exec(ctx, createUsageLog,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectID,
 		arg.AgentRunID,
 		arg.Provider,
 		arg.Model,
@@ -2889,6 +2479,63 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return i, err
 }
 
+const createWorkspaceConversation = `-- name: CreateWorkspaceConversation :one
+insert into conversations(id, workspace_id, surface, form, title, status, metadata, created_at, updated_at)
+values ($1::uuid, $2::uuid, $3, $4, $5, 'active', $6::jsonb, $7, $7)
+returning id::text, workspace_id::text, surface, form, title, status, metadata, created_at, updated_at
+`
+
+type CreateWorkspaceConversationParams struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Surface     string             `json:"surface"`
+	Form        string             `json:"form"`
+	Title       string             `json:"title"`
+	Metadata    []byte             `json:"metadata"`
+	Now         pgtype.Timestamptz `json:"now"`
+}
+
+type CreateWorkspaceConversationRow struct {
+	ID          string             `json:"id"`
+	WorkspaceID string             `json:"workspace_id"`
+	Surface     string             `json:"surface"`
+	Form        string             `json:"form"`
+	Title       string             `json:"title"`
+	Status      string             `json:"status"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// surface ∈ {web, im, api}; form ∈ {thread, group, dm, oneshot}。
+// 调用方负责传合法组合(e.g. surface='web' 通常配 form='thread',
+// surface='im' + form='group' 是飞书群,surface='api' + form='oneshot'
+// 是外部回调一次性触发)。
+func (q *Queries) CreateWorkspaceConversation(ctx context.Context, arg CreateWorkspaceConversationParams) (CreateWorkspaceConversationRow, error) {
+	row := q.db.QueryRow(ctx, createWorkspaceConversation,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Surface,
+		arg.Form,
+		arg.Title,
+		arg.Metadata,
+		arg.Now,
+	)
+	var i CreateWorkspaceConversationRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Surface,
+		&i.Form,
+		&i.Title,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteAgentCapability = `-- name: DeleteAgentCapability :exec
 delete from agent_capabilities
 where id = $1::uuid
@@ -2958,6 +2605,50 @@ func (q *Queries) DeleteConnectorSessionBindingsByUpstreamSession(ctx context.Co
 	return err
 }
 
+const disableAgent = `-- name: DisableAgent :one
+update agents
+set status = 'disabled', updated_at = $1
+where id = $2::uuid
+  and deleted_at is null
+returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at
+`
+
+type DisableAgentParams struct {
+	Now pgtype.Timestamptz `json:"now"`
+	ID  pgtype.UUID        `json:"id"`
+}
+
+type DisableAgentRow struct {
+	ID            string             `json:"id"`
+	WorkspaceID   string             `json:"workspace_id"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	Description   string             `json:"description"`
+	ConnectorType string             `json:"connector_type"`
+	Status        string             `json:"status"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) DisableAgent(ctx context.Context, arg DisableAgentParams) (DisableAgentRow, error) {
+	row := q.db.QueryRow(ctx, disableAgent, arg.Now, arg.ID)
+	var i DisableAgentRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.ConnectorType,
+		&i.Status,
+		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const disableModel = `-- name: DisableModel :one
 update models
 set status = 'disabled', updated_at = $1
@@ -3018,46 +2709,6 @@ func (q *Queries) DisableModel(ctx context.Context, arg DisableModelParams) (Dis
 	return i, err
 }
 
-const disableProjectAgent = `-- name: DisableProjectAgent :one
-update project_agents
-set status = 'disabled', updated_at = $1
-where id = $2::uuid
-  and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-`
-
-type DisableProjectAgentParams struct {
-	Now pgtype.Timestamptz `json:"now"`
-	ID  pgtype.UUID        `json:"id"`
-}
-
-type DisableProjectAgentRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) DisableProjectAgent(ctx context.Context, arg DisableProjectAgentParams) (DisableProjectAgentRow, error) {
-	row := q.db.QueryRow(ctx, disableProjectAgent, arg.Now, arg.ID)
-	var i DisableProjectAgentRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.Status,
-		&i.Config,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const disableSecret = `-- name: DisableSecret :one
 update secrets
 set status = 'disabled', updated_at = $1
@@ -3104,38 +2755,42 @@ func (q *Queries) DisableSecret(ctx context.Context, arg DisableSecretParams) (D
 	return i, err
 }
 
-const enableProjectAgent = `-- name: EnableProjectAgent :one
-update project_agents
+const enableAgent = `-- name: EnableAgent :one
+update agents
 set status = 'active', updated_at = $1
 where id = $2::uuid
   and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
+returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at
 `
 
-type EnableProjectAgentParams struct {
+type EnableAgentParams struct {
 	Now pgtype.Timestamptz `json:"now"`
 	ID  pgtype.UUID        `json:"id"`
 }
 
-type EnableProjectAgentRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+type EnableAgentRow struct {
+	ID            string             `json:"id"`
+	WorkspaceID   string             `json:"workspace_id"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	Description   string             `json:"description"`
+	ConnectorType string             `json:"connector_type"`
+	Status        string             `json:"status"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) EnableProjectAgent(ctx context.Context, arg EnableProjectAgentParams) (EnableProjectAgentRow, error) {
-	row := q.db.QueryRow(ctx, enableProjectAgent, arg.Now, arg.ID)
-	var i EnableProjectAgentRow
+func (q *Queries) EnableAgent(ctx context.Context, arg EnableAgentParams) (EnableAgentRow, error) {
+	row := q.db.QueryRow(ctx, enableAgent, arg.Now, arg.ID)
+	var i EnableAgentRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.ConnectorType,
 		&i.Status,
 		&i.Config,
 		&i.CreatedAt,
@@ -3205,7 +2860,6 @@ func (q *Queries) FinalizeSandboxBindingSpawning(ctx context.Context, arg Finali
 const findConversationByPermissionRequestID = `-- name: FindConversationByPermissionRequestID :one
 select id::text,
        workspace_id::text,
-       project_id::text,
        external_id            as external_chat_id,
        source_app_id,
        (metadata->'gateway_inflight'->'permission') as permission_slot
@@ -3218,7 +2872,6 @@ limit 1
 type FindConversationByPermissionRequestIDRow struct {
 	ID             string      `json:"id"`
 	WorkspaceID    string      `json:"workspace_id"`
-	ProjectID      string      `json:"project_id"`
 	ExternalChatID string      `json:"external_chat_id"`
 	SourceAppID    string      `json:"source_app_id"`
 	PermissionSlot interface{} `json:"permission_slot"`
@@ -3234,7 +2887,6 @@ func (q *Queries) FindConversationByPermissionRequestID(ctx context.Context, per
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.ExternalChatID,
 		&i.SourceAppID,
 		&i.PermissionSlot,
@@ -3245,7 +2897,6 @@ func (q *Queries) FindConversationByPermissionRequestID(ctx context.Context, per
 const findConversationByPromptForUserChoiceRequestID = `-- name: FindConversationByPromptForUserChoiceRequestID :one
 select id::text,
        workspace_id::text,
-       project_id::text,
        external_id            as external_chat_id,
        source_app_id,
        (metadata->'gateway_inflight'->'prompt_for_user_choice') as prompt_for_user_choice_slot
@@ -3258,7 +2909,6 @@ limit 1
 type FindConversationByPromptForUserChoiceRequestIDRow struct {
 	ID                      string      `json:"id"`
 	WorkspaceID             string      `json:"workspace_id"`
-	ProjectID               string      `json:"project_id"`
 	ExternalChatID          string      `json:"external_chat_id"`
 	SourceAppID             string      `json:"source_app_id"`
 	PromptForUserChoiceSlot interface{} `json:"prompt_for_user_choice_slot"`
@@ -3274,7 +2924,6 @@ func (q *Queries) FindConversationByPromptForUserChoiceRequestID(ctx context.Con
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.ExternalChatID,
 		&i.SourceAppID,
 		&i.PromptForUserChoiceSlot,
@@ -3417,7 +3066,7 @@ func (q *Queries) GetActiveAgentIDBySlug(ctx context.Context, arg GetActiveAgent
 }
 
 const getActiveConversationByTitle = `-- name: GetActiveConversationByTitle :one
-select id::text, workspace_id::text, project_id::text
+select id::text, workspace_id::text
 from conversations
 where status = 'active'
   and deleted_at is null
@@ -3429,23 +3078,19 @@ limit 1
 type GetActiveConversationByTitleRow struct {
 	ID          string `json:"id"`
 	WorkspaceID string `json:"workspace_id"`
-	ProjectID   string `json:"project_id"`
 }
 
 func (q *Queries) GetActiveConversationByTitle(ctx context.Context, title string) (GetActiveConversationByTitleRow, error) {
 	row := q.db.QueryRow(ctx, getActiveConversationByTitle, title)
 	var i GetActiveConversationByTitleRow
-	err := row.Scan(&i.ID, &i.WorkspaceID, &i.ProjectID)
+	err := row.Scan(&i.ID, &i.WorkspaceID)
 	return i, err
 }
 
-const getActiveMentionedProjectAgent = `-- name: GetActiveMentionedProjectAgent :one
-select pa.id::text as project_agent_id, a.id::text as agent_id, a.name, a.slug, a.connector_type
-from project_agents pa
-join agents a on a.id = pa.agent_id
-where pa.project_id = $1::uuid
-  and pa.status = 'active'
-  and pa.deleted_at is null
+const getActiveMentionedAgent = `-- name: GetActiveMentionedAgent :one
+select a.id::text as agent_id, a.name, a.slug, a.connector_type
+from agents a
+where a.workspace_id = $1::uuid
   and a.status = 'active'
   and a.deleted_at is null
   and (a.name = $2 or a.slug = $2)
@@ -3453,28 +3098,26 @@ order by a.name asc
 limit 1
 `
 
-type GetActiveMentionedProjectAgentParams struct {
-	ProjectID   pgtype.UUID `json:"project_id"`
+type GetActiveMentionedAgentParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	MentionName string      `json:"mention_name"`
 }
 
-type GetActiveMentionedProjectAgentRow struct {
-	ProjectAgentID string `json:"project_agent_id"`
-	AgentID        string `json:"agent_id"`
-	Name           string `json:"name"`
-	Slug           string `json:"slug"`
-	ConnectorType  string `json:"connector_type"`
+type GetActiveMentionedAgentRow struct {
+	AgentID       string `json:"agent_id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	ConnectorType string `json:"connector_type"`
 }
 
 // v5 (2026-05-30): connector_type comes straight from agents — the v3 hack
-// that overloaded pa.config->>'runtime' as a connector_type override is
-// gone. runtime is now per-Agent (a.config->>'runtime') and is never used
+// that overloaded config->>'runtime' as a connector_type override is
+// gone. runtime is now per-Agent (config->>'runtime') and is never used
 // as a connector_type fallback.
-func (q *Queries) GetActiveMentionedProjectAgent(ctx context.Context, arg GetActiveMentionedProjectAgentParams) (GetActiveMentionedProjectAgentRow, error) {
-	row := q.db.QueryRow(ctx, getActiveMentionedProjectAgent, arg.ProjectID, arg.MentionName)
-	var i GetActiveMentionedProjectAgentRow
+func (q *Queries) GetActiveMentionedAgent(ctx context.Context, arg GetActiveMentionedAgentParams) (GetActiveMentionedAgentRow, error) {
+	row := q.db.QueryRow(ctx, getActiveMentionedAgent, arg.WorkspaceID, arg.MentionName)
+	var i GetActiveMentionedAgentRow
 	err := row.Scan(
-		&i.ProjectAgentID,
 		&i.AgentID,
 		&i.Name,
 		&i.Slug,
@@ -3483,78 +3126,11 @@ func (q *Queries) GetActiveMentionedProjectAgent(ctx context.Context, arg GetAct
 	return i, err
 }
 
-const getActiveProjectByID = `-- name: GetActiveProjectByID :one
-select id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at
-from projects
-where id = $1::uuid
-  and status = 'active'
-  and deleted_at is null
-`
-
-type GetActiveProjectByIDRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetActiveProjectByID(ctx context.Context, id pgtype.UUID) (GetActiveProjectByIDRow, error) {
-	row := q.db.QueryRow(ctx, getActiveProjectByID, id)
-	var i GetActiveProjectByIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getActiveProjectIDBySlug = `-- name: GetActiveProjectIDBySlug :one
-select id::text from projects
-where workspace_id = $1::uuid and slug = $2 and deleted_at is null
-`
-
-type GetActiveProjectIDBySlugParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Slug        string      `json:"slug"`
-}
-
-func (q *Queries) GetActiveProjectIDBySlug(ctx context.Context, arg GetActiveProjectIDBySlugParams) (string, error) {
-	row := q.db.QueryRow(ctx, getActiveProjectIDBySlug, arg.WorkspaceID, arg.Slug)
-	var id string
-	err := row.Scan(&id)
-	return id, err
-}
-
-const getActiveProjectWorkspace = `-- name: GetActiveProjectWorkspace :one
-select workspace_id::text as workspace_id
-from projects
-where id = $1::uuid
-  and status = 'active'
-  and deleted_at is null
-`
-
-func (q *Queries) GetActiveProjectWorkspace(ctx context.Context, id pgtype.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getActiveProjectWorkspace, id)
-	var workspace_id string
-	err := row.Scan(&workspace_id)
-	return workspace_id, err
-}
-
 const getActiveSandboxBindingByAgentForWait = `-- name: GetActiveSandboxBindingByAgentForWait :one
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -3566,43 +3142,43 @@ select
   metadata
 from sandboxes
 where workspace_id    = $1::uuid
-  and project_agent_id = $2::uuid
+  and agent_id = $2::uuid
   and allocation_status = 'bound'
   and killed_at is null
 `
 
 type GetActiveSandboxBindingByAgentForWaitParams struct {
-	WorkspaceID    pgtype.UUID `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	AgentID     pgtype.UUID `json:"agent_id"`
 }
 
 type GetActiveSandboxBindingByAgentForWaitRow struct {
-	ID             string             `json:"id"`
-	WorkspaceID    string             `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	Name           pgtype.Text        `json:"name"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt   pgtype.Timestamptz `json:"last_active_at"`
-	KilledAt       pgtype.Timestamptz `json:"killed_at"`
-	Metadata       []byte             `json:"metadata"`
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	Name         pgtype.Text        `json:"name"`
+	CacheKey     pgtype.Text        `json:"cache_key"`
+	SandboxID    string             `json:"sandbox_id"`
+	TemplateID   string             `json:"template_id"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	KilledAt     pgtype.Timestamptz `json:"killed_at"`
+	Metadata     []byte             `json:"metadata"`
 }
 
 // Loser-side polling query: read whatever bound row exists for
-// (workspace, project_agent) today, regardless of lifecycle state.
+// (workspace, agent) today, regardless of lifecycle state.
 // Caller distinguishes spawning vs running vs killed_* from the
 // returned status. Distinct from GetActiveSandboxBindingForAgent
 // which intentionally hides spawning rows from admin listings.
 func (q *Queries) GetActiveSandboxBindingByAgentForWait(ctx context.Context, arg GetActiveSandboxBindingByAgentForWaitParams) (GetActiveSandboxBindingByAgentForWaitRow, error) {
-	row := q.db.QueryRow(ctx, getActiveSandboxBindingByAgentForWait, arg.WorkspaceID, arg.ProjectAgentID)
+	row := q.db.QueryRow(ctx, getActiveSandboxBindingByAgentForWait, arg.WorkspaceID, arg.AgentID)
 	var i GetActiveSandboxBindingByAgentForWaitRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.Name,
 		&i.CacheKey,
 		&i.SandboxID,
@@ -3620,7 +3196,7 @@ const getActiveSandboxBindingForAgent = `-- name: GetActiveSandboxBindingForAgen
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -3632,40 +3208,40 @@ select
   metadata
 from sandboxes
 where workspace_id    = $1::uuid
-  and project_agent_id = $2::uuid
+  and agent_id = $2::uuid
   and allocation_status = 'bound'
   and killed_at is null
 `
 
 type GetActiveSandboxBindingForAgentParams struct {
-	WorkspaceID    pgtype.UUID `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	AgentID     pgtype.UUID `json:"agent_id"`
 }
 
 type GetActiveSandboxBindingForAgentRow struct {
-	ID             string             `json:"id"`
-	WorkspaceID    string             `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	Name           pgtype.Text        `json:"name"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt   pgtype.Timestamptz `json:"last_active_at"`
-	KilledAt       pgtype.Timestamptz `json:"killed_at"`
-	Metadata       []byte             `json:"metadata"`
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	Name         pgtype.Text        `json:"name"`
+	CacheKey     pgtype.Text        `json:"cache_key"`
+	SandboxID    string             `json:"sandbox_id"`
+	TemplateID   string             `json:"template_id"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	KilledAt     pgtype.Timestamptz `json:"killed_at"`
+	Metadata     []byte             `json:"metadata"`
 }
 
-// Return the live bound sandbox for one (workspace, project_agent), if
+// Return the live bound sandbox for one (workspace, agent), if
 // any. Used by admin GET /sandbox status endpoint.
 func (q *Queries) GetActiveSandboxBindingForAgent(ctx context.Context, arg GetActiveSandboxBindingForAgentParams) (GetActiveSandboxBindingForAgentRow, error) {
-	row := q.db.QueryRow(ctx, getActiveSandboxBindingForAgent, arg.WorkspaceID, arg.ProjectAgentID)
+	row := q.db.QueryRow(ctx, getActiveSandboxBindingForAgent, arg.WorkspaceID, arg.AgentID)
 	var i GetActiveSandboxBindingForAgentRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.Name,
 		&i.CacheKey,
 		&i.SandboxID,
@@ -3853,7 +3429,7 @@ func (q *Queries) GetAgentByFeishuAppID(ctx context.Context, appID string) (GetA
 }
 
 const getAgentCapability = `-- name: GetAgentCapability :one
-select id::text as id, project_agent_id::text as project_agent_id,
+select id::text as id, agent_id::text as agent_id,
   capability_id::text as capability_id, capability_version_id::text as capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at
 from agent_capabilities
@@ -3862,7 +3438,7 @@ where id = $1::uuid
 
 type GetAgentCapabilityRow struct {
 	ID                  string             `json:"id"`
-	ProjectAgentID      string             `json:"project_agent_id"`
+	AgentID             string             `json:"agent_id"`
 	CapabilityID        string             `json:"capability_id"`
 	CapabilityVersionID string             `json:"capability_version_id"`
 	Enabled             bool               `json:"enabled"`
@@ -3877,7 +3453,7 @@ func (q *Queries) GetAgentCapability(ctx context.Context, id pgtype.UUID) (GetAg
 	var i GetAgentCapabilityRow
 	err := row.Scan(
 		&i.ID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.CapabilityID,
 		&i.CapabilityVersionID,
 		&i.Enabled,
@@ -3885,6 +3461,57 @@ func (q *Queries) GetAgentCapability(ctx context.Context, id pgtype.UUID) (GetAg
 		&i.PinningMode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAgentDetailForRead = `-- name: GetAgentDetailForRead :one
+select
+  a.id::text as id,
+  a.workspace_id::text as workspace_id,
+  a.status,
+  a.config,
+  coalesce(a.created_by::text, '')::text as created_by,
+  a.created_at,
+  a.updated_at,
+  a.name as agent_name,
+  a.slug as agent_slug,
+  coalesce(a.description, '')::text as description,
+  a.connector_type
+from agents a
+where a.id = $1::uuid
+  and a.deleted_at is null
+`
+
+type GetAgentDetailForReadRow struct {
+	ID            string             `json:"id"`
+	WorkspaceID   string             `json:"workspace_id"`
+	Status        string             `json:"status"`
+	Config        []byte             `json:"config"`
+	CreatedBy     string             `json:"created_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AgentName     string             `json:"agent_name"`
+	AgentSlug     string             `json:"agent_slug"`
+	Description   string             `json:"description"`
+	ConnectorType string             `json:"connector_type"`
+}
+
+func (q *Queries) GetAgentDetailForRead(ctx context.Context, id pgtype.UUID) (GetAgentDetailForReadRow, error) {
+	row := q.db.QueryRow(ctx, getAgentDetailForRead, id)
+	var i GetAgentDetailForReadRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Status,
+		&i.Config,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AgentName,
+		&i.AgentSlug,
+		&i.Description,
+		&i.ConnectorType,
 	)
 	return i, err
 }
@@ -3930,18 +3557,67 @@ func (q *Queries) GetAgentForUpdate(ctx context.Context, id pgtype.UUID) (GetAge
 	return i, err
 }
 
+const getAgentMetrics = `-- name: GetAgentMetrics :one
+select
+  count(*) filter (where r.status = 'completed')::bigint as completed_count,
+  count(*) filter (where r.status in ('failed','cancelled','interrupted'))::bigint as failed_count,
+  count(*) filter (where r.status in ('completed','failed','cancelled','interrupted'))::bigint as total_count,
+  coalesce(avg(extract(epoch from (r.finished_at - r.started_at)) * 1000) filter (
+    where r.status = 'completed' and r.started_at is not null and r.finished_at is not null
+  ), 0)::double precision as avg_duration_ms
+from agent_runs r
+join agents a on a.id = r.agent_id
+where a.id = $1::uuid
+  and r.workspace_id = a.workspace_id
+  and a.deleted_at is null
+  and r.created_at >= now() - make_interval(days => $2::int)
+`
+
+type GetAgentMetricsParams struct {
+	AgentID    pgtype.UUID `json:"agent_id"`
+	WindowDays int32       `json:"window_days"`
+}
+
+type GetAgentMetricsRow struct {
+	CompletedCount int64   `json:"completed_count"`
+	FailedCount    int64   `json:"failed_count"`
+	TotalCount     int64   `json:"total_count"`
+	AvgDurationMs  float64 `json:"avg_duration_ms"`
+}
+
+// Aggregates a single agent's run history over the last
+// @window_days days for the agent-detail "近 N 天表现" panel:
+//   - completed_count   — finished runs (status = 'completed')
+//   - failed_count      — failed/cancelled/interrupted (for success rate)
+//   - total_count       — completed + failed (excludes still-running/queued)
+//   - avg_duration_ms   — mean wall-clock of completed runs only
+//     (started_at → finished_at). NULL if no
+//     completed runs in window.
+//
+// All filtered by created_at to keep the window stable as runs finish
+// later. The workspace guard mirrors ListWorkspaceAgentRunsPage.
+func (q *Queries) GetAgentMetrics(ctx context.Context, arg GetAgentMetricsParams) (GetAgentMetricsRow, error) {
+	row := q.db.QueryRow(ctx, getAgentMetrics, arg.AgentID, arg.WindowDays)
+	var i GetAgentMetricsRow
+	err := row.Scan(
+		&i.CompletedCount,
+		&i.FailedCount,
+		&i.TotalCount,
+		&i.AvgDurationMs,
+	)
+	return i, err
+}
+
 const getAgentRunForRead = `-- name: GetAgentRunForRead :one
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
   coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
   coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
   r.requested_by_type,
   coalesce(r.requested_by_id::text, ''::text)::text as requested_by_id,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.connector_type,
@@ -3952,7 +3628,6 @@ select
   r.started_at,
   r.finished_at,
   r.updated_at,
-  pa.config as project_agent_config,
   a.config as agent_config,
   coalesce(csb.upstream_session_id, ''::text)::text as bound_device_id,
   coalesce(csb.metadata, '{}'::jsonb) as binding_metadata,
@@ -3968,66 +3643,53 @@ select
   rt.last_heartbeat_at
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 left join connector_session_bindings csb
   on csb.conversation_id = r.conversation_id::text
   and csb.connector_type = r.connector_type
-  and csb.binding_key = r.project_agent_id::text
+  and csb.binding_key = r.agent_id::text
 left join runtimes rt on rt.id = r.runtime_id
   and rt.workspace_id = r.workspace_id
 where r.id = $1::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = p.id
-  and r.project_id = pa.project_id
   and c.status = 'active'
   and c.deleted_at is null
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
   and a.deleted_at is null
 `
 
 type GetAgentRunForReadRow struct {
-	RID                string             `json:"r_id"`
-	RWorkspaceID       string             `json:"r_workspace_id"`
-	RProjectID         string             `json:"r_project_id"`
-	RConversationID    string             `json:"r_conversation_id"`
-	TriggerMessageID   string             `json:"trigger_message_id"`
-	OutputMessageID    string             `json:"output_message_id"`
-	RequestedByType    string             `json:"requested_by_type"`
-	RequestedByID      string             `json:"requested_by_id"`
-	RProjectAgentID    string             `json:"r_project_agent_id"`
-	PaAgentID          string             `json:"pa_agent_id"`
-	AgentName          string             `json:"agent_name"`
-	AgentSlug          string             `json:"agent_slug"`
-	ConnectorType      string             `json:"connector_type"`
-	ExternalRunID      string             `json:"external_run_id"`
-	Status             string             `json:"status"`
-	Metadata           []byte             `json:"metadata"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	StartedAt          pgtype.Timestamptz `json:"started_at"`
-	FinishedAt         pgtype.Timestamptz `json:"finished_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	ProjectAgentConfig []byte             `json:"project_agent_config"`
-	AgentConfig        []byte             `json:"agent_config"`
-	BoundDeviceID      string             `json:"bound_device_id"`
-	BindingMetadata    []byte             `json:"binding_metadata"`
-	RuntimeConfig      []byte             `json:"runtime_config"`
-	WorkingDirectory   string             `json:"working_directory"`
-	RuntimeID          string             `json:"runtime_id"`
-	RuntimeName        string             `json:"runtime_name"`
-	RuntimeType        string             `json:"runtime_type"`
-	RuntimeProvider    string             `json:"runtime_provider"`
-	RuntimeLiveness    string             `json:"runtime_liveness"`
-	RuntimeHostname    string             `json:"runtime_hostname"`
-	RuntimeVersion     string             `json:"runtime_version"`
-	LastHeartbeatAt    pgtype.Timestamptz `json:"last_heartbeat_at"`
+	RID              string             `json:"r_id"`
+	RWorkspaceID     string             `json:"r_workspace_id"`
+	RConversationID  string             `json:"r_conversation_id"`
+	TriggerMessageID string             `json:"trigger_message_id"`
+	OutputMessageID  string             `json:"output_message_id"`
+	RequestedByType  string             `json:"requested_by_type"`
+	RequestedByID    string             `json:"requested_by_id"`
+	RAgentID         string             `json:"r_agent_id"`
+	AgentName        string             `json:"agent_name"`
+	AgentSlug        string             `json:"agent_slug"`
+	ConnectorType    string             `json:"connector_type"`
+	ExternalRunID    string             `json:"external_run_id"`
+	Status           string             `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	StartedAt        pgtype.Timestamptz `json:"started_at"`
+	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	AgentConfig      []byte             `json:"agent_config"`
+	BoundDeviceID    string             `json:"bound_device_id"`
+	BindingMetadata  []byte             `json:"binding_metadata"`
+	RuntimeConfig    []byte             `json:"runtime_config"`
+	WorkingDirectory string             `json:"working_directory"`
+	RuntimeID        string             `json:"runtime_id"`
+	RuntimeName      string             `json:"runtime_name"`
+	RuntimeType      string             `json:"runtime_type"`
+	RuntimeProvider  string             `json:"runtime_provider"`
+	RuntimeLiveness  string             `json:"runtime_liveness"`
+	RuntimeHostname  string             `json:"runtime_hostname"`
+	RuntimeVersion   string             `json:"runtime_version"`
+	LastHeartbeatAt  pgtype.Timestamptz `json:"last_heartbeat_at"`
 }
 
 func (q *Queries) GetAgentRunForRead(ctx context.Context, id pgtype.UUID) (GetAgentRunForReadRow, error) {
@@ -4036,14 +3698,12 @@ func (q *Queries) GetAgentRunForRead(ctx context.Context, id pgtype.UUID) (GetAg
 	err := row.Scan(
 		&i.RID,
 		&i.RWorkspaceID,
-		&i.RProjectID,
 		&i.RConversationID,
 		&i.TriggerMessageID,
 		&i.OutputMessageID,
 		&i.RequestedByType,
 		&i.RequestedByID,
-		&i.RProjectAgentID,
-		&i.PaAgentID,
+		&i.RAgentID,
 		&i.AgentName,
 		&i.AgentSlug,
 		&i.ConnectorType,
@@ -4054,7 +3714,6 @@ func (q *Queries) GetAgentRunForRead(ctx context.Context, id pgtype.UUID) (GetAg
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.UpdatedAt,
-		&i.ProjectAgentConfig,
 		&i.AgentConfig,
 		&i.BoundDeviceID,
 		&i.BindingMetadata,
@@ -4076,53 +3735,40 @@ const getAgentRunInvocation = `-- name: GetAgentRunInvocation :one
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.requested_by_type,
   coalesce(r.requested_by_id::text, ''::text)::text as requested_by_id,
   -- v5 (2026-05-30): connector_type comes from r.connector_type (the run row);
-  -- the pa.config->>'runtime' connector override is dead.
+  -- the config->>'runtime' connector override is dead.
   r.connector_type as connector_type,
   r.status,
   coalesce(m.content, ''::text)::text as trigger_message_content,
   coalesce(m.metadata, '{}'::jsonb)::jsonb as trigger_message_metadata,
-  (a.config || pa.config)::jsonb as agent_config,
-  pa.config::jsonb as project_agent_config,
-  -- v6 (2026-06-15): explicit runtime binding on the project_agent. NULL
+  a.config::jsonb as agent_config,
+  -- v6 (2026-06-15): explicit runtime binding on the agent. NULL
   -- means the user hasn't picked one yet; dispatch surfaces a setup hint
   -- in that case rather than auto-creating a sandbox runtime.
   -- v7 (2026-06-15): also empty when the bound runtime has been
   -- soft-deleted — the LEFT JOIN below filters those out so a stale
-  -- pa.runtime_id pointing at a dead runtime degrades to the same
+  -- runtime_id pointing at a dead runtime degrades to the same
   -- "未绑定 Runtime" message instead of routing dispatch to a dead device.
   coalesce(rt.id::text, ''::text)::text as runtime_id
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 join workspaces w on w.id = r.workspace_id
 left join messages m on m.id = r.trigger_message_id
-left join runtimes rt on rt.id = pa.runtime_id and rt.deleted_at is null
+left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
 where r.id = $1::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
   and w.id = r.workspace_id
-  and (m.id is null or (m.workspace_id = r.workspace_id and m.project_id = r.project_id and m.conversation_id = r.conversation_id and m.deleted_at is null))
-  and p.status = 'active'
-  and p.deleted_at is null
+  and (m.id is null or (m.workspace_id = r.workspace_id and m.conversation_id = r.conversation_id and m.deleted_at is null))
   and c.status = 'active'
   and c.deleted_at is null
-  and pa.status = 'active'
-  and pa.deleted_at is null
   and a.status = 'active'
   and a.deleted_at is null
   and w.deleted_at is null
@@ -4131,10 +3777,8 @@ where r.id = $1::uuid
 type GetAgentRunInvocationRow struct {
 	RID                    string `json:"r_id"`
 	RWorkspaceID           string `json:"r_workspace_id"`
-	RProjectID             string `json:"r_project_id"`
 	RConversationID        string `json:"r_conversation_id"`
-	RProjectAgentID        string `json:"r_project_agent_id"`
-	PaAgentID              string `json:"pa_agent_id"`
+	RAgentID               string `json:"r_agent_id"`
 	AgentName              string `json:"agent_name"`
 	AgentSlug              string `json:"agent_slug"`
 	RequestedByType        string `json:"requested_by_type"`
@@ -4144,7 +3788,6 @@ type GetAgentRunInvocationRow struct {
 	TriggerMessageContent  string `json:"trigger_message_content"`
 	TriggerMessageMetadata []byte `json:"trigger_message_metadata"`
 	AgentConfig            []byte `json:"agent_config"`
-	ProjectAgentConfig     []byte `json:"project_agent_config"`
 	RuntimeID              string `json:"runtime_id"`
 }
 
@@ -4154,10 +3797,8 @@ func (q *Queries) GetAgentRunInvocation(ctx context.Context, id pgtype.UUID) (Ge
 	err := row.Scan(
 		&i.RID,
 		&i.RWorkspaceID,
-		&i.RProjectID,
 		&i.RConversationID,
-		&i.RProjectAgentID,
-		&i.PaAgentID,
+		&i.RAgentID,
 		&i.AgentName,
 		&i.AgentSlug,
 		&i.RequestedByType,
@@ -4167,10 +3808,102 @@ func (q *Queries) GetAgentRunInvocation(ctx context.Context, id pgtype.UUID) (Ge
 		&i.TriggerMessageContent,
 		&i.TriggerMessageMetadata,
 		&i.AgentConfig,
-		&i.ProjectAgentConfig,
 		&i.RuntimeID,
 	)
 	return i, err
+}
+
+const getAgentRuntime = `-- name: GetAgentRuntime :one
+select
+  a.id::text                   as agent_id,
+  a.workspace_id::text         as workspace_id,
+  a.status                     as agent_status,
+  a.connector_type             as connector_type,
+  a.config                     as agent_config
+from agents a
+join workspaces w on w.id = a.workspace_id
+where a.id = $1::uuid
+  and a.workspace_id = $2::uuid
+  and a.status = 'active'
+  and a.deleted_at is null
+  and w.deleted_at is null
+`
+
+type GetAgentRuntimeParams struct {
+	AgentID     pgtype.UUID `json:"agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+type GetAgentRuntimeRow struct {
+	AgentID       string `json:"agent_id"`
+	WorkspaceID   string `json:"workspace_id"`
+	AgentStatus   string `json:"agent_status"`
+	ConnectorType string `json:"connector_type"`
+	AgentConfig   []byte `json:"agent_config"`
+}
+
+// Phase 4 milestone E (sandbox warm): admin-side fetch for the
+// config inputs the OpenCode Connector needs to spawn a sandbox
+// without a real prompt. Pulls the agent row so the caller has
+// connector_type + config. Excludes deleted + disabled agents so
+// the warm endpoint cannot revive an agent that has been turned off.
+func (q *Queries) GetAgentRuntime(ctx context.Context, arg GetAgentRuntimeParams) (GetAgentRuntimeRow, error) {
+	row := q.db.QueryRow(ctx, getAgentRuntime, arg.AgentID, arg.WorkspaceID)
+	var i GetAgentRuntimeRow
+	err := row.Scan(
+		&i.AgentID,
+		&i.WorkspaceID,
+		&i.AgentStatus,
+		&i.ConnectorType,
+		&i.AgentConfig,
+	)
+	return i, err
+}
+
+const getAgentRuntimeBinding = `-- name: GetAgentRuntimeBinding :one
+select
+  a.id::text                                    as agent_id,
+  a.workspace_id::text                          as workspace_id,
+  coalesce(a.runtime_id::text, ''::text)::text  as runtime_id
+from agents a
+where a.id = $1::uuid
+  and a.workspace_id = $2::uuid
+  and a.deleted_at is null
+`
+
+type GetAgentRuntimeBindingParams struct {
+	AgentID     pgtype.UUID `json:"agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+type GetAgentRuntimeBindingRow struct {
+	AgentID     string `json:"agent_id"`
+	WorkspaceID string `json:"workspace_id"`
+	RuntimeID   string `json:"runtime_id"`
+}
+
+// Read the explicit runtime_id binding for an agent. Used by
+// the agent settings page to render the picker's current value.
+func (q *Queries) GetAgentRuntimeBinding(ctx context.Context, arg GetAgentRuntimeBindingParams) (GetAgentRuntimeBindingRow, error) {
+	row := q.db.QueryRow(ctx, getAgentRuntimeBinding, arg.AgentID, arg.WorkspaceID)
+	var i GetAgentRuntimeBindingRow
+	err := row.Scan(&i.AgentID, &i.WorkspaceID, &i.RuntimeID)
+	return i, err
+}
+
+const getAgentWorkspace = `-- name: GetAgentWorkspace :one
+select a.workspace_id::text as workspace_id
+from agents a
+where a.id = $1::uuid
+  and a.status = 'active'
+  and a.deleted_at is null
+`
+
+func (q *Queries) GetAgentWorkspace(ctx context.Context, agentID pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getAgentWorkspace, agentID)
+	var workspace_id string
+	err := row.Scan(&workspace_id)
+	return workspace_id, err
 }
 
 const getCapability = `-- name: GetCapability :one
@@ -4355,30 +4088,18 @@ const getCompletableAgentRunForUpdate = `-- name: GetCompletableAgentRunForUpdat
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   r.status,
   r.started_at
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 where r.id = $1::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
   and c.status = 'active'
   and c.deleted_at is null
-  and pa.status = 'active'
-  and pa.deleted_at is null
   and a.status = 'active'
   and a.deleted_at is null
 for update of r
@@ -4387,10 +4108,8 @@ for update of r
 type GetCompletableAgentRunForUpdateRow struct {
 	RID             string             `json:"r_id"`
 	RWorkspaceID    string             `json:"r_workspace_id"`
-	RProjectID      string             `json:"r_project_id"`
 	RConversationID string             `json:"r_conversation_id"`
-	RProjectAgentID string             `json:"r_project_agent_id"`
-	PaAgentID       string             `json:"pa_agent_id"`
+	RAgentID        string             `json:"r_agent_id"`
 	Status          string             `json:"status"`
 	StartedAt       pgtype.Timestamptz `json:"started_at"`
 }
@@ -4401,10 +4120,8 @@ func (q *Queries) GetCompletableAgentRunForUpdate(ctx context.Context, id pgtype
 	err := row.Scan(
 		&i.RID,
 		&i.RWorkspaceID,
-		&i.RProjectID,
 		&i.RConversationID,
-		&i.RProjectAgentID,
-		&i.PaAgentID,
+		&i.RAgentID,
 		&i.Status,
 		&i.StartedAt,
 	)
@@ -4436,10 +4153,64 @@ func (q *Queries) GetConnectorSessionBinding(ctx context.Context, arg GetConnect
 	return upstream_session_id, err
 }
 
+const getConversation = `-- name: GetConversation :one
+select
+  c.id::text as id,
+  c.workspace_id::text as workspace_id,
+  c.surface,
+  c.form,
+  c.title,
+  c.status,
+  c.metadata,
+  c.created_at,
+  c.updated_at,
+  coalesce(a.id::text, '')::text as primary_agent_id,
+  coalesce(a.name, '')::text as primary_agent_name
+from conversations c
+left join agents a
+  on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
+  and a.deleted_at is null
+  and a.status = 'active'
+where c.id = $1::uuid
+  and c.deleted_at is null
+`
+
+type GetConversationRow struct {
+	ID               string             `json:"id"`
+	WorkspaceID      string             `json:"workspace_id"`
+	Surface          string             `json:"surface"`
+	Form             string             `json:"form"`
+	Title            string             `json:"title"`
+	Status           string             `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	PrimaryAgentID   string             `json:"primary_agent_id"`
+	PrimaryAgentName string             `json:"primary_agent_name"`
+}
+
+func (q *Queries) GetConversation(ctx context.Context, id pgtype.UUID) (GetConversationRow, error) {
+	row := q.db.QueryRow(ctx, getConversation, id)
+	var i GetConversationRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Surface,
+		&i.Form,
+		&i.Title,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PrimaryAgentID,
+		&i.PrimaryAgentName,
+	)
+	return i, err
+}
+
 const getConversationInflightCards = `-- name: GetConversationInflightCards :one
 select id::text,
        workspace_id::text,
-       project_id::text,
        external_id            as external_chat_id,
        external_thread_id,
        source_app_id,
@@ -4454,7 +4225,6 @@ where id = $1::uuid
 type GetConversationInflightCardsRow struct {
 	ID                      string      `json:"id"`
 	WorkspaceID             string      `json:"workspace_id"`
-	ProjectID               string      `json:"project_id"`
 	ExternalChatID          string      `json:"external_chat_id"`
 	ExternalThreadID        string      `json:"external_thread_id"`
 	SourceAppID             string      `json:"source_app_id"`
@@ -4475,7 +4245,6 @@ func (q *Queries) GetConversationInflightCards(ctx context.Context, conversation
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.ExternalChatID,
 		&i.ExternalThreadID,
 		&i.SourceAppID,
@@ -4522,7 +4291,7 @@ func (q *Queries) GetDiscoverableWorkspaceForJoin(ctx context.Context, workspace
 const getEnabledCapabilitiesForAgent = `-- name: GetEnabledCapabilitiesForAgent :many
 select
   ac.id::text as agent_capability_id,
-  ac.project_agent_id::text as project_agent_id,
+  ac.agent_id::text as agent_id,
   ac.enabled,
   ac.configuration,
   ac.pinning_mode,
@@ -4582,7 +4351,7 @@ join lateral (
   order by created_at desc, version desc
   limit 1
 ) latest on true
-where ac.project_agent_id = $1::uuid
+where ac.agent_id = $1::uuid
   and ac.enabled = true
   and c.deleted_at is null
 order by c.name asc
@@ -4590,7 +4359,7 @@ order by c.name asc
 
 type GetEnabledCapabilitiesForAgentRow struct {
 	AgentCapabilityID      string             `json:"agent_capability_id"`
-	ProjectAgentID         string             `json:"project_agent_id"`
+	AgentID                string             `json:"agent_id"`
 	Enabled                bool               `json:"enabled"`
 	Configuration          []byte             `json:"configuration"`
 	PinningMode            string             `json:"pinning_mode"`
@@ -4625,8 +4394,8 @@ type GetEnabledCapabilitiesForAgentRow struct {
 	CapabilityCreatorID    string             `json:"capability_creator_id"`
 }
 
-func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, projectAgentID pgtype.UUID) ([]GetEnabledCapabilitiesForAgentRow, error) {
-	rows, err := q.db.Query(ctx, getEnabledCapabilitiesForAgent, projectAgentID)
+func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, agentID pgtype.UUID) ([]GetEnabledCapabilitiesForAgentRow, error) {
+	rows, err := q.db.Query(ctx, getEnabledCapabilitiesForAgent, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -4636,7 +4405,7 @@ func (q *Queries) GetEnabledCapabilitiesForAgent(ctx context.Context, projectAge
 		var i GetEnabledCapabilitiesForAgentRow
 		if err := rows.Scan(
 			&i.AgentCapabilityID,
-			&i.ProjectAgentID,
+			&i.AgentID,
 			&i.Enabled,
 			&i.Configuration,
 			&i.PinningMode,
@@ -4713,12 +4482,12 @@ with selected_agent as (
     and c.status = 'active'
     and c.deleted_at is null
 ), scoped_messages as (
-  select m.id, m.workspace_id, m.project_id, m.conversation_id, m.sender_type, m.sender_id, m.kind, m.content_format, m.visibility, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at
+  select m.id, m.workspace_id, m.conversation_id, m.sender_type, m.sender_id, m.kind, m.content_format, m.visibility, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at
   from messages m
   join scoped_conversations c on c.id = m.conversation_id
   where m.deleted_at is null
 ), inbound_messages as (
-  select id, workspace_id, project_id, conversation_id, sender_type, sender_id, kind, content_format, visibility, content, metadata, created_at, updated_at, deleted_at
+  select id, workspace_id, conversation_id, sender_type, sender_id, kind, content_format, visibility, content, metadata, created_at, updated_at, deleted_at
   from scoped_messages
   where sender_type in ('user', 'external')
 ), outbound_messages as (
@@ -4726,7 +4495,7 @@ with selected_agent as (
   -- longer written; delivery state is derived purely from
   -- gateway_delivered_at being set.
   select
-    m.id, m.workspace_id, m.project_id, m.conversation_id, m.sender_type, m.sender_id, m.kind, m.content_format, m.visibility, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at,
+    m.id, m.workspace_id, m.conversation_id, m.sender_type, m.sender_id, m.kind, m.content_format, m.visibility, m.content, m.metadata, m.created_at, m.updated_at, m.deleted_at,
     case
       when coalesce(m.metadata->>'gateway_delivered_at', '') <> '' then 'delivered'
       else 'pending'
@@ -4752,7 +4521,7 @@ with selected_agent as (
   -- messages tagged with metadata.kind = 'feishu_outbound_dead_letter_*'
   -- (see deadLetterKind in retry.go). One notice per (slot, run_id)
   -- pair.
-  select id, workspace_id, project_id, conversation_id, sender_type, sender_id, kind, content_format, visibility, content, metadata, created_at, updated_at, deleted_at
+  select id, workspace_id, conversation_id, sender_type, sender_id, kind, content_format, visibility, content, metadata, created_at, updated_at, deleted_at
   from scoped_messages
   where sender_type = 'system'
     and metadata->>'kind' like 'feishu_outbound_dead_letter_%'
@@ -5128,7 +4897,6 @@ const getOutputMessageByRunID = `-- name: GetOutputMessageByRunID :one
 select
   m.id::text,
   m.workspace_id::text,
-  m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
   m.sender_id::text,
@@ -5141,7 +4909,6 @@ from agent_runs r
 join messages m on m.id = r.output_message_id
 where r.id = $1::uuid
   and m.workspace_id = r.workspace_id
-  and m.project_id = r.project_id
   and m.conversation_id = r.conversation_id
   and m.deleted_at is null
 `
@@ -5149,7 +4916,6 @@ where r.id = $1::uuid
 type GetOutputMessageByRunIDRow struct {
 	MID             string             `json:"m_id"`
 	MWorkspaceID    string             `json:"m_workspace_id"`
-	MProjectID      string             `json:"m_project_id"`
 	MConversationID string             `json:"m_conversation_id"`
 	SenderType      string             `json:"sender_type"`
 	MSenderID       string             `json:"m_sender_id"`
@@ -5166,7 +4932,6 @@ func (q *Queries) GetOutputMessageByRunID(ctx context.Context, runID pgtype.UUID
 	err := row.Scan(
 		&i.MID,
 		&i.MWorkspaceID,
-		&i.MProjectID,
 		&i.MConversationID,
 		&i.SenderType,
 		&i.MSenderID,
@@ -5177,345 +4942,6 @@ func (q *Queries) GetOutputMessageByRunID(ctx context.Context, runID pgtype.UUID
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const getProjectAgentDetailForRead = `-- name: GetProjectAgentDetailForRead :one
-select
-  pa.id::text as id,
-  pa.workspace_id::text as workspace_id,
-  pa.project_id::text as project_id,
-  pa.agent_id::text as agent_id,
-  pa.status,
-  pa.config,
-  pa.created_by::text as created_by,
-  pa.created_at,
-  pa.updated_at,
-  a.name as agent_name,
-  a.slug as agent_slug,
-  coalesce(a.description, '')::text as description,
-  a.connector_type
-from project_agents pa
-join agents a on a.id = pa.agent_id
-where pa.id = $1::uuid
-  and pa.deleted_at is null
-  and a.deleted_at is null
-`
-
-type GetProjectAgentDetailForReadRow struct {
-	ID            string             `json:"id"`
-	WorkspaceID   string             `json:"workspace_id"`
-	ProjectID     string             `json:"project_id"`
-	AgentID       string             `json:"agent_id"`
-	Status        string             `json:"status"`
-	Config        []byte             `json:"config"`
-	CreatedBy     string             `json:"created_by"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	AgentName     string             `json:"agent_name"`
-	AgentSlug     string             `json:"agent_slug"`
-	Description   string             `json:"description"`
-	ConnectorType string             `json:"connector_type"`
-}
-
-func (q *Queries) GetProjectAgentDetailForRead(ctx context.Context, id pgtype.UUID) (GetProjectAgentDetailForReadRow, error) {
-	row := q.db.QueryRow(ctx, getProjectAgentDetailForRead, id)
-	var i GetProjectAgentDetailForReadRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.Status,
-		&i.Config,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.AgentName,
-		&i.AgentSlug,
-		&i.Description,
-		&i.ConnectorType,
-	)
-	return i, err
-}
-
-const getProjectAgentForUpdate = `-- name: GetProjectAgentForUpdate :one
-select id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-from project_agents
-where id = $1::uuid
-  and deleted_at is null
-for update
-`
-
-type GetProjectAgentForUpdateRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetProjectAgentForUpdate(ctx context.Context, id pgtype.UUID) (GetProjectAgentForUpdateRow, error) {
-	row := q.db.QueryRow(ctx, getProjectAgentForUpdate, id)
-	var i GetProjectAgentForUpdateRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.Status,
-		&i.Config,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getProjectAgentMetrics = `-- name: GetProjectAgentMetrics :one
-select
-  count(*) filter (where r.status = 'completed')::bigint as completed_count,
-  count(*) filter (where r.status in ('failed','cancelled','interrupted'))::bigint as failed_count,
-  count(*) filter (where r.status in ('completed','failed','cancelled','interrupted'))::bigint as total_count,
-  coalesce(avg(extract(epoch from (r.finished_at - r.started_at)) * 1000) filter (
-    where r.status = 'completed' and r.started_at is not null and r.finished_at is not null
-  ), 0)::double precision as avg_duration_ms
-from agent_runs r
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-where pa.id = $1::uuid
-  and r.project_id = $2::uuid
-  and r.workspace_id = pa.workspace_id
-  and r.project_id = pa.project_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
-  and r.created_at >= now() - make_interval(days => $3::int)
-`
-
-type GetProjectAgentMetricsParams struct {
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
-	ProjectID      pgtype.UUID `json:"project_id"`
-	WindowDays     int32       `json:"window_days"`
-}
-
-type GetProjectAgentMetricsRow struct {
-	CompletedCount int64   `json:"completed_count"`
-	FailedCount    int64   `json:"failed_count"`
-	TotalCount     int64   `json:"total_count"`
-	AvgDurationMs  float64 `json:"avg_duration_ms"`
-}
-
-// Aggregates a single project_agent's run history over the last
-// @window_days days for the agent-detail "近 N 天表现" panel:
-//   - completed_count   — finished runs (status = 'completed')
-//   - failed_count      — failed/cancelled/interrupted (for success rate)
-//   - total_count       — completed + failed (excludes still-running/queued)
-//   - avg_duration_ms   — mean wall-clock of completed runs only
-//     (started_at → finished_at). NULL if no
-//     completed runs in window.
-//
-// All filtered by created_at to keep the window stable as runs finish
-// later. The active-project / workspace guards mirror ListProjectAgentRunsPage.
-func (q *Queries) GetProjectAgentMetrics(ctx context.Context, arg GetProjectAgentMetricsParams) (GetProjectAgentMetricsRow, error) {
-	row := q.db.QueryRow(ctx, getProjectAgentMetrics, arg.ProjectAgentID, arg.ProjectID, arg.WindowDays)
-	var i GetProjectAgentMetricsRow
-	err := row.Scan(
-		&i.CompletedCount,
-		&i.FailedCount,
-		&i.TotalCount,
-		&i.AvgDurationMs,
-	)
-	return i, err
-}
-
-const getProjectAgentRuntime = `-- name: GetProjectAgentRuntime :one
-select
-  pa.id::text                  as project_agent_id,
-  pa.workspace_id::text        as workspace_id,
-  pa.project_id::text          as project_id,
-  pa.agent_id::text            as agent_id,
-  pa.status                    as project_agent_status,
-  pa.config                    as project_agent_config,
-  a.connector_type             as connector_type,
-  a.config                     as agent_config
-from project_agents pa
-join agents a on a.id = pa.agent_id
-join workspaces w on w.id = pa.workspace_id
-where pa.id = $1::uuid
-  and pa.workspace_id = $2::uuid
-  and pa.status = 'active'
-  and pa.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
-  and w.deleted_at is null
-`
-
-type GetProjectAgentRuntimeParams struct {
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
-	WorkspaceID    pgtype.UUID `json:"workspace_id"`
-}
-
-type GetProjectAgentRuntimeRow struct {
-	ProjectAgentID     string `json:"project_agent_id"`
-	WorkspaceID        string `json:"workspace_id"`
-	ProjectID          string `json:"project_id"`
-	AgentID            string `json:"agent_id"`
-	ProjectAgentStatus string `json:"project_agent_status"`
-	ProjectAgentConfig []byte `json:"project_agent_config"`
-	ConnectorType      string `json:"connector_type"`
-	AgentConfig        []byte `json:"agent_config"`
-}
-
-// Phase 4 milestone E (sandbox warm): admin-side fetch for the
-// merged-config inputs the OpenCode Connector needs to spawn a
-// sandbox without a real prompt. Pulls (workspace, project_agent)
-// and joins the parent agent so the caller can mergeConfig the
-// two jsonb blobs the same way Prompt path does. Excludes deleted
-// + disabled project_agents so the warm endpoint cannot revive
-// a rebound agent that has been turned off.
-func (q *Queries) GetProjectAgentRuntime(ctx context.Context, arg GetProjectAgentRuntimeParams) (GetProjectAgentRuntimeRow, error) {
-	row := q.db.QueryRow(ctx, getProjectAgentRuntime, arg.ProjectAgentID, arg.WorkspaceID)
-	var i GetProjectAgentRuntimeRow
-	err := row.Scan(
-		&i.ProjectAgentID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.ProjectAgentStatus,
-		&i.ProjectAgentConfig,
-		&i.ConnectorType,
-		&i.AgentConfig,
-	)
-	return i, err
-}
-
-const getProjectAgentRuntimeBinding = `-- name: GetProjectAgentRuntimeBinding :one
-select
-  pa.id::text                                    as project_agent_id,
-  pa.workspace_id::text                          as workspace_id,
-  coalesce(pa.runtime_id::text, ''::text)::text  as runtime_id
-from project_agents pa
-where pa.id = $1::uuid
-  and pa.workspace_id = $2::uuid
-  and pa.deleted_at is null
-`
-
-type GetProjectAgentRuntimeBindingParams struct {
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
-	WorkspaceID    pgtype.UUID `json:"workspace_id"`
-}
-
-type GetProjectAgentRuntimeBindingRow struct {
-	ProjectAgentID string `json:"project_agent_id"`
-	WorkspaceID    string `json:"workspace_id"`
-	RuntimeID      string `json:"runtime_id"`
-}
-
-// Read the explicit runtime_id binding for a project_agent. Used by
-// the agent settings page to render the picker's current value.
-func (q *Queries) GetProjectAgentRuntimeBinding(ctx context.Context, arg GetProjectAgentRuntimeBindingParams) (GetProjectAgentRuntimeBindingRow, error) {
-	row := q.db.QueryRow(ctx, getProjectAgentRuntimeBinding, arg.ProjectAgentID, arg.WorkspaceID)
-	var i GetProjectAgentRuntimeBindingRow
-	err := row.Scan(&i.ProjectAgentID, &i.WorkspaceID, &i.RuntimeID)
-	return i, err
-}
-
-const getProjectAgentWorkspace = `-- name: GetProjectAgentWorkspace :one
-select pa.workspace_id::text as workspace_id
-from project_agents pa
-where pa.id = $1::uuid
-  and pa.status = 'active'
-  and pa.deleted_at is null
-`
-
-func (q *Queries) GetProjectAgentWorkspace(ctx context.Context, projectAgentID pgtype.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getProjectAgentWorkspace, projectAgentID)
-	var workspace_id string
-	err := row.Scan(&workspace_id)
-	return workspace_id, err
-}
-
-const getProjectConversation = `-- name: GetProjectConversation :one
-select
-  c.id::text as id,
-  c.workspace_id::text as workspace_id,
-  c.project_id::text as project_id,
-  c.surface,
-  c.form,
-  c.title,
-  c.status,
-  c.metadata,
-  c.created_at,
-  c.updated_at,
-  coalesce(pa.id::text, '')::text as primary_agent_id,
-  coalesce(a.name, '')::text as primary_agent_name
-from conversations c
-join projects p on p.id = c.project_id
-left join project_agents pa
-  on pa.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and pa.deleted_at is null
-  and pa.status = 'active'
-left join agents a
-  on a.id = pa.agent_id
-  and a.deleted_at is null
-  and a.status = 'active'
-where c.id = $1::uuid
-  and p.status = 'active'
-  and p.deleted_at is null
-  and c.deleted_at is null
-`
-
-type GetProjectConversationRow struct {
-	ID               string             `json:"id"`
-	WorkspaceID      string             `json:"workspace_id"`
-	ProjectID        string             `json:"project_id"`
-	Surface          string             `json:"surface"`
-	Form             string             `json:"form"`
-	Title            string             `json:"title"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	PrimaryAgentID   string             `json:"primary_agent_id"`
-	PrimaryAgentName string             `json:"primary_agent_name"`
-}
-
-func (q *Queries) GetProjectConversation(ctx context.Context, id pgtype.UUID) (GetProjectConversationRow, error) {
-	row := q.db.QueryRow(ctx, getProjectConversation, id)
-	var i GetProjectConversationRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.Surface,
-		&i.Form,
-		&i.Title,
-		&i.Status,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.PrimaryAgentID,
-		&i.PrimaryAgentName,
-	)
-	return i, err
-}
-
-const getProjectWorkspace = `-- name: GetProjectWorkspace :one
-select workspace_id::text
-from projects
-where id = $1::uuid
-  and deleted_at is null
-`
-
-// 把 project_id 反查到 workspace_id,供 RBAC 中间件先把 project-scoped
-// 路由桥接到 workspace 角色检查。
-func (q *Queries) GetProjectWorkspace(ctx context.Context, projectID pgtype.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getProjectWorkspace, projectID)
-	var workspace_id string
-	err := row.Scan(&workspace_id)
-	return workspace_id, err
 }
 
 const getSandboxPoolEntry = `-- name: GetSandboxPoolEntry :one
@@ -5884,13 +5310,12 @@ select exists(
   select 1
   from capability c
   join agent_capabilities ac on ac.capability_id = c.id
-  join project_agents pa on pa.id = ac.project_agent_id
-  join projects p on p.id = pa.project_id
+  join agents a on a.id = ac.agent_id
   where c.workspace_id = $1::uuid
-    and p.workspace_id != c.workspace_id
+    and a.workspace_id != c.workspace_id
     and ac.enabled = true
     and c.deleted_at is null
-    and p.deleted_at is null
+    and a.deleted_at is null
 ) as exists
 `
 
@@ -5903,12 +5328,11 @@ func (q *Queries) HasMarketplaceDependentsForWorkspace(ctx context.Context, work
 
 const insertAgentRunEvent = `-- name: InsertAgentRunEvent :one
 insert into agent_run_events(
-  workspace_id, project_id, agent_run_id, sequence,
+  workspace_id, agent_run_id, sequence,
   event_kind, payload, occurred_at, created_at
 )
 select
   r.workspace_id,
-  r.project_id,
   r.id,
   $1::bigint,
   $2,
@@ -5916,16 +5340,11 @@ select
   $4,
   $5
 from agent_runs r
-join projects p on p.id = r.project_id
 where r.id = $6::uuid
-  and r.workspace_id = p.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
 on conflict (agent_run_id, sequence) do nothing
 returning
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   sequence,
   event_kind,
@@ -5946,7 +5365,6 @@ type InsertAgentRunEventParams struct {
 type InsertAgentRunEventRow struct {
 	ID          string             `json:"id"`
 	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
 	AgentRunID  string             `json:"agent_run_id"`
 	Sequence    int64              `json:"sequence"`
 	EventKind   string             `json:"event_kind"`
@@ -5968,7 +5386,6 @@ func (q *Queries) InsertAgentRunEvent(ctx context.Context, arg InsertAgentRunEve
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.AgentRunID,
 		&i.Sequence,
 		&i.EventKind,
@@ -5989,7 +5406,6 @@ with run_event_max as (
 )
 select c.id::text                 as conversation_id,
        c.workspace_id::text       as workspace_id,
-       c.project_id::text         as project_id,
        c.external_id              as external_chat_id,
        c.external_thread_id       as external_thread_id,
        c.source_app_id            as source_app_id,
@@ -6000,10 +5416,10 @@ select c.id::text                 as conversation_id,
        r.finished_at              as run_finished_at,
        coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
        coalesce(rem.max_seq, 0::bigint) as max_event_sequence,
-       -- Per-card Agent display name resolved via the run's
-       -- project_agent binding. LEFT JOINs so a soft-deleted /
-       -- detached binding doesn't drop the row entirely — the driver
-       -- falls back to the brand title (FeishuCardTitle) on empty.
+       -- Per-card Agent display name resolved via the run's agent.
+       -- LEFT JOIN so a soft-deleted agent doesn't drop the row
+       -- entirely — the driver falls back to the brand title
+       -- (FeishuCardTitle) on empty.
        coalesce(a.name, '')::text as agent_name,
        -- sender_open_id is the raw Feishu open_id of the user who
        -- triggered this run. The inflight driver consumes it to add
@@ -6020,8 +5436,7 @@ join agent_runs r on r.conversation_id = c.id
 left join run_event_max rem on rem.agent_run_id = r.id
 left join messages m on m.id = r.output_message_id
 left join messages trig on trig.id = r.trigger_message_id
-left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
-left join agents a on a.id = pa.agent_id and a.deleted_at is null
+left join agents a on a.id = r.agent_id and a.deleted_at is null
 where c.platform = 'feishu'
   and c.status = 'active'
   and c.deleted_at is null
@@ -6053,7 +5468,6 @@ type ListActiveFeishuInflightConversationsParams struct {
 type ListActiveFeishuInflightConversationsRow struct {
 	ConversationID       string             `json:"conversation_id"`
 	WorkspaceID          string             `json:"workspace_id"`
-	ProjectID            string             `json:"project_id"`
 	ExternalChatID       string             `json:"external_chat_id"`
 	ExternalThreadID     string             `json:"external_thread_id"`
 	SourceAppID          string             `json:"source_app_id"`
@@ -6110,7 +5524,6 @@ func (q *Queries) ListActiveFeishuInflightConversations(ctx context.Context, arg
 		if err := rows.Scan(
 			&i.ConversationID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.ExternalChatID,
 			&i.ExternalThreadID,
 			&i.SourceAppID,
@@ -6138,7 +5551,7 @@ const listActiveSandboxBindingsForWorkspace = `-- name: ListActiveSandboxBinding
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -6162,18 +5575,18 @@ type ListActiveSandboxBindingsForWorkspaceParams struct {
 }
 
 type ListActiveSandboxBindingsForWorkspaceRow struct {
-	ID             string             `json:"id"`
-	WorkspaceID    string             `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	Name           pgtype.Text        `json:"name"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt   pgtype.Timestamptz `json:"last_active_at"`
-	KilledAt       pgtype.Timestamptz `json:"killed_at"`
-	Metadata       []byte             `json:"metadata"`
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	Name         pgtype.Text        `json:"name"`
+	CacheKey     pgtype.Text        `json:"cache_key"`
+	SandboxID    string             `json:"sandbox_id"`
+	TemplateID   string             `json:"template_id"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	KilledAt     pgtype.Timestamptz `json:"killed_at"`
+	Metadata     []byte             `json:"metadata"`
 }
 
 // Admin UI workspace overview: active bound sandboxes, newest-active first.
@@ -6189,7 +5602,7 @@ func (q *Queries) ListActiveSandboxBindingsForWorkspace(ctx context.Context, arg
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.ProjectAgentID,
+			&i.AgentID,
 			&i.Name,
 			&i.CacheKey,
 			&i.SandboxID,
@@ -6387,19 +5800,19 @@ func (q *Queries) ListActiveWorkspaceOwnerNames(ctx context.Context, arg ListAct
 }
 
 const listAgentCapabilitiesByAgent = `-- name: ListAgentCapabilitiesByAgent :many
-select ac.id::text as id, ac.project_agent_id::text as project_agent_id,
+select ac.id::text as id, ac.agent_id::text as agent_id,
   ac.capability_id::text as capability_id, ac.capability_version_id::text as capability_version_id,
   ac.enabled, ac.configuration, ac.pinning_mode, ac.created_at, ac.updated_at
 from agent_capabilities ac
 join capability c on c.id = ac.capability_id
-where ac.project_agent_id = $1::uuid
+where ac.agent_id = $1::uuid
   and c.deleted_at is null
 order by c.name asc
 `
 
 type ListAgentCapabilitiesByAgentRow struct {
 	ID                  string             `json:"id"`
-	ProjectAgentID      string             `json:"project_agent_id"`
+	AgentID             string             `json:"agent_id"`
 	CapabilityID        string             `json:"capability_id"`
 	CapabilityVersionID string             `json:"capability_version_id"`
 	Enabled             bool               `json:"enabled"`
@@ -6409,8 +5822,8 @@ type ListAgentCapabilitiesByAgentRow struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) ListAgentCapabilitiesByAgent(ctx context.Context, projectAgentID pgtype.UUID) ([]ListAgentCapabilitiesByAgentRow, error) {
-	rows, err := q.db.Query(ctx, listAgentCapabilitiesByAgent, projectAgentID)
+func (q *Queries) ListAgentCapabilitiesByAgent(ctx context.Context, agentID pgtype.UUID) ([]ListAgentCapabilitiesByAgentRow, error) {
+	rows, err := q.db.Query(ctx, listAgentCapabilitiesByAgent, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -6420,7 +5833,7 @@ func (q *Queries) ListAgentCapabilitiesByAgent(ctx context.Context, projectAgent
 		var i ListAgentCapabilitiesByAgentRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ProjectAgentID,
+			&i.AgentID,
 			&i.CapabilityID,
 			&i.CapabilityVersionID,
 			&i.Enabled,
@@ -6452,13 +5865,13 @@ select
   created_at
 from agent_run_artifacts
 where agent_run_id = $1::uuid
-  and project_id = $2::uuid
+  and workspace_id = $2::uuid
 order by created_at asc, id asc
 `
 
 type ListAgentRunArtifactsParams struct {
-	RunID     pgtype.UUID `json:"run_id"`
-	ProjectID pgtype.UUID `json:"project_id"`
+	RunID       pgtype.UUID `json:"run_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
 type ListAgentRunArtifactsRow struct {
@@ -6476,7 +5889,7 @@ type ListAgentRunArtifactsRow struct {
 // 2026-06-04 schema: artifact_type 拆成 medium(载体: file/link/inline)
 // + kind(语义: log/transcript/code-patch/screenshot/...,业务定义)。
 func (q *Queries) ListAgentRunArtifacts(ctx context.Context, arg ListAgentRunArtifactsParams) ([]ListAgentRunArtifactsRow, error) {
-	rows, err := q.db.Query(ctx, listAgentRunArtifacts, arg.RunID, arg.ProjectID)
+	rows, err := q.db.Query(ctx, listAgentRunArtifacts, arg.RunID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -6568,7 +5981,6 @@ const listAgentRunEventsByRun = `-- name: ListAgentRunEventsByRun :many
 select
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   sequence,
   event_kind,
@@ -6577,21 +5989,18 @@ select
   created_at
 from agent_run_events
 where agent_run_id = $1::uuid
-  and project_id = $2::uuid
-  and sequence > $3::bigint
+  and sequence > $2::bigint
 order by sequence asc
 `
 
 type ListAgentRunEventsByRunParams struct {
 	AgentRunID    pgtype.UUID `json:"agent_run_id"`
-	ProjectID     pgtype.UUID `json:"project_id"`
 	AfterSequence int64       `json:"after_sequence"`
 }
 
 type ListAgentRunEventsByRunRow struct {
 	ID          string             `json:"id"`
 	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
 	AgentRunID  string             `json:"agent_run_id"`
 	Sequence    int64              `json:"sequence"`
 	EventKind   string             `json:"event_kind"`
@@ -6601,7 +6010,7 @@ type ListAgentRunEventsByRunRow struct {
 }
 
 func (q *Queries) ListAgentRunEventsByRun(ctx context.Context, arg ListAgentRunEventsByRunParams) ([]ListAgentRunEventsByRunRow, error) {
-	rows, err := q.db.Query(ctx, listAgentRunEventsByRun, arg.AgentRunID, arg.ProjectID, arg.AfterSequence)
+	rows, err := q.db.Query(ctx, listAgentRunEventsByRun, arg.AgentRunID, arg.AfterSequence)
 	if err != nil {
 		return nil, err
 	}
@@ -6612,7 +6021,6 @@ func (q *Queries) ListAgentRunEventsByRun(ctx context.Context, arg ListAgentRunE
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.AgentRunID,
 			&i.Sequence,
 			&i.EventKind,
@@ -7052,12 +6460,10 @@ const listConversationAgentRuns = `-- name: ListConversationAgentRuns :many
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
   coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
   coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.connector_type,
@@ -7068,22 +6474,12 @@ select
   r.finished_at
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 where r.conversation_id = $1::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = p.id
-  and r.project_id = pa.project_id
   and c.status = 'active'
   and c.deleted_at is null
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
   and a.deleted_at is null
 order by r.created_at asc, r.id asc
 limit $2
@@ -7097,12 +6493,10 @@ type ListConversationAgentRunsParams struct {
 type ListConversationAgentRunsRow struct {
 	RID              string             `json:"r_id"`
 	RWorkspaceID     string             `json:"r_workspace_id"`
-	RProjectID       string             `json:"r_project_id"`
 	RConversationID  string             `json:"r_conversation_id"`
 	TriggerMessageID string             `json:"trigger_message_id"`
 	OutputMessageID  string             `json:"output_message_id"`
-	RProjectAgentID  string             `json:"r_project_agent_id"`
-	PaAgentID        string             `json:"pa_agent_id"`
+	RAgentID         string             `json:"r_agent_id"`
 	AgentName        string             `json:"agent_name"`
 	AgentSlug        string             `json:"agent_slug"`
 	ConnectorType    string             `json:"connector_type"`
@@ -7125,12 +6519,10 @@ func (q *Queries) ListConversationAgentRuns(ctx context.Context, arg ListConvers
 		if err := rows.Scan(
 			&i.RID,
 			&i.RWorkspaceID,
-			&i.RProjectID,
 			&i.RConversationID,
 			&i.TriggerMessageID,
 			&i.OutputMessageID,
-			&i.RProjectAgentID,
-			&i.PaAgentID,
+			&i.RAgentID,
 			&i.AgentName,
 			&i.AgentSlug,
 			&i.ConnectorType,
@@ -7154,7 +6546,6 @@ const listConversationMessages = `-- name: ListConversationMessages :many
 select
   m.id::text,
   m.workspace_id::text,
-  m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
   m.sender_id::text,
@@ -7165,17 +6556,11 @@ select
   m.created_at
 from messages m
 join conversations c on c.id = m.conversation_id
-join projects p on p.id = c.project_id
 where m.conversation_id = $1::uuid
   and m.workspace_id = c.workspace_id
-  and m.workspace_id = p.workspace_id
-  and m.project_id = c.project_id
-  and m.project_id = p.id
   and m.deleted_at is null
   and c.status = 'active'
   and c.deleted_at is null
-  and p.status = 'active'
-  and p.deleted_at is null
 order by m.created_at asc, m.id asc
 limit $2
 `
@@ -7188,7 +6573,6 @@ type ListConversationMessagesParams struct {
 type ListConversationMessagesRow struct {
 	MID             string             `json:"m_id"`
 	MWorkspaceID    string             `json:"m_workspace_id"`
-	MProjectID      string             `json:"m_project_id"`
 	MConversationID string             `json:"m_conversation_id"`
 	SenderType      string             `json:"sender_type"`
 	MSenderID       string             `json:"m_sender_id"`
@@ -7211,7 +6595,6 @@ func (q *Queries) ListConversationMessages(ctx context.Context, arg ListConversa
 		if err := rows.Scan(
 			&i.MID,
 			&i.MWorkspaceID,
-			&i.MProjectID,
 			&i.MConversationID,
 			&i.SenderType,
 			&i.MSenderID,
@@ -7334,21 +6717,17 @@ func (q *Queries) ListDiscoverableWorkspaces(ctx context.Context, arg ListDiscov
 
 const listEnabledAgentsForMarketplaceCapability = `-- name: ListEnabledAgentsForMarketplaceCapability :many
 select distinct
-  pa.id::text as project_agent_id,
-  pa.agent_id::text as agent_id,
-  pa.project_id::text as project_id,
+  a.id::text as agent_id,
   a.name as agent_name,
-  (pa.status = 'active')::bool as enabled,
+  (a.status = 'active')::bool as enabled,
   ac.capability_version_id::text as capability_version_id,
   cv.version as version
 from agent_capabilities ac
-join project_agents pa on pa.id = ac.project_agent_id
-join agents a on a.id = pa.agent_id
-join projects p on p.id = pa.project_id
+join agents a on a.id = ac.agent_id
 join capability_version cv on cv.id = ac.capability_version_id
-where p.workspace_id = $1::uuid
+where a.workspace_id = $1::uuid
   and ac.capability_id = $2::uuid
-order by a.name asc, pa.id asc
+order by a.name asc, a.id asc
 `
 
 type ListEnabledAgentsForMarketplaceCapabilityParams struct {
@@ -7357,9 +6736,7 @@ type ListEnabledAgentsForMarketplaceCapabilityParams struct {
 }
 
 type ListEnabledAgentsForMarketplaceCapabilityRow struct {
-	ProjectAgentID      string `json:"project_agent_id"`
 	AgentID             string `json:"agent_id"`
-	ProjectID           string `json:"project_id"`
 	AgentName           string `json:"agent_name"`
 	Enabled             bool   `json:"enabled"`
 	CapabilityVersionID string `json:"capability_version_id"`
@@ -7376,9 +6753,7 @@ func (q *Queries) ListEnabledAgentsForMarketplaceCapability(ctx context.Context,
 	for rows.Next() {
 		var i ListEnabledAgentsForMarketplaceCapabilityRow
 		if err := rows.Scan(
-			&i.ProjectAgentID,
 			&i.AgentID,
-			&i.ProjectID,
 			&i.AgentName,
 			&i.Enabled,
 			&i.CapabilityVersionID,
@@ -7398,7 +6773,7 @@ const listIdleSandboxBindings = `-- name: ListIdleSandboxBindings :many
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -7422,18 +6797,18 @@ type ListIdleSandboxBindingsParams struct {
 }
 
 type ListIdleSandboxBindingsRow struct {
-	ID             string             `json:"id"`
-	WorkspaceID    string             `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	Name           pgtype.Text        `json:"name"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt   pgtype.Timestamptz `json:"last_active_at"`
-	KilledAt       pgtype.Timestamptz `json:"killed_at"`
-	Metadata       []byte             `json:"metadata"`
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	Name         pgtype.Text        `json:"name"`
+	CacheKey     pgtype.Text        `json:"cache_key"`
+	SandboxID    string             `json:"sandbox_id"`
+	TemplateID   string             `json:"template_id"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	KilledAt     pgtype.Timestamptz `json:"killed_at"`
+	Metadata     []byte             `json:"metadata"`
 }
 
 // Idle TTL sweeper (Phase 4 milestone B): pick up live bound sandboxes
@@ -7450,7 +6825,7 @@ func (q *Queries) ListIdleSandboxBindings(ctx context.Context, arg ListIdleSandb
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.ProjectAgentID,
+			&i.AgentID,
 			&i.Name,
 			&i.CacheKey,
 			&i.SandboxID,
@@ -7475,9 +6850,8 @@ const listMarketplaceCapabilities = `-- name: ListMarketplaceCapabilities :many
 with installed as (
   select distinct ac.capability_id
   from agent_capabilities ac
-  join project_agents pa on pa.id = ac.project_agent_id
-  join projects p on p.id = pa.project_id
-  where p.workspace_id = $1::uuid
+  join agents a on a.id = ac.agent_id
+  where a.workspace_id = $1::uuid
 )
 select
   c.id::text as capability_id,
@@ -7699,627 +7073,6 @@ func (q *Queries) ListPendingJoinRequests(ctx context.Context, workspaceID pgtyp
 	return items, nil
 }
 
-const listProjectAgentRunsPage = `-- name: ListProjectAgentRunsPage :many
-select
-  r.id::text,
-  r.workspace_id::text,
-  r.project_id::text,
-  r.conversation_id::text,
-  coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
-  coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
-  r.project_agent_id::text,
-  pa.agent_id::text,
-  a.name as agent_name,
-  a.slug as agent_slug,
-  r.connector_type,
-  r.status,
-  r.metadata,
-  r.created_at,
-  r.started_at,
-  r.finished_at
-from agent_runs r
-join projects p on p.id = r.project_id
-join conversations c on c.id = r.conversation_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
-where r.project_id = $1::uuid
-  and r.workspace_id = p.workspace_id
-  and r.workspace_id = c.workspace_id
-  and r.workspace_id = pa.workspace_id
-  and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and c.deleted_at is null
-  and pa.deleted_at is null
-  and a.deleted_at is null
-  and (cardinality($2::text[]) = 0
-       or r.status = ANY($2::text[]))
-order by r.created_at desc, r.id desc
-limit $4 offset $3
-`
-
-type ListProjectAgentRunsPageParams struct {
-	ProjectID  pgtype.UUID `json:"project_id"`
-	Statuses   []string    `json:"statuses"`
-	ItemOffset int32       `json:"item_offset"`
-	ItemLimit  int32       `json:"item_limit"`
-}
-
-type ListProjectAgentRunsPageRow struct {
-	RID              string             `json:"r_id"`
-	RWorkspaceID     string             `json:"r_workspace_id"`
-	RProjectID       string             `json:"r_project_id"`
-	RConversationID  string             `json:"r_conversation_id"`
-	TriggerMessageID string             `json:"trigger_message_id"`
-	OutputMessageID  string             `json:"output_message_id"`
-	RProjectAgentID  string             `json:"r_project_agent_id"`
-	PaAgentID        string             `json:"pa_agent_id"`
-	AgentName        string             `json:"agent_name"`
-	AgentSlug        string             `json:"agent_slug"`
-	ConnectorType    string             `json:"connector_type"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	StartedAt        pgtype.Timestamptz `json:"started_at"`
-	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
-}
-
-// 2026-06-15 redesign: replaces the previous ListProjectAgentRuns +
-// ListProjectAgentRunsByStatus pair.
-//   - ORDER BY ... DESC          — admin list shows newest first.
-//   - (created_at, id) tie-break — keep OFFSET pagination stable when
-//     multiple rows share a created_at.
-//   - @statuses::text[]          — empty array = "no status filter";
-//     non-empty filters via `= ANY(...)`. Lets the UI "进行中" tab union
-//     {running, queued} in one round-trip.
-//   - LIMIT/OFFSET                — classic pager; pair with the
-//     CountProjectAgentRuns query below for the page-count.
-func (q *Queries) ListProjectAgentRunsPage(ctx context.Context, arg ListProjectAgentRunsPageParams) ([]ListProjectAgentRunsPageRow, error) {
-	rows, err := q.db.Query(ctx, listProjectAgentRunsPage,
-		arg.ProjectID,
-		arg.Statuses,
-		arg.ItemOffset,
-		arg.ItemLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectAgentRunsPageRow{}
-	for rows.Next() {
-		var i ListProjectAgentRunsPageRow
-		if err := rows.Scan(
-			&i.RID,
-			&i.RWorkspaceID,
-			&i.RProjectID,
-			&i.RConversationID,
-			&i.TriggerMessageID,
-			&i.OutputMessageID,
-			&i.RProjectAgentID,
-			&i.PaAgentID,
-			&i.AgentName,
-			&i.AgentSlug,
-			&i.ConnectorType,
-			&i.Status,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.StartedAt,
-			&i.FinishedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProjectAgentsAdmin = `-- name: ListProjectAgentsAdmin :many
-select
-  pa.id::text as project_agent_id,
-  pa.project_id::text as project_id,
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.description,
-  a.connector_type,
-  pa.status,
-  pa.config,
-  -- Step 5: supported connectors do not use top-level runtime for
-  -- execution placement. Keep only historical non-empty runtime values
-  -- for legacy rows; daemon placement lives in pa.config.daemon_mode.
-  case when a.connector_type = 'agent_daemon' then '' else coalesce(nullif(a.config->>'runtime', ''), '') end::text as runtime,
-  (a.config || pa.config)::jsonb as agent_config,
-  a.visibility,
-  coalesce(a.created_by::text, '')::text as created_by_user_id,
-  coalesce(u.name, '')::text as created_by_name,
-  pa.created_at as enabled_at,
-  coalesce(rt.id::text, ''::text)::text as runtime_id,
-  coalesce(rt.name, ''::text)::text as runtime_name,
-  coalesce(rt.type, ''::text)::text as runtime_kind,
-  coalesce(rt.liveness, ''::text)::text as runtime_liveness,
-  coalesce(sb.sandbox_id, ''::text)::text as sandbox_external_id,
-  coalesce(sb.lifecycle_status, ''::text)::text as sandbox_status
-from project_agents pa
-join projects p on p.id = pa.project_id
-join agents a on a.id = pa.agent_id
-left join users u on u.id = a.created_by and u.deleted_at is null
-left join runtimes rt on rt.id = pa.runtime_id and rt.deleted_at is null
-left join sandboxes sb on sb.project_agent_id = pa.id
-  and sb.allocation_status = 'bound'
-  and sb.killed_at is null
-where pa.project_id = $1::uuid
-  and pa.workspace_id = p.workspace_id
-  and pa.workspace_id = a.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
-  and a.deleted_at is null
-order by case when pa.status = 'active' then 0 else 1 end, a.name asc
-`
-
-type ListProjectAgentsAdminRow struct {
-	ProjectAgentID    string             `json:"project_agent_id"`
-	ProjectID         string             `json:"project_id"`
-	AgentID           string             `json:"agent_id"`
-	Name              string             `json:"name"`
-	Slug              string             `json:"slug"`
-	Description       string             `json:"description"`
-	ConnectorType     string             `json:"connector_type"`
-	Status            string             `json:"status"`
-	Config            []byte             `json:"config"`
-	Runtime           string             `json:"runtime"`
-	AgentConfig       []byte             `json:"agent_config"`
-	Visibility        string             `json:"visibility"`
-	CreatedByUserID   string             `json:"created_by_user_id"`
-	CreatedByName     string             `json:"created_by_name"`
-	EnabledAt         pgtype.Timestamptz `json:"enabled_at"`
-	RuntimeID         string             `json:"runtime_id"`
-	RuntimeName       string             `json:"runtime_name"`
-	RuntimeKind       string             `json:"runtime_kind"`
-	RuntimeLiveness   string             `json:"runtime_liveness"`
-	SandboxExternalID string             `json:"sandbox_external_id"`
-	SandboxStatus     string             `json:"sandbox_status"`
-}
-
-func (q *Queries) ListProjectAgentsAdmin(ctx context.Context, projectID pgtype.UUID) ([]ListProjectAgentsAdminRow, error) {
-	rows, err := q.db.Query(ctx, listProjectAgentsAdmin, projectID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectAgentsAdminRow{}
-	for rows.Next() {
-		var i ListProjectAgentsAdminRow
-		if err := rows.Scan(
-			&i.ProjectAgentID,
-			&i.ProjectID,
-			&i.AgentID,
-			&i.Name,
-			&i.Slug,
-			&i.Description,
-			&i.ConnectorType,
-			&i.Status,
-			&i.Config,
-			&i.Runtime,
-			&i.AgentConfig,
-			&i.Visibility,
-			&i.CreatedByUserID,
-			&i.CreatedByName,
-			&i.EnabledAt,
-			&i.RuntimeID,
-			&i.RuntimeName,
-			&i.RuntimeKind,
-			&i.RuntimeLiveness,
-			&i.SandboxExternalID,
-			&i.SandboxStatus,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProjectConversations = `-- name: ListProjectConversations :many
-select
-  c.id::text as id,
-  c.workspace_id::text as workspace_id,
-  c.project_id::text as project_id,
-  c.surface,
-  c.form,
-  c.title,
-  c.status,
-  c.metadata,
-  c.created_at,
-  c.updated_at,
-  coalesce((
-    select count(1) from messages m
-    where m.conversation_id = c.id
-      and m.deleted_at is null
-  ), 0)::bigint as message_count,
-  (
-    select m.created_at from messages m
-    where m.conversation_id = c.id
-      and m.deleted_at is null
-    order by m.created_at desc, m.id desc
-    limit 1
-  ) as last_message_at,
-  coalesce((
-    select m.content from messages m
-    where m.conversation_id = c.id
-      and m.deleted_at is null
-    order by m.created_at desc, m.id desc
-    limit 1
-  ), '')::text as last_message_preview,
-  coalesce((
-    select m.sender_type::text from messages m
-    where m.conversation_id = c.id
-      and m.deleted_at is null
-    order by m.created_at desc, m.id desc
-    limit 1
-  ), '')::text as last_message_sender_type,
-  coalesce(pa.id::text, '')::text as primary_agent_id,
-  coalesce(a.name, '')::text as primary_agent_name
-from conversations c
-join projects p on p.id = c.project_id
-left join project_agents pa
-  on pa.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and pa.deleted_at is null
-  and pa.status = 'active'
-left join agents a
-  on a.id = pa.agent_id
-  and a.deleted_at is null
-  and a.status = 'active'
-where c.project_id = $1::uuid
-  and p.status = 'active'
-  and p.deleted_at is null
-  and c.deleted_at is null
-  and ($2::text = '' or c.metadata->>'primary_agent_id' = $2::text)
-order by coalesce((
-    select m.created_at from messages m
-    where m.conversation_id = c.id
-      and m.deleted_at is null
-    order by m.created_at desc, m.id desc
-    limit 1
-  ), c.created_at) desc, c.id desc
-limit $3
-`
-
-type ListProjectConversationsParams struct {
-	ProjectID pgtype.UUID `json:"project_id"`
-	AgentID   string      `json:"agent_id"`
-	ItemLimit int32       `json:"item_limit"`
-}
-
-type ListProjectConversationsRow struct {
-	ID                    string             `json:"id"`
-	WorkspaceID           string             `json:"workspace_id"`
-	ProjectID             string             `json:"project_id"`
-	Surface               string             `json:"surface"`
-	Form                  string             `json:"form"`
-	Title                 string             `json:"title"`
-	Status                string             `json:"status"`
-	Metadata              []byte             `json:"metadata"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	MessageCount          int64              `json:"message_count"`
-	LastMessageAt         pgtype.Timestamptz `json:"last_message_at"`
-	LastMessagePreview    string             `json:"last_message_preview"`
-	LastMessageSenderType string             `json:"last_message_sender_type"`
-	PrimaryAgentID        string             `json:"primary_agent_id"`
-	PrimaryAgentName      string             `json:"primary_agent_name"`
-}
-
-func (q *Queries) ListProjectConversations(ctx context.Context, arg ListProjectConversationsParams) ([]ListProjectConversationsRow, error) {
-	rows, err := q.db.Query(ctx, listProjectConversations, arg.ProjectID, arg.AgentID, arg.ItemLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectConversationsRow{}
-	for rows.Next() {
-		var i ListProjectConversationsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ProjectID,
-			&i.Surface,
-			&i.Form,
-			&i.Title,
-			&i.Status,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.MessageCount,
-			&i.LastMessageAt,
-			&i.LastMessagePreview,
-			&i.LastMessageSenderType,
-			&i.PrimaryAgentID,
-			&i.PrimaryAgentName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProjectEnabledAgents = `-- name: ListProjectEnabledAgents :many
-select
-  pa.id::text as project_agent_id,
-  pa.project_id::text as project_id,
-  a.id::text as agent_id,
-  a.name,
-  a.slug,
-  a.description,
-  a.connector_type,
-  pa.status,
-  pa.config,
-  -- Step 5: supported connectors do not use top-level runtime for
-  -- execution placement. Keep only historical non-empty runtime values
-  -- for legacy rows; daemon placement lives in pa.config.daemon_mode.
-  case when a.connector_type = 'agent_daemon' then '' else coalesce(nullif(a.config->>'runtime', ''), '') end::text as runtime,
-  (a.config || pa.config)::jsonb as agent_config,
-  a.visibility,
-  coalesce(a.created_by::text, '')::text as created_by_user_id,
-  coalesce(u.name, '')::text as created_by_name,
-  pa.created_at as enabled_at,
-  -- v6 (2026-06-15): explicit runtime binding on the project_agent so the
-  -- admin list can render "Local · my-mac" / "Sandbox · prod-linux" without
-  -- a second round-trip. LEFT JOIN drops soft-deleted runtimes; the
-  -- coalesce-to-empty-string pattern matches every other "optional text"
-  -- column here so the sqlc generator picks ` + "`" + `string` + "`" + ` not ` + "`" + `*string` + "`" + `.
-  coalesce(rt.id::text, ''::text)::text as runtime_id,
-  coalesce(rt.name, ''::text)::text as runtime_name,
-  coalesce(rt.type, ''::text)::text as runtime_kind,
-  coalesce(rt.liveness, ''::text)::text as runtime_liveness,
-  -- v7 (2026-06-16): currently-bound sandbox for this project_agent, if any.
-  -- The list renders "Sandbox · <e2b-id prefix>" + live dot using these.
-  -- Same ` + "`" + `allocation_status = 'bound' AND killed_at IS NULL` + "`" + ` predicate as
-  -- GetActiveSandboxBindingForAgent (matches the partial unique index that
-  -- guarantees at most one such row), so this stays consistent with the
-  -- sandbox-tab on the detail page.
-  coalesce(sb.sandbox_id, ''::text)::text as sandbox_external_id,
-  coalesce(sb.lifecycle_status, ''::text)::text as sandbox_status
-from project_agents pa
-join projects p on p.id = pa.project_id
-join agents a on a.id = pa.agent_id
-left join users u on u.id = a.created_by and u.deleted_at is null
-left join runtimes rt on rt.id = pa.runtime_id and rt.deleted_at is null
-left join sandboxes sb on sb.project_agent_id = pa.id
-  and sb.allocation_status = 'bound'
-  and sb.killed_at is null
-where pa.project_id = $1::uuid
-  and pa.workspace_id = p.workspace_id
-  and pa.workspace_id = a.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.status = 'active'
-  and pa.deleted_at is null
-  and a.status = 'active'
-  and a.deleted_at is null
-order by a.name asc
-`
-
-type ListProjectEnabledAgentsRow struct {
-	ProjectAgentID    string             `json:"project_agent_id"`
-	ProjectID         string             `json:"project_id"`
-	AgentID           string             `json:"agent_id"`
-	Name              string             `json:"name"`
-	Slug              string             `json:"slug"`
-	Description       string             `json:"description"`
-	ConnectorType     string             `json:"connector_type"`
-	Status            string             `json:"status"`
-	Config            []byte             `json:"config"`
-	Runtime           string             `json:"runtime"`
-	AgentConfig       []byte             `json:"agent_config"`
-	Visibility        string             `json:"visibility"`
-	CreatedByUserID   string             `json:"created_by_user_id"`
-	CreatedByName     string             `json:"created_by_name"`
-	EnabledAt         pgtype.Timestamptz `json:"enabled_at"`
-	RuntimeID         string             `json:"runtime_id"`
-	RuntimeName       string             `json:"runtime_name"`
-	RuntimeKind       string             `json:"runtime_kind"`
-	RuntimeLiveness   string             `json:"runtime_liveness"`
-	SandboxExternalID string             `json:"sandbox_external_id"`
-	SandboxStatus     string             `json:"sandbox_status"`
-}
-
-func (q *Queries) ListProjectEnabledAgents(ctx context.Context, projectID pgtype.UUID) ([]ListProjectEnabledAgentsRow, error) {
-	rows, err := q.db.Query(ctx, listProjectEnabledAgents, projectID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectEnabledAgentsRow{}
-	for rows.Next() {
-		var i ListProjectEnabledAgentsRow
-		if err := rows.Scan(
-			&i.ProjectAgentID,
-			&i.ProjectID,
-			&i.AgentID,
-			&i.Name,
-			&i.Slug,
-			&i.Description,
-			&i.ConnectorType,
-			&i.Status,
-			&i.Config,
-			&i.Runtime,
-			&i.AgentConfig,
-			&i.Visibility,
-			&i.CreatedByUserID,
-			&i.CreatedByName,
-			&i.EnabledAt,
-			&i.RuntimeID,
-			&i.RuntimeName,
-			&i.RuntimeKind,
-			&i.RuntimeLiveness,
-			&i.SandboxExternalID,
-			&i.SandboxStatus,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProjectUsageLogs = `-- name: ListProjectUsageLogs :many
-select
-  id::text,
-  workspace_id::text,
-  project_id::text,
-  agent_run_id::text,
-  provider,
-  model,
-  input_tokens,
-  output_tokens,
-  cost_usd,
-  raw,
-  created_at
-from usage_logs
-where project_id = $1::uuid
-order by created_at desc, id desc
-limit $2
-`
-
-type ListProjectUsageLogsParams struct {
-	ProjectID pgtype.UUID `json:"project_id"`
-	ItemLimit int32       `json:"item_limit"`
-}
-
-type ListProjectUsageLogsRow struct {
-	ID           string             `json:"id"`
-	WorkspaceID  string             `json:"workspace_id"`
-	ProjectID    string             `json:"project_id"`
-	AgentRunID   string             `json:"agent_run_id"`
-	Provider     string             `json:"provider"`
-	Model        string             `json:"model"`
-	InputTokens  int32              `json:"input_tokens"`
-	OutputTokens int32              `json:"output_tokens"`
-	CostUsd      pgtype.Numeric     `json:"cost_usd"`
-	Raw          []byte             `json:"raw"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) ListProjectUsageLogs(ctx context.Context, arg ListProjectUsageLogsParams) ([]ListProjectUsageLogsRow, error) {
-	rows, err := q.db.Query(ctx, listProjectUsageLogs, arg.ProjectID, arg.ItemLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectUsageLogsRow{}
-	for rows.Next() {
-		var i ListProjectUsageLogsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ProjectID,
-			&i.AgentRunID,
-			&i.Provider,
-			&i.Model,
-			&i.InputTokens,
-			&i.OutputTokens,
-			&i.CostUsd,
-			&i.Raw,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProjectUsageLogsByRun = `-- name: ListProjectUsageLogsByRun :many
-select
-  id::text,
-  workspace_id::text,
-  project_id::text,
-  agent_run_id::text,
-  provider,
-  model,
-  input_tokens,
-  output_tokens,
-  cost_usd,
-  raw,
-  created_at
-from usage_logs
-where project_id = $1::uuid
-  and agent_run_id = $2::uuid
-order by created_at desc, id desc
-limit $3
-`
-
-type ListProjectUsageLogsByRunParams struct {
-	ProjectID  pgtype.UUID `json:"project_id"`
-	AgentRunID pgtype.UUID `json:"agent_run_id"`
-	ItemLimit  int32       `json:"item_limit"`
-}
-
-type ListProjectUsageLogsByRunRow struct {
-	ID           string             `json:"id"`
-	WorkspaceID  string             `json:"workspace_id"`
-	ProjectID    string             `json:"project_id"`
-	AgentRunID   string             `json:"agent_run_id"`
-	Provider     string             `json:"provider"`
-	Model        string             `json:"model"`
-	InputTokens  int32              `json:"input_tokens"`
-	OutputTokens int32              `json:"output_tokens"`
-	CostUsd      pgtype.Numeric     `json:"cost_usd"`
-	Raw          []byte             `json:"raw"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) ListProjectUsageLogsByRun(ctx context.Context, arg ListProjectUsageLogsByRunParams) ([]ListProjectUsageLogsByRunRow, error) {
-	rows, err := q.db.Query(ctx, listProjectUsageLogsByRun, arg.ProjectID, arg.AgentRunID, arg.ItemLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectUsageLogsByRunRow{}
-	for rows.Next() {
-		var i ListProjectUsageLogsByRunRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ProjectID,
-			&i.AgentRunID,
-			&i.Provider,
-			&i.Model,
-			&i.InputTokens,
-			&i.OutputTokens,
-			&i.CostUsd,
-			&i.Raw,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSandboxPoolEntriesDueForAutoRenew = `-- name: ListSandboxPoolEntriesDueForAutoRenew :many
 select
   sandbox_id,
@@ -8432,7 +7185,6 @@ func (q *Queries) ListSecrets(ctx context.Context, arg ListSecretsParams) ([]Lis
 const listStaleFeishuPermissionInflightCards = `-- name: ListStaleFeishuPermissionInflightCards :many
 select id::text                  as conversation_id,
        workspace_id::text        as workspace_id,
-       project_id::text          as project_id,
        external_id               as external_chat_id,
        source_app_id             as source_app_id,
        (metadata->'gateway_inflight'->'permission') as permission_slot
@@ -8452,7 +7204,6 @@ type ListStaleFeishuPermissionInflightCardsParams struct {
 type ListStaleFeishuPermissionInflightCardsRow struct {
 	ConversationID string      `json:"conversation_id"`
 	WorkspaceID    string      `json:"workspace_id"`
-	ProjectID      string      `json:"project_id"`
 	ExternalChatID string      `json:"external_chat_id"`
 	SourceAppID    string      `json:"source_app_id"`
 	PermissionSlot interface{} `json:"permission_slot"`
@@ -8477,7 +7228,6 @@ func (q *Queries) ListStaleFeishuPermissionInflightCards(ctx context.Context, ar
 		if err := rows.Scan(
 			&i.ConversationID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.ExternalChatID,
 			&i.SourceAppID,
 			&i.PermissionSlot,
@@ -8495,7 +7245,6 @@ func (q *Queries) ListStaleFeishuPermissionInflightCards(ctx context.Context, ar
 const listStaleFeishuPromptForUserChoiceInflightCards = `-- name: ListStaleFeishuPromptForUserChoiceInflightCards :many
 select id::text                  as conversation_id,
        workspace_id::text        as workspace_id,
-       project_id::text          as project_id,
        external_id               as external_chat_id,
        source_app_id             as source_app_id,
        (metadata->'gateway_inflight'->'prompt_for_user_choice') as prompt_for_user_choice_slot
@@ -8515,7 +7264,6 @@ type ListStaleFeishuPromptForUserChoiceInflightCardsParams struct {
 type ListStaleFeishuPromptForUserChoiceInflightCardsRow struct {
 	ConversationID          string      `json:"conversation_id"`
 	WorkspaceID             string      `json:"workspace_id"`
-	ProjectID               string      `json:"project_id"`
 	ExternalChatID          string      `json:"external_chat_id"`
 	SourceAppID             string      `json:"source_app_id"`
 	PromptForUserChoiceSlot interface{} `json:"prompt_for_user_choice_slot"`
@@ -8539,7 +7287,6 @@ func (q *Queries) ListStaleFeishuPromptForUserChoiceInflightCards(ctx context.Co
 		if err := rows.Scan(
 			&i.ConversationID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.ExternalChatID,
 			&i.SourceAppID,
 			&i.PromptForUserChoiceSlot,
@@ -8602,7 +7349,6 @@ const listUsageLogsByRun = `-- name: ListUsageLogsByRun :many
 select
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   provider,
   model,
@@ -8613,21 +7359,20 @@ select
   created_at
 from usage_logs
 where agent_run_id = $1::uuid
-  and project_id = $2::uuid
+  and workspace_id = $2::uuid
 order by created_at desc, id desc
 limit $3
 `
 
 type ListUsageLogsByRunParams struct {
-	AgentRunID pgtype.UUID `json:"agent_run_id"`
-	ProjectID  pgtype.UUID `json:"project_id"`
-	ItemLimit  int32       `json:"item_limit"`
+	AgentRunID  pgtype.UUID `json:"agent_run_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ItemLimit   int32       `json:"item_limit"`
 }
 
 type ListUsageLogsByRunRow struct {
 	ID           string             `json:"id"`
 	WorkspaceID  string             `json:"workspace_id"`
-	ProjectID    string             `json:"project_id"`
 	AgentRunID   string             `json:"agent_run_id"`
 	Provider     string             `json:"provider"`
 	Model        string             `json:"model"`
@@ -8639,7 +7384,7 @@ type ListUsageLogsByRunRow struct {
 }
 
 func (q *Queries) ListUsageLogsByRun(ctx context.Context, arg ListUsageLogsByRunParams) ([]ListUsageLogsByRunRow, error) {
-	rows, err := q.db.Query(ctx, listUsageLogsByRun, arg.AgentRunID, arg.ProjectID, arg.ItemLimit)
+	rows, err := q.db.Query(ctx, listUsageLogsByRun, arg.AgentRunID, arg.WorkspaceID, arg.ItemLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -8650,7 +7395,6 @@ func (q *Queries) ListUsageLogsByRun(ctx context.Context, arg ListUsageLogsByRun
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.ProjectID,
 			&i.AgentRunID,
 			&i.Provider,
 			&i.Model,
@@ -8787,6 +7531,432 @@ func (q *Queries) ListUserWorkspaces(ctx context.Context, arg ListUserWorkspaces
 	return items, nil
 }
 
+const listWorkspaceAgentRunsPage = `-- name: ListWorkspaceAgentRunsPage :many
+select
+  r.id::text,
+  r.workspace_id::text,
+  r.conversation_id::text,
+  coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
+  coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
+  r.agent_id::text,
+  a.name as agent_name,
+  a.slug as agent_slug,
+  r.connector_type,
+  r.status,
+  r.metadata,
+  r.created_at,
+  r.started_at,
+  r.finished_at
+from agent_runs r
+join conversations c on c.id = r.conversation_id
+join agents a on a.id = r.agent_id
+where r.workspace_id = $1::uuid
+  and r.workspace_id = c.workspace_id
+  and r.workspace_id = a.workspace_id
+  and c.deleted_at is null
+  and a.deleted_at is null
+  and (cardinality($2::text[]) = 0
+       or r.status = ANY($2::text[]))
+order by r.created_at desc, r.id desc
+limit $4 offset $3
+`
+
+type ListWorkspaceAgentRunsPageParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Statuses    []string    `json:"statuses"`
+	ItemOffset  int32       `json:"item_offset"`
+	ItemLimit   int32       `json:"item_limit"`
+}
+
+type ListWorkspaceAgentRunsPageRow struct {
+	RID              string             `json:"r_id"`
+	RWorkspaceID     string             `json:"r_workspace_id"`
+	RConversationID  string             `json:"r_conversation_id"`
+	TriggerMessageID string             `json:"trigger_message_id"`
+	OutputMessageID  string             `json:"output_message_id"`
+	RAgentID         string             `json:"r_agent_id"`
+	AgentName        string             `json:"agent_name"`
+	AgentSlug        string             `json:"agent_slug"`
+	ConnectorType    string             `json:"connector_type"`
+	Status           string             `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	StartedAt        pgtype.Timestamptz `json:"started_at"`
+	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
+}
+
+// Admin paginated list of agent runs for a workspace.
+//   - ORDER BY ... DESC          — admin list shows newest first.
+//   - (created_at, id) tie-break — keep OFFSET pagination stable when
+//     multiple rows share a created_at.
+//   - @statuses::text[]          — empty array = "no status filter";
+//     non-empty filters via `= ANY(...)`. Lets the UI "进行中" tab union
+//     {running, queued} in one round-trip.
+//   - LIMIT/OFFSET                — classic pager; pair with the
+//     CountWorkspaceAgentRuns query below for the page-count.
+func (q *Queries) ListWorkspaceAgentRunsPage(ctx context.Context, arg ListWorkspaceAgentRunsPageParams) ([]ListWorkspaceAgentRunsPageRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceAgentRunsPage,
+		arg.WorkspaceID,
+		arg.Statuses,
+		arg.ItemOffset,
+		arg.ItemLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceAgentRunsPageRow{}
+	for rows.Next() {
+		var i ListWorkspaceAgentRunsPageRow
+		if err := rows.Scan(
+			&i.RID,
+			&i.RWorkspaceID,
+			&i.RConversationID,
+			&i.TriggerMessageID,
+			&i.OutputMessageID,
+			&i.RAgentID,
+			&i.AgentName,
+			&i.AgentSlug,
+			&i.ConnectorType,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceAgentsAdmin = `-- name: ListWorkspaceAgentsAdmin :many
+select
+  a.id::text as agent_id,
+  a.name,
+  a.slug,
+  a.description,
+  a.connector_type,
+  a.status,
+  a.config,
+  -- Step 5: supported connectors do not use top-level runtime for
+  -- execution placement. Keep only historical non-empty runtime values
+  -- for legacy rows; daemon placement lives in a.config.daemon_mode.
+  case when a.connector_type = 'agent_daemon' then '' else coalesce(nullif(a.config->>'runtime', ''), '') end::text as runtime,
+  a.config::jsonb as agent_config,
+  a.visibility,
+  coalesce(a.created_by::text, '')::text as created_by_user_id,
+  coalesce(u.name, '')::text as created_by_name,
+  a.created_at as enabled_at,
+  coalesce(rt.id::text, ''::text)::text as runtime_id,
+  coalesce(rt.name, ''::text)::text as runtime_name,
+  coalesce(rt.type, ''::text)::text as runtime_kind,
+  coalesce(rt.liveness, ''::text)::text as runtime_liveness,
+  coalesce(sb.sandbox_id, ''::text)::text as sandbox_external_id,
+  coalesce(sb.lifecycle_status, ''::text)::text as sandbox_status
+from agents a
+left join users u on u.id = a.created_by and u.deleted_at is null
+left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
+left join sandboxes sb on sb.agent_id = a.id
+  and sb.allocation_status = 'bound'
+  and sb.killed_at is null
+where a.workspace_id = $1::uuid
+  and a.deleted_at is null
+order by case when a.status = 'active' then 0 else 1 end, a.name asc
+`
+
+type ListWorkspaceAgentsAdminRow struct {
+	AgentID           string             `json:"agent_id"`
+	Name              string             `json:"name"`
+	Slug              string             `json:"slug"`
+	Description       string             `json:"description"`
+	ConnectorType     string             `json:"connector_type"`
+	Status            string             `json:"status"`
+	Config            []byte             `json:"config"`
+	Runtime           string             `json:"runtime"`
+	AgentConfig       []byte             `json:"agent_config"`
+	Visibility        string             `json:"visibility"`
+	CreatedByUserID   string             `json:"created_by_user_id"`
+	CreatedByName     string             `json:"created_by_name"`
+	EnabledAt         pgtype.Timestamptz `json:"enabled_at"`
+	RuntimeID         string             `json:"runtime_id"`
+	RuntimeName       string             `json:"runtime_name"`
+	RuntimeKind       string             `json:"runtime_kind"`
+	RuntimeLiveness   string             `json:"runtime_liveness"`
+	SandboxExternalID string             `json:"sandbox_external_id"`
+	SandboxStatus     string             `json:"sandbox_status"`
+}
+
+func (q *Queries) ListWorkspaceAgentsAdmin(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceAgentsAdminRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceAgentsAdmin, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceAgentsAdminRow{}
+	for rows.Next() {
+		var i ListWorkspaceAgentsAdminRow
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.ConnectorType,
+			&i.Status,
+			&i.Config,
+			&i.Runtime,
+			&i.AgentConfig,
+			&i.Visibility,
+			&i.CreatedByUserID,
+			&i.CreatedByName,
+			&i.EnabledAt,
+			&i.RuntimeID,
+			&i.RuntimeName,
+			&i.RuntimeKind,
+			&i.RuntimeLiveness,
+			&i.SandboxExternalID,
+			&i.SandboxStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceConversations = `-- name: ListWorkspaceConversations :many
+select
+  c.id::text as id,
+  c.workspace_id::text as workspace_id,
+  c.surface,
+  c.form,
+  c.title,
+  c.status,
+  c.metadata,
+  c.created_at,
+  c.updated_at,
+  coalesce((
+    select count(1) from messages m
+    where m.conversation_id = c.id
+      and m.deleted_at is null
+  ), 0)::bigint as message_count,
+  (
+    select m.created_at from messages m
+    where m.conversation_id = c.id
+      and m.deleted_at is null
+    order by m.created_at desc, m.id desc
+    limit 1
+  ) as last_message_at,
+  coalesce((
+    select m.content from messages m
+    where m.conversation_id = c.id
+      and m.deleted_at is null
+    order by m.created_at desc, m.id desc
+    limit 1
+  ), '')::text as last_message_preview,
+  coalesce((
+    select m.sender_type::text from messages m
+    where m.conversation_id = c.id
+      and m.deleted_at is null
+    order by m.created_at desc, m.id desc
+    limit 1
+  ), '')::text as last_message_sender_type,
+  coalesce(a.id::text, '')::text as primary_agent_id,
+  coalesce(a.name, '')::text as primary_agent_name
+from conversations c
+left join agents a
+  on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
+  and a.deleted_at is null
+  and a.status = 'active'
+where c.workspace_id = $1::uuid
+  and c.deleted_at is null
+  and ($2::text = '' or c.metadata->>'primary_agent_id' = $2::text)
+order by coalesce((
+    select m.created_at from messages m
+    where m.conversation_id = c.id
+      and m.deleted_at is null
+    order by m.created_at desc, m.id desc
+    limit 1
+  ), c.created_at) desc, c.id desc
+limit $3
+`
+
+type ListWorkspaceConversationsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	AgentID     string      `json:"agent_id"`
+	ItemLimit   int32       `json:"item_limit"`
+}
+
+type ListWorkspaceConversationsRow struct {
+	ID                    string             `json:"id"`
+	WorkspaceID           string             `json:"workspace_id"`
+	Surface               string             `json:"surface"`
+	Form                  string             `json:"form"`
+	Title                 string             `json:"title"`
+	Status                string             `json:"status"`
+	Metadata              []byte             `json:"metadata"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	MessageCount          int64              `json:"message_count"`
+	LastMessageAt         pgtype.Timestamptz `json:"last_message_at"`
+	LastMessagePreview    string             `json:"last_message_preview"`
+	LastMessageSenderType string             `json:"last_message_sender_type"`
+	PrimaryAgentID        string             `json:"primary_agent_id"`
+	PrimaryAgentName      string             `json:"primary_agent_name"`
+}
+
+func (q *Queries) ListWorkspaceConversations(ctx context.Context, arg ListWorkspaceConversationsParams) ([]ListWorkspaceConversationsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceConversations, arg.WorkspaceID, arg.AgentID, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceConversationsRow{}
+	for rows.Next() {
+		var i ListWorkspaceConversationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Surface,
+			&i.Form,
+			&i.Title,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MessageCount,
+			&i.LastMessageAt,
+			&i.LastMessagePreview,
+			&i.LastMessageSenderType,
+			&i.PrimaryAgentID,
+			&i.PrimaryAgentName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceEnabledAgents = `-- name: ListWorkspaceEnabledAgents :many
+select
+  a.id::text as agent_id,
+  a.name,
+  a.slug,
+  a.description,
+  a.connector_type,
+  a.status,
+  a.config,
+  -- Step 5: supported connectors do not use top-level runtime for
+  -- execution placement. Keep only historical non-empty runtime values
+  -- for legacy rows; daemon placement lives in a.config.daemon_mode.
+  case when a.connector_type = 'agent_daemon' then '' else coalesce(nullif(a.config->>'runtime', ''), '') end::text as runtime,
+  a.config::jsonb as agent_config,
+  a.visibility,
+  coalesce(a.created_by::text, '')::text as created_by_user_id,
+  coalesce(u.name, '')::text as created_by_name,
+  a.created_at as enabled_at,
+  -- v6 (2026-06-15): explicit runtime binding on the agent so the
+  -- admin list can render "Local · my-mac" / "Sandbox · prod-linux" without
+  -- a second round-trip. LEFT JOIN drops soft-deleted runtimes; the
+  -- coalesce-to-empty-string pattern matches every other "optional text"
+  -- column here so the sqlc generator picks ` + "`" + `string` + "`" + ` not ` + "`" + `*string` + "`" + `.
+  coalesce(rt.id::text, ''::text)::text as runtime_id,
+  coalesce(rt.name, ''::text)::text as runtime_name,
+  coalesce(rt.type, ''::text)::text as runtime_kind,
+  coalesce(rt.liveness, ''::text)::text as runtime_liveness,
+  -- v7 (2026-06-16): currently-bound sandbox for this agent, if any.
+  -- The list renders "Sandbox · <e2b-id prefix>" + live dot using these.
+  -- Same ` + "`" + `allocation_status = 'bound' AND killed_at IS NULL` + "`" + ` predicate as
+  -- GetActiveSandboxBindingForAgent (matches the partial unique index that
+  -- guarantees at most one such row), so this stays consistent with the
+  -- sandbox-tab on the detail page.
+  coalesce(sb.sandbox_id, ''::text)::text as sandbox_external_id,
+  coalesce(sb.lifecycle_status, ''::text)::text as sandbox_status
+from agents a
+left join users u on u.id = a.created_by and u.deleted_at is null
+left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
+left join sandboxes sb on sb.agent_id = a.id
+  and sb.allocation_status = 'bound'
+  and sb.killed_at is null
+where a.workspace_id = $1::uuid
+  and a.status = 'active'
+  and a.deleted_at is null
+order by a.name asc
+`
+
+type ListWorkspaceEnabledAgentsRow struct {
+	AgentID           string             `json:"agent_id"`
+	Name              string             `json:"name"`
+	Slug              string             `json:"slug"`
+	Description       string             `json:"description"`
+	ConnectorType     string             `json:"connector_type"`
+	Status            string             `json:"status"`
+	Config            []byte             `json:"config"`
+	Runtime           string             `json:"runtime"`
+	AgentConfig       []byte             `json:"agent_config"`
+	Visibility        string             `json:"visibility"`
+	CreatedByUserID   string             `json:"created_by_user_id"`
+	CreatedByName     string             `json:"created_by_name"`
+	EnabledAt         pgtype.Timestamptz `json:"enabled_at"`
+	RuntimeID         string             `json:"runtime_id"`
+	RuntimeName       string             `json:"runtime_name"`
+	RuntimeKind       string             `json:"runtime_kind"`
+	RuntimeLiveness   string             `json:"runtime_liveness"`
+	SandboxExternalID string             `json:"sandbox_external_id"`
+	SandboxStatus     string             `json:"sandbox_status"`
+}
+
+func (q *Queries) ListWorkspaceEnabledAgents(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceEnabledAgentsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceEnabledAgents, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceEnabledAgentsRow{}
+	for rows.Next() {
+		var i ListWorkspaceEnabledAgentsRow
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.ConnectorType,
+			&i.Status,
+			&i.Config,
+			&i.Runtime,
+			&i.AgentConfig,
+			&i.Visibility,
+			&i.CreatedByUserID,
+			&i.CreatedByName,
+			&i.EnabledAt,
+			&i.RuntimeID,
+			&i.RuntimeName,
+			&i.RuntimeKind,
+			&i.RuntimeLiveness,
+			&i.SandboxExternalID,
+			&i.SandboxStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaceMarketplaceInstalls = `-- name: ListWorkspaceMarketplaceInstalls :many
 select distinct
   c.id::text as capability_id,
@@ -8803,16 +7973,14 @@ select distinct
   latest.version as latest_published_version,
   latest.created_at as latest_version_created_at,
   (
-    select count(distinct pa2.id)::bigint
+    select count(distinct a2.id)::bigint
     from agent_capabilities ac2
-    join project_agents pa2 on ac2.project_agent_id = pa2.id
-    join projects p2 on pa2.project_id = p2.id
+    join agents a2 on ac2.agent_id = a2.id
     where ac2.capability_id = c.id
-      and p2.workspace_id = $1::uuid
+      and a2.workspace_id = $1::uuid
   ) as enabled_agent_count
 from agent_capabilities ac
-join project_agents pa on ac.project_agent_id = pa.id
-join projects p on pa.project_id = p.id
+join agents a on ac.agent_id = a.id
 join capability_version cv on ac.capability_version_id = cv.id
 join capability c on cv.capability_id = c.id
 join workspaces src_ws on src_ws.id = c.workspace_id
@@ -8823,7 +7991,7 @@ join lateral (
   order by created_at desc, version desc
   limit 1
 ) latest on true
-where p.workspace_id = $1::uuid
+where a.workspace_id = $1::uuid
   and c.workspace_id != $1::uuid
   and c.visibility = 'public'
   and c.deleted_at is null
@@ -8953,68 +8121,62 @@ func (q *Queries) ListWorkspaceMembers(ctx context.Context, arg ListWorkspaceMem
 	return items, nil
 }
 
-const listWorkspaceProjects = `-- name: ListWorkspaceProjects :many
+const listWorkspaceUsageLogs = `-- name: ListWorkspaceUsageLogs :many
 select
-  p.id::text as id,
-  p.workspace_id::text as workspace_id,
-  p.name,
-  p.slug,
-  p.description,
-  p.status,
-  p.created_at,
-  p.updated_at
-from projects p
-join workspace_members wm
-  on wm.workspace_id = p.workspace_id
- and wm.user_id = $1::uuid
- and wm.deleted_at is null
- and wm.status = 'active'
-where p.workspace_id = $2::uuid
-  and p.deleted_at is null
-  and p.status = 'active'
-order by p.name asc, p.id asc
-limit $3
+  id::text,
+  workspace_id::text,
+  agent_run_id::text,
+  provider,
+  model,
+  input_tokens,
+  output_tokens,
+  cost_usd,
+  raw,
+  created_at
+from usage_logs
+where workspace_id = $1::uuid
+order by created_at desc, id desc
+limit $2
 `
 
-type ListWorkspaceProjectsParams struct {
-	UserID      pgtype.UUID `json:"user_id"`
+type ListWorkspaceUsageLogsParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	ItemLimit   int32       `json:"item_limit"`
 }
 
-type ListWorkspaceProjectsRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+type ListWorkspaceUsageLogsRow struct {
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentRunID   string             `json:"agent_run_id"`
+	Provider     string             `json:"provider"`
+	Model        string             `json:"model"`
+	InputTokens  int32              `json:"input_tokens"`
+	OutputTokens int32              `json:"output_tokens"`
+	CostUsd      pgtype.Numeric     `json:"cost_usd"`
+	Raw          []byte             `json:"raw"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
-// Every active project the calling workspace member can see.
-// The join on workspace_members also doubles as an active-membership
-// gate: a deleted_at / status<>'active' row drops every project,
-// mirroring requireWorkspaceMember.
-func (q *Queries) ListWorkspaceProjects(ctx context.Context, arg ListWorkspaceProjectsParams) ([]ListWorkspaceProjectsRow, error) {
-	rows, err := q.db.Query(ctx, listWorkspaceProjects, arg.UserID, arg.WorkspaceID, arg.ItemLimit)
+func (q *Queries) ListWorkspaceUsageLogs(ctx context.Context, arg ListWorkspaceUsageLogsParams) ([]ListWorkspaceUsageLogsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceUsageLogs, arg.WorkspaceID, arg.ItemLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListWorkspaceProjectsRow{}
+	items := []ListWorkspaceUsageLogsRow{}
 	for rows.Next() {
-		var i ListWorkspaceProjectsRow
+		var i ListWorkspaceUsageLogsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.Name,
-			&i.Slug,
-			&i.Description,
-			&i.Status,
+			&i.AgentRunID,
+			&i.Provider,
+			&i.Model,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsd,
+			&i.Raw,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -9026,60 +8188,64 @@ func (q *Queries) ListWorkspaceProjects(ctx context.Context, arg ListWorkspacePr
 	return items, nil
 }
 
-const listWorkspaceProjectsAdmin = `-- name: ListWorkspaceProjectsAdmin :many
+const listWorkspaceUsageLogsByRun = `-- name: ListWorkspaceUsageLogsByRun :many
 select
-  p.id::text as id,
-  p.workspace_id::text as workspace_id,
-  p.name,
-  p.slug,
-  p.description,
-  p.status,
-  p.created_at,
-  p.updated_at
-from projects p
-where p.workspace_id = $1::uuid
-  and p.deleted_at is null
-  and p.status = 'active'
-order by p.name asc, p.id asc
-limit $2
+  id::text,
+  workspace_id::text,
+  agent_run_id::text,
+  provider,
+  model,
+  input_tokens,
+  output_tokens,
+  cost_usd,
+  raw,
+  created_at
+from usage_logs
+where workspace_id = $1::uuid
+  and agent_run_id = $2::uuid
+order by created_at desc, id desc
+limit $3
 `
 
-type ListWorkspaceProjectsAdminParams struct {
+type ListWorkspaceUsageLogsByRunParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	AgentRunID  pgtype.UUID `json:"agent_run_id"`
 	ItemLimit   int32       `json:"item_limit"`
 }
 
-type ListWorkspaceProjectsAdminRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+type ListWorkspaceUsageLogsByRunRow struct {
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentRunID   string             `json:"agent_run_id"`
+	Provider     string             `json:"provider"`
+	Model        string             `json:"model"`
+	InputTokens  int32              `json:"input_tokens"`
+	OutputTokens int32              `json:"output_tokens"`
+	CostUsd      pgtype.Numeric     `json:"cost_usd"`
+	Raw          []byte             `json:"raw"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
-// Platform-admin only: same shape as ListWorkspaceProjects but without
-// the workspace_members gate. Mirrors ListAllActiveWorkspaces.
-func (q *Queries) ListWorkspaceProjectsAdmin(ctx context.Context, arg ListWorkspaceProjectsAdminParams) ([]ListWorkspaceProjectsAdminRow, error) {
-	rows, err := q.db.Query(ctx, listWorkspaceProjectsAdmin, arg.WorkspaceID, arg.ItemLimit)
+func (q *Queries) ListWorkspaceUsageLogsByRun(ctx context.Context, arg ListWorkspaceUsageLogsByRunParams) ([]ListWorkspaceUsageLogsByRunRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceUsageLogsByRun, arg.WorkspaceID, arg.AgentRunID, arg.ItemLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListWorkspaceProjectsAdminRow{}
+	items := []ListWorkspaceUsageLogsByRunRow{}
 	for rows.Next() {
-		var i ListWorkspaceProjectsAdminRow
+		var i ListWorkspaceUsageLogsByRunRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.Name,
-			&i.Slug,
-			&i.Description,
-			&i.Status,
+			&i.AgentRunID,
+			&i.Provider,
+			&i.Model,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsd,
+			&i.Raw,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -9161,7 +8327,7 @@ func (q *Queries) MarkSandboxBindingKilled(ctx context.Context, arg MarkSandboxB
 const markSandboxPoolEntryClaimed = `-- name: MarkSandboxPoolEntryClaimed :exec
 update sandboxes
 set allocation_status = 'bound',
-    project_agent_id   = $1::uuid,
+    agent_id   = $1::uuid,
     cache_key          = $2,
     last_renewed_at    = $3,
     last_active_at     = $3,
@@ -9173,19 +8339,19 @@ where sandbox_id = $4
 `
 
 type MarkSandboxPoolEntryClaimedParams struct {
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	Now            pgtype.Timestamptz `json:"now"`
-	SandboxID      string             `json:"sandbox_id"`
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	CacheKey    pgtype.Text        `json:"cache_key"`
+	Now         pgtype.Timestamptz `json:"now"`
+	SandboxID   string             `json:"sandbox_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 }
 
 // Claim handoff: same sandbox row becomes a bound sandbox for one
-// workspace/project_agent/cache_key. The in-memory pool owns the actual
+// workspace/agent/cache_key. The in-memory pool owns the actual
 // claim selection; this query records the attribution.
 func (q *Queries) MarkSandboxPoolEntryClaimed(ctx context.Context, arg MarkSandboxPoolEntryClaimedParams) error {
 	_, err := q.db.Exec(ctx, markSandboxPoolEntryClaimed,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.CacheKey,
 		arg.Now,
 		arg.SandboxID,
@@ -9216,27 +8382,6 @@ type MarkSandboxPoolEntryKilledParams struct {
 func (q *Queries) MarkSandboxPoolEntryKilled(ctx context.Context, arg MarkSandboxPoolEntryKilledParams) error {
 	_, err := q.db.Exec(ctx, markSandboxPoolEntryKilled, arg.Status, arg.Now, arg.SandboxID)
 	return err
-}
-
-const projectSlugExistsInWorkspace = `-- name: ProjectSlugExistsInWorkspace :one
-select exists(
-  select 1 from projects
-  where workspace_id = $1::uuid
-    and slug = $2
-    and deleted_at is null
-) as exists
-`
-
-type ProjectSlugExistsInWorkspaceParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Slug        string      `json:"slug"`
-}
-
-func (q *Queries) ProjectSlugExistsInWorkspace(ctx context.Context, arg ProjectSlugExistsInWorkspaceParams) (bool, error) {
-	row := q.db.QueryRow(ctx, projectSlugExistsInWorkspace, arg.WorkspaceID, arg.Slug)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const recordFeishuInboundReaction = `-- name: RecordFeishuInboundReaction :exec
@@ -9361,9 +8506,8 @@ where id = $3::uuid
 returning
   id::text,
   workspace_id::text,
-  project_id::text,
   conversation_id::text,
-  project_agent_id::text
+  agent_id::text
 `
 
 type RequeueFailedAgentRunParams struct {
@@ -9375,9 +8519,8 @@ type RequeueFailedAgentRunParams struct {
 type RequeueFailedAgentRunRow struct {
 	ID             string `json:"id"`
 	WorkspaceID    string `json:"workspace_id"`
-	ProjectID      string `json:"project_id"`
 	ConversationID string `json:"conversation_id"`
-	ProjectAgentID string `json:"project_agent_id"`
+	AgentID        string `json:"agent_id"`
 }
 
 func (q *Queries) RequeueFailedAgentRun(ctx context.Context, arg RequeueFailedAgentRunParams) (RequeueFailedAgentRunRow, error) {
@@ -9386,16 +8529,15 @@ func (q *Queries) RequeueFailedAgentRun(ctx context.Context, arg RequeueFailedAg
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.ConversationID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 	)
 	return i, err
 }
 
 const reserveSandboxBindingSlot = `-- name: ReserveSandboxBindingSlot :one
 insert into sandboxes(
-  id, workspace_id, project_agent_id, cache_key,
+  id, workspace_id, agent_id, cache_key,
   sandbox_id, template_id, lifecycle_status, allocation_status,
   created_at, last_active_at, metadata
 )
@@ -9407,7 +8549,7 @@ values (
 returning
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -9422,7 +8564,7 @@ returning
 type ReserveSandboxBindingSlotParams struct {
 	ID                   pgtype.UUID        `json:"id"`
 	WorkspaceID          pgtype.UUID        `json:"workspace_id"`
-	ProjectAgentID       pgtype.UUID        `json:"project_agent_id"`
+	AgentID              pgtype.UUID        `json:"agent_id"`
 	CacheKey             pgtype.Text        `json:"cache_key"`
 	PlaceholderSandboxID string             `json:"placeholder_sandbox_id"`
 	TemplateID           string             `json:"template_id"`
@@ -9431,22 +8573,22 @@ type ReserveSandboxBindingSlotParams struct {
 }
 
 type ReserveSandboxBindingSlotRow struct {
-	ID             string             `json:"id"`
-	WorkspaceID    string             `json:"workspace_id"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	Name           pgtype.Text        `json:"name"`
-	CacheKey       pgtype.Text        `json:"cache_key"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastActiveAt   pgtype.Timestamptz `json:"last_active_at"`
-	KilledAt       pgtype.Timestamptz `json:"killed_at"`
-	Metadata       []byte             `json:"metadata"`
+	ID           string             `json:"id"`
+	WorkspaceID  string             `json:"workspace_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	Name         pgtype.Text        `json:"name"`
+	CacheKey     pgtype.Text        `json:"cache_key"`
+	SandboxID    string             `json:"sandbox_id"`
+	TemplateID   string             `json:"template_id"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
+	KilledAt     pgtype.Timestamptz `json:"killed_at"`
+	Metadata     []byte             `json:"metadata"`
 }
 
 // Multi-pod cold-start coordination: try to grab the
-// (workspace, project_agent) slot before doing any expensive
+// (workspace, agent) slot before doing any expensive
 // sandbox / runtime work. Inserts a 'spawning' bound row holding
 // a placeholder sandbox_id; the partial unique index
 // uk_sandboxes_active_per_agent enforces single-winner across
@@ -9461,7 +8603,7 @@ func (q *Queries) ReserveSandboxBindingSlot(ctx context.Context, arg ReserveSand
 	row := q.db.QueryRow(ctx, reserveSandboxBindingSlot,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.CacheKey,
 		arg.PlaceholderSandboxID,
 		arg.TemplateID,
@@ -9472,7 +8614,7 @@ func (q *Queries) ReserveSandboxBindingSlot(ctx context.Context, arg ReserveSand
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.Name,
 		&i.CacheKey,
 		&i.SandboxID,
@@ -9489,11 +8631,8 @@ func (q *Queries) ReserveSandboxBindingSlot(ctx context.Context, arg ReserveSand
 const resolveAgentNameForConversation = `-- name: ResolveAgentNameForConversation :one
 select coalesce(a.name, '')::text as agent_name
 from conversations c
-left join project_agents pa
-  on pa.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
- and pa.deleted_at is null
 left join agents a
-  on a.id = pa.agent_id
+  on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
  and a.deleted_at is null
 where c.id = $1::uuid
 `
@@ -9506,20 +8645,19 @@ where c.id = $1::uuid
 //
 // The Agent is keyed off conversations.metadata.primary_agent_id (set
 // at conversation-create time by CreateInboundIMMessage), which holds
-// a project_agents.id. We join through project_agents to agents to
-// pick up the display name. conversations has no selected_agent_id
-// column — that field lives on gateway_sessions, which only the
-// shared-bot /select flow writes to and is unrelated to "what Agent is
-// this conversation talking to".
+// an agents.id. We join to agents to pick up the display name.
+// conversations has no selected_agent_id column — that field lives on
+// gateway_sessions, which only the shared-bot /select flow writes to
+// and is unrelated to "what Agent is this conversation talking to".
 //
 // Returns empty string when:
 //   - the conversation doesn't exist (caller treats as "fall back to
 //     brand title"),
 //   - metadata.primary_agent_id is NULL / empty (system-initiated
 //     conversation that never bound to an Agent),
-//   - the project_agent / agent row was soft-deleted.
+//   - the agent row was soft-deleted.
 //
-// LEFT JOINs keep the row even on those degenerate cases so the
+// LEFT JOIN keeps the row even on those degenerate cases so the
 // caller gets (”, nil) instead of pgx.ErrNoRows, simplifying the
 // "missing → fallback" branch at every call site.
 func (q *Queries) ResolveAgentNameForConversation(ctx context.Context, conversationID pgtype.UUID) (string, error) {
@@ -9650,40 +8788,36 @@ func (q *Queries) SetAgentRunOutputMessageID(ctx context.Context, arg SetAgentRu
 	return err
 }
 
-const setProjectAgentRuntime = `-- name: SetProjectAgentRuntime :one
-update project_agents
+const setAgentRuntime = `-- name: SetAgentRuntime :one
+update agents
 set runtime_id = $1::uuid,
     updated_at = now()
 where id = $2::uuid
   and workspace_id = $3::uuid
   and deleted_at is null
 returning
-  id::text                     as project_agent_id,
+  id::text                     as agent_id,
   workspace_id::text           as workspace_id,
-  project_id::text             as project_id,
-  agent_id::text               as agent_id,
   coalesce(runtime_id::text, ''::text)::text as runtime_id,
   status,
   config
 `
 
-type SetProjectAgentRuntimeParams struct {
-	RuntimeID      pgtype.UUID `json:"runtime_id"`
-	ProjectAgentID pgtype.UUID `json:"project_agent_id"`
-	WorkspaceID    pgtype.UUID `json:"workspace_id"`
+type SetAgentRuntimeParams struct {
+	RuntimeID   pgtype.UUID `json:"runtime_id"`
+	AgentID     pgtype.UUID `json:"agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-type SetProjectAgentRuntimeRow struct {
-	ProjectAgentID string `json:"project_agent_id"`
-	WorkspaceID    string `json:"workspace_id"`
-	ProjectID      string `json:"project_id"`
-	AgentID        string `json:"agent_id"`
-	RuntimeID      string `json:"runtime_id"`
-	Status         string `json:"status"`
-	Config         []byte `json:"config"`
+type SetAgentRuntimeRow struct {
+	AgentID     string `json:"agent_id"`
+	WorkspaceID string `json:"workspace_id"`
+	RuntimeID   string `json:"runtime_id"`
+	Status      string `json:"status"`
+	Config      []byte `json:"config"`
 }
 
-// Bind (or rebind, or clear) the runtime a project_agent runs on.
+// Bind (or rebind, or clear) the runtime an agent runs on.
 //
 // runtime_id NULL clears the binding (turning the agent back into a
 // "needs configuration" state). The FK has ON DELETE SET NULL so the
@@ -9691,16 +8825,14 @@ type SetProjectAgentRuntimeRow struct {
 // surfaces a friendly "no runtime bound" hint in that case.
 //
 // The where-clause includes workspace_id as a tenant guard so an
-// attacker who guesses a project_agent_id from another workspace
+// attacker who guesses an agent_id from another workspace
 // can't repoint it.
-func (q *Queries) SetProjectAgentRuntime(ctx context.Context, arg SetProjectAgentRuntimeParams) (SetProjectAgentRuntimeRow, error) {
-	row := q.db.QueryRow(ctx, setProjectAgentRuntime, arg.RuntimeID, arg.ProjectAgentID, arg.WorkspaceID)
-	var i SetProjectAgentRuntimeRow
+func (q *Queries) SetAgentRuntime(ctx context.Context, arg SetAgentRuntimeParams) (SetAgentRuntimeRow, error) {
+	row := q.db.QueryRow(ctx, setAgentRuntime, arg.RuntimeID, arg.AgentID, arg.WorkspaceID)
+	var i SetAgentRuntimeRow
 	err := row.Scan(
-		&i.ProjectAgentID,
-		&i.WorkspaceID,
-		&i.ProjectID,
 		&i.AgentID,
+		&i.WorkspaceID,
 		&i.RuntimeID,
 		&i.Status,
 		&i.Config,
@@ -9899,101 +9031,6 @@ func (q *Queries) SoftDeleteModel(ctx context.Context, arg SoftDeleteModelParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const softDeleteProjectAgentCRUD = `-- name: SoftDeleteProjectAgentCRUD :one
-update project_agents
-set deleted_at = $1,
-    updated_at = $1
-where id = $2::uuid
-  and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-`
-
-type SoftDeleteProjectAgentCRUDParams struct {
-	Now pgtype.Timestamptz `json:"now"`
-	ID  pgtype.UUID        `json:"id"`
-}
-
-type SoftDeleteProjectAgentCRUDRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) SoftDeleteProjectAgentCRUD(ctx context.Context, arg SoftDeleteProjectAgentCRUDParams) (SoftDeleteProjectAgentCRUDRow, error) {
-	row := q.db.QueryRow(ctx, softDeleteProjectAgentCRUD, arg.Now, arg.ID)
-	var i SoftDeleteProjectAgentCRUDRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.Status,
-		&i.Config,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const softDeleteProjectAgentsByAgent = `-- name: SoftDeleteProjectAgentsByAgent :many
-update project_agents
-set deleted_at = $1,
-    updated_at = $1
-where agent_id = $2::uuid
-  and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-`
-
-type SoftDeleteProjectAgentsByAgentParams struct {
-	Now     pgtype.Timestamptz `json:"now"`
-	AgentID pgtype.UUID        `json:"agent_id"`
-}
-
-type SoftDeleteProjectAgentsByAgentRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) SoftDeleteProjectAgentsByAgent(ctx context.Context, arg SoftDeleteProjectAgentsByAgentParams) ([]SoftDeleteProjectAgentsByAgentRow, error) {
-	rows, err := q.db.Query(ctx, softDeleteProjectAgentsByAgent, arg.Now, arg.AgentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SoftDeleteProjectAgentsByAgentRow{}
-	for rows.Next() {
-		var i SoftDeleteProjectAgentsByAgentRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ProjectID,
-			&i.AgentID,
-			&i.Status,
-			&i.Config,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const softDeleteRejectedJoinRequest = `-- name: SoftDeleteRejectedJoinRequest :execrows
@@ -10342,10 +9379,9 @@ func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) erro
 
 const uninstallWorkspaceMarketplaceCapability = `-- name: UninstallWorkspaceMarketplaceCapability :execrows
 delete from agent_capabilities ac
-using project_agents pa, projects p
-where ac.project_agent_id = pa.id
-  and pa.project_id = p.id
-  and p.workspace_id = $1::uuid
+using agents a
+where ac.agent_id = a.id
+  and a.workspace_id = $1::uuid
   and ac.capability_id = $2::uuid
 `
 
@@ -10429,7 +9465,7 @@ set capability_version_id = $1::uuid,
     pinning_mode = $4::text,
     updated_at = $5
 where id = $6::uuid
-returning id::text as id, project_agent_id::text as project_agent_id,
+returning id::text as id, agent_id::text as agent_id,
   capability_id::text as capability_id, capability_version_id::text as capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at
 `
@@ -10445,7 +9481,7 @@ type UpdateAgentCapabilityParams struct {
 
 type UpdateAgentCapabilityRow struct {
 	ID                  string             `json:"id"`
-	ProjectAgentID      string             `json:"project_agent_id"`
+	AgentID             string             `json:"agent_id"`
 	CapabilityID        string             `json:"capability_id"`
 	CapabilityVersionID string             `json:"capability_version_id"`
 	Enabled             bool               `json:"enabled"`
@@ -10467,12 +9503,58 @@ func (q *Queries) UpdateAgentCapability(ctx context.Context, arg UpdateAgentCapa
 	var i UpdateAgentCapabilityRow
 	err := row.Scan(
 		&i.ID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.CapabilityID,
 		&i.CapabilityVersionID,
 		&i.Enabled,
 		&i.Configuration,
 		&i.PinningMode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateAgentConfig = `-- name: UpdateAgentConfig :one
+update agents
+set config = $1::jsonb,
+    updated_at = $2
+where id = $3::uuid
+  and deleted_at is null
+returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at
+`
+
+type UpdateAgentConfigParams struct {
+	Config []byte             `json:"config"`
+	Now    pgtype.Timestamptz `json:"now"`
+	ID     pgtype.UUID        `json:"id"`
+}
+
+type UpdateAgentConfigRow struct {
+	ID            string             `json:"id"`
+	WorkspaceID   string             `json:"workspace_id"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	Description   string             `json:"description"`
+	ConnectorType string             `json:"connector_type"`
+	Status        string             `json:"status"`
+	Config        []byte             `json:"config"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateAgentConfig(ctx context.Context, arg UpdateAgentConfigParams) (UpdateAgentConfigRow, error) {
+	row := q.db.QueryRow(ctx, updateAgentConfig, arg.Config, arg.Now, arg.ID)
+	var i UpdateAgentConfigRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.ConnectorType,
+		&i.Status,
+		&i.Config,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -10771,100 +9853,6 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Updat
 	return i, err
 }
 
-const updateProject = `-- name: UpdateProject :one
-update projects
-set name = $1,
-    slug = $2,
-    description = $3,
-    updated_at = $4
-where id = $5::uuid
-  and deleted_at is null
-returning id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at
-`
-
-type UpdateProjectParams struct {
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Now         pgtype.Timestamptz `json:"now"`
-	ID          pgtype.UUID        `json:"id"`
-}
-
-type UpdateProjectRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (UpdateProjectRow, error) {
-	row := q.db.QueryRow(ctx, updateProject,
-		arg.Name,
-		arg.Slug,
-		arg.Description,
-		arg.Now,
-		arg.ID,
-	)
-	var i UpdateProjectRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateProjectAgentConfig = `-- name: UpdateProjectAgentConfig :one
-update project_agents
-set config = $1::jsonb,
-    updated_at = $2
-where id = $3::uuid
-  and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-`
-
-type UpdateProjectAgentConfigParams struct {
-	Config []byte             `json:"config"`
-	Now    pgtype.Timestamptz `json:"now"`
-	ID     pgtype.UUID        `json:"id"`
-}
-
-type UpdateProjectAgentConfigRow struct {
-	ID          string             `json:"id"`
-	WorkspaceID string             `json:"workspace_id"`
-	ProjectID   string             `json:"project_id"`
-	AgentID     string             `json:"agent_id"`
-	Status      string             `json:"status"`
-	Config      []byte             `json:"config"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) UpdateProjectAgentConfig(ctx context.Context, arg UpdateProjectAgentConfigParams) (UpdateProjectAgentConfigRow, error) {
-	row := q.db.QueryRow(ctx, updateProjectAgentConfig, arg.Config, arg.Now, arg.ID)
-	var i UpdateProjectAgentConfigRow
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.AgentID,
-		&i.Status,
-		&i.Config,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const updateUserCredential = `-- name: UpdateUserCredential :one
 update user_credentials
 set display_name = $1,
@@ -11048,7 +10036,7 @@ set capability_version_id = $1::uuid,
     pinning_mode = $2::text,
     updated_at = $3
 from capability_version cv, capability c
-where ac.project_agent_id = $4::uuid
+where ac.agent_id = $4::uuid
   and ac.capability_id = $5::uuid
   and cv.id = $1::uuid
   and cv.capability_id = ac.capability_id
@@ -11057,22 +10045,22 @@ where ac.project_agent_id = $4::uuid
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null
-returning ac.id::text as id, ac.project_agent_id::text as project_agent_id,
+returning ac.id::text as id, ac.agent_id::text as agent_id,
   ac.capability_id::text as capability_id, ac.capability_version_id::text as capability_version_id,
   ac.enabled, ac.configuration, ac.pinning_mode, ac.created_at, ac.updated_at
 `
 
 type UpgradeAgentCapabilityParams struct {
-	NewVersionID   pgtype.UUID        `json:"new_version_id"`
-	PinningMode    string             `json:"pinning_mode"`
-	Now            pgtype.Timestamptz `json:"now"`
-	ProjectAgentID pgtype.UUID        `json:"project_agent_id"`
-	CapabilityID   pgtype.UUID        `json:"capability_id"`
+	NewVersionID pgtype.UUID        `json:"new_version_id"`
+	PinningMode  string             `json:"pinning_mode"`
+	Now          pgtype.Timestamptz `json:"now"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	CapabilityID pgtype.UUID        `json:"capability_id"`
 }
 
 type UpgradeAgentCapabilityRow struct {
 	ID                  string             `json:"id"`
-	ProjectAgentID      string             `json:"project_agent_id"`
+	AgentID             string             `json:"agent_id"`
 	CapabilityID        string             `json:"capability_id"`
 	CapabilityVersionID string             `json:"capability_version_id"`
 	Enabled             bool               `json:"enabled"`
@@ -11087,13 +10075,13 @@ func (q *Queries) UpgradeAgentCapability(ctx context.Context, arg UpgradeAgentCa
 		arg.NewVersionID,
 		arg.PinningMode,
 		arg.Now,
-		arg.ProjectAgentID,
+		arg.AgentID,
 		arg.CapabilityID,
 	)
 	var i UpgradeAgentCapabilityRow
 	err := row.Scan(
 		&i.ID,
-		&i.ProjectAgentID,
+		&i.AgentID,
 		&i.CapabilityID,
 		&i.CapabilityVersionID,
 		&i.Enabled,
@@ -11480,8 +10468,8 @@ type WorkspaceMembershipExistsParams struct {
 	UserID      pgtype.UUID `json:"user_id"`
 }
 
-// 用于把用户加入 project 前预检:必须是 workspace 的 active 成员才行。
-// pending(申请中) 不算,因此 join request 通过前不能被加 project。
+// 预检:必须是 workspace 的 active 成员才行。
+// pending(申请中) 不算,因此 join request 通过前不算正式成员。
 func (q *Queries) WorkspaceMembershipExists(ctx context.Context, arg WorkspaceMembershipExistsParams) (bool, error) {
 	row := q.db.QueryRow(ctx, workspaceMembershipExists, arg.WorkspaceID, arg.UserID)
 	var exists bool
