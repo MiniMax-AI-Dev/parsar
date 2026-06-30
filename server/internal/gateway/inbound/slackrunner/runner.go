@@ -35,6 +35,7 @@ import (
 	slackgo "github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 	slackchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/slack"
@@ -51,7 +52,7 @@ const maxSeen = 4096
 // Web API + identity; AppToken (xapp-, connections:write) opens the websocket.
 // Channel is the pure Slack adapter (decode + reply transport); Store is the
 // shared router store; GateConfig feeds the visibility rejection cards. Logger
-// is optional (defaults to slog.Default). BotUserID, when empty, is resolved
+// is optional (defaults to log.Bg). BotUserID, when empty, is resolved
 // once via auth.test at Run.
 type Config struct {
 	BotToken   string
@@ -107,7 +108,7 @@ func New(cfg Config) (*Runner, error) {
 	}
 	logger := cfg.Logger
 	if logger == nil {
-		logger = slog.Default()
+		logger = log.Bg()
 	}
 	api := slackgo.New(cfg.BotToken, slackgo.OptionAppLevelToken(cfg.AppToken))
 	return &Runner{
