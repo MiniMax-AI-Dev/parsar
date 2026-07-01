@@ -175,7 +175,7 @@ export function AdminLayout({
               tiled, non-interactive. */}
           <div
             aria-hidden
-            className="pointer-events-none fixed inset-0 bg-[url('/brand/grid-texture.png')] bg-[length:440px_440px] opacity-[0.5]"
+            className="pointer-events-none fixed inset-0 bg-[url('/brand/grid-texture.png')] bg-[length:440px_440px] opacity-25"
           />
           {fullBleed ? (
             children

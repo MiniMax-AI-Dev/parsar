@@ -418,11 +418,11 @@ export function AgentsPage() {
         />
       ) : agents.length === 0 ? (
         <EmptyState
-          icon={Bot}
+          illustration
           title={t("agents.empty.title")}
           description={t("agents.empty.description")}
           action={
-            <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" /> {t("agents.actions.create")}
             </Button>
           }

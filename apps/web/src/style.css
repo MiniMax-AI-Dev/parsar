@@ -36,20 +36,22 @@
    * `danger / warning / success / info / accent` — semantic
    * ---------------------------------------------------------- */
 
-  /* Foreground — true neutral grey (chroma 0), no blue tint. Lightness
-     ladder preserved so hierarchy/contrast is unchanged. */
-  --color-fg:          oklch(0.19 0 0);   /* near-black ink */
-  --color-fg-emphasis: oklch(0.27 0 0);
-  --color-fg-muted:    oklch(0.45 0 0);
-  --color-fg-subtle:   oklch(0.55 0 0);
-  --color-fg-faint:    oklch(0.71 0 0);
+  /* Foreground — true neutral grey (chroma 0), no blue tint. Deliberately
+     DARKER than the old slate ramp: neutral grey reads lighter/flatter than
+     blue-tinted grey at the same L, so each step is pulled down to keep text
+     feeling solid and high-contrast (esp. muted/subtle secondary text). */
+  --color-fg:          oklch(0.16 0 0);   /* near-black ink */
+  --color-fg-emphasis: oklch(0.23 0 0);
+  --color-fg-muted:    oklch(0.38 0 0);
+  --color-fg-subtle:   oklch(0.48 0 0);
+  --color-fg-faint:    oklch(0.62 0 0);
   --color-fg-on-emphasis: oklch(0.985 0 0);        /* white      */
 
   /* Background → produces bg-surface / bg-surface-subtle / etc. Pure greys. */
   --color-surface:         oklch(1 0 0);               /* white      */
   --color-surface-subtle:  oklch(0.985 0 0);
   --color-surface-muted:   oklch(0.955 0 0);
-  --color-surface-emphasis: oklch(0.19 0 0);           /* ink        */
+  --color-surface-emphasis: oklch(0.16 0 0);           /* ink        */
   --color-surface-inverse: oklch(0.13 0 0);            /* near-black */
 
   /* Border → produces border-line / border-line-muted / etc. The token is
