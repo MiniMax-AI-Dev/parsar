@@ -1,6 +1,8 @@
 
 
-<h3 align="center">Parsar</h3>
+<p align="center">
+  <img src=".github/assets/parsar-banner.png" alt="Parsar" width="520" />
+</p>
 
 <p align="center">
   <b>Your team's intent, parsed into action.</b>
