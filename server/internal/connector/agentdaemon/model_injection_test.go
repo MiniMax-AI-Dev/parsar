@@ -90,7 +90,7 @@ func TestStreamPrompt_ManagedAnthropicModelInjection(t *testing.T) {
 	binder := binding.NewInMemoryBinder()
 	if err := binder.Bind(context.Background(), binding.Binding{
 		ConversationID: "conv-1",
-		ProjectAgentID: "pa-1",
+		AgentID:        "pa-1",
 		DeviceID:       "dev-1",
 		AgentKind:      "claude_code",
 		WorkDir:        "/workspace",
@@ -114,11 +114,12 @@ func TestStreamPrompt_ManagedAnthropicModelInjection(t *testing.T) {
 
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
-	in.AgentConfig = map[string]any{"default_model_id": "agent-default", "env": map[string]any{"PARSAR_KEEP": "yes"}}
-	in.ProjectAgentConfig = map[string]any{
-		"model_id": "model-1",
-		"model":    "manual-model-should-lose",
+	in.AgentConfig = map[string]any{
+		"default_model_id": "agent-default",
+		"model_id":         "model-1",
+		"model":            "manual-model-should-lose",
 		"env": map[string]any{
+			"PARSAR_KEEP":       "yes",
 			"ANTHROPIC_API_KEY": "manual-should-lose",
 			"OTHER_FLAG":        "kept",
 		},
@@ -164,8 +165,8 @@ func TestStreamPrompt_ManagedAnthropicModelInjection(t *testing.T) {
 	if _, ok := envMap["ANTHROPIC_API_KEY"]; ok {
 		t.Fatalf("anthropic-compatible provider must remove ANTHROPIC_API_KEY; full env=%+v", envMap)
 	}
-	if _, ok := envMap["PARSAR_KEEP"]; ok {
-		t.Fatalf("project-level env should replace agent-level env before managed merge; got %+v", envMap)
+	if got := envMap["PARSAR_KEEP"]; got != "yes" {
+		t.Fatalf("user-supplied env must pass through managed merge; PARSAR_KEEP=%v full env=%+v", got, envMap)
 	}
 
 	doneEnv, _ := proto.NewEnvelope(proto.TypeDone, "run-1", proto.DonePayload{Content: "ok"})
@@ -200,7 +201,7 @@ func TestStreamPrompt_ManagedOpenCodeModelInjection(t *testing.T) {
 	binder := binding.NewInMemoryBinder()
 	if err := binder.Bind(context.Background(), binding.Binding{
 		ConversationID: "conv-1",
-		ProjectAgentID: "pa-1",
+		AgentID:        "pa-1",
 		DeviceID:       "dev-1",
 		AgentKind:      "opencode",
 		WorkDir:        "/workspace",
@@ -224,12 +225,13 @@ func TestStreamPrompt_ManagedOpenCodeModelInjection(t *testing.T) {
 
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
-	in.AgentConfig = map[string]any{"default_model_id": "agent-default", "env": map[string]any{"PARSAR_KEEP": "yes"}}
-	in.ProjectAgentConfig = map[string]any{
-		"agent_kind": "opencode",
-		"model_id":   "model-openai",
+	in.AgentConfig = map[string]any{
+		"default_model_id": "agent-default",
+		"agent_kind":       "opencode",
+		"model_id":         "model-openai",
 		"env": map[string]any{
-			"OTHER_FLAG": "kept",
+			"PARSAR_KEEP": "yes",
+			"OTHER_FLAG":  "kept",
 		},
 	}
 
@@ -266,8 +268,8 @@ func TestStreamPrompt_ManagedOpenCodeModelInjection(t *testing.T) {
 	if got := envMap["OTHER_FLAG"]; got != "kept" {
 		t.Fatalf("env[OTHER_FLAG]=%v, want kept; full env=%+v", got, envMap)
 	}
-	if _, ok := envMap["PARSAR_KEEP"]; ok {
-		t.Fatalf("project-level env should replace agent-level env before managed merge; got %+v", envMap)
+	if got := envMap["PARSAR_KEEP"]; got != "yes" {
+		t.Fatalf("user-supplied env must pass through managed merge; PARSAR_KEEP=%v full env=%+v", got, envMap)
 	}
 	rawConfig, ok := payload.AgentOptions["opencode_json"].(string)
 	if !ok || strings.TrimSpace(rawConfig) == "" {
@@ -332,7 +334,7 @@ func TestStreamPrompt_ManagedModelUnsupportedProviderDoesNotAcquireSandbox(t *te
 
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
-	in.ProjectAgentConfig = map[string]any{"daemon_mode": "sandbox", "model_id": "model-openai"}
+	in.AgentConfig = map[string]any{"daemon_mode": "sandbox", "model_id": "model-openai"}
 
 	ch, err := c.StreamPrompt(context.Background(), in)
 	if err != nil {
@@ -364,14 +366,12 @@ type fakeSpecMemory struct {
 	calls int
 	gotWS string
 	gotU  string
-	gotP  string
 }
 
-func (f *fakeSpecMemory) RenderSessionPrompt(_ context.Context, workspaceID, userID, projectID string) (string, error) {
+func (f *fakeSpecMemory) RenderSessionPrompt(_ context.Context, workspaceID, userID string) (string, error) {
 	f.calls++
 	f.gotWS = workspaceID
 	f.gotU = userID
-	f.gotP = projectID
 	return f.text, f.err
 }
 
@@ -422,7 +422,7 @@ func TestInjectManagedModel_DefaultAuthScheme_InjectsAPIKey(t *testing.T) {
 
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-default"}
+	in.AgentConfig = map[string]any{"model_id": "model-default"}
 	opts := renderStaticAgentOptions(in)
 
 	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
@@ -477,7 +477,7 @@ func TestInjectManagedModel_BearerAuthScheme_InjectsAuthToken(t *testing.T) {
 
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-bearer"}
+	in.AgentConfig = map[string]any{"model_id": "model-bearer"}
 	opts := renderStaticAgentOptions(in)
 
 	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
@@ -616,7 +616,6 @@ func TestApplySpecMemoryInjection_AppendsOntoBase(t *testing.T) {
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = "user-1"
-	in.ProjectID = "proj-9"
 
 	c.applySpecMemoryInjection(context.Background(), opts, in)
 
@@ -624,9 +623,9 @@ func TestApplySpecMemoryInjection_AppendsOntoBase(t *testing.T) {
 	if got := opts["system_prompt"]; got != want {
 		t.Fatalf("system_prompt=%q, want %q", got, want)
 	}
-	if sm.gotWS != "ws-1" || sm.gotU != "user-1" || sm.gotP != "proj-9" {
-		t.Fatalf("injector got ws=%q user=%q proj=%q; want ws-1/user-1/proj-9",
-			sm.gotWS, sm.gotU, sm.gotP)
+	if sm.gotWS != "ws-1" || sm.gotU != "user-1" {
+		t.Fatalf("injector got ws=%q user=%q; want ws-1/user-1",
+			sm.gotWS, sm.gotU)
 	}
 }
 
@@ -683,7 +682,7 @@ func TestInjectManagedModel_CredentialRef_EmitsNoticeOnUserLookupErr(t *testing.
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = "user-b"
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-byok"}
+	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
 	err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
@@ -750,7 +749,7 @@ func TestInjectManagedModel_CredentialRef_EmitsNoticeOnEmptyPayload(t *testing.T
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = "user-b"
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-byok"}
+	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
 	err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
@@ -793,7 +792,7 @@ func TestInjectManagedModel_CredentialRef_UserIDMissingDoesNotEmit(t *testing.T)
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = ""
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-byok"}
+	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
 	err = c.injectManagedModel(context.Background(), in, opts, "claude_code")
@@ -1234,7 +1233,7 @@ func TestInjectManagedModel_PiSwitchWired(t *testing.T) {
 
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-pi"}
+	in.AgentConfig = map[string]any{"model_id": "model-pi"}
 	opts := renderStaticAgentOptions(in)
 
 	if err := c.injectManagedModel(context.Background(), in, opts, "pi"); err != nil {
@@ -1316,7 +1315,7 @@ func TestInjectManagedModel_SharedBinding_BypassesUserResolver(t *testing.T) {
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = "user-bound"
-	in.ProjectAgentConfig = sharedBindingConfig()
+	in.AgentConfig = sharedBindingConfig()
 	opts := renderStaticAgentOptions(in)
 
 	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
@@ -1359,7 +1358,7 @@ func TestInjectManagedModel_SharedBinding_GuestCallerSucceeds(t *testing.T) {
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = "" // lark guest, no platform user_id
-	in.ProjectAgentConfig = sharedBindingConfig()
+	in.AgentConfig = sharedBindingConfig()
 	opts := renderStaticAgentOptions(in)
 
 	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {
@@ -1417,7 +1416,7 @@ func TestInjectManagedModel_NoBinding_PersonalPathUsesUserResolver(t *testing.T)
 	in := basicInput()
 	in.WorkspaceID = "ws-1"
 	in.ConversationInitiatorID = "user-byok"
-	in.ProjectAgentConfig = map[string]any{"model_id": "model-byok"}
+	in.AgentConfig = map[string]any{"model_id": "model-byok"}
 	opts := renderStaticAgentOptions(in)
 
 	if err := c.injectManagedModel(context.Background(), in, opts, "claude_code"); err != nil {

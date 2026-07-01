@@ -43,13 +43,13 @@ type RuntimeStore interface {
 	GetSecretPayload(ctx context.Context, workspaceID string, secretID string) (store.SecretPayload, error)
 	RequeueFailedAgentRun(ctx context.Context, input store.RequeueAgentRunInput) (store.RequeueAgentRunResult, error)
 	ConfigureDevConversationExternalRef(ctx context.Context, input store.ConfigureDevConversationExternalRefInput) (store.ConfigureDevConversationExternalRefResult, error)
-	ConfigureDevProjectAgentConnector(ctx context.Context, input store.ConfigureDevProjectAgentConnectorInput) (store.ConfigureDevProjectAgentConnectorResult, error)
-	ConfigureProjectAgentProfile(ctx context.Context, input store.ConfigureProjectAgentProfileInput) (store.ConfigureDevProjectAgentConnectorResult, error)
-	DisableProjectAgent(ctx context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error)
-	EnableProjectAgent(ctx context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error)
-	GetProjectAgentDetail(ctx context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error)
-	GetProjectAgentRuntimeBinding(ctx context.Context, workspaceID, projectAgentID string) (store.ProjectAgentRuntimeBinding, error)
-	SetProjectAgentRuntime(ctx context.Context, input store.SetProjectAgentRuntimeInput) (store.ProjectAgentRuntimeBinding, error)
+	ConfigureDevAgentConnector(ctx context.Context, input store.ConfigureDevAgentConnectorInput) (store.ConfigureDevAgentConnectorResult, error)
+	ConfigureAgentProfile(ctx context.Context, input store.ConfigureAgentProfileInput) (store.ConfigureDevAgentConnectorResult, error)
+	DisableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error)
+	EnableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error)
+	GetAgentDetail(ctx context.Context, agentID string) (store.AgentStatusRead, error)
+	GetAgentRuntimeBinding(ctx context.Context, workspaceID, agentID string) (store.AgentRuntimeBinding, error)
+	SetAgentRuntime(ctx context.Context, input store.SetAgentRuntimeInput) (store.AgentRuntimeBinding, error)
 	GetWorkspaceSettings(ctx context.Context, workspaceID string) (store.WorkspaceSettingsRead, error)
 	GetWorkspaceRuntimeSettings(ctx context.Context, workspaceID string) (store.WorkspaceRuntimeSettingsRead, error)
 	SetWorkspaceRuntimeCredentialSecret(ctx context.Context, workspaceID, secretID string, now time.Time) error
@@ -89,12 +89,12 @@ type RuntimeStore interface {
 	GetUserCredential(ctx context.Context, credentialID string) (store.UserCredentialRead, error)
 	UpdateUserCredential(ctx context.Context, input store.UpdateUserCredentialInput) (store.UserCredentialRead, error)
 	SoftDeleteUserCredential(ctx context.Context, credentialID string) (store.UserCredentialRead, error)
-	ListAgentCapabilities(ctx context.Context, projectAgentID string) ([]store.AgentCapabilityRead, error)
-	GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, projectAgentID string) ([]store.EnabledCapabilityRead, error)
-	EnableAgentCapability(ctx context.Context, projectAgentID string, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error)
-	UpgradeAgentCapability(ctx context.Context, projectAgentID string, capabilityID string, newVersionID string, pinningMode string) (store.AgentCapabilityRead, error)
+	ListAgentCapabilities(ctx context.Context, agentID string) ([]store.AgentCapabilityRead, error)
+	GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, agentID string) ([]store.EnabledCapabilityRead, error)
+	EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error)
+	UpgradeAgentCapability(ctx context.Context, agentID string, capabilityID string, newVersionID string, pinningMode string) (store.AgentCapabilityRead, error)
 	UninstallWorkspaceMarketplaceCapability(ctx context.Context, targetWorkspaceID string, sourceCapabilityID string) (int64, error)
-	DeleteAgentCapability(ctx context.Context, projectAgentID string, capabilityVersionID string) error
+	DeleteAgentCapability(ctx context.Context, agentID string, capabilityVersionID string) error
 	CreateAgent(ctx context.Context, input store.CreateAgentInput) (store.CreateAgentResult, error)
 	GetAgent(ctx context.Context, agentID string) (store.AgentSummary, error)
 	UpdateAgent(ctx context.Context, input store.UpdateAgentInput) (store.AgentSummary, []string, error)
@@ -132,9 +132,7 @@ type RuntimeStore interface {
 	// to let users continue a 话题 (thread) conversation without re-
 	// @mentioning the bot on every message.
 	HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadID string) (bool, error)
-	DeleteProjectAgent(ctx context.Context, projectAgentID string, actorID string) (store.ProjectAgentSummary, error)
 	DeleteAgent(ctx context.Context, agentID string, actorID string) (store.DeleteAgentResult, int64, error)
-	ListProjectAgentsByAgentID(ctx context.Context, agentID string) ([]store.ProjectAgentSummary, error)
 	CreateSecret(ctx context.Context, input store.CreateSecretInput, encryptedPayload []byte) (store.SecretRead, error)
 	ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]store.SecretRead, error)
 	DisableSecret(ctx context.Context, workspaceID string, secretID string) (store.SecretRead, error)
@@ -144,11 +142,11 @@ type RuntimeStore interface {
 	ResolveModelRuntime(ctx context.Context, workspaceID string, modelID string) (store.ModelRuntime, error)
 	ResolveModelRuntimeForUser(ctx context.Context, modelID, userID string) (store.ModelRuntime, error)
 	ListModels(ctx context.Context, workspaceID string, limit int32) ([]store.ModelRead, error)
-	ListProjectEnabledAgents(ctx context.Context, projectID string) ([]store.ProjectAgentRead, error)
-	ListProjectAgentsForAdmin(ctx context.Context, projectID string) ([]store.ProjectAgentRead, error)
-	CreateProjectConversation(ctx context.Context, input store.CreateProjectConversationInput) (store.ConversationRead, error)
-	ListProjectConversations(ctx context.Context, projectID string, agentID string, limit int32) ([]store.ConversationListItem, error)
-	GetProjectConversation(ctx context.Context, conversationID string) (store.ConversationRead, error)
+	ListWorkspaceEnabledAgents(ctx context.Context, workspaceID string) ([]store.AgentRead, error)
+	ListWorkspaceAgentsForAdmin(ctx context.Context, workspaceID string) ([]store.AgentRead, error)
+	CreateWorkspaceConversation(ctx context.Context, input store.CreateWorkspaceConversationInput) (store.ConversationRead, error)
+	ListWorkspaceConversations(ctx context.Context, workspaceID string, agentID string, limit int32) ([]store.ConversationListItem, error)
+	GetConversation(ctx context.Context, conversationID string) (store.ConversationRead, error)
 	UpdateConversationTitle(ctx context.Context, conversationID string, title string) error
 	SoftDeleteConversation(ctx context.Context, conversationID string) error
 	GetConversationTimeline(ctx context.Context, conversationID string, limit int32) (store.ConversationTimelineRead, error)
@@ -158,24 +156,18 @@ type RuntimeStore interface {
 	ListAgentRunEvents(ctx context.Context, runID string, afterSequence int64) ([]store.AgentRunEventRead, error)
 	ListActiveFeishuInflightConversations(ctx context.Context, cutoff time.Time, limit int32) ([]store.FeishuInflightConversation, error)
 	MarkGatewayOutboundDelivered(ctx context.Context, input store.MarkGatewayOutboundDeliveredInput) (store.MarkGatewayOutboundDeliveredResult, error)
-	ListProjectAgentRuns(ctx context.Context, projectID string, statuses []string, limit, offset int32) (store.ListProjectAgentRunsResult, error)
-	GetProjectAgentMetrics(ctx context.Context, projectID, projectAgentID string, windowDays int32) (store.AgentMetricsRead, error)
+	ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32) (store.ListWorkspaceAgentRunsResult, error)
+	GetAgentMetrics(ctx context.Context, agentID string, windowDays int32) (store.AgentMetricsRead, error)
 	ListAuditRecords(ctx context.Context, filter store.ListAuditRecordsFilter, limit int32) ([]store.AuditRecordRead, error)
-	ListProjectUsageLogs(ctx context.Context, projectID string, agentRunID string, limit int32) ([]store.UsageLogRead, error)
+	ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, agentRunID string, limit int32) ([]store.UsageLogRead, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID string, limit int32) ([]store.WorkspaceMemberRead, error)
 	GetWorkspaceMemberRole(ctx context.Context, workspaceID string, userID string) (string, error)
-	GetProjectWorkspace(ctx context.Context, projectID string) (string, error)
 	GetUserByID(ctx context.Context, userID string) (store.UserRead, error)
 	ListUserWorkspaces(ctx context.Context, userID string, limit int32) ([]store.UserWorkspaceRead, error)
 	ListAllActiveWorkspaces(ctx context.Context, limit int32) ([]store.UserWorkspaceRead, error)
-	ListWorkspaceProjects(ctx context.Context, workspaceID, userID string, limit int32) ([]store.WorkspaceProjectRead, error)
-	ListWorkspaceProjectsForAdmin(ctx context.Context, workspaceID string, limit int32) ([]store.WorkspaceProjectRead, error)
 	CreateWorkspace(ctx context.Context, input store.CreateWorkspaceInput) (store.CreateWorkspaceResult, error)
 	UpdateWorkspace(ctx context.Context, input store.UpdateWorkspaceInput) (store.UserWorkspaceRead, error)
 	ArchiveWorkspace(ctx context.Context, input store.ArchiveWorkspaceInput) (store.UserWorkspaceRead, error)
-	CreateProject(ctx context.Context, input store.CreateProjectInput) (store.CreateProjectResult, error)
-	UpdateProject(ctx context.Context, input store.UpdateProjectInput) (store.WorkspaceProjectRead, error)
-	ArchiveProject(ctx context.Context, input store.ArchiveProjectInput) (store.WorkspaceProjectRead, error)
 	AddWorkspaceMember(ctx context.Context, input store.AddWorkspaceMemberInput) (store.AddWorkspaceMemberResult, error)
 	UpdateWorkspaceMemberRole(ctx context.Context, workspaceID string, userID string, role string, now time.Time) (store.WorkspaceMemberRead, error)
 	RemoveWorkspaceMember(ctx context.Context, workspaceID string, userID string, now time.Time) (store.RemoveWorkspaceMemberResult, error)
@@ -199,8 +191,8 @@ type RuntimeStore interface {
 	UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 
 	// 定时任务(scheduled tasks)
-	ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error)
-	ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error)
+	ListScheduledTasksByAgent(ctx context.Context, agentID string) ([]store.ScheduledTaskRead, error)
+	ListScheduledTasksByWorkspace(ctx context.Context, workspaceID string, limit, offset int32) (store.ListScheduledTasksByWorkspaceResult, error)
 	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
 	GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error)
 	GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error)
@@ -246,7 +238,7 @@ type routerConfig struct {
 	auditIngester AuditIngester
 	runBroker     *runstream.Broker
 	// agentDaemonSandbox: lazy-create provider for sandbox-mode
-	// project_agents. When wired, createAgent fires background Acquire
+	// agents. When wired, createAgent fires background Acquire
 	// so the sandbox is ready before the first prompt. Nil → handler
 	// degrades to lazy-create.
 	agentDaemonSandbox AgentDaemonSandboxManager
@@ -403,9 +395,9 @@ type AgentDaemonSandboxAcquirer interface {
 // NoopSandboxProvider both satisfy this interface.
 type AgentDaemonSandboxManager interface {
 	AgentDaemonSandboxAcquirer
-	SandboxStatus(ctx context.Context, projectAgentID string) (connector.SandboxInfo, bool, error)
-	Release(ctx context.Context, projectAgentID string) error
-	Renew(ctx context.Context, projectAgentID string) (expiresAt time.Time, found bool, err error)
+	SandboxStatus(ctx context.Context, agentID string) (connector.SandboxInfo, bool, error)
+	Release(ctx context.Context, agentID string) error
+	Renew(ctx context.Context, agentID string) (expiresAt time.Time, found bool, err error)
 	// SandboxRuntimeInfo queries e2b directly for a sandbox's live
 	// expiry, bypassing the in-memory cache. The admin status handler
 	// uses this so a GET /sandbox that lands on a pod which did NOT
@@ -526,14 +518,13 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 				r.Get("/connections/github/callback", githubConnectionCallbackHandler(runtimeStore, *cfg.githubConnectionDeps))
 			}
 			r.Post("/agent-runs/{runID}/requeue", requeueAgentRun(runtimeStore))
-			r.Post("/project-agents/{projectAgentID}/connector", configureProjectAgentConnector(runtimeStore))
-			r.Post("/project-agents/{projectAgentID}/profile", configureProjectAgentProfile(runtimeStore))
-			r.Post("/project-agents/{projectAgentID}/disable", disableProjectAgent(runtimeStore))
-			r.Post("/project-agents/{projectAgentID}/enable", enableProjectAgent(runtimeStore))
-			r.Delete("/project-agents/{projectAgentID}", deleteProjectAgent(runtimeStore))
-			r.Get("/project-agents/{projectAgentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
-			r.Post("/project-agents/{projectAgentID}/scheduled-tasks", createScheduledTask(runtimeStore))
-			r.Get("/projects/{projectID}/scheduled-tasks", listScheduledTasksByProject(runtimeStore))
+			r.Post("/agents/{agentID}/connector", configureAgentConnector(runtimeStore))
+			r.Post("/agents/{agentID}/profile", configureAgentProfile(runtimeStore))
+			r.Post("/agents/{agentID}/disable", disableAgent(runtimeStore))
+			r.Post("/agents/{agentID}/enable", enableAgent(runtimeStore))
+			r.Get("/agents/{agentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
+			r.Post("/agents/{agentID}/scheduled-tasks", createScheduledTask(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/scheduled-tasks", listScheduledTasksByWorkspace(runtimeStore))
 			r.Get("/scheduled-tasks/{taskID}", getScheduledTask(runtimeStore))
 			r.Patch("/scheduled-tasks/{taskID}", updateScheduledTask(runtimeStore))
 			r.Delete("/scheduled-tasks/{taskID}", deleteScheduledTask(runtimeStore))
@@ -541,8 +532,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
-			r.Get("/workspaces/{workspaceID}/project-agents/{projectAgentID}/runtime", getProjectAgentRuntimeBinding(runtimeStore))
-			r.Put("/workspaces/{workspaceID}/project-agents/{projectAgentID}/runtime", setProjectAgentRuntimeBinding(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agents/{agentID}/runtime", getAgentRuntimeBinding(runtimeStore))
+			r.Put("/workspaces/{workspaceID}/agents/{agentID}/runtime", setAgentRuntimeBinding(runtimeStore))
 			r.Patch("/agents/{agentID}", updateAgent(runtimeStore))
 			r.Patch("/agents/{agentID}/visibility", updateAgentVisibility(runtimeStore))
 			r.Get("/agents/{agentID}/connector/feishu/diagnostics", getAgentFeishuConnectorDiagnostics(runtimeStore))
@@ -558,16 +549,16 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/agents/{agentID}/connector/feishu/provision/poll", pollAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Delete("/agents/{agentID}", deleteAgent(runtimeStore))
 			// Sandbox lifecycle (admin UI). Scoped to (workspace,
-			// project_agent). 503 when cfg.sandboxAdmin is not wired.
+			// agent). 503 when cfg.sandboxAdmin is not wired.
 			// Reads require any active workspace member;
 			// kill/rebuild (destructive — interrupts an in-flight run)
 			// require owner/admin.
-			r.Get("/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox", gateWorkspaceMember(runtimeStore, getSandboxStatus(cfg.sandboxAdmin, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/kill", gateWorkspaceOwnerOrAdmin(runtimeStore, killSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/rebuild", gateWorkspaceOwnerOrAdmin(runtimeStore, rebuildSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/renew", gateWorkspaceOwnerOrAdmin(runtimeStore, renewSandbox(cfg.sandboxAdmin, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/acquire", gateWorkspaceOwnerOrAdmin(runtimeStore, acquireSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
-			r.Post("/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/test-connection", gateWorkspaceOwnerOrAdmin(runtimeStore, sandboxConnectivityTest(cfg.sandboxAdmin, cfg.auditIngester)))
+			r.Get("/workspaces/{workspaceID}/agents/{agentID}/sandbox", gateWorkspaceMember(runtimeStore, getSandboxStatus(cfg.sandboxAdmin, cfg.agentDaemonSandbox)))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill", gateWorkspaceOwnerOrAdmin(runtimeStore, killSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild", gateWorkspaceOwnerOrAdmin(runtimeStore, rebuildSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/renew", gateWorkspaceOwnerOrAdmin(runtimeStore, renewSandbox(cfg.sandboxAdmin, cfg.agentDaemonSandbox)))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/acquire", gateWorkspaceOwnerOrAdmin(runtimeStore, acquireSandbox(cfg.sandboxAdmin, runtimeStore, cfg.agentDaemonSandbox)))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/sandbox/test-connection", gateWorkspaceOwnerOrAdmin(runtimeStore, sandboxConnectivityTest(cfg.sandboxAdmin, cfg.auditIngester)))
 			// Workspace-scoped overview: every active sandbox binding,
 			// newest-active first. Backs the admin Sandboxes page.
 			// 503 in local mode.
@@ -620,12 +611,12 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Patch("/workspaces/{workspaceID}/models/{modelID}", updateModel(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/models/{modelID}/test", testModelConnectivity(runtimeStore))
 			r.Post("/conversations/{conversationID}/external-ref", configureConversationExternalRef(runtimeStore))
-			r.Get("/projects/{projectID}/agents", listProjectEnabledAgents(runtimeStore))
-			r.Get("/projects/{projectID}/agent-runs", listProjectAgentRuns(runtimeStore))
-			r.Get("/projects/{projectID}/agents/{projectAgentID}/metrics", getProjectAgentMetrics(runtimeStore))
-			r.Get("/projects/{projectID}/agent-runs/{runID}/events", listAgentRunEvents(runtimeStore))
-			r.Get("/projects/{projectID}/audit-records", listProjectAuditRecords(runtimeStore))
-			r.Get("/projects/{projectID}/connectors", listProjectConnectors(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agents", listWorkspaceEnabledAgents(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agent-runs", listWorkspaceAgentRuns(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agents/{agentID}/metrics", getAgentMetrics(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agent-runs/{runID}/events", listAgentRunEvents(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/audit-records", listWorkspaceAuditRecords(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/connector-usage", listWorkspaceConnectorUsage(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/gateways", listWorkspaceGateways())
 			r.Get("/workspaces/{workspaceID}/members", listWorkspaceMembers(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/members", addWorkspaceMember(runtimeStore))
@@ -642,16 +633,12 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/join-requests", listJoinRequests(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/join-requests/{requestID}/approve", approveJoinRequest(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/join-requests/{requestID}/reject", rejectJoinRequest(runtimeStore))
-			r.Get("/workspaces/{workspaceID}/projects", listWorkspaceProjects(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/projects", createProject(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/settings", getWorkspaceSettings(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/settings", patchWorkspaceSettings(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/projects/{projectID}/agents", createAgent(runtimeStore, cfg.agentDaemonSandbox))
+			r.Post("/workspaces/{workspaceID}/agents", createAgent(runtimeStore, cfg.agentDaemonSandbox))
 			r.Post("/workspaces", createWorkspace(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}", updateWorkspace(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/archive", archiveWorkspace(runtimeStore))
-			r.Patch("/projects/{projectID}", updateProject(runtimeStore))
-			r.Post("/projects/{projectID}/archive", archiveProject(runtimeStore))
 			r.Get("/me", meHandler(runtimeStore))
 			r.Get("/me/workspaces", listMyWorkspaces(runtimeStore))
 			// 工作区发现:返回当前用户可申请加入的 public 工作区
@@ -664,14 +651,14 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/me/credentials", createMyCredential(runtimeStore))
 			r.Patch("/me/credentials/{credentialID}", patchMyCredential(runtimeStore))
 			r.Delete("/me/credentials/{credentialID}", deleteMyCredential(runtimeStore))
-			r.Get("/projects/{projectID}/usage", listProjectUsageLogs(runtimeStore))
-			r.Get("/projects/{projectID}/agents/{projectAgentID}/capabilities", listProjectAgentCapabilities(runtimeStore))
-			r.Post("/projects/{projectID}/agents/{projectAgentID}/capabilities/{capabilityVersionID}/enable", enableProjectAgentCapability(runtimeStore))
-			r.Post("/projects/{projectID}/agents/{projectAgentID}/capabilities/{capabilityID}/upgrade", upgradeProjectAgentCapability(runtimeStore))
-			r.Delete("/projects/{projectID}/agents/{projectAgentID}/capabilities/{capabilityVersionID}", deleteProjectAgentCapability(runtimeStore))
-			r.Get("/projects/{projectID}/conversations", listProjectConversations(runtimeStore))
-			r.Post("/projects/{projectID}/conversations", createProjectConversation(runtimeStore))
-			r.Get("/conversations/{conversationID}", getProjectConversation(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/usage", listWorkspaceUsageLogs(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agents/{agentID}/capabilities", listAgentCapabilities(runtimeStore))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable", enableAgentCapability(runtimeStore))
+			r.Post("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade", upgradeAgentCapability(runtimeStore))
+			r.Delete("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}", deleteAgentCapability(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/conversations", listWorkspaceConversations(runtimeStore))
+			r.Post("/workspaces/{workspaceID}/conversations", createWorkspaceConversation(runtimeStore))
+			r.Get("/conversations/{conversationID}", getConversation(runtimeStore))
 			r.Patch("/conversations/{conversationID}", updateConversationTitle(runtimeStore))
 			r.Delete("/conversations/{conversationID}", deleteConversation(runtimeStore))
 			r.Get("/conversations/{conversationID}/timeline", getConversationTimeline(runtimeStore))
@@ -699,7 +686,6 @@ func getSeed(w http.ResponseWriter, r *http.Request) {
 		"db": map[string]any{
 			"workspace_id":    ids.WorkspaceID,
 			"user_id":         ids.UserID,
-			"project_id":      ids.ProjectID,
 			"conversation_id": ids.ConversationID,
 			"agents": map[string]string{
 				"product_agent_id": ids.ProductAgentID,
@@ -1311,7 +1297,7 @@ type httpAgentInvokeBody struct {
 	Headers  map[string]string `json:"headers"`
 }
 
-type configureProjectAgentConnectorBody struct {
+type configureAgentConnectorBody struct {
 	ConnectorType string `json:"connector_type"`
 	Endpoint      string `json:"endpoint"`
 	SecretID      string `json:"secret_id"`
@@ -1382,7 +1368,7 @@ func foldModelConfig(config, capabilities, limits map[string]any) map[string]any
 	return merged
 }
 
-type configureProjectAgentProfileBody struct {
+type configureAgentProfileBody struct {
 	ModelID      string         `json:"model_id"`
 	Workdir      string         `json:"workdir"`
 	SystemPrompt string         `json:"system_prompt"`
@@ -1434,7 +1420,7 @@ func runHTTPAgentOnce(runtimeStore RuntimeStore, client *http.Client, deps *http
 			switch {
 			case errors.Is(err, store.ErrUnknownAgentRun):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrInvalidHTTPConnector), errors.Is(err, store.ErrAgentRunNotCompletable), errors.Is(err, store.ErrInvalidProjectAgent):
+			case errors.Is(err, store.ErrInvalidHTTPConnector), errors.Is(err, store.ErrAgentRunNotCompletable), errors.Is(err, store.ErrInvalidAgent):
 				writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			case errors.Is(err, httprunner.ErrInvalidEndpoint):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -1455,7 +1441,7 @@ func runHTTPAgentInvocation(w http.ResponseWriter, r *http.Request, runtimeStore
 		switch {
 		case errors.Is(err, store.ErrUnknownAgentRun):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-		case errors.Is(err, store.ErrInvalidHTTPConnector), errors.Is(err, store.ErrAgentRunNotCompletable), errors.Is(err, store.ErrInvalidProjectAgent):
+		case errors.Is(err, store.ErrInvalidHTTPConnector), errors.Is(err, store.ErrAgentRunNotCompletable), errors.Is(err, store.ErrInvalidAgent):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		case errors.Is(err, httprunner.ErrInvalidEndpoint):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -1469,27 +1455,27 @@ func runHTTPAgentInvocation(w http.ResponseWriter, r *http.Request, runtimeStore
 	writeJSON(w, http.StatusOK, result)
 }
 
-func configureProjectAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+func configureAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed connector config is disabled"})
 			return
 		}
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		projectID, ok := projectIDForProjectAgent(w, r.Context(), runtimeStore, projectAgentID)
+		workspaceID, ok := workspaceIDForAgent(w, r.Context(), runtimeStore, agentID)
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 
-		var req configureProjectAgentConnectorBody
+		var req configureAgentConnectorBody
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
@@ -1503,24 +1489,24 @@ func configureProjectAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc 
 			return
 		}
 
-		result, err := runtimeStore.ConfigureDevProjectAgentConnector(r.Context(), store.ConfigureDevProjectAgentConnectorInput{
-			ProjectAgentID: projectAgentID,
-			ConnectorType:  req.ConnectorType,
-			Endpoint:       req.Endpoint,
-			SecretID:       req.SecretID,
-			Model:          req.Model,
-			ModelID:        req.ModelID,
-			Workdir:        req.Workdir,
-			SystemPrompt:   req.SystemPrompt,
+		result, err := runtimeStore.ConfigureDevAgentConnector(r.Context(), store.ConfigureDevAgentConnectorInput{
+			AgentID:       agentID,
+			ConnectorType: req.ConnectorType,
+			Endpoint:      req.Endpoint,
+			SecretID:      req.SecretID,
+			Model:         req.Model,
+			ModelID:       req.ModelID,
+			Workdir:       req.Workdir,
+			SystemPrompt:  req.SystemPrompt,
 		})
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrInvalidConnectorType):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrUnknownProjectAgent):
+			case errors.Is(err, store.ErrUnknownAgent):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to configure project agent connector"})
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to configure agent connector"})
 			}
 			return
 		}
@@ -1528,62 +1514,62 @@ func configureProjectAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc 
 	}
 }
 
-func configureProjectAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
+func configureAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed project agent profile config is disabled"})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed agent profile config is disabled"})
 			return
 		}
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		projectID, ok := projectIDForProjectAgent(w, r.Context(), runtimeStore, projectAgentID)
+		workspaceID, ok := workspaceIDForAgent(w, r.Context(), runtimeStore, agentID)
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
-		var req configureProjectAgentProfileBody
+		var req configureAgentProfileBody
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
-		result, err := runtimeStore.ConfigureProjectAgentProfile(r.Context(), store.ConfigureProjectAgentProfileInput{ProjectAgentID: projectAgentID, ModelID: req.ModelID, Workdir: req.Workdir, SystemPrompt: req.SystemPrompt, Config: req.Config})
+		result, err := runtimeStore.ConfigureAgentProfile(r.Context(), store.ConfigureAgentProfileInput{AgentID: agentID, ModelID: req.ModelID, Workdir: req.Workdir, SystemPrompt: req.SystemPrompt, Config: req.Config})
 		if err != nil {
 			switch {
-			case errors.Is(err, store.ErrUnknownProjectAgent):
+			case errors.Is(err, store.ErrUnknownAgent):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			case errors.Is(err, store.ErrUnknownModel):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			case errors.Is(err, store.ErrModelDisabled):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to configure project agent profile"})
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to configure agent profile"})
 			}
 			return
 		}
 
 		// Local-device binding: mirror createAgent so editing a
-		// local-mode agent's bound device keeps pa.runtime_id in sync.
-		// Without this the admin list keeps reading "未绑定 Runtime".
-		if result.ProjectAgentConfig != nil {
-			if mode, _ := result.ProjectAgentConfig["daemon_mode"].(string); mode == "local" {
-				if deviceID, _ := result.ProjectAgentConfig["device_id"].(string); strings.TrimSpace(deviceID) != "" {
-					detail, detailErr := runtimeStore.GetProjectAgentDetail(r.Context(), projectAgentID)
+		// local-mode agent's bound device keeps the agent's runtime_id in
+		// sync. Without this the admin list keeps reading "未绑定 Runtime".
+		if result.AgentConfig != nil {
+			if mode, _ := result.AgentConfig["daemon_mode"].(string); mode == "local" {
+				if deviceID, _ := result.AgentConfig["device_id"].(string); strings.TrimSpace(deviceID) != "" {
+					detail, detailErr := runtimeStore.GetAgentDetail(r.Context(), agentID)
 					if detailErr != nil {
-						log.Bg().Warn("configureProjectAgentProfile: workspace lookup failed for runtime_id sync",
-							"project_agent_id", projectAgentID, "err", detailErr)
-					} else if _, bindErr := runtimeStore.SetProjectAgentRuntime(r.Context(), store.SetProjectAgentRuntimeInput{
-						WorkspaceID:    detail.WorkspaceID,
-						ProjectAgentID: projectAgentID,
-						RuntimeID:      deviceID,
+						log.Bg().Warn("configureAgentProfile: workspace lookup failed for runtime_id sync",
+							"agent_id", agentID, "err", detailErr)
+					} else if _, bindErr := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
+						WorkspaceID: detail.WorkspaceID,
+						AgentID:     agentID,
+						RuntimeID:   deviceID,
 					}); bindErr != nil {
-						log.Bg().Warn("configureProjectAgentProfile: persist local device runtime_id failed",
-							"project_agent_id", projectAgentID,
+						log.Bg().Warn("configureAgentProfile: persist local device runtime_id failed",
+							"agent_id", agentID,
 							"device_id", deviceID,
 							"err", bindErr)
 					}
@@ -1595,40 +1581,40 @@ func configureProjectAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func disableProjectAgent(runtimeStore RuntimeStore) http.HandlerFunc {
-	return projectAgentStatusHandler(runtimeStore, "disable")
+func disableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
+	return agentStatusHandler(runtimeStore, "disable")
 }
 
-func enableProjectAgent(runtimeStore RuntimeStore) http.HandlerFunc {
-	return projectAgentStatusHandler(runtimeStore, "enable")
+func enableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
+	return agentStatusHandler(runtimeStore, "enable")
 }
 
-// getProjectAgentRuntimeBinding returns the runtime currently bound to
-// this project_agent. Empty runtime_id means the user hasn't picked one
+// getAgentRuntimeBinding returns the runtime currently bound to
+// this agent. Empty runtime_id means the user hasn't picked one
 // yet — the dispatcher surfaces "请绑定 Runtime" when a run starts.
-func getProjectAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
+func getAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed project agent runtime binding is disabled"})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed agent runtime binding is disabled"})
 			return
 		}
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
 		if !isUUID(workspaceID) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
 		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
-		binding, err := runtimeStore.GetProjectAgentRuntimeBinding(r.Context(), workspaceID, projectAgentID)
+		binding, err := runtimeStore.GetAgentRuntimeBinding(r.Context(), workspaceID, agentID)
 		if err != nil {
-			if errors.Is(err, store.ErrUnknownProjectAgent) {
+			if errors.Is(err, store.ErrUnknownAgent) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 				return
 			}
@@ -1639,31 +1625,27 @@ func getProjectAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// setProjectAgentRuntimeBinding writes (or clears) the runtime a
-// project_agent runs on. RuntimeID="" is a valid clear request that
+// setAgentRuntimeBinding writes (or clears) the runtime an
+// agent runs on. RuntimeID="" is a valid clear request that
 // turns the agent back into an unbound state. Tenant guard: only
-// project owners / workspace admins can change the binding.
-func setProjectAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
+// workspace owners / admins can change the binding.
+func setAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed project agent runtime binding is disabled"})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed agent runtime binding is disabled"})
 			return
 		}
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
 		if !isUUID(workspaceID) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		projectID, ok := projectIDForProjectAgent(w, r.Context(), runtimeStore, projectAgentID)
-		if !ok {
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -1678,13 +1660,13 @@ func setProjectAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "runtime_id must be a valid uuid or empty"})
 			return
 		}
-		binding, err := runtimeStore.SetProjectAgentRuntime(r.Context(), store.SetProjectAgentRuntimeInput{
-			WorkspaceID:    workspaceID,
-			ProjectAgentID: projectAgentID,
-			RuntimeID:      strings.TrimSpace(body.RuntimeID),
+		binding, err := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
+			WorkspaceID: workspaceID,
+			AgentID:     agentID,
+			RuntimeID:   strings.TrimSpace(body.RuntimeID),
 		})
 		if err != nil {
-			if errors.Is(err, store.ErrUnknownProjectAgent) {
+			if errors.Is(err, store.ErrUnknownAgent) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 				return
 			}
@@ -1790,9 +1772,9 @@ func patchWorkspaceSettings(runtimeStore RuntimeStore) http.HandlerFunc {
 
 func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandboxAcquirer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, projectID := strings.TrimSpace(chi.URLParam(r, "workspaceID")), strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if runtimeStore == nil || !isUUID(workspaceID) || !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id and project_id must be valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if runtimeStore == nil || !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
 		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
@@ -1842,7 +1824,7 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 		for _, capability := range req.InitialCapabilities {
 			initialCapabilities = append(initialCapabilities, store.InitialAgentCapabilityInput{CapabilityVersionID: capability.CapabilityVersionID, Configuration: capability.Configuration, PinningMode: capability.PinningMode})
 		}
-		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, ProjectID: projectID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, DefaultModelID: req.DefaultModelID, Capabilities: req.Capabilities, CapabilitiesSet: hasCaps, InitialCapabilities: initialCapabilities, Runtime: "", ProjectAgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r)})
+		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, DefaultModelID: req.DefaultModelID, Capabilities: req.Capabilities, CapabilitiesSet: hasCaps, InitialCapabilities: initialCapabilities, Runtime: "", AgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r)})
 		if err != nil {
 			writeStoreAgentError(w, err)
 			return
@@ -1852,27 +1834,27 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 		// Sync capability checkboxes → agent_capabilities table so the
 		// runtime's GetEnabledCapabilitiesForAgent sees them.
 		if hasCaps && len(req.Capabilities) > 0 {
-			if err := syncAgentCapabilities(r.Context(), runtimeStore, result.Agent.WorkspaceID, result.ProjectAgent.ID, req.Capabilities); err != nil {
-				log.Bg().Warn("createAgent: capability sync failed", "project_agent_id", result.ProjectAgent.ID, "err", err)
+			if err := syncAgentCapabilities(r.Context(), runtimeStore, result.Agent.WorkspaceID, result.Agent.ID, req.Capabilities); err != nil {
+				log.Bg().Warn("createAgent: capability sync failed", "agent_id", result.Agent.ID, "err", err)
 			}
 		}
 
 		// Local-device binding: when the user picked a paired daemon
-		// in the create form, the device_id sits in pa.config but
-		// pa.runtime_id stays NULL. Mirror device_id → runtime_id so
+		// in the create form, the device_id sits in agents.config but
+		// agents.runtime_id stays NULL. Mirror device_id → runtime_id so
 		// the FK join lights up. device_id IS a runtime.id.
-		if result.ProjectAgent.Config != nil {
-			if mode, _ := result.ProjectAgent.Config["daemon_mode"].(string); mode == "local" {
-				if deviceID, _ := result.ProjectAgent.Config["device_id"].(string); strings.TrimSpace(deviceID) != "" {
-					if _, bindErr := runtimeStore.SetProjectAgentRuntime(r.Context(), store.SetProjectAgentRuntimeInput{
+		if result.Agent.Config != nil {
+			if mode, _ := result.Agent.Config["daemon_mode"].(string); mode == "local" {
+				if deviceID, _ := result.Agent.Config["device_id"].(string); strings.TrimSpace(deviceID) != "" {
+					if _, bindErr := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
 						WorkspaceID:    workspaceID,
-						ProjectAgentID: result.ProjectAgent.ID,
+						AgentID: result.Agent.ID,
 						RuntimeID:      deviceID,
 					}); bindErr != nil {
 						// Non-fatal: row is created, the user can
 						// re-save from the edit dialog to retry.
 						log.Bg().Warn("createAgent: persist local device runtime_id failed",
-							"project_agent_id", result.ProjectAgent.ID,
+							"agent_id", result.Agent.ID,
 							"device_id", deviceID,
 							"err", bindErr)
 					}
@@ -1882,43 +1864,42 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 
 		// Eager sandbox provisioning: kick off Acquire so the sandbox
 		// is ready before the user sends their first message. On
-		// success, persist deviceID to project_agents.runtime_id —
+		// success, persist deviceID to agents.runtime_id —
 		// without this write the connector's "user must bind a
 		// runtime first" guard would reject the very first prompt.
 		// Failure is non-fatal: the row is saved and SandboxPanel
 		// (or a follow-up Rebuild) gives the admin a recovery surface.
-		if agentDaemonSandbox != nil && result.ProjectAgent.Config != nil {
-			if mode, _ := result.ProjectAgent.Config["daemon_mode"].(string); mode == "sandbox" {
-				paID := result.ProjectAgent.ID
+		if agentDaemonSandbox != nil && result.Agent.Config != nil {
+			if mode, _ := result.Agent.Config["daemon_mode"].(string); mode == "sandbox" {
+				paID := result.Agent.ID
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 					defer cancel()
 					deviceID, err := agentDaemonSandbox.Acquire(ctx, connector.PromptInput{
-						ProjectAgentID: paID,
-						WorkspaceID:    workspaceID,
-						ProjectID:      projectID,
+						AgentID:     paID,
+						WorkspaceID: workspaceID,
 					})
 					if err != nil {
 						log.Bg().Warn("eager sandbox acquire failed",
-							"project_agent_id", paID, "err", err)
+							"agent_id", paID, "err", err)
 						return
 					}
-					if _, bindErr := runtimeStore.SetProjectAgentRuntime(ctx, store.SetProjectAgentRuntimeInput{
+					if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
 						WorkspaceID:    workspaceID,
-						ProjectAgentID: paID,
+						AgentID: paID,
 						RuntimeID:      deviceID,
 					}); bindErr != nil {
 						// Sandbox is alive but runtime_id write failed.
 						// Dispatch shows "未绑定 Runtime" until a retry
 						// succeeds or admin Rebuild rewrites.
 						log.Bg().Error("eager sandbox acquired but runtime_id persist failed",
-							"project_agent_id", paID,
+							"agent_id", paID,
 							"device_id", deviceID,
 							"err", bindErr)
 						return
 					}
 					log.Bg().Info("eager sandbox acquired and runtime bound",
-						"project_agent_id", paID, "device_id", deviceID)
+						"agent_id", paID, "device_id", deviceID)
 				}()
 			}
 		}
@@ -1998,15 +1979,8 @@ func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 
 		// Sync capability checkboxes → agent_capabilities table.
 		if hasCaps {
-			projectAgents, err := runtimeStore.ListProjectAgentsByAgentID(r.Context(), agentID)
-			if err != nil {
-				log.Bg().Warn("updateAgent: list project_agents for capability sync failed", "agent_id", agentID, "err", err)
-			} else {
-				for _, pa := range projectAgents {
-					if err := syncAgentCapabilities(r.Context(), runtimeStore, updated.WorkspaceID, pa.ID, req.Capabilities); err != nil {
-						log.Bg().Warn("updateAgent: capability sync failed", "project_agent_id", pa.ID, "err", err)
-					}
-				}
+			if err := syncAgentCapabilities(r.Context(), runtimeStore, updated.WorkspaceID, agentID, req.Capabilities); err != nil {
+				log.Bg().Warn("updateAgent: capability sync failed", "agent_id", agentID, "err", err)
 			}
 		}
 	}
@@ -2019,11 +1993,11 @@ func syncAgentCapabilities(
 	ctx context.Context,
 	rs RuntimeStore,
 	workspaceID string,
-	projectAgentID string,
+	agentID string,
 	capabilityNames []string,
 ) error {
-	// 1. Current state on this project_agent.
-	existing, err := rs.ListAgentCapabilities(ctx, projectAgentID)
+	// 1. Current state on this agent.
+	existing, err := rs.ListAgentCapabilities(ctx, agentID)
 	if err != nil {
 		return fmt.Errorf("syncAgentCapabilities: list existing: %w", err)
 	}
@@ -2073,7 +2047,7 @@ func syncAgentCapabilities(
 		cap, ok := capByName[name]
 		if !ok {
 			log.Bg().Warn("syncAgentCapabilities: capability not found, skipping",
-				"name", name, "workspace_id", workspaceID, "project_agent_id", projectAgentID)
+				"name", name, "workspace_id", workspaceID, "agent_id", agentID)
 			continue
 		}
 		desiredCapIDs[cap.capabilityID] = true
@@ -2112,13 +2086,13 @@ func syncAgentCapabilities(
 		if cap.fromMarketplace {
 			mode = store.PinningModePinned
 		}
-		if _, err := rs.EnableAgentCapability(ctx, projectAgentID, latestVersionID, nil, mode); err != nil {
+		if _, err := rs.EnableAgentCapability(ctx, agentID, latestVersionID, nil, mode); err != nil {
 			log.Bg().Warn("syncAgentCapabilities: enable failed, skipping",
 				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
 			continue
 		}
 		log.Bg().Info("syncAgentCapabilities: enabled capability",
-			"project_agent_id", projectAgentID, "capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "from_marketplace", cap.fromMarketplace, "pinning_mode", mode)
+			"agent_id", agentID, "capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "from_marketplace", cap.fromMarketplace, "pinning_mode", mode)
 	}
 
 	// 3. Remove capabilities no longer in the desired list.
@@ -2126,13 +2100,13 @@ func syncAgentCapabilities(
 		if desiredCapIDs[capID] {
 			continue
 		}
-		if err := rs.DeleteAgentCapability(ctx, projectAgentID, ac.CapabilityVersionID); err != nil {
+		if err := rs.DeleteAgentCapability(ctx, agentID, ac.CapabilityVersionID); err != nil {
 			log.Bg().Warn("syncAgentCapabilities: delete failed, skipping",
 				"capability_id", capID, "capability_version_id", ac.CapabilityVersionID, "err", err)
 			continue
 		}
 		log.Bg().Info("syncAgentCapabilities: removed capability",
-			"project_agent_id", projectAgentID, "capability_id", capID, "capability_version_id", ac.CapabilityVersionID)
+			"agent_id", agentID, "capability_id", capID, "capability_version_id", ac.CapabilityVersionID)
 	}
 	return nil
 }
@@ -2657,30 +2631,6 @@ func feishuOpenAPIBaseURL(configured string) string {
 	return strings.TrimSpace(os.Getenv(authfeishu.EnvAPIBase))
 }
 
-func deleteProjectAgent(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if runtimeStore == nil || !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
-			return
-		}
-		detail, ok := projectIDForProjectAgent(w, r.Context(), runtimeStore, projectAgentID)
-		if !ok {
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, detail); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		result, err := runtimeStore.DeleteProjectAgent(r.Context(), projectAgentID, actorIDFromRequest(r))
-		if err != nil {
-			writeStoreAgentError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"project_agent": result})
-	}
-}
-
 func deleteAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
@@ -2710,44 +2660,44 @@ func deleteAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func projectAgentStatusHandler(runtimeStore RuntimeStore, action string) http.HandlerFunc {
+func agentStatusHandler(runtimeStore RuntimeStore, action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed project agent lifecycle is disabled"})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed agent lifecycle is disabled"})
 			return
 		}
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		projectID, ok := projectIDForProjectAgent(w, r.Context(), runtimeStore, projectAgentID)
+		workspaceID, ok := workspaceIDForAgent(w, r.Context(), runtimeStore, agentID)
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 		var (
-			result store.ProjectAgentStatusRead
+			result store.AgentStatusRead
 			err    error
 		)
 		switch action {
 		case "disable":
-			result, err = runtimeStore.DisableProjectAgent(r.Context(), projectAgentID)
+			result, err = runtimeStore.DisableAgent(r.Context(), agentID)
 		case "enable":
-			result, err = runtimeStore.EnableProjectAgent(r.Context(), projectAgentID)
+			result, err = runtimeStore.EnableAgent(r.Context(), agentID)
 		default:
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unsupported project agent action"})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unsupported agent action"})
 			return
 		}
 		if err != nil {
-			if errors.Is(err, store.ErrUnknownProjectAgent) {
+			if errors.Is(err, store.ErrUnknownAgent) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("failed to %s project agent", action)})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("failed to %s agent", action)})
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
@@ -3338,7 +3288,7 @@ func requeueAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeReadError(w, err, "failed to get agent run")
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, run.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, run.WorkspaceID); err != nil {
 			if errors.Is(err, auth.ErrNotMember) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
@@ -3380,12 +3330,12 @@ func configureConversationExternalRef(runtimeStore RuntimeStore) http.HandlerFun
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversation_id must be a valid uuid"})
 			return
 		}
-		conversation, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		conversation, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to load conversation")
 			return
 		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, conversation.ProjectID); err != nil {
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, conversation.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -3427,37 +3377,37 @@ func isSafeHTTPAgentEndpoint(endpoint string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
-func listProjectEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 
 		includeDisabled := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include_disabled")), "true")
 		var (
-			agents []store.ProjectAgentRead
+			agents []store.AgentRead
 			err    error
 		)
 		if includeDisabled {
-			agents, err = runtimeStore.ListProjectAgentsForAdmin(r.Context(), projectID)
+			agents, err = runtimeStore.ListWorkspaceAgentsForAdmin(r.Context(), workspaceID)
 		} else {
-			agents, err = runtimeStore.ListProjectEnabledAgents(r.Context(), projectID)
+			agents, err = runtimeStore.ListWorkspaceEnabledAgents(r.Context(), workspaceID)
 		}
 		if err != nil {
-			writeReadError(w, err, "failed to list project agents")
+			writeReadError(w, err, "failed to list agents")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"project_id": projectID, "agents": agents})
+		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "agents": agents})
 	}
 }
 
@@ -3472,14 +3422,14 @@ func getConversationTimeline(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversation_id must be a valid uuid"})
 			return
 		}
-		// Timeline doesn't carry project_id, so reverse-lookup the
-		// parent conversation to find the project to authorise against.
-		conv, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		// Timeline doesn't carry workspace_id, so reverse-lookup the
+		// parent conversation to find the workspace to authorise against.
+		conv, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to load conversation for rbac check")
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, conv.ProjectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, conv.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -3510,8 +3460,8 @@ func getAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeReadError(w, err, "failed to get agent run")
 			return
 		}
-		// Load first to discover the parent project, then gate.
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, run.ProjectID); err != nil {
+		// Load first to discover the parent workspace, then gate.
+		if err := requireWorkspaceMember(r, runtimeStore, run.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -3550,7 +3500,6 @@ func inflightDeliveries(convs []store.FeishuInflightConversation) []map[string]a
 		row := map[string]any{
 			"conversation_id":    c.ConversationID,
 			"workspace_id":       c.WorkspaceID,
-			"project_id":         c.ProjectID,
 			"agent_run_id":       c.AgentRunID,
 			"external_chat_id":   c.ExternalChatID,
 			"external_thread_id": c.ExternalThreadID,
@@ -3611,18 +3560,18 @@ func markGatewayOutboundDelivered(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func listProjectAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -3635,13 +3584,13 @@ func listProjectAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 		limit := parseLimit(r, 100)
 		offset := parseOffset(r)
 
-		result, err := runtimeStore.ListProjectAgentRuns(r.Context(), projectID, statuses, limit, offset)
+		result, err := runtimeStore.ListWorkspaceAgentRuns(r.Context(), workspaceID, statuses, limit, offset)
 		if err != nil {
-			writeReadError(w, err, "failed to list project agent runs")
+			writeReadError(w, err, "failed to list agent runs")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"project_id": projectID,
+			"workspace_id": workspaceID,
 			"statuses":   statuses,
 			"agent_runs": result.Runs,
 			"total":      result.Total,
@@ -3651,27 +3600,27 @@ func listProjectAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// getProjectAgentMetrics returns aggregated run-history counters for
-// a single project_agent over a sliding window. Powers the agent-detail
+// getAgentMetrics returns aggregated run-history counters for
+// a single agent over a sliding window. Powers the agent-detail
 // "近 N 天表现" panel: completion count, success rate, average duration.
 // `?days=` is optional and clamps to [1, 365]; default 30.
-func getProjectAgentMetrics(runtimeStore RuntimeStore) http.HandlerFunc {
+func getAgentMetrics(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -3688,7 +3637,7 @@ func getProjectAgentMetrics(runtimeStore RuntimeStore) http.HandlerFunc {
 			}
 		}
 
-		metrics, err := runtimeStore.GetProjectAgentMetrics(r.Context(), projectID, projectAgentID, days)
+		metrics, err := runtimeStore.GetAgentMetrics(r.Context(), agentID, days)
 		if err != nil {
 			writeReadError(w, err, "failed to load agent metrics")
 			return
@@ -3720,29 +3669,29 @@ func parseStatusList(raw string) []string {
 	return out
 }
 
-// listProjectAuditRecords serves /projects/{projectID}/audit-records.
+// listWorkspaceAuditRecords serves /workspaces/{workspaceID}/audit-records.
 // It reads the unified audit_records table (5-category source taxonomy,
 // jsonb payload). Optional query filters: source, event_type,
 // target_type, target_id, actor_id.
-func listProjectAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 
 		q := r.URL.Query()
 		filter := store.ListAuditRecordsFilter{
-			ProjectID:  projectID,
+			WorkspaceID:  workspaceID,
 			Source:     strings.TrimSpace(q.Get("source")),
 			EventType:  strings.TrimSpace(q.Get("event_type")),
 			ActorID:    strings.TrimSpace(q.Get("actor_id")),
@@ -3751,11 +3700,11 @@ func listProjectAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		records, err := runtimeStore.ListAuditRecords(r.Context(), filter, parseLimit(r, 100))
 		if err != nil {
-			writeReadError(w, err, "failed to list project audit records")
+			writeReadError(w, err, "failed to list workspace audit records")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"project_id":    projectID,
+			"workspace_id":    workspaceID,
 			"source":        filter.Source,
 			"event_type":    filter.EventType,
 			"target_type":   filter.TargetType,
@@ -3764,28 +3713,28 @@ func listProjectAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// listProjectConnectors aggregates connector types in use by
-// project_agents in a project. There is no `connectors` table — the
+// listWorkspaceConnectorUsage aggregates connector types in use by
+// agents in a workspace. There is no `connectors` table — the
 // connector identity lives on each agent's `connector_type` field.
-func listProjectConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceConnectorUsage(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 
-		agents, err := runtimeStore.ListProjectAgentsForAdmin(r.Context(), projectID)
+		agents, err := runtimeStore.ListWorkspaceAgentsForAdmin(r.Context(), workspaceID)
 		if err != nil {
-			writeReadError(w, err, "failed to list project connectors")
+			writeReadError(w, err, "failed to list workspace connectors")
 			return
 		}
 
@@ -3828,7 +3777,7 @@ func listProjectConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
 		})
 
 		writeJSON(w, http.StatusOK, map[string]any{
-			"project_id": projectID,
+			"workspace_id": workspaceID,
 			"connectors": out,
 		})
 	}
@@ -3935,49 +3884,6 @@ func listWorkspaceMembers(runtimeStore RuntimeStore) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"workspace_id": workspaceID,
 			"members":      members,
-		})
-	}
-}
-
-// listWorkspaceProjects returns active projects inside a workspace.
-// Drives the project picker. 200 with empty list when none, 404 when
-// workspace unknown.
-func listWorkspaceProjects(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
-			return
-		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		// Pass userID so the SQL join on workspace_members gates the
-		// list to active workspace members (any role). Platform admins
-		// bypass the gate and see every active project in the workspace.
-		userID := actorIDFromRequest(r)
-		limit := parseLimit(r, 100)
-		var (
-			projects []store.WorkspaceProjectRead
-			err      error
-		)
-		if auth.IsPlatformAdmin(userID) {
-			projects, err = runtimeStore.ListWorkspaceProjectsForAdmin(r.Context(), workspaceID, limit)
-		} else {
-			projects, err = runtimeStore.ListWorkspaceProjects(r.Context(), workspaceID, userID, limit)
-		}
-		if err != nil {
-			writeReadError(w, err, "failed to list workspace projects")
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"workspace_id": workspaceID,
-			"projects":     projects,
 		})
 	}
 }
@@ -4195,128 +4101,6 @@ func archiveWorkspace(runtimeStore RuntimeStore) http.HandlerFunc {
 		})
 		if err != nil {
 			writeReadError(w, err, "failed to archive workspace")
-			return
-		}
-		writeJSON(w, http.StatusOK, row)
-	}
-}
-
-type createProjectRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-}
-
-func createProject(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
-			return
-		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		actorID, ok := devActorID(w, r)
-		if !ok {
-			return
-		}
-		var body createProjectRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
-			return
-		}
-		result, err := runtimeStore.CreateProject(r.Context(), store.CreateProjectInput{
-			WorkspaceID: workspaceID,
-			Name:        body.Name,
-			Description: body.Description,
-			CreatedBy:   actorID,
-			Now:         time.Now().UTC(),
-		})
-		if err != nil {
-			writeReadError(w, err, "failed to create project")
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{
-			"project": result.Project,
-		})
-	}
-}
-
-type updateProjectRequest struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-}
-
-func updateProject(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
-			return
-		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, projectID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		actorID, ok := devActorID(w, r)
-		if !ok {
-			return
-		}
-		var body updateProjectRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
-			return
-		}
-		row, err := runtimeStore.UpdateProject(r.Context(), store.UpdateProjectInput{
-			ProjectID:   projectID,
-			Name:        body.Name,
-			Description: body.Description,
-			ActorID:     actorID,
-			Now:         time.Now().UTC(),
-		})
-		if err != nil {
-			writeReadError(w, err, "failed to update project")
-			return
-		}
-		writeJSON(w, http.StatusOK, row)
-	}
-}
-
-func archiveProject(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if runtimeStore == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
-			return
-		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, projectID); err != nil {
-			writeRBACError(w, err)
-			return
-		}
-		actorID, ok := devActorID(w, r)
-		if !ok {
-			return
-		}
-		row, err := runtimeStore.ArchiveProject(r.Context(), store.ArchiveProjectInput{
-			ProjectID: projectID,
-			ActorID:   actorID,
-			Now:       time.Now().UTC(),
-		})
-		if err != nil {
-			writeReadError(w, err, "failed to archive project")
 			return
 		}
 		writeJSON(w, http.StatusOK, row)
@@ -4692,18 +4476,18 @@ func listDiscoverableWorkspaces(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func listProjectUsageLogs(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceUsageLogs(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -4713,12 +4497,12 @@ func listProjectUsageLogs(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 
-		usage, err := runtimeStore.ListProjectUsageLogs(r.Context(), projectID, agentRunID, parseLimit(r, 100))
+		usage, err := runtimeStore.ListWorkspaceUsageLogs(r.Context(), workspaceID, agentRunID, parseLimit(r, 100))
 		if err != nil {
-			writeReadError(w, err, "failed to list project usage")
+			writeReadError(w, err, "failed to list workspace usage")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"project_id": projectID, "agent_run_id": agentRunID, "usage_logs": usage})
+		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "agent_run_id": agentRunID, "usage_logs": usage})
 	}
 }
 
@@ -4772,13 +4556,13 @@ func isUUID(value string) bool {
 
 func writeReadError(w http.ResponseWriter, err error, fallback string) {
 	switch {
-	case errors.Is(err, store.ErrUnknownProject), errors.Is(err, store.ErrUnknownConversationForRead), errors.Is(err, store.ErrUnknownAgentRun), errors.Is(err, store.ErrUnknownConversation), errors.Is(err, store.ErrUnknownWorkspace):
+	case errors.Is(err, store.ErrUnknownWorkspace), errors.Is(err, store.ErrUnknownConversationForRead), errors.Is(err, store.ErrUnknownAgentRun), errors.Is(err, store.ErrUnknownConversation):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-	case errors.Is(err, store.ErrDuplicateWorkspaceSlug), errors.Is(err, store.ErrDuplicateProjectSlug):
+	case errors.Is(err, store.ErrDuplicateWorkspaceSlug):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrMarketplaceDependents):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "has_marketplace_dependents", "message": err.Error()})
-	case errors.Is(err, store.ErrInvalidWorkspaceInput), errors.Is(err, store.ErrInvalidProjectInput):
+	case errors.Is(err, store.ErrInvalidWorkspaceInput), errors.Is(err, store.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 	default:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fallback})
@@ -4805,9 +4589,9 @@ func writeStoreAgentError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrMarketplaceCapabilityUnavailable):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-	case errors.Is(err, store.ErrUnknownAgent), errors.Is(err, store.ErrUnknownProjectAgent), errors.Is(err, store.ErrUnknownWorkspace), errors.Is(err, store.ErrUnknownProject):
+	case errors.Is(err, store.ErrUnknownAgent), errors.Is(err, store.ErrUnknownAgent), errors.Is(err, store.ErrUnknownWorkspace), errors.Is(err, store.ErrUnknownWorkspace):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-	case errors.Is(err, store.ErrInvalidConnectorType), errors.Is(err, store.ErrInvalidProjectInput), errors.Is(err, store.ErrInvalidAgentVisibility):
+	case errors.Is(err, store.ErrInvalidConnectorType), errors.Is(err, store.ErrInvalidInput), errors.Is(err, store.ErrInvalidAgentVisibility):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 	default:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "agent operation failed"})
@@ -4874,39 +4658,6 @@ func requireWorkspaceMemberNotViewer(r *http.Request, runtimeStore RuntimeStore,
 	return auth.RequireWorkspaceRole(requestContextForRBAC(r), runtimeStore, workspaceID, "owner", "admin", "member")
 }
 
-// requireWorkspaceMemberByProject resolves projectID → workspaceID
-// then runs the read gate. Used by project-scoped read routes
-// (/projects/{pid}/...) after the project membership tier was removed.
-func requireWorkspaceMemberByProject(r *http.Request, runtimeStore RuntimeStore, projectID string) error {
-	workspaceID, err := runtimeStore.GetProjectWorkspace(r.Context(), projectID)
-	if err != nil {
-		return err
-	}
-	return requireWorkspaceMember(r, runtimeStore, workspaceID)
-}
-
-// requireWorkspaceOwnerOrAdminByProject is the management twin —
-// project-scoped management routes (delete/configure agent, archive
-// project, edit project, ...) map onto workspace owner/admin.
-func requireWorkspaceOwnerOrAdminByProject(r *http.Request, runtimeStore RuntimeStore, projectID string) error {
-	workspaceID, err := runtimeStore.GetProjectWorkspace(r.Context(), projectID)
-	if err != nil {
-		return err
-	}
-	return requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID)
-}
-
-// requireWorkspaceMemberNotViewerByProject is for "everyday write"
-// project-scoped routes (create conversation, send message, trigger
-// run) — viewer is locked out, member+ allowed.
-func requireWorkspaceMemberNotViewerByProject(r *http.Request, runtimeStore RuntimeStore, projectID string) error {
-	workspaceID, err := runtimeStore.GetProjectWorkspace(r.Context(), projectID)
-	if err != nil {
-		return err
-	}
-	return requireWorkspaceMemberNotViewer(r, runtimeStore, workspaceID)
-}
-
 // gateWorkspaceMember wraps a handler whose URL is
 // /workspaces/{workspaceID}/... and rejects callers that aren't an
 // active member. Used by sandbox admin endpoints whose handlers don't
@@ -4956,17 +4707,17 @@ func gateWorkspaceOwnerOrAdmin(runtimeStore RuntimeStore, next http.HandlerFunc)
 	}
 }
 
-func projectIDForProjectAgent(w http.ResponseWriter, ctx context.Context, runtimeStore RuntimeStore, projectAgentID string) (string, bool) {
-	agent, err := runtimeStore.GetProjectAgentDetail(ctx, projectAgentID)
+func workspaceIDForAgent(w http.ResponseWriter, ctx context.Context, runtimeStore RuntimeStore, agentID string) (string, bool) {
+	agent, err := runtimeStore.GetAgentDetail(ctx, agentID)
 	if err != nil {
-		if errors.Is(err, store.ErrUnknownProjectAgent) {
+		if errors.Is(err, store.ErrUnknownAgent) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return "", false
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load project agent"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load agent"})
 		return "", false
 	}
-	return agent.ProjectID, true
+	return agent.WorkspaceID, true
 }
 
 type createConversationUserMessageBody struct {
@@ -4997,12 +4748,12 @@ func createConversationUserMessage(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "content must be 1-32000 characters"})
 			return
 		}
-		conversation, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		conversation, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to get conversation")
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, conversation.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, conversation.WorkspaceID); err != nil {
 			if errors.Is(err, auth.ErrNotMember) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
@@ -5020,7 +4771,7 @@ func createConversationUserMessage(runtimeStore RuntimeStore) http.HandlerFunc {
 			switch {
 			case errors.Is(err, store.ErrUnknownConversation):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrUnknownMention), errors.Is(err, store.ErrInvalidProjectInput):
+			case errors.Is(err, store.ErrUnknownMention), errors.Is(err, store.ErrInvalidInput):
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			default:
 				log.Bg().Error("send conversation message failed",
@@ -5043,7 +4794,7 @@ func createConversationUserMessage(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-type createProjectConversationBody struct {
+type createWorkspaceConversationBody struct {
 	Title    string         `json:"title"`
 	Surface  string         `json:"surface"`
 	Form     string         `json:"form"`
@@ -5051,59 +4802,59 @@ type createProjectConversationBody struct {
 	Metadata map[string]any `json:"metadata"`
 }
 
-func listProjectConversations(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceConversations(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 		agentFilter := strings.TrimSpace(r.URL.Query().Get("agent_id"))
-		conversations, err := runtimeStore.ListProjectConversations(r.Context(), projectID, agentFilter, parseLimit(r, 100))
+		conversations, err := runtimeStore.ListWorkspaceConversations(r.Context(), workspaceID, agentFilter, parseLimit(r, 100))
 		if err != nil {
-			if errors.Is(err, store.ErrInvalidProjectInput) {
+			if errors.Is(err, store.ErrInvalidInput) {
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 				return
 			}
-			writeReadError(w, err, "failed to list project conversations")
+			writeReadError(w, err, "failed to list workspace conversations")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"conversations": conversations})
 	}
 }
 
-func createProjectConversation(runtimeStore RuntimeStore) http.HandlerFunc {
+func createWorkspaceConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed conversation creation is disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
-		var req createProjectConversationBody
+		var req createWorkspaceConversationBody
 		if r.Body != nil {
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 				return
 			}
 		}
-		conversation, err := runtimeStore.CreateProjectConversation(r.Context(), store.CreateProjectConversationInput{
-			ProjectID:      projectID,
+		conversation, err := runtimeStore.CreateWorkspaceConversation(r.Context(), store.CreateWorkspaceConversationInput{
+			WorkspaceID:      workspaceID,
 			Title:          req.Title,
 			Surface:        req.Surface,
 			Form:           req.Form,
@@ -5112,9 +4863,9 @@ func createProjectConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 		})
 		if err != nil {
 			switch {
-			case errors.Is(err, store.ErrUnknownProject):
+			case errors.Is(err, store.ErrUnknownWorkspace):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrUnknownMention), errors.Is(err, store.ErrInvalidProjectInput):
+			case errors.Is(err, store.ErrUnknownMention), errors.Is(err, store.ErrInvalidInput):
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			default:
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -5125,7 +4876,7 @@ func createProjectConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func getProjectConversation(runtimeStore RuntimeStore) http.HandlerFunc {
+func getConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
@@ -5136,14 +4887,14 @@ func getProjectConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversation_id must be a valid uuid"})
 			return
 		}
-		conversation, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		conversation, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to get conversation")
 			return
 		}
 		// URL is keyed by conversation_id, so load before knowing
-		// which project to authorise against.
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, conversation.ProjectID); err != nil {
+		// which workspace to authorise against.
+		if err := requireWorkspaceMember(r, runtimeStore, conversation.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -5167,13 +4918,13 @@ func updateConversationTitle(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversation_id must be a valid uuid"})
 			return
 		}
-		// Load row first so RBAC can gate on the resolved project.
-		conv, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		// Load row first so RBAC can gate on the resolved workspace.
+		conv, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to get conversation")
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, conv.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, conv.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -5188,7 +4939,7 @@ func updateConversationTitle(runtimeStore RuntimeStore) http.HandlerFunc {
 			switch {
 			case errors.Is(err, store.ErrUnknownConversation):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			case errors.Is(err, store.ErrInvalidProjectInput):
+			case errors.Is(err, store.ErrInvalidInput):
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			default:
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update conversation"})
@@ -5196,7 +4947,7 @@ func updateConversationTitle(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		// Re-read so response shape matches GET.
-		updated, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		updated, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to read updated conversation")
 			return
@@ -5216,12 +4967,12 @@ func deleteConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversation_id must be a valid uuid"})
 			return
 		}
-		conv, err := runtimeStore.GetProjectConversation(r.Context(), conversationID)
+		conv, err := runtimeStore.GetConversation(r.Context(), conversationID)
 		if err != nil {
 			writeReadError(w, err, "failed to get conversation")
 			return
 		}
-		if err := requireWorkspaceOwnerOrAdminByProject(r, runtimeStore, conv.ProjectID); err != nil {
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, conv.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}

@@ -36,7 +36,6 @@ func TestAssembleDoneCardData_FullFooter(t *testing.T) {
 
 	out, err := assembleDoneCardData(context.Background(), fs, assembleDoneCardInput{
 		WorkspaceID: "ws",
-		ProjectID:   "proj",
 		RunID:       runID,
 	})
 	if err != nil {
@@ -84,7 +83,6 @@ func TestAssembleDoneCardData_UnknownModelDegrades(t *testing.T) {
 
 	out, err := assembleDoneCardData(context.Background(), fs, assembleDoneCardInput{
 		WorkspaceID: "ws",
-		ProjectID:   "proj",
 		RunID:       runID,
 	})
 	if err != nil {
@@ -113,7 +111,6 @@ func TestAssembleDoneCardData_NoUsageYet(t *testing.T) {
 
 	out, err := assembleDoneCardData(context.Background(), fs, assembleDoneCardInput{
 		WorkspaceID: "ws",
-		ProjectID:   "proj",
 		RunID:       runID,
 	})
 	if err != nil {
@@ -140,7 +137,6 @@ func TestAssembleDoneCardData_PrefilledSkipsEventRead(t *testing.T) {
 
 	out, err := assembleDoneCardData(context.Background(), fs, assembleDoneCardInput{
 		WorkspaceID:      "ws",
-		ProjectID:        "proj",
 		RunID:            runID,
 		PrefilledSteps:   prefilled,
 		PrefilledElapsed: 12 * time.Second,
@@ -165,7 +161,6 @@ func TestAssembleDoneCardData_EmptyRunID(t *testing.T) {
 	fs := newFakeStore()
 	out, err := assembleDoneCardData(context.Background(), fs, assembleDoneCardInput{
 		WorkspaceID: "ws",
-		ProjectID:   "proj",
 		RunID:       "",
 	})
 	if err != nil {

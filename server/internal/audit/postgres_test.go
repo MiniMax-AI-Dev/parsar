@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 // TestPostgresSinkRoundTrip writes one event per Source and reads them
@@ -140,7 +140,6 @@ func TestPostgresSinkNullIDsWhenEmpty(t *testing.T) {
 		"actor_id":     r.ActorID,
 		"target_id":    r.TargetID,
 		"workspace_id": r.WorkspaceID,
-		"project_id":   r.ProjectID,
 	} {
 		if id.Valid {
 			t.Errorf("expected %s to be NULL when source field is empty", name)

@@ -23,8 +23,7 @@ type RuntimeIdentity struct {
 	WorkspaceID    string
 	RuntimeType    string
 	OwnerUserID    *string
-	ProjectID      *string
-	ProjectAgentID *string
+	AgentID        *string
 	ConnectorName  *string
 	ConversationID *string
 }
@@ -55,8 +54,7 @@ func (s *Store) ResolveRuntimeIdentity(ctx context.Context, plaintext string) (R
 		WorkspaceID:    row.WorkspaceID,
 		RuntimeType:    row.Type,
 		OwnerUserID:    nullableUUIDString(row.OwnerUserID),
-		ProjectID:      configString(cfg, "project_id"),
-		ProjectAgentID: configString(cfg, "project_agent_id"),
+		AgentID:        configString(cfg, "agent_id"),
 		ConnectorName:  configString(cfg, "connector"),
 		ConversationID: configString(cfg, "conversation_id"),
 	}, true, nil

@@ -14,7 +14,7 @@ export type SandboxStatusKind = "live" | "transient" | "terminal"
 export interface SandboxBinding {
   binding_id: string
   workspace_id: string
-  project_agent_id: string | null
+  agent_id: string | null
   name?: string | null
   cache_key: string
   sandbox_id: string
@@ -49,20 +49,20 @@ interface SandboxLifecycleResponse {
 
 /* --- Query keys --------------------------------------------------------- */
 
-const KEY_SANDBOX = (workspaceID: string, projectAgentID: string) =>
-  ["admin", "sandbox", workspaceID, projectAgentID] as const
+const KEY_SANDBOX = (workspaceID: string, agentID: string) =>
+  ["admin", "sandbox", workspaceID, agentID] as const
 
 /* --- Network ------------------------------------------------------------ */
 
 async function getSandboxBinding(
   workspaceID: string,
-  projectAgentID: string,
+  agentID: string,
 ): Promise<SandboxBinding | null> {
   // Server returns 200 + JSON `null` for "no binding". 404-catch below
   // covers older servers that still surface "no binding" as a 404.
   try {
     return await apiRequest<SandboxBinding | null>(
-      `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/project-agents/${encodeURIComponent(projectAgentID)}/sandbox`,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox`,
     )
   } catch (err) {
     if (err instanceof ApiError && err.envelope.status === 404) return null
@@ -72,10 +72,10 @@ async function getSandboxBinding(
 
 async function killSandboxRequest(
   workspaceID: string,
-  projectAgentID: string,
+  agentID: string,
 ): Promise<SandboxLifecycleResponse> {
   return apiRequest<SandboxLifecycleResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/project-agents/${encodeURIComponent(projectAgentID)}/sandbox/kill`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/kill`,
     { method: "POST" },
   )
 }
@@ -87,17 +87,17 @@ async function killSandboxRequest(
  */
 export async function killSandboxRequestRaw(
   workspaceID: string,
-  projectAgentID: string,
+  agentID: string,
 ): Promise<SandboxLifecycleResponse> {
-  return killSandboxRequest(workspaceID, projectAgentID)
+  return killSandboxRequest(workspaceID, agentID)
 }
 
 async function rebuildSandboxRequest(
   workspaceID: string,
-  projectAgentID: string,
+  agentID: string,
 ): Promise<SandboxLifecycleResponse> {
   return apiRequest<SandboxLifecycleResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/project-agents/${encodeURIComponent(projectAgentID)}/sandbox/rebuild`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/rebuild`,
     { method: "POST" },
   )
 }
@@ -105,20 +105,20 @@ async function rebuildSandboxRequest(
 /* --- Hooks -------------------------------------------------------------- */
 
 /**
- * useSandboxBinding fetches the current sandbox binding for a project agent.
+ * useSandboxBinding fetches the current sandbox binding for an agent.
  * Returns `null` (not error) when no live binding exists.
  */
 export function useSandboxBinding(
   workspaceID: string | null,
-  projectAgentID: string | null,
+  agentID: string | null,
 ) {
   return useQuery({
-    queryKey: KEY_SANDBOX(workspaceID ?? "_none", projectAgentID ?? "_none"),
+    queryKey: KEY_SANDBOX(workspaceID ?? "_none", agentID ?? "_none"),
     queryFn: () => {
-      if (!workspaceID || !projectAgentID) throw new Error("workspaceID + projectAgentID required")
-      return getSandboxBinding(workspaceID, projectAgentID)
+      if (!workspaceID || !agentID) throw new Error("workspaceID + agentID required")
+      return getSandboxBinding(workspaceID, agentID)
     },
-    enabled: !!workspaceID && !!projectAgentID,
+    enabled: !!workspaceID && !!agentID,
     retry: noUnreachableRetry,
     // Short stale time so the panel reflects sandbox lifecycle without
     // spamming the server; refetchInterval keeps the open panel "live".
@@ -127,19 +127,19 @@ export function useSandboxBinding(
   })
 }
 
-export function useKillSandbox(workspaceID: string | null, projectAgentID: string | null) {
+export function useKillSandbox(workspaceID: string | null, agentID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      if (!workspaceID || !projectAgentID) {
+      if (!workspaceID || !agentID) {
         throw new ApiError({
           status: 0,
           code: "no_target",
-          message: "workspaceID + projectAgentID required for sandbox kill",
+          message: "workspaceID + agentID required for sandbox kill",
           unreachable: false,
         })
       }
-      return killSandboxRequest(workspaceID, projectAgentID)
+      return killSandboxRequest(workspaceID, agentID)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
@@ -147,19 +147,19 @@ export function useKillSandbox(workspaceID: string | null, projectAgentID: strin
   })
 }
 
-export function useRebuildSandbox(workspaceID: string | null, projectAgentID: string | null) {
+export function useRebuildSandbox(workspaceID: string | null, agentID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      if (!workspaceID || !projectAgentID) {
+      if (!workspaceID || !agentID) {
         throw new ApiError({
           status: 0,
           code: "no_target",
-          message: "workspaceID + projectAgentID required for sandbox rebuild",
+          message: "workspaceID + agentID required for sandbox rebuild",
           unreachable: false,
         })
       }
-      return rebuildSandboxRequest(workspaceID, projectAgentID)
+      return rebuildSandboxRequest(workspaceID, agentID)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
@@ -171,10 +171,10 @@ export function useRebuildSandbox(workspaceID: string | null, projectAgentID: st
 
 async function renewSandboxRequest(
   workspaceID: string,
-  projectAgentID: string,
+  agentID: string,
 ): Promise<SandboxRenewResponse> {
   return apiRequest<SandboxRenewResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/project-agents/${encodeURIComponent(projectAgentID)}/sandbox/renew`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/renew`,
     { method: "POST" },
   )
 }
@@ -184,19 +184,19 @@ async function renewSandboxRequest(
  * 409 means "this pod doesn't own the cache entry"; the panel's 15s poll
  * usually redirects to the owning pod within one cycle.
  */
-export function useRenewSandbox(workspaceID: string | null, projectAgentID: string | null) {
+export function useRenewSandbox(workspaceID: string | null, agentID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      if (!workspaceID || !projectAgentID) {
+      if (!workspaceID || !agentID) {
         throw new ApiError({
           status: 0,
           code: "no_target",
-          message: "workspaceID + projectAgentID required for sandbox renew",
+          message: "workspaceID + agentID required for sandbox renew",
           unreachable: false,
         })
       }
-      return renewSandboxRequest(workspaceID, projectAgentID)
+      return renewSandboxRequest(workspaceID, agentID)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
@@ -208,32 +208,32 @@ export function useRenewSandbox(workspaceID: string | null, projectAgentID: stri
 
 async function acquireSandboxRequest(
   workspaceID: string,
-  projectAgentID: string,
-): Promise<{ status: string; project_agent_id?: string }> {
+  agentID: string,
+): Promise<{ status: string; agent_id?: string }> {
   return apiRequest(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/project-agents/${encodeURIComponent(projectAgentID)}/sandbox/acquire`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/acquire`,
     { method: "POST" },
   )
 }
 
 /**
- * useAcquireSandbox triggers sandbox provisioning for a project agent with
+ * useAcquireSandbox triggers sandbox provisioning for an agent with
  * no active binding. Returns 202 immediately — the cold start runs in the
  * background and useSandboxBinding's 15s poll picks up the result.
  */
-export function useAcquireSandbox(workspaceID: string | null, projectAgentID: string | null) {
+export function useAcquireSandbox(workspaceID: string | null, agentID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      if (!workspaceID || !projectAgentID) {
+      if (!workspaceID || !agentID) {
         throw new ApiError({
           status: 0,
           code: "no_target",
-          message: "workspaceID + projectAgentID required for sandbox acquire",
+          message: "workspaceID + agentID required for sandbox acquire",
           unreachable: false,
         })
       }
-      return acquireSandboxRequest(workspaceID, projectAgentID)
+      return acquireSandboxRequest(workspaceID, agentID)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
@@ -284,13 +284,13 @@ const SANDBOX_TEST_CONNECTION_TIMEOUT_MS = 30_000
 
 async function testSandboxConnectionRequest(
   workspaceID: string,
-  projectAgentID: string,
+  agentID: string,
 ): Promise<ConnectivityResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), SANDBOX_TEST_CONNECTION_TIMEOUT_MS)
   try {
     return await apiRequest<ConnectivityResult>(
-      `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/project-agents/${encodeURIComponent(projectAgentID)}/sandbox/test-connection`,
+      `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/test-connection`,
       { method: "POST", body: {}, signal: controller.signal },
     )
   } catch (err) {
@@ -312,9 +312,9 @@ export function useSandboxConnectivityTest() {
   return useMutation({
     mutationFn: async (params: {
       workspaceID: string
-      projectAgentID: string
+      agentID: string
     }): Promise<ConnectivityResult> => {
-      return testSandboxConnectionRequest(params.workspaceID, params.projectAgentID)
+      return testSandboxConnectionRequest(params.workspaceID, params.agentID)
     },
     retry: false,
   })

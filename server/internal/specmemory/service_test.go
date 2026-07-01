@@ -91,7 +91,7 @@ func (f *fakeService) InsertMemory(_ context.Context, in store.InsertMemoryInput
 			ID:             in.ID,
 			Scope:          in.Scope,
 			UserID:         in.UserID,
-			ProjectID:      in.ProjectID,
+			WorkspaceID:    in.WorkspaceID,
 			MemoryType:     in.MemoryType,
 			Title:          in.Title,
 			Body:           in.Body,
@@ -402,8 +402,8 @@ func TestCreateMemoryUserScopeHappyPath(t *testing.T) {
 		t.Errorf("returned memory wrong: %+v", mem)
 	}
 	got := fake.insertedMemory[0]
-	if got.ProjectID != "" {
-		t.Errorf("user-scope memory should have empty ProjectID, got %q", got.ProjectID)
+	if got.WorkspaceID != "" {
+		t.Errorf("user-scope memory should have empty WorkspaceID, got %q", got.WorkspaceID)
 	}
 	if got.AgentActor != "claude:p1" {
 		t.Errorf("AgentActor not propagated, got %q", got.AgentActor)
@@ -417,36 +417,36 @@ func TestCreateMemoryUserScopeHappyPath(t *testing.T) {
 	}
 }
 
-func TestCreateMemoryProjectScopeRequiresProjectID(t *testing.T) {
+func TestCreateMemoryWorkspaceScopeRequiresWorkspaceID(t *testing.T) {
 	fake := &fakeService{}
 	svc, _ := newTestService(t, fake, nil)
 	_, err := svc.CreateMemory(context.Background(), CreateMemoryInput{
-		Scope:      ScopeProject,
+		Scope:      ScopeWorkspace,
 		UserID:     "u",
-		MemoryType: MemoryTypeProject,
+		MemoryType: MemoryTypeWorkspace,
 		Body:       "b",
 		Source:     SourceManual,
 		Actor:      Actor{Type: audit.ActorTypeUser, UserID: "u"},
 	})
-	if err == nil || !strings.Contains(err.Error(), "project_id is required") {
-		t.Errorf("expected project_id required error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "workspace_id is required") {
+		t.Errorf("expected workspace_id required error, got %v", err)
 	}
 }
 
-func TestCreateMemoryUserScopeRejectsProjectID(t *testing.T) {
+func TestCreateMemoryUserScopeRejectsWorkspaceID(t *testing.T) {
 	fake := &fakeService{}
 	svc, _ := newTestService(t, fake, nil)
 	_, err := svc.CreateMemory(context.Background(), CreateMemoryInput{
-		Scope:      ScopeUser,
-		UserID:     "u",
-		ProjectID:  "p",
-		MemoryType: MemoryTypeUser,
-		Body:       "b",
-		Source:     SourceManual,
-		Actor:      Actor{Type: audit.ActorTypeUser, UserID: "u"},
+		Scope:       ScopeUser,
+		UserID:      "u",
+		WorkspaceID: "p",
+		MemoryType:  MemoryTypeUser,
+		Body:        "b",
+		Source:      SourceManual,
+		Actor:       Actor{Type: audit.ActorTypeUser, UserID: "u"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "must be empty") {
-		t.Errorf("expected project_id must be empty error, got %v", err)
+		t.Errorf("expected workspace_id must be empty error, got %v", err)
 	}
 }
 

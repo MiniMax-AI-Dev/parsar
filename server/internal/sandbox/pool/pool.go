@@ -77,7 +77,7 @@ type Persistence interface {
 	// killed — admin UI keeps claimed rows visible until a real
 	// kill. Phase 3 split this out from OnTerminal (which used to
 	// receive status='claimed' and route through MarkKilled).
-	OnClaim(ctx context.Context, workspaceID, projectAgentID, cacheKey, sandboxID string) error
+	OnClaim(ctx context.Context, workspaceID, agentID, cacheKey, sandboxID string) error
 	// OnTerminal records a real kill (status='killed' /
 	// 'killed_orphaned' / 'killed_error').
 	OnTerminal(ctx context.Context, sandboxID, status string) error
@@ -634,11 +634,11 @@ func (p *Pool) Kill(ctx context.Context, sandboxID string) error {
 // sandboxes closest to expiry first so renew cycles cluster on
 // entries that have the most remaining lifetime. Deterministic for
 // tests via iteration order from the sort.
-func (p *Pool) Claim(ctx context.Context, workspaceID, projectAgentID, cacheKey string) (sandbox e2bsandbox.Sandbox, kill func(), ok bool) {
+func (p *Pool) Claim(ctx context.Context, workspaceID, agentID, cacheKey string) (sandbox e2bsandbox.Sandbox, kill func(), ok bool) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	projectAgentID = strings.TrimSpace(projectAgentID)
+	agentID = strings.TrimSpace(agentID)
 	cacheKey = strings.TrimSpace(cacheKey)
-	if workspaceID == "" || projectAgentID == "" || cacheKey == "" {
+	if workspaceID == "" || agentID == "" || cacheKey == "" {
 		return e2bsandbox.Sandbox{}, nil, false
 	}
 	p.mu.Lock()
@@ -673,7 +673,7 @@ func (p *Pool) Claim(ctx context.Context, workspaceID, projectAgentID, cacheKey 
 	p.mu.Unlock()
 
 	p.logf("sandbox pool: claimed sandbox=%s", pickSandbox.SandboxID)
-	p.emitOnClaim(workspaceID, projectAgentID, cacheKey, pickSandbox.SandboxID)
+	p.emitOnClaim(workspaceID, agentID, cacheKey, pickSandbox.SandboxID)
 	return pickSandbox, pickKill, true
 }
 
@@ -811,14 +811,14 @@ func (p *Pool) emitOnRenew(sandboxID string, expiresAt time.Time) {
 	}()
 }
 
-func (p *Pool) emitOnClaim(workspaceID, projectAgentID, cacheKey, sandboxID string) {
+func (p *Pool) emitOnClaim(workspaceID, agentID, cacheKey, sandboxID string) {
 	if p.persist == nil {
 		return
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), persistOpTimeout)
 		defer cancel()
-		if err := p.persist.OnClaim(ctx, workspaceID, projectAgentID, cacheKey, sandboxID); err != nil {
+		if err := p.persist.OnClaim(ctx, workspaceID, agentID, cacheKey, sandboxID); err != nil {
 			p.logf("sandbox pool: persist OnClaim failed sandbox=%s err=%v", sandboxID, err)
 		}
 	}()

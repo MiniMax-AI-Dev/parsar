@@ -36,7 +36,7 @@ func TestListActiveFeishuInflightConversations_NullOutputMessageIDDoesNotPanic(t
 		t.Fatalf("configure conv external ref: %v", err)
 	}
 
-	// Spawn a project_agent run; output_message_id stays NULL until
+	// Spawn an agent run; output_message_id stays NULL until
 	// CompleteAgentRun fires — the window the inflight driver lives in.
 	sendRes, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,

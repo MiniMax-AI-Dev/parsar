@@ -285,7 +285,7 @@ func TestIsAPIPath(t *testing.T) {
 		"/conversations/42",
 		"/assets/app.js",
 		"/login",
-		"/admin/projects/abc",
+		"/admin/agents/abc",
 	}
 	for _, p := range no {
 		if isAPIPath(p) {

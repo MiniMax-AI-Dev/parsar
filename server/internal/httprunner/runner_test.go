@@ -186,9 +186,7 @@ func invocation(runID string) store.HTTPAgentRunInvocation {
 	return store.HTTPAgentRunInvocation{
 		RunID:                 runID,
 		WorkspaceID:           "workspace-1",
-		ProjectID:             "project-1",
 		ConversationID:        "conversation-1",
-		ProjectAgentID:        "project-agent-1",
 		AgentID:               "agent-1",
 		AgentName:             "Backend Agent",
 		AgentSlug:             "backend-agent",
@@ -196,6 +194,5 @@ func invocation(runID string) store.HTTPAgentRunInvocation {
 		Status:                "running",
 		TriggerMessageContent: "please run",
 		AgentConfig:           map[string]any{"endpoint": "http://agent.local/run"},
-		ProjectAgentConfig:    map[string]any{},
 	}
 }

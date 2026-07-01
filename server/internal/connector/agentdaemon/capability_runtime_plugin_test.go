@@ -85,7 +85,7 @@ func TestResolveCapabilityAdditions_PluginHappyPath(t *testing.T) {
 			},
 		},
 		oss: presigner,
-		log:     discardLogger(),
+		log: discardLogger(),
 	}
 	additions, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err != nil {
@@ -149,7 +149,7 @@ func TestResolveCapabilityAdditions_PluginPresignFailurePropagates(t *testing.T)
 			},
 		},
 		oss: &stubPluginPresigner{ReturnErr: signerErr},
-		log:     discardLogger(),
+		log: discardLogger(),
 	}
 	_, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err == nil {
@@ -183,7 +183,7 @@ func TestResolveCapabilityAdditions_PluginKindMismatchErrors(t *testing.T) {
 			},
 		},
 		oss: &stubPluginPresigner{},
-		log:     discardLogger(),
+		log: discardLogger(),
 	}
 	_, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err == nil {
@@ -204,7 +204,7 @@ func TestResolveCapabilityAdditions_PluginEmptyCanonicalSpecSkipped(t *testing.T
 			},
 		},
 		oss: &stubPluginPresigner{},
-		log:     discardLogger(),
+		log: discardLogger(),
 	}
 	additions, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err != nil {
@@ -217,7 +217,7 @@ func TestResolveCapabilityAdditions_PluginEmptyCanonicalSpecSkipped(t *testing.T
 
 func TestResolveCapabilityAdditions_PluginsCoexistWithSkillAndMCP(t *testing.T) {
 	t.Parallel()
-	// Three capabilities in one project_agent: one of each type. All
+	// Three capabilities in one agent: one of each type. All
 	// three branches must populate their slot in capabilityAdditions
 	// without interfering with the others.
 	c := &Connector{
@@ -229,7 +229,7 @@ func TestResolveCapabilityAdditions_PluginsCoexistWithSkillAndMCP(t *testing.T) 
 			},
 		},
 		oss: &stubPluginPresigner{},
-		log:     discardLogger(),
+		log: discardLogger(),
 	}
 	additions, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err != nil {
@@ -259,7 +259,7 @@ func TestResolveCapabilityAdditions_PluginDuplicateNameDedup(t *testing.T) {
 			},
 		},
 		oss: &stubPluginPresigner{},
-		log:     discardLogger(),
+		log: discardLogger(),
 	}
 	additions, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err != nil {

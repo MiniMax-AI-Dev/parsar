@@ -399,7 +399,6 @@ func (w *Worker) buildNeutralTerminalCard(
 	// failure degrades (best-effort card) rather than aborting.
 	data, err := assembleDoneCardData(ctx, w.store, assembleDoneCardInput{
 		WorkspaceID:       c.WorkspaceID,
-		ProjectID:         c.ProjectID,
 		RunID:             c.AgentRunID,
 		PrefilledSteps:    steps,
 		PrefilledElapsed:  elapsed,

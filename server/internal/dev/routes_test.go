@@ -14,15 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 const (
-	testProjectID      = "00000000-0000-0000-0000-000000000004"
 	testConversationID = "00000000-0000-0000-0000-000000000012"
 	testRunID          = "00000000-0000-0000-0000-000000000101"
 )
@@ -1724,11 +1723,11 @@ func TestGatewayInboundValidatesRequiredFields(t *testing.T) {
 	}
 }
 
-func TestProjectAgentsRouteReturnsEnabledAgents(t *testing.T) {
+func TestWorkspaceAgentsRouteReturnsEnabledAgents(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agents", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agents", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1739,12 +1738,12 @@ func TestProjectAgentsRouteReturnsEnabledAgents(t *testing.T) {
 	}
 }
 
-func TestConfigureProjectAgentConnectorRoute(t *testing.T) {
+func TestConfigureAgentConnectorRoute(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
 	body := bytes.NewBufferString(`{"connector_type":"http","endpoint":"http://127.0.0.1:19090/agent"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000010/connector", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000010/connector", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1756,24 +1755,24 @@ func TestConfigureProjectAgentConnectorRoute(t *testing.T) {
 	}
 }
 
-func TestConfigureProjectAgentConnectorRejectsInvalidInput(t *testing.T) {
+func TestConfigureAgentConnectorRejectsInvalidInput(t *testing.T) {
 	cases := []struct {
-		name           string
-		projectAgentID string
-		body           string
-		wantStatus     int
+		name       string
+		agentID    string
+		body       string
+		wantStatus int
 	}{
-		{name: "malformed uuid", projectAgentID: "not-a-uuid", body: `{"connector_type":"http","endpoint":"http://127.0.0.1:19090/agent"}`, wantStatus: http.StatusBadRequest},
-		{name: "missing endpoint", projectAgentID: "00000000-0000-0000-0000-000000000010", body: `{"connector_type":"http"}`, wantStatus: http.StatusBadRequest},
-		{name: "invalid connector", projectAgentID: "00000000-0000-0000-0000-000000000010", body: `{"connector_type":"bogus"}`, wantStatus: http.StatusBadRequest},
-		{name: "unknown", projectAgentID: "00000000-0000-0000-0000-000000099999", body: `{"connector_type":"http","endpoint":"http://127.0.0.1:19090/agent"}`, wantStatus: http.StatusNotFound},
+		{name: "malformed uuid", agentID: "not-a-uuid", body: `{"connector_type":"http","endpoint":"http://127.0.0.1:19090/agent"}`, wantStatus: http.StatusBadRequest},
+		{name: "missing endpoint", agentID: "00000000-0000-0000-0000-000000000010", body: `{"connector_type":"http"}`, wantStatus: http.StatusBadRequest},
+		{name: "invalid connector", agentID: "00000000-0000-0000-0000-000000000010", body: `{"connector_type":"bogus"}`, wantStatus: http.StatusBadRequest},
+		{name: "unknown", agentID: "00000000-0000-0000-0000-000000099999", body: `{"connector_type":"http","endpoint":"http://127.0.0.1:19090/agent"}`, wantStatus: http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := chi.NewRouter()
 			RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/"+tc.projectAgentID+"/connector", bytes.NewBufferString(tc.body))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/"+tc.agentID+"/connector", bytes.NewBufferString(tc.body))
 			res := httptest.NewRecorder()
 			r.ServeHTTP(res, req)
 			if res.Code != tc.wantStatus {
@@ -1847,11 +1846,11 @@ func TestGatewayOutboundRoutes(t *testing.T) {
 	}
 }
 
-func TestProjectAgentRunsRoutePassesStatusFilter(t *testing.T) {
+func TestWorkspaceAgentRunsRoutePassesStatusFilter(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agent-runs?status=queued", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs?status=queued", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1865,11 +1864,11 @@ func TestProjectAgentRunsRoutePassesStatusFilter(t *testing.T) {
 
 // The admin "进行中" tab unions running+queued in one round-trip via
 // comma-separated status.
-func TestProjectAgentRunsRouteAcceptsMultipleStatuses(t *testing.T) {
+func TestWorkspaceAgentRunsRouteAcceptsMultipleStatuses(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agent-runs?status=running,queued", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs?status=running,queued", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1888,11 +1887,11 @@ func TestProjectAgentRunsRouteAcceptsMultipleStatuses(t *testing.T) {
 
 // Handler returns total + limit + offset so the pager can render
 // "showing X-Y of N".
-func TestProjectAgentRunsRouteReturnsPaginationEnvelope(t *testing.T) {
+func TestWorkspaceAgentRunsRouteReturnsPaginationEnvelope(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agent-runs?limit=1&offset=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs?limit=1&offset=1", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1915,11 +1914,11 @@ func TestProjectAgentRunsRouteReturnsPaginationEnvelope(t *testing.T) {
 // Agent-detail "近 N 天表现" panel: handler should return the metrics
 // snapshot as-is and accept a `?days=` override. Stub returns a fixed
 // shape so the route test pins the wire contract.
-func TestProjectAgentMetricsRouteReturnsSnapshot(t *testing.T) {
+func TestWorkspaceAgentMetricsRouteReturnsSnapshot(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agents/00000000-0000-0000-0000-000000000009/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agents/00000000-0000-0000-0000-000000000009/metrics", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1934,11 +1933,11 @@ func TestProjectAgentMetricsRouteReturnsSnapshot(t *testing.T) {
 	}
 }
 
-func TestProjectAgentMetricsRouteHonorsDaysParam(t *testing.T) {
+func TestWorkspaceAgentMetricsRouteHonorsDaysParam(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agents/00000000-0000-0000-0000-000000000009/metrics?days=7", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agents/00000000-0000-0000-0000-000000000009/metrics?days=7", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1953,7 +1952,7 @@ func TestAgentRunEventsRouteReturnsEventsWithCursor(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/agent-runs/"+testRunID+"/events?after_sequence=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs/"+testRunID+"/events?after_sequence=1", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1965,11 +1964,11 @@ func TestAgentRunEventsRouteReturnsEventsWithCursor(t *testing.T) {
 	}
 }
 
-func TestAgentRunEventsRouteRejectsProjectMismatch(t *testing.T) {
+func TestAgentRunEventsRouteRejectsWorkspaceMismatch(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/00000000-0000-0000-0000-000000009999/agent-runs/"+testRunID+"/events", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000009999/agent-runs/"+testRunID+"/events", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusNotFound {
@@ -1977,11 +1976,11 @@ func TestAgentRunEventsRouteRejectsProjectMismatch(t *testing.T) {
 	}
 }
 
-func TestProjectAuditRecordsRouteFiltersBySource(t *testing.T) {
+func TestWorkspaceAuditRecordsRouteFiltersBySource(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/audit-records?source=runtime&limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/audit-records?source=runtime&limit=10", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -1994,11 +1993,11 @@ func TestProjectAuditRecordsRouteFiltersBySource(t *testing.T) {
 	}
 }
 
-func TestProjectAuditRecordsRouteRejectsBadProjectID(t *testing.T) {
+func TestWorkspaceAuditRecordsRouteRejectsBadWorkspaceID(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/not-a-uuid/audit-records", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/not-a-uuid/audit-records", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusBadRequest {
@@ -2006,11 +2005,11 @@ func TestProjectAuditRecordsRouteRejectsBadProjectID(t *testing.T) {
 	}
 }
 
-func TestProjectUsageRouteReturnsUsageAndFiltersRun(t *testing.T) {
+func TestWorkspaceUsageRouteReturnsUsageAndFiltersRun(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/usage?agent_run_id="+testRunID+"&limit=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/usage?agent_run_id="+testRunID+"&limit=1", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -2027,10 +2026,10 @@ func TestReadRoutesRejectMalformedUUIDs(t *testing.T) {
 		name string
 		path string
 	}{
-		{name: "project agents", path: "/api/v1/projects/not-a-uuid/agents"},
-		{name: "project agent runs", path: "/api/v1/projects/not-a-uuid/agent-runs"},
-		{name: "project audit records", path: "/api/v1/projects/not-a-uuid/audit-records"},
-		{name: "project usage", path: "/api/v1/projects/not-a-uuid/usage"},
+		{name: "workspace agents", path: "/api/v1/workspaces/not-a-uuid/agents"},
+		{name: "workspace agent runs", path: "/api/v1/workspaces/not-a-uuid/agent-runs"},
+		{name: "workspace audit records", path: "/api/v1/workspaces/not-a-uuid/audit-records"},
+		{name: "workspace usage", path: "/api/v1/workspaces/not-a-uuid/usage"},
 		{name: "conversation timeline", path: "/api/v1/conversations/not-a-uuid/timeline"},
 		{name: "agent run detail", path: "/api/v1/agent-runs/not-a-uuid"},
 	}
@@ -2053,11 +2052,11 @@ func TestReadRoutesRejectMalformedUUIDs(t *testing.T) {
 	}
 }
 
-func TestProjectUsageRouteRejectsMalformedAgentRunID(t *testing.T) {
+func TestWorkspaceUsageRouteRejectsMalformedAgentRunID(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+testProjectID+"/usage?agent_run_id=not-a-uuid", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/usage?agent_run_id=not-a-uuid", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusBadRequest {
@@ -2092,12 +2091,12 @@ func (s roleStubStore) roleForUser(userID string) (string, error) {
 	return role, nil
 }
 
-func (stubRuntimeStore) ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]store.ScheduledTaskRead, error) {
+func (stubRuntimeStore) ListScheduledTasksByAgent(ctx context.Context, agentID string) ([]store.ScheduledTaskRead, error) {
 	return nil, nil
 }
 
-func (stubRuntimeStore) ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (store.ListScheduledTasksByProjectResult, error) {
-	return store.ListScheduledTasksByProjectResult{}, nil
+func (stubRuntimeStore) ListScheduledTasksByWorkspace(ctx context.Context, workspaceID string, limit, offset int32) (store.ListScheduledTasksByWorkspaceResult, error) {
+	return store.ListScheduledTasksByWorkspaceResult{}, nil
 }
 
 func (stubRuntimeStore) CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error) {
@@ -2130,10 +2129,6 @@ func (stubRuntimeStore) ListAgentRunsByScheduledTask(ctx context.Context, taskID
 
 func (stubRuntimeStore) GetWorkspaceMemberRole(ctx context.Context, workspaceID string, userID string) (string, error) {
 	return "owner", nil
-}
-
-func (stubRuntimeStore) GetProjectWorkspace(ctx context.Context, projectID string) (string, error) {
-	return "00000000-0000-0000-0000-000000000002", nil
 }
 
 func (stubRuntimeStore) GetWorkspaceSettings(ctx context.Context, workspaceID string) (store.WorkspaceSettingsRead, error) {
@@ -2280,41 +2275,41 @@ func (stubRuntimeStore) SoftDeleteUserCredential(ctx context.Context, credential
 	return store.UserCredentialRead{ID: credentialID, UserID: "00000000-0000-0000-0000-0000000000aa", Kind: "github_pat", DisplayName: "GitHub"}, nil
 }
 
-func (stubRuntimeStore) ListAgentCapabilities(ctx context.Context, projectAgentID string) ([]store.AgentCapabilityRead, error) {
+func (stubRuntimeStore) ListAgentCapabilities(ctx context.Context, agentID string) ([]store.AgentCapabilityRead, error) {
 	return []store.AgentCapabilityRead{}, nil
 }
 
-func (stubRuntimeStore) GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, projectAgentID string) ([]store.EnabledCapabilityRead, error) {
+func (stubRuntimeStore) GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, agentID string) ([]store.EnabledCapabilityRead, error) {
 	return []store.EnabledCapabilityRead{}, nil
 }
 
-func (stubRuntimeStore) EnableAgentCapability(ctx context.Context, projectAgentID string, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error) {
-	return store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", ProjectAgentID: projectAgentID, CapabilityID: "00000000-0000-0000-0000-000000000c01", CapabilityVersionID: versionID, Enabled: true, PinningMode: pinningMode}, nil
+func (stubRuntimeStore) EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error) {
+	return store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", AgentID: agentID, CapabilityID: "00000000-0000-0000-0000-000000000c01", CapabilityVersionID: versionID, Enabled: true, PinningMode: pinningMode}, nil
 }
 
-func (stubRuntimeStore) UpgradeAgentCapability(ctx context.Context, projectAgentID string, capabilityID string, newVersionID string, pinningMode string) (store.AgentCapabilityRead, error) {
-	return store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", ProjectAgentID: projectAgentID, CapabilityID: capabilityID, CapabilityVersionID: newVersionID, Enabled: true, PinningMode: pinningMode}, nil
+func (stubRuntimeStore) UpgradeAgentCapability(ctx context.Context, agentID string, capabilityID string, newVersionID string, pinningMode string) (store.AgentCapabilityRead, error) {
+	return store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", AgentID: agentID, CapabilityID: capabilityID, CapabilityVersionID: newVersionID, Enabled: true, PinningMode: pinningMode}, nil
 }
 
 func (stubRuntimeStore) UninstallWorkspaceMarketplaceCapability(ctx context.Context, targetWorkspaceID string, sourceCapabilityID string) (int64, error) {
 	return 0, nil
 }
 
-func (stubRuntimeStore) DeleteAgentCapability(ctx context.Context, projectAgentID string, capabilityVersionID string) error {
+func (stubRuntimeStore) DeleteAgentCapability(ctx context.Context, agentID string, capabilityVersionID string) error {
 	return nil
 }
 
 func (stubRuntimeStore) CreateAgent(ctx context.Context, input store.CreateAgentInput) (store.CreateAgentResult, error) {
-	// Step 5: top-level runtime is retired; daemon execution details
-	// belong in project-agent config.
 	agentConfig := map[string]any{"capabilities": input.Capabilities}
+	for k, v := range input.AgentConfig {
+		agentConfig[k] = v
+	}
 	if rt := strings.TrimSpace(input.Runtime); rt != "" {
 		agentConfig["runtime"] = rt
 	}
-	paConfig := nonNilStubMap(input.ProjectAgentConfig)
-	result := store.CreateAgentResult{Agent: store.AgentSummary{ID: "00000000-0000-0000-0000-000000000901", WorkspaceID: input.WorkspaceID, Name: input.Name, Slug: "new-agent", ConnectorType: input.ConnectorType, Status: "active", Capabilities: input.Capabilities, Config: agentConfig}, ProjectAgent: store.ProjectAgentSummary{ID: "00000000-0000-0000-0000-000000000902", WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID, AgentID: "00000000-0000-0000-0000-000000000901", Status: "active", Config: paConfig}}
+	result := store.CreateAgentResult{Agent: store.AgentSummary{ID: "00000000-0000-0000-0000-000000000901", WorkspaceID: input.WorkspaceID, Name: input.Name, Slug: "new-agent", ConnectorType: input.ConnectorType, Status: "active", Capabilities: input.Capabilities, Config: agentConfig}}
 	for _, capability := range input.InitialCapabilities {
-		result.InitialCapabilities = append(result.InitialCapabilities, store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", ProjectAgentID: result.ProjectAgent.ID, CapabilityID: "00000000-0000-0000-0000-000000000c01", CapabilityVersionID: capability.CapabilityVersionID, Enabled: true, Configuration: nonNilStubMap(capability.Configuration)})
+		result.InitialCapabilities = append(result.InitialCapabilities, store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", AgentID: result.Agent.ID, CapabilityID: "00000000-0000-0000-0000-000000000c01", CapabilityVersionID: capability.CapabilityVersionID, Enabled: true, Configuration: nonNilStubMap(capability.Configuration)})
 	}
 	return result, nil
 }
@@ -2437,16 +2432,13 @@ func (stubRuntimeStore) GetAgentByID(ctx context.Context, agentID string) (store
 
 func (stubRuntimeStore) ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
 	return []store.FeishuSharedBotAgent{{
-		AgentID:        "00000000-0000-0000-0000-000000000902",
-		WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-		WorkspaceName:  "Default Workspace",
-		WorkspaceSlug:  "default",
-		AgentName:      "Backend Agent",
-		AgentSlug:      "backend",
-		Visibility:     "workspace",
-		ProjectID:      testProjectID,
-		ProjectName:    "Default Project",
-		ProjectAgentID: "00000000-0000-0000-0000-000000000010",
+		AgentID:       "00000000-0000-0000-0000-000000000902",
+		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
+		WorkspaceName: "Default Workspace",
+		WorkspaceSlug: "default",
+		AgentName:     "Backend Agent",
+		AgentSlug:     "backend",
+		Visibility:    "workspace",
 	}}, nil
 }
 
@@ -2493,25 +2485,11 @@ func (stubRuntimeStore) HasFeishuThreadInboundHistory(_ context.Context, _, _ st
 	return false, nil
 }
 
-func (stubRuntimeStore) DeleteProjectAgent(ctx context.Context, projectAgentID string, actorID string) (store.ProjectAgentSummary, error) {
-	return store.ProjectAgentSummary{ID: projectAgentID, WorkspaceID: "00000000-0000-0000-0000-000000000002", ProjectID: "00000000-0000-0000-0000-000000000004", AgentID: "00000000-0000-0000-0000-000000000006", Status: "active"}, nil
-}
-
 func (stubRuntimeStore) DeleteAgent(ctx context.Context, agentID string, actorID string) (store.DeleteAgentResult, int64, error) {
 	if agentID == "00000000-0000-0000-0000-000000000999" {
 		return store.DeleteAgentResult{}, 2, store.ErrInFlightAgentRuns
 	}
-	return store.DeleteAgentResult{Agent: store.AgentSummary{ID: agentID, WorkspaceID: "00000000-0000-0000-0000-000000000002", Name: "Agent", Slug: "agent"}, DetachedProjectAgentIDs: []string{"00000000-0000-0000-0000-000000000902"}}, 0, nil
-}
-
-func (stubRuntimeStore) ListProjectAgentsByAgentID(ctx context.Context, agentID string) ([]store.ProjectAgentSummary, error) {
-	return []store.ProjectAgentSummary{{
-		ID:          "00000000-0000-0000-0000-000000000902",
-		WorkspaceID: "00000000-0000-0000-0000-000000000002",
-		ProjectID:   testProjectID,
-		AgentID:     agentID,
-		Status:      "active",
-	}}, nil
+	return store.DeleteAgentResult{Agent: store.AgentSummary{ID: agentID, WorkspaceID: "00000000-0000-0000-0000-000000000002", Name: "Agent", Slug: "agent"}}, 0, nil
 }
 
 type captureCreateMessageStore struct {
@@ -2549,7 +2527,6 @@ func (stubRuntimeStore) CompleteAgentRun(ctx context.Context, input store.Comple
 	usage := store.UsageLogRead{
 		ID:           "00000000-0000-0000-0000-000000000501",
 		WorkspaceID:  "00000000-0000-0000-0000-000000000002",
-		ProjectID:    testProjectID,
 		AgentRunID:   input.RunID,
 		Provider:     input.Usage.Provider,
 		Model:        input.Usage.Model,
@@ -2564,7 +2541,7 @@ func (stubRuntimeStore) CompleteAgentRun(ctx context.Context, input store.Comple
 		MessageID:       "output-message-1",
 		Status:          "completed",
 		ChildRunIDs:     []string{"child-run-1"},
-		SkippedMentions: []store.SkippedAgentMention{{Mention: "@后端Agent", ProjectAgentID: "project-agent-2", Reason: "self_trigger"}},
+		SkippedMentions: []store.SkippedAgentMention{{Mention: "@后端Agent", AgentID: "agent-2", Reason: "self_trigger"}},
 		StartedAt:       time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC),
 		FinishedAt:      time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC),
 		Usage:           usage,
@@ -2585,9 +2562,7 @@ func (s stubRuntimeStore) GetHTTPAgentRunInvocation(ctx context.Context, runID s
 	return store.HTTPAgentRunInvocation{
 		RunID:                 runID,
 		WorkspaceID:           "00000000-0000-0000-0000-000000000002",
-		ProjectID:             testProjectID,
 		ConversationID:        testConversationID,
-		ProjectAgentID:        "00000000-0000-0000-0000-000000000010",
 		AgentID:               "00000000-0000-0000-0000-000000000007",
 		AgentName:             "后端Agent",
 		AgentSlug:             "backend-agent",
@@ -2595,7 +2570,6 @@ func (s stubRuntimeStore) GetHTTPAgentRunInvocation(ctx context.Context, runID s
 		Status:                "queued",
 		TriggerMessageContent: "@后端Agent 看一下 API",
 		AgentConfig:           map[string]any{"profile": map[string]any{"skills": []any{"go"}}, "endpoint": s.httpEndpoint},
-		ProjectAgentConfig:    map[string]any{},
 	}, nil
 }
 
@@ -2629,9 +2603,7 @@ func (stubRuntimeStore) RequeueFailedAgentRun(ctx context.Context, input store.R
 	return store.RequeueAgentRunResult{
 		RunID:          input.RunID,
 		WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-		ProjectID:      testProjectID,
 		ConversationID: testConversationID,
-		ProjectAgentID: "00000000-0000-0000-0000-000000000010",
 		Status:         "queued",
 	}, nil
 }
@@ -2643,136 +2615,124 @@ func (stubRuntimeStore) ConfigureDevConversationExternalRef(ctx context.Context,
 	return store.ConfigureDevConversationExternalRefResult{
 		ConversationID:   input.ConversationID,
 		WorkspaceID:      "00000000-0000-0000-0000-000000000002",
-		ProjectID:        testProjectID,
 		Platform:         input.Gateway,
 		ExternalID:       input.ExternalChatID,
 		ExternalThreadID: input.ExternalThreadID,
 	}, nil
 }
 
-func (stubRuntimeStore) ConfigureDevProjectAgentConnector(ctx context.Context, input store.ConfigureDevProjectAgentConnectorInput) (store.ConfigureDevProjectAgentConnectorResult, error) {
-	if input.ProjectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ConfigureDevProjectAgentConnectorResult{}, store.ErrUnknownProjectAgent
+func (stubRuntimeStore) ConfigureDevAgentConnector(ctx context.Context, input store.ConfigureDevAgentConnectorInput) (store.ConfigureDevAgentConnectorResult, error) {
+	if input.AgentID == "00000000-0000-0000-0000-000000099999" {
+		return store.ConfigureDevAgentConnectorResult{}, store.ErrUnknownAgent
 	}
 	if input.ConnectorType != "http" {
-		return store.ConfigureDevProjectAgentConnectorResult{}, store.ErrInvalidConnectorType
+		return store.ConfigureDevAgentConnectorResult{}, store.ErrInvalidConnectorType
 	}
 	config := map[string]any{}
 	if input.Endpoint != "" {
 		config["endpoint"] = input.Endpoint
 	}
-	return store.ConfigureDevProjectAgentConnectorResult{
-		ProjectAgentID: input.ProjectAgentID,
-		ProjectID:      testProjectID,
-		AgentID:        "00000000-0000-0000-0000-000000000007",
-		Name:           "后端Agent",
-		Slug:           "backend-agent",
-		ConnectorType:  input.ConnectorType,
-		AgentConfig:    config,
+	return store.ConfigureDevAgentConnectorResult{
+		AgentID:       input.AgentID,
+		Name:          "后端Agent",
+		Slug:          "backend-agent",
+		ConnectorType: input.ConnectorType,
+		AgentConfig:   config,
 	}, nil
 }
 
-func (stubRuntimeStore) ConfigureProjectAgentProfile(ctx context.Context, input store.ConfigureProjectAgentProfileInput) (store.ConfigureDevProjectAgentConnectorResult, error) {
-	if input.ProjectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ConfigureDevProjectAgentConnectorResult{}, store.ErrUnknownProjectAgent
+func (stubRuntimeStore) ConfigureAgentProfile(ctx context.Context, input store.ConfigureAgentProfileInput) (store.ConfigureDevAgentConnectorResult, error) {
+	if input.AgentID == "00000000-0000-0000-0000-000000099999" {
+		return store.ConfigureDevAgentConnectorResult{}, store.ErrUnknownAgent
 	}
 	if input.ModelID == "00000000-0000-0000-0000-000000000901" {
-		return store.ConfigureDevProjectAgentConnectorResult{}, store.ErrModelDisabled
+		return store.ConfigureDevAgentConnectorResult{}, store.ErrModelDisabled
 	}
 	if input.ModelID == "00000000-0000-0000-0000-000000000902" {
-		return store.ConfigureDevProjectAgentConnectorResult{}, store.ErrUnknownModel
+		return store.ConfigureDevAgentConnectorResult{}, store.ErrUnknownModel
 	}
-	return store.ConfigureDevProjectAgentConnectorResult{
-		ProjectAgentID:     input.ProjectAgentID,
-		ProjectID:          testProjectID,
-		AgentID:            "00000000-0000-0000-0000-000000000007",
-		Name:               "后端Agent",
-		Slug:               "backend-agent",
-		ConnectorType:      "agent_daemon",
-		AgentConfig:        map[string]any{"model_id": input.ModelID},
-		ProjectAgentConfig: map[string]any{"model_id": input.ModelID},
+	return store.ConfigureDevAgentConnectorResult{
+		AgentID:       input.AgentID,
+		Name:          "后端Agent",
+		Slug:          "backend-agent",
+		ConnectorType: "agent_daemon",
+		AgentConfig:   map[string]any{"model_id": input.ModelID},
 	}, nil
 }
 
-func (stubRuntimeStore) GetProjectAgentDetail(ctx context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error) {
-	if projectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownProjectAgent, projectAgentID)
+func (stubRuntimeStore) GetAgentDetail(ctx context.Context, agentID string) (store.AgentStatusRead, error) {
+	if agentID == "00000000-0000-0000-0000-000000099999" {
+		return store.AgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID)
 	}
-	return store.ProjectAgentStatusRead{
-		ProjectAgentID: projectAgentID,
-		WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-		ProjectID:      testProjectID,
-		AgentID:        "00000000-0000-0000-0000-000000000007",
-		AgentName:      "后端Agent",
-		AgentSlug:      "backend-agent",
-		ConnectorType:  "agent_daemon",
-		Status:         "active",
-		Config:         map[string]any{},
-		CreatedBy:      store.DefaultDevFixtureIDs().UserID,
+	return store.AgentStatusRead{
+		AgentID:       agentID,
+		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
+		AgentName:     "后端Agent",
+		AgentSlug:     "backend-agent",
+		ConnectorType: "agent_daemon",
+		Status:        "active",
+		Config:        map[string]any{},
+		CreatedBy:     store.DefaultDevFixtureIDs().UserID,
 	}, nil
 }
 
-func (stubRuntimeStore) GetProjectAgentRuntimeBinding(ctx context.Context, workspaceID, projectAgentID string) (store.ProjectAgentRuntimeBinding, error) {
-	if projectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ProjectAgentRuntimeBinding{}, fmt.Errorf("%w: %s", store.ErrUnknownProjectAgent, projectAgentID)
+func (stubRuntimeStore) GetAgentRuntimeBinding(ctx context.Context, workspaceID, agentID string) (store.AgentRuntimeBinding, error) {
+	if agentID == "00000000-0000-0000-0000-000000099999" {
+		return store.AgentRuntimeBinding{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID)
 	}
-	return store.ProjectAgentRuntimeBinding{
-		ProjectAgentID: projectAgentID,
-		WorkspaceID:    workspaceID,
-		RuntimeID:      "",
+	return store.AgentRuntimeBinding{
+		AgentID:     agentID,
+		WorkspaceID: workspaceID,
+		RuntimeID:   "",
 	}, nil
 }
 
-func (stubRuntimeStore) SetProjectAgentRuntime(ctx context.Context, input store.SetProjectAgentRuntimeInput) (store.ProjectAgentRuntimeBinding, error) {
-	if input.ProjectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ProjectAgentRuntimeBinding{}, fmt.Errorf("%w: %s", store.ErrUnknownProjectAgent, input.ProjectAgentID)
+func (stubRuntimeStore) SetAgentRuntime(ctx context.Context, input store.SetAgentRuntimeInput) (store.AgentRuntimeBinding, error) {
+	if input.AgentID == "00000000-0000-0000-0000-000000099999" {
+		return store.AgentRuntimeBinding{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, input.AgentID)
 	}
-	return store.ProjectAgentRuntimeBinding{
-		ProjectAgentID: input.ProjectAgentID,
-		WorkspaceID:    input.WorkspaceID,
-		RuntimeID:      input.RuntimeID,
+	return store.AgentRuntimeBinding{
+		AgentID:     input.AgentID,
+		WorkspaceID: input.WorkspaceID,
+		RuntimeID:   input.RuntimeID,
 	}, nil
 }
 
-func (s stubRuntimeStore) ListProjectAgentsForAdmin(ctx context.Context, projectID string) ([]store.ProjectAgentRead, error) {
-	enabled, err := s.ListProjectEnabledAgents(ctx, projectID)
+func (s stubRuntimeStore) ListWorkspaceAgentsForAdmin(ctx context.Context, workspaceID string) ([]store.AgentRead, error) {
+	enabled, err := s.ListWorkspaceEnabledAgents(ctx, workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	return append(enabled, store.ProjectAgentRead{ProjectAgentID: "project-agent-99", ProjectID: projectID, AgentID: "agent-99", Name: "停用Agent", Slug: "disabled-agent", ConnectorType: "agent_daemon", Status: "disabled"}), nil
+	return append(enabled, store.AgentRead{AgentID: "agent-99", Name: "停用Agent", Slug: "disabled-agent", ConnectorType: "agent_daemon", Status: "disabled"}), nil
 }
 
-func (stubRuntimeStore) DisableProjectAgent(ctx context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error) {
-	if projectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownProjectAgent, projectAgentID)
+func (stubRuntimeStore) DisableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error) {
+	if agentID == "00000000-0000-0000-0000-000000099999" {
+		return store.AgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID)
 	}
-	return store.ProjectAgentStatusRead{
-		ProjectAgentID: projectAgentID,
-		WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-		ProjectID:      testProjectID,
-		AgentID:        "00000000-0000-0000-0000-000000000007",
-		AgentName:      "后端Agent",
-		AgentSlug:      "backend-agent",
-		ConnectorType:  "agent_daemon",
-		Status:         "disabled",
-		Config:         map[string]any{},
+	return store.AgentStatusRead{
+		AgentID:       agentID,
+		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
+		AgentName:     "后端Agent",
+		AgentSlug:     "backend-agent",
+		ConnectorType: "agent_daemon",
+		Status:        "disabled",
+		Config:        map[string]any{},
 	}, nil
 }
 
-func (stubRuntimeStore) EnableProjectAgent(ctx context.Context, projectAgentID string) (store.ProjectAgentStatusRead, error) {
-	if projectAgentID == "00000000-0000-0000-0000-000000099999" {
-		return store.ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownProjectAgent, projectAgentID)
+func (stubRuntimeStore) EnableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error) {
+	if agentID == "00000000-0000-0000-0000-000000099999" {
+		return store.AgentStatusRead{}, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID)
 	}
-	return store.ProjectAgentStatusRead{
-		ProjectAgentID: projectAgentID,
-		WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-		ProjectID:      testProjectID,
-		AgentID:        "00000000-0000-0000-0000-000000000007",
-		AgentName:      "后端Agent",
-		AgentSlug:      "backend-agent",
-		ConnectorType:  "agent_daemon",
-		Status:         "active",
-		Config:         map[string]any{},
+	return store.AgentStatusRead{
+		AgentID:       agentID,
+		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
+		AgentName:     "后端Agent",
+		AgentSlug:     "backend-agent",
+		ConnectorType: "agent_daemon",
+		Status:        "active",
+		Config:        map[string]any{},
 	}, nil
 }
 
@@ -2857,18 +2817,18 @@ func (stubRuntimeStore) UpdateModel(ctx context.Context, input store.UpdateModel
 	return store.ModelRead{ID: input.ModelID, Slug: "model-test", Name: input.Name, ProviderType: "openai", Adapter: "@ai-sdk/openai", BaseURL: input.BaseURL, ModelKey: input.ModelKey, CredentialMode: "inline_secret", SecretID: input.SecretID, CredentialKindCode: input.CredentialKindCode, Status: "active", Config: input.Config, CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)}, nil
 }
 
-func (stubRuntimeStore) ListProjectEnabledAgents(ctx context.Context, projectID string) ([]store.ProjectAgentRead, error) {
-	return []store.ProjectAgentRead{
-		{ProjectAgentID: "project-agent-1", ProjectID: projectID, AgentID: "agent-1", Name: "产品Agent", Slug: "product-agent", ConnectorType: "agent_daemon", Status: "active"},
-		{ProjectAgentID: "project-agent-2", ProjectID: projectID, AgentID: "agent-2", Name: "后端Agent", Slug: "backend-agent", ConnectorType: "agent_daemon", Status: "active"},
-		{ProjectAgentID: "project-agent-3", ProjectID: projectID, AgentID: "agent-3", Name: "测试Agent", Slug: "test-agent", ConnectorType: "agent_daemon", Status: "active"},
+func (stubRuntimeStore) ListWorkspaceEnabledAgents(ctx context.Context, workspaceID string) ([]store.AgentRead, error) {
+	return []store.AgentRead{
+		{AgentID: "agent-1", Name: "产品Agent", Slug: "product-agent", ConnectorType: "agent_daemon", Status: "active"},
+		{AgentID: "agent-2", Name: "后端Agent", Slug: "backend-agent", ConnectorType: "agent_daemon", Status: "active"},
+		{AgentID: "agent-3", Name: "测试Agent", Slug: "test-agent", ConnectorType: "agent_daemon", Status: "active"},
 	}, nil
 }
 
-func (stubRuntimeStore) CreateProjectConversation(ctx context.Context, input store.CreateProjectConversationInput) (store.ConversationRead, error) {
-	switch input.ProjectID {
+func (stubRuntimeStore) CreateWorkspaceConversation(ctx context.Context, input store.CreateWorkspaceConversationInput) (store.ConversationRead, error) {
+	switch input.WorkspaceID {
 	case "00000000-0000-0000-0000-000000000404":
-		return store.ConversationRead{}, fmt.Errorf("%w: %s", store.ErrUnknownProject, input.ProjectID)
+		return store.ConversationRead{}, fmt.Errorf("%w: %s", store.ErrUnknownWorkspace, input.WorkspaceID)
 	case "00000000-0000-0000-0000-000000000400":
 		return store.ConversationRead{}, fmt.Errorf("invalid conversation surface: %s", input.Surface)
 	}
@@ -2886,8 +2846,7 @@ func (stubRuntimeStore) CreateProjectConversation(ctx context.Context, input sto
 	}
 	return store.ConversationRead{
 		ID:          "00000000-0000-0000-0000-000000000c11",
-		WorkspaceID: "00000000-0000-0000-0000-0000000000aa",
-		ProjectID:   input.ProjectID,
+		WorkspaceID: input.WorkspaceID,
 		Surface:     surface,
 		Form:        form,
 		Title:       title,
@@ -2896,16 +2855,16 @@ func (stubRuntimeStore) CreateProjectConversation(ctx context.Context, input sto
 	}, nil
 }
 
-func (stubRuntimeStore) ListProjectConversations(ctx context.Context, projectID string, agentID string, limit int32) ([]store.ConversationListItem, error) {
-	if projectID == "00000000-0000-0000-0000-000000000404" {
-		return nil, fmt.Errorf("%w: %s", store.ErrUnknownProject, projectID)
+func (stubRuntimeStore) ListWorkspaceConversations(ctx context.Context, workspaceID string, agentID string, limit int32) ([]store.ConversationListItem, error) {
+	if workspaceID == "00000000-0000-0000-0000-000000000404" {
+		return nil, fmt.Errorf("%w: %s", store.ErrUnknownWorkspace, workspaceID)
 	}
 	if agentID == "bad-uuid" {
-		return nil, fmt.Errorf("%w: agent_id", store.ErrInvalidProjectInput)
+		return nil, fmt.Errorf("%w: agent_id", store.ErrInvalidWorkspaceInput)
 	}
 	return []store.ConversationListItem{{
 		ConversationRead: store.ConversationRead{
-			ID: "00000000-0000-0000-0000-000000000c10", WorkspaceID: "00000000-0000-0000-0000-0000000000aa", ProjectID: projectID,
+			ID: "00000000-0000-0000-0000-000000000c10", WorkspaceID: workspaceID,
 			Surface: "web", Form: "thread", Title: "Demo Group", Status: "active",
 		},
 		MessageCount:          2,
@@ -2914,12 +2873,12 @@ func (stubRuntimeStore) ListProjectConversations(ctx context.Context, projectID 
 	}}, nil
 }
 
-func (stubRuntimeStore) GetProjectConversation(ctx context.Context, conversationID string) (store.ConversationRead, error) {
+func (stubRuntimeStore) GetConversation(ctx context.Context, conversationID string) (store.ConversationRead, error) {
 	if conversationID == "00000000-0000-0000-0000-000000000404" {
 		return store.ConversationRead{}, fmt.Errorf("%w: %s", store.ErrUnknownConversation, conversationID)
 	}
 	return store.ConversationRead{
-		ID: conversationID, WorkspaceID: "00000000-0000-0000-0000-0000000000aa", ProjectID: "00000000-0000-0000-0000-0000000000bb",
+		ID: conversationID, WorkspaceID: "00000000-0000-0000-0000-0000000000aa",
 		Surface: "web", Form: "thread", Title: "Demo Group", Status: "active",
 	}, nil
 }
@@ -2947,11 +2906,9 @@ func (stubRuntimeStore) GetConversationTimeline(ctx context.Context, conversatio
 	completedAt := createdAt.Add(time.Minute)
 	run := store.AgentRunBriefRead{
 		ID:               testRunID,
-		ProjectID:        testProjectID,
 		ConversationID:   conversationID,
 		TriggerMessageID: "00000000-0000-0000-0000-000000000201",
 		OutputMessageID:  "00000000-0000-0000-0000-000000000202",
-		ProjectAgentID:   "00000000-0000-0000-0000-000000000009",
 		AgentID:          "00000000-0000-0000-0000-000000000007",
 		AgentName:        "后端Agent",
 		AgentSlug:        "backend-agent",
@@ -2964,7 +2921,6 @@ func (stubRuntimeStore) GetConversationTimeline(ctx context.Context, conversatio
 	childRun.ID = "00000000-0000-0000-0000-000000000103"
 	childRun.TriggerMessageID = "00000000-0000-0000-0000-000000000202"
 	childRun.OutputMessageID = ""
-	childRun.ProjectAgentID = "00000000-0000-0000-0000-000000000011"
 	childRun.AgentID = "00000000-0000-0000-0000-000000000008"
 	childRun.AgentName = "测试Agent"
 	childRun.AgentSlug = "test-agent"
@@ -2973,8 +2929,8 @@ func (stubRuntimeStore) GetConversationTimeline(ctx context.Context, conversatio
 	return store.ConversationTimelineRead{
 		ConversationID: conversationID,
 		Messages: []store.MessageRead{
-			{ID: "00000000-0000-0000-0000-000000000201", ProjectID: testProjectID, ConversationID: conversationID, SenderType: "user", SenderID: "00000000-0000-0000-0000-000000000001", Kind: "message", ContentFormat: "text", Content: "user message", CreatedAt: createdAt, Runs: []store.AgentRunBriefRead{run}},
-			{ID: "00000000-0000-0000-0000-000000000202", ProjectID: testProjectID, ConversationID: conversationID, SenderType: "agent", SenderID: "00000000-0000-0000-0000-000000000007", Kind: "message", ContentFormat: "text", Content: "agent output", CreatedAt: completedAt, Runs: []store.AgentRunBriefRead{childRun}},
+			{ID: "00000000-0000-0000-0000-000000000201", ConversationID: conversationID, SenderType: "user", SenderID: "00000000-0000-0000-0000-000000000001", Kind: "message", ContentFormat: "text", Content: "user message", CreatedAt: createdAt, Runs: []store.AgentRunBriefRead{run}},
+			{ID: "00000000-0000-0000-0000-000000000202", ConversationID: conversationID, SenderType: "agent", SenderID: "00000000-0000-0000-0000-000000000007", Kind: "message", ContentFormat: "text", Content: "agent output", CreatedAt: completedAt, Runs: []store.AgentRunBriefRead{childRun}},
 		},
 		AgentRuns: []store.AgentRunBriefRead{run, childRun},
 	}, nil
@@ -2989,11 +2945,10 @@ func (stubRuntimeStore) GetAgentRun(ctx context.Context, runID string) (store.Ag
 	return store.AgentRunDetailRead{
 		AgentRunBriefRead: store.AgentRunBriefRead{
 			ID:               runID,
-			ProjectID:        testProjectID,
+			WorkspaceID:      testWorkspaceID,
 			ConversationID:   testConversationID,
 			TriggerMessageID: "00000000-0000-0000-0000-000000000201",
 			OutputMessageID:  "00000000-0000-0000-0000-000000000202",
-			ProjectAgentID:   "00000000-0000-0000-0000-000000000009",
 			AgentID:          "00000000-0000-0000-0000-000000000007",
 			AgentName:        "后端Agent",
 			AgentSlug:        "backend-agent",
@@ -3005,9 +2960,9 @@ func (stubRuntimeStore) GetAgentRun(ctx context.Context, runID string) (store.Ag
 		RequestedByType: "user",
 		RequestedByID:   "00000000-0000-0000-0000-000000000001",
 		UpdatedAt:       finishedAt,
-		OutputMessage:   &store.MessageRead{ID: "00000000-0000-0000-0000-000000000202", ProjectID: testProjectID, ConversationID: testConversationID, SenderType: "agent", SenderID: "00000000-0000-0000-0000-000000000007", Kind: "message", ContentFormat: "text", Content: "agent output", CreatedAt: finishedAt},
+		OutputMessage:   &store.MessageRead{ID: "00000000-0000-0000-0000-000000000202", ConversationID: testConversationID, SenderType: "agent", SenderID: "00000000-0000-0000-0000-000000000007", Kind: "message", ContentFormat: "text", Content: "agent output", CreatedAt: finishedAt},
 		Artifacts:       []store.ArtifactRead{},
-		Usage:           []store.UsageLogRead{{ID: "00000000-0000-0000-0000-000000000501", WorkspaceID: "00000000-0000-0000-0000-000000000002", ProjectID: testProjectID, AgentRunID: runID, Provider: "fake", Model: "parsar-test-model", InputTokens: 42, OutputTokens: 18, CostUSD: 0.000123, Raw: map[string]any{"source": "runtime"}, CreatedAt: finishedAt}},
+		Usage:           []store.UsageLogRead{{ID: "00000000-0000-0000-0000-000000000501", WorkspaceID: "00000000-0000-0000-0000-000000000002", AgentRunID: runID, Provider: "fake", Model: "parsar-test-model", InputTokens: 42, OutputTokens: 18, CostUSD: 0.000123, Raw: map[string]any{"source": "runtime"}, CreatedAt: finishedAt}},
 	}, nil
 }
 
@@ -3017,8 +2972,8 @@ func (stubRuntimeStore) ListAgentRunEvents(ctx context.Context, runID string, af
 	}
 	createdAt := time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)
 	events := []store.AgentRunEventRead{
-		{ID: "00000000-0000-0000-0000-000000000701", ProjectID: testProjectID, AgentRunID: runID, Sequence: 1, EventKind: "message.delta", Payload: map[string]any{"delta": "hello"}, OccurredAt: createdAt, CreatedAt: createdAt},
-		{ID: "00000000-0000-0000-0000-000000000702", ProjectID: testProjectID, AgentRunID: runID, Sequence: 2, EventKind: "run.completed", Payload: map[string]any{"sequence": 2}, OccurredAt: createdAt.Add(time.Second), CreatedAt: createdAt.Add(time.Second)},
+		{ID: "00000000-0000-0000-0000-000000000701", AgentRunID: runID, Sequence: 1, EventKind: "message.delta", Payload: map[string]any{"delta": "hello"}, OccurredAt: createdAt, CreatedAt: createdAt},
+		{ID: "00000000-0000-0000-0000-000000000702", AgentRunID: runID, Sequence: 2, EventKind: "run.completed", Payload: map[string]any{"sequence": 2}, OccurredAt: createdAt.Add(time.Second), CreatedAt: createdAt.Add(time.Second)},
 	}
 	out := make([]store.AgentRunEventRead, 0, len(events))
 	for _, ev := range events {
@@ -3033,7 +2988,6 @@ func (stubRuntimeStore) ListActiveFeishuInflightConversations(ctx context.Contex
 	return []store.FeishuInflightConversation{{
 		ConversationID:   testConversationID,
 		WorkspaceID:      testWorkspaceID,
-		ProjectID:        testProjectID,
 		ExternalChatID:   "oc_demo",
 		SourceAppID:      "cli_stub",
 		AgentRunID:       "00000000-0000-0000-0000-000000000007",
@@ -3059,12 +3013,12 @@ func (stubRuntimeStore) MarkGatewayOutboundDelivered(ctx context.Context, input 
 	return store.MarkGatewayOutboundDeliveredResult{MessageID: input.MessageID, Metadata: map[string]any{"gateway_delivered_at": "2026-06-12T18:00:00Z"}}, nil
 }
 
-func (stubRuntimeStore) ListProjectAgentRuns(ctx context.Context, projectID string, statuses []string, limit, offset int32) (store.ListProjectAgentRunsResult, error) {
+func (stubRuntimeStore) ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32) (store.ListWorkspaceAgentRunsResult, error) {
 	// Stub mirrors the real SQL ordering (created_at DESC, id DESC)
 	// so route tests pin "newest first" pagination semantics.
 	runs := []store.AgentRunBriefRead{
-		{ID: "00000000-0000-0000-0000-000000000102", ProjectID: projectID, ConversationID: testConversationID, ProjectAgentID: "00000000-0000-0000-0000-000000000009", AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "后端Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "completed", CreatedAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC)},
-		{ID: testRunID, ProjectID: projectID, ConversationID: testConversationID, ProjectAgentID: "00000000-0000-0000-0000-000000000009", AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "后端Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "queued", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
+		{ID: "00000000-0000-0000-0000-000000000102", WorkspaceID: workspaceID, ConversationID: testConversationID, AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "后端Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "completed", CreatedAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC)},
+		{ID: testRunID, WorkspaceID: workspaceID, ConversationID: testConversationID, AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "后端Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "queued", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
 	}
 	filtered := runs
 	if len(statuses) > 0 {
@@ -3081,16 +3035,16 @@ func (stubRuntimeStore) ListProjectAgentRuns(ctx context.Context, projectID stri
 	}
 	total := int64(len(filtered))
 	if offset >= int32(len(filtered)) {
-		return store.ListProjectAgentRunsResult{Runs: []store.AgentRunBriefRead{}, Total: total}, nil
+		return store.ListWorkspaceAgentRunsResult{Runs: []store.AgentRunBriefRead{}, Total: total}, nil
 	}
 	end := min(offset+limit, int32(len(filtered)))
-	return store.ListProjectAgentRunsResult{Runs: filtered[offset:end], Total: total}, nil
+	return store.ListWorkspaceAgentRunsResult{Runs: filtered[offset:end], Total: total}, nil
 }
 
-// GetProjectAgentMetrics returns a fixed metrics snapshot so the
+// GetAgentMetrics returns a fixed metrics snapshot so the
 // agent-detail "近 N 天表现" route test can assert the JSON shape
 // without spinning up a real DB.
-func (stubRuntimeStore) GetProjectAgentMetrics(ctx context.Context, projectID, projectAgentID string, windowDays int32) (store.AgentMetricsRead, error) {
+func (stubRuntimeStore) GetAgentMetrics(ctx context.Context, agentID string, windowDays int32) (store.AgentMetricsRead, error) {
 	if windowDays <= 0 {
 		windowDays = 30
 	}
@@ -3108,8 +3062,8 @@ func (stubRuntimeStore) GetProjectAgentMetrics(ctx context.Context, projectID, p
 // target_type / target_id / actor_id filters.
 func (stubRuntimeStore) ListAuditRecords(ctx context.Context, filter store.ListAuditRecordsFilter, limit int32) ([]store.AuditRecordRead, error) {
 	rows := []store.AuditRecordRead{
-		{ID: 1002, OccurredAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC), Source: "runtime", EventType: "agent_run.completed", ActorType: "agent", ActorID: "00000000-0000-0000-0000-000000000007", TargetType: "agent_run", TargetID: testRunID, WorkspaceID: "00000000-0000-0000-0000-000000000002", ProjectID: filter.ProjectID, Payload: map[string]any{"source": "runtime"}},
-		{ID: 1001, OccurredAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), Source: "admin", EventType: "im.message.created", ActorType: "user", ActorID: "00000000-0000-0000-0000-000000000001", TargetType: "message", TargetID: "00000000-0000-0000-0000-000000000201", WorkspaceID: "00000000-0000-0000-0000-000000000002", ProjectID: filter.ProjectID, Payload: map[string]any{"source": "im"}},
+		{ID: 1002, OccurredAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC), Source: "runtime", EventType: "agent_run.completed", ActorType: "agent", ActorID: "00000000-0000-0000-0000-000000000007", TargetType: "agent_run", TargetID: testRunID, WorkspaceID: "00000000-0000-0000-0000-000000000002", Payload: map[string]any{"source": "runtime"}},
+		{ID: 1001, OccurredAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), Source: "admin", EventType: "im.message.created", ActorType: "user", ActorID: "00000000-0000-0000-0000-000000000001", TargetType: "message", TargetID: "00000000-0000-0000-0000-000000000201", WorkspaceID: "00000000-0000-0000-0000-000000000002", Payload: map[string]any{"source": "im"}},
 	}
 	out := make([]store.AuditRecordRead, 0, len(rows))
 	for _, row := range rows {
@@ -3136,10 +3090,10 @@ func (stubRuntimeStore) ListAuditRecords(ctx context.Context, filter store.ListA
 	return out, nil
 }
 
-func (stubRuntimeStore) ListProjectUsageLogs(ctx context.Context, projectID string, agentRunID string, limit int32) ([]store.UsageLogRead, error) {
+func (stubRuntimeStore) ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, agentRunID string, limit int32) ([]store.UsageLogRead, error) {
 	logs := []store.UsageLogRead{
-		{ID: "00000000-0000-0000-0000-000000000501", WorkspaceID: "00000000-0000-0000-0000-000000000002", ProjectID: projectID, AgentRunID: testRunID, Provider: "fake", Model: "parsar-test-model", InputTokens: 12, OutputTokens: 8, CostUSD: 0.000321, Raw: map[string]any{"source": "runtime"}, CreatedAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC)},
-		{ID: "00000000-0000-0000-0000-000000000502", WorkspaceID: "00000000-0000-0000-0000-000000000002", ProjectID: projectID, AgentRunID: "00000000-0000-0000-0000-000000000102", Provider: "fake", Model: "parsar-test-model", InputTokens: 42, OutputTokens: 18, CostUSD: 0.000123, Raw: map[string]any{"source": "runtime"}, CreatedAt: time.Date(2026, 5, 22, 0, 2, 0, 0, time.UTC)},
+		{ID: "00000000-0000-0000-0000-000000000501", WorkspaceID: workspaceID, AgentRunID: testRunID, Provider: "fake", Model: "parsar-test-model", InputTokens: 12, OutputTokens: 8, CostUSD: 0.000321, Raw: map[string]any{"source": "runtime"}, CreatedAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC)},
+		{ID: "00000000-0000-0000-0000-000000000502", WorkspaceID: workspaceID, AgentRunID: "00000000-0000-0000-0000-000000000102", Provider: "fake", Model: "parsar-test-model", InputTokens: 42, OutputTokens: 18, CostUSD: 0.000123, Raw: map[string]any{"source": "runtime"}, CreatedAt: time.Date(2026, 5, 22, 0, 2, 0, 0, time.UTC)},
 	}
 	if agentRunID == "" {
 		return logs, nil
@@ -3181,26 +3135,6 @@ func (stubRuntimeStore) ListAllActiveWorkspaces(ctx context.Context, limit int32
 		{ID: "00000000-0000-0000-0000-000000000002", Name: "Demo Workspace", Slug: "demo", Role: "owner", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
 		{ID: "00000000-0000-0000-0000-000000000020", Name: "Second Workspace", Slug: "second", Role: "owner", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
 		{ID: "00000000-0000-0000-0000-000000000077", Name: "Other Workspace", Slug: "other", Role: "owner", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
-	}, nil
-}
-
-func (stubRuntimeStore) ListWorkspaceProjects(ctx context.Context, workspaceID, userID string, limit int32) ([]store.WorkspaceProjectRead, error) {
-	if workspaceID == "00000000-0000-0000-0000-000000099999" {
-		return nil, store.ErrUnknownWorkspace
-	}
-	return []store.WorkspaceProjectRead{
-		{ID: "00000000-0000-0000-0000-000000000004", WorkspaceID: workspaceID, Name: "Demo Project", Slug: "demo-project", Description: "", Status: "active", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
-	}, nil
-}
-
-func (stubRuntimeStore) ListWorkspaceProjectsForAdmin(ctx context.Context, workspaceID string, limit int32) ([]store.WorkspaceProjectRead, error) {
-	if workspaceID == "00000000-0000-0000-0000-000000099999" {
-		return nil, store.ErrUnknownWorkspace
-	}
-	// Distinct fixture so a test can tell the admin branch was hit.
-	return []store.WorkspaceProjectRead{
-		{ID: "00000000-0000-0000-0000-000000000004", WorkspaceID: workspaceID, Name: "Demo Project", Slug: "demo-project", Description: "", Status: "active", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
-		{ID: "00000000-0000-0000-0000-000000000005", WorkspaceID: workspaceID, Name: "Foreign Project", Slug: "foreign-project", Description: "", Status: "active", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
 	}, nil
 }
 
@@ -3265,73 +3199,6 @@ func (stubRuntimeStore) ArchiveWorkspace(ctx context.Context, input store.Archiv
 	}, nil
 }
 
-func (stubRuntimeStore) CreateProject(ctx context.Context, input store.CreateProjectInput) (store.CreateProjectResult, error) {
-	if input.WorkspaceID == "00000000-0000-0000-0000-000000099999" {
-		return store.CreateProjectResult{}, store.ErrUnknownWorkspace
-	}
-	if strings.TrimSpace(input.Name) == "" {
-		return store.CreateProjectResult{}, store.ErrInvalidProjectInput
-	}
-	if strings.TrimSpace(input.Name) == "Dup" {
-		return store.CreateProjectResult{}, store.ErrDuplicateProjectSlug
-	}
-	return store.CreateProjectResult{
-		Project: store.WorkspaceProjectRead{
-			ID:          "00000000-0000-0000-0000-0000000000ee",
-			WorkspaceID: input.WorkspaceID,
-			Name:        input.Name,
-			Slug:        "project-cafebabe",
-			Description: input.Description,
-			Status:      "active",
-			CreatedAt:   input.Now,
-			UpdatedAt:   input.Now,
-		},
-	}, nil
-}
-
-func (stubRuntimeStore) UpdateProject(ctx context.Context, input store.UpdateProjectInput) (store.WorkspaceProjectRead, error) {
-	if input.ProjectID == "00000000-0000-0000-0000-000000099999" {
-		return store.WorkspaceProjectRead{}, store.ErrUnknownProject
-	}
-	if input.Name == nil && input.Description == nil {
-		return store.WorkspaceProjectRead{}, store.ErrInvalidProjectInput
-	}
-	name := "Renamed Project"
-	if input.Name != nil {
-		name = *input.Name
-	}
-	desc := ""
-	if input.Description != nil {
-		desc = *input.Description
-	}
-	return store.WorkspaceProjectRead{
-		ID:          input.ProjectID,
-		WorkspaceID: "00000000-0000-0000-0000-000000000002",
-		Name:        name,
-		Slug:        "project-cafebabe",
-		Description: desc,
-		Status:      "active",
-		CreatedAt:   input.Now,
-		UpdatedAt:   input.Now,
-	}, nil
-}
-
-func (stubRuntimeStore) ArchiveProject(ctx context.Context, input store.ArchiveProjectInput) (store.WorkspaceProjectRead, error) {
-	if input.ProjectID == "00000000-0000-0000-0000-000000099999" {
-		return store.WorkspaceProjectRead{}, store.ErrUnknownProject
-	}
-	return store.WorkspaceProjectRead{
-		ID:          input.ProjectID,
-		WorkspaceID: "00000000-0000-0000-0000-000000000002",
-		Name:        "Demo Project",
-		Slug:        "demo-project",
-		Description: "",
-		Status:      "archived",
-		CreatedAt:   input.Now,
-		UpdatedAt:   input.Now,
-	}, nil
-}
-
 func (stubRuntimeStore) AddWorkspaceMember(ctx context.Context, input store.AddWorkspaceMemberInput) (store.AddWorkspaceMemberResult, error) {
 	return store.AddWorkspaceMemberResult{
 		Member: store.WorkspaceMemberRead{
@@ -3383,12 +3250,12 @@ func (stubRuntimeStore) SearchUsers(ctx context.Context, input store.SearchUsers
 	return nil, nil
 }
 
-func TestConfigureProjectAgentProfileAPIErrors(t *testing.T) {
+func TestConfigureAgentProfileAPIErrors(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
 	// active model -> 200
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/profile",
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/profile",
 		strings.NewReader(`{"model_id":"00000000-0000-0000-0000-000000000702"}`))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
@@ -3398,7 +3265,7 @@ func TestConfigureProjectAgentProfileAPIErrors(t *testing.T) {
 	}
 
 	// disabled model -> 400
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/profile",
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/profile",
 		strings.NewReader(`{"model_id":"00000000-0000-0000-0000-000000000901"}`))
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
@@ -3411,7 +3278,7 @@ func TestConfigureProjectAgentProfileAPIErrors(t *testing.T) {
 	}
 
 	// unknown model -> 404
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/profile",
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/profile",
 		strings.NewReader(`{"model_id":"00000000-0000-0000-0000-000000000902"}`))
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
@@ -3421,21 +3288,21 @@ func TestConfigureProjectAgentProfileAPIErrors(t *testing.T) {
 	}
 }
 
-func TestConfigureProjectAgentProfileRequiresProjectOwnerOrAdmin(t *testing.T) {
+func TestConfigureAgentProfileRequiresWorkspaceOwnerOrAdmin(t *testing.T) {
 	r := registerRoutesWithRBACStore(newRoleStubStore(map[string]string{
 		store.DefaultDevFixtureIDs().UserID:    "admin",
 		"00000000-0000-0000-0000-0000000000aa": "viewer",
 	}), true)
 	body := `{"model_id":"00000000-0000-0000-0000-000000000702"}`
 
-	req := newRequestWithDevUser(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/profile", body, store.DefaultDevFixtureIDs().UserID)
+	req := newRequestWithDevUser(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/profile", body, store.DefaultDevFixtureIDs().UserID)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected admin 200, got %d: %s", res.Code, res.Body.String())
 	}
 
-	req = newRequestWithDevUser(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/profile", body, "00000000-0000-0000-0000-0000000000aa")
+	req = newRequestWithDevUser(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/profile", body, "00000000-0000-0000-0000-0000000000aa")
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusForbidden {
@@ -3443,11 +3310,11 @@ func TestConfigureProjectAgentProfileRequiresProjectOwnerOrAdmin(t *testing.T) {
 	}
 }
 
-func TestListProjectConversationsAPI(t *testing.T) {
+func TestListWorkspaceConversationsAPI(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/00000000-0000-0000-0000-000000000004/conversations", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000004/conversations", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -3459,22 +3326,22 @@ func TestListProjectConversationsAPI(t *testing.T) {
 	}
 }
 
-func TestListProjectConversationsAPIErrors(t *testing.T) {
+func TestListWorkspaceConversationsAPIErrors(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/not-a-uuid/conversations", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/not-a-uuid/conversations", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad project uuid, got %d", res.Code)
+		t.Fatalf("expected 400 for bad workspace uuid, got %d", res.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/projects/00000000-0000-0000-0000-000000000404/conversations", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000404/conversations", nil)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown project, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 404 for unknown workspace, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
@@ -3546,91 +3413,6 @@ func TestListMyWorkspacesAPIPlatformAdminListsAll(t *testing.T) {
 	body := res.Body.String()
 	if !strings.Contains(body, `"Other Workspace"`) {
 		t.Fatalf("platform admin should see workspaces they're not a member of; got %s", body)
-	}
-}
-
-func TestListWorkspaceProjectsAPI(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects", nil)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
-	body := res.Body.String()
-	if !strings.Contains(body, `"projects"`) || !strings.Contains(body, `"Demo Project"`) {
-		t.Fatalf("expected project list payload, got %s", body)
-	}
-}
-
-func TestListWorkspaceProjectsAPIErrors(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/not-a-uuid/projects", nil)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad workspace uuid, got %d", res.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000099999/projects", nil)
-	res = httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown workspace, got %d: %s", res.Code, res.Body.String())
-	}
-}
-
-// Platform admin entering a workspace they're not a member of must
-// see every active project, not the empty list the workspace_members
-// gate produces. stubRuntimeStore returns a richer fixture from the
-// ...ForAdmin branch (extra "Foreign Project") so this test proves the
-// handler picks the admin path.
-func TestListWorkspaceProjectsAPIPlatformAdminSeesAll(t *testing.T) {
-	const adminID = "00000000-0000-0000-0000-0000000000ad"
-	auth.SetPlatformAdminIDs([]string{adminID})
-	t.Cleanup(func() { auth.SetPlatformAdminIDs(nil) })
-
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects", nil)
-	req = req.WithContext(auth.WithUserID(req.Context(), adminID))
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
-	body := res.Body.String()
-	if !strings.Contains(body, `"Foreign Project"`) {
-		t.Fatalf("platform admin should see foreign projects, got %s", body)
-	}
-}
-
-// Non-admin caller must keep going through the membership-gated query
-// — same stub workspace, but the ...ForAdmin fixture's "Foreign Project"
-// must NOT appear.
-func TestListWorkspaceProjectsAPINonAdminUsesMembershipGate(t *testing.T) {
-	auth.SetPlatformAdminIDs(nil)
-
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	req := withTestUser(httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects", nil))
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
-	body := res.Body.String()
-	if !strings.Contains(body, `"Demo Project"`) {
-		t.Fatalf("expected member view to include Demo Project, got %s", body)
-	}
-	if strings.Contains(body, `"Foreign Project"`) {
-		t.Fatalf("non-admin caller leaked admin-only project: %s", body)
 	}
 }
 
@@ -3744,104 +3526,6 @@ func TestArchiveWorkspaceAPIUnknown(t *testing.T) {
 	}
 }
 
-func TestCreateProjectAPIHappyPath(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	body := strings.NewReader(`{"name":"New Project","description":"desc"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects", body)
-	req = withTestUser(req)
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
-	if !strings.Contains(res.Body.String(), `"project"`) {
-		t.Fatalf("expected project envelope, got %s", res.Body.String())
-	}
-	if !strings.Contains(res.Body.String(), `"slug":"project-`) {
-		t.Fatalf("expected system-generated slug starting with project-, got %s", res.Body.String())
-	}
-}
-
-func TestCreateProjectAPIDuplicateSlug(t *testing.T) {
-	// Stub returns ErrDuplicateProjectSlug when name == "Dup" — exercises
-	// the auto-slug retry-exhaustion path inside the workspace scope.
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	body := strings.NewReader(`{"name":"Dup"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects", body)
-	req = withTestUser(req)
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusConflict {
-		t.Fatalf("expected 409 for duplicate project slug, got %d: %s", res.Code, res.Body.String())
-	}
-}
-
-func TestCreateProjectAPIUnknownWorkspace(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	body := strings.NewReader(`{"name":"X"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000099999/projects", body)
-	req = withTestUser(req)
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown workspace, got %d: %s", res.Code, res.Body.String())
-	}
-}
-
-func TestUpdateProjectAPIHappyPath(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	body := strings.NewReader(`{"name":"Renamed","description":"new desc"}`)
-	req := httptest.NewRequest(http.MethodPatch, "/api/v1/projects/00000000-0000-0000-0000-000000000004", body)
-	req = withTestUser(req)
-	req.Header.Set("Content-Type", "application/json")
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
-	if !strings.Contains(res.Body.String(), `"name":"Renamed"`) {
-		t.Fatalf("expected renamed project, got %s", res.Body.String())
-	}
-}
-
-func TestArchiveProjectAPIHappyPath(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000000004/archive", nil))
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
-	if !strings.Contains(res.Body.String(), `"status":"archived"`) {
-		t.Fatalf("expected status=archived in response, got %s", res.Body.String())
-	}
-}
-
-func TestArchiveProjectAPIUnknown(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-
-	req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000099999/archive", nil))
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown project, got %d: %s", res.Code, res.Body.String())
-	}
-}
-
 func TestWorkspaceSettingsAPIHappyPathAndForbidden(t *testing.T) {
 	r := registerRoutesWithRBACStore(newRoleStubStore(map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}), true)
 	req := newRequestWithDevUser(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/settings", "", store.DefaultDevFixtureIDs().UserID)
@@ -3870,16 +3554,16 @@ func TestWorkspaceSettingsAPIHappyPathAndForbidden(t *testing.T) {
 func TestCreateAgentAPIHappyPathAndNameConflict(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects/00000000-0000-0000-0000-000000000004/agents", strings.NewReader(`{"name":"New Agent","connector_type":"agent_daemon","capabilities":["shell"],"initial_capabilities":[{"capability_version_id":"00000000-0000-0000-0000-000000000c02","configuration":{"mode":"create"}}],"config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(`{"name":"New Agent","connector_type":"agent_daemon","capabilities":["shell"],"initial_capabilities":[{"capability_version_id":"00000000-0000-0000-0000-000000000c02","configuration":{"mode":"create"}}],"config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`))
 	req = withTestUser(req)
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"project_agent"`) || !strings.Contains(res.Body.String(), `"initial_capabilities"`) || !strings.Contains(res.Body.String(), `"capability_version_id":"00000000-0000-0000-0000-000000000c02"`) || strings.Contains(res.Body.String(), `"runtime"`) {
+	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"agent"`) || !strings.Contains(res.Body.String(), `"initial_capabilities"`) || !strings.Contains(res.Body.String(), `"capability_version_id":"00000000-0000-0000-0000-000000000c02"`) || strings.Contains(res.Body.String(), `"runtime"`) {
 		t.Fatalf("expected 201 create agent without runtime and with initial capabilities, got %d: %s", res.Code, res.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects/00000000-0000-0000-0000-000000000004/agents", strings.NewReader(`{"name":"Bad Runtime","connector_type":"agent_daemon","runtime":"bad"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(`{"name":"Bad Runtime","connector_type":"agent_daemon","runtime":"bad"}`))
 	req = withTestUser(req)
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
@@ -3888,16 +3572,16 @@ func TestCreateAgentAPIHappyPathAndNameConflict(t *testing.T) {
 		t.Fatalf("expected 422 invalid create runtime, got %d: %s", res.Code, res.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects/00000000-0000-0000-0000-000000000004/agents", strings.NewReader(`{"name":"Daemon Agent","connector_type":"agent_daemon","config":{"device_id":"00000000-0000-0000-0000-00000000d001","agent_kind":"claude_code"}}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(`{"name":"Daemon Agent","connector_type":"agent_daemon","config":{"device_id":"00000000-0000-0000-0000-00000000d001","agent_kind":"claude_code"}}`))
 	req = withTestUser(req)
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"device_id":"00000000-0000-0000-0000-00000000d001"`) || strings.Contains(res.Body.String(), `"runtime"`) {
-		t.Fatalf("expected 201 agent_daemon without runtime and with project config, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 201 agent_daemon without runtime and with config, got %d: %s", res.Code, res.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects/00000000-0000-0000-0000-000000000004/agents", strings.NewReader(`{"name":"Daemon Bad Runtime","connector_type":"agent_daemon","runtime":"sandbox"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(`{"name":"Daemon Bad Runtime","connector_type":"agent_daemon","runtime":"sandbox"}`))
 	req = withTestUser(req)
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
@@ -3906,7 +3590,7 @@ func TestCreateAgentAPIHappyPathAndNameConflict(t *testing.T) {
 		t.Fatalf("expected 422 agent_daemon runtime, got %d: %s", res.Code, res.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects/00000000-0000-0000-0000-000000000004/agents", strings.NewReader(`{"name":"Dup","connector_type":"agent_daemon","config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(`{"name":"Dup","connector_type":"agent_daemon","config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`))
 	req = withTestUser(req)
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
@@ -4032,44 +3716,13 @@ func TestUpdateAgentVisibilityAPI(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectAgentRuntimeRouteRemovedV5(t *testing.T) {
-	// Per-Agent runtime is immutable after creation. The PATCH route
-	// that flipped project_agent.config.runtime is gone; should 404.
-	r := registerRoutesWithRBACStore(newRoleStubStore(map[string]string{store.DefaultDevFixtureIDs().UserID: "member"}), true)
-
-	req := newRequestWithDevUser(http.MethodPatch, "/api/v1/projects/"+testProjectID+"/agents/"+store.DefaultDevFixtureIDs().BackendProjectAgentID, `{"runtime":"sandbox"}`, store.DefaultDevFixtureIDs().UserID)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound && res.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 404 or 405 for retired runtime override route, got %d: %s", res.Code, res.Body.String())
-	}
-}
-
-func TestDeleteProjectAgentAPIHappyPathAndUnknown(t *testing.T) {
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, stubRuntimeStore{})
-	req := withTestUser(httptest.NewRequest(http.MethodDelete, "/api/v1/project-agents/00000000-0000-0000-0000-000000000902", nil))
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"project_agent"`) {
-		t.Fatalf("expected 200 delete project agent, got %d: %s", res.Code, res.Body.String())
-	}
-
-	req = withTestUser(httptest.NewRequest(http.MethodDelete, "/api/v1/project-agents/00000000-0000-0000-0000-000000099999", nil))
-	res = httptest.NewRecorder()
-	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 unknown project agent, got %d: %s", res.Code, res.Body.String())
-	}
-}
-
 func TestDeleteAgentAPIHappyPathAndInFlightRuns(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 	req := withTestUser(httptest.NewRequest(http.MethodDelete, "/api/v1/agents/00000000-0000-0000-0000-000000000901", nil))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "detached_project_agent_ids") {
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"agent"`) {
 		t.Fatalf("expected 200 delete agent, got %d: %s", res.Code, res.Body.String())
 	}
 
@@ -4085,7 +3738,7 @@ func TestDeleteAgentAPIHappyPathAndInFlightRuns(t *testing.T) {
 // permission gate: every Agent CRUD mutation endpoint must reject members
 // (non-admin) with 403. We hit each endpoint with a member-role user and
 // expect a 403 + "forbidden" error envelope so the RBAC wiring on
-// requireProjectOwnerOrAdmin / requireWorkspaceOwnerOrAdmin can't silently
+// requireWorkspaceOwnerOrAdmin can't silently
 // regress to a no-op.
 func TestAgentCRUDForbiddenForNonAdmin(t *testing.T) {
 	memberID := store.DefaultDevFixtureIDs().UserID
@@ -4098,7 +3751,7 @@ func TestAgentCRUDForbiddenForNonAdmin(t *testing.T) {
 		{
 			name:   "create agent",
 			method: http.MethodPost,
-			path:   "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects/00000000-0000-0000-0000-000000000004/agents",
+			path:   "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents",
 			body:   `{"name":"NoPerm","connector_type":"agent_daemon"}`,
 		},
 		{
@@ -4114,9 +3767,9 @@ func TestAgentCRUDForbiddenForNonAdmin(t *testing.T) {
 			body:   "",
 		},
 		{
-			name:   "delete project-agent",
+			name:   "delete merged agent",
 			method: http.MethodDelete,
-			path:   "/api/v1/project-agents/00000000-0000-0000-0000-000000000007",
+			path:   "/api/v1/agents/00000000-0000-0000-0000-000000000007",
 			body:   "",
 		},
 	}
@@ -4136,11 +3789,11 @@ func TestAgentCRUDForbiddenForNonAdmin(t *testing.T) {
 	}
 }
 
-func TestCreateProjectConversationAPI(t *testing.T) {
+func TestCreateConversationAPI(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000000004/conversations",
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/conversations",
 		strings.NewReader(`{"title":"排查 API","surface":"web","form":"thread","metadata":{"source":"dev"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
@@ -4154,11 +3807,11 @@ func TestCreateProjectConversationAPI(t *testing.T) {
 	}
 }
 
-func TestCreateProjectConversationAPIDefaults(t *testing.T) {
+func TestCreateConversationAPIDefaults(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000000004/conversations", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/conversations", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusCreated {
@@ -4169,18 +3822,18 @@ func TestCreateProjectConversationAPIDefaults(t *testing.T) {
 	}
 }
 
-func TestCreateProjectConversationAPIErrors(t *testing.T) {
+func TestCreateConversationAPIErrors(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/not-a-uuid/conversations", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/not-a-uuid/conversations", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad project uuid, got %d", res.Code)
+		t.Fatalf("expected 400 for bad workspace uuid, got %d", res.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000000004/conversations",
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/conversations",
 		strings.NewReader(`not json`))
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
@@ -4189,24 +3842,24 @@ func TestCreateProjectConversationAPIErrors(t *testing.T) {
 		t.Fatalf("expected 400 for invalid json, got %d", res.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000000400/conversations",
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000400/conversations",
 		strings.NewReader(`{"type":"bogus"}`))
 	req.Header.Set("Content-Type", "application/json")
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid type, got %d", res.Code)
+		t.Fatalf("expected 400 for invalid surface, got %d", res.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/projects/00000000-0000-0000-0000-000000000404/conversations", nil)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000404/conversations", nil)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown project, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 404 for unknown workspace, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
-func TestGetProjectConversationAPI(t *testing.T) {
+func TestGetConversationAPI(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
@@ -4235,11 +3888,11 @@ func TestGetProjectConversationAPI(t *testing.T) {
 	}
 }
 
-func TestDisableProjectAgentAPI(t *testing.T) {
+func TestDisableAgentAPI(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/disable", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/disable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -4250,11 +3903,11 @@ func TestDisableProjectAgentAPI(t *testing.T) {
 	}
 }
 
-func TestEnableProjectAgentAPI(t *testing.T) {
+func TestEnableAgentAPI(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000000007/enable", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/enable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -4265,36 +3918,36 @@ func TestEnableProjectAgentAPI(t *testing.T) {
 	}
 }
 
-func TestProjectAgentLifecycleAPIErrors(t *testing.T) {
+func TestAgentLifecycleAPIErrors(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/not-a-uuid/disable", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/not-a-uuid/disable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad project_agent_id, got %d", res.Code)
+		t.Fatalf("expected 400 for bad agent_id, got %d", res.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000099999/disable", nil)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000099999/disable", nil)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown project agent, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 404 for unknown agent, got %d: %s", res.Code, res.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/project-agents/00000000-0000-0000-0000-000000099999/enable", nil)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000099999/enable", nil)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown project agent enable, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected 404 for unknown agent enable, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
 // TestReadRBACGatesNonMemberAcrossEndpoints exercises a representative
-// sample of newly-gated GET endpoints — direct workspace-scoped, direct
-// project-scoped, and indirect ones that load the resource first to
-// discover the parent project — and asserts:
+// sample of newly-gated GET endpoints — direct workspace-scoped, and
+// indirect ones that load the resource first to discover the parent
+// workspace — and asserts:
 //
 //  1. an active member gets through (200), and
 //  2. a non-member gets 404 (ErrNotMember → "not found" to avoid
@@ -4314,11 +3967,9 @@ func TestReadRBACGatesNonMemberAcrossEndpoints(t *testing.T) {
 	}{
 		// Direct workspace-scoped reads
 		{"list_secrets", "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/secrets"},
-		{"list_workspace_projects", "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/projects"},
-		// Direct project-scoped reads
-		{"list_project_conversations", "/api/v1/projects/00000000-0000-0000-0000-0000000000bb/conversations"},
+		{"list_workspace_conversations", "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/conversations"},
 		// Indirect: keyed by conversation_id / run_id, must
-		// reverse-lookup the parent project before gating.
+		// reverse-lookup the parent workspace before gating.
 		{"get_conversation", "/api/v1/conversations/00000000-0000-0000-0000-000000000123"},
 		{"get_conversation_timeline", "/api/v1/conversations/00000000-0000-0000-0000-000000000123/timeline"},
 		{"get_agent_run", "/api/v1/agent-runs/00000000-0000-0000-0000-000000000777"},
@@ -4384,11 +4035,11 @@ func TestSandboxAdminRBAC(t *testing.T) {
 	}
 	readRoutes := []tc{
 		{"list_sandboxes", http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/sandboxes"},
-		{"get_sandbox_status", http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000099/sandbox"},
+		{"get_sandbox_status", http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000099/sandbox"},
 	}
 	writeRoutes := []tc{
-		{"kill_sandbox", http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000099/sandbox/kill"},
-		{"rebuild_sandbox", http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/project-agents/00000000-0000-0000-0000-000000000099/sandbox/rebuild"},
+		{"kill_sandbox", http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000099/sandbox/kill"},
+		{"rebuild_sandbox", http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents/00000000-0000-0000-0000-000000000099/sandbox/rebuild"},
 	}
 
 	// Outsider hits read + write — all must return 404 "not a

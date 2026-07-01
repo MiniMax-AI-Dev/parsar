@@ -200,7 +200,7 @@ func newTestRegistryWithDevice(t *testing.T, deviceID string) (*gateway.Registry
 // connector turns it into a clean user-facing error.
 func TestNoopSandboxProvider(t *testing.T) {
 	p := NoopSandboxProvider{}
-	_, err := p.Acquire(context.Background(), connector.PromptInput{ProjectAgentID: "pa-1"})
+	_, err := p.Acquire(context.Background(), connector.PromptInput{AgentID: "pa-1"})
 	if !errors.Is(err, ErrSandboxProviderDisabled) {
 		t.Fatalf("expected ErrSandboxProviderDisabled, got %v", err)
 	}
@@ -287,8 +287,8 @@ func TestE2BSandboxProvider_AcquireColdStart(t *testing.T) {
 	}
 
 	deviceID, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1",
-		WorkspaceID:    "wks-1",
+		AgentID:     "pa-1",
+		WorkspaceID: "wks-1",
 	})
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -338,7 +338,7 @@ func TestE2BSandboxProvider_AcquireColdStart(t *testing.T) {
 }
 
 // TestE2BSandboxProvider_AcquireWarmCacheHit: second Acquire for the
-// same project_agent must skip Create and return the cached
+// same agent must skip Create and return the cached
 // deviceID. Also verifies Renew is called to bump the sandbox TTL.
 func TestE2BSandboxProvider_AcquireWarmCacheHit(t *testing.T) {
 	reg, _ := newTestRegistryWithDevice(t, "dev-runtime-01")
@@ -359,7 +359,7 @@ func TestE2BSandboxProvider_AcquireWarmCacheHit(t *testing.T) {
 	}
 
 	deviceID, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentID: "pa-1", WorkspaceID: "wks-1",
 	})
 	if err != nil {
 		t.Fatalf("Acquire (warm): %v", err)
@@ -403,7 +403,7 @@ func TestE2BSandboxProvider_AcquireRecoversFromDeadDevice(t *testing.T) {
 	}
 
 	deviceID, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentID: "pa-1", WorkspaceID: "wks-1",
 	})
 	if err != nil {
 		t.Fatalf("Acquire after dead device: %v", err)
@@ -420,7 +420,7 @@ func TestE2BSandboxProvider_AcquireRecoversFromDeadDevice(t *testing.T) {
 }
 
 // TestE2BSandboxProvider_AcquireSerialisesConcurrent: 5 concurrent
-// Acquires for the same project_agent must result in exactly one
+// Acquires for the same agent must result in exactly one
 // e2b.Create call. The other 4 wait on the inflight promise.
 func TestE2BSandboxProvider_AcquireSerialisesConcurrent(t *testing.T) {
 	reg := gateway.NewRegistry()
@@ -448,7 +448,7 @@ func TestE2BSandboxProvider_AcquireSerialisesConcurrent(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			results[idx], errs[idx] = p.Acquire(context.Background(), connector.PromptInput{
-				ProjectAgentID: "pa-1", WorkspaceID: "wks-1",
+				AgentID: "pa-1", WorkspaceID: "wks-1",
 			})
 		}(i)
 	}
@@ -481,7 +481,7 @@ func TestE2BSandboxProvider_AcquireConnectFailureKillsSandbox(t *testing.T) {
 		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
 	})
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentID: "pa-1", WorkspaceID: "wks-1",
 	})
 	if err == nil {
 		t.Fatalf("expected error on connect failure")
@@ -519,7 +519,7 @@ func TestE2BSandboxProvider_AcquireWaitForDeviceTimeout(t *testing.T) {
 		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
 	})
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentID: "pa-1", WorkspaceID: "wks-1",
 	})
 	if err == nil {
 		t.Fatalf("expected timeout error")
@@ -540,7 +540,7 @@ func TestE2BSandboxProvider_Release(t *testing.T) {
 	e2bClient := newFakeE2BClient()
 	binder := binding.NewInMemoryBinder()
 	_ = binder.Bind(context.Background(), binding.Binding{
-		ConversationID: "conv-1", ProjectAgentID: "pa-1", DeviceID: "dev-runtime-01",
+		ConversationID: "conv-1", AgentID: "pa-1", DeviceID: "dev-runtime-01",
 	})
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: &fakeMinter{}, Registry: reg, Binder: binder,
@@ -651,7 +651,7 @@ func TestE2BSandboxProvider_SeedFailureKillsSandbox(t *testing.T) {
 		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
 	})
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentID: "pa-1", WorkspaceID: "wks-1",
 	})
 	if err == nil {
 		t.Fatalf("expected error on seed failure")
@@ -707,9 +707,8 @@ func TestE2BSandboxProvider_ColdStartPropagatesTGEnv(t *testing.T) {
 	})
 
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID:          "pa-1",
+		AgentID:                 "pa-1",
 		WorkspaceID:             "wks-1",
-		ProjectID:               "proj-7",
 		ConversationID:          "conv-42",
 		ConversationInitiatorID: "user-99",
 	})
@@ -728,15 +727,14 @@ func TestE2BSandboxProvider_ColdStartPropagatesTGEnv(t *testing.T) {
 		"PARSAR_DAEMON_CONNECT_URL":   "https://parsar.example.com",
 		"PARSAR_DAEMON_CONNECT_TOKEN": "tok-dev-runtime-01",
 		// CLI keys — same token, different name.
-		"PARSAR_SERVER_URL":       "https://parsar.example.com",
-		"PARSAR_RUNNER_TOKEN":     "tok-dev-runtime-01",
-		"PARSAR_RUNTIME_ID":       "dev-runtime-01",
-		"PARSAR_WORKSPACE_ID":     "wks-1",
-		"PARSAR_PROJECT_AGENT_ID": "pa-1",
-		"PARSAR_CONNECTOR":        "claude",
+		"PARSAR_SERVER_URL":   "https://parsar.example.com",
+		"PARSAR_RUNNER_TOKEN": "tok-dev-runtime-01",
+		"PARSAR_RUNTIME_ID":   "dev-runtime-01",
+		"PARSAR_WORKSPACE_ID": "wks-1",
+		"PARSAR_AGENT_ID":     "pa-1",
+		"PARSAR_CONNECTOR":    "claude",
 		// Optional keys: present when PromptInput supplied them.
 		"PARSAR_USER_ID":         "user-99",
-		"PARSAR_PROJECT_ID":      "proj-7",
 		"PARSAR_CONVERSATION_ID": "conv-42",
 	}
 	for k, v := range wantEnv {
@@ -750,10 +748,10 @@ func TestE2BSandboxProvider_ColdStartPropagatesTGEnv(t *testing.T) {
 
 // TestE2BSandboxProvider_ColdStartOmitsEmptyTGEnv: optional PARSAR_* keys
 // must be ABSENT (not set to "") when PromptInput leaves them empty.
-// Hook scripts inside the sandbox use `os.environ.get("PARSAR_PROJECT_ID")`
-// as the "is this project-scoped?" signal; an empty string would still
-// be truthy and break that check. This test guards the symmetry by
-// supplying only the mandatory fields.
+// Hook scripts inside the sandbox use `os.environ.get("PARSAR_USER_ID")`
+// as a presence signal; an empty string would still be truthy and break
+// that check. This test guards the symmetry by supplying only the
+// mandatory fields.
 func TestE2BSandboxProvider_ColdStartOmitsEmptyTGEnv(t *testing.T) {
 	reg := gateway.NewRegistry()
 	minter := &fakeMinter{}
@@ -775,18 +773,18 @@ func TestE2BSandboxProvider_ColdStartOmitsEmptyTGEnv(t *testing.T) {
 		Connector: SandboxConnectorClaude, // explicit, not zero-value
 	})
 
-	// Only mandatory fields supplied. Optionals (ProjectID,
-	// ConversationID, ConversationInitiatorID) intentionally empty.
+	// Only mandatory fields supplied. Optionals (ConversationID,
+	// ConversationInitiatorID) intentionally empty.
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1",
-		WorkspaceID:    "wks-1",
+		AgentID:     "pa-1",
+		WorkspaceID: "wks-1",
 	})
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
 
 	env := e2bClient.runEnvs[1]
-	for _, key := range []string{"PARSAR_USER_ID", "PARSAR_PROJECT_ID", "PARSAR_CONVERSATION_ID"} {
+	for _, key := range []string{"PARSAR_USER_ID", "PARSAR_CONVERSATION_ID"} {
 		if _, present := env[key]; present {
 			t.Errorf("env[%q] should be absent when PromptInput field is empty; got %q", key, env[key])
 		}
@@ -813,14 +811,14 @@ type fakeBindings struct {
 
 	// reserveFn is what ReserveSandboxBindingSlot returns. nil means
 	// always-win and seed a brand-new spawning row keyed by
-	// project_agent_id; tests that want the loser path set this.
+	// agent_id; tests that want the loser path set this.
 	reserveFn func(in store.ReserveSandboxBindingSlotInput) (store.SandboxBindingRead, bool, error)
 
 	// waitFn is what WaitForSandboxBindingActive returns for losers.
 	// Default: refuse to wait (return ErrSandboxBindingFailed) so
 	// tests that don't opt into the loser path fail loudly if they
 	// hit it by accident.
-	waitFn func(workspaceID, projectAgentID string) (store.SandboxBindingRead, error)
+	waitFn func(workspaceID, agentID string) (store.SandboxBindingRead, error)
 
 	// Recorded invocations — tests assert on these.
 	createCalls   int
@@ -852,10 +850,10 @@ func (f *fakeBindings) ReserveSandboxBindingSlot(_ context.Context, in store.Res
 	}
 	// Default: win, returning a fresh spawning row.
 	return store.SandboxBindingRead{
-		ID:          "binding-" + in.ProjectAgentID,
+		ID:          "binding-" + in.AgentID,
 		WorkspaceID: in.WorkspaceID,
 		Status:      store.SandboxBindingStatusSpawning,
-		SandboxID:   "pending-" + in.ProjectAgentID,
+		SandboxID:   "pending-" + in.AgentID,
 	}, true, nil
 }
 
@@ -867,13 +865,13 @@ func (f *fakeBindings) FinalizeSandboxBindingSpawning(_ context.Context, in stor
 	return nil
 }
 
-func (f *fakeBindings) WaitForSandboxBindingActive(_ context.Context, workspaceID, projectAgentID string, _ time.Duration) (store.SandboxBindingRead, error) {
+func (f *fakeBindings) WaitForSandboxBindingActive(_ context.Context, workspaceID, agentID string, _ time.Duration) (store.SandboxBindingRead, error) {
 	f.mu.Lock()
 	f.waitCalls++
 	fn := f.waitFn
 	f.mu.Unlock()
 	if fn != nil {
-		return fn(workspaceID, projectAgentID)
+		return fn(workspaceID, agentID)
 	}
 	return store.SandboxBindingRead{}, store.ErrSandboxBindingFailed
 }
@@ -918,8 +916,8 @@ func TestE2BSandboxProvider_AcquireWinnerFinalizesReservation(t *testing.T) {
 	}
 
 	deviceID, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1",
-		WorkspaceID:    "wks-1",
+		AgentID:     "pa-1",
+		WorkspaceID: "wks-1",
 	})
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -992,8 +990,8 @@ func TestE2BSandboxProvider_AcquireLoserReusesWinnerDevice(t *testing.T) {
 	}
 
 	deviceID, err := p.Acquire(context.Background(), connector.PromptInput{
-		ProjectAgentID: "pa-1",
-		WorkspaceID:    "wks-1",
+		AgentID:     "pa-1",
+		WorkspaceID: "wks-1",
 	})
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -1051,8 +1049,8 @@ func TestE2BSandboxProvider_AcquireWinnerFailureReleasesReservation(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	_, err = p.Acquire(ctx, connector.PromptInput{
-		ProjectAgentID: "pa-1",
-		WorkspaceID:    "wks-1",
+		AgentID:     "pa-1",
+		WorkspaceID: "wks-1",
 	})
 	if err == nil {
 		t.Fatalf("expected Acquire failure when daemon never dials in")

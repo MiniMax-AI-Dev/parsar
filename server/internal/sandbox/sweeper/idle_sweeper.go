@@ -232,7 +232,7 @@ func (s *IdleSweeper) killOne(ctx context.Context, row store.SandboxBindingRead,
 		slog.String("binding_id", row.ID),
 		slog.String("sandbox_id", row.SandboxID),
 		slog.String("workspace_id", row.WorkspaceID),
-		slog.Any("project_agent_id", row.ProjectAgentID),
+		slog.Any("agent_id", row.AgentID),
 		slog.String("status", terminalStatus),
 		slog.Time("last_active_at", row.LastActiveAt),
 	)

@@ -332,7 +332,7 @@ func (s *Store) upsertWorkspaceConnector(ctx context.Context, u workspaceConnect
 	}
 	if !change.Noop {
 		// Audit payload omits *_ref values; only presence/booleans.
-		s.emitAgentAudit(now, u.actorID, auditWorkspaceIMConnectorUpdated, "workspace_im_connector", change.ID, change.WorkspaceID, "", map[string]any{
+		s.emitAgentAudit(now, u.actorID, auditWorkspaceIMConnectorUpdated, "workspace_im_connector", change.ID, change.WorkspaceID, map[string]any{
 			"platform":    change.Platform,
 			"old_enabled": oldEnabled,
 			"new_enabled": change.Enabled,

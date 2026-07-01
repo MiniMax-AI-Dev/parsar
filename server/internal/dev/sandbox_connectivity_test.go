@@ -31,7 +31,7 @@ const (
 func newConnectivityTestRouter(deps sandboxAdminDeps) chi.Router {
 	r := chi.NewRouter()
 	r.Post(
-		"/api/v1/workspaces/{workspaceID}/project-agents/{projectAgentID}/sandbox/test-connection",
+		"/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/test-connection",
 		sandboxConnectivityTest(deps, nil),
 	)
 	return r
@@ -40,7 +40,7 @@ func newConnectivityTestRouter(deps sandboxAdminDeps) chi.Router {
 func newConnectivityRequest(t *testing.T) *http.Request {
 	t.Helper()
 	url := "/api/v1/workspaces/" + connTestWorkspaceID +
-		"/project-agents/" + connTestAgentID + "/sandbox/test-connection"
+		"/agents/" + connTestAgentID + "/sandbox/test-connection"
 	return httptest.NewRequest(http.MethodPost, url, strings.NewReader(""))
 }
 

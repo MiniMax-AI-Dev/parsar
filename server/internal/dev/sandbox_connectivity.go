@@ -83,16 +83,16 @@ func sandboxConnectivityTest(deps sandboxAdminDeps, ingester AuditIngester) http
 			return
 		}
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(workspaceID) || !isUUID(projectAgentID) {
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(workspaceID) || !isUUID(agentID) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": "workspace_id and project_agent_id must be UUIDs",
+				"error": "workspace_id and agent_id must be UUIDs",
 			})
 			return
 		}
 
 		binding, found, err := deps.store.GetActiveSandboxBindingForAgent(
-			r.Context(), workspaceID, projectAgentID)
+			r.Context(), workspaceID, agentID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
 				"error": "lookup failed: " + err.Error(),
@@ -101,9 +101,9 @@ func sandboxConnectivityTest(deps sandboxAdminDeps, ingester AuditIngester) http
 		}
 		if !found {
 			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error":            "no active sandbox binding",
-				"workspace_id":     workspaceID,
-				"project_agent_id": projectAgentID,
+				"error":        "no active sandbox binding",
+				"workspace_id": workspaceID,
+				"agent_id":     agentID,
 			})
 			return
 		}
@@ -121,7 +121,7 @@ func sandboxConnectivityTest(deps sandboxAdminDeps, ingester AuditIngester) http
 			Checks:     checks,
 		}
 
-		emitSandboxConnectivityAudit(ingester, r, workspaceID, projectAgentID, startedAt, totalDuration, resp)
+		emitSandboxConnectivityAudit(ingester, r, workspaceID, agentID, startedAt, totalDuration, resp)
 
 		writeJSON(w, http.StatusOK, resp)
 	}
@@ -241,7 +241,7 @@ func computeSandboxConnectivityOverall(checks []sandboxConnectivityCheck) string
 	return "fail"
 }
 
-func emitSandboxConnectivityAudit(ingester AuditIngester, r *http.Request, workspaceID, projectAgentID string, startedAt time.Time, duration time.Duration, resp sandboxConnectivityResponse) {
+func emitSandboxConnectivityAudit(ingester AuditIngester, r *http.Request, workspaceID, agentID string, startedAt time.Time, duration time.Duration, resp sandboxConnectivityResponse) {
 	if ingester == nil {
 		return
 	}
@@ -267,11 +267,11 @@ func emitSandboxConnectivityAudit(ingester AuditIngester, r *http.Request, works
 		TargetID:    resp.SandboxID,
 		WorkspaceID: workspaceID,
 		Payload: map[string]any{
-			"overall":          resp.Overall,
-			"sandbox_id":       resp.SandboxID,
-			"duration_ms":      duration.Milliseconds(),
-			"project_agent_id": projectAgentID,
-			"checks":           checkSummary,
+			"overall":     resp.Overall,
+			"sandbox_id":  resp.SandboxID,
+			"duration_ms": duration.Milliseconds(),
+			"agent_id":    agentID,
+			"checks":      checkSummary,
 		},
 	})
 }

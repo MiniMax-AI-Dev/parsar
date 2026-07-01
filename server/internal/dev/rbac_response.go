@@ -16,9 +16,9 @@ func writeRBACError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 	case errors.Is(err, auth.ErrNotMember):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not a member"})
-	case errors.Is(err, store.ErrUnknownProject):
-		// Surfaces from the project → workspace bridge when the project
-		// id is invalid or soft-deleted; same 404 shape as ErrNotMember
+	case errors.Is(err, store.ErrUnknownWorkspace):
+		// Surfaces when the workspace id is invalid or soft-deleted;
+		// same 404 shape as ErrNotMember
 		// so existence isn't leaked.
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not a member"})
 	default:

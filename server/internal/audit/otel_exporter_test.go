@@ -88,7 +88,6 @@ func TestOTelExporterSinkPostsValidOTLPLog(t *testing.T) {
 		TargetType:  "model",
 		TargetID:    "22222222-2222-2222-2222-222222222222",
 		WorkspaceID: "33333333-3333-3333-3333-333333333333",
-		ProjectID:   "44444444-4444-4444-4444-444444444444",
 		Payload:     map[string]any{"model_id": "claude-3-5"},
 	}
 	if err := sink.Write(context.Background(), ev); err != nil {
@@ -138,7 +137,6 @@ func TestOTelExporterSinkPostsValidOTLPLog(t *testing.T) {
 		"parsar.audit.actor_type":       ActorTypeUser,
 		"parsar.audit.actor_id":         "11111111-1111-1111-1111-111111111111",
 		"parsar.workspace_id":           "33333333-3333-3333-3333-333333333333",
-		"parsar.project_id":             "44444444-4444-4444-4444-444444444444",
 		"parsar.audit.payload.model_id": "claude-3-5",
 	} {
 		if got := attrs[k]; got != want {

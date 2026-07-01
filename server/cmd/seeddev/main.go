@@ -32,13 +32,11 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("seeded dev database: users=%d workspaces=%d workspace_members=%d projects=%d agents=%d project_agents=%d conversations=%d\n",
+	fmt.Printf("seeded dev database: users=%d workspaces=%d workspace_members=%d agents=%d conversations=%d\n",
 		result.Users,
 		result.Workspaces,
 		result.WorkspaceMembers,
-		result.Projects,
 		result.Agents,
-		result.ProjectAgents,
 		result.Conversations,
 	)
 

@@ -1,10 +1,9 @@
 /**
- * Workspace + project picker data + CRUD for the admin header switcher.
+ * Workspace picker data + CRUD for the admin header switcher.
  *
  * `useMyWorkspaces` falls back to a single "Demo Workspace" *placeholder*
  * when `/api/v1/me/workspaces` is unreachable so the header switcher still
- * renders something. We deliberately do NOT inject demo projects: a real
- * workspace's project list should start empty until the user creates one.
+ * renders something.
  */
 import {
   useMutation,
@@ -15,20 +14,15 @@ import { apiRequest, noUnreachableRetry } from "./api-client"
 import type {
   CreateJoinRequestRequest,
   CreateJoinRequestResponse,
-  CreateProjectRequest,
-  CreateProjectResponse,
   CreateWorkspaceRequest,
   CreateWorkspaceResponse,
   ListDiscoverableWorkspacesResponse,
   ListMyWorkspacesResponse,
   ListPendingJoinRequestsResponse,
-  ListWorkspaceProjectsResponse,
   PendingJoinRequest,
-  UpdateProjectRequest,
   UpdateWorkspaceRequest,
   UserWorkspace,
   WorkspaceMember,
-  WorkspaceProject,
 } from "./api-types"
 
 const KEY_MY_WORKSPACES = ["admin", "myWorkspaces"] as const
@@ -38,8 +32,6 @@ const KEY_DISCOVERABLE_WORKSPACES_PAGE = (
   limit: number,
   offset: number
 ) => ["admin", "discoverableWorkspaces", { q, limit, offset }] as const
-const KEY_WORKSPACE_PROJECTS = (wsId: string) =>
-  ["admin", "workspaceProjects", wsId] as const
 const KEY_PENDING_JOIN_REQUESTS = (wsId: string) =>
   ["admin", "pendingJoinRequests", wsId] as const
 
@@ -61,15 +53,6 @@ async function listMyWorkspacesRequest(): Promise<ListMyWorkspacesResponse> {
   })
 }
 
-async function listWorkspaceProjectsRequest(
-  wsId: string
-): Promise<ListWorkspaceProjectsResponse> {
-  return apiRequest<ListWorkspaceProjectsResponse>(
-    `/api/v1/workspaces/${wsId}/projects`,
-    { method: "GET" }
-  )
-}
-
 export function useMyWorkspaces() {
   return useQuery({
     queryKey: KEY_MY_WORKSPACES,
@@ -83,31 +66,6 @@ export function useMyWorkspaces() {
           user_id: "mock-user",
           workspaces: MOCK_WORKSPACES,
         } satisfies ListMyWorkspacesResponse
-      }
-    },
-    retry: noUnreachableRetry,
-    staleTime: 60_000,
-  })
-}
-
-export function useWorkspaceProjects(wsId: string | null) {
-  return useQuery({
-    queryKey: KEY_WORKSPACE_PROJECTS(wsId ?? "_none"),
-    enabled: wsId !== null,
-    queryFn: async () => {
-      if (!wsId) {
-        return {
-          workspace_id: "",
-          projects: [],
-        } satisfies ListWorkspaceProjectsResponse
-      }
-      try {
-        return await listWorkspaceProjectsRequest(wsId)
-      } catch {
-        return {
-          workspace_id: wsId,
-          projects: [],
-        } satisfies ListWorkspaceProjectsResponse
       }
     },
     retry: noUnreachableRetry,
@@ -154,58 +112,6 @@ export function useArchiveWorkspace() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY_MY_WORKSPACES })
-    },
-  })
-}
-
-export function useCreateProject() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ wsId, body }: { wsId: string; body: CreateProjectRequest }) =>
-      apiRequest<CreateProjectResponse>(`/api/v1/workspaces/${wsId}/projects`, {
-        method: "POST",
-        body,
-      }),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: KEY_WORKSPACE_PROJECTS(vars.wsId) })
-    },
-  })
-}
-
-export function useUpdateProject() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({
-      pid,
-      body,
-    }: {
-      pid: string
-      wsId: string | null
-      body: UpdateProjectRequest
-    }) =>
-      apiRequest<WorkspaceProject>(`/api/v1/projects/${pid}`, {
-        method: "PATCH",
-        body,
-      }),
-    onSuccess: (_data, vars) => {
-      if (vars.wsId) {
-        qc.invalidateQueries({ queryKey: KEY_WORKSPACE_PROJECTS(vars.wsId) })
-      }
-    },
-  })
-}
-
-export function useArchiveProject() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ pid }: { pid: string; wsId: string | null }) =>
-      apiRequest<WorkspaceProject>(`/api/v1/projects/${pid}/archive`, {
-        method: "POST",
-      }),
-    onSuccess: (_data, vars) => {
-      if (vars.wsId) {
-        qc.invalidateQueries({ queryKey: KEY_WORKSPACE_PROJECTS(vars.wsId) })
-      }
     },
   })
 }

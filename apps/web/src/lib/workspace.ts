@@ -1,16 +1,13 @@
 /**
- * Workspace + project context for scoped admin API calls.
+ * Workspace context for scoped admin API calls.
  *
- * Resolution order: URL param `?ws=<uuid>` / `?project=<uuid>` →
- * localStorage `parsar.ws` / `parsar.project` → null (UI shows
- * "no workspace" empty state).
+ * Resolution order: URL param `?ws=<uuid>` → localStorage `parsar.ws` →
+ * null (UI shows "no workspace" empty state).
  */
 import { useEffect, useMemo, useState } from "react"
 
 const WS_KEY = "parsar.ws"
-const PROJECT_KEY = "parsar.project"
 const WS_PARAM = "ws"
-const PROJECT_PARAM = "project"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -46,10 +43,6 @@ export function getCurrentWorkspaceId(): string | null {
   return readUUIDFromUrl(WS_PARAM) ?? readUUIDFromStorage(WS_KEY)
 }
 
-export function getCurrentProjectId(): string | null {
-  return readUUIDFromUrl(PROJECT_PARAM) ?? readUUIDFromStorage(PROJECT_KEY)
-}
-
 function syncURLParam(param: string, val: string | null) {
   // Must rewrite the URL because `getCurrentWorkspaceId` gives URL precedence
   // over localStorage.
@@ -66,17 +59,6 @@ function syncURLParam(param: string, val: string | null) {
 export function setWorkspaceId(id: string | null) {
   writeStorage(WS_KEY, id)
   syncURLParam(WS_PARAM, id)
-  // Switching workspace invalidates the previously-picked project (it belongs
-  // to the old workspace). Clear pid atomically so URL switches and other
-  // caller paths are all covered.
-  writeStorage(PROJECT_KEY, null)
-  syncURLParam(PROJECT_PARAM, null)
-  window.dispatchEvent(new Event("workspace:change"))
-}
-
-export function setProjectId(id: string | null) {
-  writeStorage(PROJECT_KEY, id)
-  syncURLParam(PROJECT_PARAM, id)
   window.dispatchEvent(new Event("workspace:change"))
 }
 
@@ -98,22 +80,6 @@ export function useWorkspaceId(): string | null {
     }
   }, [])
   return ws
-}
-
-export function useProjectId(): string | null {
-  const [pid, setPid] = useState<string | null>(() => getCurrentProjectId())
-  useEffect(() => {
-    const refresh = () => setPid(getCurrentProjectId())
-    window.addEventListener("popstate", refresh)
-    window.addEventListener("workspace:change", refresh)
-    window.addEventListener("admin:navigate", refresh)
-    return () => {
-      window.removeEventListener("popstate", refresh)
-      window.removeEventListener("workspace:change", refresh)
-      window.removeEventListener("admin:navigate", refresh)
-    }
-  }, [])
-  return pid
 }
 
 /**

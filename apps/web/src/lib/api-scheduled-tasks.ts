@@ -5,7 +5,7 @@ import { apiRequest, noUnreachableRetry } from "./api-client"
 
 export interface ScheduledTask {
   id: string
-  project_agent_id: string
+  agent_id: string
   conversation_id: string
   name: string
   prompt: string
@@ -27,7 +27,7 @@ export interface ScheduledTask {
 export interface ScheduledTaskRun {
   id: string
   conversation_id: string
-  project_agent_id: string
+  agent_id: string
   connector_type: string
   status: string
   failure_reason: string
@@ -57,39 +57,39 @@ export interface ScheduledTaskUpdateRequest {
   enabled: boolean
 }
 
-export interface ScheduledTasksByProjectResponse {
+export interface ScheduledTasksByWorkspaceResponse {
   scheduled_tasks: ScheduledTask[]
   total: number
   limit: number
   offset: number
 }
 
-export interface UseScheduledTasksByProjectOptions {
+export interface UseScheduledTasksByWorkspaceOptions {
   offset?: number
   limit?: number
 }
 
 /* --- Query keys --------------------------------------------------------- */
 
-// Page-scoped key carries offset/limit; mutations invalidate via the project
+// Page-scoped key carries offset/limit; mutations invalidate via the workspace
 // prefix so every cached page refreshes (React Query matches keys by prefix).
-const KEY_TASKS_BY_PROJECT_PREFIX = (projectID: string) =>
-  ["admin", "scheduledTasksByProject", projectID] as const
-const KEY_TASKS_BY_PROJECT = (projectID: string, offset: number, limit: number) =>
-  [...KEY_TASKS_BY_PROJECT_PREFIX(projectID), offset, limit] as const
+const KEY_TASKS_BY_WORKSPACE_PREFIX = (workspaceID: string) =>
+  ["admin", "scheduledTasksByWorkspace", workspaceID] as const
+const KEY_TASKS_BY_WORKSPACE = (workspaceID: string, offset: number, limit: number) =>
+  [...KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID), offset, limit] as const
 const KEY_TASK_RUNS = (taskID: string) =>
   ["admin", "scheduledTaskRuns", taskID] as const
 
 /* --- Network ------------------------------------------------------------ */
 
-async function listTasksByProject(
-  projectID: string | null,
+async function listTasksByWorkspace(
+  workspaceID: string | null,
   offset: number,
   limit: number,
-): Promise<ScheduledTasksByProjectResponse> {
-  if (!projectID) return { scheduled_tasks: [], total: 0, limit, offset }
-  return apiRequest<ScheduledTasksByProjectResponse>(
-    `/api/v1/projects/${encodeURIComponent(projectID)}/scheduled-tasks`,
+): Promise<ScheduledTasksByWorkspaceResponse> {
+  if (!workspaceID) return { scheduled_tasks: [], total: 0, limit, offset }
+  return apiRequest<ScheduledTasksByWorkspaceResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/scheduled-tasks`,
     { query: { limit, offset } },
   )
 }
@@ -103,15 +103,15 @@ async function listTaskRuns(taskID: string | null): Promise<ScheduledTaskRun[]> 
 
 /* --- React Query hooks -------------------------------------------------- */
 
-export function useScheduledTasksByProject(
-  projectID: string | null,
-  options: UseScheduledTasksByProjectOptions = {},
+export function useScheduledTasksByWorkspace(
+  workspaceID: string | null,
+  options: UseScheduledTasksByWorkspaceOptions = {},
 ) {
   const { offset = 0, limit = 20 } = options
   return useQuery({
-    queryKey: KEY_TASKS_BY_PROJECT(projectID ?? "_none", offset, limit),
-    queryFn: () => listTasksByProject(projectID, offset, limit),
-    enabled: Boolean(projectID),
+    queryKey: KEY_TASKS_BY_WORKSPACE(workspaceID ?? "_none", offset, limit),
+    queryFn: () => listTasksByWorkspace(workspaceID, offset, limit),
+    enabled: Boolean(workspaceID),
     retry: noUnreachableRetry,
     staleTime: 15_000,
     // Keep the previous page on screen while the next one fetches.
@@ -129,23 +129,23 @@ export function useScheduledTaskRuns(taskID: string | null) {
   })
 }
 
-// Listing is project-wide, but create targets one agent (picked in the dialog),
-// so the create mutation carries projectAgentID while the rest key off taskID.
-export function useCreateScheduledTask(projectID: string | null) {
+// Listing is workspace-wide, but create targets one agent (picked in the dialog),
+// so the create mutation carries agentID while the rest key off taskID.
+export function useCreateScheduledTask(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ projectAgentID, body }: { projectAgentID: string; body: ScheduledTaskCreateRequest }) =>
+    mutationFn: async ({ agentID, body }: { agentID: string; body: ScheduledTaskCreateRequest }) =>
       apiRequest<ScheduledTask>(
-        `/api/v1/project-agents/${encodeURIComponent(projectAgentID)}/scheduled-tasks`,
+        `/api/v1/agents/${encodeURIComponent(agentID)}/scheduled-tasks`,
         { method: "POST", body },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID ?? "_none") })
     },
   })
 }
 
-export function useUpdateScheduledTask(projectID: string | null) {
+export function useUpdateScheduledTask(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ taskID, body }: { taskID: string; body: ScheduledTaskUpdateRequest }) =>
@@ -154,12 +154,12 @@ export function useUpdateScheduledTask(projectID: string | null) {
         { method: "PATCH", body },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID ?? "_none") })
     },
   })
 }
 
-export function useDeleteScheduledTask(projectID: string | null) {
+export function useDeleteScheduledTask(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (taskID: string) =>
@@ -168,12 +168,12 @@ export function useDeleteScheduledTask(projectID: string | null) {
         { method: "DELETE" },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID ?? "_none") })
     },
   })
 }
 
-export function useRunScheduledTaskNow(projectID: string | null) {
+export function useRunScheduledTaskNow(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (taskID: string) =>
@@ -182,7 +182,7 @@ export function useRunScheduledTaskNow(projectID: string | null) {
         { method: "POST", body: {} },
       ),
     onSuccess: (_res, taskID) => {
-      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_PROJECT_PREFIX(projectID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID ?? "_none") })
       void qc.invalidateQueries({ queryKey: KEY_TASK_RUNS(taskID) })
     },
   })

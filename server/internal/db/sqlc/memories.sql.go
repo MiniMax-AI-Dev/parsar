@@ -16,7 +16,7 @@ select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -36,7 +36,7 @@ type GetMemoryRow struct {
 	ID             string             `json:"id"`
 	Scope          string             `json:"scope"`
 	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	MemoryType     string             `json:"memory_type"`
 	Title          string             `json:"title"`
 	Body           string             `json:"body"`
@@ -58,7 +58,7 @@ func (q *Queries) GetMemory(ctx context.Context, id pgtype.UUID) (GetMemoryRow, 
 		&i.ID,
 		&i.Scope,
 		&i.UserID,
-		&i.ProjectID,
+		&i.WorkspaceID,
 		&i.MemoryType,
 		&i.Title,
 		&i.Body,
@@ -76,7 +76,7 @@ func (q *Queries) GetMemory(ctx context.Context, id pgtype.UUID) (GetMemoryRow, 
 const insertMemory = `-- name: InsertMemory :one
 
 insert into memories (
-  id, scope, user_id, project_id, memory_type,
+  id, scope, user_id, workspace_id, memory_type,
   title, body, why, tags,
   source, agent_actor, conversation_id,
   created_at, updated_at
@@ -91,7 +91,7 @@ returning
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -108,7 +108,7 @@ type InsertMemoryParams struct {
 	ID             pgtype.UUID        `json:"id"`
 	Scope          string             `json:"scope"`
 	UserID         pgtype.UUID        `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	MemoryType     string             `json:"memory_type"`
 	Title          string             `json:"title"`
 	Body           string             `json:"body"`
@@ -124,7 +124,7 @@ type InsertMemoryRow struct {
 	ID             string             `json:"id"`
 	Scope          string             `json:"scope"`
 	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	MemoryType     string             `json:"memory_type"`
 	Title          string             `json:"title"`
 	Body           string             `json:"body"`
@@ -137,7 +137,7 @@ type InsertMemoryRow struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
-// memories.sql — user- and project-scoped memory rows backing the
+// memories.sql — user- and workspace-scoped memory rows backing the
 // spec & memory injection feature (see docs/spec-memory-module.md).
 //
 // Conventions match spec_fragments.sql in this dir:
@@ -147,21 +147,21 @@ type InsertMemoryRow struct {
 //     filter so one list query covers unfiltered + filtered views
 //   - source / scope / memory_type strings are validated by the Go
 //     service layer (specmemory.{Source,Scope,MemoryType} enums);
-//     SQL only enforces the scope↔project_id structural CHECK from
-//     migration 000004
+//     SQL only enforces the scope↔workspace_id structural CHECK from
+//     migration 000001
 //
 // Two-rail design: user-scope rows live alongside this user only
-// (idx_memories_user_scope_active); project-scope rows are shared
-// across all users on the project (idx_memories_project_active).
+// (idx_memories_user_scope_active); workspace-scope rows are shared
+// across all users on the workspace (idx_memories_workspace_active).
 // Per-turn incremental injection therefore uses two separate
 // ListXxxSince queries so callers can't accidentally bleed one
 // user's user-scope memory into another user's session.
 // Single insert path for both UI ("user") and agent ("agent") writes.
 // Caller is responsible for:
-//   - setting project_id (pgtype.UUID{Valid:false} when scope='user';
-//     concrete UUID when scope='project') — the table CHECK enforces
+//   - setting workspace_id (pgtype.UUID{Valid:false} when scope='user';
+//     concrete UUID when scope='workspace') — the table CHECK enforces
 //     the pairing
-//   - agent_actor (” for human; 'connector:projectAgentID' for agent)
+//   - agent_actor (” for human; 'connector:agentID' for agent)
 //   - conversation_id (pgtype.UUID{Valid:false} unless the write
 //     originated inside an agent turn)
 func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (InsertMemoryRow, error) {
@@ -169,7 +169,7 @@ func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (Ins
 		arg.ID,
 		arg.Scope,
 		arg.UserID,
-		arg.ProjectID,
+		arg.WorkspaceID,
 		arg.MemoryType,
 		arg.Title,
 		arg.Body,
@@ -185,7 +185,7 @@ func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (Ins
 		&i.ID,
 		&i.Scope,
 		&i.UserID,
-		&i.ProjectID,
+		&i.WorkspaceID,
 		&i.MemoryType,
 		&i.Title,
 		&i.Body,
@@ -200,192 +200,12 @@ func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (Ins
 	return i, err
 }
 
-const listProjectMemories = `-- name: ListProjectMemories :many
-select
-  id::text           as id,
-  scope,
-  user_id::text      as user_id,
-  project_id,
-  memory_type,
-  title,
-  body,
-  why,
-  tags,
-  source,
-  agent_actor,
-  conversation_id,
-  created_at,
-  updated_at
-from memories
-where project_id  = $1::uuid
-  and scope       = 'project'
-  and deleted_at  is null
-  and ($2::text = '' or memory_type = $2::text)
-  and (cardinality($3::text[]) = 0
-       or tags && $3::text[])
-order by updated_at desc, id desc
-limit $4::int
-`
-
-type ListProjectMemoriesParams struct {
-	ProjectID  pgtype.UUID `json:"project_id"`
-	MemoryType string      `json:"memory_type"`
-	TagFilter  []string    `json:"tag_filter"`
-	ItemLimit  int32       `json:"item_limit"`
-}
-
-type ListProjectMemoriesRow struct {
-	ID             string             `json:"id"`
-	Scope          string             `json:"scope"`
-	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
-	MemoryType     string             `json:"memory_type"`
-	Title          string             `json:"title"`
-	Body           string             `json:"body"`
-	Why            string             `json:"why"`
-	Tags           []string           `json:"tags"`
-	Source         string             `json:"source"`
-	AgentActor     string             `json:"agent_actor"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-// Per-project listing (shared across all users on the project) for
-// the project-scope Memory tab and SessionStart snapshot injection.
-// Same filter sentinels as ListUserMemories.
-func (q *Queries) ListProjectMemories(ctx context.Context, arg ListProjectMemoriesParams) ([]ListProjectMemoriesRow, error) {
-	rows, err := q.db.Query(ctx, listProjectMemories,
-		arg.ProjectID,
-		arg.MemoryType,
-		arg.TagFilter,
-		arg.ItemLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectMemoriesRow{}
-	for rows.Next() {
-		var i ListProjectMemoriesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Scope,
-			&i.UserID,
-			&i.ProjectID,
-			&i.MemoryType,
-			&i.Title,
-			&i.Body,
-			&i.Why,
-			&i.Tags,
-			&i.Source,
-			&i.AgentActor,
-			&i.ConversationID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProjectMemoriesSince = `-- name: ListProjectMemoriesSince :many
-select
-  id::text           as id,
-  scope,
-  user_id::text      as user_id,
-  project_id,
-  memory_type,
-  title,
-  body,
-  why,
-  tags,
-  source,
-  agent_actor,
-  conversation_id,
-  created_at,
-  updated_at
-from memories
-where project_id  = $1::uuid
-  and scope       = 'project'
-  and deleted_at  is null
-  and updated_at  > $2::timestamptz
-order by updated_at asc, id asc
-limit $3::int
-`
-
-type ListProjectMemoriesSinceParams struct {
-	ProjectID pgtype.UUID        `json:"project_id"`
-	Since     pgtype.Timestamptz `json:"since"`
-	ItemLimit int32              `json:"item_limit"`
-}
-
-type ListProjectMemoriesSinceRow struct {
-	ID             string             `json:"id"`
-	Scope          string             `json:"scope"`
-	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
-	MemoryType     string             `json:"memory_type"`
-	Title          string             `json:"title"`
-	Body           string             `json:"body"`
-	Why            string             `json:"why"`
-	Tags           []string           `json:"tags"`
-	Source         string             `json:"source"`
-	AgentActor     string             `json:"agent_actor"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-// Per-turn incremental cursor for project-scope memories.
-// Mirrors ListUserMemoriesSince but scoped by project_id so a
-// session bound to project X cannot pick up memories from project Y.
-func (q *Queries) ListProjectMemoriesSince(ctx context.Context, arg ListProjectMemoriesSinceParams) ([]ListProjectMemoriesSinceRow, error) {
-	rows, err := q.db.Query(ctx, listProjectMemoriesSince, arg.ProjectID, arg.Since, arg.ItemLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProjectMemoriesSinceRow{}
-	for rows.Next() {
-		var i ListProjectMemoriesSinceRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Scope,
-			&i.UserID,
-			&i.ProjectID,
-			&i.MemoryType,
-			&i.Title,
-			&i.Body,
-			&i.Why,
-			&i.Tags,
-			&i.Source,
-			&i.AgentActor,
-			&i.ConversationID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUserMemories = `-- name: ListUserMemories :many
 select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -418,7 +238,7 @@ type ListUserMemoriesRow struct {
 	ID             string             `json:"id"`
 	Scope          string             `json:"scope"`
 	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	MemoryType     string             `json:"memory_type"`
 	Title          string             `json:"title"`
 	Body           string             `json:"body"`
@@ -457,7 +277,7 @@ func (q *Queries) ListUserMemories(ctx context.Context, arg ListUserMemoriesPara
 			&i.ID,
 			&i.Scope,
 			&i.UserID,
-			&i.ProjectID,
+			&i.WorkspaceID,
 			&i.MemoryType,
 			&i.Title,
 			&i.Body,
@@ -484,7 +304,7 @@ select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -514,7 +334,7 @@ type ListUserMemoriesSinceRow struct {
 	ID             string             `json:"id"`
 	Scope          string             `json:"scope"`
 	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	MemoryType     string             `json:"memory_type"`
 	Title          string             `json:"title"`
 	Body           string             `json:"body"`
@@ -545,7 +365,187 @@ func (q *Queries) ListUserMemoriesSince(ctx context.Context, arg ListUserMemorie
 			&i.ID,
 			&i.Scope,
 			&i.UserID,
-			&i.ProjectID,
+			&i.WorkspaceID,
+			&i.MemoryType,
+			&i.Title,
+			&i.Body,
+			&i.Why,
+			&i.Tags,
+			&i.Source,
+			&i.AgentActor,
+			&i.ConversationID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceMemories = `-- name: ListWorkspaceMemories :many
+select
+  id::text           as id,
+  scope,
+  user_id::text      as user_id,
+  workspace_id,
+  memory_type,
+  title,
+  body,
+  why,
+  tags,
+  source,
+  agent_actor,
+  conversation_id,
+  created_at,
+  updated_at
+from memories
+where workspace_id = $1::uuid
+  and scope       = 'workspace'
+  and deleted_at  is null
+  and ($2::text = '' or memory_type = $2::text)
+  and (cardinality($3::text[]) = 0
+       or tags && $3::text[])
+order by updated_at desc, id desc
+limit $4::int
+`
+
+type ListWorkspaceMemoriesParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	MemoryType  string      `json:"memory_type"`
+	TagFilter   []string    `json:"tag_filter"`
+	ItemLimit   int32       `json:"item_limit"`
+}
+
+type ListWorkspaceMemoriesRow struct {
+	ID             string             `json:"id"`
+	Scope          string             `json:"scope"`
+	UserID         string             `json:"user_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	MemoryType     string             `json:"memory_type"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	Why            string             `json:"why"`
+	Tags           []string           `json:"tags"`
+	Source         string             `json:"source"`
+	AgentActor     string             `json:"agent_actor"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Per-workspace listing (shared across all users on the workspace) for
+// the workspace-scope Memory tab and SessionStart snapshot injection.
+// Same filter sentinels as ListUserMemories.
+func (q *Queries) ListWorkspaceMemories(ctx context.Context, arg ListWorkspaceMemoriesParams) ([]ListWorkspaceMemoriesRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceMemories,
+		arg.WorkspaceID,
+		arg.MemoryType,
+		arg.TagFilter,
+		arg.ItemLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceMemoriesRow{}
+	for rows.Next() {
+		var i ListWorkspaceMemoriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Scope,
+			&i.UserID,
+			&i.WorkspaceID,
+			&i.MemoryType,
+			&i.Title,
+			&i.Body,
+			&i.Why,
+			&i.Tags,
+			&i.Source,
+			&i.AgentActor,
+			&i.ConversationID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceMemoriesSince = `-- name: ListWorkspaceMemoriesSince :many
+select
+  id::text           as id,
+  scope,
+  user_id::text      as user_id,
+  workspace_id,
+  memory_type,
+  title,
+  body,
+  why,
+  tags,
+  source,
+  agent_actor,
+  conversation_id,
+  created_at,
+  updated_at
+from memories
+where workspace_id = $1::uuid
+  and scope       = 'workspace'
+  and deleted_at  is null
+  and updated_at  > $2::timestamptz
+order by updated_at asc, id asc
+limit $3::int
+`
+
+type ListWorkspaceMemoriesSinceParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Since       pgtype.Timestamptz `json:"since"`
+	ItemLimit   int32              `json:"item_limit"`
+}
+
+type ListWorkspaceMemoriesSinceRow struct {
+	ID             string             `json:"id"`
+	Scope          string             `json:"scope"`
+	UserID         string             `json:"user_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	MemoryType     string             `json:"memory_type"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	Why            string             `json:"why"`
+	Tags           []string           `json:"tags"`
+	Source         string             `json:"source"`
+	AgentActor     string             `json:"agent_actor"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Per-turn incremental cursor for workspace-scope memories.
+// Mirrors ListUserMemoriesSince but scoped by workspace_id so a
+// session bound to workspace X cannot pick up memories from workspace Y.
+func (q *Queries) ListWorkspaceMemoriesSince(ctx context.Context, arg ListWorkspaceMemoriesSinceParams) ([]ListWorkspaceMemoriesSinceRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceMemoriesSince, arg.WorkspaceID, arg.Since, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceMemoriesSinceRow{}
+	for rows.Next() {
+		var i ListWorkspaceMemoriesSinceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Scope,
+			&i.UserID,
+			&i.WorkspaceID,
 			&i.MemoryType,
 			&i.Title,
 			&i.Body,
@@ -601,7 +601,7 @@ returning
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -627,7 +627,7 @@ type UpdateMemoryRow struct {
 	ID             string             `json:"id"`
 	Scope          string             `json:"scope"`
 	UserID         string             `json:"user_id"`
-	ProjectID      pgtype.UUID        `json:"project_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
 	MemoryType     string             `json:"memory_type"`
 	Title          string             `json:"title"`
 	Body           string             `json:"body"`
@@ -641,7 +641,7 @@ type UpdateMemoryRow struct {
 }
 
 // Full-replace update of the editable fields. Provenance fields
-// (scope/user_id/project_id/memory_type/source/agent_actor/
+// (scope/user_id/workspace_id/memory_type/source/agent_actor/
 // conversation_id) are fixed at insert time and intentionally not
 // editable — a "moved" memory should be deleted + re-inserted so
 // audit history stays intact. memory_type is excluded because a
@@ -661,7 +661,7 @@ func (q *Queries) UpdateMemory(ctx context.Context, arg UpdateMemoryParams) (Upd
 		&i.ID,
 		&i.Scope,
 		&i.UserID,
-		&i.ProjectID,
+		&i.WorkspaceID,
 		&i.MemoryType,
 		&i.Title,
 		&i.Body,

@@ -26,7 +26,7 @@ var (
 
 type ScheduledTaskRead struct {
 	ID                  string     `json:"id"`
-	ProjectAgentID      string     `json:"project_agent_id"`
+	AgentID             string     `json:"agent_id"`
 	ConversationID      string     `json:"conversation_id"`
 	Name                string     `json:"name"`
 	Prompt              string     `json:"prompt"`
@@ -48,15 +48,15 @@ type ScheduledTaskRead struct {
 // CreateScheduledTaskInput: the handler resolves NextRunAt via the
 // scheduler.NextRun cron helper and passes it in (store stays cron-free).
 type CreateScheduledTaskInput struct {
-	ProjectAgentID string
-	Name           string
-	Prompt         string
-	CronExpr       string
-	Timezone       string
-	Enabled        bool
-	FeishuChatID   string // "" = web only
-	CreatedBy      string
-	NextRunAt      time.Time
+	AgentID      string
+	Name         string
+	Prompt       string
+	CronExpr     string
+	Timezone     string
+	Enabled      bool
+	FeishuChatID string // "" = web only
+	CreatedBy    string
+	NextRunAt    time.Time
 }
 
 type UpdateScheduledTaskInput struct {
@@ -71,16 +71,15 @@ type UpdateScheduledTaskInput struct {
 
 // ScheduledTaskScope is the RBAC resolution for a task id.
 type ScheduledTaskScope struct {
-	TaskID         string
-	ProjectAgentID string
-	ProjectID      string
-	WorkspaceID    string
+	TaskID      string
+	AgentID     string
+	WorkspaceID string
 }
 
 type ScheduledTaskRunRead struct {
 	ID             string     `json:"id"`
 	ConversationID string     `json:"conversation_id"`
-	ProjectAgentID string     `json:"project_agent_id"`
+	AgentID        string     `json:"agent_id"`
 	ConnectorType  string     `json:"connector_type"`
 	Status         string     `json:"status"`
 	FailureReason  string     `json:"failure_reason"`
@@ -143,7 +142,7 @@ func scheduledRunTitle(name, timezone string, now time.Time) string {
 func scheduledTaskFromCreateRow(r sqlc.CreateScheduledTaskRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
-		ProjectAgentID:      r.ProjectAgentID,
+		AgentID:             r.AgentID,
 		ConversationID:      r.ConversationID,
 		Name:                r.Name,
 		Prompt:              r.Prompt,
@@ -166,7 +165,7 @@ func scheduledTaskFromCreateRow(r sqlc.CreateScheduledTaskRow) ScheduledTaskRead
 func scheduledTaskFromGetRow(r sqlc.GetScheduledTaskRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
-		ProjectAgentID:      r.ProjectAgentID,
+		AgentID:             r.AgentID,
 		ConversationID:      r.ConversationID,
 		Name:                r.Name,
 		Prompt:              r.Prompt,
@@ -186,10 +185,10 @@ func scheduledTaskFromGetRow(r sqlc.GetScheduledTaskRow) ScheduledTaskRead {
 	}
 }
 
-func scheduledTaskFromListRow(r sqlc.ListScheduledTasksByProjectAgentRow) ScheduledTaskRead {
+func scheduledTaskFromListRow(r sqlc.ListScheduledTasksByAgentRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
-		ProjectAgentID:      r.ProjectAgentID,
+		AgentID:             r.AgentID,
 		ConversationID:      r.ConversationID,
 		Name:                r.Name,
 		Prompt:              r.Prompt,
@@ -209,10 +208,10 @@ func scheduledTaskFromListRow(r sqlc.ListScheduledTasksByProjectAgentRow) Schedu
 	}
 }
 
-func scheduledTaskFromListByProjectRow(r sqlc.ListScheduledTasksByProjectPageRow) ScheduledTaskRead {
+func scheduledTaskFromListByWorkspaceRow(r sqlc.ListScheduledTasksByWorkspacePageRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
-		ProjectAgentID:      r.ProjectAgentID,
+		AgentID:             r.AgentID,
 		ConversationID:      r.ConversationID,
 		Name:                r.Name,
 		Prompt:              r.Prompt,
@@ -235,7 +234,7 @@ func scheduledTaskFromListByProjectRow(r sqlc.ListScheduledTasksByProjectPageRow
 func scheduledTaskFromUpdateRow(r sqlc.UpdateScheduledTaskRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
-		ProjectAgentID:      r.ProjectAgentID,
+		AgentID:             r.AgentID,
 		ConversationID:      r.ConversationID,
 		Name:                r.Name,
 		Prompt:              r.Prompt,
@@ -264,24 +263,24 @@ func (s *Store) CreateScheduledTask(ctx context.Context, in CreateScheduledTaskI
 	name := strings.TrimSpace(in.Name)
 	prompt := strings.TrimSpace(in.Prompt)
 	if name == "" || prompt == "" || strings.TrimSpace(in.CronExpr) == "" || strings.TrimSpace(in.Timezone) == "" {
-		return zero, ErrInvalidProjectInput
+		return zero, ErrInvalidInput
 	}
 	if len(prompt) > 32000 {
-		return zero, ErrInvalidProjectInput
+		return zero, ErrInvalidInput
 	}
 	createdBy, err := uuid(in.CreatedBy)
 	if err != nil {
 		return zero, err
 	}
-	// Validate the project_agent exists before anchoring a task to it.
-	if _, err := s.GetProjectAgentDetail(ctx, in.ProjectAgentID); err != nil {
+	// Validate the agent exists before anchoring a task to it.
+	if _, err := s.GetAgent(ctx, in.AgentID); err != nil {
 		return zero, err
 	}
 	now := time.Now().UTC()
 
 	row, err := sqlc.New(s.db).CreateScheduledTask(ctx, sqlc.CreateScheduledTaskParams{
 		ID:             mustUUID(newID()),
-		ProjectAgentID: mustUUID(in.ProjectAgentID),
+		AgentID:        mustUUID(in.AgentID),
 		Name:           name,
 		Prompt:         prompt,
 		CronExpr:       strings.TrimSpace(in.CronExpr),
@@ -317,12 +316,12 @@ func (s *Store) GetScheduledTask(ctx context.Context, taskID string) (ScheduledT
 	return scheduledTaskFromGetRow(row), nil
 }
 
-func (s *Store) ListScheduledTasksByProjectAgent(ctx context.Context, projectAgentID string) ([]ScheduledTaskRead, error) {
-	id, err := uuid(projectAgentID)
+func (s *Store) ListScheduledTasksByAgent(ctx context.Context, agentID string) ([]ScheduledTaskRead, error) {
+	id, err := uuid(agentID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := sqlc.New(s.db).ListScheduledTasksByProjectAgent(ctx, id)
+	rows, err := sqlc.New(s.db).ListScheduledTasksByAgent(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -333,45 +332,45 @@ func (s *Store) ListScheduledTasksByProjectAgent(ctx context.Context, projectAge
 	return out, nil
 }
 
-// ListScheduledTasksByProjectResult bundles a page of scheduled tasks with the
-// total row count for the project, so the standalone 定时任务 page can paginate.
-type ListScheduledTasksByProjectResult struct {
+// ListScheduledTasksByWorkspaceResult bundles a page of scheduled tasks with the
+// total row count for the workspace, so the standalone 定时任务 page can paginate.
+type ListScheduledTasksByWorkspaceResult struct {
 	Tasks []ScheduledTaskRead
 	Total int64
 }
 
-// ListScheduledTasksByProject is the project-wide counterpart to
-// ListScheduledTasksByProjectAgent, powering the standalone 定时任务 page.
+// ListScheduledTasksByWorkspace is the workspace-wide counterpart to
+// ListScheduledTasksByAgent, powering the standalone 定时任务 page.
 // Returns a newest-first page plus the total count under the same filter.
-func (s *Store) ListScheduledTasksByProject(ctx context.Context, projectID string, limit, offset int32) (ListScheduledTasksByProjectResult, error) {
+func (s *Store) ListScheduledTasksByWorkspace(ctx context.Context, workspaceID string, limit, offset int32) (ListScheduledTasksByWorkspaceResult, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	id, err := uuid(projectID)
+	id, err := uuid(workspaceID)
 	if err != nil {
-		return ListScheduledTasksByProjectResult{}, err
+		return ListScheduledTasksByWorkspaceResult{}, err
 	}
 	queries := sqlc.New(s.db)
-	rows, err := queries.ListScheduledTasksByProjectPage(ctx, sqlc.ListScheduledTasksByProjectPageParams{
-		ProjectID:  id,
-		ItemLimit:  limit,
-		ItemOffset: offset,
+	rows, err := queries.ListScheduledTasksByWorkspacePage(ctx, sqlc.ListScheduledTasksByWorkspacePageParams{
+		WorkspaceID: id,
+		ItemLimit:   limit,
+		ItemOffset:  offset,
 	})
 	if err != nil {
-		return ListScheduledTasksByProjectResult{}, err
+		return ListScheduledTasksByWorkspaceResult{}, err
 	}
-	total, err := queries.CountScheduledTasksByProject(ctx, id)
+	total, err := queries.CountScheduledTasksByWorkspace(ctx, id)
 	if err != nil {
-		return ListScheduledTasksByProjectResult{}, err
+		return ListScheduledTasksByWorkspaceResult{}, err
 	}
 	out := make([]ScheduledTaskRead, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, scheduledTaskFromListByProjectRow(r))
+		out = append(out, scheduledTaskFromListByWorkspaceRow(r))
 	}
-	return ListScheduledTasksByProjectResult{Tasks: out, Total: total}, nil
+	return ListScheduledTasksByWorkspaceResult{Tasks: out, Total: total}, nil
 }
 
 func (s *Store) GetScheduledTaskScope(ctx context.Context, taskID string) (ScheduledTaskScope, error) {
@@ -388,10 +387,9 @@ func (s *Store) GetScheduledTaskScope(ctx context.Context, taskID string) (Sched
 		return zero, err
 	}
 	return ScheduledTaskScope{
-		TaskID:         row.ID,
-		ProjectAgentID: row.ProjectAgentID,
-		ProjectID:      row.ProjectID,
-		WorkspaceID:    row.WorkspaceID,
+		TaskID:      row.ID,
+		AgentID:     row.AgentID,
+		WorkspaceID: row.WorkspaceID,
 	}, nil
 }
 
@@ -404,7 +402,7 @@ func (s *Store) UpdateScheduledTask(ctx context.Context, in UpdateScheduledTaskI
 	name := strings.TrimSpace(in.Name)
 	prompt := strings.TrimSpace(in.Prompt)
 	if name == "" || prompt == "" || strings.TrimSpace(in.CronExpr) == "" || strings.TrimSpace(in.Timezone) == "" || len(prompt) > 32000 {
-		return zero, ErrInvalidProjectInput
+		return zero, ErrInvalidInput
 	}
 	row, err := sqlc.New(s.db).UpdateScheduledTask(ctx, sqlc.UpdateScheduledTaskParams{
 		ID:        id,
@@ -454,7 +452,7 @@ func (s *Store) ListAgentRunsByScheduledTask(ctx context.Context, taskID string,
 		out = append(out, ScheduledTaskRunRead{
 			ID:             r.ID,
 			ConversationID: r.ConversationID,
-			ProjectAgentID: r.ProjectAgentID,
+			AgentID:        r.AgentID,
 			ConnectorType:  r.ConnectorType,
 			Status:         r.Status,
 			FailureReason:  r.FailureReason,
@@ -475,37 +473,36 @@ func (s *Store) ListAgentRunsByScheduledTask(ctx context.Context, taskID string,
 // returns the new run id, the new conversation id (for the task's
 // conversation_id backfill), and any streaming-dispatch inputs to flush AFTER
 // commit. Shared by the cron path (FireScheduledTaskRun) and run-now.
-func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, taskID, projectAgentID, taskName, timezone, prompt, createdBy string, now time.Time) (string, string, []StreamingDispatchInput, error) {
-	// Resolve workspace first: GetProjectAgentRuntime guards on workspace_id,
-	// so it can't double as the resolver. Runtime then yields project_id +
-	// connector_type. No existing conversation to read — this builds its own.
-	workspaceID, err := q.GetProjectAgentWorkspace(ctx, mustUUID(projectAgentID))
+func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, taskID, agentID, taskName, timezone, prompt, createdBy string, now time.Time) (string, string, []StreamingDispatchInput, error) {
+	// Resolve workspace first: GetAgentRuntime guards on workspace_id, so it
+	// can't double as the resolver. Runtime then yields connector_type. No
+	// existing conversation to read — this builds its own.
+	workspaceID, err := q.GetAgentWorkspace(ctx, mustUUID(agentID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", "", nil, ErrUnknownProjectAgent
+			return "", "", nil, ErrUnknownAgent
 		}
 		return "", "", nil, err
 	}
-	rt, err := q.GetProjectAgentRuntime(ctx, sqlc.GetProjectAgentRuntimeParams{ProjectAgentID: mustUUID(projectAgentID), WorkspaceID: mustUUID(workspaceID)})
+	rt, err := q.GetAgentRuntime(ctx, sqlc.GetAgentRuntimeParams{AgentID: mustUUID(agentID), WorkspaceID: mustUUID(workspaceID)})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", "", nil, ErrUnknownProjectAgent
+			return "", "", nil, ErrUnknownAgent
 		}
 		return "", "", nil, err
 	}
 
 	// Fresh conversation per dispatch: primary_agent_id surfaces it in the
-	// agent's 对话 list (ListProjectConversations filters on that metadata key).
+	// agent's 对话 list (ListWorkspaceConversations filters on that metadata key).
 	convID := newID()
 	convMeta, _ := json.Marshal(map[string]any{
 		"source":            "scheduled_task",
 		"scheduled_task_id": taskID,
-		"primary_agent_id":  projectAgentID,
+		"primary_agent_id":  agentID,
 	})
-	if _, err := q.CreateProjectConversation(ctx, sqlc.CreateProjectConversationParams{
+	if _, err := q.CreateWorkspaceConversation(ctx, sqlc.CreateWorkspaceConversationParams{
 		ID:          mustUUID(convID),
 		WorkspaceID: mustUUID(workspaceID),
-		ProjectID:   mustUUID(rt.ProjectID),
 		Surface:     "web",
 		Form:        "thread",
 		Title:       scheduledRunTitle(taskName, timezone, now),
@@ -520,7 +517,6 @@ func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, tas
 	if err := q.CreateMessage(ctx, sqlc.CreateMessageParams{
 		ID:             mustUUID(msgID),
 		WorkspaceID:    mustUUID(workspaceID),
-		ProjectID:      mustUUID(rt.ProjectID),
 		ConversationID: mustUUID(convID),
 		SenderType:     "system",
 		SenderID:       pgtype.UUID{}, // null: system-authored
@@ -540,12 +536,11 @@ func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, tas
 	if err := q.CreateScheduledAgentRun(ctx, sqlc.CreateScheduledAgentRunParams{
 		ID:               mustUUID(runID),
 		WorkspaceID:      mustUUID(workspaceID),
-		ProjectID:        mustUUID(rt.ProjectID),
 		ConversationID:   mustUUID(convID),
 		TriggerMessageID: mustUUID(msgID),
 		TriggerRefID:     mustUUID(taskID),
 		RequestedByID:    requestedBy,
-		ProjectAgentID:   mustUUID(projectAgentID),
+		AgentID:          mustUUID(agentID),
 		ConnectorType:    rt.ConnectorType,
 		Metadata:         runMeta,
 		Now:              timestamptz(now),
@@ -631,7 +626,7 @@ func (s *Store) FireScheduledTaskRun(ctx context.Context, taskID string, nextRun
 		return res, nil
 	}
 
-	runID, convID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.ProjectAgentID, task.Name, task.Timezone, task.Prompt, task.CreatedBy, now)
+	runID, convID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.AgentID, task.Name, task.Timezone, task.Prompt, task.CreatedBy, now)
 	if err != nil {
 		return res, err
 	}
@@ -677,7 +672,7 @@ func (s *Store) RunScheduledTaskNow(ctx context.Context, taskID string) (string,
 	case "queued", "running":
 		return "", ErrScheduledTaskBusy
 	}
-	runID, convID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.ProjectAgentID, task.Name, task.Timezone, task.Prompt, task.CreatedBy, now)
+	runID, convID, pending, err := s.dispatchScheduledRunTx(ctx, q, task.ID, task.AgentID, task.Name, task.Timezone, task.Prompt, task.CreatedBy, now)
 	if err != nil {
 		return "", err
 	}

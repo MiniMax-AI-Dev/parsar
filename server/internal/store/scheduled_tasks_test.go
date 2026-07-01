@@ -8,8 +8,8 @@ import (
 )
 
 type seededAgent struct {
-	ProjectAgentID string
-	UserID         string
+	AgentID string
+	UserID  string
 }
 
 func seedProjectAgent(t *testing.T, s *Store) seededAgent {
@@ -18,7 +18,7 @@ func seedProjectAgent(t *testing.T, s *Store) seededAgent {
 	if _, err := s.SeedDevFixture(context.Background()); err != nil {
 		t.Fatalf("seed dev fixture: %v", err)
 	}
-	return seededAgent{ProjectAgentID: ids.BackendProjectAgentID, UserID: ids.UserID}
+	return seededAgent{AgentID: ids.BackendAgentID, UserID: ids.UserID}
 }
 
 func markRunStatus(t *testing.T, s *Store, runID, status string) {
@@ -35,14 +35,14 @@ func TestScheduledTaskCRUDRoundtrip(t *testing.T) {
 	pa := seedProjectAgent(t, s)
 
 	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{
-		ProjectAgentID: pa.ProjectAgentID,
-		Name:           "nightly",
-		Prompt:         "summarize today",
-		CronExpr:       "0 9 * * *",
-		Timezone:       "Asia/Shanghai",
-		Enabled:        true,
-		CreatedBy:      pa.UserID,
-		NextRunAt:      time.Now().UTC().Add(time.Hour),
+		AgentID:   pa.AgentID,
+		Name:      "nightly",
+		Prompt:    "summarize today",
+		CronExpr:  "0 9 * * *",
+		Timezone:  "Asia/Shanghai",
+		Enabled:   true,
+		CreatedBy: pa.UserID,
+		NextRunAt: time.Now().UTC().Add(time.Hour),
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -54,12 +54,12 @@ func TestScheduledTaskCRUDRoundtrip(t *testing.T) {
 	if err != nil || got.Name != "nightly" {
 		t.Fatalf("get: %v %+v", err, got)
 	}
-	list, err := s.ListScheduledTasksByProjectAgent(ctx, pa.ProjectAgentID)
+	list, err := s.ListScheduledTasksByAgent(ctx, pa.AgentID)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v len=%d", err, len(list))
 	}
 	scope, err := s.GetScheduledTaskScope(ctx, created.ID)
-	if err != nil || scope.ProjectAgentID != pa.ProjectAgentID {
+	if err != nil || scope.AgentID != pa.AgentID {
 		t.Fatalf("scope: %v %+v", err, scope)
 	}
 }
@@ -69,7 +69,7 @@ func TestScheduledTaskUpdateAndSoftDelete(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 	pa := seedProjectAgent(t, s)
-	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{ProjectAgentID: pa.ProjectAgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(time.Hour)})
+	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{AgentID: pa.AgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,14 +92,14 @@ func TestScheduledTaskTimelineHandlesNullSenderID(t *testing.T) {
 	pa := seedProjectAgent(t, s)
 
 	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{
-		ProjectAgentID: pa.ProjectAgentID,
-		Name:           "reminder",
-		Prompt:         "drink water",
-		CronExpr:       "0 9 * * *",
-		Timezone:       "UTC",
-		Enabled:        true,
-		CreatedBy:      pa.UserID,
-		NextRunAt:      time.Now().UTC().Add(-time.Minute),
+		AgentID:   pa.AgentID,
+		Name:      "reminder",
+		Prompt:    "drink water",
+		CronExpr:  "0 9 * * *",
+		Timezone:  "UTC",
+		Enabled:   true,
+		CreatedBy: pa.UserID,
+		NextRunAt: time.Now().UTC().Add(-time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -140,7 +140,7 @@ func TestFireScheduledTaskSelfOverlapSkips(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 	pa := seedProjectAgent(t, s)
-	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{ProjectAgentID: pa.ProjectAgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
+	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{AgentID: pa.AgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestFireScheduledTaskAutoDisablesAtThreshold(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 	pa := seedProjectAgent(t, s)
-	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{ProjectAgentID: pa.ProjectAgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
+	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{AgentID: pa.AgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestReEnableAfterAutoDisableDispatchesAgain(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 	pa := seedProjectAgent(t, s)
-	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{ProjectAgentID: pa.ProjectAgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
+	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{AgentID: pa.AgentID, Name: "a", Prompt: "p", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true, CreatedBy: pa.UserID, NextRunAt: time.Now().UTC().Add(-time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,14 +256,14 @@ func TestScheduledTaskFireCreatesFreshConversation(t *testing.T) {
 	pa := seedProjectAgent(t, s)
 
 	created, err := s.CreateScheduledTask(ctx, CreateScheduledTaskInput{
-		ProjectAgentID: pa.ProjectAgentID,
-		Name:           "pulse",
-		Prompt:         "ping",
-		CronExpr:       "0 9 * * *",
-		Timezone:       "Asia/Shanghai",
-		Enabled:        true,
-		CreatedBy:      pa.UserID,
-		NextRunAt:      time.Now().UTC().Add(-time.Minute),
+		AgentID:   pa.AgentID,
+		Name:      "pulse",
+		Prompt:    "ping",
+		CronExpr:  "0 9 * * *",
+		Timezone:  "Asia/Shanghai",
+		Enabled:   true,
+		CreatedBy: pa.UserID,
+		NextRunAt: time.Now().UTC().Add(-time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -317,8 +317,8 @@ func TestScheduledTaskFireCreatesFreshConversation(t *testing.T) {
 		if err := s.db.QueryRow(ctx, `select coalesce(metadata->>'primary_agent_id','') from conversations where id=$1::uuid`, convID).Scan(&primaryAgent); err != nil {
 			t.Fatalf("read conv metadata %s: %v", convID, err)
 		}
-		if primaryAgent != pa.ProjectAgentID {
-			t.Fatalf("expected primary_agent_id=%q on conv %s, got %q", pa.ProjectAgentID, convID, primaryAgent)
+		if primaryAgent != pa.AgentID {
+			t.Fatalf("expected primary_agent_id=%q on conv %s, got %q", pa.AgentID, convID, primaryAgent)
 		}
 	}
 

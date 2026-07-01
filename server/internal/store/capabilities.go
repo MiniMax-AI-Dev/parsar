@@ -21,7 +21,7 @@ type RequiredCredential struct {
 
 type EnabledCapabilityRead struct {
 	AgentCapabilityID      string               `json:"agent_capability_id"`
-	ProjectAgentID         string               `json:"project_agent_id"`
+	AgentID                string               `json:"agent_id"`
 	Enabled                bool                 `json:"enabled"`
 	Configuration          map[string]any       `json:"configuration"`
 	// PinningMode is 'latest' or 'pinned'. In 'latest' mode the daemon
@@ -120,7 +120,7 @@ type CapabilityVersionRead struct {
 
 type AgentCapabilityRead struct {
 	ID                  string         `json:"id"`
-	ProjectAgentID      string         `json:"project_agent_id"`
+	AgentID             string         `json:"agent_id"`
 	CapabilityID        string         `json:"capability_id"`
 	CapabilityVersionID string         `json:"capability_version_id"`
 	Enabled             bool           `json:"enabled"`
@@ -170,9 +170,7 @@ type MarketplaceInstallRead struct {
 }
 
 type EnabledMarketplaceAgentRead struct {
-	ProjectAgentID      string `json:"project_agent_id"`
 	AgentID             string `json:"agent_id"`
-	ProjectID           string `json:"project_id"`
 	AgentName           string `json:"agent_name"`
 	Enabled             bool   `json:"enabled"`
 	CapabilityVersionID string `json:"capability_version_id"`
@@ -358,7 +356,7 @@ func (s *Store) ListEnabledAgents(ctx context.Context, targetWorkspaceID string,
 	}
 	out := make([]EnabledMarketplaceAgentRead, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, EnabledMarketplaceAgentRead{ProjectAgentID: row.ProjectAgentID, AgentID: row.AgentID, ProjectID: row.ProjectID, AgentName: row.AgentName, Enabled: row.Enabled, CapabilityVersionID: row.CapabilityVersionID, Version: row.Version})
+		out = append(out, EnabledMarketplaceAgentRead{AgentID: row.AgentID, AgentName: row.AgentName, Enabled: row.Enabled, CapabilityVersionID: row.CapabilityVersionID, Version: row.Version})
 	}
 	return out, nil
 }
@@ -819,8 +817,8 @@ func (s *Store) SoftDeleteUserCredential(ctx context.Context, credentialID strin
 	return userCredentialFromDeleteRow(row), nil
 }
 
-func (s *Store) ListAgentCapabilities(ctx context.Context, projectAgentID string) ([]AgentCapabilityRead, error) {
-	rows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(projectAgentID))
+func (s *Store) ListAgentCapabilities(ctx context.Context, agentID string) ([]AgentCapabilityRead, error) {
+	rows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(agentID))
 	if err != nil {
 		return nil, err
 	}
@@ -854,7 +852,7 @@ func normalizePinningMode(mode string) string {
 	}
 }
 
-func (s *Store) EnableAgentCapability(ctx context.Context, projectAgentID string, versionID string, configuration map[string]any, pinningMode string) (AgentCapabilityRead, error) {
+func (s *Store) EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string) (AgentCapabilityRead, error) {
 	version, err := s.GetCapabilityVersion(ctx, versionID)
 	if err != nil {
 		return AgentCapabilityRead{}, err
@@ -865,7 +863,7 @@ func (s *Store) EnableAgentCapability(ctx context.Context, projectAgentID string
 	}
 	mode := normalizePinningMode(pinningMode)
 	now := time.Now().UTC()
-	params := sqlc.CreateAgentCapabilityParams{ID: mustUUID(newID()), ProjectAgentID: mustUUID(projectAgentID), CapabilityID: mustUUID(version.CapabilityID), CapabilityVersionID: mustUUID(version.ID), Enabled: true, Configuration: config, PinningMode: mode, Now: timestamptz(now)}
+	params := sqlc.CreateAgentCapabilityParams{ID: mustUUID(newID()), AgentID: mustUUID(agentID), CapabilityID: mustUUID(version.CapabilityID), CapabilityVersionID: mustUUID(version.ID), Enabled: true, Configuration: config, PinningMode: mode, Now: timestamptz(now)}
 	row, err := sqlc.New(s.db).CreateAgentCapability(ctx, params)
 	if err == nil {
 		return agentCapabilityFromCreateRow(row), nil
@@ -873,7 +871,7 @@ func (s *Store) EnableAgentCapability(ctx context.Context, projectAgentID string
 	if !isUniqueViolation(err) {
 		return AgentCapabilityRead{}, err
 	}
-	existingRows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(projectAgentID))
+	existingRows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(agentID))
 	if err != nil {
 		return AgentCapabilityRead{}, err
 	}
@@ -889,9 +887,9 @@ func (s *Store) EnableAgentCapability(ctx context.Context, projectAgentID string
 	return AgentCapabilityRead{}, err
 }
 
-func (s *Store) UpgradeAgentCapability(ctx context.Context, projectAgentID string, capabilityID string, newVersionID string, pinningMode string) (AgentCapabilityRead, error) {
+func (s *Store) UpgradeAgentCapability(ctx context.Context, agentID string, capabilityID string, newVersionID string, pinningMode string) (AgentCapabilityRead, error) {
 	mode := normalizePinningMode(pinningMode)
-	row, err := sqlc.New(s.db).UpgradeAgentCapability(ctx, sqlc.UpgradeAgentCapabilityParams{ProjectAgentID: mustUUID(projectAgentID), CapabilityID: mustUUID(capabilityID), NewVersionID: mustUUID(newVersionID), PinningMode: mode, Now: timestamptz(time.Now().UTC())})
+	row, err := sqlc.New(s.db).UpgradeAgentCapability(ctx, sqlc.UpgradeAgentCapabilityParams{AgentID: mustUUID(agentID), CapabilityID: mustUUID(capabilityID), NewVersionID: mustUUID(newVersionID), PinningMode: mode, Now: timestamptz(time.Now().UTC())})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return AgentCapabilityRead{}, fmt.Errorf("%w: %s", ErrMarketplaceCapabilityUnavailable, capabilityID)
@@ -920,8 +918,8 @@ func (s *Store) UninstallWorkspaceMarketplaceCapability(ctx context.Context, tar
 	return sqlc.New(s.db).UninstallWorkspaceMarketplaceCapability(ctx, sqlc.UninstallWorkspaceMarketplaceCapabilityParams{TargetWorkspaceID: targetUUID, SourceCapabilityID: sourceUUID})
 }
 
-func (s *Store) DeleteAgentCapability(ctx context.Context, projectAgentID string, capabilityVersionID string) error {
-	rows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(projectAgentID))
+func (s *Store) DeleteAgentCapability(ctx context.Context, agentID string, capabilityVersionID string) error {
+	rows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(agentID))
 	if err != nil {
 		return err
 	}
@@ -1079,27 +1077,27 @@ func userCredentialFromDeleteRow(row sqlc.SoftDeleteUserCredentialRow) UserCrede
 }
 
 func agentCapabilityFromCreateRow(row sqlc.CreateAgentCapabilityRow) AgentCapabilityRead {
-	return AgentCapabilityRead{ID: row.ID, ProjectAgentID: row.ProjectAgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
+	return AgentCapabilityRead{ID: row.ID, AgentID: row.AgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
 }
 
 func agentCapabilityFromListRow(row sqlc.ListAgentCapabilitiesByAgentRow) AgentCapabilityRead {
-	return AgentCapabilityRead{ID: row.ID, ProjectAgentID: row.ProjectAgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
+	return AgentCapabilityRead{ID: row.ID, AgentID: row.AgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
 }
 
 func agentCapabilityFromUpdateRow(row sqlc.UpdateAgentCapabilityRow) AgentCapabilityRead {
-	return AgentCapabilityRead{ID: row.ID, ProjectAgentID: row.ProjectAgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
+	return AgentCapabilityRead{ID: row.ID, AgentID: row.AgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
 }
 
 func agentCapabilityFromUpgradeRow(row sqlc.UpgradeAgentCapabilityRow) AgentCapabilityRead {
-	return AgentCapabilityRead{ID: row.ID, ProjectAgentID: row.ProjectAgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
+	return AgentCapabilityRead{ID: row.ID, AgentID: row.AgentID, CapabilityID: row.CapabilityID, CapabilityVersionID: row.CapabilityVersionID, Enabled: row.Enabled, Configuration: decodeJSONMap(row.Configuration), PinningMode: row.PinningMode, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
 }
 
-func (s *Store) GetEnabledCapabilitiesForAgent(ctx context.Context, projectAgentID string) ([]EnabledCapabilityRead, error) {
-	projectAgentUUID, err := uuid(projectAgentID)
+func (s *Store) GetEnabledCapabilitiesForAgent(ctx context.Context, agentID string) ([]EnabledCapabilityRead, error) {
+	agentUUID, err := uuid(agentID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := sqlc.New(s.db).GetEnabledCapabilitiesForAgent(ctx, projectAgentUUID)
+	rows, err := sqlc.New(s.db).GetEnabledCapabilitiesForAgent(ctx, agentUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -1114,8 +1112,8 @@ func (s *Store) GetEnabledCapabilitiesForAgent(ctx context.Context, projectAgent
 	return out, nil
 }
 
-func (s *Store) GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, projectAgentID string) ([]EnabledCapabilityRead, error) {
-	return s.GetEnabledCapabilitiesForAgent(ctx, projectAgentID)
+func (s *Store) GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Context, agentID string) ([]EnabledCapabilityRead, error) {
+	return s.GetEnabledCapabilitiesForAgent(ctx, agentID)
 }
 
 func (s *Store) GetUserCredentialByUserKind(ctx context.Context, userID, kind string) (UserCredentialRead, bool, error) {
@@ -1144,7 +1142,7 @@ func enabledCapabilityFromRow(row sqlc.GetEnabledCapabilitiesForAgentRow) (Enabl
 	}
 	return EnabledCapabilityRead{
 		AgentCapabilityID:      row.AgentCapabilityID,
-		ProjectAgentID:         row.ProjectAgentID,
+		AgentID:                row.AgentID,
 		Enabled:                row.Enabled,
 		Configuration:          configuration,
 		PinningMode:            row.PinningMode,

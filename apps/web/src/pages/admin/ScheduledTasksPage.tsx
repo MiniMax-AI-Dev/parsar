@@ -15,14 +15,14 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { ApiError } from "../../lib/api-client"
-import { useProjectAgents } from "../../lib/api-agents"
-import { useProjectId } from "../../lib/workspace"
-import type { ProjectAgent } from "../../lib/api-types"
+import { useAgents } from "../../lib/api-agents"
+import { useWorkspaceId } from "../../lib/workspace"
+import type { Agent } from "../../lib/api-types"
 import {
   useCreateScheduledTask,
   useDeleteScheduledTask,
   useRunScheduledTaskNow,
-  useScheduledTasksByProject,
+  useScheduledTasksByWorkspace,
   useUpdateScheduledTask,
   type ScheduledTask,
 } from "../../lib/api-scheduled-tasks"
@@ -162,14 +162,14 @@ function fmtWhen(iso: string | null): string {
 
 export function ScheduledTasksPage() {
   const { t } = useTranslation("admin")
-  const projectID = useProjectId()
+  const workspaceID = useWorkspaceId()
   const [offset, setOffset] = useState(0)
-  const tasksQ = useScheduledTasksByProject(projectID, { offset, limit: SCHED_PAGE_SIZE })
-  const agentsQ = useProjectAgents(projectID)
-  const createMut = useCreateScheduledTask(projectID)
-  const updateMut = useUpdateScheduledTask(projectID)
-  const deleteMut = useDeleteScheduledTask(projectID)
-  const runNowMut = useRunScheduledTaskNow(projectID)
+  const tasksQ = useScheduledTasksByWorkspace(workspaceID, { offset, limit: SCHED_PAGE_SIZE })
+  const agentsQ = useAgents(workspaceID)
+  const createMut = useCreateScheduledTask(workspaceID)
+  const updateMut = useUpdateScheduledTask(workspaceID)
+  const deleteMut = useDeleteScheduledTask(workspaceID)
+  const runNowMut = useRunScheduledTaskNow(workspaceID)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ScheduledTask | null>(null)
@@ -177,7 +177,7 @@ export function ScheduledTasksPage() {
 
   useEffect(() => {
     setOffset(0)
-  }, [projectID])
+  }, [workspaceID])
 
   const weekdays = (t("scheduledTasks.weekdays", { returnObjects: true }) as unknown as string[]) ?? []
   const tasks = tasksQ.data?.scheduled_tasks ?? []
@@ -189,7 +189,7 @@ export function ScheduledTasksPage() {
   const activeAgents = useMemo(() => allAgents.filter((a) => a.status === "active"), [allAgents])
   const agentName = useMemo(() => {
     const m = new Map<string, string>()
-    for (const a of allAgents) m.set(a.project_agent_id, a.name)
+    for (const a of allAgents) m.set(a.id, a.name)
     return m
   }, [allAgents])
 
@@ -289,9 +289,9 @@ export function ScheduledTasksPage() {
                     })}
                   </div>
                 </div>
-                <div className="flex w-32 shrink-0 items-center gap-1.5 text-[12px] text-slate-600" title={agentName.get(task.project_agent_id) ?? task.project_agent_id}>
+                <div className="flex w-32 shrink-0 items-center gap-1.5 text-[12px] text-slate-600" title={agentName.get(task.agent_id) ?? task.agent_id}>
                   <Bot className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
-                  <span className="truncate">{agentName.get(task.project_agent_id) ?? task.project_agent_id}</span>
+                  <span className="truncate">{agentName.get(task.agent_id) ?? task.agent_id}</span>
                 </div>
                 <div className="shrink-0">
                   <Badge variant={statusVariant(task.last_status)}>
@@ -352,7 +352,7 @@ export function ScheduledTasksPage() {
             pending={createMut.isPending || updateMut.isPending}
             error={createMut.error ?? updateMut.error}
             onOpenChange={setDialogOpen}
-            onSubmit={async (body, projectAgentID) => {
+            onSubmit={async (body, agentID) => {
               if (editing) {
                 await updateMut.mutateAsync({
                   taskID: editing.id,
@@ -365,7 +365,7 @@ export function ScheduledTasksPage() {
                   },
                 })
               } else {
-                await createMut.mutateAsync({ projectAgentID, body })
+                await createMut.mutateAsync({ agentID, body })
               }
               setDialogOpen(false)
             }}
@@ -418,7 +418,7 @@ function SchedPager({
 interface DialogProps {
   open: boolean
   task: ScheduledTask | null
-  agents: ProjectAgent[]
+  agents: Agent[]
   agentName: Map<string, string>
   weekdays: string[]
   pending: boolean
@@ -426,7 +426,7 @@ interface DialogProps {
   onOpenChange: (open: boolean) => void
   onSubmit: (
     body: { name: string; prompt: string; cron_expr: string; timezone: string },
-    projectAgentID: string,
+    agentID: string,
   ) => Promise<void>
 }
 
@@ -438,7 +438,7 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
   const [name, setName] = useState(task?.name ?? "")
   const [prompt, setPrompt] = useState(task?.prompt ?? "")
-  const [agentID, setAgentID] = useState(task?.project_agent_id ?? agents[0]?.project_agent_id ?? "")
+  const [agentID, setAgentID] = useState(task?.agent_id ?? agents[0]?.id ?? "")
   const [freq, setFreq] = useState<FreqType>(initial.freq)
   const [timeStr, setTimeStr] = useState(initial.timeStr)
   const [dow, setDow] = useState(initial.dow)
@@ -489,7 +489,7 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
           <div className="grid min-w-0 gap-1.5">
             <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.agent")}</label>
             {task ? (
-              <Input value={agentName.get(task.project_agent_id) ?? task.project_agent_id} disabled readOnly />
+              <Input value={agentName.get(task.agent_id) ?? task.agent_id} disabled readOnly />
             ) : (
               <select
                 value={agentID}
@@ -499,7 +499,7 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
               >
                 {agents.length === 0 && <option value="">—</option>}
                 {agents.map((a) => (
-                  <option key={a.project_agent_id} value={a.project_agent_id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
             )}

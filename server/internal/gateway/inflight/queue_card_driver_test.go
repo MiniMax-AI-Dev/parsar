@@ -26,7 +26,6 @@ func TestQueueCardTickOnce_MultiPodClaimNoDuplicates(t *testing.T) {
 		{
 			RunID:          "run-A",
 			WorkspaceID:    "ws-1",
-			ProjectID:      "proj-1",
 			ConversationID: "conv-1",
 			ExternalChatID: "oc_chat",
 			SourceAppID:    "cli_react",
@@ -34,7 +33,6 @@ func TestQueueCardTickOnce_MultiPodClaimNoDuplicates(t *testing.T) {
 		{
 			RunID:          "run-B",
 			WorkspaceID:    "ws-1",
-			ProjectID:      "proj-1",
 			ConversationID: "conv-1",
 			ExternalChatID: "oc_chat",
 			SourceAppID:    "cli_react",

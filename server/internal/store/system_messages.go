@@ -27,7 +27,6 @@ const SandboxOfflineNoticeKind = "sandbox_offline_notice"
 // the per-conversation sandbox-offline system message.
 type CreateSandboxOfflineNoticeInput struct {
 	WorkspaceID    string
-	ProjectID      string
 	AgentID        string
 	RunID          string
 	ConversationID string
@@ -42,7 +41,6 @@ type CreateCapabilityCredentialOwnerNoticeInput struct {
 
 type CreateRuntimeErrorSystemMessageInput struct {
 	WorkspaceID      string
-	ProjectID        string
 	AgentID          string
 	RunID            string
 	ConversationID   string
@@ -54,7 +52,7 @@ type CreateRuntimeErrorSystemMessageInput struct {
 }
 
 func (s *Store) CreateCapabilityCredentialOwnerNoticeOnce(ctx context.Context, input CreateCapabilityCredentialOwnerNoticeInput) (bool, error) {
-	conversation, err := s.GetProjectConversation(ctx, input.ConversationID)
+	conversation, err := s.GetConversation(ctx, input.ConversationID)
 	if err != nil {
 		return false, err
 	}
@@ -84,9 +82,8 @@ func (s *Store) CreateCapabilityCredentialOwnerNoticeOnce(ctx context.Context, i
 	rows, err := sqlc.New(s.db).CreateSystemMessageOnce(ctx, sqlc.CreateSystemMessageOnceParams{
 		ID:             mustUUID(newID()),
 		WorkspaceID:    mustUUID(conversation.WorkspaceID),
-		ProjectID:      mustUUID(conversation.ProjectID),
 		ConversationID: mustUUID(conversation.ID),
-		Visibility:     "project",
+		Visibility:     "workspace",
 		Content:        content,
 		Metadata:       metadata,
 		Now:            timestamptz(now),
@@ -99,7 +96,7 @@ func (s *Store) CreateCapabilityCredentialOwnerNoticeOnce(ctx context.Context, i
 }
 
 func (s *Store) CreateRuntimeErrorSystemMessage(ctx context.Context, input CreateRuntimeErrorSystemMessageInput) (string, error) {
-	conversation, err := s.GetProjectConversation(ctx, input.ConversationID)
+	conversation, err := s.GetConversation(ctx, input.ConversationID)
 	if err != nil {
 		return "", err
 	}
@@ -109,7 +106,6 @@ func (s *Store) CreateRuntimeErrorSystemMessage(ctx context.Context, input Creat
 		"sub_kind":                 strings.TrimSpace(input.SubKind),
 		"role":                     "system",
 		"workspace_id":             nonEmpty(input.WorkspaceID, conversation.WorkspaceID),
-		"project_id":               nonEmpty(input.ProjectID, conversation.ProjectID),
 		"agent_id":                 strings.TrimSpace(input.AgentID),
 		"run_id":                   strings.TrimSpace(input.RunID),
 		"conversation_id":          conversation.ID,
@@ -128,9 +124,8 @@ func (s *Store) CreateRuntimeErrorSystemMessage(ctx context.Context, input Creat
 	if err := sqlc.New(s.db).CreateRuntimeErrorSystemMessage(ctx, sqlc.CreateRuntimeErrorSystemMessageParams{
 		ID:             mustUUID(messageID),
 		WorkspaceID:    mustUUID(conversation.WorkspaceID),
-		ProjectID:      mustUUID(conversation.ProjectID),
 		ConversationID: mustUUID(conversation.ID),
-		Visibility:     "project",
+		Visibility:     "workspace",
 		Content:        content,
 		Metadata:       metadata,
 		Now:            timestamptz(time.Now().UTC()),
@@ -146,7 +141,7 @@ func (s *Store) CreateRuntimeErrorSystemMessage(ctx context.Context, input Creat
 // state the user does not want silently discarded; recovery is an
 // explicit "delete and recreate the Agent" in the web UI.
 func (s *Store) CreateSandboxOfflineNotice(ctx context.Context, input CreateSandboxOfflineNoticeInput) (string, error) {
-	conversation, err := s.GetProjectConversation(ctx, input.ConversationID)
+	conversation, err := s.GetConversation(ctx, input.ConversationID)
 	if err != nil {
 		return "", err
 	}
@@ -155,7 +150,6 @@ func (s *Store) CreateSandboxOfflineNotice(ctx context.Context, input CreateSand
 		"kind":            SandboxOfflineNoticeKind,
 		"role":            "system",
 		"workspace_id":    nonEmpty(input.WorkspaceID, conversation.WorkspaceID),
-		"project_id":      nonEmpty(input.ProjectID, conversation.ProjectID),
 		"agent_id":        strings.TrimSpace(input.AgentID),
 		"run_id":          strings.TrimSpace(input.RunID),
 		"conversation_id": conversation.ID,
@@ -176,9 +170,8 @@ func (s *Store) CreateSandboxOfflineNotice(ctx context.Context, input CreateSand
 	if err := sqlc.New(s.db).CreateSandboxOfflineNotice(ctx, sqlc.CreateSandboxOfflineNoticeParams{
 		ID:             mustUUID(messageID),
 		WorkspaceID:    mustUUID(conversation.WorkspaceID),
-		ProjectID:      mustUUID(conversation.ProjectID),
 		ConversationID: mustUUID(conversation.ID),
-		Visibility:     "project",
+		Visibility:     "workspace",
 		Content:        content,
 		Metadata:       metadata,
 		Now:            timestamptz(time.Now().UTC()),
@@ -349,7 +342,6 @@ func nonEmpty(value string, fallback string) string {
 type SendSystemNoticeMessageInput struct {
 	ConversationID string
 	WorkspaceID    string // tolerated empty — resolved from conversation
-	ProjectID      string // tolerated empty — resolved from conversation
 	Kind           string // dedup key under metadata.kind, e.g. "feishu_outbound_dead_letter"
 	Content        string // user-visible text
 	// SourceRunID is the agent_run_id that produced this notice. When
@@ -373,7 +365,7 @@ type SendSystemNoticeMessageResult struct {
 // attempt should suffix Kind with a unique discriminator (e.g.
 // include the run_id or attempt number).
 func (s *Store) SendSystemNoticeMessage(ctx context.Context, input SendSystemNoticeMessageInput) (SendSystemNoticeMessageResult, error) {
-	conv, err := s.GetProjectConversation(ctx, input.ConversationID)
+	conv, err := s.GetConversation(ctx, input.ConversationID)
 	if err != nil {
 		return SendSystemNoticeMessageResult{}, err
 	}
@@ -386,12 +378,10 @@ func (s *Store) SendSystemNoticeMessage(ctx context.Context, input SendSystemNot
 		content = kind
 	}
 	workspaceID := nonEmpty(input.WorkspaceID, conv.WorkspaceID)
-	projectID := nonEmpty(input.ProjectID, conv.ProjectID)
 	metadata, err := json.Marshal(map[string]any{
 		"kind":         kind,
 		"role":         "system",
 		"workspace_id": workspaceID,
-		"project_id":   projectID,
 		"run_id":       strings.TrimSpace(input.SourceRunID),
 	})
 	if err != nil {
@@ -401,9 +391,8 @@ func (s *Store) SendSystemNoticeMessage(ctx context.Context, input SendSystemNot
 	rows, err := sqlc.New(s.db).CreateSystemMessageOnce(ctx, sqlc.CreateSystemMessageOnceParams{
 		ID:             mustUUID(messageID),
 		WorkspaceID:    mustUUID(workspaceID),
-		ProjectID:      mustUUID(projectID),
 		ConversationID: mustUUID(conv.ID),
-		Visibility:     "project",
+		Visibility:     "workspace",
 		Content:        content,
 		Metadata:       metadata,
 		Now:            timestamptz(time.Now().UTC()),

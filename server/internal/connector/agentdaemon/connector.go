@@ -8,7 +8,7 @@
 // only thing this package needs from the daemon side is the protocol
 // types in internal/agentdaemon/proto.
 //
-// agent_kind is resolved from project/agent config and validated against
+// agent_kind is resolved from the agent config and validated against
 // the selected daemon session's heartbeat-advertised capabilities before
 // sending prompt_request. Older daemons that only expose the legacy
 // claude_available signal are treated as claude_code-only.
@@ -53,7 +53,7 @@ type Config struct {
 	Binder binding.Binder
 
 	// Sandbox is the lazy-create provider for sandbox-mode
-	// project_agents. The default dispatch path no longer Acquires on
+	// agents. The default dispatch path no longer Acquires on
 	// ErrNotBound (see acquireSandboxBinding); the provider is kept for
 	// a future conversation-scoped ephemeral sandbox feature.
 	//
@@ -183,26 +183,26 @@ type AgentRunStatusReader interface {
 }
 
 // SandboxBindingReader looks up the current sandbox_bindings row for
-// a (workspace, project_agent) tuple. Consulted only on the slow path
+// a (workspace, agent) tuple. Consulted only on the slow path
 // when a sandbox-mode agent has no runtime bound, to distinguish:
 //
 //   - (zero, false, nil)             no Acquire attempt yet
 //   - (status="spawning", true)      Acquire in flight
 //   - (status="killed_error", true)  Acquire failed
 //   - (status="running", true)       sandbox alive but runtime_id not
-//     yet written (Acquire-success → SetProjectAgentRuntime UPDATE
+//     yet written (Acquire-success → SetAgentRuntime UPDATE
 //     race)
 //
 // *store.Store satisfies this via GetActiveSandboxBindingForAgent.
 type SandboxBindingReader interface {
-	GetActiveSandboxBindingForAgent(ctx context.Context, workspaceID, projectAgentID string) (store.SandboxBindingRead, bool, error)
+	GetActiveSandboxBindingForAgent(ctx context.Context, workspaceID, agentID string) (store.SandboxBindingRead, bool, error)
 }
 
 // SpecMemoryInjector is the narrow surface the connector needs from
 // the spec/memory service. Returning "" (with nil error) signals
 // "nothing to inject".
 type SpecMemoryInjector interface {
-	RenderSessionPrompt(ctx context.Context, workspaceID, userID, projectID string) (string, error)
+	RenderSessionPrompt(ctx context.Context, workspaceID, userID string) (string, error)
 }
 
 // New wires the connector. Panics on missing Registry / Binder so the
@@ -332,7 +332,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	c.log.Info("agent_daemon: streamPrompt enter",
 		"run_id", in.RunID,
 		"conversation_id", in.ConversationID,
-		"project_agent_id", in.ProjectAgentID,
+		"agent_id", in.AgentID,
 		"allow_remote", allowRemote)
 	agentKind := resolveAgentKind(in)
 
@@ -342,23 +342,23 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 		return errorChannel(in.RunID, err.Error()), nil
 	}
 
-	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.ProjectAgentID)
+	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID)
 	if err != nil {
 		if errors.Is(err, binding.ErrNotBound) {
 			// Lazy-bind: pick up the runtime the user picked in the
-			// agent settings page. ProjectAgentConfig.device_id is fed
-			// by the project_agents.runtime_id FK (authoritative)
+			// agent settings page. AgentConfig.device_id is fed
+			// by the agents.runtime_id FK (authoritative)
 			// merged in by the store in GetAgentRunInvocation; the
 			// jsonb mirror exists for downstream readers that already
 			// pivot on device_id.
 			//
-			// Per project_agent_must_bind_runtime memory: auto-Acquire
+			// Per agent_must_bind_runtime memory: auto-Acquire
 			// on the default dispatch path is intentionally OFF —
 			// callers must bind a runtime up front. The sandbox
 			// provider stays compiled for a future conversation-scoped
 			// ephemeral feature.
 			if configured, ok := configuredDeviceBinding(in); ok {
-				c.log.Info("agent_daemon: lazy-bind conversation from project_agent runtime binding",
+				c.log.Info("agent_daemon: lazy-bind conversation from agent runtime binding",
 					"run_id", in.RunID,
 					"conversation_id", in.ConversationID,
 					"device_id", configured.DeviceID)
@@ -368,10 +368,10 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 					return errorChannel(in.RunID, "agent_daemon: persist device binding: "+err.Error()), nil
 				}
 			} else {
-				c.log.Warn("agent_daemon: project_agent has no runtime bound",
+				c.log.Warn("agent_daemon: agent has no runtime bound",
 					"run_id", in.RunID,
 					"conversation_id", in.ConversationID,
-					"project_agent_id", in.ProjectAgentID,
+					"agent_id", in.AgentID,
 					"sandbox_mode_requested", isSandboxMode(in))
 				return errorChannel(in.RunID, c.unboundRuntimeMessage(ctx, in)), nil
 			}
@@ -415,8 +415,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 			)
 			if _, sysErr := c.systemMessages.CreateSandboxOfflineNotice(ctx, store.CreateSandboxOfflineNoticeInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectID:      in.ProjectID,
-				AgentID:        in.ProjectAgentID,
+				AgentID:        in.AgentID,
 				RunID:          in.RunID,
 				ConversationID: in.ConversationID,
 				DeviceID:       bind.DeviceID,
@@ -476,7 +475,7 @@ func (c *Connector) recordExecutionSnapshot(ctx context.Context, in connector.Pr
 	}
 	workDir := strings.TrimSpace(bind.WorkDir)
 	if workDir == "" {
-		workDir = firstConfigString(in.ProjectAgentConfig, "work_dir", "workdir", "working_directory")
+		workDir = firstConfigString(in.AgentConfig, "work_dir", "workdir", "working_directory")
 	}
 	if err := c.executionRecorder.RecordAgentRunExecutionSnapshot(ctx, store.RecordAgentRunExecutionSnapshotInput{
 		RunID:            in.RunID,
@@ -746,7 +745,7 @@ func (c *Connector) rememberClaudeSession(ctx context.Context, in connector.Prom
 			runStartedAt = startedAt
 		}
 	}
-	if err := c.binder.RememberSession(ctx, in.ConversationID, in.ProjectAgentID, claudeSess, runStartedAt); err != nil {
+	if err := c.binder.RememberSession(ctx, in.ConversationID, in.AgentID, claudeSess, runStartedAt); err != nil {
 		c.log.Warn("agent_daemon: remember claude_session_id", "err", err, "run_id", in.RunID)
 	}
 }
@@ -920,15 +919,8 @@ func (c *Connector) Close(ctx context.Context, conversationID string) error {
 // helpers
 // ----------------------------------------------------------------------
 
-// resolveAgentKind reads agent_kind from the merged config.
-// ProjectAgentConfig wins over AgentConfig (project-level overrides
-// workspace-level).
+// resolveAgentKind reads agent_kind from the agent config.
 func resolveAgentKind(in connector.PromptInput) string {
-	if v, ok := in.ProjectAgentConfig["agent_kind"].(string); ok {
-		if v = strings.TrimSpace(v); v != "" {
-			return v
-		}
-	}
 	if v, ok := in.AgentConfig["agent_kind"].(string); ok {
 		if v = strings.TrimSpace(v); v != "" {
 			return v
@@ -937,17 +929,15 @@ func resolveAgentKind(in connector.PromptInput) string {
 	return "claude_code"
 }
 
-// isSandboxMode reports whether the merged config requested sandbox
-// deployment. We deliberately ignore workspace-level AgentConfig so a
-// workspace default never silently flips an unsuspecting project_agent
-// into sandbox mode.
+// isSandboxMode reports whether the agent config requested sandbox
+// deployment.
 func isSandboxMode(in connector.PromptInput) bool {
-	mode, _ := in.ProjectAgentConfig["daemon_mode"].(string)
+	mode, _ := in.AgentConfig["daemon_mode"].(string)
 	return mode == "sandbox"
 }
 
 // unboundRuntimeMessage returns the user-facing string for the
-// "project_agent has no runtime_id" slow path. Sandbox-mode agents
+// "agent has no runtime_id" slow path. Sandbox-mode agents
 // drill into sandbox_bindings to distinguish spawning vs. failed vs.
 // never-attempted so the message matches reality.
 //
@@ -961,10 +951,10 @@ func (c *Connector) unboundRuntimeMessage(ctx context.Context, in connector.Prom
 	if c.sandboxBindings == nil {
 		return "This Agent's sandbox is preparing — please retry shortly."
 	}
-	bindingRow, found, err := c.sandboxBindings.GetActiveSandboxBindingForAgent(ctx, in.WorkspaceID, in.ProjectAgentID)
+	bindingRow, found, err := c.sandboxBindings.GetActiveSandboxBindingForAgent(ctx, in.WorkspaceID, in.AgentID)
 	if err != nil {
 		c.log.Warn("agent_daemon: sandbox binding lookup for unbound-runtime hint failed",
-			"err", err, "project_agent_id", in.ProjectAgentID)
+			"err", err, "agent_id", in.AgentID)
 		return "This Agent's sandbox is preparing — please retry shortly."
 	}
 	if !found {
@@ -983,18 +973,18 @@ func (c *Connector) unboundRuntimeMessage(ctx context.Context, in connector.Prom
 }
 
 func configuredDeviceBinding(in connector.PromptInput) (binding.Binding, bool) {
-	deviceID, _ := in.ProjectAgentConfig["device_id"].(string)
+	deviceID, _ := in.AgentConfig["device_id"].(string)
 	deviceID = strings.TrimSpace(deviceID)
 	if deviceID == "" {
 		return binding.Binding{}, false
 	}
-	// store writes "workdir" via ConfigureDevProjectAgentConnector;
+	// store writes "workdir" via ConfigureDevAgentConnector;
 	// older jsonb shapes used "work_dir" / "working_directory" — keep
 	// all three so legacy rows still bind correctly.
-	workDir := firstConfigString(in.ProjectAgentConfig, "work_dir", "workdir", "working_directory")
+	workDir := firstConfigString(in.AgentConfig, "work_dir", "workdir", "working_directory")
 	return binding.Binding{
 		ConversationID: in.ConversationID,
-		ProjectAgentID: in.ProjectAgentID,
+		AgentID:        in.AgentID,
 		DeviceID:       deviceID,
 		AgentKind:      resolveAgentKind(in),
 		WorkDir:        workDir,
@@ -1002,7 +992,7 @@ func configuredDeviceBinding(in connector.PromptInput) (binding.Binding, bool) {
 }
 
 // acquireSandboxBinding is the cold-start path: ErrNotBound and the
-// project_agent is configured for sandbox mode. The provider blocks
+// agent is configured for sandbox mode. The provider blocks
 // until the daemon's WS upgrade lands in gateway.Registry (it owns
 // WaitForDevice internally), so by the time this returns the deviceID
 // is guaranteed to resolve via registry.LookupDevice.
@@ -1017,7 +1007,7 @@ func (c *Connector) acquireSandboxBinding(ctx context.Context, in connector.Prom
 			// Clean user-facing message — don't leak the internal env
 			// var name; platform owner sees it in the server logs.
 			c.log.Warn("agent_daemon: sandbox mode requested but provider not configured",
-				"project_agent_id", in.ProjectAgentID)
+				"agent_id", in.AgentID)
 			return binding.Binding{}, fmt.Errorf("sandbox mode requested but this deployment does not have a sandbox template configured; switch the agent to local-runtime mode or contact the platform owner")
 		}
 		return binding.Binding{}, fmt.Errorf("sandbox acquire: %w", err)
@@ -1025,7 +1015,7 @@ func (c *Connector) acquireSandboxBinding(ctx context.Context, in connector.Prom
 
 	b := binding.Binding{
 		ConversationID: in.ConversationID,
-		ProjectAgentID: in.ProjectAgentID,
+		AgentID:        in.AgentID,
 		DeviceID:       deviceID,
 		AgentKind:      resolveAgentKind(in),
 		// WorkDir intentionally empty: parsar-daemon resolves a
@@ -1038,13 +1028,13 @@ func (c *Connector) acquireSandboxBinding(ctx context.Context, in connector.Prom
 		// return the cached entry, and Bind may succeed once the DB
 		// blip clears.
 		c.log.Warn("agent_daemon: persist sandbox binding failed; sandbox kept",
-			"err", err, "device_id", deviceID, "project_agent_id", in.ProjectAgentID)
+			"err", err, "device_id", deviceID, "agent_id", in.AgentID)
 		return binding.Binding{}, fmt.Errorf("persist sandbox binding: %w", err)
 	}
 	c.log.Info("agent_daemon: sandbox binding established",
 		"device_id", deviceID,
 		"conversation_id", in.ConversationID,
-		"project_agent_id", in.ProjectAgentID)
+		"agent_id", in.AgentID)
 	return b, nil
 }
 

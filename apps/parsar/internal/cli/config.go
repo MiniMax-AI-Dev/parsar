@@ -16,9 +16,8 @@ type Config struct {
 	RuntimeID      string // PARSAR_RUNTIME_ID
 	WorkspaceID    string // PARSAR_WORKSPACE_ID
 	UserID         string // PARSAR_USER_ID
-	ProjectID      string // PARSAR_PROJECT_ID (empty for workspace-only runtimes)
 	Connector      string // PARSAR_CONNECTOR — "claude" | "opencode" | "codex"
-	ProjectAgentID string // PARSAR_PROJECT_AGENT_ID
+	AgentID        string // PARSAR_AGENT_ID
 	ConversationID string // PARSAR_CONVERSATION_ID
 }
 
@@ -29,9 +28,8 @@ func loadConfigFromEnv() (Config, error) {
 		RuntimeID:      strings.TrimSpace(os.Getenv("PARSAR_RUNTIME_ID")),
 		WorkspaceID:    strings.TrimSpace(os.Getenv("PARSAR_WORKSPACE_ID")),
 		UserID:         strings.TrimSpace(os.Getenv("PARSAR_USER_ID")),
-		ProjectID:      strings.TrimSpace(os.Getenv("PARSAR_PROJECT_ID")),
 		Connector:      strings.TrimSpace(os.Getenv("PARSAR_CONNECTOR")),
-		ProjectAgentID: strings.TrimSpace(os.Getenv("PARSAR_PROJECT_AGENT_ID")),
+		AgentID:        strings.TrimSpace(os.Getenv("PARSAR_AGENT_ID")),
 		ConversationID: strings.TrimSpace(os.Getenv("PARSAR_CONVERSATION_ID")),
 	}
 	if err := cfg.validate(); err != nil {

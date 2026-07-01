@@ -95,7 +95,7 @@ func TestSandboxPoolPersistence(t *testing.T) {
 	}
 
 	// Claim transitions status without killed_at so the row stays in active listing.
-	if err := s.MarkSandboxPoolEntryClaimed(ctx, ids.WorkspaceID, ids.BackendProjectAgentID, "pool-cache-key", "sbx-pool-2"); err != nil {
+	if err := s.MarkSandboxPoolEntryClaimed(ctx, ids.WorkspaceID, ids.BackendAgentID, "pool-cache-key", "sbx-pool-2"); err != nil {
 		t.Fatalf("MarkSandboxPoolEntryClaimed: %v", err)
 	}
 	rowsAfterClaim, err := s.ListActiveSandboxPoolEntries(ctx, ids.WorkspaceID, 10, 0)
@@ -204,8 +204,8 @@ func TestSweepOrphanedSandboxPoolEntries(t *testing.T) {
 	}
 	for _, sd := range seeds {
 		if _, err := db.Exec(ctx,
-			`insert into sandboxes (id, workspace_id, project_agent_id, cache_key, sandbox_id, template_id, lifecycle_status, allocation_status, killed_at, expires_at, timeout_seconds, created_at, last_active_at, last_renewed_at) values (gen_random_uuid(), $1, case when $4 = 'claimed' then $2::uuid else null end, case when $4 = 'claimed' then 'claimed-cache-key' else null end, $3, $5, (case when $4 in ('idle', 'claimed') then 'running' else $4 end), (case when $4 = 'claimed' then 'bound' when $4 = 'killed' then 'released' else 'pooled' end), $6, $7, $8, now(), now(), now())`,
-			ids.WorkspaceID, ids.BackendProjectAgentID, sd.id, sd.status, "parsar-opencode-base", sd.killed, expires, int32(3600),
+			`insert into sandboxes (id, workspace_id, agent_id, cache_key, sandbox_id, template_id, lifecycle_status, allocation_status, killed_at, expires_at, timeout_seconds, created_at, last_active_at, last_renewed_at) values (gen_random_uuid(), $1, case when $4 = 'claimed' then $2::uuid else null end, case when $4 = 'claimed' then 'claimed-cache-key' else null end, $3, $5, (case when $4 in ('idle', 'claimed') then 'running' else $4 end), (case when $4 = 'claimed' then 'bound' when $4 = 'killed' then 'released' else 'pooled' end), $6, $7, $8, now(), now(), now())`,
+			ids.WorkspaceID, ids.BackendAgentID, sd.id, sd.status, "parsar-opencode-base", sd.killed, expires, int32(3600),
 		); err != nil {
 			t.Fatalf("seed %s: %v", sd.id, err)
 		}

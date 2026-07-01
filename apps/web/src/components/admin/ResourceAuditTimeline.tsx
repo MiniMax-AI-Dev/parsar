@@ -72,25 +72,25 @@ function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: st
 }
 
 export interface ResourceAuditTimelineProps {
-  /** Active project ID; null surfaces mock data on dev landing. */
-  pid: string | null
+  /** Active workspace ID; null surfaces mock data on dev landing. */
+  wsId: string | null
   /** Resource discriminator the feed pins to (`agent_run`, `agent`, …). */
   targetType: string
-  /** Required — without an ID we'd query the unfiltered project feed. */
+  /** Required — without an ID we'd query the unfiltered workspace feed. */
   targetID: string
   /** Override the default 200-row cap. */
   limit?: number
 }
 
 export function ResourceAuditTimeline({
-  pid,
+  wsId,
   targetType,
   targetID,
   limit,
 }: ResourceAuditTimelineProps) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
-  const query = useAuditRecords(pid, {
+  const query = useAuditRecords(wsId, {
     target_type: targetType,
     target_id: targetID,
     limit,

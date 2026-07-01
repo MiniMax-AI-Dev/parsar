@@ -23,8 +23,8 @@ import (
 //   - capability has v2 with proper oss_key + sha256 + canonical_spec
 //   - binding is pinned to v1 (the pre-change state on prod)
 //   - row returned by GetEnabledCapabilitiesForAgent should carry:
-//     * OssKey == "" (pinned v1)
-//     * LatestOssKey == "capabilities/skills/test/v2.zip" (lateral v2)
+//   - OssKey == "" (pinned v1)
+//   - LatestOssKey == "capabilities/skills/test/v2.zip" (lateral v2)
 //
 // Skipped when PARSAR_TEST_DATABASE_URL is unset (same convention as
 // every other DB-backed test in this package).
@@ -96,10 +96,9 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 	// the DB column default).
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Pinning Mode Test Agent (pinned)",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "claude_code",
 		},
@@ -115,7 +114,7 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 
 	// 4. The crux: GetEnabledCapabilitiesForAgent returns both columns
 	// AND the lateral latest_* fields in one row.
-	enabled, err := st.GetEnabledCapabilitiesForAgent(ctx, created.ProjectAgent.ID)
+	enabled, err := st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)
 	if err != nil {
 		t.Fatalf("GetEnabledCapabilitiesForAgent: %v", err)
 	}
@@ -168,10 +167,10 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 	// cv.* still reflect v1 (we didn't rewrite capability_version_id);
 	// latest_* still reflect v2; PinningMode is now "latest". The
 	// daemon resolver's resolveVersionFields then picks v2 fields.
-	if _, err := st.EnableAgentCapability(ctx, created.ProjectAgent.ID, v1ID, nil, PinningModeLatest); err != nil {
+	if _, err := st.EnableAgentCapability(ctx, created.Agent.ID, v1ID, nil, PinningModeLatest); err != nil {
 		t.Fatalf("EnableAgentCapability flip to latest: %v", err)
 	}
-	enabled, err = st.GetEnabledCapabilitiesForAgent(ctx, created.ProjectAgent.ID)
+	enabled, err = st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)
 	if err != nil {
 		t.Fatalf("GetEnabledCapabilitiesForAgent (post-flip): %v", err)
 	}
@@ -243,10 +242,9 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 	// Bind an agent with pinning_mode=latest, sanity-check pre-deprecation.
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
-		ProjectID:     ids.ProjectID,
 		Name:          "Deprecation Freeze Agent",
 		ConnectorType: "agent_daemon",
-		ProjectAgentConfig: map[string]any{
+		AgentConfig: map[string]any{
 			"daemon_mode": "sandbox",
 			"agent_kind":  "claude_code",
 		},
@@ -260,7 +258,7 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 		t.Fatalf("CreateAgent: %v", err)
 	}
 
-	enabled, err := st.GetEnabledCapabilitiesForAgent(ctx, created.ProjectAgent.ID)
+	enabled, err := st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)
 	if err != nil {
 		t.Fatalf("GetEnabledCapabilitiesForAgent pre-deprecation: %v", err)
 	}
@@ -294,7 +292,7 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 		t.Fatalf("CreateCapabilityVersion v2 (post-deprecation): %v", err)
 	}
 
-	enabled, err = st.GetEnabledCapabilitiesForAgent(ctx, created.ProjectAgent.ID)
+	enabled, err = st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)
 	if err != nil {
 		t.Fatalf("GetEnabledCapabilitiesForAgent post-deprecation: %v", err)
 	}

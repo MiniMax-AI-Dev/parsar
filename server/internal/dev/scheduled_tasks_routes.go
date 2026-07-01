@@ -33,20 +33,20 @@ func listScheduledTasks(rs RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed APIs are disabled"})
 			return
 		}
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		projectID, ok := projectIDForProjectAgent(w, r.Context(), rs, projectAgentID)
+		workspaceID, ok := workspaceIDForAgent(w, r.Context(), rs, agentID)
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, rs, projectID); err != nil {
+		if err := requireWorkspaceMember(r, rs, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
-		tasks, err := rs.ListScheduledTasksByProjectAgent(r.Context(), projectAgentID)
+		tasks, err := rs.ListScheduledTasksByAgent(r.Context(), agentID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list scheduled tasks"})
 			return
@@ -55,24 +55,24 @@ func listScheduledTasks(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
-func listScheduledTasksByProject(rs RuntimeStore) http.HandlerFunc {
+func listScheduledTasksByWorkspace(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, rs, projectID); err != nil {
+		if err := requireWorkspaceMember(r, rs, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
 		limit := parseLimit(r, 50)
 		offset := parseOffset(r)
-		result, err := rs.ListScheduledTasksByProject(r.Context(), projectID, limit, offset)
+		result, err := rs.ListScheduledTasksByWorkspace(r.Context(), workspaceID, limit, offset)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list scheduled tasks"})
 			return
@@ -101,7 +101,7 @@ func getScheduledTask(rs RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, rs, scope.ProjectID); err != nil {
+		if err := requireWorkspaceMember(r, rs, scope.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -133,7 +133,7 @@ func listScheduledTaskRuns(rs RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, rs, scope.ProjectID); err != nil {
+		if err := requireWorkspaceMember(r, rs, scope.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -161,16 +161,16 @@ func createScheduledTask(rs RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed APIs are disabled"})
 			return
 		}
-		projectAgentID := strings.TrimSpace(chi.URLParam(r, "projectAgentID"))
-		if !isUUID(projectAgentID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_agent_id must be a valid uuid"})
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
 			return
 		}
-		projectID, ok := projectIDForProjectAgent(w, r.Context(), rs, projectAgentID)
+		workspaceID, ok := workspaceIDForAgent(w, r.Context(), rs, agentID)
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, rs, projectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, rs, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -193,18 +193,18 @@ func createScheduledTask(rs RuntimeStore) http.HandlerFunc {
 			return
 		}
 		task, err := rs.CreateScheduledTask(r.Context(), store.CreateScheduledTaskInput{
-			ProjectAgentID: projectAgentID,
-			Name:           body.Name,
-			Prompt:         body.Prompt,
-			CronExpr:       body.CronExpr,
-			Timezone:       body.Timezone,
-			Enabled:        enabled,
-			FeishuChatID:   body.FeishuChatID,
-			CreatedBy:      actorID,
-			NextRunAt:      next,
+			AgentID:      agentID,
+			Name:         body.Name,
+			Prompt:       body.Prompt,
+			CronExpr:     body.CronExpr,
+			Timezone:     body.Timezone,
+			Enabled:      enabled,
+			FeishuChatID: body.FeishuChatID,
+			CreatedBy:    actorID,
+			NextRunAt:    next,
 		})
 		if err != nil {
-			if errors.Is(err, store.ErrInvalidProjectInput) {
+			if errors.Is(err, store.ErrInvalidInput) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name, prompt, cron_expr, timezone are required"})
 				return
 			}
@@ -238,7 +238,7 @@ func updateScheduledTask(rs RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, rs, scope.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, rs, scope.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -260,7 +260,7 @@ func updateScheduledTask(rs RuntimeStore) http.HandlerFunc {
 			switch {
 			case errors.Is(err, store.ErrUnknownScheduledTask):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "scheduled task not found"})
-			case errors.Is(err, store.ErrInvalidProjectInput):
+			case errors.Is(err, store.ErrInvalidInput):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name, prompt, cron_expr, timezone are required"})
 			default:
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update scheduled task"})
@@ -286,7 +286,7 @@ func deleteScheduledTask(rs RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, rs, scope.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, rs, scope.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}
@@ -313,7 +313,7 @@ func runScheduledTaskNow(rs RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, rs, scope.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, rs, scope.WorkspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}

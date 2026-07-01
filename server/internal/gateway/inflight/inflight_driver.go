@@ -1414,7 +1414,6 @@ func buildFinalCardForRun(ctx context.Context, ch *feishuchannel.Channel, s done
 	// "executing" card on the user's screen.
 	data, err := assembleDoneCardData(ctx, s, assembleDoneCardInput{
 		WorkspaceID:       c.WorkspaceID,
-		ProjectID:         c.ProjectID,
 		RunID:             c.AgentRunID,
 		PrefilledSteps:    steps,
 		PrefilledElapsed:  elapsed,

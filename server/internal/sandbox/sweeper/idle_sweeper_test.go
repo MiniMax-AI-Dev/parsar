@@ -183,13 +183,13 @@ func TestRun_DisabledOnNonPositiveTTL(t *testing.T) {
 
 func TestTick_CleanKill(t *testing.T) {
 	row := store.SandboxBindingRead{
-		ID:             "binding-1",
-		WorkspaceID:    "ws-1",
-		ProjectAgentID: strPtr("pa-1"),
-		SandboxID:      "sbx-aaa",
-		TemplateID:     "tpl-base",
-		Status:         store.SandboxBindingStatusActive,
-		LastActiveAt:   time.Now().Add(-time.Hour),
+		ID:           "binding-1",
+		WorkspaceID:  "ws-1",
+		AgentID:      strPtr("pa-1"),
+		SandboxID:    "sbx-aaa",
+		TemplateID:   "tpl-base",
+		Status:       store.SandboxBindingStatusActive,
+		LastActiveAt: time.Now().Add(-time.Hour),
 	}
 	bl := &fakeBindings{rows: []store.SandboxBindingRead{row}}
 	kl := &fakeKiller{}

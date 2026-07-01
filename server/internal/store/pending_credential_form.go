@@ -90,7 +90,7 @@ type PendingCredentialFormSlot struct {
 	// already has the user_id in hand, so the cost of storing is zero.
 	InitiatorUserID string `json:"initiator_user_id"`
 
-	// AgentID is the project_agent_id the original inbound targeted.
+	// AgentID is the agent the original inbound targeted.
 	// The re-fired inbound uses it as CreateInboundIMMessageInput.TargetAgentID
 	// so the rerun lands on the same agent the user originally talked
 	// to. Old slots written before this field landed have AgentID ==

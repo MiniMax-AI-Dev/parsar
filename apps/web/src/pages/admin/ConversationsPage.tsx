@@ -19,7 +19,7 @@ import { Input } from "../../components/ui/input"
 import { Skeleton } from "../../components/ui/skeleton"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
-import { useProjectAgents, useCancelRun, useCancelConversation } from "../../lib/api-agents"
+import { useAgents, useCancelRun, useCancelConversation } from "../../lib/api-agents"
 import {
   createConversation,
   sendUserMessage,
@@ -28,17 +28,17 @@ import {
   useConversation,
   useConversationTimeline,
   useDeleteConversation,
-  useProjectConversations,
+  useConversations,
   useSendUserMessage,
   useUpdateConversationTitle,
 } from "../../lib/api-conversations"
 import type {
   ConversationListItem,
   ConversationTimelineRun,
-  ProjectAgent,
+  Agent,
   ToolStep,
 } from "../../lib/api-types"
-import { useProjectId } from "../../lib/workspace"
+import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
 import { credentialKindLabel } from "./capability-ui"
@@ -60,17 +60,17 @@ export function ConversationsPage() {
   const { t } = useTranslation("admin")
   const { entityId, navigate } = useAdminView()
   const focusTarget = new URLSearchParams(window.location.search).get("focus")
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
 
-  const agentsQ = useProjectAgents(pid)
-  const allAgents: ProjectAgent[] = useMemo(
+  const agentsQ = useAgents(wsId)
+  const allAgents: Agent[] = useMemo(
     () => (agentsQ.data?.agents ?? []).filter((a) => a.status === "active"),
     [agentsQ.data],
   )
 
   // Sidebar selection follows the active conv's primary_agent_id; when
   // there's no active conv, fall back to user pick / first active agent.
-  const currentConvQ = useConversation(entityId ?? null, pid)
+  const currentConvQ = useConversation(entityId ?? null, wsId)
   const currentConv = currentConvQ.data
 
   // Selected agent: current conv's primary_agent_id → user pick →
@@ -85,11 +85,11 @@ export function ConversationsPage() {
   const selectedAgentId =
     pickedAgentId ||
     currentConv?.primary_agent_id ||
-    (allAgents[0]?.project_agent_id ?? "")
-  const selectedAgent = allAgents.find((a) => a.project_agent_id === selectedAgentId)
+    (allAgents[0]?.id ?? "")
+  const selectedAgent = allAgents.find((a) => a.id === selectedAgentId)
 
   // Sidebar conversations: scoped to the selected agent.
-  const convsQ = useProjectConversations(pid, selectedAgentId)
+  const convsQ = useConversations(wsId, selectedAgentId)
   const conversations: ConversationListItem[] = convsQ.data?.conversations ?? []
 
   // Fold state — persisted, defaults to expanded.
@@ -125,10 +125,10 @@ export function ConversationsPage() {
   // Title derives from the first 30 chars so the sidebar gets a
   // meaningful name immediately (server defaults to 未命名会话).
   const handleSendFromEmpty = async (content: string): Promise<void> => {
-    if (!pid || !selectedAgentId) {
-      throw new Error("project_id and agent_id required for empty-state send")
+    if (!wsId || !selectedAgentId) {
+      throw new Error("workspace_id and agent_id required for empty-state send")
     }
-    const conv = await createConversation(pid, {
+    const conv = await createConversation(wsId, {
       title: content.slice(0, 30),
       surface: "web",
       form: "thread",
@@ -143,15 +143,15 @@ export function ConversationsPage() {
         predicate: (q) =>
           q.queryKey[0] === "admin" &&
           q.queryKey[1] === "conversations" &&
-          q.queryKey[2] === pid,
+          q.queryKey[2] === wsId,
       })
       qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conv.id] })
     }
     navigate("conversations", { id: conv.id })
   }
 
-  const renameMutation = useUpdateConversationTitle(pid)
-  const deleteMutation = useDeleteConversation(pid)
+  const renameMutation = useUpdateConversationTitle(wsId)
+  const deleteMutation = useDeleteConversation(wsId)
   const handleRenameConversation = async (cid: string, title: string): Promise<void> => {
     await renameMutation.mutateAsync({ cid, title })
   }
@@ -210,7 +210,7 @@ export function ConversationsPage() {
 /* ============================================================== */
 
 interface SidebarProps {
-  agents: ProjectAgent[]
+  agents: Agent[]
   selectedAgentId: string
   onPickAgent: (id: string) => void
   agentsLoading: boolean
@@ -228,7 +228,7 @@ function ConversationSidebar(p: SidebarProps) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
   const [pickerOpen, setPickerOpen] = useState(false)
-  const selectedAgent = p.agents.find((a) => a.project_agent_id === p.selectedAgentId)
+  const selectedAgent = p.agents.find((a) => a.id === p.selectedAgentId)
 
   const [renamingConvId, setRenamingConvId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState<string>("")
@@ -330,17 +330,17 @@ function ConversationSidebar(p: SidebarProps) {
           ) : (
             p.agents.map((a) => (
               <button
-                key={a.project_agent_id}
+                key={a.id}
                 type="button"
                 role="option"
-                aria-selected={a.project_agent_id === p.selectedAgentId}
+                aria-selected={a.id === p.selectedAgentId}
                 onClick={() => {
-                  p.onPickAgent(a.project_agent_id)
+                  p.onPickAgent(a.id)
                   setPickerOpen(false)
                 }}
                 className={cn(
                   "block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-surface-subtle",
-                  a.project_agent_id === p.selectedAgentId && "bg-info-subtle text-info",
+                  a.id === p.selectedAgentId && "bg-info-subtle text-info",
                 )}
               >
                 <div className="font-medium">{a.name}</div>
@@ -586,7 +586,7 @@ interface MainProps {
   conv: import("../../lib/api-types").Conversation | undefined
   convLoading: boolean
   convError: unknown
-  agent: ProjectAgent | undefined
+  agent: Agent | undefined
   conversationId: string
   /** From the list summary; single-conv GET doesn't include it. */
   messageCount: number
@@ -676,7 +676,7 @@ function EmptyChat({
   onRenameAfterFirstMessage,
   focusComposer,
 }: {
-  agent: ProjectAgent | undefined
+  agent: Agent | undefined
   pageDescription: string
   /** When set, composer sends into this conv (in-chat flow). */
   conversationId?: string
@@ -733,7 +733,7 @@ function EmptyChat({
 /*  Chat stream — user (right bubble) + agent (left plain text)     */
 /* ============================================================== */
 
-function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: string; agent: ProjectAgent | undefined; sidebarFolded?: boolean }) {
+function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: string; agent: Agent | undefined; sidebarFolded?: boolean }) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
   const { navigate } = useAdminView()
@@ -741,11 +741,11 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
 
   // /cancel infra: per-run cancel (X on the working card) + bulk
   // cancel (header button when at least one queued/running run exists).
-  // Project id is read from useConversation so the hook is project-aware
+  // Workspace id is read from useConversation so the hook is workspace-aware
   // without threading the id through every parent prop bag.
   const convInfoQ = useConversation(conversationId, null)
-  const convProjectId = convInfoQ.data?.project_id ?? null
-  const cancelRunMut = useCancelRun(convProjectId)
+  const convWorkspaceId = convInfoQ.data?.workspace_id ?? null
+  const cancelRunMut = useCancelRun(convWorkspaceId)
   const cancelConvMut = useCancelConversation()
 
   // SSE state: ComposerForm hands us a run_id after send; we open the

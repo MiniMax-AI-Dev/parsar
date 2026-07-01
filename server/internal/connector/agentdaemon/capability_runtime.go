@@ -18,10 +18,10 @@ import (
 
 // CapabilityRuntimeStore is the capability surface the agent_daemon
 // connector needs. GetEnabledCapabilitiesForAgent lists what's enabled
-// on the project_agent; GetUserCredentialByUserKind resolves per-user
+// on the agent; GetUserCredentialByUserKind resolves per-user
 // credentials for MCP env placeholder substitution.
 type CapabilityRuntimeStore interface {
-	GetEnabledCapabilitiesForAgent(ctx context.Context, projectAgentID string) ([]store.EnabledCapabilityRead, error)
+	GetEnabledCapabilitiesForAgent(ctx context.Context, agentID string) ([]store.EnabledCapabilityRead, error)
 	GetUserCredentialByUserKind(ctx context.Context, userID, kind string) (store.UserCredentialRead, bool, error)
 }
 
@@ -258,7 +258,7 @@ func resolveVersionFields(cap store.EnabledCapabilityRead) resolvedVersionFields
 }
 
 // resolveCapabilityAdditions enumerates all enabled capabilities on the
-// project_agent and returns skill fragments + MCP server configs in a
+// agent and returns skill fragments + MCP server configs in a
 // single DB round-trip.
 func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector.PromptInput, agentKind string) (capabilityAdditions, error) {
 	result := capabilityAdditions{}
@@ -266,16 +266,16 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 		c.log.Warn("agent_daemon: resolveCapabilityAdditions skipped — capabilities store is nil")
 		return result, nil
 	}
-	if strings.TrimSpace(in.ProjectAgentID) == "" {
-		c.log.Warn("agent_daemon: resolveCapabilityAdditions skipped — project_agent_id is empty")
+	if strings.TrimSpace(in.AgentID) == "" {
+		c.log.Warn("agent_daemon: resolveCapabilityAdditions skipped — agent_id is empty")
 		return result, nil
 	}
-	caps, err := c.capabilities.GetEnabledCapabilitiesForAgent(ctx, in.ProjectAgentID)
+	caps, err := c.capabilities.GetEnabledCapabilitiesForAgent(ctx, in.AgentID)
 	if err != nil {
 		return result, fmt.Errorf("agent_daemon: list enabled capabilities: %w", err)
 	}
 	if len(caps) == 0 {
-		c.log.Info("agent_daemon: no enabled capabilities for project_agent", "project_agent_id", in.ProjectAgentID)
+		c.log.Info("agent_daemon: no enabled capabilities for agent", "agent_id", in.AgentID)
 		return result, nil
 	}
 	target := agentKindToRenderTarget(agentKind)
@@ -576,7 +576,7 @@ func (c *Connector) resolveMCPCapability(
 	// kind resolves via either an agent-level shared binding (secret
 	// table lookup) or, by default, per-user user_credentials keyed by
 	// the conversation initiator.
-	bindings := ParseCredentialBindings(in.AgentConfig, in.ProjectAgentConfig)
+	bindings := ParseCredentialBindings(in.AgentConfig)
 	credentialValues, sharedSecretIDs, missing, err := c.resolveCredentialValues(ctx, in, cap, credentialCache, bindings)
 	if err != nil {
 		return nil, nil, nil, err
@@ -1098,7 +1098,6 @@ func (c *Connector) emitDisabledCapabilityNotices(ctx context.Context, in connec
 		if len(d.MissingCredentials) == 0 {
 			if _, err := c.systemMessages.CreateRuntimeErrorSystemMessage(ctx, store.CreateRuntimeErrorSystemMessageInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectID:      in.ProjectID,
 				AgentID:        in.AgentID,
 				RunID:          in.RunID,
 				ConversationID: in.ConversationID,
@@ -1116,7 +1115,6 @@ func (c *Connector) emitDisabledCapabilityNotices(ctx context.Context, in connec
 		for _, missing := range d.MissingCredentials {
 			if _, err := c.systemMessages.CreateRuntimeErrorSystemMessage(ctx, store.CreateRuntimeErrorSystemMessageInput{
 				WorkspaceID:    in.WorkspaceID,
-				ProjectID:      in.ProjectID,
 				AgentID:        in.AgentID,
 				RunID:          in.RunID,
 				ConversationID: in.ConversationID,

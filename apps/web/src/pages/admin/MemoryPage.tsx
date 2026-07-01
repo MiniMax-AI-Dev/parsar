@@ -1,4 +1,4 @@
-// Memory admin page — user / project tabbed list.
+// Memory admin page — user / workspace tabbed list.
 // Tab state is local on purpose: switching tabs shouldn't pollute
 // history, so back-button skips ephemeral tab toggles.
 
@@ -47,7 +47,7 @@ import { ApiError } from "../../lib/api-client"
 import {
   useCreateMemoryMutation,
   useDeleteMemoryMutation,
-  useProjectMemoriesQuery,
+  useWorkspaceMemoriesQuery,
   useUpdateMemoryMutation,
   useUserMemoriesQuery,
   type Memory,
@@ -55,17 +55,17 @@ import {
   type MemoryType,
 } from "../../lib/api-memory"
 import { useRelativeTime } from "../../lib/relative-time"
-import { useProjectId } from "../../lib/workspace"
+import { useWorkspaceId } from "../../lib/workspace"
 import type { SpecSource } from "../../lib/api-specs"
 
-const MEMORY_TYPES: MemoryType[] = ["user", "feedback", "project", "reference"]
+const MEMORY_TYPES: MemoryType[] = ["user", "feedback", "workspace", "reference"]
 
 type TypeFilter = MemoryType | "all"
 
 interface EditorState {
   mode: "create" | "edit"
   scope: MemoryScope
-  projectID?: string
+  workspaceID?: string
   memory?: Memory
 }
 
@@ -81,13 +81,13 @@ export function MemoryPage() {
       <Tabs value={tab} onValueChange={(value) => setTab(value as MemoryScope)}>
         <TabsList>
           <TabsTrigger value="user">{t("memory.tabs.user")}</TabsTrigger>
-          <TabsTrigger value="project">{t("memory.tabs.project")}</TabsTrigger>
+          <TabsTrigger value="workspace">{t("memory.tabs.workspace")}</TabsTrigger>
         </TabsList>
         <TabsContent value="user">
           <UserMemoryPanel />
         </TabsContent>
-        <TabsContent value="project">
-          <ProjectMemoryPanel />
+        <TabsContent value="workspace">
+          <WorkspaceMemoryPanel />
         </TabsContent>
       </Tabs>
     </AdminLayout>
@@ -108,19 +108,19 @@ function UserMemoryPanel() {
       onRetry={() => void listQ.refetch()}
       emptyLabel={t("memory.empty.user")}
       scope="user"
-      projectID={undefined}
+      workspaceID={undefined}
     />
   )
 }
 
-// ----- project memory panel -------------------------------------------------
+// ----- workspace memory panel -------------------------------------------------
 
-function ProjectMemoryPanel() {
+function WorkspaceMemoryPanel() {
   const { t } = useTranslation("admin")
-  const projectID = useProjectId()
-  const listQ = useProjectMemoriesQuery(projectID)
-  if (!projectID) {
-    return <ScopeRequiredState scope="project" resourceName={t("memory.page.title")} />
+  const workspaceID = useWorkspaceId()
+  const listQ = useWorkspaceMemoriesQuery(workspaceID)
+  if (!workspaceID) {
+    return <ScopeRequiredState scope="workspace" resourceName={t("memory.page.title")} />
   }
   return (
     <MemoryPanelBody
@@ -129,9 +129,9 @@ function ProjectMemoryPanel() {
       isError={listQ.isError}
       error={listQ.error as ApiError | undefined}
       onRetry={() => void listQ.refetch()}
-      emptyLabel={t("memory.empty.project")}
-      scope="project"
-      projectID={projectID}
+      emptyLabel={t("memory.empty.workspace")}
+      scope="workspace"
+      workspaceID={workspaceID}
     />
   )
 }
@@ -146,7 +146,7 @@ interface MemoryPanelBodyProps {
   onRetry: () => void
   emptyLabel: string
   scope: MemoryScope
-  projectID?: string
+  workspaceID?: string
 }
 
 function MemoryPanelBody({
@@ -157,7 +157,7 @@ function MemoryPanelBody({
   onRetry,
   emptyLabel,
   scope,
-  projectID,
+  workspaceID,
 }: MemoryPanelBodyProps) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
@@ -168,8 +168,8 @@ function MemoryPanelBody({
   const [filter, setFilter] = useState<TypeFilter>("all")
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Memory | null>(null)
-  // Project-scope only — user-scope rows hide the entry button because
-  // /api/v1/projects/.../audit-records can't surface their events.
+  // Workspace-scope only — user-scope rows hide the entry button because
+  // /api/v1/workspaces/.../audit-records can't surface their events.
   const [auditFor, setAuditFor] = useState<Memory | null>(null)
 
   const closeEditor = () => {
@@ -183,7 +183,7 @@ function MemoryPanelBody({
     if (editor.mode === "create") {
       await createMut.mutateAsync({
         scope,
-        project_id: projectID,
+        workspace_id: workspaceID,
         memory_type: input.memoryType,
         title: input.title || undefined,
         body: input.body,
@@ -194,7 +194,7 @@ function MemoryPanelBody({
       await updateMut.mutateAsync({
         memoryID: editor.memory.id,
         scope,
-        projectID,
+        workspaceID,
         body: {
           title: input.title,
           body: input.body,
@@ -212,7 +212,7 @@ function MemoryPanelBody({
       await deleteMut.mutateAsync({
         memoryID: confirmDelete.id,
         scope,
-        projectID,
+        workspaceID,
       })
       setConfirmDelete(null)
     } catch {
@@ -245,7 +245,7 @@ function MemoryPanelBody({
           type="button"
           size="sm"
           onClick={() =>
-            setEditor({ mode: "create", scope, projectID })
+            setEditor({ mode: "create", scope, workspaceID })
           }
         >
           <Plus className="h-3.5 w-3.5" />
@@ -274,7 +274,7 @@ function MemoryPanelBody({
               <Button
                 type="button"
                 size="sm"
-                onClick={() => setEditor({ mode: "create", scope, projectID })}
+                onClick={() => setEditor({ mode: "create", scope, workspaceID })}
               >
                 <Plus className="h-3.5 w-3.5" />
                 {t("memory.actions.create")}
@@ -289,10 +289,10 @@ function MemoryPanelBody({
                 memory={memory}
                 fmtAgo={fmtAgo}
                 onEdit={() =>
-                  setEditor({ mode: "edit", scope, projectID, memory })
+                  setEditor({ mode: "edit", scope, workspaceID, memory })
                 }
                 onDelete={() => setConfirmDelete(memory)}
-                onAudit={scope === "project" ? () => setAuditFor(memory) : undefined}
+                onAudit={scope === "workspace" ? () => setAuditFor(memory) : undefined}
               />
             ))}
           </ul>
@@ -323,10 +323,10 @@ function MemoryPanelBody({
         />
       )}
 
-      {auditFor && projectID && (
+      {auditFor && workspaceID && (
         <MemoryAuditDialog
           memory={auditFor}
-          projectID={projectID}
+          workspaceID={workspaceID}
           onClose={() => setAuditFor(null)}
         />
       )}
@@ -415,7 +415,7 @@ function MemoryTypeBadge({ type }: { type: MemoryType }) {
   const variant =
     type === "feedback"
       ? "warning"
-      : type === "project"
+      : type === "workspace"
         ? "primary"
         : type === "reference"
           ? "success"
@@ -519,7 +519,7 @@ function MemoryEditorDialog({
       ? "memory.editor.editTitle"
       : scope === "user"
         ? "memory.editor.createTitleUser"
-        : "memory.editor.createTitleProject"
+        : "memory.editor.createTitleWorkspace"
 
   return (
     <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
@@ -676,11 +676,11 @@ function MemoryDeleteDialog({
 
 interface MemoryAuditDialogProps {
   memory: Memory
-  projectID: string
+  workspaceID: string
   onClose: () => void
 }
 
-function MemoryAuditDialog({ memory, projectID, onClose }: MemoryAuditDialogProps) {
+function MemoryAuditDialog({ memory, workspaceID, onClose }: MemoryAuditDialogProps) {
   const { t } = useTranslation("admin")
   return (
     <Dialog open onOpenChange={(next) => { if (!next) onClose() }}>
@@ -690,7 +690,7 @@ function MemoryAuditDialog({ memory, projectID, onClose }: MemoryAuditDialogProp
           <DialogDescription>{t("memory.audit.dialogDescription")}</DialogDescription>
         </DialogHeader>
         <ResourceAuditTimeline
-          pid={projectID}
+          wsId={workspaceID}
           targetType="memory"
           targetID={memory.id}
         />

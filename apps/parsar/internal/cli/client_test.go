@@ -143,8 +143,8 @@ func TestClientListMemoriesScopeRequired(t *testing.T) {
 }
 
 func TestClientCreateMemoryBody(t *testing.T) {
-	srv, rec := stubServer(t, http.StatusCreated, `{"id":"m1","scope":"project","user_id":"u","project_id":"p","memory_type":"feedback","body":"b","why":"w","tags":["x"],"source":"agent","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`)
-	_, err := newTestClient(srv).CreateMemory(context.Background(), "project", "feedback", "ttl", "body", "why", []string{"x"})
+	srv, rec := stubServer(t, http.StatusCreated, `{"id":"m1","scope":"workspace","user_id":"u","workspace_id":"p","memory_type":"feedback","body":"b","why":"w","tags":["x"],"source":"agent","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`)
+	_, err := newTestClient(srv).CreateMemory(context.Background(), "workspace", "feedback", "ttl", "body", "why", []string{"x"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestClientCreateMemoryBody(t *testing.T) {
 	if err := json.Unmarshal([]byte(rec.body), &sent); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if sent.Scope != "project" || sent.MemoryType != "feedback" || sent.Why != "why" {
+	if sent.Scope != "workspace" || sent.MemoryType != "feedback" || sent.Why != "why" {
 		t.Errorf("sent = %+v", sent)
 	}
 }

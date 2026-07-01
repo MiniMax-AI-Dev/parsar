@@ -361,7 +361,6 @@ func (w *Worker) emitDeadLetterAudit(
 		TargetType:  "conversation",
 		TargetID:    conv.ConversationID,
 		WorkspaceID: conv.WorkspaceID,
-		ProjectID:   conv.ProjectID,
 		Payload: map[string]any{
 			"agent_run_id":     conv.AgentRunID,
 			"attempts":         attempts,

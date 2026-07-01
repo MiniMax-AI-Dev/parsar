@@ -20,7 +20,7 @@
 -- Single insert path for both UI ("manual"/"import") and agent
 -- ("agent") writes. Caller is responsible for setting created_by
 -- (UI: signed-in user; agent: pgtype.UUID{Valid:false}) and
--- agent_actor (UI: ''; agent: 'connector:projectAgentID').
+-- agent_actor (UI: ''; agent: 'connector:agentID').
 insert into spec_fragments (
   id, workspace_id, title, body, tags,
   source, created_by, agent_actor,

@@ -135,7 +135,6 @@ func TestManager_DefaultSharedBotListUsesEnvCredentialsWithoutAgentConnector(t *
 			WorkspaceSlug: "platform",
 			AgentName:     "Backend Agent",
 			AgentSlug:     "backend-agent",
-			ProjectName:   "Core",
 		},
 	}
 	manager, err := NewManager(Options{
@@ -388,7 +387,7 @@ func (f *inboundFakeStore) CreateInboundIMMessage(_ context.Context, input store
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, input)
-	return store.CreateInboundIMMessageResult{MessageID: "msg-created", WorkspaceID: "ws-created", ProjectID: "project-created"}, nil
+	return store.CreateInboundIMMessageResult{MessageID: "msg-created", WorkspaceID: "ws-created"}, nil
 }
 
 // --- P3 permission-card callback stubs ---
@@ -533,7 +532,7 @@ func (f *inboundFakeStore) ReplaceUserCredentials(_ context.Context, userID stri
 	return out, nil
 }
 
-func (f *inboundFakeStore) GetProjectConversation(_ context.Context, conversationID string) (store.ConversationRead, error) {
+func (f *inboundFakeStore) GetConversation(_ context.Context, conversationID string) (store.ConversationRead, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if got, ok := f.conversations[conversationID]; ok {

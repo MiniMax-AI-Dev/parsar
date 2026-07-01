@@ -38,7 +38,7 @@ func (ctx *runContext) resolveConfig() (Config, error) {
 
 var commands = []command{
 	{name: "spec", summary: "Manage workspace spec fragments (list / add / edit / rm)", run: runSpec},
-	{name: "memory", summary: "Manage user / project memories (list / add / edit / rm)", run: runMemory},
+	{name: "memory", summary: "Manage user / workspace memories (list / add / edit / rm)", run: runMemory},
 	{name: "inject", summary: "Print the injection bundle hook scripts stitch into the prompt", run: runInject},
 	{name: "sync", summary: "Human-readable dump of the current injection snapshot (debug)", run: runSync},
 	{name: "version", summary: "Print the CLI version and exit", run: runVersion},

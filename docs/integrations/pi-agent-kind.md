@@ -15,7 +15,7 @@
 | 是否能 headless 包装 | **能**。pi 有成熟的 `--mode json`（单发 NDJSON 流）和 `--mode rpc`（常驻）两种无 TUI 模式 |
 | MVP 改动范围 | **纯 daemon 侧**：新建一个 adapter 包 + `connect.go` 接 8 处线。**dispatch 路径零 server 改动**（BYO key 模式下） |
 | server / web 改动 | **可选**：仅当需要「Parsar 托管模型注入」「能力(skill/MCP)渲染」「Web 后台下拉创建 pi agent」时才改 |
-| DB migration | **不需要**。`agent_kind` 存在 `project_agents.config` 的 JSONB 里，无 CHECK 约束；心跳的 `supported_agent_kinds` 也是 JSONB |
+| DB migration | **不需要**。`agent_kind` 存在 `agents.config` 的 JSONB 里，无 CHECK 约束；心跳的 `supported_agent_kinds` 也是 JSONB |
 
 一句话：**pi 的接入是「克隆 opencode adapter → 改 CLI 拼参 → 改 stdout 解析」三件事**，外加 `connect.go` 注册。
 
@@ -172,7 +172,7 @@ proto.SupportedAgentKind{
 
 ## 5. 数据流走查（pi 一次 run）
 
-1. 运营在 `project_agents.config` 里设 `agent_kind="pi"` 并绑定 `runtime_id`（某台跑了 `parsar-daemon` 且 `pi` 可用的设备）。
+1. 运营在 `agents.config` 里设 `agent_kind="pi"` 并绑定 `runtime_id`（某台跑了 `parsar-daemon` 且 `pi` 可用的设备）。
 2. server `agent_daemon` 连接器 `resolveAgentKind` 读出 `"pi"`，对照该设备心跳的 `supported_agent_kinds` 校验 available。
 3. 连接器把 `PromptInput` 翻成 `proto.PromptRequestPayload`（`agent_kind="pi"`、`WorkDir`、`AgentOptions`、`ResumeSessionID`），WS 下发。
 4. daemon `dispatch.Router.handlePromptRequest` → `registry.Resolve("pi")` → `pi.Factory` 建 session，起 `pump`。

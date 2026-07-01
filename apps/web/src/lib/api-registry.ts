@@ -7,15 +7,15 @@ import type {
 
 /* --- Query keys --------------------------------------------------------- */
 
-const KEY_CONNECTORS = (pid: string) => ["admin", "connectors", pid] as const
+const KEY_CONNECTORS = (wsId: string) => ["admin", "connectors", wsId] as const
 const KEY_GATEWAYS = (wsId: string) => ["admin", "gateways", wsId] as const
 
 /* --- Network ------------------------------------------------------------ */
 
-async function listConnectors(pid: string | null): Promise<ListConnectorsResponse> {
-  if (!pid) return { connectors: [] }
+async function listConnectors(wsId: string | null): Promise<ListConnectorsResponse> {
+  if (!wsId) return { connectors: [] }
   return apiRequest<ListConnectorsResponse>(
-    `/api/v1/projects/${encodeURIComponent(pid)}/connectors`
+    `/api/v1/workspaces/${encodeURIComponent(wsId)}/connector-usage`
   )
 }
 
@@ -28,10 +28,10 @@ async function listGateways(wsId: string | null): Promise<ListGatewaysResponse> 
 
 /* --- React Query hooks -------------------------------------------------- */
 
-export function useProjectConnectors(pid: string | null) {
+export function useWorkspaceConnectors(wsId: string | null) {
   return useQuery({
-    queryKey: KEY_CONNECTORS(pid ?? "_none"),
-    queryFn: () => listConnectors(pid),
+    queryKey: KEY_CONNECTORS(wsId ?? "_none"),
+    queryFn: () => listConnectors(wsId),
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })

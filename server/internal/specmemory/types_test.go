@@ -32,12 +32,12 @@ func TestSourceFromString(t *testing.T) {
 }
 
 func TestScopeValid(t *testing.T) {
-	for _, s := range []Scope{ScopeUser, ScopeProject} {
+	for _, s := range []Scope{ScopeUser, ScopeWorkspace} {
 		if !s.Valid() {
 			t.Errorf("Scope %q should be Valid()", s)
 		}
 	}
-	for _, s := range []Scope{"", "workspace", "USER", " project"} {
+	for _, s := range []Scope{"", "project", "USER", " workspace"} {
 		if s.Valid() {
 			t.Errorf("Scope %q should NOT be Valid()", s)
 		}
@@ -45,12 +45,12 @@ func TestScopeValid(t *testing.T) {
 }
 
 func TestScopeFromString(t *testing.T) {
-	got, err := ScopeFromString("project")
+	got, err := ScopeFromString("workspace")
 	if err != nil {
-		t.Fatalf("ScopeFromString(project): unexpected error %v", err)
+		t.Fatalf("ScopeFromString(workspace): unexpected error %v", err)
 	}
-	if got != ScopeProject {
-		t.Errorf("ScopeFromString(project) = %q, want %q", got, ScopeProject)
+	if got != ScopeWorkspace {
+		t.Errorf("ScopeFromString(workspace) = %q, want %q", got, ScopeWorkspace)
 	}
 
 	if _, err := ScopeFromString("team"); err == nil {
@@ -59,7 +59,7 @@ func TestScopeFromString(t *testing.T) {
 }
 
 func TestMemoryTypeValid(t *testing.T) {
-	for _, mt := range []MemoryType{MemoryTypeUser, MemoryTypeFeedback, MemoryTypeProject, MemoryTypeReference} {
+	for _, mt := range []MemoryType{MemoryTypeUser, MemoryTypeFeedback, MemoryTypeWorkspace, MemoryTypeReference} {
 		if !mt.Valid() {
 			t.Errorf("MemoryType %q should be Valid()", mt)
 		}
@@ -89,8 +89,8 @@ func TestEnumStringRoundTrip(t *testing.T) {
 	if SourceAgent.String() != "agent" {
 		t.Errorf("SourceAgent.String() = %q, want %q", SourceAgent.String(), "agent")
 	}
-	if ScopeProject.String() != "project" {
-		t.Errorf("ScopeProject.String() = %q, want %q", ScopeProject.String(), "project")
+	if ScopeWorkspace.String() != "workspace" {
+		t.Errorf("ScopeWorkspace.String() = %q, want %q", ScopeWorkspace.String(), "workspace")
 	}
 	if MemoryTypeReference.String() != "reference" {
 		t.Errorf("MemoryTypeReference.String() = %q, want %q", MemoryTypeReference.String(), "reference")

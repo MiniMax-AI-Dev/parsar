@@ -195,7 +195,7 @@
     "loadError": {
       "title": "Failed to load approvals",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists.",
+      "hint": "Make sure the server is running and the current workspace exists.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -204,7 +204,7 @@
     },
     "mockBanner": {
       "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace or Project in the header."
+      "hint": "Choose the matching Workspace in the header."
     }
   },
   "conversations": {
@@ -286,7 +286,7 @@
     "loadError": {
       "title": "Failed to load conversation",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists.",
+      "hint": "Make sure the server is running and the current workspace exists.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -369,7 +369,7 @@
     "loadError": {
       "title": "Failed to load runs",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists in the dev seed.",
+      "hint": "Make sure the server is running and the current workspace exists in the dev seed.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -378,7 +378,7 @@
     },
     "mockBanner": {
       "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace or Project in the header."
+      "hint": "Choose the matching Workspace in the header."
     },
     "empty": {
       "title": "No agent runs yet",
@@ -725,7 +725,7 @@
     "none": "—",
     "empty": {
       "title": "No capabilities have been added to this workspace yet.",
-      "descriptionAdmin": "Capabilities live in the workspace capability pool. They are external tools (MCP) or loadable Skill packages that Agents in this workspace's projects can enable as needed.",
+      "descriptionAdmin": "Capabilities live in the workspace capability pool. They are external tools (MCP) or loadable Skill packages that Agents in this workspace can enable as needed.",
       "descriptionMember": "This workspace capability pool has no capabilities yet. Ask an owner / admin to add one."
     },
     "loadError": {
@@ -1085,7 +1085,7 @@
     "loadError": {
       "title": "Failed to load agents",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists.",
+      "hint": "Make sure the server is running and the current workspace exists.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -1094,7 +1094,7 @@
     },
     "mockBanner": {
       "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace or Project in the header."
+      "hint": "Choose the matching Workspace in the header."
     },
     "empty": {
       "title": "No agents yet",
@@ -1417,7 +1417,6 @@
         "localHint": "Pick latest to auto-follow re-uploads. Pick a specific version to pin.",
         "marketplaceHint": "Marketplace: latest follows the publisher's newest release, which may include breaking changes."
       },
-      "sharedBanner": "This Agent is attached to {{count}} Projects. Changes take effect everywhere immediately.",
       "wizard": {
         "stepOf": "Step {{current}} of {{total}}",
         "complete": "{{percent}}% complete",
@@ -1450,9 +1449,9 @@
         "hint": "Pick a connected local daemon. Cloud isolation does not need a device; Parsar lazy-starts a sandbox daemon on first run."
       },
       "workDir": {
-        "placeholder": "/Users/me/code/my-project",
+        "placeholder": "/Users/me/code/my-app",
         "hintLocal": "Directory the agent runs in on your local device. Leave blank to use a per-conversation scratch dir. Created if it does not exist.",
-        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-project). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
+        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
       }
     },
     "pendingCapability": {
@@ -1509,7 +1508,7 @@
       "title": "Connectors",
       "description": "How Agents actually run. A Connector is the integration layer — one connector can carry multiple Agents."
     },
-    "aggregateHint": "This view aggregates connector types in use by Agents in the current project. Connectors don't have their own registry table by design (anti-overengineering: connector identity lives directly on each Project Agent's connector_type field).",
+    "aggregateHint": "This view aggregates connector types in use by Agents in the current workspace. Connectors don't have their own registry table by design (anti-overengineering: connector identity lives directly on each Agent's connector_type field).",
     "summary": "{{count}} connector type(s) in use",
     "actions": {
       "add": "Add connector",
@@ -1535,7 +1534,7 @@
     "loadError": {
       "title": "Failed to load connectors",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists.",
+      "hint": "Make sure the server is running and the current workspace exists.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -1544,10 +1543,10 @@
     },
     "mockBanner": {
       "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace or Project in the header."
+      "hint": "Choose the matching Workspace in the header."
     },
     "empty": {
-      "title": "No Agents in this project use any connector yet",
+      "title": "No Agents in this workspace use any connector yet",
       "description": "Create an Agent in Agents and set its connector_type — this view aggregates automatically."
     },
     "detail": {
@@ -1558,7 +1557,7 @@
       "noAgents": "No agents use this connector.",
       "notFound": {
         "title": "Connector type not found",
-        "description": "It may have been removed, or no Agent in the current project uses it."
+        "description": "It may have been removed, or no Agent in the current workspace uses it."
       },
       "agentSummary": "View {{count}} Agent(s)"
     }
@@ -1845,7 +1844,7 @@
         "title": "Experimental features",
         "description": "Unstable capabilities. Evaluate risk before enabling.",
         "agentToAgent": "Allow agent → agent calls",
-        "agentToAgentHint": "Agents can @-mention each other. Chain depth controlled per project.",
+        "agentToAgentHint": "Agents can @-mention each other. Chain depth controlled per workspace.",
         "memoryProposal": "Memory write proposal review",
         "memoryProposalHint": "Agent memory writes need human approval first."
       },
@@ -1888,9 +1887,7 @@
       "permission_request": "Approval request",
       "workspace": "Workspace",
       "workspace_member": "Workspace member",
-      "project": "Project",
-      "project_member": "Project member",
-      "project_agent": "Project agent",
+      "agent": "Agent",
       "secret": "Secret",
       "model_provider": "Model provider",
       "model": "Model"
@@ -1921,7 +1918,7 @@
     "loadError": {
       "title": "Failed to load audit records",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists.",
+      "hint": "Make sure the server is running and the current workspace exists.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -1930,11 +1927,11 @@
     },
     "mockBanner": {
       "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace or Project in the header."
+      "hint": "Choose the matching Workspace in the header."
     },
     "empty": {
       "title": "No audit records",
-      "description": "This project has no audit events yet. Wait for new activity.",
+      "description": "This workspace has no audit events yet. Wait for new activity.",
       "filteredDescription": "No records match the current filters. Switch tabs, change target type, or clear the search term.",
       "clearFilters": "Clear filters"
     },
@@ -1978,7 +1975,7 @@
     "loadError": {
       "title": "Failed to load usage data",
       "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current project exists.",
+      "hint": "Make sure the server is running and the current workspace exists.",
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
@@ -1987,7 +1984,7 @@
     },
     "mockBanner": {
       "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace or Project in the header."
+      "hint": "Choose the matching Workspace in the header."
     },
     "empty": {
       "title": "No usage data yet",
@@ -2461,7 +2458,7 @@
         },
         "table": {
           "runtime": "Runtime",
-          "projectAgent": "Project Agent",
+          "agent": "Agent",
           "kind": "Sandbox kind",
           "agentEngines": "Agent engines",
           "status": "Status",
@@ -2547,15 +2544,6 @@
     "workspace": {
       "title": "Choose a Workspace to view {{resource}}",
       "description": "This data is managed by Workspace. Choose a Workspace in the header first."
-    },
-    "project": {
-      "noWorkspaceTitle": "Choose a Workspace first",
-      "noWorkspaceDescription": "This data is shown by Project. Choose a Workspace in the header, then pick a Project.",
-      "loadingTitle": "Loading Projects",
-      "loadingDescription": "Once Projects load for this Workspace, you can switch to the matching data scope.",
-      "noProjectsTitle": "This Workspace has no available Projects yet",
-      "selectTitle": "Choose a Project to view {{resource}}",
-      "selectDescription": "Project is the data scope for this page. The sidebar stays the same; this page switches to the selected scope."
     }
   },
   "connections": {
@@ -2845,7 +2833,7 @@
     },
     "tabs": {
       "user": "My memory",
-      "project": "Project memory"
+      "workspace": "Workspace memory"
     },
     "filter": {
       "all": "All"
@@ -2853,7 +2841,7 @@
     "type": {
       "user": "User",
       "feedback": "Feedback",
-      "project": "Project",
+      "workspace": "Workspace",
       "reference": "Reference"
     },
     "source": {
@@ -2873,7 +2861,7 @@
     },
     "empty": {
       "user": "You don't have any user-level memories yet",
-      "project": "This project has no memories yet"
+      "workspace": "This workspace has no memories yet"
     },
     "row": {
       "updatedAt": "updated {{time}}",
@@ -2883,14 +2871,14 @@
     },
     "editor": {
       "createTitleUser": "New user memory",
-      "createTitleProject": "New project memory",
+      "createTitleWorkspace": "New workspace memory",
       "editTitle": "Edit memory",
-      "description": "Memories are grouped by type. Feedback / project entries should include a 'Why' so future-you can judge edge cases.",
+      "description": "Memories are grouped by type. Feedback / workspace entries should include a 'Why' so future-you can judge edge cases.",
       "field": {
         "type": "Type",
         "title": "Title (optional)",
         "body": "Body",
-        "why": "Why (recommended for feedback / project)",
+        "why": "Why (recommended for feedback / workspace)",
         "tags": "Tags (comma-separated, optional)"
       },
       "placeholder": {

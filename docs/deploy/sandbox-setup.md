@@ -145,7 +145,7 @@ agent_daemon gateway mounted
 
 ### Automated (production flow)
 
-1. Create a Project Agent in the web UI with `daemon_mode: sandbox`.
+1. Create an Agent in the web UI with `daemon_mode: sandbox`.
 2. Send a message to that Agent.
 3. Server should: mint a pairing token → allocate a pod → daemon
    dials back via WebSocket → first response within 5-30s.

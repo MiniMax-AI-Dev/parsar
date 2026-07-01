@@ -141,7 +141,6 @@ type ProvisionState = {
 interface FeishuConnectorPanelProps {
   agentID: string
   workspaceID: string | null
-  projectID: string | null
   /** Current persisted config — undefined when never configured. */
   current: FeishuConnectorConfig | undefined
   canEdit: boolean
@@ -151,16 +150,15 @@ interface FeishuConnectorPanelProps {
 export function FeishuConnectorPanel({
   agentID,
   workspaceID,
-  projectID,
   current,
   canEdit,
   onToast,
 }: FeishuConnectorPanelProps) {
   const { t } = useTranslation("admin")
-  const mut = useUpdateAgentFeishuConnector(projectID)
+  const mut = useUpdateAgentFeishuConnector(workspaceID)
   const createSecretMut = useCreateSecret(workspaceID)
-  const beginProvisionMut = useBeginAgentFeishuProvisioning(projectID)
-  const pollProvisionMut = usePollAgentFeishuProvisioning(projectID)
+  const beginProvisionMut = useBeginAgentFeishuProvisioning(workspaceID)
+  const pollProvisionMut = usePollAgentFeishuProvisioning(workspaceID)
 
   // Local edit buffer so cancel doesn't ping the server. Re-seeded
   // when the persisted config changes (e.g. PATCH refetch).
@@ -827,8 +825,8 @@ function configEqual(a: FeishuConnectorConfig, b: FeishuConnectorConfig): boolea
   )
 }
 
-/** Extract the current Feishu connector config from a ProjectAgent's
- *  agent_config jsonb; undefined when never wired. */
+/** Extract the current Feishu connector config from an Agent's
+ *  config jsonb; undefined when never wired. */
 export function readFeishuConfigFromAgent(
   agentConfig: Record<string, unknown> | undefined,
 ): FeishuConnectorConfig | undefined {

@@ -4,7 +4,6 @@ import {
   Check,
   ChevronsUpDown,
   Clock,
-  FolderKanban,
   Globe,
   Layers,
   Pencil,
@@ -17,33 +16,25 @@ import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import {
-  setProjectId,
   setWorkspaceId,
-  useProjectId,
   useWorkspaceId,
 } from "../../lib/workspace"
 import {
-  useArchiveProject,
   useArchiveWorkspace,
-  useCreateProject,
   useCreateWorkspace,
   useDiscoverableWorkspaces,
   useMyWorkspaces,
   useRequestJoinWorkspace,
-  useUpdateProject,
   useUpdateWorkspace,
   useWithdrawJoinRequest,
-  useWorkspaceProjects,
 } from "../../lib/api-workspaces"
 import type {
   DiscoverableWorkspace,
   UserWorkspace,
-  WorkspaceProject,
 } from "../../lib/api-types"
 import {
   ConfirmArchiveDialog,
   JoinRequestDialog,
-  ProjectFormDialog,
   WorkspaceFormDialog,
 } from "./WorkspaceCrudDialogs"
 import { DiscoverWorkspacesDialog } from "./DiscoverWorkspacesDialog"
@@ -56,20 +47,16 @@ function shortId(id: string | null | undefined): string {
 export function WorkspaceSwitcher() {
   const { t } = useTranslation("common")
   const wsId = useWorkspaceId()
-  const projectId = useProjectId()
   const workspacesQuery = useMyWorkspaces()
-  const projectsQuery = useWorkspaceProjects(wsId)
   // Cap at 5; overflow opens the full DiscoverWorkspacesDialog so the
   // dropdown can't be blown up by hundreds of workspaces.
   const discoverableQuery = useDiscoverableWorkspaces({ limit: 5 })
   const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false)
 
   const workspaces = workspacesQuery.data?.workspaces ?? []
-  const projects = projectsQuery.data?.projects ?? []
   const discoverable = discoverableQuery.data?.workspaces ?? []
   const discoverableTotal = discoverableQuery.data?.total ?? discoverable.length
   const currentWorkspace = workspaces.find((w) => w.id === wsId)
-  const currentProject = projects.find((p) => p.id === projectId)
 
   // Self-heal: stale wsId from localStorage (archived ws or old dev seed)
   // would leave currentWorkspace undefined; auto-pick the first one.
@@ -84,9 +71,6 @@ export function WorkspaceSwitcher() {
   const [createWsOpen, setCreateWsOpen] = useState(false)
   const [renameWs, setRenameWs] = useState<UserWorkspace | null>(null)
   const [archiveWs, setArchiveWs] = useState<UserWorkspace | null>(null)
-  const [createProjOpen, setCreateProjOpen] = useState(false)
-  const [renameProj, setRenameProj] = useState<WorkspaceProject | null>(null)
-  const [archiveProj, setArchiveProj] = useState<WorkspaceProject | null>(null)
   const [joinTarget, setJoinTarget] = useState<DiscoverableWorkspace | null>(
     null
   )
@@ -102,9 +86,6 @@ export function WorkspaceSwitcher() {
   const createWorkspaceMut = useCreateWorkspace()
   const updateWorkspaceMut = useUpdateWorkspace()
   const archiveWorkspaceMut = useArchiveWorkspace()
-  const createProjectMut = useCreateProject()
-  const updateProjectMut = useUpdateProject()
-  const archiveProjectMut = useArchiveProject()
   const requestJoinMut = useRequestJoinWorkspace()
   const withdrawJoinMut = useWithdrawJoinRequest()
 
@@ -113,12 +94,6 @@ export function WorkspaceSwitcher() {
     : wsId
       ? `WS · ${shortId(wsId)}`
       : t("workspaceSwitcher.demoWorkspace")
-
-  const triggerProjectLabel = currentProject?.name
-    ? currentProject.name
-    : projectId
-      ? `P · ${shortId(projectId)}`
-      : null
 
   return (
     <>
@@ -130,11 +105,6 @@ export function WorkspaceSwitcher() {
             className="ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-fg-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 data-[state=open]:bg-surface-muted"
           >
             <span className="font-medium">{triggerLabel}</span>
-            {triggerProjectLabel && (
-              <span className="rounded bg-surface-muted px-1 py-0 text-xs font-mono text-fg-muted">
-                {triggerProjectLabel}
-              </span>
-            )}
             {!wsId && (
               <span
                 title={t("workspace.mockTooltip")}
@@ -177,8 +147,6 @@ export function WorkspaceSwitcher() {
                     onSelect={() => {
                       if (ws.id === wsId) return
                       setWorkspaceId(ws.id)
-                      // Switching workspace invalidates the picked project.
-                      setProjectId(null)
                     }}
                     className={cn(
                       "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-surface-muted",
@@ -312,84 +280,6 @@ export function WorkspaceSwitcher() {
                 {joinToast}
               </div>
             )}
-
-            <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
-
-            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
-              <FolderKanban className="h-3 w-3" strokeWidth={1.75} />
-              {currentWorkspace?.name
-                ? t("workspaceSwitcher.projectsInLabel", {
-                    workspace: currentWorkspace.name,
-                  })
-                : t("workspaceSwitcher.projectsLabel")}
-            </DropdownMenu.Label>
-
-            {!wsId && (
-              <div className="px-2 py-2 text-sm text-fg-faint">
-                {t("workspaceSwitcher.pickWorkspaceFirst")}
-              </div>
-            )}
-
-            {wsId && projects.length === 0 && (
-              <div className="px-2 py-2 text-sm text-fg-faint">
-                {projectsQuery.isLoading
-                  ? t("states.loading")
-                  : t("workspaceSwitcher.noProjects")}
-              </div>
-            )}
-
-            {wsId &&
-              projects.map((p) => {
-                const isActive = p.id === projectId
-                return (
-                  <div key={p.id} className="group/row flex items-center gap-1">
-                    <DropdownMenu.Item
-                      onSelect={() => {
-                        if (p.id === projectId) return
-                        setProjectId(p.id)
-                      }}
-                      className={cn(
-                        "flex flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-surface-muted",
-                        isActive && "font-medium text-fg"
-                      )}
-                    >
-                      <div className="flex flex-1 flex-col min-w-0">
-                        <span className="truncate">{p.name}</span>
-                        <span className="truncate font-mono text-xs text-fg-faint">
-                          {p.slug}
-                        </span>
-                      </div>
-                      {isActive && (
-                        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />
-                      )}
-                    </DropdownMenu.Item>
-                    <RowAction
-                      title={t("workspaceCrud.project.renameTitle")}
-                      onSelect={() => setRenameProj(p)}
-                      icon={<Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                    />
-                    <RowAction
-                      title={t("workspaceCrud.project.archiveTitle")}
-                      onSelect={() => setArchiveProj(p)}
-                      icon={<Archive className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                      danger
-                    />
-                  </div>
-                )
-              })}
-
-            {wsId && (
-              <DropdownMenu.Item
-                onSelect={(e) => {
-                  e.preventDefault()
-                  setCreateProjOpen(true)
-                }}
-                className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-fg-muted outline-none data-[highlighted]:bg-surface-muted"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                <span>{t("workspaceCrud.project.createAction")}</span>
-              </DropdownMenu.Item>
-            )}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -409,7 +299,6 @@ export function WorkspaceSwitcher() {
             {
               onSuccess: (data) => {
                 setWorkspaceId(data.workspace.id)
-                setProjectId(null)
                 setCreateWsOpen(false)
               },
             }
@@ -472,107 +361,10 @@ export function WorkspaceSwitcher() {
             onSuccess: () => {
               if (wsId === archivedId) {
                 setWorkspaceId(null)
-                setProjectId(null)
               }
               setArchiveWs(null)
             },
           })
-        }}
-      />
-
-      <ProjectFormDialog
-        open={createProjOpen}
-        onOpenChange={(open) => {
-          if (!open) createProjectMut.reset()
-          setCreateProjOpen(open)
-        }}
-        mode="create"
-        pending={createProjectMut.isPending}
-        error={createProjectMut.error}
-        onSubmit={({ name, description }) => {
-          if (!wsId) return
-          createProjectMut.mutate(
-            {
-              wsId,
-              body: {
-                name,
-                description: description || undefined,
-              },
-            },
-            {
-              onSuccess: (data) => {
-                setProjectId(data.project.id)
-                setCreateProjOpen(false)
-              },
-            }
-          )
-        }}
-      />
-
-      <ProjectFormDialog
-        open={renameProj !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            updateProjectMut.reset()
-            setRenameProj(null)
-          }
-        }}
-        mode="rename"
-        initialName={renameProj?.name ?? ""}
-        initialDescription={renameProj?.description ?? ""}
-        pending={updateProjectMut.isPending}
-        error={updateProjectMut.error}
-        onSubmit={({ name, description }) => {
-          if (!renameProj) return
-          const body: {
-            name?: string
-            description?: string
-          } = {}
-          if (name !== renameProj.name) body.name = name
-          if (description !== renameProj.description) body.description = description
-          if (Object.keys(body).length === 0) {
-            setRenameProj(null)
-            return
-          }
-          updateProjectMut.mutate(
-            { pid: renameProj.id, wsId, body },
-            {
-              onSuccess: () => {
-                setRenameProj(null)
-              },
-            }
-          )
-        }}
-      />
-
-      <ConfirmArchiveDialog
-        open={archiveProj !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            archiveProjectMut.reset()
-            setArchiveProj(null)
-          }
-        }}
-        title={t("workspaceCrud.project.archiveTitle")}
-        description={t("workspaceCrud.project.archiveDescription", {
-          name: archiveProj?.name ?? "",
-        })}
-        pending={archiveProjectMut.isPending}
-        error={archiveProjectMut.error}
-        onConfirm={() => {
-          if (!archiveProj) return
-          const archivedId = archiveProj.id
-          archiveProjectMut.mutate(
-            { pid: archivedId, wsId },
-            {
-              onSuccess: () => {
-                if (projectId === archivedId) {
-                  setProjectId(null)
-                }
-                setArchiveProj(null)
-              },
-            }
-          )
         }}
       />
 

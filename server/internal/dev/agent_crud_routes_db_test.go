@@ -37,16 +37,15 @@ func TestAgentCRUDRoutesWithRealStore(t *testing.T) {
 	}
 
 	createBody := `{"name":"Route Agent","connector_type":"agent_daemon","system_prompt":"be useful","config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`
-	created := serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/projects/"+ids.ProjectID+"/agents", createBody)
-	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"project_agent"`) {
+	created := serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/agents", createBody)
+	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"agent"`) {
 		t.Fatalf("create expected 201, got %d: %s", created.Code, created.Body.String())
 	}
 	flushDevRouteAudit(t, ingester)
 	assertAuditEventCount(t, db, "agent.created", 1)
-	assertAuditEventCount(t, db, "project_agent.attached", 1)
 	assertAuditActor(t, db, "agent.created", ids.UserID)
 
-	duplicateAuto := serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/projects/"+ids.ProjectID+"/agents", createBody)
+	duplicateAuto := serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/agents", createBody)
 	if duplicateAuto.Code != http.StatusCreated || !strings.Contains(duplicateAuto.Body.String(), `"slug":"agent-`) {
 		t.Fatalf("duplicate auto slug expected 201 with random agent slug, got %d: %s", duplicateAuto.Code, duplicateAuto.Body.String())
 	}
@@ -55,11 +54,11 @@ func TestAgentCRUDRoutesWithRealStore(t *testing.T) {
 	}
 
 	conflictBody := `{"name":"Route Agent Explicit","slug":"backend-agent","connector_type":"agent_daemon","system_prompt":"explicit","config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`
-	conflict := serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/projects/"+ids.ProjectID+"/agents", conflictBody)
+	conflict := serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/agents", conflictBody)
 	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), "slug_conflict") {
 		t.Fatalf("explicit duplicate slug expected 409 slug_conflict, got %d: %s", conflict.Code, conflict.Body.String())
 	}
-	agentID, projectAgentID := lookupAgentAndProjectAgent(t, db, "Route Agent")
+	agentID := lookupAgent(t, db, "Route Agent")
 
 	updated := serveDevRoute(t, r, http.MethodPatch, "/api/v1/agents/"+agentID, `{"name":"Route Agent Renamed","capabilities":["unknown-capability"]}`)
 	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), "Route Agent Renamed") {
@@ -76,30 +75,26 @@ func TestAgentCRUDRoutesWithRealStore(t *testing.T) {
 		t.Fatalf("immutable slug expected 422, got %d: %s", immutable.Code, immutable.Body.String())
 	}
 
-	detached := serveDevRoute(t, r, http.MethodDelete, "/api/v1/project-agents/"+projectAgentID, "")
-	if detached.Code != http.StatusOK || !strings.Contains(detached.Body.String(), `"project_agent"`) {
-		t.Fatalf("project-agent delete expected 200, got %d: %s", detached.Code, detached.Body.String())
-	}
-	missingDetach := serveDevRoute(t, r, http.MethodDelete, "/api/v1/project-agents/00000000-0000-0000-0000-000000099999", "")
-	if missingDetach.Code != http.StatusNotFound {
-		t.Fatalf("unknown project-agent delete expected 404, got %d: %s", missingDetach.Code, missingDetach.Body.String())
+	missingDelete := serveDevRoute(t, r, http.MethodDelete, "/api/v1/agents/00000000-0000-0000-0000-000000099999", "")
+	if missingDelete.Code != http.StatusNotFound {
+		t.Fatalf("unknown agent delete expected 404, got %d: %s", missingDelete.Code, missingDelete.Body.String())
 	}
 
-	created = serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/projects/"+ids.ProjectID+"/agents", `{"name":"Delete Guard Agent","connector_type":"agent_daemon","config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`)
+	created = serveDevRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+ids.WorkspaceID+"/agents", `{"name":"Delete Guard Agent","connector_type":"agent_daemon","config":{"daemon_mode":"sandbox","agent_kind":"opencode"}}`)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create delete guard agent expected 201, got %d: %s", created.Code, created.Body.String())
 	}
-	deleteAgentID, deleteProjectAgentID := lookupAgentAndProjectAgent(t, db, "Delete Guard Agent")
-	insertQueuedRun(t, db, ids, deleteProjectAgentID)
+	deleteAgentID := lookupAgent(t, db, "Delete Guard Agent")
+	insertQueuedRun(t, db, ids, deleteAgentID)
 	blocked := serveDevRoute(t, r, http.MethodDelete, "/api/v1/agents/"+deleteAgentID, "")
 	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "in_flight_runs") {
 		t.Fatalf("agent delete with in-flight run expected 409, got %d: %s", blocked.Code, blocked.Body.String())
 	}
-	if _, err := db.Exec(ctx, `update agent_runs set status = 'completed', finished_at = $1 where project_agent_id = $2`, time.Now().UTC(), deleteProjectAgentID); err != nil {
+	if _, err := db.Exec(ctx, `update agent_runs set status = 'completed', finished_at = $1 where agent_id = $2`, time.Now().UTC(), deleteAgentID); err != nil {
 		t.Fatal(err)
 	}
 	deleted := serveDevRoute(t, r, http.MethodDelete, "/api/v1/agents/"+deleteAgentID, "")
-	if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body.String(), "detached_project_agent_ids") {
+	if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body.String(), `"agent"`) {
 		t.Fatalf("agent delete expected 200, got %d: %s", deleted.Code, deleted.Body.String())
 	}
 }
@@ -127,7 +122,7 @@ func openDevRouteTestDB(t *testing.T) *pgxpool.Pool {
 		_, _ = lockConn.Exec(context.Background(), `select pg_advisory_unlock(8675309)`)
 		lockConn.Release()
 	})
-	if _, err := db.Exec(context.Background(), `truncate table sandboxes, agent_run_events, usage_logs, audit_records, agent_run_artifacts, agent_runs, messages, conversations, project_agents, agents, models, secrets, projects, workspace_members, workspaces, auth_identities, users restart identity cascade`); err != nil {
+	if _, err := db.Exec(context.Background(), `truncate table sandboxes, agent_run_events, usage_logs, audit_records, agent_run_artifacts, agent_runs, messages, conversations, agents, models, secrets, workspace_members, workspaces, auth_identities, users restart identity cascade`); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -184,19 +179,19 @@ func assertAuditActor(t *testing.T, db *pgxpool.Pool, eventType string, actorID 
 	}
 }
 
-func lookupAgentAndProjectAgent(t *testing.T, db *pgxpool.Pool, name string) (string, string) {
+func lookupAgent(t *testing.T, db *pgxpool.Pool, name string) string {
 	t.Helper()
-	var agentID, projectAgentID string
-	if err := db.QueryRow(context.Background(), `select a.id::text, pa.id::text from agents a join project_agents pa on pa.agent_id = a.id where a.name = $1 and a.deleted_at is null and pa.deleted_at is null order by a.created_at desc limit 1`, name).Scan(&agentID, &projectAgentID); err != nil {
+	var agentID string
+	if err := db.QueryRow(context.Background(), `select a.id::text from agents a where a.name = $1 and a.deleted_at is null order by a.created_at desc limit 1`, name).Scan(&agentID); err != nil {
 		t.Fatal(err)
 	}
-	return agentID, projectAgentID
+	return agentID
 }
 
-func insertQueuedRun(t *testing.T, db *pgxpool.Pool, ids store.DevFixtureIDs, projectAgentID string) {
+func insertQueuedRun(t *testing.T, db *pgxpool.Pool, ids store.DevFixtureIDs, agentID string) {
 	t.Helper()
 	now := time.Now().UTC()
-	if _, err := db.Exec(context.Background(), `insert into agent_runs(id, workspace_id, project_id, conversation_id, trigger_source, trigger_channel, requested_by_type, requested_by_id, project_agent_id, connector_type, status, visibility, metadata, created_at, updated_at) values ('00000000-0000-0000-0000-000000009999', $1, $2, $3, 'manual', 'web', 'user', $4, $5, 'agent_daemon', 'queued', 'project', '{}', $6, $6)`, ids.WorkspaceID, ids.ProjectID, ids.ConversationID, ids.UserID, projectAgentID, now); err != nil {
+	if _, err := db.Exec(context.Background(), `insert into agent_runs(id, workspace_id, conversation_id, trigger_source, trigger_channel, requested_by_type, requested_by_id, agent_id, connector_type, status, visibility, metadata, created_at, updated_at) values ('00000000-0000-0000-0000-000000009999', $1, $2, 'manual', 'web', 'user', $3, $4, 'agent_daemon', 'queued', 'workspace', '{}', $5, $5)`, ids.WorkspaceID, ids.ConversationID, ids.UserID, agentID, now); err != nil {
 		t.Fatal(err)
 	}
 }

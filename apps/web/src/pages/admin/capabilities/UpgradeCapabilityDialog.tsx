@@ -4,21 +4,21 @@ import { Loader2 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
 import { ApiError } from "../../../lib/api-client"
 import { useUpgrade } from "../../../lib/api-marketplace"
-import type { AgentCapability, Capability, CapabilityVersion, ProjectAgent } from "../../../lib/api-types"
+import type { AgentCapability, Capability, CapabilityVersion, Agent } from "../../../lib/api-types"
 
 interface UpgradeCapabilityDialogProps {
-  agent: ProjectAgent
+  agent: Agent
   capability: Capability
   binding: AgentCapability
   latestVersion?: CapabilityVersion
-  projectID: string | null
+  workspaceID: string | null
   disabled?: boolean
   onToast: (message: string) => void
 }
 
-export function UpgradeCapabilityDialog({ agent, capability, binding, latestVersion, projectID, disabled, onToast }: UpgradeCapabilityDialogProps) {
+export function UpgradeCapabilityDialog({ agent, capability, binding, latestVersion, workspaceID, disabled, onToast }: UpgradeCapabilityDialogProps) {
   const { t } = useTranslation("admin")
-  const upgradeMut = useUpgrade(projectID, agent.project_agent_id)
+  const upgradeMut = useUpgrade(workspaceID, agent.id)
   const errMsg = upgradeMut.error instanceof ApiError ? upgradeMut.error.envelope.message : upgradeMut.error instanceof Error ? upgradeMut.error.message : null
   const canUpgrade = !!latestVersion && latestVersion.id !== binding.capability_version_id && !disabled && !upgradeMut.isPending
   return (

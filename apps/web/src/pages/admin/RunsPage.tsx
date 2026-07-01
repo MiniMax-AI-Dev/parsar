@@ -61,7 +61,7 @@ import {
   useAgentRuns,
 } from "../../lib/api-agents"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
-import { useProjectId } from "../../lib/workspace"
+import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 
 /* ------------------------------------------------------------------ */
@@ -374,7 +374,7 @@ const TAB_STATUSES: Record<"all" | "running" | "failed", AgentRunStatus[]> = {
 export function RunsPage() {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
   const [tab, setTab] = useState<"all" | "running" | "failed">("all")
   const [keyword, setKeyword] = useState("")
   const [offset, setOffset] = useState(0)
@@ -383,7 +383,7 @@ export function RunsPage() {
   // the union case), so the page always asks for exactly RUNS_PAGE_SIZE
   // rows of the right kind — no over-fetch + client-side filter.
   const statuses = TAB_STATUSES[tab]
-  const query = useAgentRuns(pid, { statuses, offset, limit: RUNS_PAGE_SIZE })
+  const query = useAgentRuns(wsId, { statuses, offset, limit: RUNS_PAGE_SIZE })
   const runs = useMemo(() => query.data?.agent_runs ?? [], [query.data])
   const total = query.data?.total ?? 0
 
@@ -391,7 +391,7 @@ export function RunsPage() {
   // new result set.
   useEffect(() => {
     setOffset(0)
-  }, [tab, pid])
+  }, [tab, wsId])
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
@@ -416,8 +416,8 @@ export function RunsPage() {
         title={t("runs.page.title")}
         description={t("runs.page.description")}
       />
-      {!pid ? (
-        <ScopeRequiredState scope="project" resourceName={t("runs.page.title")} />
+      {!wsId ? (
+        <ScopeRequiredState scope="workspace" resourceName={t("runs.page.title")} />
       ) : query.isLoading ? (
         <RunsLoadingSkeleton />
       ) : err ? (
@@ -606,15 +606,15 @@ export function RunDetailPage({ id }: { id: string }) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const { navigate } = useAdminView()
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
 
-  const runQ = useAgentRun(id, pid)
-  const cancelRun = useCancelRun(pid)
+  const runQ = useAgentRun(id, wsId)
+  const cancelRun = useCancelRun(wsId)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
 
   const runData = runQ.data
-  const eventsQ = useAgentRunEvents(runData?.id ?? null, pid, { status: runData?.status, initialEvents: runData?.events })
+  const eventsQ = useAgentRunEvents(runData?.id ?? null, wsId, { status: runData?.status, initialEvents: runData?.events })
   const events = eventsQ.data?.events ?? runData?.events ?? []
 
   if (runQ.isLoading) {
@@ -686,7 +686,7 @@ export function RunDetailPage({ id }: { id: string }) {
           <>
             <RunStatusBadge status={run.status} />
             {isCancellable && (
-              <Button size="sm" variant="outline" onClick={() => setConfirmCancel(true)} disabled={cancelRun.isPending || !pid}>
+              <Button size="sm" variant="outline" onClick={() => setConfirmCancel(true)} disabled={cancelRun.isPending || !wsId}>
                 {cancelRun.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {t("runs.actions.cancel.label")}
               </Button>
@@ -877,7 +877,7 @@ export function RunDetailPage({ id }: { id: string }) {
 
         <TabsContent value="audit">
           <Card title={t("runs.detail.tabs.audit")}>
-            <ResourceAuditTimeline pid={pid} targetType="agent_run" targetID={run.id} />
+            <ResourceAuditTimeline wsId={wsId} targetType="agent_run" targetID={run.id} />
           </Card>
         </TabsContent>
       </Tabs>

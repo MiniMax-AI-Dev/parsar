@@ -118,9 +118,6 @@ func encodeEventAsOTLPLog(ev Event) ([]byte, error) {
 	if ev.WorkspaceID != "" {
 		attrs = append(attrs, strAttr("parsar.workspace_id", ev.WorkspaceID))
 	}
-	if ev.ProjectID != "" {
-		attrs = append(attrs, strAttr("parsar.project_id", ev.ProjectID))
-	}
 	for k, v := range ev.Payload {
 		attrs = append(attrs, strAttr("parsar.audit.payload."+k,
 			fmt.Sprintf("%v", v)))

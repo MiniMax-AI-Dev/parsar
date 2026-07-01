@@ -68,14 +68,6 @@ where workspace_id = @workspace_id::uuid
   and deleted_at is null
   and status = 'active';
 
--- name: GetProjectWorkspace :one
--- 把 project_id 反查到 workspace_id,供 RBAC 中间件先把 project-scoped
--- 路由桥接到 workspace 角色检查。
-select workspace_id::text
-from projects
-where id = @project_id::uuid
-  and deleted_at is null;
-
 -- name: GetWorkspaceSettings :one
 select
   w.id::text as workspace_id
@@ -99,20 +91,16 @@ where w.id = @workspace_id::uuid
   and w.deleted_at is null;
 
 -- name: CountSandboxAgentsInWorkspace :one
--- Step 5: number of active project-agent bindings in this workspace whose
--- daemon execution mode is sandbox. The execution mode now lives in
--- project_agents.config.daemon_mode rather than agents.config.runtime.
+-- Step 5: number of active agents in this workspace whose daemon
+-- execution mode is sandbox. The execution mode lives in
+-- agents.config.daemon_mode.
 select count(*)::bigint
-from project_agents pa
-join agents a on a.id = pa.agent_id
-  and a.workspace_id = pa.workspace_id
-where pa.workspace_id = @workspace_id::uuid
-  and pa.deleted_at is null
-  and pa.status = 'active'
+from agents a
+where a.workspace_id = @workspace_id::uuid
   and a.deleted_at is null
   and a.status = 'active'
   and a.connector_type = 'agent_daemon'
-  and coalesce(pa.config->>'daemon_mode', '') = 'sandbox';
+  and coalesce(a.config->>'daemon_mode', '') = 'sandbox';
 
 -- name: SetWorkspaceRuntimeCredentialSecret :exec
 -- Sets the workspace's E2B (or other sandbox provider) runtime
@@ -164,25 +152,12 @@ where id = @workspace_id::uuid
   and deleted_at is null
 returning id::text as workspace_id;
 
--- name: CreateDevProject :execrows
-insert into projects(id, workspace_id, name, slug, description, status, config, created_by, created_at, updated_at)
-select @id::uuid, @workspace_id::uuid, 'Demo Project', 'demo-project', 'Development fixture project', 'active', '{}', @created_by::uuid, @now, @now
-where not exists (
-  select 1 from projects
-  where workspace_id = @workspace_id::uuid and slug = 'demo-project' and deleted_at is null
-);
-
--- name: GetActiveProjectIDBySlug :one
-select id::text from projects
-where workspace_id = @workspace_id::uuid and slug = @slug and deleted_at is null;
-
 -- name: CreateDevAgent :execrows
 insert into agents(id, workspace_id, name, slug, description, connector_type, status, config, created_by, created_at, updated_at)
-select @id::uuid, @workspace_id::uuid, @name, @slug, @description, 'agent_daemon', 'active', @config::jsonb, @created_by::uuid, @now, @now
-where not exists (
-  select 1 from agents
-  where workspace_id = @workspace_id::uuid and slug = @slug and deleted_at is null
-);
+values (@id::uuid, @workspace_id::uuid, @name, @slug, @description, 'agent_daemon', 'active', @config::jsonb, @created_by::uuid, @now, @now)
+on conflict (id) do update
+  set status = 'active', updated_at = @now
+  where agents.status <> 'active';
 
 -- name: GetActiveAgentIDBySlug :one
 select id::text from agents
@@ -210,16 +185,6 @@ values (@id::uuid, @workspace_id::uuid, @name, @slug, @description, @connector_t
 on conflict do nothing
 returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at;
 
--- name: CreateProjectAgentCRUD :one
-insert into project_agents(id, workspace_id, project_id, agent_id, status, config, created_by, created_at, updated_at)
-select @id::uuid, p.workspace_id, p.id, @agent_id::uuid, 'active', @config::jsonb, @created_by::uuid, @now, @now
-from projects p
-where p.id = @project_id::uuid
-  and p.workspace_id = @workspace_id::uuid
-  and p.status = 'active'
-  and p.deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at;
-
 -- name: UpdateAgentCRUD :one
 update agents
 set name = @name,
@@ -231,35 +196,19 @@ where id = @id::uuid
   and deleted_at is null
 returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at;
 
--- name: SoftDeleteProjectAgentCRUD :one
-update project_agents
-set deleted_at = @now,
-    updated_at = @now
-where id = @id::uuid
-  and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at;
-
--- name: UpdateProjectAgentConfig :one
-update project_agents
+-- name: UpdateAgentConfig :one
+update agents
 set config = @config::jsonb,
     updated_at = @now
 where id = @id::uuid
   and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at;
-
--- name: GetProjectAgentForUpdate :one
-select id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-from project_agents
-where id = @id::uuid
-  and deleted_at is null
-for update;
+returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at;
 
 -- name: CountInFlightRunsByAgent :one
 -- In-flight means actively running or still queued.
 select count(1)::bigint
 from agent_runs r
-join project_agents pa on pa.id = r.project_agent_id
-where pa.agent_id = @agent_id::uuid
+where r.agent_id = @agent_id::uuid
   and r.status in ('running', 'queued');
 
 -- name: SoftDeleteAgentCRUD :one
@@ -296,14 +245,6 @@ returning
   prior.old_visibility,
   agents.visibility as new_visibility,
   agents.updated_at;
-
--- name: SoftDeleteProjectAgentsByAgent :many
-update project_agents
-set deleted_at = @now,
-    updated_at = @now
-where agent_id = @agent_id::uuid
-  and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at;
 
 -- B phase Feishu IM routing (docs/feishu-routing.md §6.4):
 -- GetAgentByFeishuAppID is the inbound router's first DB lookup —
@@ -488,72 +429,41 @@ where ai.provider = @provider::text
   and u.status = 'active'
 limit 1;
 
--- name: CreateDevProjectAgent :execrows
-insert into project_agents(id, workspace_id, project_id, agent_id, status, config, created_by, created_at, updated_at)
-select @id::uuid, @workspace_id::uuid, @project_id::uuid, @agent_id::uuid, 'active', '{"daemon_mode":"sandbox","agent_kind":"opencode"}'::jsonb, @created_by::uuid, @now, @now
-where not exists (
-  select 1 from project_agents
-  where project_id = @project_id::uuid and agent_id = @agent_id::uuid and deleted_at is null
-);
-
--- name: ActivateDevProjectAgent :execrows
-update project_agents
-set status = 'active', updated_at = @now
-where project_id = @project_id::uuid
-  and agent_id = @agent_id::uuid
-  and deleted_at is null
-  and status <> 'active';
-
--- name: ConfigureDevProjectAgentConnector :one
+-- name: ConfigureDevAgentConnector :one
 update agents a
 set connector_type = @connector_type,
     config = @agent_config::jsonb,
     updated_at = @now
-from project_agents pa
-where pa.id = @project_agent_id::uuid
-  and pa.agent_id = a.id
-  and pa.workspace_id = a.workspace_id
-  and pa.status = 'active'
-  and pa.deleted_at is null
+where a.id = @agent_id::uuid
   and a.status = 'active'
   and a.deleted_at is null
 returning
-  pa.id::text as project_agent_id,
-  pa.project_id::text,
   a.id::text as agent_id,
   a.name,
   a.slug,
   a.connector_type,
   a.config as agent_config;
 
--- name: ConfigureProjectAgentProfile :one
-update project_agents pa
-set config = @project_agent_config::jsonb,
+-- name: ConfigureAgentProfile :one
+update agents a
+set config = @agent_config::jsonb,
     updated_at = @now
-from agents a
-where pa.id = @project_agent_id::uuid
-  and pa.agent_id = a.id
-  and pa.workspace_id = a.workspace_id
-  and pa.status = 'active'
-  and pa.deleted_at is null
+where a.id = @agent_id::uuid
   and a.status = 'active'
   and a.deleted_at is null
 returning
-  pa.id::text as project_agent_id,
-  pa.project_id::text,
   a.id::text as agent_id,
   a.name,
   a.slug,
   a.connector_type,
-  a.config as agent_config,
-  pa.config as project_agent_config;
+  a.config as agent_config;
 
--- name: GetProjectAgentWorkspace :one
-select pa.workspace_id::text as workspace_id
-from project_agents pa
-where pa.id = @project_agent_id::uuid
-  and pa.status = 'active'
-  and pa.deleted_at is null;
+-- name: GetAgentWorkspace :one
+select a.workspace_id::text as workspace_id
+from agents a
+where a.id = @agent_id::uuid
+  and a.status = 'active'
+  and a.deleted_at is null;
 
 -- name: AppendAgentRunMetadata :exec
 update agent_runs
@@ -565,32 +475,30 @@ where id = @id::uuid;
 -- 2026-06-04 schema: conversations.type 拆成 surface + form 两维
 -- (web/im/api × thread/group/dm/oneshot)。Dev seed 是内置 web 的群聊
 -- (Demo Group),所以 surface='web', form='group'。
-insert into conversations(id, workspace_id, project_id, surface, form, title, status, metadata, created_at, updated_at)
-select @id::uuid, @workspace_id::uuid, @project_id::uuid, 'web', 'group', 'Demo Group', 'active', '{}', @now, @now
+insert into conversations(id, workspace_id, surface, form, title, status, metadata, created_at, updated_at)
+select @id::uuid, @workspace_id::uuid, 'web', 'group', 'Demo Group', 'active', '{}', @now, @now
 where not exists (
   select 1 from conversations
   where workspace_id = @workspace_id::uuid
-    and project_id = @project_id::uuid
     and surface = 'web'
     and form = 'group'
     and title = 'Demo Group'
     and deleted_at is null
 );
 
--- name: CreateProjectConversation :one
+-- name: CreateWorkspaceConversation :one
 -- surface ∈ {web, im, api}; form ∈ {thread, group, dm, oneshot}。
 -- 调用方负责传合法组合(e.g. surface='web' 通常配 form='thread',
 -- surface='im' + form='group' 是飞书群,surface='api' + form='oneshot'
 -- 是外部回调一次性触发)。
-insert into conversations(id, workspace_id, project_id, surface, form, title, status, metadata, created_at, updated_at)
-values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @surface, @form, @title, 'active', @metadata::jsonb, @now, @now)
-returning id::text, workspace_id::text, project_id::text, surface, form, title, status, metadata, created_at, updated_at;
+insert into conversations(id, workspace_id, surface, form, title, status, metadata, created_at, updated_at)
+values (@id::uuid, @workspace_id::uuid, @surface, @form, @title, 'active', @metadata::jsonb, @now, @now)
+returning id::text, workspace_id::text, surface, form, title, status, metadata, created_at, updated_at;
 
--- name: ListProjectConversations :many
+-- name: ListWorkspaceConversations :many
 select
   c.id::text as id,
   c.workspace_id::text as workspace_id,
-  c.project_id::text as project_id,
   c.surface,
   c.form,
   c.title,
@@ -624,21 +532,14 @@ select
     order by m.created_at desc, m.id desc
     limit 1
   ), '')::text as last_message_sender_type,
-  coalesce(pa.id::text, '')::text as primary_agent_id,
+  coalesce(a.id::text, '')::text as primary_agent_id,
   coalesce(a.name, '')::text as primary_agent_name
 from conversations c
-join projects p on p.id = c.project_id
-left join project_agents pa
-  on pa.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and pa.deleted_at is null
-  and pa.status = 'active'
 left join agents a
-  on a.id = pa.agent_id
+  on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
   and a.deleted_at is null
   and a.status = 'active'
-where c.project_id = @project_id::uuid
-  and p.status = 'active'
-  and p.deleted_at is null
+where c.workspace_id = @workspace_id::uuid
   and c.deleted_at is null
   and (@agent_id::text = '' or c.metadata->>'primary_agent_id' = @agent_id::text)
 order by coalesce((
@@ -650,11 +551,10 @@ order by coalesce((
   ), c.created_at) desc, c.id desc
 limit @item_limit;
 
--- name: GetProjectConversation :one
+-- name: GetConversation :one
 select
   c.id::text as id,
   c.workspace_id::text as workspace_id,
-  c.project_id::text as project_id,
   c.surface,
   c.form,
   c.title,
@@ -662,21 +562,14 @@ select
   c.metadata,
   c.created_at,
   c.updated_at,
-  coalesce(pa.id::text, '')::text as primary_agent_id,
+  coalesce(a.id::text, '')::text as primary_agent_id,
   coalesce(a.name, '')::text as primary_agent_name
 from conversations c
-join projects p on p.id = c.project_id
-left join project_agents pa
-  on pa.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
-  and pa.deleted_at is null
-  and pa.status = 'active'
 left join agents a
-  on a.id = pa.agent_id
+  on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
   and a.deleted_at is null
   and a.status = 'active'
 where c.id = @id::uuid
-  and p.status = 'active'
-  and p.deleted_at is null
   and c.deleted_at is null;
 
 -- name: ConfigureDevConversationExternalRef :one
@@ -692,7 +585,7 @@ set surface = 'im',
     updated_at = @now
 where id = @id::uuid
   and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, platform, external_id, external_thread_id;
+returning id::text, workspace_id::text, platform, external_id, external_thread_id;
 
 -- name: UpdateConversationTitle :execrows
 update conversations
@@ -711,7 +604,7 @@ where id = @id::uuid
   and deleted_at is null;
 
 -- name: GetActiveConversationByTitle :one
-select id::text, workspace_id::text, project_id::text
+select id::text, workspace_id::text
 from conversations
 where status = 'active'
   and deleted_at is null
@@ -719,17 +612,14 @@ where status = 'active'
 order by created_at asc
 limit 1;
 
--- name: GetActiveMentionedProjectAgent :one
+-- name: GetActiveMentionedAgent :one
 -- v5 (2026-05-30): connector_type comes straight from agents — the v3 hack
--- that overloaded pa.config->>'runtime' as a connector_type override is
--- gone. runtime is now per-Agent (a.config->>'runtime') and is never used
+-- that overloaded config->>'runtime' as a connector_type override is
+-- gone. runtime is now per-Agent (config->>'runtime') and is never used
 -- as a connector_type fallback.
-select pa.id::text as project_agent_id, a.id::text as agent_id, a.name, a.slug, a.connector_type
-from project_agents pa
-join agents a on a.id = pa.agent_id
-where pa.project_id = @project_id::uuid
-  and pa.status = 'active'
-  and pa.deleted_at is null
+select a.id::text as agent_id, a.name, a.slug, a.connector_type
+from agents a
+where a.workspace_id = @workspace_id::uuid
   and a.status = 'active'
   and a.deleted_at is null
   and (a.name = @mention_name or a.slug = @mention_name)
@@ -741,42 +631,42 @@ limit 1;
 -- 普通会话消息: kind='message', content_format='text' (默认即可)。
 -- 想发 markdown / card 的消息请用专门的 CreateRichMessage 或调用方覆盖。
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
-values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uuid, @sender_type, @sender_id::uuid, 'message', 'text', 'project', @content, @metadata::jsonb, @now, @now);
+values (@id::uuid, @workspace_id::uuid, @conversation_id::uuid, @sender_type, @sender_id::uuid, 'message', 'text', 'workspace', @content, @metadata::jsonb, @now, @now);
 
 -- name: CreateAgentRun :exec
 -- 2026-06-04 schema: trigger_type 拆成 trigger_source(WHAT) + trigger_channel(HOW)。
 -- 用户消息触发: trigger_source='message',trigger_channel 由调用方传入
 -- (web / im / api),不再用 metadata.platform 间接区分。
 insert into agent_runs(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   trigger_message_id, trigger_source, trigger_channel, requested_by_type, requested_by_id,
-  project_agent_id, connector_type, status, visibility, metadata,
+  agent_id, connector_type, status, visibility, metadata,
   created_at, updated_at
 )
-values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uuid, @trigger_message_id::uuid, 'message', @trigger_channel, 'user', @requested_by_id::uuid, @project_agent_id::uuid, @connector_type, 'queued', 'project', @metadata::jsonb, @now, @now);
+values (@id::uuid, @workspace_id::uuid, @conversation_id::uuid, @trigger_message_id::uuid, 'message', @trigger_channel, 'user', @requested_by_id::uuid, @agent_id::uuid, @connector_type, 'queued', 'workspace', @metadata::jsonb, @now, @now);
 
 -- name: CreateChildAgentRun :exec
 -- 子 run 是另一个 agent 通过 hand-off 触发的:
 -- trigger_source='agent', trigger_channel='internal' 永远成立。
 insert into agent_runs(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   trigger_message_id, trigger_source, trigger_channel, requested_by_type, requested_by_id,
-  project_agent_id, connector_type, status, visibility, metadata,
+  agent_id, connector_type, status, visibility, metadata,
   created_at, updated_at
 )
-values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uuid, @trigger_message_id::uuid, 'agent', 'internal', 'agent', @requested_by_id::uuid, @project_agent_id::uuid, @connector_type, 'queued', 'project', @metadata::jsonb, @now, @now);
+values (@id::uuid, @workspace_id::uuid, @conversation_id::uuid, @trigger_message_id::uuid, 'agent', 'internal', 'agent', @requested_by_id::uuid, @agent_id::uuid, @connector_type, 'queued', 'workspace', @metadata::jsonb, @now, @now);
 
 -- name: CreateUsageLog :exec
 insert into usage_logs(
-  id, workspace_id, project_id, agent_run_id,
+  id, workspace_id, agent_run_id,
   provider, model, input_tokens, output_tokens, cost_usd, raw, created_at
 )
 values (
-  @id::uuid, @workspace_id::uuid, @project_id::uuid, @agent_run_id::uuid,
+  @id::uuid, @workspace_id::uuid, @agent_run_id::uuid,
   @provider, @model, @input_tokens, @output_tokens, @cost_usd, @raw::jsonb, @now
 );
 
@@ -784,30 +674,18 @@ values (
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   r.status,
   r.started_at
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 where r.id = @id::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
   and c.status = 'active'
   and c.deleted_at is null
-  and pa.status = 'active'
-  and pa.deleted_at is null
   and a.status = 'active'
   and a.deleted_at is null
 for update of r;
@@ -816,53 +694,40 @@ for update of r;
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.requested_by_type,
   coalesce(r.requested_by_id::text, ''::text)::text as requested_by_id,
   -- v5 (2026-05-30): connector_type comes from r.connector_type (the run row);
-  -- the pa.config->>'runtime' connector override is dead.
+  -- the config->>'runtime' connector override is dead.
   r.connector_type as connector_type,
   r.status,
   coalesce(m.content, ''::text)::text as trigger_message_content,
   coalesce(m.metadata, '{}'::jsonb)::jsonb as trigger_message_metadata,
-  (a.config || pa.config)::jsonb as agent_config,
-  pa.config::jsonb as project_agent_config,
-  -- v6 (2026-06-15): explicit runtime binding on the project_agent. NULL
+  a.config::jsonb as agent_config,
+  -- v6 (2026-06-15): explicit runtime binding on the agent. NULL
   -- means the user hasn't picked one yet; dispatch surfaces a setup hint
   -- in that case rather than auto-creating a sandbox runtime.
   -- v7 (2026-06-15): also empty when the bound runtime has been
   -- soft-deleted — the LEFT JOIN below filters those out so a stale
-  -- pa.runtime_id pointing at a dead runtime degrades to the same
+  -- runtime_id pointing at a dead runtime degrades to the same
   -- "未绑定 Runtime" message instead of routing dispatch to a dead device.
   coalesce(rt.id::text, ''::text)::text as runtime_id
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 join workspaces w on w.id = r.workspace_id
 left join messages m on m.id = r.trigger_message_id
-left join runtimes rt on rt.id = pa.runtime_id and rt.deleted_at is null
+left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
 where r.id = @id::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
   and w.id = r.workspace_id
-  and (m.id is null or (m.workspace_id = r.workspace_id and m.project_id = r.project_id and m.conversation_id = r.conversation_id and m.deleted_at is null))
-  and p.status = 'active'
-  and p.deleted_at is null
+  and (m.id is null or (m.workspace_id = r.workspace_id and m.conversation_id = r.conversation_id and m.deleted_at is null))
   and c.status = 'active'
   and c.deleted_at is null
-  and pa.status = 'active'
-  and pa.deleted_at is null
   and a.status = 'active'
   and a.deleted_at is null
   and w.deleted_at is null;
@@ -872,23 +737,13 @@ with picked as (
   select r.id
   from agent_runs r
   join conversations c on c.id = r.conversation_id
-  join projects p on p.id = r.project_id
-  join project_agents pa on pa.id = r.project_agent_id
-  join agents a on a.id = pa.agent_id
+  join agents a on a.id = r.agent_id
   where r.connector_type = 'http'
     and r.status = 'queued'
     and r.workspace_id = c.workspace_id
-    and r.workspace_id = p.workspace_id
-    and r.project_id = c.project_id
-    and r.project_id = pa.project_id
-    and r.workspace_id = pa.workspace_id
     and r.workspace_id = a.workspace_id
-    and p.status = 'active'
-    and p.deleted_at is null
     and c.status = 'active'
     and c.deleted_at is null
-    and pa.status = 'active'
-    and pa.deleted_at is null
     and a.status = 'active'
     and a.deleted_at is null
   order by r.created_at asc, r.id asc
@@ -951,15 +806,13 @@ where id = @id::uuid
 returning
   id::text,
   workspace_id::text,
-  project_id::text,
   conversation_id::text,
-  project_agent_id::text;
+  agent_id::text;
 
 -- name: ListUsageLogsByRun :many
 select
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   provider,
   model,
@@ -970,18 +823,9 @@ select
   created_at
 from usage_logs
 where agent_run_id = @agent_run_id::uuid
-  and project_id = @project_id::uuid
+  and workspace_id = @workspace_id::uuid
 order by created_at desc, id desc
 limit @item_limit;
-
--- name: ActiveProjectExists :one
-select exists(
-  select 1
-  from projects
-  where id = @id::uuid
-    and status = 'active'
-    and deleted_at is null
-);
 
 -- name: ActiveWorkspaceExists :one
 select exists(
@@ -997,55 +841,34 @@ from workspaces
 where id = @id::uuid
   and deleted_at is null;
 
--- name: GetActiveProjectByID :one
-select id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at
-from projects
-where id = @id::uuid
-  and status = 'active'
-  and deleted_at is null;
-
--- name: GetActiveProjectWorkspace :one
-select workspace_id::text as workspace_id
-from projects
-where id = @id::uuid
-  and status = 'active'
-  and deleted_at is null;
-
 -- name: ActiveConversationExists :one
 select exists(
   select 1
   from conversations c
-  join projects p on p.id = c.project_id
   where c.id = @id::uuid
-    and c.workspace_id = p.workspace_id
-    and c.project_id = p.id
     and c.status = 'active'
     and c.deleted_at is null
-    and p.status = 'active'
-    and p.deleted_at is null
 );
 
--- name: ListProjectEnabledAgents :many
+-- name: ListWorkspaceEnabledAgents :many
 select
-  pa.id::text as project_agent_id,
-  pa.project_id::text as project_id,
   a.id::text as agent_id,
   a.name,
   a.slug,
   a.description,
   a.connector_type,
-  pa.status,
-  pa.config,
+  a.status,
+  a.config,
   -- Step 5: supported connectors do not use top-level runtime for
   -- execution placement. Keep only historical non-empty runtime values
-  -- for legacy rows; daemon placement lives in pa.config.daemon_mode.
+  -- for legacy rows; daemon placement lives in a.config.daemon_mode.
   case when a.connector_type = 'agent_daemon' then '' else coalesce(nullif(a.config->>'runtime', ''), '') end::text as runtime,
-  (a.config || pa.config)::jsonb as agent_config,
+  a.config::jsonb as agent_config,
   a.visibility,
   coalesce(a.created_by::text, '')::text as created_by_user_id,
   coalesce(u.name, '')::text as created_by_name,
-  pa.created_at as enabled_at,
-  -- v6 (2026-06-15): explicit runtime binding on the project_agent so the
+  a.created_at as enabled_at,
+  -- v6 (2026-06-15): explicit runtime binding on the agent so the
   -- admin list can render "Local · my-mac" / "Sandbox · prod-linux" without
   -- a second round-trip. LEFT JOIN drops soft-deleted runtimes; the
   -- coalesce-to-empty-string pattern matches every other "optional text"
@@ -1054,7 +877,7 @@ select
   coalesce(rt.name, ''::text)::text as runtime_name,
   coalesce(rt.type, ''::text)::text as runtime_kind,
   coalesce(rt.liveness, ''::text)::text as runtime_liveness,
-  -- v7 (2026-06-16): currently-bound sandbox for this project_agent, if any.
+  -- v7 (2026-06-16): currently-bound sandbox for this agent, if any.
   -- The list renders "Sandbox · <e2b-id prefix>" + live dot using these.
   -- Same `allocation_status = 'bound' AND killed_at IS NULL` predicate as
   -- GetActiveSandboxBindingForAgent (matches the partial unique index that
@@ -1062,73 +885,55 @@ select
   -- sandbox-tab on the detail page.
   coalesce(sb.sandbox_id, ''::text)::text as sandbox_external_id,
   coalesce(sb.lifecycle_status, ''::text)::text as sandbox_status
-from project_agents pa
-join projects p on p.id = pa.project_id
-join agents a on a.id = pa.agent_id
+from agents a
 left join users u on u.id = a.created_by and u.deleted_at is null
-left join runtimes rt on rt.id = pa.runtime_id and rt.deleted_at is null
-left join sandboxes sb on sb.project_agent_id = pa.id
+left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
+left join sandboxes sb on sb.agent_id = a.id
   and sb.allocation_status = 'bound'
   and sb.killed_at is null
-where pa.project_id = @project_id::uuid
-  and pa.workspace_id = p.workspace_id
-  and pa.workspace_id = a.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.status = 'active'
-  and pa.deleted_at is null
+where a.workspace_id = @workspace_id::uuid
   and a.status = 'active'
   and a.deleted_at is null
 order by a.name asc;
 
--- name: ListProjectAgentsAdmin :many
+-- name: ListWorkspaceAgentsAdmin :many
 select
-  pa.id::text as project_agent_id,
-  pa.project_id::text as project_id,
   a.id::text as agent_id,
   a.name,
   a.slug,
   a.description,
   a.connector_type,
-  pa.status,
-  pa.config,
+  a.status,
+  a.config,
   -- Step 5: supported connectors do not use top-level runtime for
   -- execution placement. Keep only historical non-empty runtime values
-  -- for legacy rows; daemon placement lives in pa.config.daemon_mode.
+  -- for legacy rows; daemon placement lives in a.config.daemon_mode.
   case when a.connector_type = 'agent_daemon' then '' else coalesce(nullif(a.config->>'runtime', ''), '') end::text as runtime,
-  (a.config || pa.config)::jsonb as agent_config,
+  a.config::jsonb as agent_config,
   a.visibility,
   coalesce(a.created_by::text, '')::text as created_by_user_id,
   coalesce(u.name, '')::text as created_by_name,
-  pa.created_at as enabled_at,
+  a.created_at as enabled_at,
   coalesce(rt.id::text, ''::text)::text as runtime_id,
   coalesce(rt.name, ''::text)::text as runtime_name,
   coalesce(rt.type, ''::text)::text as runtime_kind,
   coalesce(rt.liveness, ''::text)::text as runtime_liveness,
   coalesce(sb.sandbox_id, ''::text)::text as sandbox_external_id,
   coalesce(sb.lifecycle_status, ''::text)::text as sandbox_status
-from project_agents pa
-join projects p on p.id = pa.project_id
-join agents a on a.id = pa.agent_id
+from agents a
 left join users u on u.id = a.created_by and u.deleted_at is null
-left join runtimes rt on rt.id = pa.runtime_id and rt.deleted_at is null
-left join sandboxes sb on sb.project_agent_id = pa.id
+left join runtimes rt on rt.id = a.runtime_id and rt.deleted_at is null
+left join sandboxes sb on sb.agent_id = a.id
   and sb.allocation_status = 'bound'
   and sb.killed_at is null
-where pa.project_id = @project_id::uuid
-  and pa.workspace_id = p.workspace_id
-  and pa.workspace_id = a.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
+where a.workspace_id = @workspace_id::uuid
   and a.deleted_at is null
-order by case when pa.status = 'active' then 0 else 1 end, a.name asc;
+order by case when a.status = 'active' then 0 else 1 end, a.name asc;
 
 -- name: ListConversationMessages :many
 select
   m.id::text,
   m.workspace_id::text,
-  m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
   -- system-authored messages (e.g. scheduled-task triggers) have a NULL
@@ -1141,17 +946,11 @@ select
   m.created_at
 from messages m
 join conversations c on c.id = m.conversation_id
-join projects p on p.id = c.project_id
 where m.conversation_id = @conversation_id::uuid
   and m.workspace_id = c.workspace_id
-  and m.workspace_id = p.workspace_id
-  and m.project_id = c.project_id
-  and m.project_id = p.id
   and m.deleted_at is null
   and c.status = 'active'
   and c.deleted_at is null
-  and p.status = 'active'
-  and p.deleted_at is null
 order by m.created_at asc, m.id asc
 limit @item_limit;
 
@@ -1159,12 +958,10 @@ limit @item_limit;
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
   coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
   coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.connector_type,
@@ -1175,22 +972,12 @@ select
   r.finished_at
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 where r.conversation_id = @conversation_id::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = p.id
-  and r.project_id = pa.project_id
   and c.status = 'active'
   and c.deleted_at is null
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
   and a.deleted_at is null
 order by r.created_at asc, r.id asc
 limit @item_limit;
@@ -1218,14 +1005,12 @@ order by created_at asc, id asc;
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
   coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
   coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
   r.requested_by_type,
   coalesce(r.requested_by_id::text, ''::text)::text as requested_by_id,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.connector_type,
@@ -1236,7 +1021,6 @@ select
   r.started_at,
   r.finished_at,
   r.updated_at,
-  pa.config as project_agent_config,
   a.config as agent_config,
   coalesce(csb.upstream_session_id, ''::text)::text as bound_device_id,
   coalesce(csb.metadata, '{}'::jsonb) as binding_metadata,
@@ -1252,35 +1036,24 @@ select
   rt.last_heartbeat_at
 from agent_runs r
 join conversations c on c.id = r.conversation_id
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
+join agents a on a.id = r.agent_id
 left join connector_session_bindings csb
   on csb.conversation_id = r.conversation_id::text
   and csb.connector_type = r.connector_type
-  and csb.binding_key = r.project_agent_id::text
+  and csb.binding_key = r.agent_id::text
 left join runtimes rt on rt.id = r.runtime_id
   and rt.workspace_id = r.workspace_id
 where r.id = @id::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = p.workspace_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = p.id
-  and r.project_id = pa.project_id
   and c.status = 'active'
   and c.deleted_at is null
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
   and a.deleted_at is null;
 
 -- name: GetOutputMessageByRunID :one
 select
   m.id::text,
   m.workspace_id::text,
-  m.project_id::text,
   m.conversation_id::text,
   m.sender_type,
   m.sender_id::text,
@@ -1293,7 +1066,6 @@ from agent_runs r
 join messages m on m.id = r.output_message_id
 where r.id = @run_id::uuid
   and m.workspace_id = r.workspace_id
-  and m.project_id = r.project_id
   and m.conversation_id = r.conversation_id
   and m.deleted_at is null;
 
@@ -1463,7 +1235,6 @@ with run_event_max as (
 )
 select c.id::text                 as conversation_id,
        c.workspace_id::text       as workspace_id,
-       c.project_id::text         as project_id,
        c.external_id              as external_chat_id,
        c.external_thread_id       as external_thread_id,
        c.source_app_id            as source_app_id,
@@ -1474,10 +1245,10 @@ select c.id::text                 as conversation_id,
        r.finished_at              as run_finished_at,
        coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
        coalesce(rem.max_seq, 0::bigint) as max_event_sequence,
-       -- Per-card Agent display name resolved via the run's
-       -- project_agent binding. LEFT JOINs so a soft-deleted /
-       -- detached binding doesn't drop the row entirely — the driver
-       -- falls back to the brand title (FeishuCardTitle) on empty.
+       -- Per-card Agent display name resolved via the run's agent.
+       -- LEFT JOIN so a soft-deleted agent doesn't drop the row
+       -- entirely — the driver falls back to the brand title
+       -- (FeishuCardTitle) on empty.
        coalesce(a.name, '')::text as agent_name,
        -- sender_open_id is the raw Feishu open_id of the user who
        -- triggered this run. The inflight driver consumes it to add
@@ -1494,8 +1265,7 @@ join agent_runs r on r.conversation_id = c.id
 left join run_event_max rem on rem.agent_run_id = r.id
 left join messages m on m.id = r.output_message_id
 left join messages trig on trig.id = r.trigger_message_id
-left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
-left join agents a on a.id = pa.agent_id and a.deleted_at is null
+left join agents a on a.id = r.agent_id and a.deleted_at is null
 where c.platform = 'feishu'
   and c.status = 'active'
   and c.deleted_at is null
@@ -1687,12 +1457,11 @@ claimed as (
       ),
       updated_at = @now::timestamptz
   where c.id in (select id from picked)
-  returning c.id, c.workspace_id, c.project_id, c.external_id,
+  returning c.id, c.workspace_id, c.external_id,
             c.external_thread_id, c.source_app_id, c.metadata
 )
 select claimed.id::text                 as conversation_id,
        claimed.workspace_id::text       as workspace_id,
-       claimed.project_id::text         as project_id,
        claimed.external_id              as external_chat_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
@@ -1704,10 +1473,9 @@ select claimed.id::text                 as conversation_id,
        r.finished_at                    as run_finished_at,
        coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
        coalesce(rem.max_seq, 0::bigint) as max_event_sequence,
-       -- Per-card Agent display name resolved via the run's
-       -- project_agent binding. LEFT JOINs so a soft-deleted /
-       -- detached binding doesn't drop the row entirely — the
-       -- driver falls back to FeishuCardTitle on empty.
+       -- Per-card Agent display name resolved via the run's agent.
+       -- LEFT JOIN so a soft-deleted agent doesn't drop the row
+       -- entirely — the driver falls back to FeishuCardTitle on empty.
        coalesce(a.name, '')::text       as agent_name,
        -- sender_open_id mirrors ListActiveFeishuInflightConversations
        -- — captured from the inbound trigger message so the driver
@@ -1729,8 +1497,7 @@ from picked
 join claimed on claimed.id = picked.id
 join agent_runs r on r.id = picked.run_id
 left join messages trig on trig.id = r.trigger_message_id
-left join project_agents pa on pa.id = r.project_agent_id and pa.deleted_at is null
-left join agents a on a.id = pa.agent_id and a.deleted_at is null
+left join agents a on a.id = r.agent_id and a.deleted_at is null
 left join (
   select agent_run_id, max(sequence)::bigint as max_seq
   from agent_run_events
@@ -1843,7 +1610,6 @@ where id = @conversation_id::uuid
 --     permission_request_id without scanning the whole table
 select id::text,
        workspace_id::text,
-       project_id::text,
        external_id            as external_chat_id,
        external_thread_id,
        source_app_id,
@@ -1874,7 +1640,6 @@ where id = @conversation_id::uuid
 -- decision back to connector.SubmitPermission without re-querying.
 select id::text,
        workspace_id::text,
-       project_id::text,
        external_id            as external_chat_id,
        source_app_id,
        (metadata->'gateway_inflight'->'permission') as permission_slot
@@ -1893,7 +1658,6 @@ limit 1;
 -- shorter / longer windows without a schema change.
 select id::text                  as conversation_id,
        workspace_id::text        as workspace_id,
-       project_id::text          as project_id,
        external_id               as external_chat_id,
        source_app_id             as source_app_id,
        (metadata->'gateway_inflight'->'permission') as permission_slot
@@ -1929,7 +1693,6 @@ returning id::text, (metadata->'gateway_inflight'->'prompt_for_user_choice') as 
 -- 000010 so it's O(log n) even on a busy bot.
 select id::text,
        workspace_id::text,
-       project_id::text,
        external_id            as external_chat_id,
        source_app_id,
        (metadata->'gateway_inflight'->'prompt_for_user_choice') as prompt_for_user_choice_slot
@@ -1947,7 +1710,6 @@ limit 1;
 -- the slot so the slot index doesn't leak.
 select id::text                  as conversation_id,
        workspace_id::text        as workspace_id,
-       project_id::text          as project_id,
        external_id               as external_chat_id,
        source_app_id             as source_app_id,
        (metadata->'gateway_inflight'->'prompt_for_user_choice') as prompt_for_user_choice_slot
@@ -2033,24 +1795,21 @@ claimed as (
       updated_at = @now::timestamptz
   from picked
   where r.id = picked.id
-  returning r.id, r.workspace_id, r.project_id, r.conversation_id, r.project_agent_id
+  returning r.id, r.workspace_id, r.conversation_id, r.agent_id
 )
 select claimed.id::text               as run_id,
        claimed.workspace_id::text     as workspace_id,
-       claimed.project_id::text       as project_id,
        claimed.conversation_id::text  as conversation_id,
        c.external_id                  as external_chat_id,
        c.external_thread_id           as external_thread_id,
        c.source_app_id                as source_app_id,
-       -- Per-card Agent display name resolved via the run's
-       -- project_agent binding. LEFT JOINs so a soft-deleted /
-       -- detached binding doesn't drop the row entirely — the
-       -- driver falls back to FeishuCardTitle on empty.
+       -- Per-card Agent display name resolved via the run's agent.
+       -- LEFT JOIN so a soft-deleted agent doesn't drop the row
+       -- entirely — the driver falls back to FeishuCardTitle on empty.
        coalesce(a.name, '')::text    as agent_name
 from claimed
 join conversations c on c.id = claimed.conversation_id
-left join project_agents pa on pa.id = claimed.project_agent_id and pa.deleted_at is null
-left join agents a on a.id = pa.agent_id and a.deleted_at is null;
+left join agents a on a.id = claimed.agent_id and a.deleted_at is null;
 
 -- name: StampQueueCardSent :exec
 -- Idempotency marker for ClaimPendingQueuedFeishuRuns. The queue-card
@@ -2079,12 +1838,11 @@ select
   created_at
 from agent_run_artifacts
 where agent_run_id = @run_id::uuid
-  and project_id = @project_id::uuid
+  and workspace_id = @workspace_id::uuid
 order by created_at asc, id asc;
 
--- name: ListProjectAgentRunsPage :many
--- 2026-06-15 redesign: replaces the previous ListProjectAgentRuns +
--- ListProjectAgentRunsByStatus pair.
+-- name: ListWorkspaceAgentRunsPage :many
+-- Admin paginated list of agent runs for a workspace.
 --   * ORDER BY ... DESC          — admin list shows newest first.
 --   * (created_at, id) tie-break — keep OFFSET pagination stable when
 --     multiple rows share a created_at.
@@ -2092,16 +1850,14 @@ order by created_at asc, id asc;
 --     non-empty filters via `= ANY(...)`. Lets the UI "进行中" tab union
 --     {running, queued} in one round-trip.
 --   * LIMIT/OFFSET                — classic pager; pair with the
---     CountProjectAgentRuns query below for the page-count.
+--     CountWorkspaceAgentRuns query below for the page-count.
 select
   r.id::text,
   r.workspace_id::text,
-  r.project_id::text,
   r.conversation_id::text,
   coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
   coalesce(r.output_message_id::text, ''::text)::text as output_message_id,
-  r.project_agent_id::text,
-  pa.agent_id::text,
+  r.agent_id::text,
   a.name as agent_name,
   a.slug as agent_slug,
   r.connector_type,
@@ -2111,55 +1867,37 @@ select
   r.started_at,
   r.finished_at
 from agent_runs r
-join projects p on p.id = r.project_id
 join conversations c on c.id = r.conversation_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
-where r.project_id = @project_id::uuid
-  and r.workspace_id = p.workspace_id
+join agents a on a.id = r.agent_id
+where r.workspace_id = @workspace_id::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and p.status = 'active'
-  and p.deleted_at is null
   and c.deleted_at is null
-  and pa.deleted_at is null
   and a.deleted_at is null
   and (cardinality(@statuses::text[]) = 0
        or r.status = ANY(@statuses::text[]))
 order by r.created_at desc, r.id desc
 limit @item_limit offset @item_offset;
 
--- name: CountProjectAgentRuns :one
--- Companion to ListProjectAgentRunsPage. Returns the total row count
+-- name: CountWorkspaceAgentRuns :one
+-- Companion to ListWorkspaceAgentRunsPage. Returns the total row count
 -- under the SAME filter so the UI can render "第 X-Y 条,共 N 条" and
 -- decide when to disable the "next page" button. Joins mirror the list
--- query (same active-project guard) so counts and rows never disagree.
+-- query so counts and rows never disagree.
 select count(*)::bigint as total
 from agent_runs r
-join projects p on p.id = r.project_id
 join conversations c on c.id = r.conversation_id
-join project_agents pa on pa.id = r.project_agent_id
-join agents a on a.id = pa.agent_id
-where r.project_id = @project_id::uuid
-  and r.workspace_id = p.workspace_id
+join agents a on a.id = r.agent_id
+where r.workspace_id = @workspace_id::uuid
   and r.workspace_id = c.workspace_id
-  and r.workspace_id = pa.workspace_id
   and r.workspace_id = a.workspace_id
-  and r.project_id = c.project_id
-  and r.project_id = pa.project_id
-  and p.status = 'active'
-  and p.deleted_at is null
   and c.deleted_at is null
-  and pa.deleted_at is null
   and a.deleted_at is null
   and (cardinality(@statuses::text[]) = 0
        or r.status = ANY(@statuses::text[]));
 
--- name: GetProjectAgentMetrics :one
--- Aggregates a single project_agent's run history over the last
+-- name: GetAgentMetrics :one
+-- Aggregates a single agent's run history over the last
 -- @window_days days for the agent-detail "近 N 天表现" panel:
 --   * completed_count   — finished runs (status = 'completed')
 --   * failed_count      — failed/cancelled/interrupted (for success rate)
@@ -2168,7 +1906,7 @@ where r.project_id = @project_id::uuid
 --                         (started_at → finished_at). NULL if no
 --                         completed runs in window.
 -- All filtered by created_at to keep the window stable as runs finish
--- later. The active-project / workspace guards mirror ListProjectAgentRunsPage.
+-- later. The workspace guard mirrors ListWorkspaceAgentRunsPage.
 select
   count(*) filter (where r.status = 'completed')::bigint as completed_count,
   count(*) filter (where r.status in ('failed','cancelled','interrupted'))::bigint as failed_count,
@@ -2177,22 +1915,16 @@ select
     where r.status = 'completed' and r.started_at is not null and r.finished_at is not null
   ), 0)::double precision as avg_duration_ms
 from agent_runs r
-join projects p on p.id = r.project_id
-join project_agents pa on pa.id = r.project_agent_id
-where pa.id = @project_agent_id::uuid
-  and r.project_id = @project_id::uuid
-  and r.workspace_id = pa.workspace_id
-  and r.project_id = pa.project_id
-  and p.status = 'active'
-  and p.deleted_at is null
-  and pa.deleted_at is null
+join agents a on a.id = r.agent_id
+where a.id = @agent_id::uuid
+  and r.workspace_id = a.workspace_id
+  and a.deleted_at is null
   and r.created_at >= now() - make_interval(days => @window_days::int);
 
--- name: ListProjectUsageLogs :many
+-- name: ListWorkspaceUsageLogs :many
 select
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   provider,
   model,
@@ -2202,15 +1934,14 @@ select
   raw,
   created_at
 from usage_logs
-where project_id = @project_id::uuid
+where workspace_id = @workspace_id::uuid
 order by created_at desc, id desc
 limit @item_limit;
 
--- name: ListProjectUsageLogsByRun :many
+-- name: ListWorkspaceUsageLogsByRun :many
 select
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   provider,
   model,
@@ -2220,7 +1951,7 @@ select
   raw,
   created_at
 from usage_logs
-where project_id = @project_id::uuid
+where workspace_id = @workspace_id::uuid
   and agent_run_id = @agent_run_id::uuid
 order by created_at desc, id desc
 limit @item_limit;
@@ -2429,39 +2160,35 @@ where m.id = @id::uuid
   and m.status = 'active'
   and m.deleted_at is null;
 
--- name: DisableProjectAgent :one
-update project_agents
+-- name: DisableAgent :one
+update agents
 set status = 'disabled', updated_at = @now
 where id = @id::uuid
   and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at;
+returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at;
 
--- name: EnableProjectAgent :one
-update project_agents
+-- name: EnableAgent :one
+update agents
 set status = 'active', updated_at = @now
 where id = @id::uuid
   and deleted_at is null
-returning id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at;
+returning id::text, workspace_id::text, name, slug, description, connector_type, status, config, created_at, updated_at;
 
--- name: GetProjectAgentDetailForRead :one
+-- name: GetAgentDetailForRead :one
 select
-  pa.id::text as id,
-  pa.workspace_id::text as workspace_id,
-  pa.project_id::text as project_id,
-  pa.agent_id::text as agent_id,
-  pa.status,
-  pa.config,
-  pa.created_by::text as created_by,
-  pa.created_at,
-  pa.updated_at,
+  a.id::text as id,
+  a.workspace_id::text as workspace_id,
+  a.status,
+  a.config,
+  coalesce(a.created_by::text, '')::text as created_by,
+  a.created_at,
+  a.updated_at,
   a.name as agent_name,
   a.slug as agent_slug,
   coalesce(a.description, '')::text as description,
   a.connector_type
-from project_agents pa
-join agents a on a.id = pa.agent_id
-where pa.id = @id::uuid
-  and pa.deleted_at is null
+from agents a
+where a.id = @id::uuid
   and a.deleted_at is null;
 
 -- name: ListWorkspaceMembers :many
@@ -2548,51 +2275,6 @@ select
 from workspaces w
 where w.deleted_at is null
 order by w.name asc, w.id asc
-limit @item_limit;
-
--- name: ListWorkspaceProjects :many
--- Every active project the calling workspace member can see.
--- The join on workspace_members also doubles as an active-membership
--- gate: a deleted_at / status<>'active' row drops every project,
--- mirroring requireWorkspaceMember.
-select
-  p.id::text as id,
-  p.workspace_id::text as workspace_id,
-  p.name,
-  p.slug,
-  p.description,
-  p.status,
-  p.created_at,
-  p.updated_at
-from projects p
-join workspace_members wm
-  on wm.workspace_id = p.workspace_id
- and wm.user_id = @user_id::uuid
- and wm.deleted_at is null
- and wm.status = 'active'
-where p.workspace_id = @workspace_id::uuid
-  and p.deleted_at is null
-  and p.status = 'active'
-order by p.name asc, p.id asc
-limit @item_limit;
-
--- name: ListWorkspaceProjectsAdmin :many
--- Platform-admin only: same shape as ListWorkspaceProjects but without
--- the workspace_members gate. Mirrors ListAllActiveWorkspaces.
-select
-  p.id::text as id,
-  p.workspace_id::text as workspace_id,
-  p.name,
-  p.slug,
-  p.description,
-  p.status,
-  p.created_at,
-  p.updated_at
-from projects p
-where p.workspace_id = @workspace_id::uuid
-  and p.deleted_at is null
-  and p.status = 'active'
-order by p.name asc, p.id asc
 limit @item_limit;
 
 -- name: UpsertUserByEmail :one
@@ -2706,8 +2388,8 @@ where workspace_id = @workspace_id::uuid
 returning id::text as id, workspace_id::text as workspace_id, user_id::text as user_id, role, created_at, updated_at;
 
 -- name: WorkspaceMembershipExists :one
--- 用于把用户加入 project 前预检:必须是 workspace 的 active 成员才行。
--- pending(申请中) 不算,因此 join request 通过前不能被加 project。
+-- 预检:必须是 workspace 的 active 成员才行。
+-- pending(申请中) 不算,因此 join request 通过前不算正式成员。
 select exists (
   select 1 from workspace_members
   where workspace_id = @workspace_id::uuid
@@ -2747,8 +2429,8 @@ returning id::text as id, name, slug, visibility, created_at, updated_at;
 -- name: ArchiveWorkspace :one
 -- Soft-delete a workspace (sets deleted_at). The caller is responsible
 -- for cascading any UI side effects (e.g. clearing the active workspace
--- in localStorage). Children rows in workspace_members / projects are
--- left intact; queries already filter them via the workspaces JOIN.
+-- in localStorage). Children rows in workspace_members are left intact;
+-- queries already filter them via the workspaces JOIN.
 update workspaces
 set deleted_at = @now, updated_at = @now
 where id = @id::uuid
@@ -2760,53 +2442,13 @@ select exists(
   select 1
   from capability c
   join agent_capabilities ac on ac.capability_id = c.id
-  join project_agents pa on pa.id = ac.project_agent_id
-  join projects p on p.id = pa.project_id
+  join agents a on a.id = ac.agent_id
   where c.workspace_id = @workspace_id::uuid
-    and p.workspace_id != c.workspace_id
+    and a.workspace_id != c.workspace_id
     and ac.enabled = true
     and c.deleted_at is null
-    and p.deleted_at is null
+    and a.deleted_at is null
 ) as exists;
-
--- name: CreateProject :one
--- Admin-side project create inside a workspace (Phase 2 dev path).
--- (workspace_id, slug) is unique among non-deleted rows, so duplicate
--- slugs are caught by the partial unique index; callers probe with
--- ProjectSlugExistsInWorkspace beforehand to return a friendly 409.
-insert into projects(id, workspace_id, name, slug, description, status, config, created_by, created_at, updated_at)
-values (@id::uuid, @workspace_id::uuid, @name, @slug, @description, 'active', '{}', @created_by::uuid, @now, @now)
-returning id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at;
-
--- name: ProjectSlugExistsInWorkspace :one
-select exists(
-  select 1 from projects
-  where workspace_id = @workspace_id::uuid
-    and slug = @slug
-    and deleted_at is null
-) as exists;
-
--- name: UpdateProject :one
-update projects
-set name = @name,
-    slug = @slug,
-    description = @description,
-    updated_at = @now
-where id = @id::uuid
-  and deleted_at is null
-returning id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at;
-
--- name: ArchiveProject :one
--- Soft-archive a project (sets status = 'archived'; not deleted_at, so
--- the row stays joinable for historical lookups). Active=true list
--- queries (ListWorkspaceProjects) filter status, so this hides it from
--- the switcher without breaking past references.
-update projects
-set status = 'archived', updated_at = @now
-where id = @id::uuid
-  and status = 'active'
-  and deleted_at is null
-returning id::text as id, workspace_id::text as workspace_id, name, slug, description, status, created_at, updated_at;
 
 -- ============================================================
 -- user_sessions (Phase 3 real-auth)
@@ -2896,7 +2538,7 @@ set user_id    = excluded.user_id,
 -- These queries back PersistentSandboxProvider's DB-side audit
 -- + admin lookup. The in-memory cache is the source of truth at
 -- runtime; the DB row is "sandbox X currently exists and is bound
--- to this project agent" for admin UI listings and post-restart sweep.
+-- to this agent" for admin UI listings and post-restart sweep.
 -- Pool entries use the same table with allocation_status='pooled'.
 --
 -- envd_access_token / endpoint are intentionally NOT in the
@@ -2904,25 +2546,25 @@ set user_id    = excluded.user_id,
 
 -- name: CreateSandboxBinding :one
 -- Insert a new binding row when the provider just spawned a
--- sandbox for a (workspace, project_agent) key. Caller MUST
+-- sandbox for a (workspace, agent) key. Caller MUST
 -- ensure no other live bound sandbox exists for the same
--- (workspace_id, project_agent_id) — the partial unique index
+-- (workspace_id, agent_id) — the partial unique index
 -- enforces this and the insert will fail loudly if a stale
 -- binding was not killed first.
 insert into sandboxes(
-  id, workspace_id, project_agent_id, cache_key,
+  id, workspace_id, agent_id, cache_key,
   sandbox_id, template_id, lifecycle_status, allocation_status,
   created_at, last_active_at, metadata
 )
 values (
-  @id::uuid, @workspace_id::uuid, @project_agent_id::uuid, @cache_key,
+  @id::uuid, @workspace_id::uuid, @agent_id::uuid, @cache_key,
   @sandbox_id, @template_id, @status, 'bound',
   @now, @now, @metadata::jsonb
 )
 returning
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -2934,12 +2576,12 @@ returning
   metadata;
 
 -- name: GetActiveSandboxBindingForAgent :one
--- Return the live bound sandbox for one (workspace, project_agent), if
+-- Return the live bound sandbox for one (workspace, agent), if
 -- any. Used by admin GET /sandbox status endpoint.
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -2951,7 +2593,7 @@ select
   metadata
 from sandboxes
 where workspace_id    = @workspace_id::uuid
-  and project_agent_id = @project_agent_id::uuid
+  and agent_id = @agent_id::uuid
   and allocation_status = 'bound'
   and killed_at is null;
 
@@ -2960,7 +2602,7 @@ where workspace_id    = @workspace_id::uuid
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -3024,7 +2666,7 @@ where killed_at is null
 
 -- name: ReserveSandboxBindingSlot :one
 -- Multi-pod cold-start coordination: try to grab the
--- (workspace, project_agent) slot before doing any expensive
+-- (workspace, agent) slot before doing any expensive
 -- sandbox / runtime work. Inserts a 'spawning' bound row holding
 -- a placeholder sandbox_id; the partial unique index
 -- uk_sandboxes_active_per_agent enforces single-winner across
@@ -3036,19 +2678,19 @@ where killed_at is null
 -- placeholder here and overwrite it in FinalizeSandboxBindingSpawning
 -- once the real e2b sandbox id is known.
 insert into sandboxes(
-  id, workspace_id, project_agent_id, cache_key,
+  id, workspace_id, agent_id, cache_key,
   sandbox_id, template_id, lifecycle_status, allocation_status,
   created_at, last_active_at, metadata
 )
 values (
-  @id::uuid, @workspace_id::uuid, @project_agent_id::uuid, @cache_key,
+  @id::uuid, @workspace_id::uuid, @agent_id::uuid, @cache_key,
   @placeholder_sandbox_id, @template_id, 'spawning', 'bound',
   @now, @now, @metadata::jsonb
 )
 returning
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -3077,14 +2719,14 @@ where id = @id::uuid
 
 -- name: GetActiveSandboxBindingByAgentForWait :one
 -- Loser-side polling query: read whatever bound row exists for
--- (workspace, project_agent) today, regardless of lifecycle state.
+-- (workspace, agent) today, regardless of lifecycle state.
 -- Caller distinguishes spawning vs running vs killed_* from the
 -- returned status. Distinct from GetActiveSandboxBindingForAgent
 -- which intentionally hides spawning rows from admin listings.
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -3096,7 +2738,7 @@ select
   metadata
 from sandboxes
 where workspace_id    = @workspace_id::uuid
-  and project_agent_id = @project_agent_id::uuid
+  and agent_id = @agent_id::uuid
   and allocation_status = 'bound'
   and killed_at is null;
 
@@ -3106,7 +2748,7 @@ where workspace_id    = @workspace_id::uuid
 select
   id::text            as id,
   workspace_id::text  as workspace_id,
-  project_agent_id,
+  agent_id,
   name,
   cache_key,
   sandbox_id,
@@ -3123,30 +2765,22 @@ where killed_at is null
 order by last_active_at asc
 limit @limit_n::int;
 
--- name: GetProjectAgentRuntime :one
+-- name: GetAgentRuntime :one
 -- Phase 4 milestone E (sandbox warm): admin-side fetch for the
--- merged-config inputs the OpenCode Connector needs to spawn a
--- sandbox without a real prompt. Pulls (workspace, project_agent)
--- and joins the parent agent so the caller can mergeConfig the
--- two jsonb blobs the same way Prompt path does. Excludes deleted
--- + disabled project_agents so the warm endpoint cannot revive
--- a rebound agent that has been turned off.
+-- config inputs the OpenCode Connector needs to spawn a sandbox
+-- without a real prompt. Pulls the agent row so the caller has
+-- connector_type + config. Excludes deleted + disabled agents so
+-- the warm endpoint cannot revive an agent that has been turned off.
 select
-  pa.id::text                  as project_agent_id,
-  pa.workspace_id::text        as workspace_id,
-  pa.project_id::text          as project_id,
-  pa.agent_id::text            as agent_id,
-  pa.status                    as project_agent_status,
-  pa.config                    as project_agent_config,
+  a.id::text                   as agent_id,
+  a.workspace_id::text         as workspace_id,
+  a.status                     as agent_status,
   a.connector_type             as connector_type,
   a.config                     as agent_config
-from project_agents pa
-join agents a on a.id = pa.agent_id
-join workspaces w on w.id = pa.workspace_id
-where pa.id = @project_agent_id::uuid
-  and pa.workspace_id = @workspace_id::uuid
-  and pa.status = 'active'
-  and pa.deleted_at is null
+from agents a
+join workspaces w on w.id = a.workspace_id
+where a.id = @agent_id::uuid
+  and a.workspace_id = @workspace_id::uuid
   and a.status = 'active'
   and a.deleted_at is null
   and w.deleted_at is null;
@@ -3173,12 +2807,11 @@ where wm.role = 'owner'
 
 -- name: InsertAgentRunEvent :one
 insert into agent_run_events(
-  workspace_id, project_id, agent_run_id, sequence,
+  workspace_id, agent_run_id, sequence,
   event_kind, payload, occurred_at, created_at
 )
 select
   r.workspace_id,
-  r.project_id,
   r.id,
   @sequence::bigint,
   @event_kind,
@@ -3186,16 +2819,11 @@ select
   @occurred_at,
   @created_at
 from agent_runs r
-join projects p on p.id = r.project_id
 where r.id = @agent_run_id::uuid
-  and r.workspace_id = p.workspace_id
-  and p.status = 'active'
-  and p.deleted_at is null
 on conflict (agent_run_id, sequence) do nothing
 returning
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   sequence,
   event_kind,
@@ -3207,7 +2835,6 @@ returning
 select
   id::text,
   workspace_id::text,
-  project_id::text,
   agent_run_id::text,
   sequence,
   event_kind,
@@ -3216,7 +2843,6 @@ select
   created_at
 from agent_run_events
 where agent_run_id = @agent_run_id::uuid
-  and project_id = @project_id::uuid
   and sequence > @after_sequence::bigint
 order by sequence asc;
 
@@ -3337,14 +2963,13 @@ where id = @id::uuid
 -- 去重逻辑还是用 metadata->>'kind'(系统侧自定义事件名,例如
 -- 'runtime_paired')区分,WHERE EXISTS 查的是 messages.kind。
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
 select
   @id::uuid,
   @workspace_id::uuid,
-  @project_id::uuid,
   @conversation_id::uuid,
   'system',
   null,
@@ -3371,14 +2996,13 @@ where not exists (
 -- 'agent' / 'validation' 等其它来源,通过 metadata 区分)。
 -- 这里在插入时把 source='runtime' 合进 @metadata,防止调用方漏写。
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
 values (
   @id::uuid,
   @workspace_id::uuid,
-  @project_id::uuid,
   @conversation_id::uuid,
   'system',
   null,
@@ -3397,14 +3021,13 @@ values (
 -- metadata.kind='sandbox_offline_notice' 渲染成灰底警告。允许同
 -- conversation 多次插入(无 dedup),用户可能在多个时段碰到沙箱掉线。
 insert into messages(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   sender_type, sender_id, kind, content_format, visibility, content, metadata,
   created_at, updated_at
 )
 values (
   @id::uuid,
   @workspace_id::uuid,
-  @project_id::uuid,
   @conversation_id::uuid,
   'system',
   null,
@@ -3626,9 +3249,8 @@ returning id::text as id, workspace_id::text as workspace_id, type, name,
 with installed as (
   select distinct ac.capability_id
   from agent_capabilities ac
-  join project_agents pa on pa.id = ac.project_agent_id
-  join projects p on p.id = pa.project_id
-  where p.workspace_id = @target_workspace_id::uuid
+  join agents a on a.id = ac.agent_id
+  where a.workspace_id = @target_workspace_id::uuid
 )
 select
   c.id::text as capability_id,
@@ -3680,16 +3302,14 @@ select distinct
   latest.version as latest_published_version,
   latest.created_at as latest_version_created_at,
   (
-    select count(distinct pa2.id)::bigint
+    select count(distinct a2.id)::bigint
     from agent_capabilities ac2
-    join project_agents pa2 on ac2.project_agent_id = pa2.id
-    join projects p2 on pa2.project_id = p2.id
+    join agents a2 on ac2.agent_id = a2.id
     where ac2.capability_id = c.id
-      and p2.workspace_id = @target_workspace_id::uuid
+      and a2.workspace_id = @target_workspace_id::uuid
   ) as enabled_agent_count
 from agent_capabilities ac
-join project_agents pa on ac.project_agent_id = pa.id
-join projects p on pa.project_id = p.id
+join agents a on ac.agent_id = a.id
 join capability_version cv on ac.capability_version_id = cv.id
 join capability c on cv.capability_id = c.id
 join workspaces src_ws on src_ws.id = c.workspace_id
@@ -3700,53 +3320,47 @@ join lateral (
   order by created_at desc, version desc
   limit 1
 ) latest on true
-where p.workspace_id = @target_workspace_id::uuid
+where a.workspace_id = @target_workspace_id::uuid
   and c.workspace_id != @target_workspace_id::uuid
   and c.visibility = 'public'
   and c.deleted_at is null
 order by c.name asc, cv.version asc;
 
 -- name: CountInstalls :one
-select count(distinct p.workspace_id)::bigint
+select count(distinct a.workspace_id)::bigint
 from agent_capabilities ac
-join project_agents pa on ac.project_agent_id = pa.id
-join projects p on pa.project_id = p.id
+join agents a on ac.agent_id = a.id
 join capability c on c.id = ac.capability_id
 where ac.capability_id = @source_capability_id::uuid
-  and p.workspace_id != c.workspace_id;
+  and a.workspace_id != c.workspace_id;
 
 -- 数所有 agent_capabilities 引用——包括本 workspace 内部的 agent 绑定和跨 workspace
 -- 的 marketplace 装机方。用于删除拦截:capability 被任何 agent 绑着就不能删,
 -- 否则那些 agent 会突然看到 "capability not found"。
 -- name: CountAgentBindingsForCapability :one
-select count(distinct ac.project_agent_id)::bigint
+select count(distinct ac.agent_id)::bigint
 from agent_capabilities ac
 where ac.capability_id = @capability_id::uuid;
 
 -- name: ListEnabledAgentsForMarketplaceCapability :many
 select distinct
-  pa.id::text as project_agent_id,
-  pa.agent_id::text as agent_id,
-  pa.project_id::text as project_id,
+  a.id::text as agent_id,
   a.name as agent_name,
-  (pa.status = 'active')::bool as enabled,
+  (a.status = 'active')::bool as enabled,
   ac.capability_version_id::text as capability_version_id,
   cv.version as version
 from agent_capabilities ac
-join project_agents pa on pa.id = ac.project_agent_id
-join agents a on a.id = pa.agent_id
-join projects p on p.id = pa.project_id
+join agents a on a.id = ac.agent_id
 join capability_version cv on cv.id = ac.capability_version_id
-where p.workspace_id = @target_workspace_id::uuid
+where a.workspace_id = @target_workspace_id::uuid
   and ac.capability_id = @source_capability_id::uuid
-order by a.name asc, pa.id asc;
+order by a.name asc, a.id asc;
 
 -- name: UninstallWorkspaceMarketplaceCapability :execrows
 delete from agent_capabilities ac
-using project_agents pa, projects p
-where ac.project_agent_id = pa.id
-  and pa.project_id = p.id
-  and p.workspace_id = @target_workspace_id::uuid
+using agents a
+where ac.agent_id = a.id
+  and a.workspace_id = @target_workspace_id::uuid
   and ac.capability_id = @source_capability_id::uuid;
 
 -- name: CreateCapabilityVersion :one
@@ -3875,32 +3489,32 @@ returning id::text as id, user_id::text as user_id, kind, display_name,
 
 -- name: CreateAgentCapability :one
 insert into agent_capabilities(
-  id, project_agent_id, capability_id, capability_version_id,
+  id, agent_id, capability_id, capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at
 )
 values (
-  @id::uuid, @project_agent_id::uuid, @capability_id::uuid,
+  @id::uuid, @agent_id::uuid, @capability_id::uuid,
   @capability_version_id::uuid, @enabled::bool, @configuration::jsonb,
   @pinning_mode::text, @now, @now
 )
-returning id::text as id, project_agent_id::text as project_agent_id,
+returning id::text as id, agent_id::text as agent_id,
   capability_id::text as capability_id, capability_version_id::text as capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at;
 
 -- name: GetAgentCapability :one
-select id::text as id, project_agent_id::text as project_agent_id,
+select id::text as id, agent_id::text as agent_id,
   capability_id::text as capability_id, capability_version_id::text as capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at
 from agent_capabilities
 where id = @id::uuid;
 
 -- name: ListAgentCapabilitiesByAgent :many
-select ac.id::text as id, ac.project_agent_id::text as project_agent_id,
+select ac.id::text as id, ac.agent_id::text as agent_id,
   ac.capability_id::text as capability_id, ac.capability_version_id::text as capability_version_id,
   ac.enabled, ac.configuration, ac.pinning_mode, ac.created_at, ac.updated_at
 from agent_capabilities ac
 join capability c on c.id = ac.capability_id
-where ac.project_agent_id = @project_agent_id::uuid
+where ac.agent_id = @agent_id::uuid
   and c.deleted_at is null
 order by c.name asc;
 
@@ -3912,7 +3526,7 @@ set capability_version_id = @capability_version_id::uuid,
     pinning_mode = @pinning_mode::text,
     updated_at = @now
 where id = @id::uuid
-returning id::text as id, project_agent_id::text as project_agent_id,
+returning id::text as id, agent_id::text as agent_id,
   capability_id::text as capability_id, capability_version_id::text as capability_version_id,
   enabled, configuration, pinning_mode, created_at, updated_at;
 
@@ -3922,7 +3536,7 @@ set capability_version_id = @new_version_id::uuid,
     pinning_mode = @pinning_mode::text,
     updated_at = @now
 from capability_version cv, capability c
-where ac.project_agent_id = @project_agent_id::uuid
+where ac.agent_id = @agent_id::uuid
   and ac.capability_id = @capability_id::uuid
   and cv.id = @new_version_id::uuid
   and cv.capability_id = ac.capability_id
@@ -3931,7 +3545,7 @@ where ac.project_agent_id = @project_agent_id::uuid
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null
-returning ac.id::text as id, ac.project_agent_id::text as project_agent_id,
+returning ac.id::text as id, ac.agent_id::text as agent_id,
   ac.capability_id::text as capability_id, ac.capability_version_id::text as capability_version_id,
   ac.enabled, ac.configuration, ac.pinning_mode, ac.created_at, ac.updated_at;
 
@@ -3942,7 +3556,7 @@ where id = @id::uuid;
 -- name: GetEnabledCapabilitiesForAgent :many
 select
   ac.id::text as agent_capability_id,
-  ac.project_agent_id::text as project_agent_id,
+  ac.agent_id::text as agent_id,
   ac.enabled,
   ac.configuration,
   ac.pinning_mode,
@@ -4002,7 +3616,7 @@ join lateral (
   order by created_at desc, version desc
   limit 1
 ) latest on true
-where ac.project_agent_id = @project_agent_id::uuid
+where ac.agent_id = @agent_id::uuid
   and ac.enabled = true
   and c.deleted_at is null
 order by c.name asc;
@@ -4058,11 +3672,11 @@ where sandbox_id = @sandbox_id
 
 -- name: MarkSandboxPoolEntryClaimed :exec
 -- Claim handoff: same sandbox row becomes a bound sandbox for one
--- workspace/project_agent/cache_key. The in-memory pool owns the actual
+-- workspace/agent/cache_key. The in-memory pool owns the actual
 -- claim selection; this query records the attribution.
 update sandboxes
 set allocation_status = 'bound',
-    project_agent_id   = @project_agent_id::uuid,
+    agent_id   = @agent_id::uuid,
     cache_key          = @cache_key,
     last_renewed_at    = @now,
     last_active_at     = @now,
@@ -4340,8 +3954,8 @@ where id = @workspace_id::uuid
   and deleted_at is null
   and visibility = 'public';
 
--- name: SetProjectAgentRuntime :one
--- Bind (or rebind, or clear) the runtime a project_agent runs on.
+-- name: SetAgentRuntime :one
+-- Bind (or rebind, or clear) the runtime an agent runs on.
 --
 -- runtime_id NULL clears the binding (turning the agent back into a
 -- "needs configuration" state). The FK has ON DELETE SET NULL so the
@@ -4349,34 +3963,32 @@ where id = @workspace_id::uuid
 -- surfaces a friendly "no runtime bound" hint in that case.
 --
 -- The where-clause includes workspace_id as a tenant guard so an
--- attacker who guesses a project_agent_id from another workspace
+-- attacker who guesses an agent_id from another workspace
 -- can't repoint it.
-update project_agents
+update agents
 set runtime_id = sqlc.narg('runtime_id')::uuid,
     updated_at = now()
-where id = @project_agent_id::uuid
+where id = @agent_id::uuid
   and workspace_id = @workspace_id::uuid
   and deleted_at is null
 returning
-  id::text                     as project_agent_id,
+  id::text                     as agent_id,
   workspace_id::text           as workspace_id,
-  project_id::text             as project_id,
-  agent_id::text               as agent_id,
   coalesce(runtime_id::text, ''::text)::text as runtime_id,
   status,
   config;
 
--- name: GetProjectAgentRuntimeBinding :one
--- Read the explicit runtime_id binding for a project_agent. Used by
+-- name: GetAgentRuntimeBinding :one
+-- Read the explicit runtime_id binding for an agent. Used by
 -- the agent settings page to render the picker's current value.
 select
-  pa.id::text                                    as project_agent_id,
-  pa.workspace_id::text                          as workspace_id,
-  coalesce(pa.runtime_id::text, ''::text)::text  as runtime_id
-from project_agents pa
-where pa.id = @project_agent_id::uuid
-  and pa.workspace_id = @workspace_id::uuid
-  and pa.deleted_at is null;
+  a.id::text                                    as agent_id,
+  a.workspace_id::text                          as workspace_id,
+  coalesce(a.runtime_id::text, ''::text)::text  as runtime_id
+from agents a
+where a.id = @agent_id::uuid
+  and a.workspace_id = @workspace_id::uuid
+  and a.deleted_at is null;
 
 -- name: ResolveAgentNameForConversation :one
 -- Returns the display name of the Agent bound to a conversation, used
@@ -4387,29 +3999,25 @@ where pa.id = @project_agent_id::uuid
 --
 -- The Agent is keyed off conversations.metadata.primary_agent_id (set
 -- at conversation-create time by CreateInboundIMMessage), which holds
--- a project_agents.id. We join through project_agents to agents to
--- pick up the display name. conversations has no selected_agent_id
--- column — that field lives on gateway_sessions, which only the
--- shared-bot /select flow writes to and is unrelated to "what Agent is
--- this conversation talking to".
+-- an agents.id. We join to agents to pick up the display name.
+-- conversations has no selected_agent_id column — that field lives on
+-- gateway_sessions, which only the shared-bot /select flow writes to
+-- and is unrelated to "what Agent is this conversation talking to".
 --
 -- Returns empty string when:
 --   - the conversation doesn't exist (caller treats as "fall back to
 --     brand title"),
 --   - metadata.primary_agent_id is NULL / empty (system-initiated
 --     conversation that never bound to an Agent),
---   - the project_agent / agent row was soft-deleted.
+--   - the agent row was soft-deleted.
 --
--- LEFT JOINs keep the row even on those degenerate cases so the
+-- LEFT JOIN keeps the row even on those degenerate cases so the
 -- caller gets ('', nil) instead of pgx.ErrNoRows, simplifying the
 -- "missing → fallback" branch at every call site.
 select coalesce(a.name, '')::text as agent_name
 from conversations c
-left join project_agents pa
-  on pa.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
- and pa.deleted_at is null
 left join agents a
-  on a.id = pa.agent_id
+  on a.id = nullif(c.metadata->>'primary_agent_id', '')::uuid
  and a.deleted_at is null
 where c.id = @conversation_id::uuid;
 
@@ -4419,14 +4027,14 @@ where c.id = @conversation_id::uuid;
 
 -- name: CreateScheduledTask :one
 insert into scheduled_tasks(
-  id, project_agent_id, name, prompt, cron_expr, timezone,
+  id, agent_id, name, prompt, cron_expr, timezone,
   enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
 )
-values (@id::uuid, @project_agent_id::uuid, @name, @prompt, @cron_expr, @timezone,
+values (@id::uuid, @agent_id::uuid, @name, @prompt, @cron_expr, @timezone,
         @enabled, @feishu_chat_id, @feishu_chat_name, @next_run_at, @created_by, @now, @now)
 returning
   id::text                                  as id,
-  project_agent_id::text                    as project_agent_id,
+  agent_id::text                    as agent_id,
   coalesce(conversation_id::text, '')::text as conversation_id,
   name, prompt, cron_expr, timezone, enabled,
   coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
@@ -4440,7 +4048,7 @@ returning
 -- name: GetScheduledTask :one
 select
   t.id::text                                  as id,
-  t.project_agent_id::text                    as project_agent_id,
+  t.agent_id::text                    as agent_id,
   coalesce(t.conversation_id::text, '')::text as conversation_id,
   t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
   coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
@@ -4462,10 +4070,10 @@ from scheduled_tasks t
 left join agent_runs r on r.id = t.last_run_id
 where t.id = @id::uuid and t.deleted_at is null;
 
--- name: ListScheduledTasksByProjectAgent :many
+-- name: ListScheduledTasksByAgent :many
 select
   t.id::text                                  as id,
-  t.project_agent_id::text                    as project_agent_id,
+  t.agent_id::text                    as agent_id,
   coalesce(t.conversation_id::text, '')::text as conversation_id,
   t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
   coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
@@ -4482,17 +4090,17 @@ select
   t.created_at, t.updated_at
 from scheduled_tasks t
 left join agent_runs r on r.id = t.last_run_id
-where t.project_agent_id = @project_agent_id::uuid and t.deleted_at is null
+where t.agent_id = @agent_id::uuid and t.deleted_at is null
 order by t.created_at desc;
 
--- name: ListScheduledTasksByProjectPage :many
--- Project-wide list (paginated): every scheduled task across all of the
--- project's agents, newest first. last_status is derived from the linked run
+-- name: ListScheduledTasksByWorkspacePage :many
+-- Workspace-wide list (paginated): every scheduled task across all of the
+-- workspace's agents, newest first. last_status is derived from the linked run
 -- (see GetScheduledTask). The (created_at, id) tie-break keeps OFFSET paging
--- stable; pair with CountScheduledTasksByProject for the page count.
+-- stable; pair with CountScheduledTasksByWorkspace for the page count.
 select
   t.id::text                                  as id,
-  t.project_agent_id::text                    as project_agent_id,
+  t.agent_id::text                    as agent_id,
   coalesce(t.conversation_id::text, '')::text as conversation_id,
   t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
   coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
@@ -4508,29 +4116,28 @@ select
   coalesce(t.created_by::text, '')::text      as created_by,
   t.created_at, t.updated_at
 from scheduled_tasks t
-join project_agents pa on pa.id = t.project_agent_id
+join agents a on a.id = t.agent_id
 left join agent_runs r on r.id = t.last_run_id
-where pa.project_id = @project_id::uuid and t.deleted_at is null
+where a.workspace_id = @workspace_id::uuid and t.deleted_at is null
 order by t.created_at desc, t.id desc
 limit @item_limit offset @item_offset;
 
--- name: CountScheduledTasksByProject :one
--- Companion to ListScheduledTasksByProjectPage: total rows under the same
+-- name: CountScheduledTasksByWorkspace :one
+-- Companion to ListScheduledTasksByWorkspacePage: total rows under the same
 -- filter so the pager can render "第 X-Y 条,共 N 条" and gate the Next button.
 select count(*)::bigint as total
 from scheduled_tasks t
-join project_agents pa on pa.id = t.project_agent_id
-where pa.project_id = @project_id::uuid and t.deleted_at is null;
+join agents a on a.id = t.agent_id
+where a.workspace_id = @workspace_id::uuid and t.deleted_at is null;
 
 -- name: GetScheduledTaskScope :one
--- Resolve workspace/project/project_agent for RBAC gating from a task id.
+-- Resolve workspace/agent for RBAC gating from a task id.
 select
   t.id::text             as id,
-  pa.id::text            as project_agent_id,
-  pa.project_id::text    as project_id,
-  pa.workspace_id::text  as workspace_id
+  a.id::text             as agent_id,
+  a.workspace_id::text   as workspace_id
 from scheduled_tasks t
-join project_agents pa on pa.id = t.project_agent_id
+join agents a on a.id = t.agent_id
 where t.id = @id::uuid and t.deleted_at is null;
 
 -- name: UpdateScheduledTask :one
@@ -4562,7 +4169,7 @@ set name = @name,
 where id = @id::uuid and deleted_at is null
 returning
   id::text                                  as id,
-  project_agent_id::text                    as project_agent_id,
+  agent_id::text                    as agent_id,
   coalesce(conversation_id::text, '')::text as conversation_id,
   name, prompt, cron_expr, timezone, enabled,
   coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
@@ -4618,7 +4225,7 @@ from claimed;
 -- self-overlap + failure-accounting decision in FireScheduledTaskRun.
 select
   t.id::text                                   as id,
-  t.project_agent_id::text                     as project_agent_id,
+  t.agent_id::text                     as agent_id,
   coalesce(t.conversation_id::text, '')::text  as conversation_id,
   t.name                                       as name,
   t.prompt                                     as prompt,
@@ -4638,16 +4245,16 @@ for update of t;
 -- trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
 -- 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
 insert into agent_runs(
-  id, workspace_id, project_id, conversation_id,
+  id, workspace_id, conversation_id,
   trigger_message_id, trigger_source, trigger_channel, trigger_ref_type, trigger_ref_id,
   requested_by_type, requested_by_id,
-  project_agent_id, connector_type, status, visibility, metadata,
+  agent_id, connector_type, status, visibility, metadata,
   created_at, updated_at
 )
-values (@id::uuid, @workspace_id::uuid, @project_id::uuid, @conversation_id::uuid,
+values (@id::uuid, @workspace_id::uuid, @conversation_id::uuid,
         @trigger_message_id::uuid, 'scheduled_task', 'cron', 'scheduled_task', @trigger_ref_id::uuid,
         'user', @requested_by_id,
-        @project_agent_id::uuid, @connector_type, 'queued', 'project', @metadata::jsonb, @now, @now);
+        @agent_id::uuid, @connector_type, 'queued', 'workspace', @metadata::jsonb, @now, @now);
 
 -- name: MarkScheduledTaskDispatched :exec
 -- After a cron dispatch: stamp last run, set consecutive_failures to the
@@ -4701,7 +4308,7 @@ where id = @id::uuid;
 select
   id::text                                   as id,
   conversation_id::text                      as conversation_id,
-  project_agent_id::text                     as project_agent_id,
+  agent_id::text                     as agent_id,
   connector_type,
   status,
   failure_reason,

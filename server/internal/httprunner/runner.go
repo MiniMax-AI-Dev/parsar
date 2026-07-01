@@ -35,15 +35,12 @@ type InvokeInput struct {
 type AgentRequest struct {
 	RunID                 string         `json:"run_id"`
 	WorkspaceID           string         `json:"workspace_id"`
-	ProjectID             string         `json:"project_id"`
 	ConversationID        string         `json:"conversation_id"`
-	ProjectAgentID        string         `json:"project_agent_id"`
 	AgentID               string         `json:"agent_id"`
 	AgentName             string         `json:"agent_name"`
 	AgentSlug             string         `json:"agent_slug"`
 	TriggerMessageContent string         `json:"trigger_message_content"`
 	AgentConfig           map[string]any `json:"agent_config"`
-	ProjectAgentConfig    map[string]any `json:"project_agent_config"`
 }
 
 type AgentResponse struct {
@@ -140,9 +137,6 @@ func Invoke(ctx context.Context, runtimeStore Store, client *http.Client, input 
 
 	endpoint := strings.TrimSpace(input.Endpoint)
 	if endpoint == "" {
-		endpoint = stringFromConfig(invocation.ProjectAgentConfig, "endpoint")
-	}
-	if endpoint == "" {
 		endpoint = stringFromConfig(invocation.AgentConfig, "endpoint")
 	}
 	if !isSafeEndpoint(endpoint) {
@@ -152,15 +146,12 @@ func Invoke(ctx context.Context, runtimeStore Store, client *http.Client, input 
 	body, err := json.Marshal(AgentRequest{
 		RunID:                 invocation.RunID,
 		WorkspaceID:           invocation.WorkspaceID,
-		ProjectID:             invocation.ProjectID,
 		ConversationID:        invocation.ConversationID,
-		ProjectAgentID:        invocation.ProjectAgentID,
 		AgentID:               invocation.AgentID,
 		AgentName:             invocation.AgentName,
 		AgentSlug:             invocation.AgentSlug,
 		TriggerMessageContent: invocation.TriggerMessageContent,
 		AgentConfig:           invocation.AgentConfig,
-		ProjectAgentConfig:    invocation.ProjectAgentConfig,
 	})
 	if err != nil {
 		return Result{}, err

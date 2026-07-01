@@ -21,7 +21,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
-// SandboxInfo is the per-project-agent sandbox snapshot returned by
+// SandboxInfo is the per-agent sandbox snapshot returned by
 // SandboxStatus. Shared between the agent_daemon provider (producer)
 // and the dev admin handlers (consumer) so neither package imports the
 // other.
@@ -47,9 +47,7 @@ type PromptInput struct {
 	RunID string
 
 	WorkspaceID    string
-	ProjectID      string
 	ConversationID string
-	ProjectAgentID string
 	AgentID        string
 	AgentName      string
 	AgentSlug      string
@@ -67,12 +65,8 @@ type PromptInput struct {
 
 	ConversationInitiatorID string
 
-	// AgentConfig is the workspace-level agent config (agents.config jsonb)
-	// merged with ProjectAgentConfig (project_agents.config jsonb) by the
-	// caller. Both are kept separate here so the connector can prefer
-	// project-level overrides without re-reading the DB.
-	AgentConfig        map[string]any
-	ProjectAgentConfig map[string]any
+	// AgentConfig is the agent config (agents.config jsonb).
+	AgentConfig map[string]any
 }
 
 // PromptOutput is the synchronous Prompt result. Streaming connectors

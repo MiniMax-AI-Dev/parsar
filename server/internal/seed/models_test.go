@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestSeedModelRegistryIdempotent verifies SeedModelRegistry can be
@@ -84,11 +84,9 @@ func resetTestDB(t *testing.T, db *pgxpool.Pool) {
 			agent_runs,
 			messages,
 			conversations,
-			project_agents,
 			agents,
 			models,
 			secrets,
-			projects,
 			workspace_members,
 			workspaces,
 			auth_identities,

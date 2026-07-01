@@ -1,6 +1,6 @@
 // Memory endpoint is NOT workspace-scoped at the URL: the server reads
-// ?scope=user|project and routes internally. scope=user uses the session
-// user; scope=project requires project_id for RBAC. User memory follows the
+// ?scope=user|workspace and routes internally. scope=user uses the session
+// user; scope=workspace requires workspace_id for RBAC. User memory follows the
 // account across workspaces, hence no workspace prefix.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -8,14 +8,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
 import type { SpecSource } from "./api-specs"
 
-export type MemoryScope = "user" | "project"
-export type MemoryType = "user" | "feedback" | "project" | "reference"
+export type MemoryScope = "user" | "workspace"
+export type MemoryType = "user" | "feedback" | "workspace" | "reference"
 
 export interface Memory {
   id: string
   scope: MemoryScope
   user_id: string
-  project_id?: string
+  workspace_id?: string
   memory_type: MemoryType
   title?: string
   body: string
@@ -34,8 +34,8 @@ export interface ListMemoriesResponse {
 
 export interface CreateMemoryRequest {
   scope: MemoryScope
-  /** required when scope=project */
-  project_id?: string
+  /** required when scope=workspace */
+  workspace_id?: string
   memory_type: MemoryType
   title?: string
   body: string
@@ -53,20 +53,20 @@ export interface UpdateMemoryRequest {
 // Memory-type / tag filters are intentionally not part of the key — we always
 // fetch the full list and filter client-side.
 export const KEY_USER_MEMORIES = ["admin", "memories", "user"] as const
-export const KEY_PROJECT_MEMORIES = (projectID: string) =>
-  ["admin", "memories", "project", projectID] as const
+export const KEY_WORKSPACE_MEMORIES = (workspaceID: string) =>
+  ["admin", "memories", "workspace", workspaceID] as const
 
-function missingProjectError(): ApiError {
-  return new ApiError({ status: 0, code: "no_project", message: "no project selected" })
+function missingWorkspaceError(): ApiError {
+  return new ApiError({ status: 0, code: "no_workspace", message: "no workspace selected" })
 }
 
 async function listUserMemories(): Promise<ListMemoriesResponse> {
   return apiRequest<ListMemoriesResponse>(`/api/v1/memories?scope=user`)
 }
 
-async function listProjectMemories(projectID: string): Promise<ListMemoriesResponse> {
+async function listWorkspaceMemories(workspaceID: string): Promise<ListMemoriesResponse> {
   return apiRequest<ListMemoriesResponse>(
-    `/api/v1/memories?scope=project&project_id=${encodeURIComponent(projectID)}`,
+    `/api/v1/memories?scope=workspace&workspace_id=${encodeURIComponent(workspaceID)}`,
   )
 }
 
@@ -96,11 +96,11 @@ export function useUserMemoriesQuery() {
   })
 }
 
-export function useProjectMemoriesQuery(projectID: string | null) {
+export function useWorkspaceMemoriesQuery(workspaceID: string | null) {
   return useQuery({
-    queryKey: KEY_PROJECT_MEMORIES(projectID ?? "_none"),
-    queryFn: () => listProjectMemories(projectID as string),
-    enabled: !!projectID,
+    queryKey: KEY_WORKSPACE_MEMORIES(workspaceID ?? "_none"),
+    queryFn: () => listWorkspaceMemories(workspaceID as string),
+    enabled: !!workspaceID,
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })
@@ -112,14 +112,14 @@ export function useCreateMemoryMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: CreateMemoryRequest) => {
-      if (body.scope === "project" && !body.project_id) throw missingProjectError()
+      if (body.scope === "workspace" && !body.workspace_id) throw missingWorkspaceError()
       return createMemory(body)
     },
     onSuccess: (_data, variables) => {
       if (variables.scope === "user") {
         void qc.invalidateQueries({ queryKey: KEY_USER_MEMORIES })
-      } else if (variables.project_id) {
-        void qc.invalidateQueries({ queryKey: KEY_PROJECT_MEMORIES(variables.project_id) })
+      } else if (variables.workspace_id) {
+        void qc.invalidateQueries({ queryKey: KEY_WORKSPACE_MEMORIES(variables.workspace_id) })
       }
     },
   })
@@ -130,8 +130,8 @@ export function useCreateMemoryMutation() {
 export interface MutateMemoryArgs {
   memoryID: string
   scope: MemoryScope
-  /** required when scope=project */
-  projectID?: string
+  /** required when scope=workspace */
+  workspaceID?: string
 }
 
 export function useUpdateMemoryMutation() {
@@ -144,8 +144,8 @@ export function useUpdateMemoryMutation() {
     onSuccess: (_data, variables) => {
       if (variables.scope === "user") {
         void qc.invalidateQueries({ queryKey: KEY_USER_MEMORIES })
-      } else if (variables.projectID) {
-        void qc.invalidateQueries({ queryKey: KEY_PROJECT_MEMORIES(variables.projectID) })
+      } else if (variables.workspaceID) {
+        void qc.invalidateQueries({ queryKey: KEY_WORKSPACE_MEMORIES(variables.workspaceID) })
       }
     },
   })
@@ -158,8 +158,8 @@ export function useDeleteMemoryMutation() {
     onSuccess: (_data, variables) => {
       if (variables.scope === "user") {
         void qc.invalidateQueries({ queryKey: KEY_USER_MEMORIES })
-      } else if (variables.projectID) {
-        void qc.invalidateQueries({ queryKey: KEY_PROJECT_MEMORIES(variables.projectID) })
+      } else if (variables.workspaceID) {
+        void qc.invalidateQueries({ queryKey: KEY_WORKSPACE_MEMORIES(variables.workspaceID) })
       }
     },
   })

@@ -180,16 +180,16 @@ function ConfirmDialog({
 
 export function SandboxPanel({
   workspaceID,
-  projectAgentID,
+  agentID,
 }: {
   workspaceID: string | null
-  projectAgentID: string
+  agentID: string
 }) {
   const { t } = useTranslation("admin")
-  const query = useSandboxBinding(workspaceID, projectAgentID)
-  const rebuildMut = useRebuildSandbox(workspaceID, projectAgentID)
-  const acquireMut = useAcquireSandbox(workspaceID, projectAgentID)
-  const renewMut = useRenewSandbox(workspaceID, projectAgentID)
+  const query = useSandboxBinding(workspaceID, agentID)
+  const rebuildMut = useRebuildSandbox(workspaceID, agentID)
+  const acquireMut = useAcquireSandbox(workspaceID, agentID)
+  const renewMut = useRenewSandbox(workspaceID, agentID)
 
   const [confirmingRebuild, setConfirmingRebuild] = useState(false)
 

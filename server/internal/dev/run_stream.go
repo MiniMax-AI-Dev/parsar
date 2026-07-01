@@ -85,7 +85,7 @@ func StartConversationRun(
 		"run_id", runID, "conversation_id", conversationID)
 
 	// Fast-path serial-queue check: if another run for the same
-	// (conversation, project_agent) is already running, don't dispatch
+	// (conversation, agent) is already running, don't dispatch
 	// this one. The fast-path is an optimization — MarkAgentRunRunning's
 	// NOT EXISTS guard is the actual race defender.
 	if checker, ok := runtimeStore.(inflightChecker); ok {
@@ -145,7 +145,7 @@ func startConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) htt
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, run.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, run.WorkspaceID); err != nil {
 			if errors.Is(err, auth.ErrNotMember) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
@@ -201,7 +201,7 @@ func streamConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) ht
 		if !ok {
 			return
 		}
-		if err := requireWorkspaceMemberNotViewerByProject(r, runtimeStore, run.ProjectID); err != nil {
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, run.WorkspaceID); err != nil {
 			if errors.Is(err, auth.ErrNotMember) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
@@ -314,15 +314,13 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 	log.Bg().Info("dispatchConversationRun: loaded invocation",
 		"run_id", runID,
 		"connector_type", invocation.ConnectorType,
-		"project_agent_id", invocation.ProjectAgentID,
+		"agent_id", invocation.AgentID,
 		"conversation_id", invocation.ConversationID,
 		"agent_name", invocation.AgentName)
 	in := connector.PromptInput{
 		RunID:                   invocation.RunID,
 		WorkspaceID:             invocation.WorkspaceID,
-		ProjectID:               invocation.ProjectID,
 		ConversationID:          invocation.ConversationID,
-		ProjectAgentID:          invocation.ProjectAgentID,
 		AgentID:                 invocation.AgentID,
 		AgentName:               invocation.AgentName,
 		AgentSlug:               invocation.AgentSlug,
@@ -330,7 +328,6 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 		TriggerMessageContent:   invocation.TriggerMessageContent,
 		TriggerAttachments:      invocation.TriggerAttachments,
 		AgentConfig:             invocation.AgentConfig,
-		ProjectAgentConfig:      invocation.ProjectAgentConfig,
 	}
 	source := invocation.ConnectorType
 	target := resolveStreamConnector(cfg, invocation.ConnectorType)

@@ -14,9 +14,9 @@ func listAgentRunEvents(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		projectID := strings.TrimSpace(chi.URLParam(r, "projectID"))
-		if !isUUID(projectID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id must be a valid uuid"})
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
 		runID := strings.TrimSpace(chi.URLParam(r, "runID"))
@@ -29,11 +29,11 @@ func listAgentRunEvents(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeReadError(w, err, "failed to get agent run")
 			return
 		}
-		if run.ProjectID != projectID {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent run does not belong to project"})
+		if run.WorkspaceID != workspaceID {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent run does not belong to workspace"})
 			return
 		}
-		if err := requireWorkspaceMemberByProject(r, runtimeStore, projectID); err != nil {
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
 			return
 		}

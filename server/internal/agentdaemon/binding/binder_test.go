@@ -17,7 +17,7 @@ func TestInMemoryBinder_ResolveAndBind(t *testing.T) {
 
 	in := Binding{
 		ConversationID: "conv-1",
-		ProjectAgentID: "pa-1",
+		AgentID:        "pa-1",
 		DeviceID:       "dev-A",
 		WorkDir:        "/home/me/proj",
 	}
@@ -42,9 +42,9 @@ func TestInMemoryBinder_BindRejectsMissingFields(t *testing.T) {
 	ctx := context.Background()
 
 	cases := []Binding{
-		{ProjectAgentID: "pa", DeviceID: "d"},
+		{AgentID: "pa", DeviceID: "d"},
 		{ConversationID: "c", DeviceID: "d"},
-		{ConversationID: "c", ProjectAgentID: "pa"},
+		{ConversationID: "c", AgentID: "pa"},
 	}
 	for i, in := range cases {
 		if err := b.Bind(ctx, in); err == nil {
@@ -66,7 +66,7 @@ func TestInMemoryBinder_RememberSession(t *testing.T) {
 		t.Fatalf("RememberSession should not create binding")
 	}
 
-	if err := b.Bind(ctx, Binding{ConversationID: "conv-1", ProjectAgentID: "pa-1", DeviceID: "dev-A"}); err != nil {
+	if err := b.Bind(ctx, Binding{ConversationID: "conv-1", AgentID: "pa-1", DeviceID: "dev-A"}); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
 	if err := b.RememberSession(ctx, "conv-1", "pa-1", "claude-sess-xyz", time.Time{}); err != nil {
@@ -87,9 +87,9 @@ func TestInMemoryBinder_InvalidateConversation(t *testing.T) {
 			t.Fatalf("setup: %v", err)
 		}
 	}
-	must(b.Bind(ctx, Binding{ConversationID: "conv-1", ProjectAgentID: "pa-1", DeviceID: "dev-A"}))
-	must(b.Bind(ctx, Binding{ConversationID: "conv-1", ProjectAgentID: "pa-2", DeviceID: "dev-A"}))
-	must(b.Bind(ctx, Binding{ConversationID: "conv-2", ProjectAgentID: "pa-1", DeviceID: "dev-A"}))
+	must(b.Bind(ctx, Binding{ConversationID: "conv-1", AgentID: "pa-1", DeviceID: "dev-A"}))
+	must(b.Bind(ctx, Binding{ConversationID: "conv-1", AgentID: "pa-2", DeviceID: "dev-A"}))
+	must(b.Bind(ctx, Binding{ConversationID: "conv-2", AgentID: "pa-1", DeviceID: "dev-A"}))
 
 	if err := b.InvalidateConversation(ctx, "conv-1"); err != nil {
 		t.Fatalf("InvalidateConversation: %v", err)
@@ -108,9 +108,9 @@ func TestInMemoryBinder_InvalidateConversation(t *testing.T) {
 func TestInMemoryBinder_InvalidateDevice(t *testing.T) {
 	b := NewInMemoryBinder()
 	ctx := context.Background()
-	_ = b.Bind(ctx, Binding{ConversationID: "conv-1", ProjectAgentID: "pa-1", DeviceID: "dev-A"})
-	_ = b.Bind(ctx, Binding{ConversationID: "conv-2", ProjectAgentID: "pa-1", DeviceID: "dev-A"})
-	_ = b.Bind(ctx, Binding{ConversationID: "conv-3", ProjectAgentID: "pa-1", DeviceID: "dev-B"})
+	_ = b.Bind(ctx, Binding{ConversationID: "conv-1", AgentID: "pa-1", DeviceID: "dev-A"})
+	_ = b.Bind(ctx, Binding{ConversationID: "conv-2", AgentID: "pa-1", DeviceID: "dev-A"})
+	_ = b.Bind(ctx, Binding{ConversationID: "conv-3", AgentID: "pa-1", DeviceID: "dev-B"})
 
 	if err := b.InvalidateDevice(ctx, "dev-A"); err != nil {
 		t.Fatalf("InvalidateDevice: %v", err)

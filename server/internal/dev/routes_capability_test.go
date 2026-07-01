@@ -141,22 +141,22 @@ func TestCapabilityAgentEnableRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	_ = capID
 	foreignCapID, foreignV1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign MCP")
 	_ = foreignCapID
-	ownedPA := insertProjectAgentForOwner(t, db, testUserAID, "owned-agent")
-	otherPA := insertProjectAgentForOwner(t, db, testUserBID, "other-agent")
+	ownedPA := insertAgentForOwner(t, db, testUserAID, "owned-agent")
+	otherPA := insertAgentForOwner(t, db, testUserBID, "other-agent")
 
-	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+ownedPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable own agent expected 200, got %d: %s", enabled.Code, enabled.Body.String())
 	}
-	forbidden := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	forbidden := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
 	if forbidden.Code != http.StatusForbidden {
 		t.Fatalf("enable other agent expected 403, got %d: %s", forbidden.Code, forbidden.Body.String())
 	}
-	foreign := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+ownedPA+"/capabilities/"+foreignV1+"/enable", `{}`, testUserAID)
+	foreign := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+foreignV1+"/enable", `{}`, testUserAID)
 	if foreign.Code != http.StatusForbidden {
 		t.Fatalf("unpublished foreign capability expected 403, got %d: %s", foreign.Code, foreign.Body.String())
 	}
-	updated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+ownedPA+"/capabilities/"+v2+"/enable", `{}`, testUserAID)
+	updated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v2+"/enable", `{}`, testUserAID)
 	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), v2) {
 		t.Fatalf("enable second version expected update 200, got %d: %s", updated.Code, updated.Body.String())
 	}
@@ -204,14 +204,14 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
 	capID, v1, v2 := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP")
 	publishForeignCapability(t, db, capID)
-	agentA := insertProjectAgentForOwner(t, db, testUserAID, "market-agent-a")
-	agentB := insertProjectAgentForOwner(t, db, testUserAID, "market-agent-b")
+	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-a")
+	agentB := insertAgentForOwner(t, db, testUserAID, "market-agent-b")
 
-	enabledA := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	enabledA := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
 	if enabledA.Code != http.StatusOK {
 		t.Fatalf("enable marketplace A expected 200, got %d: %s", enabledA.Code, enabledA.Body.String())
 	}
-	enabledB := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+agentB+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	enabledB := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
 	if enabledB.Code != http.StatusOK {
 		t.Fatalf("enable marketplace B expected 200, got %d: %s", enabledB.Code, enabledB.Body.String())
 	}
@@ -223,7 +223,7 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	if market.Code != http.StatusOK || !strings.Contains(market.Body.String(), `"installed":true`) || strings.Contains(market.Body.String(), foreignWorkspaceID) {
 		t.Fatalf("marketplace list expected installed without source workspace id leak, got %d: %s", market.Code, market.Body.String())
 	}
-	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
+	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
 	if upgraded.Code != http.StatusOK || !strings.Contains(upgraded.Body.String(), v2) {
 		t.Fatalf("upgrade expected 200/v2, got %d: %s", upgraded.Code, upgraded.Body.String())
 	}
@@ -231,7 +231,7 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	if _, err := db.Exec(context.Background(), `update capability set deprecated_at = now() where id = $1`, capID); err != nil {
 		t.Fatal(err)
 	}
-	blocked := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+agentB+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
+	blocked := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
 	if blocked.Code != http.StatusForbidden {
 		t.Fatalf("upgrade deprecated expected 403, got %d: %s", blocked.Code, blocked.Body.String())
 	}
@@ -253,8 +253,8 @@ func TestInstallCountRejectsCrossWorkspace(t *testing.T) {
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
 	capID, v1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP install-count")
 	publishForeignCapability(t, db, capID)
-	agentA := insertProjectAgentForOwner(t, db, testUserAID, "market-agent-install-count")
-	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/projects/"+store.DefaultDevFixtureIDs().ProjectID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-install-count")
+	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable marketplace cap expected 200, got %d: %s", enabled.Code, enabled.Body.String())
 	}
@@ -381,23 +381,20 @@ func publishForeignCapability(t *testing.T, db *pgxpool.Pool, capabilityID strin
 	}
 }
 
-func insertProjectAgentForOwner(t *testing.T, db *pgxpool.Pool, userID, slug string) string {
+func insertAgentForOwner(t *testing.T, db *pgxpool.Pool, userID, slug string) string {
 	t.Helper()
-	var agentID, projectAgentID string
-	if err := db.QueryRow(context.Background(), `insert into agents(id, workspace_id, name, slug, connector_type, status, config, created_by, created_at, updated_at) values (gen_random_uuid(), $1, $2, $2, 'agent_daemon', 'active', '{}', $3, now(), now()) returning id::text`, store.DefaultDevFixtureIDs().WorkspaceID, slug, userID).Scan(&agentID); err != nil {
+	var agentID string
+	if err := db.QueryRow(context.Background(), `insert into agents(id, workspace_id, name, slug, connector_type, status, config, created_by, created_at, updated_at) values (gen_random_uuid(), $1, $2, $2, 'agent_daemon', 'active', '{"daemon_mode":"sandbox","agent_kind":"opencode"}'::jsonb, $3, now(), now()) returning id::text`, store.DefaultDevFixtureIDs().WorkspaceID, slug, userID).Scan(&agentID); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(context.Background(), `insert into project_agents(id, workspace_id, project_id, agent_id, status, config, created_by, created_at, updated_at) values (gen_random_uuid(), $1, $2, $3, 'active', '{"daemon_mode":"sandbox","agent_kind":"opencode"}'::jsonb, $4, now(), now()) returning id::text`, store.DefaultDevFixtureIDs().WorkspaceID, store.DefaultDevFixtureIDs().ProjectID, agentID, userID).Scan(&projectAgentID); err != nil {
-		t.Fatal(err)
-	}
-	return projectAgentID
+	return agentID
 }
 
-func assertSingleAgentCapability(t *testing.T, db *pgxpool.Pool, projectAgentID, capabilityID, versionID string) {
+func assertSingleAgentCapability(t *testing.T, db *pgxpool.Pool, agentID, capabilityID, versionID string) {
 	t.Helper()
 	var count int
 	var gotVersion string
-	if err := db.QueryRow(context.Background(), `select count(*), max(capability_version_id::text) from agent_capabilities where project_agent_id = $1 and capability_id = $2`, projectAgentID, capabilityID).Scan(&count, &gotVersion); err != nil {
+	if err := db.QueryRow(context.Background(), `select count(*), max(capability_version_id::text) from agent_capabilities where agent_id = $1 and capability_id = $2`, agentID, capabilityID).Scan(&count, &gotVersion); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 || gotVersion != versionID {
@@ -546,8 +543,8 @@ func TestSyncAgentCapabilitiesPreservesDeprecatedBindings(t *testing.T) {
 
 	// Seed capability + a version + an agent + bind the capability.
 	capID, v1, _ := insertCapabilityVersions(t, db, wid, "Sync Preserve MCP")
-	agentID, projectAgentID := insertProjectAgentForSyncTest(t, db, wid, uid, "sync-preserve-target")
-	insertAgentCapability(t, db, projectAgentID, capID, v1)
+	agentID := insertAgentForSyncTest(t, db, wid, uid, "sync-preserve-target")
+	insertAgentCapability(t, db, agentID, capID, v1)
 
 	// Admin deprecates the capability AFTER it's already bound.
 	if _, err := db.Exec(context.Background(), `update capability set deprecated_at = now() where id = $1`, capID); err != nil {
@@ -557,12 +554,12 @@ func TestSyncAgentCapabilitiesPreservesDeprecatedBindings(t *testing.T) {
 	// Simulate the edit-dialog Save: user re-submits the same capability
 	// name list (which still contains the now-deprecated cap).
 	s := store.New(db)
-	if err := syncAgentCapabilities(context.Background(), s, wid, projectAgentID, []string{"Sync Preserve MCP"}); err != nil {
+	if err := syncAgentCapabilities(context.Background(), s, wid, agentID, []string{"Sync Preserve MCP"}); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
 	// Binding must still exist.
-	bindings, err := s.ListAgentCapabilities(context.Background(), projectAgentID)
+	bindings, err := s.ListAgentCapabilities(context.Background(), agentID)
 	if err != nil {
 		t.Fatalf("list bindings: %v", err)
 	}
@@ -587,35 +584,26 @@ func containsCapabilityByID(caps []store.CapabilityRead, id string) bool {
 	return false
 }
 
-func insertProjectAgentForSyncTest(t *testing.T, db *pgxpool.Pool, workspaceID, userID, name string) (string, string) {
+func insertAgentForSyncTest(t *testing.T, db *pgxpool.Pool, workspaceID, userID, name string) string {
 	t.Helper()
-	var agentID, projectAgentID string
+	var agentID string
 	if err := db.QueryRow(context.Background(),
-		`insert into agents(id, workspace_id, name, description, connector_type, config, created_by, created_at, updated_at)
-		 values (gen_random_uuid(), $1, $2, '', 'agent_daemon', '{}'::jsonb, $3, now(), now())
+		`insert into agents(id, workspace_id, name, slug, description, connector_type, config, created_by, created_at, updated_at)
+		 values (gen_random_uuid(), $1, $2, $2, '', 'agent_daemon', '{}'::jsonb, $3, now(), now())
 		 returning id::text`,
 		workspaceID, name, userID,
 	).Scan(&agentID); err != nil {
 		t.Fatalf("insert agent: %v", err)
 	}
-	projectID := store.DefaultDevFixtureIDs().ProjectID
-	if err := db.QueryRow(context.Background(),
-		`insert into project_agents(id, workspace_id, project_id, agent_id, status, config, created_by, created_at, updated_at)
-		 values (gen_random_uuid(), $1, $2, $3, 'active', '{}'::jsonb, $4, now(), now())
-		 returning id::text`,
-		workspaceID, projectID, agentID, userID,
-	).Scan(&projectAgentID); err != nil {
-		t.Fatalf("insert project_agent: %v", err)
-	}
-	return agentID, projectAgentID
+	return agentID
 }
 
-func insertAgentCapability(t *testing.T, db *pgxpool.Pool, projectAgentID, capabilityID, capabilityVersionID string) {
+func insertAgentCapability(t *testing.T, db *pgxpool.Pool, agentID, capabilityID, capabilityVersionID string) {
 	t.Helper()
 	if _, err := db.Exec(context.Background(),
-		`insert into agent_capabilities(id, project_agent_id, capability_id, capability_version_id, enabled, configuration, created_at, updated_at)
+		`insert into agent_capabilities(id, agent_id, capability_id, capability_version_id, enabled, configuration, created_at, updated_at)
 		 values (gen_random_uuid(), $1, $2, $3, true, '{}'::jsonb, now(), now())`,
-		projectAgentID, capabilityID, capabilityVersionID,
+		agentID, capabilityID, capabilityVersionID,
 	); err != nil {
 		t.Fatalf("insert agent_capability: %v", err)
 	}
@@ -637,14 +625,14 @@ func TestSyncAgentCapabilitiesBindsMarketplaceByName(t *testing.T) {
 
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
 	uid := store.DefaultDevFixtureIDs().UserID
-	_, projectAgentID := insertProjectAgentForSyncTest(t, db, wid, uid, "sync-marketplace-target")
+	agentID := insertAgentForSyncTest(t, db, wid, uid, "sync-marketplace-target")
 
 	s := store.New(db)
-	if err := syncAgentCapabilities(context.Background(), s, wid, projectAgentID, []string{"Foreign Marketplace MCP"}); err != nil {
+	if err := syncAgentCapabilities(context.Background(), s, wid, agentID, []string{"Foreign Marketplace MCP"}); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
-	bindings, err := s.ListAgentCapabilities(context.Background(), projectAgentID)
+	bindings, err := s.ListAgentCapabilities(context.Background(), agentID)
 	if err != nil {
 		t.Fatalf("list bindings: %v", err)
 	}
@@ -713,8 +701,8 @@ func TestCapabilityDeleteRejectedWhenAgentBound(t *testing.T) {
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
 	uid := store.DefaultDevFixtureIDs().UserID
 	capID, v1, _ := insertCapabilityVersions(t, db, wid, "Bound Capability")
-	_, projectAgentID := insertProjectAgentForSyncTest(t, db, wid, uid, "Agent Holding Cap")
-	insertAgentCapability(t, db, projectAgentID, capID, v1)
+	agentID := insertAgentForSyncTest(t, db, wid, uid, "Agent Holding Cap")
+	insertAgentCapability(t, db, agentID, capID, v1)
 
 	del := serveCapabilityRoute(t, r, http.MethodDelete, "/api/v1/workspaces/"+wid+"/capabilities/"+capID, ``, uid)
 	if del.Code != http.StatusConflict {

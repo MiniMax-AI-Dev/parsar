@@ -127,7 +127,7 @@ func newMCPRow(t *testing.T, id, name string, servers []canonical.MCPServer, req
 
 func defaultPromptInput() connector.PromptInput {
 	return connector.PromptInput{
-		ProjectAgentID:          "pa-1",
+		AgentID:                 "pa-1",
 		ConversationInitiatorID: "user-1",
 		WorkspaceID:             "ws-1",
 	}
@@ -743,7 +743,6 @@ func TestEmitDisabledCapabilityNotices_PerKindAndPerCapability(t *testing.T) {
 	}
 	in := connector.PromptInput{
 		WorkspaceID:    "ws-1",
-		ProjectID:      "proj-1",
 		AgentID:        "agt-1",
 		RunID:          "run-1",
 		ConversationID: "conv-1",

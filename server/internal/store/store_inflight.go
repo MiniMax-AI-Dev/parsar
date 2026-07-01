@@ -163,12 +163,11 @@ func (s PromptForUserChoiceInflightSlot) EffectiveQuestions() []PromptForUserCho
 // the full conversations.metadata jsonb; consume via the typed
 // WorkingInflightSlot / PermissionInflightSlot helpers.
 type FeishuInflightConversation struct {
-	ConversationID   string
-	WorkspaceID      string
-	ProjectID        string
-	ExternalChatID   string
-	ExternalThreadID string
-	SourceAppID      string
+	ConversationID       string
+	WorkspaceID          string
+	ExternalChatID       string
+	ExternalThreadID     string
+	SourceAppID          string
 	// Platform is the IM platform the conversation belongs to
 	// (conversations.platform: "feishu", "slack", ...). The outbound
 	// driver dispatches by this field — Feishu rows take the legacy
@@ -181,7 +180,7 @@ type FeishuInflightConversation struct {
 	RunFinishedAt        time.Time
 	OutputMessageID      string
 	MaxEventSequence     int64
-	// AgentName is the display name via project_agents → agents. Empty
+	// AgentName is the display name via agents. Empty
 	// when the binding is missing/soft-deleted; callers fall back to
 	// FeishuCardTitle.
 	AgentName string
@@ -224,12 +223,11 @@ func (s *Store) ListActiveFeishuInflightConversations(ctx context.Context, cutof
 	out := make([]FeishuInflightConversation, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, FeishuInflightConversation{
-			ConversationID:   row.ConversationID,
-			WorkspaceID:      row.WorkspaceID,
-			ProjectID:        row.ProjectID,
-			ExternalChatID:   row.ExternalChatID,
-			ExternalThreadID: row.ExternalThreadID,
-			SourceAppID:      row.SourceAppID,
+			ConversationID:       row.ConversationID,
+			WorkspaceID:          row.WorkspaceID,
+			ExternalChatID:       row.ExternalChatID,
+			ExternalThreadID:     row.ExternalThreadID,
+			SourceAppID:          row.SourceAppID,
 			// List query is not platform-parameterized (feishu-only debug
 			// path), so the row carries no platform column — literal here.
 			Platform:             "feishu",
@@ -296,7 +294,6 @@ func (s *Store) ClaimActiveFeishuInflightConversations(ctx context.Context, inpu
 		out = append(out, FeishuInflightConversation{
 			ConversationID:       row.ConversationID,
 			WorkspaceID:          row.WorkspaceID,
-			ProjectID:            row.ProjectID,
 			ExternalChatID:       row.ExternalChatID,
 			ExternalThreadID:     row.ExternalThreadID,
 			SourceAppID:          row.SourceAppID,
@@ -502,7 +499,6 @@ func (s *Store) FindConversationByPromptForUserChoiceRequestID(ctx context.Conte
 	out := ConversationInflightCards{
 		ConversationID: row.ID,
 		WorkspaceID:    row.WorkspaceID,
-		ProjectID:      row.ProjectID,
 		ExternalChatID: row.ExternalChatID,
 		SourceAppID:    row.SourceAppID,
 	}
@@ -533,7 +529,6 @@ func (s *Store) ListStaleFeishuPromptForUserChoiceInflightCards(ctx context.Cont
 		entry := ConversationInflightCards{
 			ConversationID: row.ConversationID,
 			WorkspaceID:    row.WorkspaceID,
-			ProjectID:      row.ProjectID,
 			ExternalChatID: row.ExternalChatID,
 			SourceAppID:    row.SourceAppID,
 		}
@@ -580,7 +575,6 @@ func (s *Store) MarkConversationInflightTerminalDelivered(ctx context.Context, c
 type ConversationInflightCards struct {
 	ConversationID         string
 	WorkspaceID            string
-	ProjectID              string
 	ExternalChatID         string
 	ExternalThreadID       string
 	SourceAppID            string
@@ -610,7 +604,6 @@ func (s *Store) GetConversationInflightCards(ctx context.Context, conversationID
 	out := ConversationInflightCards{
 		ConversationID:   row.ID,
 		WorkspaceID:      row.WorkspaceID,
-		ProjectID:        row.ProjectID,
 		ExternalChatID:   row.ExternalChatID,
 		ExternalThreadID: row.ExternalThreadID,
 		SourceAppID:      row.SourceAppID,
@@ -645,7 +638,6 @@ func (s *Store) FindConversationByPermissionRequestID(ctx context.Context, permi
 	out := ConversationInflightCards{
 		ConversationID: row.ID,
 		WorkspaceID:    row.WorkspaceID,
-		ProjectID:      row.ProjectID,
 		ExternalChatID: row.ExternalChatID,
 		SourceAppID:    row.SourceAppID,
 	}
@@ -700,7 +692,6 @@ func (s *Store) ListStaleFeishuPermissionInflightCards(ctx context.Context, cuto
 		entry := ConversationInflightCards{
 			ConversationID: row.ConversationID,
 			WorkspaceID:    row.WorkspaceID,
-			ProjectID:      row.ProjectID,
 			ExternalChatID: row.ExternalChatID,
 			SourceAppID:    row.SourceAppID,
 		}
@@ -720,12 +711,11 @@ func (s *Store) ListStaleFeishuPermissionInflightCards(ctx context.Context, cuto
 type PendingQueuedFeishuRun struct {
 	RunID            string
 	WorkspaceID      string
-	ProjectID        string
 	ConversationID   string
 	ExternalChatID   string
 	ExternalThreadID string
 	SourceAppID      string
-	// AgentName via project_agents → agents. Empty when binding is
+	// AgentName via agents. Empty when binding is
 	// missing/soft-deleted; callers fall back to FeishuCardTitle.
 	AgentName string
 }
@@ -766,7 +756,6 @@ func (s *Store) ClaimPendingQueuedFeishuRuns(ctx context.Context, input ClaimPen
 		out = append(out, PendingQueuedFeishuRun{
 			RunID:            row.RunID,
 			WorkspaceID:      row.WorkspaceID,
-			ProjectID:        row.ProjectID,
 			ConversationID:   row.ConversationID,
 			ExternalChatID:   row.ExternalChatID,
 			ExternalThreadID: row.ExternalThreadID,

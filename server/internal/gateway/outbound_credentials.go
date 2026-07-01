@@ -13,7 +13,6 @@ import (
 type PendingOutboundMessage struct {
 	MessageID        string
 	WorkspaceID      string
-	ProjectID        string
 	ConversationID   string
 	Text             string
 	Gateway          string

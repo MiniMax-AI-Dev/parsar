@@ -22,7 +22,7 @@ import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useUsage } from "../../lib/api-governance"
 import type { UsageLog } from "../../lib/api-types"
-import { useProjectId } from "../../lib/workspace"
+import { useWorkspaceId } from "../../lib/workspace"
 
 /* ------------------------------------------------------------------ */
 /*  Aggregation                                                        */
@@ -113,10 +113,10 @@ function fmtTime(iso: string): string {
 
 export function UsagePage() {
   const { t } = useTranslation("admin")
-  const pid = useProjectId()
+  const wsId = useWorkspaceId()
   const { navigate } = useAdminView()
 
-  const query = useUsage(pid)
+  const query = useUsage(wsId)
   const logs = useMemo(() => query.data?.usage_logs ?? [], [query.data])
   const summary = useMemo(() => summarize(logs), [logs])
   const byModel = useMemo(() => groupByModel(logs), [logs])
@@ -130,8 +130,8 @@ export function UsagePage() {
         title={t("usage.page.title")}
       />
       <SettingsTabs active="usage" />
-      {!pid ? (
-        <ScopeRequiredState scope="project" resourceName={t("usage.page.title")} />
+      {!wsId ? (
+        <ScopeRequiredState scope="workspace" resourceName={t("usage.page.title")} />
       ) : query.isLoading ? (
         <UsageLoadingSkeleton />
       ) : err ? (

@@ -1,4 +1,4 @@
--- memories.sql — user- and project-scoped memory rows backing the
+-- memories.sql — user- and workspace-scoped memory rows backing the
 -- spec & memory injection feature (see docs/spec-memory-module.md).
 --
 -- Conventions match spec_fragments.sql in this dir:
@@ -8,12 +8,12 @@
 --     filter so one list query covers unfiltered + filtered views
 --   * source / scope / memory_type strings are validated by the Go
 --     service layer (specmemory.{Source,Scope,MemoryType} enums);
---     SQL only enforces the scope↔project_id structural CHECK from
---     migration 000004
+--     SQL only enforces the scope↔workspace_id structural CHECK from
+--     migration 000001
 --
 -- Two-rail design: user-scope rows live alongside this user only
--- (idx_memories_user_scope_active); project-scope rows are shared
--- across all users on the project (idx_memories_project_active).
+-- (idx_memories_user_scope_active); workspace-scope rows are shared
+-- across all users on the workspace (idx_memories_workspace_active).
 -- Per-turn incremental injection therefore uses two separate
 -- ListXxxSince queries so callers can't accidentally bleed one
 -- user's user-scope memory into another user's session.
@@ -21,20 +21,20 @@
 -- name: InsertMemory :one
 -- Single insert path for both UI ("user") and agent ("agent") writes.
 -- Caller is responsible for:
---   * setting project_id (pgtype.UUID{Valid:false} when scope='user';
---     concrete UUID when scope='project') — the table CHECK enforces
+--   * setting workspace_id (pgtype.UUID{Valid:false} when scope='user';
+--     concrete UUID when scope='workspace') — the table CHECK enforces
 --     the pairing
---   * agent_actor ('' for human; 'connector:projectAgentID' for agent)
+--   * agent_actor ('' for human; 'connector:agentID' for agent)
 --   * conversation_id (pgtype.UUID{Valid:false} unless the write
 --     originated inside an agent turn)
 insert into memories (
-  id, scope, user_id, project_id, memory_type,
+  id, scope, user_id, workspace_id, memory_type,
   title, body, why, tags,
   source, agent_actor, conversation_id,
   created_at, updated_at
 )
 values (
-  @id::uuid, @scope, @user_id::uuid, sqlc.narg('project_id')::uuid, @memory_type,
+  @id::uuid, @scope, @user_id::uuid, sqlc.narg('workspace_id')::uuid, @memory_type,
   @title, @body, @why, @tags::text[],
   @source, @agent_actor, sqlc.narg('conversation_id')::uuid,
   @now, @now
@@ -43,7 +43,7 @@ returning
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -62,7 +62,7 @@ select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -89,7 +89,7 @@ select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -110,15 +110,15 @@ where user_id     = @user_id::uuid
 order by updated_at desc, id desc
 limit @item_limit::int;
 
--- name: ListProjectMemories :many
--- Per-project listing (shared across all users on the project) for
--- the project-scope Memory tab and SessionStart snapshot injection.
+-- name: ListWorkspaceMemories :many
+-- Per-workspace listing (shared across all users on the workspace) for
+-- the workspace-scope Memory tab and SessionStart snapshot injection.
 -- Same filter sentinels as ListUserMemories.
 select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -130,8 +130,8 @@ select
   created_at,
   updated_at
 from memories
-where project_id  = @project_id::uuid
-  and scope       = 'project'
+where workspace_id = @workspace_id::uuid
+  and scope       = 'workspace'
   and deleted_at  is null
   and (@memory_type::text = '' or memory_type = @memory_type::text)
   and (cardinality(@tag_filter::text[]) = 0
@@ -149,7 +149,7 @@ select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -168,15 +168,15 @@ where user_id     = @user_id::uuid
 order by updated_at asc, id asc
 limit @item_limit::int;
 
--- name: ListProjectMemoriesSince :many
--- Per-turn incremental cursor for project-scope memories.
--- Mirrors ListUserMemoriesSince but scoped by project_id so a
--- session bound to project X cannot pick up memories from project Y.
+-- name: ListWorkspaceMemoriesSince :many
+-- Per-turn incremental cursor for workspace-scope memories.
+-- Mirrors ListUserMemoriesSince but scoped by workspace_id so a
+-- session bound to workspace X cannot pick up memories from workspace Y.
 select
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,
@@ -188,8 +188,8 @@ select
   created_at,
   updated_at
 from memories
-where project_id  = @project_id::uuid
-  and scope       = 'project'
+where workspace_id = @workspace_id::uuid
+  and scope       = 'workspace'
   and deleted_at  is null
   and updated_at  > @since::timestamptz
 order by updated_at asc, id asc
@@ -197,7 +197,7 @@ limit @item_limit::int;
 
 -- name: UpdateMemory :one
 -- Full-replace update of the editable fields. Provenance fields
--- (scope/user_id/project_id/memory_type/source/agent_actor/
+-- (scope/user_id/workspace_id/memory_type/source/agent_actor/
 -- conversation_id) are fixed at insert time and intentionally not
 -- editable — a "moved" memory should be deleted + re-inserted so
 -- audit history stays intact. memory_type is excluded because a
@@ -215,7 +215,7 @@ returning
   id::text           as id,
   scope,
   user_id::text      as user_id,
-  project_id,
+  workspace_id,
   memory_type,
   title,
   body,

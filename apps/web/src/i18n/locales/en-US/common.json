@@ -31,13 +31,10 @@
     "placeholder": "Jump to Run / Agent / Conversation…"
   },
   "workspaceSwitcher": {
-    "triggerAriaLabel": "Switch workspace / project",
+    "triggerAriaLabel": "Switch workspace",
     "demoWorkspace": "Demo Workspace",
     "workspaceLabel": "Workspace",
-    "projectsLabel": "Projects",
-    "projectsInLabel": "Projects in {{workspace}}",
     "noWorkspaces": "No workspaces available",
-    "noProjects": "No projects in this workspace yet",
     "pickWorkspaceFirst": "Pick a workspace first",
     "discoverLabel": "Other workspaces",
     "memberCount": "{{count}} members",
@@ -81,24 +78,13 @@
     "workspace": {
       "createAction": "New workspace",
       "createTitle": "Create workspace",
-      "createDescription": "Workspaces hold projects, members, and shared registry. You become the owner of any workspace you create. The system identifier is generated automatically.",
+      "createDescription": "Workspaces hold agents, members, and shared registry. You become the owner of any workspace you create. The system identifier is generated automatically.",
       "renameTitle": "Rename workspace",
       "renameDescription": "Change the workspace display name. The system identifier is permanent and not editable.",
       "archiveTitle": "Archive workspace",
-      "archiveDescription": "Archive \"{{name}}\"? The workspace will disappear from the switcher; existing members and projects stay in the database but become unreachable through the workspace JOIN.",
+      "archiveDescription": "Archive \"{{name}}\"? The workspace will disappear from the switcher; existing members and agents stay in the database but become unreachable through the workspace JOIN.",
       "archiveMarketplaceDependents": "If capabilities published by this workspace are still used by Agents in other workspaces, archive will be blocked. Unpublish first and wait for those workspaces to remove the capabilities.",
       "namePlaceholder": "e.g. Platform Team"
-    },
-    "project": {
-      "createAction": "New project",
-      "createTitle": "Create project",
-      "createDescription": "Projects scope conversations and runs inside a workspace. You become the owner of any project you create. The system identifier is generated automatically.",
-      "renameTitle": "Rename project",
-      "renameDescription": "Change the project name or description. The system identifier is permanent and not editable.",
-      "archiveTitle": "Archive project",
-      "archiveDescription": "Archive \"{{name}}\"? The project will be hidden from the switcher (status=archived) but its history stays intact.",
-      "namePlaceholder": "e.g. Q3 Migration",
-      "descriptionPlaceholder": "Optional short description"
     },
     "join": {
       "title": "Request to join \"{{name}}\"",
@@ -132,7 +118,7 @@
   },
   "onboarding": {
     "title": "Create your first workspace",
-    "subtitle": "A workspace is a shared space where your team collaborates on projects and agents. You'll be its Owner.",
+    "subtitle": "A workspace is a shared space where your team collaborates on agents. You'll be its Owner.",
     "fields": {
       "name": "Workspace name",
       "namePlaceholder": "e.g. Platform Team"
@@ -199,15 +185,6 @@
     "workspace": {
       "title": "Choose a Workspace to view {{resource}}",
       "description": "This data is managed by Workspace. Choose a Workspace in the header first."
-    },
-    "project": {
-      "noWorkspaceTitle": "Choose a Workspace first",
-      "noWorkspaceDescription": "This data is shown by Project. Choose a Workspace in the header, then pick a Project.",
-      "loadingTitle": "Loading Projects",
-      "loadingDescription": "Once Projects load for this Workspace, you can switch to the matching data scope.",
-      "noProjectsTitle": "This Workspace has no available Projects yet",
-      "selectTitle": "Choose a Project to view {{resource}}",
-      "selectDescription": "Project is the data scope for this page. The sidebar stays the same; this page switches to the selected scope."
     }
   }
 }

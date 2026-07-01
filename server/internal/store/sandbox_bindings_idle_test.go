@@ -18,9 +18,9 @@ func TestListIdleSandboxBindings(t *testing.T) {
 	s := New(db)
 
 	now := time.Now().UTC()
-	idle1 := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductProjectAgentID, "sbx-idle-1", now.Add(-2*time.Hour))
-	idle2 := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.BackendProjectAgentID, "sbx-idle-2", now.Add(-90*time.Minute))
-	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.TestProjectAgentID, "sbx-fresh", now.Add(-5*time.Minute))
+	idle1 := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductAgentID, "sbx-idle-1", now.Add(-2*time.Hour))
+	idle2 := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.BackendAgentID, "sbx-idle-2", now.Add(-90*time.Minute))
+	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.TestAgentID, "sbx-fresh", now.Add(-5*time.Minute))
 
 	cutoff := now.Add(-30 * time.Minute)
 	rows, err := s.ListIdleSandboxBindings(ctx, cutoff, 100)
@@ -63,9 +63,9 @@ func TestListIdleSandboxBindings_LimitCap(t *testing.T) {
 	s := New(db)
 
 	now := time.Now().UTC()
-	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductProjectAgentID, "sbx-cap-1", now.Add(-2*time.Hour))
-	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.BackendProjectAgentID, "sbx-cap-2", now.Add(-90*time.Minute))
-	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.TestProjectAgentID, "sbx-cap-3", now.Add(-1*time.Hour))
+	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductAgentID, "sbx-cap-1", now.Add(-2*time.Hour))
+	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.BackendAgentID, "sbx-cap-2", now.Add(-90*time.Minute))
+	mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.TestAgentID, "sbx-cap-3", now.Add(-1*time.Hour))
 
 	cutoff := now.Add(-30 * time.Minute)
 	rows, err := s.ListIdleSandboxBindings(ctx, cutoff, 2)
@@ -85,7 +85,7 @@ func TestListIdleSandboxBindings_NegativeLimitNormalized(t *testing.T) {
 		t.Fatalf("InsertDevFixture: %v", err)
 	}
 	s := New(db)
-	mustCreateBindingWithLastActive(t, context.Background(), s, ids.WorkspaceID, ids.ProductProjectAgentID, "sbx-neg-1", time.Now().Add(-2*time.Hour))
+	mustCreateBindingWithLastActive(t, context.Background(), s, ids.WorkspaceID, ids.ProductAgentID, "sbx-neg-1", time.Now().Add(-2*time.Hour))
 
 	// limit=0 must normalize to 1, not error.
 	rows, err := s.ListIdleSandboxBindings(ctx, time.Now(), 0)
@@ -106,7 +106,7 @@ func TestTouchSandboxBinding(t *testing.T) {
 	}
 	s := New(db)
 
-	original := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductProjectAgentID, "sbx-touch", time.Now().Add(-2*time.Hour))
+	original := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductAgentID, "sbx-touch", time.Now().Add(-2*time.Hour))
 
 	if err := s.TouchSandboxBinding(ctx, original.ID); err != nil {
 		t.Fatalf("TouchSandboxBinding: %v", err)
@@ -146,15 +146,15 @@ func TestTouchSandboxBinding_UnknownIDIsNoOp(t *testing.T) {
 
 // mustCreateBindingWithLastActive seeds an active binding then directly
 // UPDATEs last_active_at via raw SQL so tests can simulate aged rows.
-func mustCreateBindingWithLastActive(t *testing.T, ctx context.Context, s *Store, workspaceID, projectAgentID, sandboxID string, lastActive time.Time) SandboxBindingRead {
+func mustCreateBindingWithLastActive(t *testing.T, ctx context.Context, s *Store, workspaceID, agentID, sandboxID string, lastActive time.Time) SandboxBindingRead {
 	t.Helper()
 	row, err := s.CreateSandboxBinding(ctx, CreateSandboxBindingInput{
-		WorkspaceID:    workspaceID,
-		ProjectAgentID: projectAgentID,
-		CacheKey:       "cache-" + sandboxID,
-		SandboxID:      sandboxID,
-		TemplateID:     "tpl_test",
-		Status:         SandboxBindingStatusActive,
+		WorkspaceID: workspaceID,
+		AgentID:     agentID,
+		CacheKey:    "cache-" + sandboxID,
+		SandboxID:   sandboxID,
+		TemplateID:  "tpl_test",
+		Status:      SandboxBindingStatusActive,
 	})
 	if err != nil {
 		t.Fatalf("CreateSandboxBinding %s: %v", sandboxID, err)

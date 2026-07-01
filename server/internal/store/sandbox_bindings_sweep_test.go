@@ -18,35 +18,35 @@ func TestSweepOrphanedSandboxBindings(t *testing.T) {
 	}
 	s := New(db)
 
-	// Use three project_agents so the partial unique index
-	// (one active per project_agent) doesn't trip.
+	// Use three agents so the partial unique index
+	// (one active per agent) doesn't trip.
 	type want struct {
 		bindingID   string
 		finalStatus string
 		finalKilled bool // was killed_at set after sweep?
 	}
 	cases := []struct {
-		name           string
-		projectAgentID string
-		initStatus     string
-		preKilled      bool   // mark killed before sweep so it's not orphaned
-		want           string // expected status AFTER sweep
-		wantKilledSet  bool
+		name          string
+		agentID       string
+		initStatus    string
+		preKilled     bool   // mark killed before sweep so it's not orphaned
+		want          string // expected status AFTER sweep
+		wantKilledSet bool
 	}{
-		{"active gets orphaned", ids.ProductProjectAgentID, SandboxBindingStatusActive, false, SandboxBindingStatusKilledOrphaned, true},
-		{"spawning gets orphaned", ids.BackendProjectAgentID, SandboxBindingStatusSpawning, false, SandboxBindingStatusKilledOrphaned, true},
-		{"killing gets orphaned", ids.TestProjectAgentID, SandboxBindingStatusKilling, false, SandboxBindingStatusKilledOrphaned, true},
+		{"active gets orphaned", ids.ProductAgentID, SandboxBindingStatusActive, false, SandboxBindingStatusKilledOrphaned, true},
+		{"spawning gets orphaned", ids.BackendAgentID, SandboxBindingStatusSpawning, false, SandboxBindingStatusKilledOrphaned, true},
+		{"killing gets orphaned", ids.TestAgentID, SandboxBindingStatusKilling, false, SandboxBindingStatusKilledOrphaned, true},
 	}
 
 	var ws []want
 	for _, c := range cases {
 		row, err := s.CreateSandboxBinding(ctx, CreateSandboxBindingInput{
-			WorkspaceID:    ids.WorkspaceID,
-			ProjectAgentID: c.projectAgentID,
-			CacheKey:       "cache_" + c.name,
-			SandboxID:      "sbx_" + c.name,
-			TemplateID:     "tpl_test",
-			Status:         c.initStatus,
+			WorkspaceID: ids.WorkspaceID,
+			AgentID:     c.agentID,
+			CacheKey:    "cache_" + c.name,
+			SandboxID:   "sbx_" + c.name,
+			TemplateID:  "tpl_test",
+			Status:      c.initStatus,
 		})
 		if err != nil {
 			t.Fatalf("CreateSandboxBinding(%s): %v", c.name, err)
@@ -64,7 +64,7 @@ func TestSweepOrphanedSandboxBindings(t *testing.T) {
 
 	// Verify each row transitioned exactly as expected.
 	for i, c := range cases {
-		row, found, err := s.GetActiveSandboxBindingForAgent(ctx, ids.WorkspaceID, c.projectAgentID)
+		row, found, err := s.GetActiveSandboxBindingForAgent(ctx, ids.WorkspaceID, c.agentID)
 		if err != nil {
 			t.Errorf("GetActiveSandboxBindingForAgent(%s): %v", c.name, err)
 			continue

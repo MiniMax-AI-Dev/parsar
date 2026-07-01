@@ -294,7 +294,7 @@ func (c *Connector) assertLocalOwner(ctx context.Context, in connector.PromptInp
 	if c.ownerResolver == nil {
 		return nil
 	}
-	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.ProjectAgentID)
+	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID)
 	if err != nil {
 		return fmt.Errorf("stale_owner: resolve binding: %w", err)
 	}
@@ -313,7 +313,7 @@ func (c *Connector) assertLocalOwner(ctx context.Context, in connector.PromptInp
 
 // assertLocalOwnerForSubmit mirrors assertLocalOwner but resolves the
 // device id from the inflight slot — Submit requests carry only a
-// request id over the wire, not the conversation/project_agent tuple.
+// request id over the wire, not the conversation/agent tuple.
 // A nil submitSlots is treated as "single-pod / tests" and skips the
 // check, matching ownerResolver semantics.
 func (c *Connector) assertLocalOwnerForSubmit(ctx context.Context, requestID string, generation int64, kind string) error {

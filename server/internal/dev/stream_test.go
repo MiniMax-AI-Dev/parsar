@@ -93,9 +93,7 @@ func minimalValidPromptBody(t *testing.T) []byte {
 	body, err := json.Marshal(connector.PromptInput{
 		RunID:                 "00000000-0000-0000-0000-000000000999",
 		WorkspaceID:           "00000000-0000-0000-0000-000000000002",
-		ProjectID:             "00000000-0000-0000-0000-000000000004",
 		ConversationID:        "00000000-0000-0000-0000-000000000012",
-		ProjectAgentID:        "00000000-0000-0000-0000-000000000010",
 		AgentID:               "00000000-0000-0000-0000-000000000007",
 		AgentName:             "后端Agent",
 		TriggerMessageContent: "stream me",
@@ -103,7 +101,6 @@ func minimalValidPromptBody(t *testing.T) []byte {
 			"model_id": "00000000-0000-0000-0000-0000000000aa",
 			"workdir":  "/tmp/wd-stream-test",
 		},
-		ProjectAgentConfig: map[string]any{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -288,19 +285,17 @@ func parseSSEFrames(t *testing.T, r io.Reader) []map[string]any {
 // sees the same shape a real caller would send.
 func rebuildPromptInputFromJSON(raw string) connector.PromptInput {
 	var lift struct {
-		WorkspaceID        string         `json:"workspace_id"`
-		ConversationID     string         `json:"conversation_id"`
-		RunID              string         `json:"run_id"`
-		AgentConfig        map[string]any `json:"agent_config"`
-		ProjectAgentConfig map[string]any `json:"project_agent_config"`
+		WorkspaceID    string         `json:"workspace_id"`
+		ConversationID string         `json:"conversation_id"`
+		RunID          string         `json:"run_id"`
+		AgentConfig    map[string]any `json:"agent_config"`
 	}
 	_ = json.Unmarshal([]byte(raw), &lift)
 	return connector.PromptInput{
-		WorkspaceID:        lift.WorkspaceID,
-		ConversationID:     lift.ConversationID,
-		RunID:              lift.RunID,
-		AgentConfig:        lift.AgentConfig,
-		ProjectAgentConfig: lift.ProjectAgentConfig,
+		WorkspaceID:    lift.WorkspaceID,
+		ConversationID: lift.ConversationID,
+		RunID:          lift.RunID,
+		AgentConfig:    lift.AgentConfig,
 	}
 }
 

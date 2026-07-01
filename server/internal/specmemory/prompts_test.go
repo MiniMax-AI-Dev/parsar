@@ -69,7 +69,7 @@ func TestRenderMemoryBlockGroupsByType(t *testing.T) {
 		{MemoryType: MemoryTypeReference, Body: "dashboards.example.com"},
 		{MemoryType: MemoryTypeUser, Body: "user is a senior backend dev"},
 		{MemoryType: MemoryTypeFeedback, Body: "no defer in hot loop", Why: "got a 30% regression last year"},
-		{MemoryType: MemoryTypeProject, Body: "migrating to grpc", Why: "REST timeout SLO violations"},
+		{MemoryType: MemoryTypeWorkspace, Body: "migrating to grpc", Why: "REST timeout SLO violations"},
 	})
 	want := `<memory>
 ## user
@@ -78,7 +78,7 @@ func TestRenderMemoryBlockGroupsByType(t *testing.T) {
 ## feedback
 - no defer in hot loop (Why: got a 30% regression last year)
 
-## project
+## workspace
 - migrating to grpc (Why: REST timeout SLO violations)
 
 ## reference
@@ -160,7 +160,7 @@ func TestRenderIncrementalMemoryEmpty(t *testing.T) {
 
 func TestMemoryWriteGuideHasAllFourTypes(t *testing.T) {
 	guide := MemoryWriteGuide()
-	for _, want := range []string{"user", "feedback", "project", "reference"} {
+	for _, want := range []string{"user", "feedback", "workspace", "reference"} {
 		if !strings.Contains(guide, want) {
 			t.Errorf("MemoryWriteGuide missing %q", want)
 		}

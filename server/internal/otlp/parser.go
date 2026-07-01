@@ -18,7 +18,6 @@ const (
 	AttrRequester     = "parsar.requester"
 	AttrExecutor      = "parsar.executor"
 	AttrWorkspaceID   = "parsar.workspace_id"
-	AttrProjectID     = "parsar.project_id"
 	AttrApprover      = "parsar.approver"
 	AttrCredentialID  = "parsar.credential.id"
 	AttrExternalURL   = "parsar.external_object.url"
@@ -132,7 +131,6 @@ func buildEvent(eventType string, unixNano uint64, attrs map[string]string) (aud
 		TargetType:  "tool_call",
 		TargetID:    attrs[AttrToolCallID],
 		WorkspaceID: attrs[AttrWorkspaceID],
-		ProjectID:   attrs[AttrProjectID],
 		Payload:     payload,
 	}, nil
 }

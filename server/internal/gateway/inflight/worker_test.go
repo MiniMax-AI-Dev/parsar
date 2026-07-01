@@ -392,7 +392,7 @@ func (f *fakeStore) ClearFeishuInboundReaction(_ context.Context, messageID stri
 // don't care about footer data leave doneCardData empty — the helper
 // degrades to a zero DoneCardRunData (HasUsage=false), which the
 // renderer renders as the short `Ns · N steps` footer.
-func (f *fakeStore) LoadDoneCardRunData(_ context.Context, _, _, runID string) (store.DoneCardRunData, error) {
+func (f *fakeStore) LoadDoneCardRunData(_ context.Context, _, runID string) (store.DoneCardRunData, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if data, ok := f.doneCardData[runID]; ok {

@@ -18,7 +18,7 @@ const memoryWriteGuide = "<memory-write-guide>\n" +
 	"  - feedback  : guidance the user gave about how to work — corrections AND validated\n" +
 	"                non-obvious decisions. Always set --why (the reason makes the rule\n" +
 	"                applicable to edge cases later).\n" +
-	"  - project   : ongoing project state (initiatives, constraints, deadlines, decisions)\n" +
+	"  - workspace : ongoing workspace state (initiatives, constraints, deadlines, decisions)\n" +
 	"                that isn't derivable from code or git history. Always set --why.\n" +
 	"  - reference : pointers to external systems (dashboards, docs, Slack channels) so\n" +
 	"                future-you knows where to look.\n" +
@@ -46,7 +46,7 @@ func MemoryWriteGuide() string { return memoryWriteGuide }
 var memoryTypeRenderOrder = []MemoryType{
 	MemoryTypeUser,
 	MemoryTypeFeedback,
-	MemoryTypeProject,
+	MemoryTypeWorkspace,
 	MemoryTypeReference,
 }
 
@@ -76,7 +76,7 @@ func RenderSpecBlock(workspaceName string, fragments []Fragment) string {
 }
 
 // RenderMemoryBlock renders the SessionStart <memory> snapshot grouped
-// by MemoryType. Only feedback and project entries print the
+// by MemoryType. Only feedback and workspace entries print the
 // "(Why: ...)" suffix; user/reference rows stay terse.
 func RenderMemoryBlock(memories []Memory) string {
 	if len(memories) == 0 {
@@ -164,7 +164,7 @@ func writeMemoryLine(b *strings.Builder, m Memory) {
 // should suffix the (Why: ...) clause.
 func memoryTypeWantsWhy(mt MemoryType) bool {
 	switch mt {
-	case MemoryTypeFeedback, MemoryTypeProject:
+	case MemoryTypeFeedback, MemoryTypeWorkspace:
 		return true
 	}
 	return false

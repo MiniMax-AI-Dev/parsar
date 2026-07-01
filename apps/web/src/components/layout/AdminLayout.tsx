@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import { useAdminView, type AdminView } from "../../lib/admin-router"
@@ -13,12 +13,6 @@ import {
 } from "lucide-react"
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
 import { UserMenu } from "./UserMenu"
-import { useWorkspaceProjects } from "../../lib/api-workspaces"
-import {
-  setProjectId,
-  useProjectId,
-  useWorkspaceId,
-} from "../../lib/workspace"
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -83,28 +77,6 @@ export function AdminLayout({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const toggle = (key: string) =>
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
-
-  // Self-heal stale pid when the bound workspace doesn't own it.
-  // setWorkspaceId clears pid on dropdown/URL changes, but a pid from
-  // an earlier session can survive a page reload; without this, project-
-  // scoped hooks would surface another workspace's data.
-  const wsId = useWorkspaceId()
-  const pid = useProjectId()
-  const projectsQ = useWorkspaceProjects(wsId)
-  useEffect(() => {
-    if (!wsId) return
-    if (projectsQ.isLoading || projectsQ.isError || !projectsQ.data) return
-
-    if (!pid) {
-      if (projectsQ.data.projects.length === 1) {
-        setProjectId(projectsQ.data.projects[0].id)
-      }
-      return
-    }
-
-    const owned = projectsQ.data.projects.some((p) => p.id === pid)
-    if (!owned) setProjectId(null)
-  }, [wsId, pid, projectsQ.isLoading, projectsQ.isError, projectsQ.data])
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-subtle/60 text-fg antialiased">

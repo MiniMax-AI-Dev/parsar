@@ -45,8 +45,8 @@ const (
 	EnvOpenCodeBin    = "PARSAR_OPENCODE_BIN"
 	EnvOpenCodeRunner = "PARSAR_OPENCODE_RUNNER"
 
-	// EnvPlatformAdminUserIDs lists user UUIDs that bypass workspace/
-	// project membership checks. Comma-separated. Empty disables.
+	// EnvPlatformAdminUserIDs lists user UUIDs that bypass workspace
+	// membership checks. Comma-separated. Empty disables.
 	EnvPlatformAdminUserIDs = "PARSAR_PLATFORM_ADMIN_USER_IDS"
 
 	EnvLoginRedirectURL = "PARSAR_LOGIN_REDIRECT_URL"

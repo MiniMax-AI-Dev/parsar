@@ -43,7 +43,7 @@ func handleSelect(ctx context.Context, st Store, host gateway.FeishuRouteAgent, 
 	}); err != nil {
 		return Outcome{}, err
 	}
-	text := fmt.Sprintf("已选择 Agent「%s」（%s / %s）。", selected.AgentName, selected.WorkspaceName, selected.ProjectName)
+	text := fmt.Sprintf("已选择 Agent「%s」（%s / %s）。", selected.AgentName, selected.WorkspaceName, selected.WorkspaceSlug)
 	return replyAndStop(ctx, reply, host, event, text, "selected")
 }
 
@@ -141,7 +141,7 @@ func formatAgentList(agents []store.FeishuSharedBotAgent, currentAgentID string)
 			if agent.AgentID == currentAgentID {
 				marker = " ✓"
 			}
-			lines = append(lines, fmt.Sprintf("%s（%s — %s）%s", agent.AgentSlug, agent.AgentName, agent.ProjectName, marker))
+			lines = append(lines, fmt.Sprintf("%s（%s — %s）%s", agent.AgentSlug, agent.AgentName, agent.WorkspaceSlug, marker))
 		}
 	}
 	lines = append(lines, "", "发送 /select <agent-slug> 选择。")

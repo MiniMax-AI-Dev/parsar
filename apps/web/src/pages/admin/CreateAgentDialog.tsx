@@ -17,10 +17,10 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useProjectAgentCapabilitiesQuery, useEnableProjectAgentCapabilityMutation } from "../../lib/api-capabilities"
+import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery, useEnableAgentCapabilityMutation } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
-import type { UpdateProjectAgentProfileRequest } from "../../lib/api-agents"
+import type { UpdateAgentProfileRequest } from "../../lib/api-agents"
 import type {
   AgentInlineNewSecret,
   AgentRuntime,
@@ -29,7 +29,7 @@ import type {
   CreateAgentRequest,
   MarketplaceCapability,
   Model,
-  ProjectAgent,
+  Agent,
   RequiredCredential,
   Secret,
   UpdateAgentRequest,
@@ -48,48 +48,45 @@ function connectorForExecutionMode(mode: ExecutionMode): string {
   return "agent_daemon"
 }
 
-function executionModeFromAgent(a?: ProjectAgent | null): ExecutionMode {
+function executionModeFromAgent(a?: Agent | null): ExecutionMode {
   if (!a) return "sandbox"
   if (a.connector_type === "http") return "external"
   if (a.connector_type === "agent_daemon") {
-    return String(projectAgentConfig(a).daemon_mode ?? "local") === "sandbox" ? "sandbox" : "local_device"
+    return String(agentConfig(a).daemon_mode ?? "local") === "sandbox" ? "sandbox" : "local_device"
   }
   return runtimeFromAgent(a) === "local" ? "local_device" : "sandbox"
 }
 
-function agentEngineFromAgent(a?: ProjectAgent | null): AgentEngine {
-  const v = String(projectAgentConfig(a).agent_kind ?? agentConfig(a).agent_kind ?? "claude_code")
+function agentEngineFromAgent(a?: Agent | null): AgentEngine {
+  const v = String(agentConfig(a).agent_kind ?? "claude_code")
   if (v === "opencode") return "opencode"
   if (v === "codex") return "codex"
   if (v === "pi") return "pi"
   return "claude_code"
 }
 
-function sandboxSizeFromAgent(a?: ProjectAgent | null): SandboxSize {
-  // Mirrors the server-side resolveTemplate precedence:
-  // ProjectAgentConfig > AgentConfig > "standard". The server actually
-  // reads the same fields from the same maps at sandbox cold-start
-  // time, so we keep the UI and the runtime view in sync.
-  const v = String(projectAgentConfig(a).sandbox_size ?? agentConfig(a).sandbox_size ?? "standard")
+function sandboxSizeFromAgent(a?: Agent | null): SandboxSize {
+  // The server reads sandbox_size from the same merged config map at sandbox
+  // cold-start time, so we keep the UI and the runtime view in sync.
+  const v = String(agentConfig(a).sandbox_size ?? "standard")
   return v === "xl" ? "xl" : "standard"
 }
 
 export type AgentDialogMode = "create" | "edit"
 
 export interface AgentDialogValues {
-  projectAgentID?: string
+  agentID?: string
   body: CreateAgentRequest | UpdateAgentRequest
-  projectAgentProfile?: UpdateProjectAgentProfileRequest
+  agentProfile?: UpdateAgentProfileRequest
 }
 
 interface CreateAgentDialogProps {
   open: boolean
   mode: AgentDialogMode
   workspaceID: string | null
-  projectID: string | null
   workspaceRole?: UserWorkspace["role"]
   models: Model[]
-  agent?: ProjectAgent | null
+  agent?: Agent | null
   pending: boolean
   error: unknown
   onOpenChange: (open: boolean) => void
@@ -103,56 +100,51 @@ function extractErrorMessage(err: unknown): string | null {
   return String(err)
 }
 
-function agentConfig(a?: ProjectAgent | null): Record<string, unknown> {
-  return (a?.agent_config ?? {}) as Record<string, unknown>
-}
-
-function profileConfig(a?: ProjectAgent | null): Record<string, unknown> {
-  return ((agentConfig(a).profile ?? {}) as Record<string, unknown>)
-}
-
-function projectAgentConfig(a?: ProjectAgent | null): Record<string, unknown> {
+function agentConfig(a?: Agent | null): Record<string, unknown> {
   return (a?.config ?? {}) as Record<string, unknown>
 }
 
-function modelIDFromAgent(a?: ProjectAgent | null): string {
+function profileConfig(a?: Agent | null): Record<string, unknown> {
+  return ((agentConfig(a).profile ?? {}) as Record<string, unknown>)
+}
+
+function modelIDFromAgent(a?: Agent | null): string {
   const cfg = agentConfig(a)
   const profile = profileConfig(a)
   return String(cfg.default_model_id ?? cfg.model_id ?? profile.model_id ?? "")
 }
 
-function promptFromAgent(a?: ProjectAgent | null): string {
+function promptFromAgent(a?: Agent | null): string {
   const cfg = agentConfig(a)
   return String(cfg.system_prompt ?? DEFAULT_PROMPT)
 }
 
-function capabilitiesFromAgent(a?: ProjectAgent | null): string[] {
+function capabilitiesFromAgent(a?: Agent | null): string[] {
   const cfg = agentConfig(a)
   const profile = profileConfig(a)
   const caps = cfg.capabilities ?? profile.capabilities ?? profile.skills
   return Array.isArray(caps) ? caps.filter((v): v is string => typeof v === "string") : []
 }
 
-function runtimeFromAgent(a?: ProjectAgent | null): RuntimeChoice {
+function runtimeFromAgent(a?: Agent | null): RuntimeChoice {
   // Legacy rows predating the per-agent runtime field default to "sandbox",
   // matching the migration backfill so server and UI agree.
   return a?.runtime ?? "sandbox"
 }
 
-function deviceIDFromAgent(a?: ProjectAgent | null): string {
-  return String(projectAgentConfig(a).device_id ?? agentConfig(a).device_id ?? "")
+function deviceIDFromAgent(a?: Agent | null): string {
+  return String(agentConfig(a).device_id ?? "")
 }
 
-function workDirFromAgent(a?: ProjectAgent | null): string {
+function workDirFromAgent(a?: Agent | null): string {
   // Same fallback chain as the backend's firstConfigString reader so old rows
   // (stored under work_dir / working_directory) still surface.
-  const cfg = projectAgentConfig(a)
-  const fallback = agentConfig(a)
-  return String(cfg.work_dir ?? cfg.workdir ?? cfg.working_directory ?? fallback.work_dir ?? fallback.workdir ?? "")
+  const cfg = agentConfig(a)
+  return String(cfg.work_dir ?? cfg.workdir ?? cfg.working_directory ?? "")
 }
 
-function projectConfigBaseForSubmit(a: ProjectAgent | null | undefined, connector: string): Record<string, unknown> {
-  const cfg = { ...projectAgentConfig(a) }
+function configBaseForSubmit(a: Agent | null | undefined, connector: string): Record<string, unknown> {
+  const cfg = { ...agentConfig(a) }
   delete cfg.profile
   if (connector === "agent_daemon") {
     delete cfg.agent_kind
@@ -180,7 +172,6 @@ export function CreateAgentDialog({
   open,
   mode,
   workspaceID,
-  projectID,
   workspaceRole,
   models,
   agent,
@@ -250,17 +241,16 @@ export function CreateAgentDialog({
 
   const capabilitiesQ = useCapabilitiesQuery(workspaceID, capabilitySearch)
   const allCapabilitiesQ = useCapabilitiesQuery(workspaceID, "")
-  // In edit mode, fetch existing per-project_agent bindings so we can
+  // In edit mode, fetch existing per-agent bindings so we can
   // hydrate the version dropdowns with the current pinning_mode +
   // capability_version_id. In create mode the response is empty.
-  const existingBindingsQ = useProjectAgentCapabilitiesQuery(projectID, mode === "edit" ? agent?.project_agent_id ?? null : null)
-  const enableBindingMut = useEnableProjectAgentCapabilityMutation(projectID, agent?.project_agent_id ?? null)
+  const existingBindingsQ = useAgentCapabilitiesQuery(workspaceID, mode === "edit" ? agent?.id ?? null : null)
+  const enableBindingMut = useEnableAgentCapabilityMutation(workspaceID, agent?.id ?? null)
   const secretsQ = useSecrets(workspaceID)
   const sharedSecrets: Secret[] = useMemo(
     () => (secretsQ.data?.secrets ?? []).filter((s) => s.kind === "capability_inline" && s.status === "active"),
     [secretsQ.data?.secrets],
   )
-  void projectID
   const activeModels = useMemo(() => models.filter((m) => m.status === "active"), [models])
   const selectedModel = useMemo(() => activeModels.find((m) => m.id === modelID) ?? null, [activeModels, modelID])
   const capabilityOptions = useMemo(() => {
@@ -493,9 +483,9 @@ export function CreateAgentDialog({
     setPairDialogOpen(false)
     setStep(1)
     setCapabilityTypeFilter("all")
-  }, [open, mode, agent?.project_agent_id, firstModelID])
+  }, [open, mode, agent?.id, firstModelID])
 
-  // Hydrate edit-mode binding choices when the listProjectAgentCapabilities
+  // Hydrate edit-mode binding choices when the listAgentCapabilities
   // response lands. We only seed entries the user hasn't touched (i.e.
   // key not already present) so a hot reload of the bindings query won't
   // clobber an in-flight version pick.
@@ -610,14 +600,6 @@ export function CreateAgentDialog({
   const showExecutionChoices = mode === "create" || daemonExecutionEditable
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
   const errMsg = extractErrorMessage(error)
-  const attachedCount = Number(
-    (agentConfig(agent).attached_project_count as number | undefined) ??
-    (agent?.config?.attached_project_count as number | undefined) ??
-    1
-  )
-  const attachedProjects = Array.isArray(agent?.config?.attached_projects)
-    ? (agent?.config?.attached_projects as Array<{ name?: string; id?: string }>)
-    : []
 
   function prefillQuery(target: "models" | "connectors") {
     const url = new URL(window.location.href)
@@ -710,8 +692,8 @@ export function CreateAgentDialog({
         : (cap.latest_version_id as string)
       return { capability_version_id: versionID, pinning_mode: pinningMode }
     })
-    const projectConfig: Record<string, unknown> = {
-      ...projectConfigBaseForSubmit(agent, connector),
+    const mergedConfig: Record<string, unknown> = {
+      ...configBaseForSubmit(agent, connector),
       profile: {
         ...(requiresModel ? { model_id: modelID } : {}),
         capabilities: capabilityNames,
@@ -736,10 +718,10 @@ export function CreateAgentDialog({
     // can persist the clear. In create mode there's no stored state to
     // override, so we omit empty payloads to keep the JSON tight.
     //
-    // These belong to agents.agent_config, NOT project_agents.config, so we
-    // build them on a separate object — the projectAgentProfile request
-    // below intentionally doesn't see them.
-    const agentBodyConfig: Record<string, unknown> = { ...projectConfig }
+    // These belong to the agent config the update body carries, so we build
+    // them on a separate object — the agentProfile request below
+    // intentionally doesn't see them.
+    const agentBodyConfig: Record<string, unknown> = { ...mergedConfig }
     if (mode === "edit" || Object.keys(credentialBindings).length > 0) {
       agentBodyConfig.credential_bindings = credentialBindings
     }
@@ -772,12 +754,12 @@ export function CreateAgentDialog({
       config: agentBodyConfig,
       ...(inlineSecretsToCreate.length > 0 ? { inline_new_secrets: inlineSecretsToCreate } : {}),
     } satisfies CreateAgentRequest | UpdateAgentRequest
-    const projectAgentProfile = mode === "edit" && connector === "agent_daemon"
+    const agentProfile = mode === "edit" && connector === "agent_daemon"
       ? {
           ...(requiresModel ? { model_id: modelID } : {}),
           system_prompt: systemPrompt.trim() || undefined,
-          config: projectConfig,
-        } satisfies UpdateProjectAgentProfileRequest
+          config: mergedConfig,
+        } satisfies UpdateAgentProfileRequest
       : undefined
     // In edit mode, sync per-binding pinning_mode / version against the
     // server BEFORE firing the main update. updateAgent + the server-
@@ -785,7 +767,7 @@ export function CreateAgentDialog({
     // pinning_mode on rows that already exist (the "don't auto-upgrade"
     // contract), so we have to call enable explicitly for each binding
     // the user changed. enable's upsert path takes care of the UPDATE
-    // when the (project_agent, capability) row already exists.
+    // when the (agent, capability) row already exists.
     //
     // We MUST await every per-binding mutate before calling onSubmit:
     // syncAgentCapabilities racing with the per-binding enables would
@@ -793,7 +775,7 @@ export function CreateAgentDialog({
     // and re-enable it with its own default mode, clobbering the
     // pinning_mode the user just picked. Sequencing here makes the
     // outcome deterministic regardless of network latency.
-    if (mode === "edit" && agent?.project_agent_id && projectID) {
+    if (mode === "edit" && agent?.id && workspaceID) {
       const installed = existingBindingsQ.data?.installed ?? []
       const existingByCapID = new Map<string, { versionID: string; mode: "latest" | "pinned" }>()
       for (const binding of installed) {
@@ -838,7 +820,7 @@ export function CreateAgentDialog({
         }
       }
     }
-    onSubmit({ projectAgentID: agent?.project_agent_id, body, projectAgentProfile })
+    onSubmit({ agentID: agent?.id, body, agentProfile })
   }
 
   // capabilityNameForID resolves capability_id → name from the
@@ -916,22 +898,6 @@ export function CreateAgentDialog({
             e.preventDefault()
           }}
         >
-          {mode === "edit" && attachedCount > 1 && (
-            <div className="rounded-lg border border-warning-border bg-warning-subtle/50 p-3 text-sm text-warning-emphasis">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-medium">{t("agents.form.sharedBanner", { count: attachedCount })}</p>
-                  {attachedProjects.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {attachedProjects.map((p, i) => <Badge key={p.id ?? i} variant="warning">{p.name ?? p.id}</Badge>)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {step === 1 && (
             <section className="space-y-3">
               <Field

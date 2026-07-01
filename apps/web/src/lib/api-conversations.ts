@@ -14,22 +14,22 @@ import type {
 
 /* --- Query keys --------------------------------------------------------- */
 
-const KEY_LIST = (pid: string, agentID: string) =>
-  ["admin", "conversations", pid, agentID || "_all"] as const
+const KEY_LIST = (wsId: string, agentID: string) =>
+  ["admin", "conversations", wsId, agentID || "_all"] as const
 const KEY_ONE = (cid: string) => ["admin", "conversation", cid] as const
 const KEY_TIMELINE = (cid: string) => ["admin", "conversationTimeline", cid] as const
 
 /* --- Network ------------------------------------------------------------ */
 
 async function listConversations(
-  pid: string | null,
+  wsId: string | null,
   agentID: string
 ): Promise<ListConversationsResponse> {
-  if (!pid) return { conversations: [] }
+  if (!wsId) return { conversations: [] }
   const query: Record<string, string | number> = { limit: 200 }
   if (agentID) query.agent_id = agentID
   return apiRequest<ListConversationsResponse>(
-    `/api/v1/projects/${encodeURIComponent(pid)}/conversations`,
+    `/api/v1/workspaces/${encodeURIComponent(wsId)}/conversations`,
     { query }
   )
 }
@@ -46,11 +46,11 @@ async function getTimeline(cid: string): Promise<ConversationTimeline> {
 }
 
 export async function createConversation(
-  pid: string,
+  wsId: string,
   body: CreateConversationRequest
 ): Promise<Conversation> {
   return apiRequest<Conversation>(
-    `/api/v1/projects/${encodeURIComponent(pid)}/conversations`,
+    `/api/v1/workspaces/${encodeURIComponent(wsId)}/conversations`,
     { method: "POST", body }
   )
 }
@@ -138,16 +138,16 @@ function isUserCancelledError(message: string): boolean {
 
 /* --- React Query hooks -------------------------------------------------- */
 
-export function useProjectConversations(pid: string | null, agentID: string = "") {
+export function useConversations(wsId: string | null, agentID: string = "") {
   return useQuery({
-    queryKey: KEY_LIST(pid ?? "_none", agentID),
-    queryFn: () => listConversations(pid, agentID),
+    queryKey: KEY_LIST(wsId ?? "_none", agentID),
+    queryFn: () => listConversations(wsId, agentID),
     retry: noUnreachableRetry,
     staleTime: 15_000,
   })
 }
 
-export function useConversation(cid: string | null, _projectIDForMock?: string | null) {
+export function useConversation(cid: string | null, _workspaceIDForMock?: string | null) {
   return useQuery({
     queryKey: KEY_ONE(cid ?? "_none"),
     queryFn: () => {
@@ -162,7 +162,7 @@ export function useConversation(cid: string | null, _projectIDForMock?: string |
 
 export function useConversationTimeline(
   cid: string | null,
-  _projectIDForMock?: string | null,
+  _workspaceIDForMock?: string | null,
   opts: { pollingEnabled?: boolean } = {}
 ) {
   const pollingEnabled = opts.pollingEnabled ?? true
@@ -307,24 +307,24 @@ export function useAgentRunStream(
   return state
 }
 
-export function useCreateConversation(pid: string | null) {
+export function useCreateConversation(wsId: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: CreateConversationRequest) => {
-      if (!pid) throw new Error("project id is required")
-      return createConversation(pid, body)
+      if (!wsId) throw new Error("workspace id is required")
+      return createConversation(wsId, body)
     },
     retry: noUnreachableRetry,
     onSuccess: () => {
       // New conversation may be bound to any agent, so invalidate every
-      // per-agent slice for this project. Predicate matches both
-      // ['admin','conversations',pid,'_all'] and the per-agent variant.
-      if (pid) {
+      // per-agent slice for this workspace. Predicate matches both
+      // ['admin','conversations',wsId,'_all'] and the per-agent variant.
+      if (wsId) {
         qc.invalidateQueries({
           predicate: (q) =>
             q.queryKey[0] === "admin" &&
             q.queryKey[1] === "conversations" &&
-            q.queryKey[2] === pid,
+            q.queryKey[2] === wsId,
         })
       }
     },
@@ -357,7 +357,7 @@ export function useSendUserMessage(cid: string | null) {
  * Update a conversation's user-visible title. Server trims and caps at 200
  * chars; 422 on empty / too-long, 404 on unknown / already-deleted.
  */
-export function useUpdateConversationTitle(pid: string | null) {
+export function useUpdateConversationTitle(wsId: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (args: { cid: string; title: string }) =>
@@ -365,12 +365,12 @@ export function useUpdateConversationTitle(pid: string | null) {
     retry: noUnreachableRetry,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: KEY_ONE(args.cid) })
-      if (pid) {
+      if (wsId) {
         qc.invalidateQueries({
           predicate: (q) =>
             q.queryKey[0] === "admin" &&
             q.queryKey[1] === "conversations" &&
-            q.queryKey[2] === pid,
+            q.queryKey[2] === wsId,
         })
       }
     },
@@ -383,7 +383,7 @@ export function useUpdateConversationTitle(pid: string | null) {
  * passing the deleted id back to useConversation() returns 404 and triggers
  * the EmptyChat fallback in ConversationsPage.
  */
-export function useDeleteConversation(pid: string | null) {
+export function useDeleteConversation(wsId: string | null) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (cid: string) => deleteConversation(cid),
@@ -391,12 +391,12 @@ export function useDeleteConversation(pid: string | null) {
     onSuccess: (_data, cid) => {
       qc.invalidateQueries({ queryKey: KEY_ONE(cid) })
       qc.invalidateQueries({ queryKey: KEY_TIMELINE(cid) })
-      if (pid) {
+      if (wsId) {
         qc.invalidateQueries({
           predicate: (q) =>
             q.queryKey[0] === "admin" &&
             q.queryKey[1] === "conversations" &&
-            q.queryKey[2] === pid,
+            q.queryKey[2] === wsId,
         })
       }
     },

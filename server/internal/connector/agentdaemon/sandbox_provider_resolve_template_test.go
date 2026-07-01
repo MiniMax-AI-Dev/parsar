@@ -40,7 +40,7 @@ func TestResolveTemplate_DefaultsToStandardWhenNoSizeConfigured(t *testing.T) {
 	}
 }
 
-func TestResolveTemplate_HonorsProjectAgentXL(t *testing.T) {
+func TestResolveTemplate_HonorsAgentXL(t *testing.T) {
 	p := newProviderForResolveTest(E2BProviderConfig{
 		Template: "parsar-daemon",
 		Templates: map[string]string{
@@ -51,7 +51,7 @@ func TestResolveTemplate_HonorsProjectAgentXL(t *testing.T) {
 	})
 
 	in := connector.PromptInput{
-		ProjectAgentConfig: map[string]any{"sandbox_size": "xl"},
+		AgentConfig: map[string]any{"sandbox_size": "xl"},
 	}
 	size, tmpl := p.resolveTemplate(in)
 
@@ -60,33 +60,6 @@ func TestResolveTemplate_HonorsProjectAgentXL(t *testing.T) {
 	}
 	if tmpl != "parsar-daemon-xl" {
 		t.Errorf("template = %q, want %q", tmpl, "parsar-daemon-xl")
-	}
-}
-
-func TestResolveTemplate_ProjectAgentOverridesAgentDefault(t *testing.T) {
-	// AgentConfig says xl, ProjectAgentConfig says standard — project
-	// override wins. Mirrors the precedence used by injectClaudeManagedModel
-	// for model_id (project > agent > default).
-	p := newProviderForResolveTest(E2BProviderConfig{
-		Template: "parsar-daemon",
-		Templates: map[string]string{
-			"standard": "parsar-daemon",
-			"xl":       "parsar-daemon-xl",
-		},
-		DefaultSize: "standard",
-	})
-
-	in := connector.PromptInput{
-		AgentConfig:        map[string]any{"sandbox_size": "xl"},
-		ProjectAgentConfig: map[string]any{"sandbox_size": "standard"},
-	}
-	size, tmpl := p.resolveTemplate(in)
-
-	if size != "standard" {
-		t.Errorf("size = %q, want project override %q", size, "standard")
-	}
-	if tmpl != "parsar-daemon" {
-		t.Errorf("template = %q, want %q", tmpl, "parsar-daemon")
 	}
 }
 
@@ -101,7 +74,7 @@ func TestResolveTemplate_FallsBackToTemplateWhenXLNotConfigured(t *testing.T) {
 	})
 
 	in := connector.PromptInput{
-		ProjectAgentConfig: map[string]any{"sandbox_size": "xl"},
+		AgentConfig: map[string]any{"sandbox_size": "xl"},
 	}
 	size, tmpl := p.resolveTemplate(in)
 
@@ -121,7 +94,7 @@ func TestResolveTemplate_WhitespaceSizeTreatedAsUnset(t *testing.T) {
 	})
 
 	in := connector.PromptInput{
-		ProjectAgentConfig: map[string]any{"sandbox_size": "   "},
+		AgentConfig: map[string]any{"sandbox_size": "   "},
 	}
 	size, tmpl := p.resolveTemplate(in)
 

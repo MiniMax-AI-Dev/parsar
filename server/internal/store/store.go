@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	guuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 type Store struct {
@@ -91,7 +91,7 @@ func (s *Store) dispatchPendingStreaming(ctx context.Context, pending []Streamin
 
 // dispatchNextQueuedRunAfter is invoked by run terminators AFTER their
 // transaction commits. Looks for the oldest queued run on the same
-// (conversation, project_agent) and hands it to the streaming dispatcher.
+// (conversation, agent) and hands it to the streaming dispatcher.
 // Nil-safe. Errors are swallowed — missed dequeues get picked up by a
 // subsequent terminator or the next inbound message.
 func (s *Store) dispatchNextQueuedRunAfter(ctx context.Context, finishedRunID string) {
@@ -114,18 +114,14 @@ func (s *Store) dispatchNextQueuedRunAfter(ctx context.Context, finishedRunID st
 }
 
 type DevFixtureIDs struct {
-	UserID                string
-	FeishuAuthIdentityID  string
-	WorkspaceID           string
-	WorkspaceMemberID     string
-	ProjectID             string
-	ProductAgentID        string
-	BackendAgentID        string
-	TestAgentID           string
-	ProductProjectAgentID string
-	BackendProjectAgentID string
-	TestProjectAgentID    string
-	ConversationID        string
+	UserID               string
+	FeishuAuthIdentityID string
+	WorkspaceID          string
+	WorkspaceMemberID    string
+	ProductAgentID       string
+	BackendAgentID       string
+	TestAgentID          string
+	ConversationID       string
 }
 
 type DevSeedResult struct {
@@ -134,9 +130,7 @@ type DevSeedResult struct {
 	AuthIdentities   int64
 	Workspaces       int64
 	WorkspaceMembers int64
-	Projects         int64
 	Agents           int64
-	ProjectAgents    int64
 	Conversations    int64
 }
 
@@ -200,7 +194,6 @@ type CreateInboundIMMessageResult struct {
 	Mentions       []string
 	CreatedAt      time.Time
 	WorkspaceID    string
-	ProjectID      string
 	ConversationID string
 }
 
@@ -227,7 +220,6 @@ type CompleteAgentRunInput struct {
 type MarkAgentRunRunningResult struct {
 	RunID          string    `json:"run_id"`
 	WorkspaceID    string    `json:"workspace_id"`
-	ProjectID      string    `json:"project_id"`
 	ConversationID string    `json:"conversation_id"`
 	Status         string    `json:"status"`
 	StartedAt      time.Time `json:"started_at"`
@@ -255,9 +247,7 @@ type CompleteAgentRunResult struct {
 	MessageID       string
 	Status          string
 	WorkspaceID     string
-	ProjectID       string
 	ConversationID  string
-	ProjectAgentID  string
 	AgentID         string
 	ChildRunIDs     []string
 	SkippedMentions []SkippedAgentMention
@@ -267,23 +257,20 @@ type CompleteAgentRunResult struct {
 }
 
 type SkippedAgentMention struct {
-	Mention        string `json:"mention"`
-	ProjectAgentID string `json:"project_agent_id,omitempty"`
-	Reason         string `json:"reason"`
+	Mention string `json:"mention"`
+	AgentID string `json:"agent_id,omitempty"`
+	Reason  string `json:"reason"`
 }
 
-type ProjectAgentRead struct {
-	ProjectAgentID string         `json:"project_agent_id"`
-	ProjectID      string         `json:"project_id"`
-	AgentID        string         `json:"agent_id"`
-	Name           string         `json:"name"`
-	Slug           string         `json:"slug"`
-	Description    string         `json:"description"`
-	ConnectorType  string         `json:"connector_type"`
-	Status         string         `json:"status"`
-	Runtime        *string        `json:"runtime,omitempty"`
-	Config         map[string]any `json:"config"`
-	AgentConfig    map[string]any `json:"agent_config"`
+type AgentRead struct {
+	AgentID       string         `json:"agent_id"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	Description   string         `json:"description"`
+	ConnectorType string         `json:"connector_type"`
+	Status        string         `json:"status"`
+	Runtime       *string        `json:"runtime,omitempty"`
+	Config        map[string]any `json:"config"`
 
 	// Visibility carries the workspace-level Agent visibility. Defaults to "workspace".
 	Visibility string `json:"visibility,omitempty"`
@@ -296,9 +283,9 @@ type ProjectAgentRead struct {
 
 	EnabledAt time.Time `json:"enabled_at"`
 
-	// Explicit runtime binding on the project_agent. Empty when no
-	// runtime is bound — dispatch is blocked in that state. RuntimeKind
-	// mirrors runtimes.type.
+	// Explicit runtime binding on the agent. Empty when no runtime is
+	// bound — dispatch is blocked in that state. RuntimeKind mirrors
+	// runtimes.type.
 	RuntimeID       string `json:"runtime_id,omitempty"`
 	RuntimeName     string `json:"runtime_name,omitempty"`
 	RuntimeKind     string `json:"runtime_kind,omitempty"`
@@ -321,7 +308,7 @@ type WorkspaceRuntimeSettingsRead struct {
 	RuntimeCredentialSecretID string         `json:"runtime_credential_secret_id,omitempty"`
 	RuntimeConfig             map[string]any `json:"runtime_config"`
 	RuntimeCredentialMasked   string         `json:"runtime_credential_masked,omitempty"`
-	// SandboxAgentCount is the number of active project-agent bindings in
+	// SandboxAgentCount is the number of active agent bindings in
 	// this workspace whose daemon_mode is 'sandbox'.
 	SandboxAgentCount int64 `json:"sandbox_agent_count"`
 }
@@ -341,17 +328,6 @@ type AgentSummary struct {
 	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
-type ProjectAgentSummary struct {
-	ID          string         `json:"id"`
-	WorkspaceID string         `json:"workspace_id"`
-	ProjectID   string         `json:"project_id"`
-	AgentID     string         `json:"agent_id"`
-	Status      string         `json:"status"`
-	Config      map[string]any `json:"config"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-}
-
 type InitialAgentCapabilityInput struct {
 	CapabilityVersionID string
 	Configuration       map[string]any
@@ -364,7 +340,6 @@ type InitialAgentCapabilityInput struct {
 
 type CreateAgentInput struct {
 	WorkspaceID         string
-	ProjectID           string
 	Name                string
 	Description         string
 	ConnectorType       string
@@ -374,7 +349,7 @@ type CreateAgentInput struct {
 	CapabilitiesSet     bool
 	InitialCapabilities []InitialAgentCapabilityInput
 	Runtime             string
-	ProjectAgentConfig  map[string]any
+	AgentConfig         map[string]any
 	Visibility          string
 	Slug                string
 	CreatedBy           string
@@ -382,7 +357,6 @@ type CreateAgentInput struct {
 
 type CreateAgentResult struct {
 	Agent               AgentSummary          `json:"agent"`
-	ProjectAgent        ProjectAgentSummary   `json:"project_agent"`
 	InitialCapabilities []AgentCapabilityRead `json:"initial_capabilities,omitempty"`
 }
 
@@ -404,8 +378,7 @@ type UpdateAgentInput struct {
 }
 
 type DeleteAgentResult struct {
-	Agent                   AgentSummary `json:"agent"`
-	DetachedProjectAgentIDs []string     `json:"detached_project_agent_ids"`
+	Agent AgentSummary `json:"agent"`
 }
 
 type HTTPAgentRunInvocation = AgentRunInvocation
@@ -413,9 +386,7 @@ type HTTPAgentRunInvocation = AgentRunInvocation
 type AgentRunInvocation struct {
 	RunID                 string `json:"run_id"`
 	WorkspaceID           string `json:"workspace_id"`
-	ProjectID             string `json:"project_id"`
 	ConversationID        string `json:"conversation_id"`
-	ProjectAgentID        string `json:"project_agent_id"`
 	AgentID               string `json:"agent_id"`
 	AgentName             string `json:"agent_name"`
 	AgentSlug             string `json:"agent_slug"`
@@ -429,37 +400,33 @@ type AgentRunInvocation struct {
 	// can ignore the field.
 	TriggerAttachments []MessageAttachment `json:"trigger_attachments,omitempty"`
 	AgentConfig        map[string]any      `json:"agent_config"`
-	ProjectAgentConfig map[string]any      `json:"project_agent_config"`
 }
 
-type ConfigureDevProjectAgentConnectorInput struct {
-	ProjectAgentID string
-	ConnectorType  string
-	Endpoint       string
-	SecretID       string
-	Model          string
-	ModelID        string
-	Workdir        string
-	SystemPrompt   string
+type ConfigureDevAgentConnectorInput struct {
+	AgentID       string
+	ConnectorType string
+	Endpoint      string
+	SecretID      string
+	Model         string
+	ModelID       string
+	Workdir       string
+	SystemPrompt  string
 }
 
-type ConfigureDevProjectAgentConnectorResult struct {
-	ProjectAgentID     string         `json:"project_agent_id"`
-	ProjectID          string         `json:"project_id"`
-	AgentID            string         `json:"agent_id"`
-	Name               string         `json:"name"`
-	Slug               string         `json:"slug"`
-	ConnectorType      string         `json:"connector_type"`
-	AgentConfig        map[string]any `json:"agent_config"`
-	ProjectAgentConfig map[string]any `json:"project_agent_config,omitempty"`
+type ConfigureDevAgentConnectorResult struct {
+	AgentID       string         `json:"agent_id"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	ConnectorType string         `json:"connector_type"`
+	AgentConfig   map[string]any `json:"agent_config"`
 }
 
-type ConfigureProjectAgentProfileInput struct {
-	ProjectAgentID string
-	ModelID        string
-	Workdir        string
-	SystemPrompt   string
-	Config         map[string]any
+type ConfigureAgentProfileInput struct {
+	AgentID      string
+	ModelID      string
+	Workdir      string
+	SystemPrompt string
+	Config       map[string]any
 }
 
 type ClaimHTTPAgentRunResult struct {
@@ -482,9 +449,8 @@ type RequeueAgentRunInput struct {
 type RequeueAgentRunResult struct {
 	RunID          string `json:"run_id"`
 	WorkspaceID    string `json:"workspace_id"`
-	ProjectID      string `json:"project_id"`
 	ConversationID string `json:"conversation_id"`
-	ProjectAgentID string `json:"project_agent_id"`
+	AgentID        string `json:"agent_id"`
 	Status         string `json:"status"`
 }
 
@@ -498,39 +464,37 @@ type ConfigureDevConversationExternalRefInput struct {
 type ConfigureDevConversationExternalRefResult struct {
 	ConversationID   string `json:"conversation_id"`
 	WorkspaceID      string `json:"workspace_id"`
-	ProjectID        string `json:"project_id"`
 	Platform         string `json:"platform"`
 	ExternalID       string `json:"external_id"`
 	ExternalThreadID string `json:"external_thread_id"`
 }
 
-type CreateProjectConversationInput struct {
-	ProjectID string
-	Title     string
+type CreateWorkspaceConversationInput struct {
+	WorkspaceID string
+	Title       string
 	// Surface ∈ {web, im, api}. Empty defaults to "web".
 	Surface string
 	// Form ∈ {thread, group, dm, oneshot}. Empty defaults based on Surface:
 	//   web → thread, im → group, api → oneshot.
 	Form     string
 	Metadata map[string]any
-	// PrimaryAgentID, when set, identifies the project-scoped Agent this
-	// conversation is bound to. Must be the id of an active project_agent
-	// belonging to ProjectID. Persisted under metadata["primary_agent_id"].
-	// Empty string means no agent bound.
+	// PrimaryAgentID, when set, identifies the Agent this conversation is
+	// bound to. Must be the id of an active agent belonging to WorkspaceID.
+	// Persisted under metadata["primary_agent_id"]. Empty string means no
+	// agent bound.
 	PrimaryAgentID string
 }
 
 type ConversationRead struct {
 	ID          string         `json:"id"`
 	WorkspaceID string         `json:"workspace_id"`
-	ProjectID   string         `json:"project_id"`
 	Surface     string         `json:"surface"`
 	Form        string         `json:"form"`
 	Title       string         `json:"title"`
 	Status      string         `json:"status"`
 	Metadata    map[string]any `json:"metadata"`
 	// PrimaryAgentID / PrimaryAgentName are derived fields, hydrated from
-	// metadata.primary_agent_id + a JOIN against project_agents / agents.
+	// metadata.primary_agent_id + a JOIN against agents.
 	PrimaryAgentID   string    `json:"primary_agent_id,omitempty"`
 	PrimaryAgentName string    `json:"primary_agent_name,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
@@ -554,7 +518,6 @@ type ConversationTimelineRead struct {
 type MessageRead struct {
 	ID             string `json:"id"`
 	WorkspaceID    string `json:"workspace_id"`
-	ProjectID      string `json:"project_id"`
 	ConversationID string `json:"conversation_id"`
 	SenderType     string `json:"sender_type"`
 	SenderID       string `json:"sender_id"`
@@ -612,11 +575,9 @@ type ToolStepRead struct {
 type AgentRunBriefRead struct {
 	ID               string         `json:"id"`
 	WorkspaceID      string         `json:"workspace_id"`
-	ProjectID        string         `json:"project_id"`
 	ConversationID   string         `json:"conversation_id"`
 	TriggerMessageID string         `json:"trigger_message_id,omitempty"`
 	OutputMessageID  string         `json:"output_message_id,omitempty"`
-	ProjectAgentID   string         `json:"project_agent_id"`
 	AgentID          string         `json:"agent_id"`
 	AgentName        string         `json:"agent_name"`
 	AgentSlug        string         `json:"agent_slug"`
@@ -625,7 +586,7 @@ type AgentRunBriefRead struct {
 	UserFacingReason string         `json:"user_facing_reason,omitempty"`
 	Steps            []ToolStepRead `json:"steps,omitempty"`
 	// QueuePosition is the 1-indexed position of this run in its
-	// (conversation, project_agent) serial-queue lane, populated only
+	// (conversation, agent) serial-queue lane, populated only
 	// for status='queued' rows.
 	QueuePosition int        `json:"queue_position,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
@@ -708,7 +669,6 @@ type AuditRecordRead struct {
 	TargetType  string         `json:"target_type,omitempty"`
 	TargetID    string         `json:"target_id,omitempty"`
 	WorkspaceID string         `json:"workspace_id,omitempty"`
-	ProjectID   string         `json:"project_id,omitempty"`
 	Payload     map[string]any `json:"payload"`
 }
 
@@ -716,7 +676,6 @@ type AuditRecordRead struct {
 // Store.ListAuditRecords. Limit is mandatory and capped server-side.
 type ListAuditRecordsFilter struct {
 	WorkspaceID string
-	ProjectID   string
 	Source      string
 	EventType   string
 	ActorID     string
@@ -729,7 +688,6 @@ type ListAuditRecordsFilter struct {
 type UsageLogRead struct {
 	ID           string         `json:"id"`
 	WorkspaceID  string         `json:"workspace_id"`
-	ProjectID    string         `json:"project_id"`
 	AgentRunID   string         `json:"agent_run_id"`
 	Provider     string         `json:"provider"`
 	Model        string         `json:"model"`
@@ -881,29 +839,14 @@ type UserRead struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// WorkspaceProjectRead is one active project inside a workspace. Drives
-// the project picker nested inside the header workspace switcher.
-type WorkspaceProjectRead struct {
-	ID          string    `json:"id"`
-	WorkspaceID string    `json:"workspace_id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-var ErrUnknownMention = errors.New("unknown active project agent mention")
+var ErrUnknownMention = errors.New("unknown active agent mention")
 var ErrUnknownConversation = errors.New("unknown active conversation")
 var ErrUnknownSender = errors.New("unknown active sender")
 var ErrUnknownAgentRun = errors.New("unknown agent run")
 var ErrUnknownMessage = errors.New("unknown message")
-var ErrUnknownProject = errors.New("unknown active project")
 var ErrUnknownWorkspace = errors.New("unknown active workspace")
 var ErrUnknownUser = errors.New("unknown user")
 var ErrDuplicateWorkspaceSlug = errors.New("workspace slug already in use")
-var ErrDuplicateProjectSlug = errors.New("project slug already in use in this workspace")
 var ErrDuplicateAgentSlug = errors.New("agent slug already in use in this workspace")
 var ErrDuplicateModelProviderSlug = errors.New("model provider slug already in use in this workspace")
 var ErrUnknownAgent = errors.New("unknown active agent")
@@ -932,17 +875,17 @@ var ErrInvalidCredentialKind = errors.New("invalid credential kind")
 var ErrUnknownAgentCapability = errors.New("unknown agent capability")
 var ErrInFlightAgentRuns = errors.New("agent has in-flight runs")
 var ErrInvalidWorkspaceInput = errors.New("invalid workspace input")
-var ErrInvalidProjectInput = errors.New("invalid project input")
+var ErrInvalidInput = errors.New("invalid input")
 var ErrUnknownConversationForRead = errors.New("unknown active conversation")
 var ErrAgentRunNotCompletable = errors.New("agent run is not completable")
 var ErrAgentRunNotStartable = errors.New("agent run is not startable")
 
 // ErrAgentRunBlockedByQueue is returned by MarkAgentRunRunning when another
-// run for the same (conversation, project_agent) pair is already running.
+// run for the same (conversation, agent) pair is already running.
 // Callers MUST NOT surface this as an error — the run stays queued and is
 // dispatched when the sibling terminates.
 var ErrAgentRunBlockedByQueue = errors.New("agent run blocked by in-flight sibling")
-var ErrInvalidProjectAgent = errors.New("invalid active project agent relation")
+var ErrInvalidAgent = errors.New("invalid active agent relation")
 var ErrInvalidHTTPConnector = errors.New("agent run is not configured for http connector")
 var ErrUnknownWorkspaceMember = errors.New("unknown active workspace member")
 var ErrInvalidMemberRole = errors.New("invalid member role")
@@ -1025,24 +968,6 @@ func (s *Store) IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID
 		return false, nil
 	}
 	return false, err
-}
-
-// GetProjectWorkspace resolves a project id to its owning workspace.
-// Used by the RBAC bridge that maps project-scoped routes onto the
-// workspace role check (workspace is the only membership tier now).
-func (s *Store) GetProjectWorkspace(ctx context.Context, projectID string) (string, error) {
-	pjUUID, err := uuid(projectID)
-	if err != nil {
-		return "", err
-	}
-	workspaceID, err := sqlc.New(s.db).GetProjectWorkspace(ctx, pjUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("%w: %s", ErrUnknownProject, projectID)
-		}
-		return "", err
-	}
-	return workspaceID, nil
 }
 
 func (s *Store) GetWorkspaceSettings(ctx context.Context, workspaceID string) (WorkspaceSettingsRead, error) {
@@ -1294,18 +1219,15 @@ type FeishuAgentRoute struct {
 
 // FeishuSharedBotAgent is one selectable target shown by a shared Feishu
 // Bot's /list command. The shared Bot owns the app credentials, while the
-// selected Agent owns the workspace/project execution semantics.
+// selected Agent owns the workspace execution semantics.
 type FeishuSharedBotAgent struct {
-	AgentID        string
-	WorkspaceID    string
-	WorkspaceName  string
-	WorkspaceSlug  string
-	AgentName      string
-	AgentSlug      string
-	Visibility     string
-	ProjectID      string
-	ProjectName    string
-	ProjectAgentID string
+	AgentID       string
+	WorkspaceID   string
+	WorkspaceName string
+	WorkspaceSlug string
+	AgentName     string
+	AgentSlug     string
+	Visibility    string
 }
 
 type GatewaySessionSelectionInput struct {
@@ -1412,20 +1334,9 @@ func (s *Store) ListFeishuSharedBotAgents(ctx context.Context, senderUserID stri
 		  w.slug,
 		  a.name,
 		  a.slug,
-		  a.visibility,
-		  p.id::text,
-		  p.name,
-		  pa.id::text
+		  a.visibility
 		from agents a
 		join workspaces w on w.id = a.workspace_id
-		join project_agents pa on pa.agent_id = a.id
-		  and pa.workspace_id = a.workspace_id
-		  and pa.status = 'active'
-		  and pa.deleted_at is null
-		join projects p on p.id = pa.project_id
-		  and p.workspace_id = a.workspace_id
-		  and p.status = 'active'
-		  and p.deleted_at is null
 		left join workspace_members wm on wm.workspace_id = a.workspace_id
 		  and wm.user_id = $1::uuid
 		  and wm.deleted_at is null
@@ -1441,7 +1352,7 @@ func (s *Store) ListFeishuSharedBotAgents(ctx context.Context, senderUserID stri
 		    ($1::uuid is null and a.visibility = 'public')
 		    or ($1::uuid is not null and (a.visibility in ('tenant', 'public') or wm.user_id is not null))
 		  )
-		order by a.id, w.name asc, a.name asc, pa.created_at asc
+		order by a.id, w.name asc, a.name asc
 		limit $3
 	`, senderParam, excludeParam, limit)
 	if err != nil {
@@ -1459,9 +1370,6 @@ func (s *Store) ListFeishuSharedBotAgents(ctx context.Context, senderUserID stri
 			&item.AgentName,
 			&item.AgentSlug,
 			&item.Visibility,
-			&item.ProjectID,
-			&item.ProjectName,
-			&item.ProjectAgentID,
 		); err != nil {
 			return nil, err
 		}
@@ -1717,7 +1625,7 @@ func (s *Store) UpdateAgentVisibility(ctx context.Context, agentID, newVisibilit
 		Noop:          row.OldVisibility == row.NewVisibility,
 	}
 	if !change.Noop {
-		s.emitAgentAudit(now, actorID, auditAgentVisibilityChanged, "agent", change.AgentID, change.WorkspaceID, "", map[string]any{
+		s.emitAgentAudit(now, actorID, auditAgentVisibilityChanged, "agent", change.AgentID, change.WorkspaceID, map[string]any{
 			"from": change.OldVisibility,
 			"to":   change.NewVisibility,
 			"slug": change.Slug,
@@ -1919,7 +1827,7 @@ func (s *Store) UpdateAgentFeishuConnector(ctx context.Context, input UpdateAgen
 	if !change.Noop {
 		// Audit payload omits *_ref values to keep the admin UI's
 		// "feishu bot configured" filter cleaner.
-		s.emitAgentAudit(now, actorID, auditAgentFeishuConnectorUpdated, "agent", change.AgentID, change.WorkspaceID, "", map[string]any{
+		s.emitAgentAudit(now, actorID, auditAgentFeishuConnectorUpdated, "agent", change.AgentID, change.WorkspaceID, map[string]any{
 			"slug":            change.Slug,
 			"old_enabled":     change.Old.Enabled,
 			"new_enabled":     change.New.Enabled,
@@ -2037,7 +1945,6 @@ type RemoveWorkspaceMemberResult struct {
 	Member WorkspaceMemberRead `json:"member"`
 }
 
-var ErrUnknownProjectAgent = errors.New("unknown active project agent")
 var ErrInvalidConnectorType = errors.New("invalid connector type")
 var ErrUnknownSecret = errors.New("unknown secret")
 var ErrUnknownModelProvider = errors.New("unknown model provider")
@@ -2069,15 +1976,13 @@ const (
 	auditRuntimeUpdated              = "runtime.updated"
 	auditRuntimeDeleted              = "runtime.deleted"
 	auditRuntimeOnline               = "runtime.online"
-	auditProjectAgentDisabled        = "project_agent.disabled"
-	auditProjectAgentEnabled         = "project_agent.enabled"
+	auditAgentDisabled               = "agent.disabled"
+	auditAgentEnabled                = "agent.enabled"
 	auditAgentCreated                = "agent.created"
 	auditAgentUpdated                = "agent.updated"
 	auditAgentVisibilityChanged      = "agent.visibility.changed"
 	auditAgentFeishuConnectorUpdated = "agent.feishu_connector.updated"
 	auditAgentDeleted                = "agent.deleted"
-	auditProjectAgentAttached        = "project_agent.attached"
-	auditProjectAgentDetached        = "project_agent.detached"
 	auditWorkspaceMemberAdded        = "workspace_member.added"
 	auditWorkspaceMemberRoleUpdated  = "workspace_member.role_updated"
 	auditWorkspaceMemberRemoved      = "workspace_member.removed"
@@ -2088,9 +1993,6 @@ const (
 	auditWorkspaceCreated            = "workspace.created"
 	auditWorkspaceUpdated            = "workspace.updated"
 	auditWorkspaceArchived           = "workspace.archived"
-	auditProjectCreated              = "project.created"
-	auditProjectUpdated              = "project.updated"
-	auditProjectArchived             = "project.archived"
 	auditSecretCreated               = "secret.created"
 	auditSecretDisabled              = "secret.disabled"
 	auditModelCreated                = "model.created"
@@ -2103,7 +2005,6 @@ const (
 	auditSourceHTTPAgent             = "http_agent"
 	auditSourceDevMemberWrite        = "dev_member_write"
 	auditSourceDevWorkspaceWrite     = "dev_workspace_write"
-	auditSourceDevProjectWrite       = "dev_project_write"
 	auditSourceDevSecretWrite        = "dev_secret_write"
 	auditSourceDevModelRegistryWrite = "dev_model_registry_write"
 )
@@ -2123,7 +2024,7 @@ func (s *Store) GetAgentRunInvocation(ctx context.Context, runID string) (AgentR
 				return AgentRunInvocation{}, existsErr
 			}
 			if exists {
-				return AgentRunInvocation{}, fmt.Errorf("%w: %s", ErrInvalidProjectAgent, runID)
+				return AgentRunInvocation{}, fmt.Errorf("%w: %s", ErrInvalidAgent, runID)
 			}
 			return AgentRunInvocation{}, fmt.Errorf("%w: %s", ErrUnknownAgentRun, runID)
 		}
@@ -2133,10 +2034,8 @@ func (s *Store) GetAgentRunInvocation(ctx context.Context, runID string) (AgentR
 	return AgentRunInvocation{
 		RunID:                 row.RID,
 		WorkspaceID:           row.RWorkspaceID,
-		ProjectID:             row.RProjectID,
 		ConversationID:        row.RConversationID,
-		ProjectAgentID:        row.RProjectAgentID,
-		AgentID:               row.PaAgentID,
+		AgentID:               row.RAgentID,
 		AgentName:             row.AgentName,
 		AgentSlug:             row.AgentSlug,
 		RequestedByType:       row.RequestedByType,
@@ -2145,8 +2044,7 @@ func (s *Store) GetAgentRunInvocation(ctx context.Context, runID string) (AgentR
 		Status:                row.Status,
 		TriggerMessageContent: applyTriggerMessagePrefix(triggerMetadata, row.TriggerMessageContent),
 		TriggerAttachments:    DecodeMessageAttachments(triggerMetadata),
-		AgentConfig:           decodeJSONMap(row.AgentConfig),
-		ProjectAgentConfig:    mergeRuntimeIntoProjectAgentConfig(decodeJSONMap(row.ProjectAgentConfig), row.RuntimeID),
+		AgentConfig:           mergeRuntimeIntoAgentConfig(decodeJSONMap(row.AgentConfig), row.RuntimeID),
 	}, nil
 }
 
@@ -2171,13 +2069,12 @@ func applyTriggerMessagePrefix(metadata map[string]any, content string) string {
 	return raw + content
 }
 
-// mergeRuntimeIntoProjectAgentConfig folds the explicit
-// project_agents.runtime_id binding into the legacy
-// ProjectAgentConfig.device_id slot so downstream connectors see a uniform
-// view. When runtime_id is set it wins over any stale config.device_id —
-// the explicit FK is the source of truth. Empty runtime_id leaves the map
-// untouched.
-func mergeRuntimeIntoProjectAgentConfig(cfg map[string]any, runtimeID string) map[string]any {
+// mergeRuntimeIntoAgentConfig folds the explicit agents.runtime_id
+// binding into the AgentConfig.device_id slot so downstream connectors
+// see a uniform view. When runtime_id is set it wins over any stale
+// config.device_id — the explicit FK is the source of truth. Empty
+// runtime_id leaves the map untouched.
+func mergeRuntimeIntoAgentConfig(cfg map[string]any, runtimeID string) map[string]any {
 	runtimeID = strings.TrimSpace(runtimeID)
 	if runtimeID == "" {
 		return cfg
@@ -2201,14 +2098,14 @@ func (s *Store) GetHTTPAgentRunInvocation(ctx context.Context, runID string) (Ag
 	return invocation, nil
 }
 
-func (s *Store) ConfigureDevProjectAgentConnector(ctx context.Context, input ConfigureDevProjectAgentConnectorInput) (ConfigureDevProjectAgentConnectorResult, error) {
+func (s *Store) ConfigureDevAgentConnector(ctx context.Context, input ConfigureDevAgentConnectorInput) (ConfigureDevAgentConnectorResult, error) {
 	connectorType := strings.TrimSpace(input.ConnectorType)
 	if connectorType != "http" {
-		return ConfigureDevProjectAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrInvalidConnectorType, connectorType)
+		return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrInvalidConnectorType, connectorType)
 	}
-	projectAgentID, err := uuid(input.ProjectAgentID)
+	agentID, err := uuid(input.AgentID)
 	if err != nil {
-		return ConfigureDevProjectAgentConnectorResult{}, err
+		return ConfigureDevAgentConnectorResult{}, err
 	}
 
 	agentConfig := map[string]any{}
@@ -2220,66 +2117,64 @@ func (s *Store) ConfigureDevProjectAgentConnector(ctx context.Context, input Con
 	}
 	agentConfigJSON, err := json.Marshal(agentConfig)
 	if err != nil {
-		return ConfigureDevProjectAgentConnectorResult{}, err
+		return ConfigureDevAgentConnectorResult{}, err
 	}
 
 	queries := sqlc.New(s.db)
-	row, err := queries.ConfigureDevProjectAgentConnector(ctx, sqlc.ConfigureDevProjectAgentConnectorParams{
-		ProjectAgentID: projectAgentID,
-		ConnectorType:  connectorType,
-		AgentConfig:    agentConfigJSON,
-		Now:            timestamptz(time.Now().UTC()),
+	row, err := queries.ConfigureDevAgentConnector(ctx, sqlc.ConfigureDevAgentConnectorParams{
+		AgentID:       agentID,
+		ConnectorType: connectorType,
+		AgentConfig:   agentConfigJSON,
+		Now:           timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ConfigureDevProjectAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, input.ProjectAgentID)
+			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
 		}
-		return ConfigureDevProjectAgentConnectorResult{}, err
+		return ConfigureDevAgentConnectorResult{}, err
 	}
 
-	return ConfigureDevProjectAgentConnectorResult{
-		ProjectAgentID: row.ProjectAgentID,
-		ProjectID:      row.PaProjectID,
-		AgentID:        row.AgentID,
-		Name:           row.Name,
-		Slug:           row.Slug,
-		ConnectorType:  row.ConnectorType,
-		AgentConfig:    decodeJSONMap(row.AgentConfig),
+	return ConfigureDevAgentConnectorResult{
+		AgentID:       row.AgentID,
+		Name:          row.Name,
+		Slug:          row.Slug,
+		ConnectorType: row.ConnectorType,
+		AgentConfig:   decodeJSONMap(row.AgentConfig),
 	}, nil
 }
 
-func (s *Store) ConfigureProjectAgentProfile(ctx context.Context, input ConfigureProjectAgentProfileInput) (ConfigureDevProjectAgentConnectorResult, error) {
-	projectAgentID, err := uuid(input.ProjectAgentID)
+func (s *Store) ConfigureAgentProfile(ctx context.Context, input ConfigureAgentProfileInput) (ConfigureDevAgentConnectorResult, error) {
+	agentID, err := uuid(input.AgentID)
 	if err != nil {
-		return ConfigureDevProjectAgentConnectorResult{}, err
+		return ConfigureDevAgentConnectorResult{}, err
 	}
 	config := nonNilMap(input.Config)
 	if modelID := strings.TrimSpace(input.ModelID); modelID != "" {
 		modelUUID, err := uuid(modelID)
 		if err != nil {
-			return ConfigureDevProjectAgentConnectorResult{}, err
+			return ConfigureDevAgentConnectorResult{}, err
 		}
-		workspaceID, err := sqlc.New(s.db).GetProjectAgentWorkspace(ctx, projectAgentID)
+		workspaceID, err := sqlc.New(s.db).GetAgentWorkspace(ctx, agentID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return ConfigureDevProjectAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, input.ProjectAgentID)
+				return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
 			}
-			return ConfigureDevProjectAgentConnectorResult{}, err
+			return ConfigureDevAgentConnectorResult{}, err
 		}
 		workspaceUUID, err := uuid(workspaceID)
 		if err != nil {
-			return ConfigureDevProjectAgentConnectorResult{}, err
+			return ConfigureDevAgentConnectorResult{}, err
 		}
 		_ = workspaceUUID
 		status, err := sqlc.New(s.db).GetModelStatus(ctx, modelUUID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return ConfigureDevProjectAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
+				return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
 			}
-			return ConfigureDevProjectAgentConnectorResult{}, err
+			return ConfigureDevAgentConnectorResult{}, err
 		}
 		if status != "active" {
-			return ConfigureDevProjectAgentConnectorResult{}, fmt.Errorf("%w: model=%s", ErrModelDisabled, status)
+			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: model=%s", ErrModelDisabled, status)
 		}
 		config["model_id"] = modelID
 	}
@@ -2291,16 +2186,16 @@ func (s *Store) ConfigureProjectAgentProfile(ctx context.Context, input Configur
 	}
 	encoded, err := json.Marshal(config)
 	if err != nil {
-		return ConfigureDevProjectAgentConnectorResult{}, err
+		return ConfigureDevAgentConnectorResult{}, err
 	}
-	row, err := sqlc.New(s.db).ConfigureProjectAgentProfile(ctx, sqlc.ConfigureProjectAgentProfileParams{ProjectAgentID: projectAgentID, ProjectAgentConfig: encoded, Now: timestamptz(time.Now().UTC())})
+	row, err := sqlc.New(s.db).ConfigureAgentProfile(ctx, sqlc.ConfigureAgentProfileParams{AgentID: agentID, AgentConfig: encoded, Now: timestamptz(time.Now().UTC())})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ConfigureDevProjectAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, input.ProjectAgentID)
+			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
 		}
-		return ConfigureDevProjectAgentConnectorResult{}, err
+		return ConfigureDevAgentConnectorResult{}, err
 	}
-	return ConfigureDevProjectAgentConnectorResult{ProjectAgentID: row.ProjectAgentID, ProjectID: row.PaProjectID, AgentID: row.AgentID, Name: row.Name, Slug: row.Slug, ConnectorType: row.ConnectorType, AgentConfig: decodeJSONMap(row.AgentConfig), ProjectAgentConfig: decodeJSONMap(row.ProjectAgentConfig)}, nil
+	return ConfigureDevAgentConnectorResult{AgentID: row.AgentID, Name: row.Name, Slug: row.Slug, ConnectorType: row.ConnectorType, AgentConfig: decodeJSONMap(row.AgentConfig)}, nil
 }
 
 func (s *Store) ClaimNextQueuedHTTPAgentRun(ctx context.Context) (ClaimHTTPAgentRunResult, error) {
@@ -2376,11 +2271,10 @@ func (s *Store) FailAgentRun(ctx context.Context, input FailAgentRunInput) error
 		Source:      audit.SourceRuntime,
 		EventType:   eventType,
 		ActorType:   audit.ActorTypeSystem,
-		ActorID:     run.PaAgentID,
+		ActorID:     run.RAgentID,
 		TargetType:  "agent_run",
 		TargetID:    run.RID,
 		WorkspaceID: run.RWorkspaceID,
-		ProjectID:   run.RProjectID,
 		Payload: map[string]any{
 			"source": source,
 			"reason": reason,
@@ -2443,13 +2337,12 @@ func (s *Store) RequeueFailedAgentRun(ctx context.Context, input RequeueAgentRun
 		TargetType:  "agent_run",
 		TargetID:    row.ID,
 		WorkspaceID: row.WorkspaceID,
-		ProjectID:   row.ProjectID,
 		Payload: map[string]any{
 			"source": source,
 			"reason": reason,
 		},
 	})
-	return RequeueAgentRunResult{RunID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, ConversationID: row.ConversationID, ProjectAgentID: row.ProjectAgentID, Status: "queued"}, nil
+	return RequeueAgentRunResult{RunID: row.ID, WorkspaceID: row.WorkspaceID, ConversationID: row.ConversationID, AgentID: row.AgentID, Status: "queued"}, nil
 }
 
 func (s *Store) CancelAgentRun(ctx context.Context, runID, reason string) (bool, error) {
@@ -2509,7 +2402,7 @@ type SupersededRun struct {
 }
 
 // CancelRunningRunsForConversation cancels all in-flight (queued / running)
-// agent_runs for the same (conversation, project_agent) pair, excluding
+// agent_runs for the same (conversation, agent) pair, excluding
 // excludeRunID (the new run about to start). Returns the cancelled runs
 // so callers can send connector-level abort signals.
 func (s *Store) CancelRunningRunsForConversation(ctx context.Context, conversationID, excludeRunID, reason string) ([]SupersededRun, error) {
@@ -2531,7 +2424,7 @@ SET status = 'cancelled',
     metadata = metadata || jsonb_build_object('cancel_reason', $3::text)
 WHERE conversation_id = $1::uuid
   AND id != $2::uuid
-  AND project_agent_id = (SELECT project_agent_id FROM agent_runs WHERE id = $2::uuid)
+  AND agent_id = (SELECT agent_id FROM agent_runs WHERE id = $2::uuid)
   AND status IN ('queued', 'running')
 RETURNING id::text, connector_type`, convUUID, excludeUUID, reason, now)
 	if err != nil {
@@ -2550,7 +2443,7 @@ RETURNING id::text, connector_type`, convUUID, excludeUUID, reason, now)
 }
 
 // CancelAllInflightForConversation cancels every queued / running run in a
-// conversation, regardless of project_agent. Returns the cancelled rows so
+// conversation, regardless of agent. Returns the cancelled rows so
 // the caller can drive connector.Abort on each.
 func (s *Store) CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]SupersededRun, error) {
 	convUUID, err := uuid(conversationID)
@@ -2631,7 +2524,7 @@ limit 1`, gateway, externalChatID, externalThreadID).Scan(&id)
 // lands in the chat but on a different thread than the asking
 // conversation should still be delivered as the answer. Returns
 // ErrUnknownConversation when no conversation in the chat has an open
-// ask. Workspace / project scoping is intentionally omitted — the
+// ask. Workspace scoping is intentionally omitted — the
 // caller has already resolved the bot route and the chat_id is
 // already a workspace-scoped identifier in Feishu's model.
 func (s *Store) FindPendingAskByChat(ctx context.Context, gateway, externalChatID string) (conversationID string, slot PromptForUserChoiceInflightSlot, err error) {
@@ -2735,25 +2628,21 @@ func (s *Store) ConfigureDevConversationExternalRef(ctx context.Context, input C
 		}
 		return ConfigureDevConversationExternalRefResult{}, err
 	}
-	return ConfigureDevConversationExternalRefResult{ConversationID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Platform: row.Platform, ExternalID: row.ExternalID, ExternalThreadID: row.ExternalThreadID}, nil
+	return ConfigureDevConversationExternalRefResult{ConversationID: row.ID, WorkspaceID: row.WorkspaceID, Platform: row.Platform, ExternalID: row.ExternalID, ExternalThreadID: row.ExternalThreadID}, nil
 }
 
-func (s *Store) CreateProjectConversation(ctx context.Context, input CreateProjectConversationInput) (ConversationRead, error) {
+func (s *Store) CreateWorkspaceConversation(ctx context.Context, input CreateWorkspaceConversationInput) (ConversationRead, error) {
 	queries := sqlc.New(s.db)
-	projectUUID, err := uuid(input.ProjectID)
+	workspaceUUID, err := uuid(input.WorkspaceID)
 	if err != nil {
 		return ConversationRead{}, err
 	}
-	workspaceID, err := queries.GetActiveProjectWorkspace(ctx, projectUUID)
+	wsExists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ConversationRead{}, fmt.Errorf("%w: %s", ErrUnknownProject, input.ProjectID)
-		}
 		return ConversationRead{}, err
 	}
-	workspaceUUID, err := uuid(workspaceID)
-	if err != nil {
-		return ConversationRead{}, err
+	if !wsExists {
+		return ConversationRead{}, fmt.Errorf("%w: %s", ErrUnknownWorkspace, input.WorkspaceID)
 	}
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
@@ -2766,7 +2655,7 @@ func (s *Store) CreateProjectConversation(ctx context.Context, input CreateProje
 	switch surface {
 	case "web", "im", "api":
 	default:
-		return ConversationRead{}, fmt.Errorf("%w: invalid conversation surface: %s", ErrInvalidProjectInput, surface)
+		return ConversationRead{}, fmt.Errorf("%w: invalid conversation surface: %s", ErrInvalidInput, surface)
 	}
 	form := strings.TrimSpace(input.Form)
 	if form == "" {
@@ -2782,40 +2671,36 @@ func (s *Store) CreateProjectConversation(ctx context.Context, input CreateProje
 	switch form {
 	case "thread", "group", "dm", "oneshot":
 	default:
-		return ConversationRead{}, fmt.Errorf("%w: invalid conversation form: %s", ErrInvalidProjectInput, form)
+		return ConversationRead{}, fmt.Errorf("%w: invalid conversation form: %s", ErrInvalidInput, form)
 	}
 	metadata := nonNilMap(input.Metadata)
 	// Reject callers that pre-set metadata.primary_agent_id directly,
-	// bypassing the project_agent validation. The binding pointer is
-	// server-managed; only input.PrimaryAgentID + JOIN validation may
-	// write the key.
+	// bypassing the agent validation. The pointer is server-managed; only
+	// input.PrimaryAgentID + validation may write the key.
 	if _, present := metadata["primary_agent_id"]; present {
-		return ConversationRead{}, fmt.Errorf("%w: metadata.primary_agent_id is reserved — set agent_id at the top level instead", ErrInvalidProjectInput)
+		return ConversationRead{}, fmt.Errorf("%w: metadata.primary_agent_id is reserved — set agent_id at the top level instead", ErrInvalidInput)
 	}
 	primaryAgentID := strings.TrimSpace(input.PrimaryAgentID)
 	if primaryAgentID != "" {
 		paUUID, err := uuid(primaryAgentID)
 		if err != nil {
-			return ConversationRead{}, fmt.Errorf("%w: primary_agent_id: %w", ErrInvalidProjectInput, err)
+			return ConversationRead{}, fmt.Errorf("%w: primary_agent_id: %w", ErrInvalidInput, err)
 		}
 		var exists bool
 		if err := s.db.QueryRow(ctx,
 			`select exists(
-				select 1 from project_agents pa
-				join agents a on a.id = pa.agent_id
-				where pa.id = $1
-				  and pa.project_id = $2
-				  and pa.status = 'active'
-				  and pa.deleted_at is null
+				select 1 from agents a
+				where a.id = $1
+				  and a.workspace_id = $2
 				  and a.status = 'active'
 				  and a.deleted_at is null
 			)`,
-			paUUID, projectUUID,
+			paUUID, workspaceUUID,
 		).Scan(&exists); err != nil {
 			return ConversationRead{}, fmt.Errorf("validate primary agent: %w", err)
 		}
 		if !exists {
-			return ConversationRead{}, fmt.Errorf("%w: project_agent_id=%s", ErrUnknownMention, primaryAgentID)
+			return ConversationRead{}, fmt.Errorf("%w: agent_id=%s", ErrUnknownMention, primaryAgentID)
 		}
 		metadata["primary_agent_id"] = primaryAgentID
 	}
@@ -2823,10 +2708,9 @@ func (s *Store) CreateProjectConversation(ctx context.Context, input CreateProje
 	if err != nil {
 		return ConversationRead{}, err
 	}
-	row, err := queries.CreateProjectConversation(ctx, sqlc.CreateProjectConversationParams{
+	row, err := queries.CreateWorkspaceConversation(ctx, sqlc.CreateWorkspaceConversationParams{
 		ID:          mustUUID(newID()),
 		WorkspaceID: workspaceUUID,
-		ProjectID:   projectUUID,
 		Surface:     surface,
 		Form:        form,
 		Title:       title,
@@ -2838,37 +2722,37 @@ func (s *Store) CreateProjectConversation(ctx context.Context, input CreateProje
 	}
 	// Re-read so the response carries hydrated derived fields with the same
 	// SQL/JOIN logic as list / detail.
-	return s.GetProjectConversation(ctx, row.ID)
+	return s.GetConversation(ctx, row.ID)
 }
 
-func (s *Store) ListProjectConversations(ctx context.Context, projectID string, agentID string, limit int32) ([]ConversationListItem, error) {
+func (s *Store) ListWorkspaceConversations(ctx context.Context, workspaceID string, agentID string, limit int32) ([]ConversationListItem, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
 	}
 	queries := sqlc.New(s.db)
-	projectUUID, err := uuid(projectID)
+	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	exists, err := queries.ActiveProjectExists(ctx, projectUUID)
+	exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownProject, projectID)
+		return nil, fmt.Errorf("%w: %s", ErrUnknownWorkspace, workspaceID)
 	}
 	agentFilter := strings.TrimSpace(agentID)
 	if agentFilter != "" {
 		// Reject malformed UUIDs explicitly so callers see a 422-style error
 		// rather than the empty list a silent SQL filter would produce.
 		if _, err := uuid(agentFilter); err != nil {
-			return nil, fmt.Errorf("%w: agent_id: %w", ErrInvalidProjectInput, err)
+			return nil, fmt.Errorf("%w: agent_id: %w", ErrInvalidInput, err)
 		}
 	}
-	rows, err := queries.ListProjectConversations(ctx, sqlc.ListProjectConversationsParams{
-		ProjectID: projectUUID,
-		AgentID:   agentFilter,
-		ItemLimit: limit,
+	rows, err := queries.ListWorkspaceConversations(ctx, sqlc.ListWorkspaceConversationsParams{
+		WorkspaceID: workspaceUUID,
+		AgentID:     agentFilter,
+		ItemLimit:   limit,
 	})
 	if err != nil {
 		return nil, err
@@ -2879,7 +2763,6 @@ func (s *Store) ListProjectConversations(ctx context.Context, projectID string, 
 			ConversationRead: ConversationRead{
 				ID:               row.ID,
 				WorkspaceID:      row.WorkspaceID,
-				ProjectID:        row.ProjectID,
 				Surface:          row.Surface,
 				Form:             row.Form,
 				Title:            row.Title,
@@ -2903,13 +2786,13 @@ func (s *Store) ListProjectConversations(ctx context.Context, projectID string, 
 	return items, nil
 }
 
-func (s *Store) GetProjectConversation(ctx context.Context, conversationID string) (ConversationRead, error) {
+func (s *Store) GetConversation(ctx context.Context, conversationID string) (ConversationRead, error) {
 	queries := sqlc.New(s.db)
 	conversationUUID, err := uuid(conversationID)
 	if err != nil {
 		return ConversationRead{}, err
 	}
-	row, err := queries.GetProjectConversation(ctx, conversationUUID)
+	row, err := queries.GetConversation(ctx, conversationUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ConversationRead{}, fmt.Errorf("%w: %s", ErrUnknownConversation, conversationID)
@@ -2919,7 +2802,6 @@ func (s *Store) GetProjectConversation(ctx context.Context, conversationID strin
 	return ConversationRead{
 		ID:               row.ID,
 		WorkspaceID:      row.WorkspaceID,
-		ProjectID:        row.ProjectID,
 		Surface:          row.Surface,
 		Form:             row.Form,
 		Title:            row.Title,
@@ -2941,7 +2823,7 @@ func (s *Store) UpdateConversationTitle(ctx context.Context, conversationID stri
 	}
 	trimmed := strings.TrimSpace(title)
 	if trimmed == "" || len([]rune(trimmed)) > 200 {
-		return fmt.Errorf("%w: title must be 1-200 characters", ErrInvalidProjectInput)
+		return fmt.Errorf("%w: title must be 1-200 characters", ErrInvalidInput)
 	}
 	queries := sqlc.New(s.db)
 	rows, err := queries.UpdateConversationTitle(ctx, sqlc.UpdateConversationTitleParams{
@@ -2979,17 +2861,13 @@ func (s *Store) SoftDeleteConversation(ctx context.Context, conversationID strin
 	return nil
 }
 
-func (s *Store) ListProjectEnabledAgents(ctx context.Context, projectID string) ([]ProjectAgentRead, error) {
-	return s.listProjectAgents(ctx, projectID, false)
+func (s *Store) ListWorkspaceEnabledAgents(ctx context.Context, workspaceID string) ([]AgentRead, error) {
+	return s.listWorkspaceAgents(ctx, workspaceID, false)
 }
 
 func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (CreateAgentResult, error) {
 	now := time.Now().UTC()
 	workspaceUUID, err := uuid(input.WorkspaceID)
-	if err != nil {
-		return CreateAgentResult{}, err
-	}
-	projectUUID, err := uuid(input.ProjectID)
 	if err != nil {
 		return CreateAgentResult{}, err
 	}
@@ -3000,7 +2878,7 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 	name := strings.TrimSpace(input.Name)
 	connectorType := strings.TrimSpace(input.ConnectorType)
 	if name == "" || connectorType == "" {
-		return CreateAgentResult{}, ErrInvalidProjectInput
+		return CreateAgentResult{}, ErrInvalidInput
 	}
 	if !validConnectorType(connectorType) {
 		return CreateAgentResult{}, ErrInvalidConnectorType
@@ -3035,7 +2913,7 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 			return CreateAgentResult{}, fmt.Errorf("%w: %s", ErrDuplicateAgentSlug, nextSlugSuggestion(ctx, queries, workspaceUUID, slug))
 		}
 	}
-	config, err := agentConfigJSON(input.SystemPrompt, input.DefaultModelID, capabilities, input.Runtime, connectorType, input.ProjectAgentConfig)
+	config, err := agentConfigJSON(input.SystemPrompt, input.DefaultModelID, capabilities, input.Runtime, connectorType, input.AgentConfig)
 	if err != nil {
 		return CreateAgentResult{}, err
 	}
@@ -3047,21 +2925,8 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 		return CreateAgentResult{}, fmt.Errorf("%w: %q", ErrInvalidAgentVisibility, visibility)
 	}
 
-	// runtime lives on agents.config.runtime only; project_agents.config is
-	// for orthogonal per-project choices such as agent_daemon device/mode.
-	encodedProjectAgentConfig, err := projectAgentConfigJSON(input.ProjectAgentConfig, connectorType)
-	if err != nil {
-		return CreateAgentResult{}, err
-	}
 	agentRow, err := createAgentWithSlugRetry(ctx, queries, sqlc.CreateAgentCRUDParams{ID: mustUUID(newID()), WorkspaceID: workspaceUUID, Name: name, Slug: slug, Description: strings.TrimSpace(input.Description), ConnectorType: connectorType, Visibility: visibility, Config: config, CreatedBy: createdBy, Now: timestamptz(now)}, explicitSlug)
 	if err != nil {
-		return CreateAgentResult{}, err
-	}
-	paRow, err := queries.CreateProjectAgentCRUD(ctx, sqlc.CreateProjectAgentCRUDParams{ID: mustUUID(newID()), WorkspaceID: workspaceUUID, ProjectID: projectUUID, AgentID: mustUUID(agentRow.ID), Config: encodedProjectAgentConfig, CreatedBy: createdBy, Now: timestamptz(now)})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return CreateAgentResult{}, fmt.Errorf("%w: %s", ErrUnknownProject, input.ProjectID)
-		}
 		return CreateAgentResult{}, err
 	}
 	initialCapabilities := make([]AgentCapabilityRead, 0, len(input.InitialCapabilities))
@@ -3069,11 +2934,11 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 	for _, requested := range input.InitialCapabilities {
 		versionID := strings.TrimSpace(requested.CapabilityVersionID)
 		if versionID == "" {
-			return CreateAgentResult{}, fmt.Errorf("%w: empty capability_version_id", ErrInvalidProjectInput)
+			return CreateAgentResult{}, fmt.Errorf("%w: empty capability_version_id", ErrInvalidInput)
 		}
 		versionUUID, err := uuid(versionID)
 		if err != nil {
-			return CreateAgentResult{}, fmt.Errorf("%w: invalid capability_version_id", ErrInvalidProjectInput)
+			return CreateAgentResult{}, fmt.Errorf("%w: invalid capability_version_id", ErrInvalidInput)
 		}
 		version, err := queries.GetCapabilityVersion(ctx, versionUUID)
 		if err != nil {
@@ -3093,7 +2958,7 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 			return CreateAgentResult{}, fmt.Errorf("%w: %s", ErrMarketplaceCapabilityUnavailable, version.CapabilityID)
 		}
 		if seenInitialCapabilities[version.CapabilityID] {
-			return CreateAgentResult{}, fmt.Errorf("%w: duplicate initial capability %s", ErrInvalidProjectInput, version.CapabilityID)
+			return CreateAgentResult{}, fmt.Errorf("%w: duplicate initial capability %s", ErrInvalidInput, version.CapabilityID)
 		}
 		seenInitialCapabilities[version.CapabilityID] = true
 		configuration, err := json.Marshal(nonNilMap(requested.Configuration))
@@ -3102,7 +2967,7 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 		}
 		row, err := queries.CreateAgentCapability(ctx, sqlc.CreateAgentCapabilityParams{
 			ID:                  mustUUID(newID()),
-			ProjectAgentID:      mustUUID(paRow.ID),
+			AgentID:             mustUUID(agentRow.ID),
 			CapabilityID:        mustUUID(version.CapabilityID),
 			CapabilityVersionID: versionUUID,
 			Enabled:             true,
@@ -3119,14 +2984,8 @@ func (s *Store) CreateAgent(ctx context.Context, input CreateAgentInput) (Create
 		return CreateAgentResult{}, err
 	}
 	agent := agentSummaryFromRow(agentRow.ID, agentRow.WorkspaceID, agentRow.Name, agentRow.Slug, agentRow.Description, agentRow.ConnectorType, agentRow.Status, agentRow.Config, agentRow.CreatedAt, agentRow.UpdatedAt)
-	projectAgent := projectAgentSummaryFromRow(paRow.ID, paRow.WorkspaceID, paRow.ProjectID, paRow.AgentID, paRow.Status, paRow.Config, paRow.CreatedAt, paRow.UpdatedAt)
-	s.emitAgentAudit(now, input.CreatedBy, auditAgentCreated, "agent", agent.ID, agent.WorkspaceID, "", map[string]any{"name": agent.Name, "slug": agent.Slug, "connector_type": agent.ConnectorType, "default_model_id": input.DefaultModelID, "visibility": visibility})
-	attachedMeta := map[string]any{"agent_id": agent.ID, "project_id": projectAgent.ProjectID}
-	if runtime := strings.TrimSpace(input.Runtime); runtime != "" {
-		attachedMeta["runtime"] = runtime
-	}
-	s.emitAgentAudit(now, input.CreatedBy, auditProjectAgentAttached, "project_agent", projectAgent.ID, projectAgent.WorkspaceID, projectAgent.ProjectID, attachedMeta)
-	return CreateAgentResult{Agent: agent, ProjectAgent: projectAgent, InitialCapabilities: initialCapabilities}, nil
+	s.emitAgentAudit(now, input.CreatedBy, auditAgentCreated, "agent", agent.ID, agent.WorkspaceID, map[string]any{"name": agent.Name, "slug": agent.Slug, "connector_type": agent.ConnectorType, "default_model_id": input.DefaultModelID, "visibility": visibility})
+	return CreateAgentResult{Agent: agent, InitialCapabilities: initialCapabilities}, nil
 }
 
 func (s *Store) UpdateAgent(ctx context.Context, input UpdateAgentInput) (AgentSummary, []string, error) {
@@ -3159,7 +3018,7 @@ func (s *Store) UpdateAgent(ctx context.Context, input UpdateAgentInput) (AgentS
 		connectorType = strings.TrimSpace(*input.ConnectorType)
 	}
 	if name == "" {
-		return AgentSummary{}, nil, ErrInvalidProjectInput
+		return AgentSummary{}, nil, ErrInvalidInput
 	}
 	if !validConnectorType(connectorType) {
 		return AgentSummary{}, nil, ErrInvalidConnectorType
@@ -3233,7 +3092,7 @@ func (s *Store) UpdateAgent(ctx context.Context, input UpdateAgentInput) (AgentS
 	agent := agentSummaryFromRow(row.ID, row.WorkspaceID, row.Name, row.Slug, row.Description, row.ConnectorType, row.Status, row.Config, row.CreatedAt, row.UpdatedAt)
 	agent.Visibility = current.Visibility
 	changed := changedAgentFields(current, agent, input)
-	s.emitAgentAudit(now, input.ActorID, auditAgentUpdated, "agent", agent.ID, agent.WorkspaceID, "", map[string]any{"changed_fields": changed})
+	s.emitAgentAudit(now, input.ActorID, auditAgentUpdated, "agent", agent.ID, agent.WorkspaceID, map[string]any{"changed_fields": changed})
 	return agent, changed, nil
 }
 
@@ -3307,55 +3166,6 @@ func (s *Store) requiredKindsForCapabilities(ctx context.Context, queries *sqlc.
 	return needed, nil
 }
 
-func (s *Store) DeleteProjectAgent(ctx context.Context, projectAgentID string, actorID string) (ProjectAgentSummary, error) {
-	now := time.Now().UTC()
-	paUUID, err := uuid(projectAgentID)
-	if err != nil {
-		return ProjectAgentSummary{}, err
-	}
-	row, err := sqlc.New(s.db).SoftDeleteProjectAgentCRUD(ctx, sqlc.SoftDeleteProjectAgentCRUDParams{ID: paUUID, Now: timestamptz(now)})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ProjectAgentSummary{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, projectAgentID)
-		}
-		return ProjectAgentSummary{}, err
-	}
-	pa := projectAgentSummaryFromRow(row.ID, row.WorkspaceID, row.ProjectID, row.AgentID, row.Status, row.Config, row.CreatedAt, row.UpdatedAt)
-	s.emitAgentAudit(now, actorID, auditProjectAgentDetached, "project_agent", pa.ID, pa.WorkspaceID, pa.ProjectID, map[string]any{"agent_id": pa.AgentID, "project_id": pa.ProjectID})
-	return pa, nil
-}
-
-// ListProjectAgentsByAgentID returns all non-deleted project_agents linked
-// to the given agent.
-func (s *Store) ListProjectAgentsByAgentID(ctx context.Context, agentID string) ([]ProjectAgentSummary, error) {
-	agentUUID, err := uuid(agentID)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := s.db.Query(ctx, `
-SELECT id::text, workspace_id::text, project_id::text, agent_id::text, status, config, created_at, updated_at
-FROM project_agents
-WHERE agent_id = $1::uuid AND deleted_at IS NULL
-ORDER BY created_at`, agentUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []ProjectAgentSummary
-	for rows.Next() {
-		var pa ProjectAgentSummary
-		var cfgJSON []byte
-		if err := rows.Scan(&pa.ID, &pa.WorkspaceID, &pa.ProjectID, &pa.AgentID, &pa.Status, &cfgJSON, &pa.CreatedAt, &pa.UpdatedAt); err != nil {
-			return out, err
-		}
-		if len(cfgJSON) > 0 {
-			_ = json.Unmarshal(cfgJSON, &pa.Config)
-		}
-		out = append(out, pa)
-	}
-	return out, rows.Err()
-}
-
 func (s *Store) DeleteAgent(ctx context.Context, agentID string, actorID string) (DeleteAgentResult, int64, error) {
 	now := time.Now().UTC()
 	agentUUID, err := uuid(agentID)
@@ -3382,10 +3192,6 @@ func (s *Store) DeleteAgent(ctx context.Context, agentID string, actorID string)
 	if runCount > 0 {
 		return DeleteAgentResult{}, runCount, ErrInFlightAgentRuns
 	}
-	detachedRows, err := queries.SoftDeleteProjectAgentsByAgent(ctx, sqlc.SoftDeleteProjectAgentsByAgentParams{AgentID: agentUUID, Now: timestamptz(now)})
-	if err != nil {
-		return DeleteAgentResult{}, 0, err
-	}
 	row, err := queries.SoftDeleteAgentCRUD(ctx, sqlc.SoftDeleteAgentCRUDParams{ID: agentUUID, Now: timestamptz(now)})
 	if err != nil {
 		return DeleteAgentResult{}, 0, err
@@ -3394,46 +3200,37 @@ func (s *Store) DeleteAgent(ctx context.Context, agentID string, actorID string)
 		return DeleteAgentResult{}, 0, err
 	}
 	agent := agentSummaryFromRow(row.ID, row.WorkspaceID, row.Name, row.Slug, row.Description, row.ConnectorType, row.Status, row.Config, row.CreatedAt, row.UpdatedAt)
-	detached := make([]string, 0, len(detachedRows))
-	for _, pa := range detachedRows {
-		detached = append(detached, pa.ID)
-	}
-	s.emitAgentAudit(now, actorID, auditAgentDeleted, "agent", current.ID, current.WorkspaceID, "", map[string]any{"name": current.Name, "slug": current.Slug})
-	for _, pa := range detachedRows {
-		s.emitAgentAudit(now, actorID, auditProjectAgentDetached, "project_agent", pa.ID, pa.WorkspaceID, pa.ProjectID, map[string]any{"agent_id": pa.AgentID, "project_id": pa.ProjectID})
-	}
-	return DeleteAgentResult{Agent: agent, DetachedProjectAgentIDs: detached}, 0, nil
+	s.emitAgentAudit(now, actorID, auditAgentDeleted, "agent", current.ID, current.WorkspaceID, map[string]any{"name": current.Name, "slug": current.Slug})
+	return DeleteAgentResult{Agent: agent}, 0, nil
 }
 
-func (s *Store) ListProjectAgentsForAdmin(ctx context.Context, projectID string) ([]ProjectAgentRead, error) {
-	return s.listProjectAgents(ctx, projectID, true)
+func (s *Store) ListWorkspaceAgentsForAdmin(ctx context.Context, workspaceID string) ([]AgentRead, error) {
+	return s.listWorkspaceAgents(ctx, workspaceID, true)
 }
 
-func (s *Store) listProjectAgents(ctx context.Context, projectID string, includeDisabled bool) ([]ProjectAgentRead, error) {
+func (s *Store) listWorkspaceAgents(ctx context.Context, workspaceID string, includeDisabled bool) ([]AgentRead, error) {
 	queries := sqlc.New(s.db)
-	projectUUID, err := uuid(projectID)
+	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return nil, err
 	}
 
-	exists, err := queries.ActiveProjectExists(ctx, projectUUID)
+	exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownProject, projectID)
+		return nil, fmt.Errorf("%w: %s", ErrUnknownWorkspace, workspaceID)
 	}
 
-	agents := make([]ProjectAgentRead, 0)
+	agents := make([]AgentRead, 0)
 	if includeDisabled {
-		rows, err := queries.ListProjectAgentsAdmin(ctx, projectUUID)
+		rows, err := queries.ListWorkspaceAgentsAdmin(ctx, workspaceUUID)
 		if err != nil {
 			return nil, err
 		}
 		for _, row := range rows {
-			agents = append(agents, ProjectAgentRead{
-				ProjectAgentID:    row.ProjectAgentID,
-				ProjectID:         row.ProjectID,
+			agents = append(agents, AgentRead{
 				AgentID:           row.AgentID,
 				Name:              row.Name,
 				Slug:              row.Slug,
@@ -3442,7 +3239,6 @@ func (s *Store) listProjectAgents(ctx context.Context, projectID string, include
 				Status:            row.Status,
 				Runtime:           runtimePtr(row.Runtime),
 				Config:            decodeJSONMap(row.Config),
-				AgentConfig:       decodeJSONMap(row.AgentConfig),
 				Visibility:        row.Visibility,
 				CreatedByUserID:   row.CreatedByUserID,
 				CreatedByName:     row.CreatedByName,
@@ -3457,14 +3253,12 @@ func (s *Store) listProjectAgents(ctx context.Context, projectID string, include
 		}
 		return agents, nil
 	}
-	rows, err := queries.ListProjectEnabledAgents(ctx, projectUUID)
+	rows, err := queries.ListWorkspaceEnabledAgents(ctx, workspaceUUID)
 	if err != nil {
 		return nil, err
 	}
 	for _, row := range rows {
-		agents = append(agents, ProjectAgentRead{
-			ProjectAgentID:    row.ProjectAgentID,
-			ProjectID:         row.ProjectID,
+		agents = append(agents, AgentRead{
 			AgentID:           row.AgentID,
 			Name:              row.Name,
 			Slug:              row.Slug,
@@ -3473,7 +3267,6 @@ func (s *Store) listProjectAgents(ctx context.Context, projectID string, include
 			Status:            row.Status,
 			Runtime:           runtimePtr(row.Runtime),
 			Config:            decodeJSONMap(row.Config),
-			AgentConfig:       decodeJSONMap(row.AgentConfig),
 			Visibility:        row.Visibility,
 			CreatedByUserID:   row.CreatedByUserID,
 			CreatedByName:     row.CreatedByName,
@@ -3692,7 +3485,6 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 	}
 
 	runMetadata := decodeJSONMap(row.Metadata)
-	projectAgentConfig := decodeJSONMap(row.ProjectAgentConfig)
 	agentConfig := decodeJSONMap(row.AgentConfig)
 	bindingMetadata := decodeJSONMap(row.BindingMetadata)
 	runtimeConfig := decodeJSONMap(row.RuntimeConfig)
@@ -3701,12 +3493,10 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 		AgentRunBriefRead: AgentRunBriefRead{
 			ID:               row.RID,
 			WorkspaceID:      row.RWorkspaceID,
-			ProjectID:        row.RProjectID,
 			ConversationID:   row.RConversationID,
 			TriggerMessageID: row.TriggerMessageID,
 			OutputMessageID:  row.OutputMessageID,
-			ProjectAgentID:   row.RProjectAgentID,
-			AgentID:          row.PaAgentID,
+			AgentID:          row.RAgentID,
 			AgentName:        row.AgentName,
 			AgentSlug:        row.AgentSlug,
 			ConnectorType:    row.ConnectorType,
@@ -3723,7 +3513,7 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 		Artifacts:       []ArtifactRead{},
 		Usage:           []UsageLogRead{},
 		Events:          []AgentRunEventRead{},
-		Runtime:         agentRunRuntimeReadFromRow(row, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
+		Runtime:         agentRunRuntimeReadFromRow(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
 	}
 	if transcript, ok := detail.Metadata["transcript"].(string); ok {
 		detail.Transcript = transcript
@@ -3743,7 +3533,7 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 		}
 	}
 
-	artifactRows, err := queries.ListAgentRunArtifacts(ctx, sqlc.ListAgentRunArtifactsParams{RunID: runUUID, ProjectID: mustUUID(detail.ProjectID)})
+	artifactRows, err := queries.ListAgentRunArtifacts(ctx, sqlc.ListAgentRunArtifactsParams{RunID: runUUID, WorkspaceID: mustUUID(detail.WorkspaceID)})
 	if err != nil {
 		return AgentRunDetailRead{}, err
 	}
@@ -3761,7 +3551,7 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 		})
 	}
 
-	usageRows, err := queries.ListUsageLogsByRun(ctx, sqlc.ListUsageLogsByRunParams{AgentRunID: runUUID, ProjectID: mustUUID(detail.ProjectID), ItemLimit: defaultReadLimit})
+	usageRows, err := queries.ListUsageLogsByRun(ctx, sqlc.ListUsageLogsByRunParams{AgentRunID: runUUID, WorkspaceID: mustUUID(detail.WorkspaceID), ItemLimit: defaultReadLimit})
 	if err != nil {
 		return AgentRunDetailRead{}, err
 	}
@@ -3769,19 +3559,19 @@ func (s *Store) GetAgentRun(ctx context.Context, runID string) (AgentRunDetailRe
 		detail.Usage = append(detail.Usage, usageLogFromRunRow(usage))
 	}
 
-	eventRows, err := queries.ListAgentRunEventsByRun(ctx, sqlc.ListAgentRunEventsByRunParams{AgentRunID: runUUID, ProjectID: mustUUID(detail.ProjectID), AfterSequence: 0})
+	eventRows, err := queries.ListAgentRunEventsByRun(ctx, sqlc.ListAgentRunEventsByRunParams{AgentRunID: runUUID, AfterSequence: 0})
 	if err != nil {
 		return AgentRunDetailRead{}, err
 	}
 	detail.Events = make([]AgentRunEventRead, 0, len(eventRows))
 	for _, ev := range eventRows {
-		detail.Events = append(detail.Events, agentRunEventFromRow(ev.ID, ev.WorkspaceID, ev.ProjectID, ev.AgentRunID, ev.Sequence, ev.EventKind, ev.Payload, ev.OccurredAt, ev.CreatedAt))
+		detail.Events = append(detail.Events, agentRunEventFromRow(ev.ID, ev.WorkspaceID, ev.AgentRunID, ev.Sequence, ev.EventKind, ev.Payload, ev.OccurredAt, ev.CreatedAt))
 	}
 
 	return detail, nil
 }
 
-func agentRunRuntimeReadFromRow(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) *AgentRunRuntimeRead {
+func agentRunRuntimeReadFromRow(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) *AgentRunRuntimeRead {
 	connectorType := strings.TrimSpace(row.ConnectorType)
 	runtime := AgentRunRuntimeRead{
 		ID:               strings.TrimSpace(row.RuntimeID),
@@ -3789,17 +3579,17 @@ func agentRunRuntimeReadFromRow(row sqlc.GetAgentRunForReadRow, runMetadata, pro
 		Type:             strings.TrimSpace(row.RuntimeType),
 		Provider:         strings.TrimSpace(row.RuntimeProvider),
 		ConnectorType:    connectorType,
-		AgentKind:        resolveAgentRunRuntimeAgentKind(connectorType, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
-		RuntimeMode:      resolveAgentRunRuntimeMode(row, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
-		DeviceID:         resolveAgentRunRuntimeDeviceID(row, runMetadata, projectAgentConfig, bindingMetadata, runtimeConfig),
-		SandboxID:        firstStringForKeys([]string{"sandbox_id", "e2b_sandbox_id", "parsar.sandbox_id"}, runMetadata, bindingMetadata, runtimeConfig, projectAgentConfig, agentConfig),
-		ManagedModelID:   resolveAgentRunManagedModelID(runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
+		AgentKind:        resolveAgentRunRuntimeAgentKind(connectorType, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
+		RuntimeMode:      resolveAgentRunRuntimeMode(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
+		DeviceID:         resolveAgentRunRuntimeDeviceID(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
+		SandboxID:        firstStringForKeys([]string{"sandbox_id", "e2b_sandbox_id", "parsar.sandbox_id"}, runMetadata, bindingMetadata, runtimeConfig, agentConfig),
+		ManagedModelID:   resolveAgentRunManagedModelID(runMetadata, agentConfig, bindingMetadata, runtimeConfig),
 		Capabilities:     boolMapFromValue(runtimeConfig["daemon_capabilities"]),
 		Liveness:         strings.TrimSpace(row.RuntimeLiveness),
 		Hostname:         strings.TrimSpace(row.RuntimeHostname),
 		Version:          strings.TrimSpace(row.RuntimeVersion),
 		LastHeartbeatAt:  pgOptionalTime(row.LastHeartbeatAt),
-		WorkingDirectory: resolveAgentRunWorkingDirectory(row, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig),
+		WorkingDirectory: resolveAgentRunWorkingDirectory(row, runMetadata, agentConfig, bindingMetadata, runtimeConfig),
 	}
 	mergeAgentRunRuntimeSnapshot(&runtime, agentRunRuntimeReadFromMetadataSnapshot(runMetadata))
 	if runtime.ExecutionPlace == "" {
@@ -3976,8 +3766,8 @@ func deriveAgentRunGovernanceMode(runtime AgentRunRuntimeRead) string {
 	}
 }
 
-func resolveAgentRunRuntimeAgentKind(connectorType string, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
-	if v := firstStringForKeys([]string{"agent_kind"}, runMetadata, projectAgentConfig, bindingMetadata, agentConfig, runtimeConfig); v != "" {
+func resolveAgentRunRuntimeAgentKind(connectorType string, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+	if v := firstStringForKeys([]string{"agent_kind"}, runMetadata, agentConfig, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
 	if connectorType == "agent_daemon" {
@@ -3986,8 +3776,8 @@ func resolveAgentRunRuntimeAgentKind(connectorType string, runMetadata, projectA
 	return ""
 }
 
-func resolveAgentRunRuntimeMode(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
-	if v := firstStringForKeys([]string{"runtime_mode", "daemon_mode"}, runMetadata, projectAgentConfig, bindingMetadata, runtimeConfig, agentConfig); v != "" {
+func resolveAgentRunRuntimeMode(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+	if v := firstStringForKeys([]string{"runtime_mode", "daemon_mode"}, runMetadata, agentConfig, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
 	if strings.TrimSpace(row.ConnectorType) != "agent_daemon" {
@@ -3997,37 +3787,37 @@ func resolveAgentRunRuntimeMode(row sqlc.GetAgentRunForReadRow, runMetadata, pro
 	if strings.Contains(provider, "sandbox") || strings.EqualFold(stringFromMap(runtimeConfig, "created_by"), "sandbox_provider") || stringFromMap(runtimeConfig, "sandbox_kind") != "" {
 		return "sandbox"
 	}
-	if firstStringForKeys([]string{"device_id"}, projectAgentConfig, runMetadata, bindingMetadata, runtimeConfig) != "" || strings.TrimSpace(row.BoundDeviceID) != "" || provider == "agent_daemon" || strings.Contains(provider, "local") {
+	if firstStringForKeys([]string{"device_id"}, agentConfig, runMetadata, bindingMetadata, runtimeConfig) != "" || strings.TrimSpace(row.BoundDeviceID) != "" || provider == "agent_daemon" || strings.Contains(provider, "local") {
 		return "local"
 	}
 	return ""
 }
 
-func resolveAgentRunRuntimeDeviceID(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+func resolveAgentRunRuntimeDeviceID(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
 	if v := firstStringForKeys([]string{"device_id", "runtime_id"}, runMetadata); v != "" {
 		return v
 	}
 	if strings.TrimSpace(row.RuntimeID) != "" && (strings.TrimSpace(row.ConnectorType) == "agent_daemon" || strings.TrimSpace(row.RuntimeType) == "agent_daemon") {
 		return strings.TrimSpace(row.RuntimeID)
 	}
-	if v := firstStringForKeys([]string{"device_id"}, projectAgentConfig, bindingMetadata, runtimeConfig); v != "" {
+	if v := firstStringForKeys([]string{"device_id"}, agentConfig, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
 	return strings.TrimSpace(row.BoundDeviceID)
 }
 
-func resolveAgentRunWorkingDirectory(row sqlc.GetAgentRunForReadRow, runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+func resolveAgentRunWorkingDirectory(row sqlc.GetAgentRunForReadRow, runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
 	if wd := strings.TrimSpace(row.WorkingDirectory); wd != "" {
 		return wd
 	}
-	return firstStringForKeys([]string{"working_directory", "work_dir", "workdir"}, runMetadata, projectAgentConfig, bindingMetadata, agentConfig, runtimeConfig)
+	return firstStringForKeys([]string{"working_directory", "work_dir", "workdir"}, runMetadata, agentConfig, bindingMetadata, runtimeConfig)
 }
 
-func resolveAgentRunManagedModelID(runMetadata, projectAgentConfig, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
+func resolveAgentRunManagedModelID(runMetadata, agentConfig, bindingMetadata, runtimeConfig map[string]any) string {
 	if v := firstStringForKeys([]string{"managed_model_id"}, runMetadata, bindingMetadata, runtimeConfig); v != "" {
 		return v
 	}
-	return firstStringForKeys([]string{"model_id", "default_model_id"}, runMetadata, projectAgentConfig, agentConfig)
+	return firstStringForKeys([]string{"model_id", "default_model_id"}, runMetadata, agentConfig)
 }
 
 func cloneBoolMap(values map[string]bool) map[string]bool {
@@ -4089,16 +3879,16 @@ func firstStringForKeys(keys []string, maps ...map[string]any) string {
 	return ""
 }
 
-// ListProjectAgentRunsResult bundles a page of agent_run rows with the
+// ListWorkspaceAgentRunsResult bundles a page of agent_run rows with the
 // total row count under the same filter.
-type ListProjectAgentRunsResult struct {
+type ListWorkspaceAgentRunsResult struct {
 	Runs  []AgentRunBriefRead
 	Total int64
 }
 
-// ListProjectAgentRuns returns a page of agent runs for an active project,
+// ListWorkspaceAgentRuns returns a page of agent runs for an active workspace,
 // newest first. `statuses` is an OR filter (nil/empty means no filter).
-func (s *Store) ListProjectAgentRuns(ctx context.Context, projectID string, statuses []string, limit, offset int32) (ListProjectAgentRunsResult, error) {
+func (s *Store) ListWorkspaceAgentRuns(ctx context.Context, workspaceID string, statuses []string, limit, offset int32) (ListWorkspaceAgentRunsResult, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
 	}
@@ -4106,17 +3896,17 @@ func (s *Store) ListProjectAgentRuns(ctx context.Context, projectID string, stat
 		offset = 0
 	}
 	queries := sqlc.New(s.db)
-	projectUUID, err := uuid(projectID)
+	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
-		return ListProjectAgentRunsResult{}, err
+		return ListWorkspaceAgentRunsResult{}, err
 	}
 
-	exists, err := queries.ActiveProjectExists(ctx, projectUUID)
+	exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
 	if err != nil {
-		return ListProjectAgentRunsResult{}, err
+		return ListWorkspaceAgentRunsResult{}, err
 	}
 	if !exists {
-		return ListProjectAgentRunsResult{}, fmt.Errorf("%w: %s", ErrUnknownProject, projectID)
+		return ListWorkspaceAgentRunsResult{}, fmt.Errorf("%w: %s", ErrUnknownWorkspace, workspaceID)
 	}
 
 	// sqlc + pgx/v5 treat a nil []string as NULL, which would break
@@ -4126,28 +3916,28 @@ func (s *Store) ListProjectAgentRuns(ctx context.Context, projectID string, stat
 		statuses = []string{}
 	}
 
-	rows, err := queries.ListProjectAgentRunsPage(ctx, sqlc.ListProjectAgentRunsPageParams{
-		ProjectID:  projectUUID,
-		Statuses:   statuses,
-		ItemOffset: offset,
-		ItemLimit:  limit,
+	rows, err := queries.ListWorkspaceAgentRunsPage(ctx, sqlc.ListWorkspaceAgentRunsPageParams{
+		WorkspaceID: workspaceUUID,
+		Statuses:    statuses,
+		ItemOffset:  offset,
+		ItemLimit:   limit,
 	})
 	if err != nil {
-		return ListProjectAgentRunsResult{}, err
+		return ListWorkspaceAgentRunsResult{}, err
 	}
-	total, err := queries.CountProjectAgentRuns(ctx, sqlc.CountProjectAgentRunsParams{
-		ProjectID: projectUUID,
-		Statuses:  statuses,
+	total, err := queries.CountWorkspaceAgentRuns(ctx, sqlc.CountWorkspaceAgentRunsParams{
+		WorkspaceID: workspaceUUID,
+		Statuses:    statuses,
 	})
 	if err != nil {
-		return ListProjectAgentRunsResult{}, err
+		return ListWorkspaceAgentRunsResult{}, err
 	}
 
 	runs := make([]AgentRunBriefRead, 0, len(rows))
 	for _, row := range rows {
-		runs = append(runs, agentRunBriefFromProjectPageRow(row))
+		runs = append(runs, agentRunBriefFromWorkspacePageRow(row))
 	}
-	return ListProjectAgentRunsResult{Runs: runs, Total: total}, nil
+	return ListWorkspaceAgentRunsResult{Runs: runs, Total: total}, nil
 }
 
 // AgentMetricsRead aggregates run history. SuccessRate is computed against
@@ -4161,34 +3951,22 @@ type AgentMetricsRead struct {
 	AvgDurationMs  float64 `json:"avg_duration_ms"`
 }
 
-// GetProjectAgentMetrics aggregates one project_agent's runs over the last
-// windowDays (defaults to 30). Returns zeros (not an error) when there are
-// no runs in window.
-func (s *Store) GetProjectAgentMetrics(ctx context.Context, projectID, projectAgentID string, windowDays int32) (AgentMetricsRead, error) {
+// GetAgentMetrics aggregates one agent's runs over the last windowDays
+// (defaults to 30). Returns zeros (not an error) when there are no runs in
+// window.
+func (s *Store) GetAgentMetrics(ctx context.Context, agentID string, windowDays int32) (AgentMetricsRead, error) {
 	if windowDays <= 0 {
 		windowDays = 30
 	}
-	projectUUID, err := uuid(projectID)
-	if err != nil {
-		return AgentMetricsRead{}, err
-	}
-	agentUUID, err := uuid(projectAgentID)
+	agentUUID, err := uuid(agentID)
 	if err != nil {
 		return AgentMetricsRead{}, err
 	}
 	queries := sqlc.New(s.db)
-	exists, err := queries.ActiveProjectExists(ctx, projectUUID)
-	if err != nil {
-		return AgentMetricsRead{}, err
-	}
-	if !exists {
-		return AgentMetricsRead{}, fmt.Errorf("%w: %s", ErrUnknownProject, projectID)
-	}
 
-	row, err := queries.GetProjectAgentMetrics(ctx, sqlc.GetProjectAgentMetricsParams{
-		ProjectAgentID: agentUUID,
-		ProjectID:      projectUUID,
-		WindowDays:     windowDays,
+	row, err := queries.GetAgentMetrics(ctx, sqlc.GetAgentMetricsParams{
+		AgentID:    agentUUID,
+		WindowDays: windowDays,
 	})
 	if err != nil {
 		return AgentMetricsRead{}, err
@@ -4910,100 +4688,9 @@ func escapeLikePattern(s string) string {
 	return b.String()
 }
 
-// ListWorkspaceProjects returns active projects the caller can open. Any
-// active workspace member sees every project in that workspace. The join
-// on workspace_members doubles as an active-membership gate, so a
-// non-member or soft-deleted user gets the empty list. Returns
-// ErrUnknownWorkspace on unknown workspace.
-func (s *Store) ListWorkspaceProjects(ctx context.Context, workspaceID, userID string, limit int32) ([]WorkspaceProjectRead, error) {
-	if limit <= 0 {
-		limit = defaultReadLimit
-	}
-	workspaceUUID, err := uuid(workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	userUUID, err := uuid(userID)
-	if err != nil {
-		return nil, err
-	}
-	queries := sqlc.New(s.db)
-	exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownWorkspace, workspaceID)
-	}
-	rows, err := queries.ListWorkspaceProjects(ctx, sqlc.ListWorkspaceProjectsParams{
-		UserID:      userUUID,
-		WorkspaceID: workspaceUUID,
-		ItemLimit:   limit,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]WorkspaceProjectRead, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, WorkspaceProjectRead{
-			ID:          row.ID,
-			WorkspaceID: row.WorkspaceID,
-			Name:        row.Name,
-			Slug:        row.Slug,
-			Description: row.Description,
-			Status:      row.Status,
-			CreatedAt:   pgTime(row.CreatedAt),
-			UpdatedAt:   pgTime(row.UpdatedAt),
-		})
-	}
-	return out, nil
-}
-
-// ListWorkspaceProjectsForAdmin is the platform-admin twin of
-// ListWorkspaceProjects: no workspace_members gate, the caller is
-// trusted by handler-level auth.IsPlatformAdmin.
-func (s *Store) ListWorkspaceProjectsForAdmin(ctx context.Context, workspaceID string, limit int32) ([]WorkspaceProjectRead, error) {
-	if limit <= 0 {
-		limit = defaultReadLimit
-	}
-	workspaceUUID, err := uuid(workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	queries := sqlc.New(s.db)
-	exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownWorkspace, workspaceID)
-	}
-	rows, err := queries.ListWorkspaceProjectsAdmin(ctx, sqlc.ListWorkspaceProjectsAdminParams{
-		WorkspaceID: workspaceUUID,
-		ItemLimit:   limit,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]WorkspaceProjectRead, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, WorkspaceProjectRead{
-			ID:          row.ID,
-			WorkspaceID: row.WorkspaceID,
-			Name:        row.Name,
-			Slug:        row.Slug,
-			Description: row.Description,
-			Status:      row.Status,
-			CreatedAt:   pgTime(row.CreatedAt),
-			UpdatedAt:   pgTime(row.UpdatedAt),
-		})
-	}
-	return out, nil
-}
-
-// Workspace + Project CRUD. All six writes emit audit events. Slug is
-// system-generated (`workspace-<12hex>` / `project-<12hex>`) and permanent —
-// it doubles as a stable external identifier. Empty Name → ErrInvalid*Input.
+// Workspace CRUD. All writes emit audit events. Slug is
+// system-generated (`workspace-<12hex>`) and permanent — it doubles as a
+// stable external identifier. Empty Name → ErrInvalidInput.
 
 type CreateWorkspaceInput struct {
 	Name       string
@@ -5029,32 +4716,6 @@ type ArchiveWorkspaceInput struct {
 	WorkspaceID string
 	ActorID     string
 	Now         time.Time
-}
-
-type CreateProjectInput struct {
-	WorkspaceID string
-	Name        string
-	Description string
-	CreatedBy   string
-	Now         time.Time
-}
-
-type CreateProjectResult struct {
-	Project WorkspaceProjectRead
-}
-
-type UpdateProjectInput struct {
-	ProjectID   string
-	Name        *string // nil = leave unchanged
-	Description *string // nil = leave unchanged
-	ActorID     string
-	Now         time.Time
-}
-
-type ArchiveProjectInput struct {
-	ProjectID string
-	ActorID   string
-	Now       time.Time
 }
 
 // generateAutoSlug returns `<prefix>-<12 hex chars>`. 48 bits of entropy —
@@ -5338,248 +4999,6 @@ func (s *Store) ArchiveWorkspace(ctx context.Context, input ArchiveWorkspaceInpu
 	}, nil
 }
 
-func (s *Store) CreateProject(ctx context.Context, input CreateProjectInput) (CreateProjectResult, error) {
-	name := strings.TrimSpace(input.Name)
-	if name == "" {
-		return CreateProjectResult{}, fmt.Errorf("%w: name is required", ErrInvalidProjectInput)
-	}
-	wsUUID, err := uuid(input.WorkspaceID)
-	if err != nil {
-		return CreateProjectResult{}, err
-	}
-	createdBy, err := uuid(input.CreatedBy)
-	if err != nil {
-		return CreateProjectResult{}, fmt.Errorf("%w: invalid created_by: %v", ErrInvalidProjectInput, err)
-	}
-
-	tx, err := beginTx(ctx, s.db)
-	if err != nil {
-		return CreateProjectResult{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-	q := sqlc.New(tx)
-
-	wsExists, err := q.ActiveWorkspaceExists(ctx, wsUUID)
-	if err != nil {
-		return CreateProjectResult{}, err
-	}
-	if !wsExists {
-		return CreateProjectResult{}, fmt.Errorf("%w: %s", ErrUnknownWorkspace, input.WorkspaceID)
-	}
-
-	// Project slug uniqueness is workspace-scoped (partial unique index).
-	var slug string
-	for attempt := 0; attempt < autoSlugMaxAttempts; attempt++ {
-		candidate := generateAutoSlug("project")
-		exists, err := q.ProjectSlugExistsInWorkspace(ctx, sqlc.ProjectSlugExistsInWorkspaceParams{
-			WorkspaceID: wsUUID,
-			Slug:        candidate,
-		})
-		if err != nil {
-			return CreateProjectResult{}, err
-		}
-		if !exists {
-			slug = candidate
-			break
-		}
-	}
-	if slug == "" {
-		return CreateProjectResult{}, fmt.Errorf("%w: could not generate unique slug after %d attempts", ErrDuplicateProjectSlug, autoSlugMaxAttempts)
-	}
-
-	projID := newID()
-	projRow, err := q.CreateProject(ctx, sqlc.CreateProjectParams{
-		ID:          mustUUID(projID),
-		WorkspaceID: wsUUID,
-		Name:        name,
-		Slug:        slug,
-		Description: input.Description,
-		CreatedBy:   createdBy,
-		Now:         timestamptz(input.Now),
-	})
-	if err != nil {
-		return CreateProjectResult{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return CreateProjectResult{}, err
-	}
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt:  input.Now,
-		Source:      audit.SourceAdmin,
-		EventType:   auditProjectCreated,
-		ActorType:   audit.ActorTypeSystem,
-		ActorID:     input.CreatedBy,
-		TargetType:  "project",
-		TargetID:    projRow.ID,
-		WorkspaceID: projRow.WorkspaceID,
-		ProjectID:   projRow.ID,
-		Payload: map[string]any{
-			"source":      auditSourceDevProjectWrite,
-			"name":        projRow.Name,
-			"slug":        projRow.Slug,
-			"description": projRow.Description,
-		},
-	})
-
-	return CreateProjectResult{
-		Project: WorkspaceProjectRead{
-			ID:          projRow.ID,
-			WorkspaceID: projRow.WorkspaceID,
-			Name:        projRow.Name,
-			Slug:        projRow.Slug,
-			Description: projRow.Description,
-			Status:      projRow.Status,
-			CreatedAt:   pgTime(projRow.CreatedAt),
-			UpdatedAt:   pgTime(projRow.UpdatedAt),
-		},
-	}, nil
-}
-
-func (s *Store) UpdateProject(ctx context.Context, input UpdateProjectInput) (WorkspaceProjectRead, error) {
-	if input.Name == nil && input.Description == nil {
-		return WorkspaceProjectRead{}, fmt.Errorf("%w: at least one of name / description must be set", ErrInvalidProjectInput)
-	}
-	projUUID, err := uuid(input.ProjectID)
-	if err != nil {
-		return WorkspaceProjectRead{}, err
-	}
-
-	tx, err := beginTx(ctx, s.db)
-	if err != nil {
-		return WorkspaceProjectRead{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-	q := sqlc.New(tx)
-
-	current, err := q.GetActiveProjectByID(ctx, projUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return WorkspaceProjectRead{}, fmt.Errorf("%w: %s", ErrUnknownProject, input.ProjectID)
-		}
-		return WorkspaceProjectRead{}, err
-	}
-
-	newName := current.Name
-	if input.Name != nil {
-		trimmed := strings.TrimSpace(*input.Name)
-		if trimmed == "" {
-			return WorkspaceProjectRead{}, fmt.Errorf("%w: name must not be empty", ErrInvalidProjectInput)
-		}
-		newName = trimmed
-	}
-	newDesc := current.Description
-	if input.Description != nil {
-		newDesc = *input.Description
-	}
-
-	row, err := q.UpdateProject(ctx, sqlc.UpdateProjectParams{
-		ID:          projUUID,
-		Name:        newName,
-		Slug:        current.Slug,
-		Description: newDesc,
-		Now:         timestamptz(input.Now),
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return WorkspaceProjectRead{}, fmt.Errorf("%w: %s", ErrUnknownProject, input.ProjectID)
-		}
-		return WorkspaceProjectRead{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return WorkspaceProjectRead{}, err
-	}
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt:  input.Now,
-		Source:      audit.SourceAdmin,
-		EventType:   auditProjectUpdated,
-		ActorType:   audit.ActorTypeSystem,
-		ActorID:     input.ActorID,
-		TargetType:  "project",
-		TargetID:    row.ID,
-		WorkspaceID: row.WorkspaceID,
-		ProjectID:   row.ID,
-		Payload: map[string]any{
-			"source":          auditSourceDevProjectWrite,
-			"old_name":        current.Name,
-			"new_name":        row.Name,
-			"old_description": current.Description,
-			"new_description": row.Description,
-		},
-	})
-
-	return WorkspaceProjectRead{
-		ID:          row.ID,
-		WorkspaceID: row.WorkspaceID,
-		Name:        row.Name,
-		Slug:        row.Slug,
-		Description: row.Description,
-		Status:      row.Status,
-		CreatedAt:   pgTime(row.CreatedAt),
-		UpdatedAt:   pgTime(row.UpdatedAt),
-	}, nil
-}
-
-func (s *Store) ArchiveProject(ctx context.Context, input ArchiveProjectInput) (WorkspaceProjectRead, error) {
-	projUUID, err := uuid(input.ProjectID)
-	if err != nil {
-		return WorkspaceProjectRead{}, err
-	}
-
-	tx, err := beginTx(ctx, s.db)
-	if err != nil {
-		return WorkspaceProjectRead{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-	q := sqlc.New(tx)
-
-	row, err := q.ArchiveProject(ctx, sqlc.ArchiveProjectParams{
-		ID:  projUUID,
-		Now: timestamptz(input.Now),
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return WorkspaceProjectRead{}, fmt.Errorf("%w: %s", ErrUnknownProject, input.ProjectID)
-		}
-		return WorkspaceProjectRead{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return WorkspaceProjectRead{}, err
-	}
-
-	s.emitAuditEvent(audit.Event{
-		OccurredAt:  input.Now,
-		Source:      audit.SourceAdmin,
-		EventType:   auditProjectArchived,
-		ActorType:   audit.ActorTypeSystem,
-		ActorID:     input.ActorID,
-		TargetType:  "project",
-		TargetID:    row.ID,
-		WorkspaceID: row.WorkspaceID,
-		ProjectID:   row.ID,
-		Payload: map[string]any{
-			"source": auditSourceDevProjectWrite,
-			"name":   row.Name,
-			"slug":   row.Slug,
-		},
-	})
-
-	return WorkspaceProjectRead{
-		ID:          row.ID,
-		WorkspaceID: row.WorkspaceID,
-		Name:        row.Name,
-		Slug:        row.Slug,
-		Description: row.Description,
-		Status:      row.Status,
-		CreatedAt:   pgTime(row.CreatedAt),
-		UpdatedAt:   pgTime(row.UpdatedAt),
-	}, nil
-}
-
 // AddWorkspaceMember atomically upserts the user by email and inserts /
 // revives the (workspace_id, user_id) membership at the requested role.
 func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMemberInput) (AddWorkspaceMemberResult, error) {
@@ -5810,8 +5229,8 @@ func (s *Store) RemoveWorkspaceMember(ctx context.Context, workspaceID string, u
 }
 
 // ListAuditRecords reads the audit_records table. All filters are optional
-// (empty / zero = skip). Newest-first by (occurred_at, id). When ProjectID
-// is set, unknown IDs return ErrUnknownProject instead of an empty list.
+// (empty / zero = skip). Newest-first by (occurred_at, id). When WorkspaceID
+// is set, unknown IDs return ErrUnknownWorkspace instead of an empty list.
 func (s *Store) ListAuditRecords(ctx context.Context, f ListAuditRecordsFilter, limit int32) ([]AuditRecordRead, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
@@ -5820,7 +5239,6 @@ func (s *Store) ListAuditRecords(ctx context.Context, f ListAuditRecordsFilter, 
 
 	params := sqlc.ListAuditRecordsParams{
 		WorkspaceID: nullableUUID(f.WorkspaceID),
-		ProjectID:   nullableUUID(f.ProjectID),
 		Source:      strings.TrimSpace(f.Source),
 		EventType:   strings.TrimSpace(f.EventType),
 		ActorID:     nullableUUID(f.ActorID),
@@ -5835,17 +5253,17 @@ func (s *Store) ListAuditRecords(ctx context.Context, f ListAuditRecordsFilter, 
 		params.Until = pgtype.Timestamptz{Time: f.Until, Valid: true}
 	}
 
-	if f.ProjectID != "" {
-		projectUUID, err := uuid(f.ProjectID)
+	if f.WorkspaceID != "" {
+		workspaceUUID, err := uuid(f.WorkspaceID)
 		if err != nil {
 			return nil, err
 		}
-		exists, err := queries.ActiveProjectExists(ctx, projectUUID)
+		exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
 		if err != nil {
 			return nil, err
 		}
 		if !exists {
-			return nil, fmt.Errorf("%w: %s", ErrUnknownProject, f.ProjectID)
+			return nil, fmt.Errorf("%w: %s", ErrUnknownWorkspace, f.WorkspaceID)
 		}
 	}
 
@@ -5872,7 +5290,6 @@ func auditRecordFromRow(row sqlc.ListAuditRecordsRow) AuditRecordRead {
 		TargetType:  row.TargetType,
 		TargetID:    pgUUIDString(row.TargetID),
 		WorkspaceID: pgUUIDString(row.WorkspaceID),
-		ProjectID:   pgUUIDString(row.ProjectID),
 		Payload:     decodeJSONMap(row.Payload),
 	}
 }
@@ -5886,33 +5303,33 @@ func pgUUIDString(id pgtype.UUID) string {
 	return guuid.UUID(id.Bytes).String()
 }
 
-func (s *Store) ListProjectUsageLogs(ctx context.Context, projectID string, agentRunID string, limit int32) ([]UsageLogRead, error) {
+func (s *Store) ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, agentRunID string, limit int32) ([]UsageLogRead, error) {
 	if limit <= 0 {
 		limit = defaultReadLimit
 	}
 	queries := sqlc.New(s.db)
-	projectUUID, err := uuid(projectID)
+	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return nil, err
 	}
 
-	exists, err := queries.ActiveProjectExists(ctx, projectUUID)
+	exists, err := queries.ActiveWorkspaceExists(ctx, workspaceUUID)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownProject, projectID)
+		return nil, fmt.Errorf("%w: %s", ErrUnknownWorkspace, workspaceID)
 	}
 
 	agentRunID = strings.TrimSpace(agentRunID)
 	if agentRunID == "" {
-		rows, err := queries.ListProjectUsageLogs(ctx, sqlc.ListProjectUsageLogsParams{ProjectID: projectUUID, ItemLimit: limit})
+		rows, err := queries.ListWorkspaceUsageLogs(ctx, sqlc.ListWorkspaceUsageLogsParams{WorkspaceID: workspaceUUID, ItemLimit: limit})
 		if err != nil {
 			return nil, err
 		}
 		usage := make([]UsageLogRead, 0, len(rows))
 		for _, row := range rows {
-			usage = append(usage, usageLogFromProjectRow(row))
+			usage = append(usage, usageLogFromWorkspaceRow(row))
 		}
 		return usage, nil
 	}
@@ -5921,13 +5338,13 @@ func (s *Store) ListProjectUsageLogs(ctx context.Context, projectID string, agen
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queries.ListProjectUsageLogsByRun(ctx, sqlc.ListProjectUsageLogsByRunParams{ProjectID: projectUUID, AgentRunID: runUUID, ItemLimit: limit})
+	rows, err := queries.ListWorkspaceUsageLogsByRun(ctx, sqlc.ListWorkspaceUsageLogsByRunParams{WorkspaceID: workspaceUUID, AgentRunID: runUUID, ItemLimit: limit})
 	if err != nil {
 		return nil, err
 	}
 	usage := make([]UsageLogRead, 0, len(rows))
 	for _, row := range rows {
-		usage = append(usage, usageLogFromProjectRunRow(row))
+		usage = append(usage, usageLogFromWorkspaceRunRow(row))
 	}
 	return usage, nil
 }
@@ -6312,112 +5729,108 @@ func (s *Store) SoftDeleteModel(ctx context.Context, modelID, actorID string) er
 	return nil
 }
 
-type ProjectAgentStatusRead struct {
-	ProjectAgentID string         `json:"project_agent_id"`
-	WorkspaceID    string         `json:"workspace_id"`
-	ProjectID      string         `json:"project_id"`
-	AgentID        string         `json:"agent_id"`
-	AgentName      string         `json:"agent_name"`
-	AgentSlug      string         `json:"agent_slug"`
-	ConnectorType  string         `json:"connector_type"`
-	Status         string         `json:"status"`
-	Config         map[string]any `json:"config"`
-	CreatedBy      string         `json:"created_by,omitempty"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+type AgentStatusRead struct {
+	WorkspaceID   string         `json:"workspace_id"`
+	AgentID       string         `json:"agent_id"`
+	AgentName     string         `json:"agent_name"`
+	AgentSlug     string         `json:"agent_slug"`
+	ConnectorType string         `json:"connector_type"`
+	Status        string         `json:"status"`
+	Config        map[string]any `json:"config"`
+	CreatedBy     string         `json:"created_by,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
-func (s *Store) DisableProjectAgent(ctx context.Context, projectAgentID string) (ProjectAgentStatusRead, error) {
-	return s.setProjectAgentStatus(ctx, projectAgentID, "disabled", auditProjectAgentDisabled)
+func (s *Store) DisableAgent(ctx context.Context, agentID string) (AgentStatusRead, error) {
+	return s.setAgentStatus(ctx, agentID, "disabled", auditAgentDisabled)
 }
 
-func (s *Store) EnableProjectAgent(ctx context.Context, projectAgentID string) (ProjectAgentStatusRead, error) {
-	return s.setProjectAgentStatus(ctx, projectAgentID, "active", auditProjectAgentEnabled)
+func (s *Store) EnableAgent(ctx context.Context, agentID string) (AgentStatusRead, error) {
+	return s.setAgentStatus(ctx, agentID, "active", auditAgentEnabled)
 }
 
-func (s *Store) GetProjectAgentDetail(ctx context.Context, projectAgentID string) (ProjectAgentStatusRead, error) {
-	paUUID, err := uuid(projectAgentID)
+func (s *Store) GetAgentDetail(ctx context.Context, agentID string) (AgentStatusRead, error) {
+	aUUID, err := uuid(agentID)
 	if err != nil {
-		return ProjectAgentStatusRead{}, err
+		return AgentStatusRead{}, err
 	}
-	row, err := sqlc.New(s.db).GetProjectAgentDetailForRead(ctx, paUUID)
+	row, err := sqlc.New(s.db).GetAgentDetailForRead(ctx, aUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, projectAgentID)
+			return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
 		}
-		return ProjectAgentStatusRead{}, err
+		return AgentStatusRead{}, err
 	}
-	read := ProjectAgentStatusRead{
-		ProjectAgentID: row.ID,
-		WorkspaceID:    row.WorkspaceID,
-		ProjectID:      row.ProjectID,
-		AgentID:        row.AgentID,
-		AgentName:      row.AgentName,
-		AgentSlug:      row.AgentSlug,
-		ConnectorType:  row.ConnectorType,
-		Status:         row.Status,
-		Config:         decodeJSONMap(row.Config),
-		CreatedBy:      row.CreatedBy,
-		CreatedAt:      pgTime(row.CreatedAt),
-		UpdatedAt:      pgTime(row.UpdatedAt),
+	read := AgentStatusRead{
+		WorkspaceID:   row.WorkspaceID,
+		AgentID:       row.ID,
+		AgentName:     row.AgentName,
+		AgentSlug:     row.AgentSlug,
+		ConnectorType: row.ConnectorType,
+		Status:        row.Status,
+		Config:        decodeJSONMap(row.Config),
+		CreatedBy:     row.CreatedBy,
+		CreatedAt:     pgTime(row.CreatedAt),
+		UpdatedAt:     pgTime(row.UpdatedAt),
 	}
 	return read, nil
 }
 
-func (s *Store) setProjectAgentStatus(ctx context.Context, projectAgentID, targetStatus, eventType string) (ProjectAgentStatusRead, error) {
+func (s *Store) setAgentStatus(ctx context.Context, agentID, targetStatus, eventType string) (AgentStatusRead, error) {
 	now := time.Now().UTC()
-	paUUID, err := uuid(projectAgentID)
+	aUUID, err := uuid(agentID)
 	if err != nil {
-		return ProjectAgentStatusRead{}, err
+		return AgentStatusRead{}, err
 	}
 
 	tx, err := beginTx(ctx, s.db)
 	if err != nil {
-		return ProjectAgentStatusRead{}, err
+		return AgentStatusRead{}, err
 	}
 	defer tx.Rollback(ctx)
 	queries := sqlc.New(tx)
 
-	detail, err := queries.GetProjectAgentDetailForRead(ctx, paUUID)
+	detail, err := queries.GetAgentDetailForRead(ctx, aUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, projectAgentID)
+			return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
 		}
-		return ProjectAgentStatusRead{}, err
+		return AgentStatusRead{}, err
 	}
 
 	var (
-		updatedID, updatedWS, updatedProject, updatedAgent, updatedStatus string
-		updatedConfig                                                     []byte
-		updatedCreatedAt, updatedUpdatedAt                                pgtype.Timestamptz
+		updatedID, updatedWS, updatedStatus string
+		updatedConfig                       []byte
+		updatedCreatedAt, updatedUpdatedAt  pgtype.Timestamptz
 	)
 	switch targetStatus {
 	case "disabled":
-		row, err := queries.DisableProjectAgent(ctx, sqlc.DisableProjectAgentParams{ID: paUUID, Now: timestamptz(now)})
+		row, err := queries.DisableAgent(ctx, sqlc.DisableAgentParams{ID: aUUID, Now: timestamptz(now)})
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, projectAgentID)
+				return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
 			}
-			return ProjectAgentStatusRead{}, err
+			return AgentStatusRead{}, err
 		}
-		updatedID, updatedWS, updatedProject, updatedAgent, updatedStatus = row.ID, row.WorkspaceID, row.ProjectID, row.AgentID, row.Status
+		updatedID, updatedWS, updatedStatus = row.ID, row.WorkspaceID, row.Status
 		updatedConfig, updatedCreatedAt, updatedUpdatedAt = row.Config, row.CreatedAt, row.UpdatedAt
 	case "active":
-		row, err := queries.EnableProjectAgent(ctx, sqlc.EnableProjectAgentParams{ID: paUUID, Now: timestamptz(now)})
+		row, err := queries.EnableAgent(ctx, sqlc.EnableAgentParams{ID: aUUID, Now: timestamptz(now)})
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return ProjectAgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, projectAgentID)
+				return AgentStatusRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
 			}
-			return ProjectAgentStatusRead{}, err
+			return AgentStatusRead{}, err
 		}
-		updatedID, updatedWS, updatedProject, updatedAgent, updatedStatus = row.ID, row.WorkspaceID, row.ProjectID, row.AgentID, row.Status
+		updatedID, updatedWS, updatedStatus = row.ID, row.WorkspaceID, row.Status
 		updatedConfig, updatedCreatedAt, updatedUpdatedAt = row.Config, row.CreatedAt, row.UpdatedAt
 	default:
-		return ProjectAgentStatusRead{}, fmt.Errorf("invalid project agent target status: %s", targetStatus)
+		return AgentStatusRead{}, fmt.Errorf("invalid agent target status: %s", targetStatus)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return ProjectAgentStatusRead{}, err
+		return AgentStatusRead{}, err
 	}
 
 	s.emitAuditEvent(audit.Event{
@@ -6425,11 +5838,10 @@ func (s *Store) setProjectAgentStatus(ctx context.Context, projectAgentID, targe
 		Source:      audit.SourceAdmin,
 		EventType:   eventType,
 		ActorType:   audit.ActorTypeSystem,
-		ActorID:     updatedAgent,
-		TargetType:  "project_agent",
+		ActorID:     updatedID,
+		TargetType:  "agent",
 		TargetID:    updatedID,
 		WorkspaceID: updatedWS,
-		ProjectID:   updatedProject,
 		Payload: map[string]any{
 			"agent_slug": detail.AgentSlug,
 			"agent_name": detail.AgentName,
@@ -6438,18 +5850,16 @@ func (s *Store) setProjectAgentStatus(ctx context.Context, projectAgentID, targe
 		},
 	})
 
-	return ProjectAgentStatusRead{
-		ProjectAgentID: updatedID,
-		WorkspaceID:    updatedWS,
-		ProjectID:      updatedProject,
-		AgentID:        updatedAgent,
-		AgentName:      detail.AgentName,
-		AgentSlug:      detail.AgentSlug,
-		ConnectorType:  detail.ConnectorType,
-		Status:         updatedStatus,
-		Config:         decodeJSONMap(updatedConfig),
-		CreatedAt:      pgTime(updatedCreatedAt),
-		UpdatedAt:      pgTime(updatedUpdatedAt),
+	return AgentStatusRead{
+		WorkspaceID:   updatedWS,
+		AgentID:       updatedID,
+		AgentName:     detail.AgentName,
+		AgentSlug:     detail.AgentSlug,
+		ConnectorType: detail.ConnectorType,
+		Status:        updatedStatus,
+		Config:        decodeJSONMap(updatedConfig),
+		CreatedAt:     pgTime(updatedCreatedAt),
+		UpdatedAt:     pgTime(updatedUpdatedAt),
 	}, nil
 }
 
@@ -6664,7 +6074,7 @@ func (s *Store) MarkAgentRunRunning(ctx context.Context, runID string, conversat
 	if err != nil {
 		return MarkAgentRunRunningResult{}, err
 	}
-	// NOT EXISTS clause enforces at most one running run per (conversation, project_agent).
+	// NOT EXISTS clause enforces at most one running run per (conversation, agent).
 	// If a sibling is already running, UPDATE matches 0 rows and we return
 	// ErrAgentRunBlockedByQueue. Slow-path defender behind HasInflightRunForConversationAgent's
 	// fast check; closes the race between two messages arriving before either marks-running.
@@ -6680,14 +6090,14 @@ where id = $1::uuid
   and not exists (
     select 1 from agent_runs r2
     where r2.conversation_id = $2::uuid
-      and r2.project_agent_id = (select project_agent_id from agent_runs where id = $1::uuid)
+      and r2.agent_id = (select agent_id from agent_runs where id = $1::uuid)
       and r2.status = 'running'
       and r2.id != $1::uuid
   )
-returning id::text, workspace_id::text, project_id::text, conversation_id::text, status, started_at`, runUUID, conversationUUID, timestamptz(now))
+returning id::text, workspace_id::text, conversation_id::text, status, started_at`, runUUID, conversationUUID, timestamptz(now))
 	var result MarkAgentRunRunningResult
 	var startedAt pgtype.Timestamptz
-	if err := row.Scan(&result.RunID, &result.WorkspaceID, &result.ProjectID, &result.ConversationID, &result.Status, &startedAt); err != nil {
+	if err := row.Scan(&result.RunID, &result.WorkspaceID, &result.ConversationID, &result.Status, &startedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			exists, existsErr := sqlc.New(s.db).AgentRunExists(ctx, runUUID)
 			if existsErr != nil {
@@ -6714,7 +6124,7 @@ returning id::text, workspace_id::text, project_id::text, conversation_id::text,
 	return result, nil
 }
 
-// HasInflightRunForConversationAgent reports whether the (conversation, project_agent)
+// HasInflightRunForConversationAgent reports whether the (conversation, agent)
 // tuple identified by runID has any sibling run in 'running' state. Fast-path check;
 // MarkAgentRunRunning's NOT EXISTS guard closes the race window.
 func (s *Store) HasInflightRunForConversationAgent(ctx context.Context, runID string) (bool, error) {
@@ -6727,7 +6137,7 @@ func (s *Store) HasInflightRunForConversationAgent(ctx context.Context, runID st
 select exists (
   select 1 from agent_runs r2
   where r2.conversation_id = (select conversation_id from agent_runs where id = $1::uuid)
-    and r2.project_agent_id = (select project_agent_id from agent_runs where id = $1::uuid)
+    and r2.agent_id = (select agent_id from agent_runs where id = $1::uuid)
     and r2.status = 'running'
     and r2.id != $1::uuid
 )`, runUUID).Scan(&inflight); err != nil {
@@ -6737,7 +6147,7 @@ select exists (
 }
 
 // QueuePositionForRun returns the 1-indexed position of runID inside the queued-only
-// segment of its (conversation_id, project_agent_id) lane. Excludes the running
+// segment of its (conversation_id, agent_id) lane. Excludes the running
 // lane-holder ("currently being served", not "ahead of you"), so running self → 1
 // and queued self with no queued siblings ahead → 1.
 //
@@ -6750,15 +6160,15 @@ func (s *Store) QueuePositionForRun(ctx context.Context, runID string) (int, err
 	// Load target first so we can distinguish "row not found" from "lane empty
 	// besides target" — the queued-only COUNT below cannot tell them apart.
 	var (
-		conversationID, projectAgentID string
-		targetStatus                   string
-		targetCreatedAt                pgtype.Timestamptz
+		conversationID, agentID string
+		targetStatus            string
+		targetCreatedAt         pgtype.Timestamptz
 	)
 	err = s.db.QueryRow(ctx, `
-		select conversation_id::text, project_agent_id::text, status, created_at
+		select conversation_id::text, agent_id::text, status, created_at
 		from agent_runs
 		where id = $1::uuid
-	`, runUUID).Scan(&conversationID, &projectAgentID, &targetStatus, &targetCreatedAt)
+	`, runUUID).Scan(&conversationID, &agentID, &targetStatus, &targetCreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, fmt.Errorf("%w: %s", ErrUnknownAgentRun, runID)
@@ -6774,10 +6184,10 @@ func (s *Store) QueuePositionForRun(ctx context.Context, runID string) (int, err
 		select count(*)::int
 		from agent_runs r
 		where r.conversation_id = $1::uuid
-		  and r.project_agent_id = $2::uuid
+		  and r.agent_id = $2::uuid
 		  and r.status = 'queued'
 		  and r.created_at <= $3::timestamptz
-	`, mustUUID(conversationID), mustUUID(projectAgentID), targetCreatedAt).Scan(&position)
+	`, mustUUID(conversationID), mustUUID(agentID), targetCreatedAt).Scan(&position)
 	if err != nil {
 		return 0, err
 	}
@@ -6798,7 +6208,7 @@ type DequeuedRun struct {
 }
 
 // DequeueNextRunForConversationAgent finds the oldest queued run for
-// the same (conversation, project_agent) as finishedRunID and returns
+// the same (conversation, agent) as finishedRunID and returns
 // its dispatch descriptor. Returns (nil, nil) when no queued sibling
 // exists. FOR UPDATE SKIP LOCKED prevents two concurrent terminators
 // from grabbing the same queued run; the eventual NOT EXISTS guard
@@ -6815,7 +6225,7 @@ join lateral (
   select id, conversation_id, connector_type
   from agent_runs
   where conversation_id = finished.conversation_id
-    and project_agent_id = finished.project_agent_id
+    and agent_id = finished.agent_id
     and status = 'queued'
   order by created_at asc
   limit 1
@@ -6913,7 +6323,7 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 				return result, existsErr
 			}
 			if exists {
-				return result, fmt.Errorf("%w: %s", ErrInvalidProjectAgent, input.RunID)
+				return result, fmt.Errorf("%w: %s", ErrInvalidAgent, input.RunID)
 			}
 			return result, fmt.Errorf("%w: %s", ErrUnknownAgentRun, input.RunID)
 		}
@@ -6925,11 +6335,9 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 	}
 	result.RunID = run.RID
 	result.WorkspaceID = run.RWorkspaceID
-	result.ProjectID = run.RProjectID
 	result.ConversationID = run.RConversationID
-	result.ProjectAgentID = run.RProjectAgentID
-	result.AgentID = run.PaAgentID
-	result.Usage = normalizeUsageLog(input.Usage, result.WorkspaceID, result.ProjectID, result.RunID, now, source)
+	result.AgentID = run.RAgentID
+	result.Usage = normalizeUsageLog(input.Usage, result.WorkspaceID, result.RunID, now, source)
 	if run.StartedAt.Valid {
 		result.StartedAt = run.StartedAt.Time.UTC()
 	}
@@ -6953,7 +6361,6 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 	if err := queries.CreateMessage(ctx, sqlc.CreateMessageParams{
 		ID:             messageID,
 		WorkspaceID:    mustUUID(result.WorkspaceID),
-		ProjectID:      mustUUID(result.ProjectID),
 		ConversationID: mustUUID(result.ConversationID),
 		SenderType:     "agent",
 		SenderID:       mustUUID(result.AgentID),
@@ -6981,7 +6388,6 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 		TargetType:  "agent_run",
 		TargetID:    result.RunID,
 		WorkspaceID: result.WorkspaceID,
-		ProjectID:   result.ProjectID,
 		Payload: map[string]any{
 			"source":            source,
 			"source_event_id":   result.MessageID,
@@ -7006,7 +6412,6 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 	if err := queries.CreateUsageLog(ctx, sqlc.CreateUsageLogParams{
 		ID:           mustUUID(result.Usage.ID),
 		WorkspaceID:  mustUUID(result.WorkspaceID),
-		ProjectID:    mustUUID(result.ProjectID),
 		AgentRunID:   runID,
 		Provider:     result.Usage.Provider,
 		Model:        result.Usage.Model,
@@ -7032,11 +6437,10 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 		if err := queries.CreateChildAgentRun(ctx, sqlc.CreateChildAgentRunParams{
 			ID:               mustUUID(childRunID),
 			WorkspaceID:      mustUUID(result.WorkspaceID),
-			ProjectID:        mustUUID(result.ProjectID),
 			ConversationID:   mustUUID(result.ConversationID),
 			TriggerMessageID: messageID,
 			RequestedByID:    mustUUID(result.AgentID),
-			ProjectAgentID:   mustUUID(agent.projectAgentID),
+			AgentID:          mustUUID(agent.agentID),
 			ConnectorType:    agent.connectorType,
 			Metadata:         runMetadata,
 			Now:              timestamptz(now),
@@ -7052,12 +6456,11 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 			TargetType:  "agent_run",
 			TargetID:    childRunID,
 			WorkspaceID: result.WorkspaceID,
-			ProjectID:   result.ProjectID,
 			Payload: map[string]any{
 				"source":            source,
 				"source_event_id":   result.MessageID,
 				"output_message_id": result.MessageID,
-				"project_agent_id":  agent.projectAgentID,
+				"agent_id":          agent.agentID,
 			},
 		})
 		result.ChildRunIDs = append(result.ChildRunIDs, childRunID)
@@ -7081,7 +6484,7 @@ func (s *Store) CompleteAgentRun(ctx context.Context, input CompleteAgentRunInpu
 		s.emitAuditEvent(ev)
 	}
 	// Serial-queue handoff: if a queued sibling is waiting on the
-	// same (conversation, project_agent), dispatch it now.
+	// same (conversation, agent), dispatch it now.
 	s.dispatchNextQueuedRunAfter(ctx, result.RunID)
 	return result, nil
 }
@@ -7099,7 +6502,7 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 	}
 	content := strings.TrimSpace(input.Content)
 	if content == "" || len(content) > 32000 {
-		return result, ErrInvalidProjectInput
+		return result, ErrInvalidInput
 	}
 
 	tx, err := beginTx(ctx, s.db)
@@ -7109,7 +6512,7 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 	defer tx.Rollback(ctx)
 	queries := sqlc.New(tx)
 
-	conversation, err := queries.GetProjectConversation(ctx, conversationID)
+	conversation, err := queries.GetConversation(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return result, fmt.Errorf("%w: %s", ErrUnknownConversation, input.ConversationID)
@@ -7127,52 +6530,52 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 	if len(mentionNames) == 0 && len(input.MentionedAgentIDs) == 0 {
 		implicitPrimary = strings.TrimSpace(conversation.PrimaryAgentID)
 	}
-	mentionedAgents := make([]mentionedProjectAgent, 0, len(input.MentionedAgentIDs)+len(mentionNames)+1)
+	mentionedAgents := make([]mentionedAgent, 0, len(input.MentionedAgentIDs)+len(mentionNames)+1)
 	seenAgents := map[string]struct{}{}
 	for _, mention := range mentionNames {
-		agent, err := queries.GetActiveMentionedProjectAgent(ctx, sqlc.GetActiveMentionedProjectAgentParams{ProjectID: mustUUID(conversation.ProjectID), MentionName: strings.TrimPrefix(mention, "@")})
+		agent, err := queries.GetActiveMentionedAgent(ctx, sqlc.GetActiveMentionedAgentParams{WorkspaceID: mustUUID(conversation.WorkspaceID), MentionName: strings.TrimPrefix(mention, "@")})
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}
 			return result, err
 		}
-		if _, ok := seenAgents[agent.ProjectAgentID]; ok {
+		if _, ok := seenAgents[agent.AgentID]; ok {
 			continue
 		}
-		seenAgents[agent.ProjectAgentID] = struct{}{}
-		mentionedAgents = append(mentionedAgents, mentionedProjectAgent{projectAgentID: agent.ProjectAgentID, agentID: agent.AgentID, name: agent.Name, slug: agent.Slug, connectorType: agent.ConnectorType})
+		seenAgents[agent.AgentID] = struct{}{}
+		mentionedAgents = append(mentionedAgents, mentionedAgent{agentID: agent.AgentID, name: agent.Name, slug: agent.Slug, connectorType: agent.ConnectorType})
 	}
-	for _, projectAgentID := range input.MentionedAgentIDs {
-		trimmedID := strings.TrimSpace(projectAgentID)
-		projectAgentUUID, err := uuid(trimmedID)
+	for _, mentionedID := range input.MentionedAgentIDs {
+		trimmedID := strings.TrimSpace(mentionedID)
+		agentUUID, err := uuid(trimmedID)
 		if err != nil {
-			return result, fmt.Errorf("%w: %s", ErrUnknownMention, projectAgentID)
+			return result, fmt.Errorf("%w: %s", ErrUnknownMention, mentionedID)
 		}
-		row := tx.QueryRow(ctx, `select pa.id::text, a.id::text, a.name, a.slug, a.connector_type from project_agents pa join agents a on a.id = pa.agent_id where (pa.id = $1 or a.id = $1) and pa.project_id = $2 and pa.status = 'active' and pa.deleted_at is null and a.status = 'active' and a.deleted_at is null`, projectAgentUUID, mustUUID(conversation.ProjectID))
-		var agent mentionedProjectAgent
-		if err := row.Scan(&agent.projectAgentID, &agent.agentID, &agent.name, &agent.slug, &agent.connectorType); err != nil {
+		row := tx.QueryRow(ctx, `select a.id::text, a.name, a.slug, a.connector_type from agents a where a.id = $1 and a.workspace_id = $2 and a.status = 'active' and a.deleted_at is null`, agentUUID, mustUUID(conversation.WorkspaceID))
+		var agent mentionedAgent
+		if err := row.Scan(&agent.agentID, &agent.name, &agent.slug, &agent.connectorType); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return result, fmt.Errorf("%w: %s", ErrUnknownMention, projectAgentID)
+				return result, fmt.Errorf("%w: %s", ErrUnknownMention, mentionedID)
 			}
 			return result, err
 		}
-		if _, ok := seenAgents[agent.projectAgentID]; ok {
+		if _, ok := seenAgents[agent.agentID]; ok {
 			continue
 		}
-		seenAgents[agent.projectAgentID] = struct{}{}
+		seenAgents[agent.agentID] = struct{}{}
 		mentionedAgents = append(mentionedAgents, agent)
 	}
 	// Implicit primary_agent fallback: must be active, otherwise silently drop to "no run
 	// dispatched" so the user message still lands and the UI shows the bound-agent-disabled state.
 	if implicitPrimary != "" {
-		projectAgentUUID, err := uuid(implicitPrimary)
+		agentUUID, err := uuid(implicitPrimary)
 		if err == nil {
-			row := tx.QueryRow(ctx, `select pa.id::text, a.id::text, a.name, a.slug, a.connector_type from project_agents pa join agents a on a.id = pa.agent_id where pa.id = $1 and pa.project_id = $2 and pa.status = 'active' and pa.deleted_at is null and a.status = 'active' and a.deleted_at is null`, projectAgentUUID, mustUUID(conversation.ProjectID))
-			var agent mentionedProjectAgent
-			if scanErr := row.Scan(&agent.projectAgentID, &agent.agentID, &agent.name, &agent.slug, &agent.connectorType); scanErr == nil {
-				if _, ok := seenAgents[agent.projectAgentID]; !ok {
-					seenAgents[agent.projectAgentID] = struct{}{}
+			row := tx.QueryRow(ctx, `select a.id::text, a.name, a.slug, a.connector_type from agents a where a.id = $1 and a.workspace_id = $2 and a.status = 'active' and a.deleted_at is null`, agentUUID, mustUUID(conversation.WorkspaceID))
+			var agent mentionedAgent
+			if scanErr := row.Scan(&agent.agentID, &agent.name, &agent.slug, &agent.connectorType); scanErr == nil {
+				if _, ok := seenAgents[agent.agentID]; !ok {
+					seenAgents[agent.agentID] = struct{}{}
 					mentionedAgents = append(mentionedAgents, agent)
 				}
 			} else if !errors.Is(scanErr, pgx.ErrNoRows) {
@@ -7187,12 +6590,12 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 	}
 	messageID := newID()
 	messageUUID := mustUUID(messageID)
-	if err := queries.CreateMessage(ctx, sqlc.CreateMessageParams{ID: messageUUID, WorkspaceID: mustUUID(conversation.WorkspaceID), ProjectID: mustUUID(conversation.ProjectID), ConversationID: mustUUID(conversation.ID), SenderType: "user", SenderID: userID, Content: content, Metadata: metadata, Now: timestamptz(now)}); err != nil {
+	if err := queries.CreateMessage(ctx, sqlc.CreateMessageParams{ID: messageUUID, WorkspaceID: mustUUID(conversation.WorkspaceID), ConversationID: mustUUID(conversation.ID), SenderType: "user", SenderID: userID, Content: content, Metadata: metadata, Now: timestamptz(now)}); err != nil {
 		return result, err
 	}
-	result.Message = MessageRead{ID: messageID, WorkspaceID: conversation.WorkspaceID, ProjectID: conversation.ProjectID, ConversationID: conversation.ID, SenderType: "user", SenderID: input.UserID, Kind: "message", ContentFormat: "text", Content: content, Metadata: metadataMap, CreatedAt: now}
+	result.Message = MessageRead{ID: messageID, WorkspaceID: conversation.WorkspaceID, ConversationID: conversation.ID, SenderType: "user", SenderID: input.UserID, Kind: "message", ContentFormat: "text", Content: content, Metadata: metadataMap, CreatedAt: now}
 
-	pendingAudit := []audit.Event{{OccurredAt: now, Source: audit.SourceRuntime, EventType: auditUserMessageSent, ActorType: audit.ActorTypeUser, ActorID: input.UserID, TargetType: "message", TargetID: messageID, WorkspaceID: conversation.WorkspaceID, ProjectID: conversation.ProjectID, Payload: map[string]any{"conversation_id": conversation.ID, "mentioned_count": len(mentionedAgents)}}}
+	pendingAudit := []audit.Event{{OccurredAt: now, Source: audit.SourceRuntime, EventType: auditUserMessageSent, ActorType: audit.ActorTypeUser, ActorID: input.UserID, TargetType: "message", TargetID: messageID, WorkspaceID: conversation.WorkspaceID, Payload: map[string]any{"conversation_id": conversation.ID, "mentioned_count": len(mentionedAgents)}}}
 	var pendingStreaming []StreamingDispatchInput
 	for _, agent := range mentionedAgents {
 		runID := newID()
@@ -7200,11 +6603,11 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 		if err != nil {
 			return result, err
 		}
-		if err := queries.CreateAgentRun(ctx, sqlc.CreateAgentRunParams{ID: mustUUID(runID), WorkspaceID: mustUUID(conversation.WorkspaceID), ProjectID: mustUUID(conversation.ProjectID), ConversationID: mustUUID(conversation.ID), TriggerMessageID: messageUUID, TriggerChannel: "web", RequestedByID: userID, ProjectAgentID: mustUUID(agent.projectAgentID), ConnectorType: agent.connectorType, Metadata: runMetadata, Now: timestamptz(now)}); err != nil {
+		if err := queries.CreateAgentRun(ctx, sqlc.CreateAgentRunParams{ID: mustUUID(runID), WorkspaceID: mustUUID(conversation.WorkspaceID), ConversationID: mustUUID(conversation.ID), TriggerMessageID: messageUUID, TriggerChannel: "web", RequestedByID: userID, AgentID: mustUUID(agent.agentID), ConnectorType: agent.connectorType, Metadata: runMetadata, Now: timestamptz(now)}); err != nil {
 			return result, err
 		}
 		result.RunIDs = append(result.RunIDs, runID)
-		pendingAudit = append(pendingAudit, audit.Event{OccurredAt: now, Source: audit.SourceRuntime, EventType: auditAgentRunCreated, ActorType: audit.ActorTypeUser, ActorID: input.UserID, TargetType: "agent_run", TargetID: runID, WorkspaceID: conversation.WorkspaceID, ProjectID: conversation.ProjectID, Payload: map[string]any{"source": "web", "trigger_message_id": messageID, "project_agent_id": agent.projectAgentID}})
+		pendingAudit = append(pendingAudit, audit.Event{OccurredAt: now, Source: audit.SourceRuntime, EventType: auditAgentRunCreated, ActorType: audit.ActorTypeUser, ActorID: input.UserID, TargetType: "agent_run", TargetID: runID, WorkspaceID: conversation.WorkspaceID, Payload: map[string]any{"source": "web", "trigger_message_id": messageID, "agent_id": agent.agentID}})
 		// agent_daemon needs StreamingDispatcher to flip queued → running and
 		// push the prompt; otherwise the run sits at queued forever.
 		switch {
@@ -7244,36 +6647,28 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 
 	targetAgentID := strings.TrimSpace(input.TargetAgentID)
 	targetMode := targetAgentID != ""
-	var targetAgent mentionedProjectAgent
+	var targetAgent mentionedAgent
 	var conversation struct {
 		ID          string
 		WorkspaceID string
-		ProjectID   string
 	}
 
 	if targetMode {
 		targetUUID, err := uuid(targetAgentID)
 		if err != nil {
-			return result, fmt.Errorf("%w: target_agent_id: %w", ErrInvalidProjectInput, err)
+			return result, fmt.Errorf("%w: target_agent_id: %w", ErrInvalidInput, err)
 		}
-		var targetWorkspaceID, targetProjectID string
+		var targetWorkspaceID string
 		row := tx.QueryRow(ctx, `
-			select pa.id::text, pa.workspace_id::text, pa.project_id::text,
-			       a.id::text, a.name, a.slug, a.connector_type
-			from project_agents pa
-			join projects p on p.id = pa.project_id
-			join agents a on a.id = pa.agent_id
+			select a.id::text, a.workspace_id::text,
+			       a.name, a.slug, a.connector_type
+			from agents a
 			where a.id = $1
-			  and pa.status = 'active'
-			  and pa.deleted_at is null
-			  and p.status = 'active'
-			  and p.deleted_at is null
 			  and a.status = 'active'
 			  and a.deleted_at is null
-			order by pa.created_at asc, pa.id asc
 			limit 1
 		`, targetUUID)
-		if err := row.Scan(&targetAgent.projectAgentID, &targetWorkspaceID, &targetProjectID, &targetAgent.agentID, &targetAgent.name, &targetAgent.slug, &targetAgent.connectorType); err != nil {
+		if err := row.Scan(&targetAgent.agentID, &targetWorkspaceID, &targetAgent.name, &targetAgent.slug, &targetAgent.connectorType); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return result, fmt.Errorf("%w: target_agent_id=%s", ErrUnknownMention, targetAgentID)
 			}
@@ -7291,32 +6686,30 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 			platform = "gateway"
 		}
 		err = tx.QueryRow(ctx, `
-			select id::text, workspace_id::text, project_id::text
+			select id::text, workspace_id::text
 			from conversations
 			where workspace_id = $1
-			  and project_id = $2
-			  and platform = $3
-			  and external_id = $4
-			  and external_thread_id = $5
+			  and platform = $2
+			  and external_id = $3
+			  and external_thread_id = $4
 			  and status = 'active'
 			  and deleted_at is null
 			order by created_at asc, id asc
 			limit 1
-		`, mustUUID(targetWorkspaceID), mustUUID(targetProjectID), platform, externalChatID, externalThreadID).Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.ProjectID)
+		`, mustUUID(targetWorkspaceID), platform, externalChatID, externalThreadID).Scan(&conversation.ID, &conversation.WorkspaceID)
 		if err != nil {
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return result, err
 			}
 			conversation.ID = newID()
 			conversation.WorkspaceID = targetWorkspaceID
-			conversation.ProjectID = targetProjectID
 			form := normalizeIMConversationForm(input.ConversationForm)
 			title := strings.TrimSpace(input.ConversationTitle)
 			if title == "" {
 				title = fmt.Sprintf("Feishu %s", externalChatID)
 			}
 			convMetadata, err := json.Marshal(map[string]any{
-				"primary_agent_id": targetAgent.projectAgentID,
+				"primary_agent_id": targetAgent.agentID,
 				"source":           source,
 				"gateway":          gateway,
 			})
@@ -7325,11 +6718,11 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 			}
 			if _, err := tx.Exec(ctx, `
 				insert into conversations(
-				  id, workspace_id, project_id, surface, form, title,
+				  id, workspace_id, surface, form, title,
 				  platform, external_id, external_thread_id, source_app_id,
 				  status, metadata, created_at, updated_at
-				) values ($1::uuid, $2::uuid, $3::uuid, 'im', $4, $5, $6, $7, $8, $9, 'active', $10::jsonb, $11, $11)
-			`, mustUUID(conversation.ID), mustUUID(targetWorkspaceID), mustUUID(targetProjectID), form, title, platform, externalChatID, externalThreadID, strings.TrimSpace(input.SourceAppID), convMetadata, timestamptz(now)); err != nil {
+				) values ($1::uuid, $2::uuid, 'im', $3, $4, $5, $6, $7, $8, 'active', $9::jsonb, $10, $10)
+			`, mustUUID(conversation.ID), mustUUID(targetWorkspaceID), form, title, platform, externalChatID, externalThreadID, strings.TrimSpace(input.SourceAppID), convMetadata, timestamptz(now)); err != nil {
 				return result, err
 			}
 		} else if _, err := tx.Exec(ctx, `
@@ -7338,7 +6731,7 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 			    metadata = metadata || jsonb_build_object('primary_agent_id', $3::text),
 			    updated_at = $4
 			where id = $1::uuid
-		`, mustUUID(conversation.ID), strings.TrimSpace(input.SourceAppID), targetAgent.projectAgentID, timestamptz(now)); err != nil {
+		`, mustUUID(conversation.ID), strings.TrimSpace(input.SourceAppID), targetAgent.agentID, timestamptz(now)); err != nil {
 			return result, err
 		}
 	} else {
@@ -7356,11 +6749,9 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 		conversation = struct {
 			ID          string
 			WorkspaceID string
-			ProjectID   string
-		}{ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID}
+		}{ID: row.ID, WorkspaceID: row.WorkspaceID}
 	}
 	result.WorkspaceID = conversation.WorkspaceID
-	result.ProjectID = conversation.ProjectID
 	result.ConversationID = conversation.ID
 
 	if source == auditSourceGateway && gateway != "" && strings.TrimSpace(input.ExternalMessageID) != "" {
@@ -7414,7 +6805,7 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 		}
 	}
 
-	mentionedAgents := make([]mentionedProjectAgent, 0, len(input.Mentions)+1)
+	mentionedAgents := make([]mentionedAgent, 0, len(input.Mentions)+1)
 	if targetMode {
 		mentionedAgents = append(mentionedAgents, targetAgent)
 	}
@@ -7426,8 +6817,8 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 			}
 			seenMentions[mention] = struct{}{}
 
-			agent, err := queries.GetActiveMentionedProjectAgent(ctx, sqlc.GetActiveMentionedProjectAgentParams{
-				ProjectID:   mustUUID(conversation.ProjectID),
+			agent, err := queries.GetActiveMentionedAgent(ctx, sqlc.GetActiveMentionedAgentParams{
+				WorkspaceID: mustUUID(conversation.WorkspaceID),
 				MentionName: strings.TrimPrefix(mention, "@"),
 			})
 			if err != nil {
@@ -7436,12 +6827,11 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 				}
 				return result, err
 			}
-			mentionedAgents = append(mentionedAgents, mentionedProjectAgent{
-				projectAgentID: agent.ProjectAgentID,
-				agentID:        agent.AgentID,
-				name:           agent.Name,
-				slug:           agent.Slug,
-				connectorType:  agent.ConnectorType,
+			mentionedAgents = append(mentionedAgents, mentionedAgent{
+				agentID:       agent.AgentID,
+				name:          agent.Name,
+				slug:          agent.Slug,
+				connectorType: agent.ConnectorType,
 			})
 		}
 	}
@@ -7498,11 +6888,11 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into messages(
-		  id, workspace_id, project_id, conversation_id,
+		  id, workspace_id, conversation_id,
 		  sender_type, sender_id, kind, content_format, visibility, content, metadata,
 		  created_at, updated_at
-		) values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6::uuid, 'message', 'text', 'project', $7, $8::jsonb, $9, $9)
-	`, messageID, mustUUID(conversation.WorkspaceID), mustUUID(conversation.ProjectID), mustUUID(conversation.ID), senderType, senderUUID, input.Text, metadata, timestamptz(now)); err != nil {
+		) values ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, 'message', 'text', 'workspace', $6, $7::jsonb, $8, $8)
+	`, messageID, mustUUID(conversation.WorkspaceID), mustUUID(conversation.ID), senderType, senderUUID, input.Text, metadata, timestamptz(now)); err != nil {
 		return result, err
 	}
 	messageAuditMetadata := map[string]any{
@@ -7535,7 +6925,6 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 		TargetType:  "message",
 		TargetID:    result.MessageID,
 		WorkspaceID: conversation.WorkspaceID,
-		ProjectID:   conversation.ProjectID,
 		Payload:     cloneAuditPayload(messageAuditMetadata),
 	}}
 
@@ -7567,19 +6956,19 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 		requestedByUUID := senderUUID
 		if _, err := tx.Exec(ctx, `
 			insert into agent_runs(
-			  id, workspace_id, project_id, conversation_id,
+			  id, workspace_id, conversation_id,
 			  trigger_message_id, trigger_source, trigger_channel, requested_by_type, requested_by_id,
-			  project_agent_id, connector_type, status, visibility, metadata,
+			  agent_id, connector_type, status, visibility, metadata,
 			  created_at, updated_at
-			) values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, 'message', 'im', $6, $7::uuid, $8::uuid, $9, 'queued', 'project', $10::jsonb, $11, $11)
-		`, mustUUID(runID), mustUUID(conversation.WorkspaceID), mustUUID(conversation.ProjectID), mustUUID(conversation.ID), messageID, requestedByType, requestedByUUID, mustUUID(agent.projectAgentID), agent.connectorType, runMetadata, timestamptz(now)); err != nil {
+			) values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'message', 'im', $5, $6::uuid, $7::uuid, $8, 'queued', 'workspace', $9::jsonb, $10, $10)
+		`, mustUUID(runID), mustUUID(conversation.WorkspaceID), mustUUID(conversation.ID), messageID, requestedByType, requestedByUUID, mustUUID(agent.agentID), agent.connectorType, runMetadata, timestamptz(now)); err != nil {
 			return result, err
 		}
 		runAuditMetadata := map[string]any{
 			"source":             source,
 			"source_event_id":    result.MessageID,
 			"trigger_message_id": result.MessageID,
-			"project_agent_id":   agent.projectAgentID,
+			"agent_id":           agent.agentID,
 		}
 		if gateway != "" {
 			runAuditMetadata["gateway"] = gateway
@@ -7593,7 +6982,6 @@ func (s *Store) CreateInboundIMMessage(ctx context.Context, input CreateInboundI
 			TargetType:  "agent_run",
 			TargetID:    runID,
 			WorkspaceID: conversation.WorkspaceID,
-			ProjectID:   conversation.ProjectID,
 			Payload:     cloneAuditPayload(runAuditMetadata),
 		})
 		result.RunIDs = append(result.RunIDs, runID)
@@ -7642,18 +7030,14 @@ func cloneAuditPayload(src map[string]any) map[string]any {
 
 func DefaultDevFixtureIDs() DevFixtureIDs {
 	return DevFixtureIDs{
-		UserID:                "00000000-0000-0000-0000-000000000001",
-		FeishuAuthIdentityID:  "00000000-0000-0000-0000-000000000013",
-		WorkspaceID:           "00000000-0000-0000-0000-000000000002",
-		WorkspaceMemberID:     "00000000-0000-0000-0000-000000000003",
-		ProjectID:             "00000000-0000-0000-0000-000000000004",
-		ProductAgentID:        "00000000-0000-0000-0000-000000000006",
-		BackendAgentID:        "00000000-0000-0000-0000-000000000007",
-		TestAgentID:           "00000000-0000-0000-0000-000000000008",
-		ProductProjectAgentID: "00000000-0000-0000-0000-000000000009",
-		BackendProjectAgentID: "00000000-0000-0000-0000-000000000010",
-		TestProjectAgentID:    "00000000-0000-0000-0000-000000000011",
-		ConversationID:        "00000000-0000-0000-0000-000000000012",
+		UserID:               "00000000-0000-0000-0000-000000000001",
+		FeishuAuthIdentityID: "00000000-0000-0000-0000-000000000013",
+		WorkspaceID:          "00000000-0000-0000-0000-000000000002",
+		WorkspaceMemberID:    "00000000-0000-0000-0000-000000000003",
+		ProductAgentID:       "00000000-0000-0000-0000-000000000006",
+		BackendAgentID:       "00000000-0000-0000-0000-000000000007",
+		TestAgentID:          "00000000-0000-0000-0000-000000000008",
+		ConversationID:       "00000000-0000-0000-0000-000000000012",
 	}
 }
 
@@ -7709,16 +7093,6 @@ func (s *Store) InsertDevFixture(ctx context.Context, ids DevFixtureIDs) (DevSee
 	}
 	result.WorkspaceMembers += workspaceMemberRows
 
-	projectRows, err := queries.CreateDevProject(ctx, sqlc.CreateDevProjectParams{ID: mustUUID(ids.ProjectID), WorkspaceID: mustUUID(workspaceID), CreatedBy: mustUUID(userID), Now: timestamptz(now)})
-	if err != nil {
-		return result, err
-	}
-	result.Projects += projectRows
-	projectID, err := queries.GetActiveProjectIDBySlug(ctx, sqlc.GetActiveProjectIDBySlugParams{WorkspaceID: mustUUID(workspaceID), Slug: "demo-project"})
-	if err != nil {
-		return result, err
-	}
-
 	agents := []struct {
 		id          string
 		name        string
@@ -7766,46 +7140,7 @@ func (s *Store) InsertDevFixture(ctx context.Context, ids DevFixtureIDs) (DevSee
 		result.Agents += agentRows
 	}
 
-	projectAgents := []struct {
-		id        string
-		agentSlug string
-	}{
-		{id: ids.ProductProjectAgentID, agentSlug: "product-agent"},
-		{id: ids.BackendProjectAgentID, agentSlug: "backend-agent"},
-		{id: ids.TestProjectAgentID, agentSlug: "test-agent"},
-	}
-
-	for _, projectAgent := range projectAgents {
-		agentID, err := queries.GetActiveAgentIDBySlug(ctx, sqlc.GetActiveAgentIDBySlugParams{WorkspaceID: mustUUID(workspaceID), Slug: projectAgent.agentSlug})
-		if err != nil {
-			return result, err
-		}
-
-		projectAgentRows, err := queries.CreateDevProjectAgent(ctx, sqlc.CreateDevProjectAgentParams{
-			ID:          mustUUID(projectAgent.id),
-			WorkspaceID: mustUUID(workspaceID),
-			ProjectID:   mustUUID(projectID),
-			AgentID:     mustUUID(agentID),
-			CreatedBy:   mustUUID(userID),
-			Now:         timestamptz(now),
-		})
-		if err != nil {
-			return result, err
-		}
-		result.ProjectAgents += projectAgentRows
-
-		activatedRows, err := queries.ActivateDevProjectAgent(ctx, sqlc.ActivateDevProjectAgentParams{
-			ProjectID: mustUUID(projectID),
-			AgentID:   mustUUID(agentID),
-			Now:       timestamptz(now),
-		})
-		if err != nil {
-			return result, err
-		}
-		result.ProjectAgents += activatedRows
-	}
-
-	conversationRows, err := queries.CreateDevConversation(ctx, sqlc.CreateDevConversationParams{ID: mustUUID(ids.ConversationID), WorkspaceID: mustUUID(workspaceID), ProjectID: mustUUID(projectID), Now: timestamptz(now)})
+	conversationRows, err := queries.CreateDevConversation(ctx, sqlc.CreateDevConversationParams{ID: mustUUID(ids.ConversationID), WorkspaceID: mustUUID(workspaceID), Now: timestamptz(now)})
 	if err != nil {
 		return result, err
 	}
@@ -7827,12 +7162,11 @@ func (f txBeginnerFunc) Begin(ctx context.Context) (pgx.Tx, error) {
 	return f(ctx)
 }
 
-type mentionedProjectAgent struct {
-	projectAgentID string
-	agentID        string
-	name           string
-	slug           string
-	connectorType  string
+type mentionedAgent struct {
+	agentID       string
+	name          string
+	slug          string
+	connectorType string
 }
 
 var mentionPattern = regexp.MustCompile(`@[\p{Han}A-Za-z0-9_-]+`)
@@ -7876,8 +7210,8 @@ func beginTx(ctx context.Context, db sqlc.DBTX) (pgx.Tx, error) {
 	return beginner.Begin(ctx)
 }
 
-func resolveChildAgentMentions(ctx context.Context, queries *sqlc.Queries, run sqlc.GetCompletableAgentRunForUpdateRow, mentions []string) ([]mentionedProjectAgent, []SkippedAgentMention, error) {
-	mentionedAgents := make([]mentionedProjectAgent, 0, len(mentions))
+func resolveChildAgentMentions(ctx context.Context, queries *sqlc.Queries, run sqlc.GetCompletableAgentRunForUpdateRow, mentions []string) ([]mentionedAgent, []SkippedAgentMention, error) {
+	mentionedAgents := make([]mentionedAgent, 0, len(mentions))
 	skippedMentions := make([]SkippedAgentMention, 0)
 	seenMentions := make(map[string]struct{}, len(mentions))
 	seenTargets := make(map[string]struct{}, len(mentions))
@@ -7888,8 +7222,8 @@ func resolveChildAgentMentions(ctx context.Context, queries *sqlc.Queries, run s
 		}
 		seenMentions[mention] = struct{}{}
 
-		agent, err := queries.GetActiveMentionedProjectAgent(ctx, sqlc.GetActiveMentionedProjectAgentParams{
-			ProjectID:   mustUUID(run.RProjectID),
+		agent, err := queries.GetActiveMentionedAgent(ctx, sqlc.GetActiveMentionedAgentParams{
+			WorkspaceID: mustUUID(run.RWorkspaceID),
 			MentionName: strings.TrimPrefix(mention, "@"),
 		})
 		if err != nil {
@@ -7900,22 +7234,21 @@ func resolveChildAgentMentions(ctx context.Context, queries *sqlc.Queries, run s
 			return nil, nil, err
 		}
 
-		if agent.ProjectAgentID == run.RProjectAgentID {
-			skippedMentions = append(skippedMentions, SkippedAgentMention{Mention: mention, ProjectAgentID: agent.ProjectAgentID, Reason: "self_trigger"})
+		if agent.AgentID == run.RAgentID {
+			skippedMentions = append(skippedMentions, SkippedAgentMention{Mention: mention, AgentID: agent.AgentID, Reason: "self_trigger"})
 			continue
 		}
-		if _, ok := seenTargets[agent.ProjectAgentID]; ok {
-			skippedMentions = append(skippedMentions, SkippedAgentMention{Mention: mention, ProjectAgentID: agent.ProjectAgentID, Reason: "duplicate_target"})
+		if _, ok := seenTargets[agent.AgentID]; ok {
+			skippedMentions = append(skippedMentions, SkippedAgentMention{Mention: mention, AgentID: agent.AgentID, Reason: "duplicate_target"})
 			continue
 		}
 
-		seenTargets[agent.ProjectAgentID] = struct{}{}
-		mentionedAgents = append(mentionedAgents, mentionedProjectAgent{
-			projectAgentID: agent.ProjectAgentID,
-			agentID:        agent.AgentID,
-			name:           agent.Name,
-			slug:           agent.Slug,
-			connectorType:  agent.ConnectorType,
+		seenTargets[agent.AgentID] = struct{}{}
+		mentionedAgents = append(mentionedAgents, mentionedAgent{
+			agentID:       agent.AgentID,
+			name:          agent.Name,
+			slug:          agent.Slug,
+			connectorType: agent.ConnectorType,
 		})
 	}
 
@@ -7945,7 +7278,7 @@ func completionAuditEvent(source string) string {
 	return auditAgentRunCompleted
 }
 
-func normalizeUsageLog(input UsageInput, workspaceID string, projectID string, runID string, now time.Time, source string) UsageLogRead {
+func normalizeUsageLog(input UsageInput, workspaceID string, runID string, now time.Time, source string) UsageLogRead {
 	// Recorded verbatim; missing connector usage persists as '' / 0 rather than fabricated.
 	provider := strings.TrimSpace(input.Provider)
 	model := strings.TrimSpace(input.Model)
@@ -7970,7 +7303,6 @@ func normalizeUsageLog(input UsageInput, workspaceID string, projectID string, r
 	return UsageLogRead{
 		ID:           newID(),
 		WorkspaceID:  workspaceID,
-		ProjectID:    projectID,
 		AgentRunID:   runID,
 		Provider:     provider,
 		Model:        model,
@@ -8208,7 +7540,7 @@ func runtimePtr(value string) *string {
 
 // agentConfigJSON builds the JSON to be written into agents.config. `bindings`
 // carries `credential_bindings` / `model_credential_binding` extracted from the
-// caller's project-agent config; without piping them through here the runtime's
+// caller's agent config; without piping them through here the runtime's
 // ParseCredentialBindings (which reads agent_config) would always see {}.
 func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string, runtime, connectorType string, bindings map[string]any) ([]byte, error) {
 	config := map[string]any{"capabilities": normalizeStringSlice(capabilities)}
@@ -8224,11 +7556,11 @@ func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string,
 			r = "sandbox"
 		}
 		if !validRuntimeMode(r) {
-			return nil, fmt.Errorf("%w: runtime must be sandbox or local", ErrInvalidProjectInput)
+			return nil, fmt.Errorf("%w: runtime must be sandbox or local", ErrInvalidInput)
 		}
 		config["runtime"] = r
 	} else if r != "" {
-		return nil, fmt.Errorf("%w: %s agents have no server-side runtime; got runtime=%q", ErrInvalidProjectInput, connectorType, r)
+		return nil, fmt.Errorf("%w: %s agents have no server-side runtime; got runtime=%q", ErrInvalidInput, connectorType, r)
 	}
 	if v, ok := bindings["credential_bindings"]; ok && v != nil {
 		config["credential_bindings"] = v
@@ -8236,17 +7568,13 @@ func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string,
 	if v, ok := bindings["model_credential_binding"]; ok && v != nil {
 		config["model_credential_binding"] = v
 	}
-	return json.Marshal(config)
-}
-
-func projectAgentConfigJSON(input map[string]any, connectorType string) ([]byte, error) {
-	config := map[string]any{}
+	// Fold agent_daemon identity/runtime keys (formerly carried on the
+	// agent config) into the merged agent config.
 	if connectorType == "agent_daemon" {
 		for _, key := range []string{"device_id", "daemon_mode", "agent_kind", "work_dir"} {
-			if v, ok := input[key]; ok {
+			if v, ok := bindings[key]; ok {
 				if s, ok := v.(string); ok {
-					trimmed := strings.TrimSpace(s)
-					if trimmed != "" {
+					if trimmed := strings.TrimSpace(s); trimmed != "" {
 						config[key] = trimmed
 					}
 				}
@@ -8284,10 +7612,6 @@ func agentSummaryFromRow(id, workspaceID, name, slug, description, connectorType
 		delete(config, "runtime")
 	}
 	return AgentSummary{ID: id, WorkspaceID: workspaceID, Name: name, Slug: slug, Description: description, ConnectorType: connectorType, Status: status, Capabilities: normalizeStringSlice(caps), Config: config, CreatedAt: pgTime(createdAt), UpdatedAt: pgTime(updatedAt)}
-}
-
-func projectAgentSummaryFromRow(id, workspaceID, projectID, agentID, status string, configJSON []byte, createdAt, updatedAt pgtype.Timestamptz) ProjectAgentSummary {
-	return ProjectAgentSummary{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, AgentID: agentID, Status: status, Config: decodeJSONMap(configJSON), CreatedAt: pgTime(createdAt), UpdatedAt: pgTime(updatedAt)}
 }
 
 func changedAgentFields(current sqlc.GetAgentForUpdateRow, updated AgentSummary, input UpdateAgentInput) []string {
@@ -8352,8 +7676,8 @@ func nextSlugSuggestion(ctx context.Context, queries *sqlc.Queries, workspaceID 
 	return fmt.Sprintf("%s-%s", base, generateSlugSuffix(3))
 }
 
-func (s *Store) emitAgentAudit(now time.Time, actorID, eventType, targetType, targetID, workspaceID, projectID string, payload map[string]any) {
-	s.emitAuditEvent(audit.Event{OccurredAt: now, Source: audit.SourceAdmin, EventType: eventType, ActorType: audit.ActorTypeUser, ActorID: actorID, TargetType: targetType, TargetID: targetID, WorkspaceID: workspaceID, ProjectID: projectID, Payload: payload})
+func (s *Store) emitAgentAudit(now time.Time, actorID, eventType, targetType, targetID, workspaceID string, payload map[string]any) {
+	s.emitAuditEvent(audit.Event{OccurredAt: now, Source: audit.SourceAdmin, EventType: eventType, ActorType: audit.ActorTypeUser, ActorID: actorID, TargetType: targetType, TargetID: targetID, WorkspaceID: workspaceID, Payload: payload})
 }
 
 // userFacingReasonFromMetadata extracts a human-readable failure reason from
@@ -8448,7 +7772,6 @@ func messageFromConversationRow(row sqlc.ListConversationMessagesRow) MessageRea
 	return MessageRead{
 		ID:             row.MID,
 		WorkspaceID:    row.MWorkspaceID,
-		ProjectID:      row.MProjectID,
 		ConversationID: row.MConversationID,
 		SenderType:     row.SenderType,
 		SenderID:       row.MSenderID,
@@ -8464,7 +7787,6 @@ func messageFromOutputRow(row sqlc.GetOutputMessageByRunIDRow) MessageRead {
 	return MessageRead{
 		ID:             row.MID,
 		WorkspaceID:    row.MWorkspaceID,
-		ProjectID:      row.MProjectID,
 		ConversationID: row.MConversationID,
 		SenderType:     row.SenderType,
 		SenderID:       row.MSenderID,
@@ -8480,12 +7802,10 @@ func agentRunBriefFromConversationRow(row sqlc.ListConversationAgentRunsRow) Age
 	brief := AgentRunBriefRead{
 		ID:               row.RID,
 		WorkspaceID:      row.RWorkspaceID,
-		ProjectID:        row.RProjectID,
 		ConversationID:   row.RConversationID,
 		TriggerMessageID: row.TriggerMessageID,
 		OutputMessageID:  row.OutputMessageID,
-		ProjectAgentID:   row.RProjectAgentID,
-		AgentID:          row.PaAgentID,
+		AgentID:          row.RAgentID,
 		AgentName:        row.AgentName,
 		AgentSlug:        row.AgentSlug,
 		ConnectorType:    row.ConnectorType,
@@ -8500,18 +7820,16 @@ func agentRunBriefFromConversationRow(row sqlc.ListConversationAgentRunsRow) Age
 	return brief
 }
 
-// agentRunBriefFromProjectPageRow maps a single ListProjectAgentRunsPage row to the
+// agentRunBriefFromWorkspacePageRow maps a single ListWorkspaceAgentRunsPage row to the
 // AgentRunBriefRead shape the admin API serves.
-func agentRunBriefFromProjectPageRow(row sqlc.ListProjectAgentRunsPageRow) AgentRunBriefRead {
+func agentRunBriefFromWorkspacePageRow(row sqlc.ListWorkspaceAgentRunsPageRow) AgentRunBriefRead {
 	brief := AgentRunBriefRead{
 		ID:               row.RID,
 		WorkspaceID:      row.RWorkspaceID,
-		ProjectID:        row.RProjectID,
 		ConversationID:   row.RConversationID,
 		TriggerMessageID: row.TriggerMessageID,
 		OutputMessageID:  row.OutputMessageID,
-		ProjectAgentID:   row.RProjectAgentID,
-		AgentID:          row.PaAgentID,
+		AgentID:          row.RAgentID,
 		AgentName:        row.AgentName,
 		AgentSlug:        row.AgentSlug,
 		ConnectorType:    row.ConnectorType,
@@ -8526,11 +7844,10 @@ func agentRunBriefFromProjectPageRow(row sqlc.ListProjectAgentRunsPageRow) Agent
 	return brief
 }
 
-func usageLogFromProjectRow(row sqlc.ListProjectUsageLogsRow) UsageLogRead {
+func usageLogFromWorkspaceRow(row sqlc.ListWorkspaceUsageLogsRow) UsageLogRead {
 	return UsageLogRead{
 		ID:           row.ID,
 		WorkspaceID:  row.WorkspaceID,
-		ProjectID:    row.ProjectID,
 		AgentRunID:   row.AgentRunID,
 		Provider:     row.Provider,
 		Model:        row.Model,
@@ -8542,11 +7859,10 @@ func usageLogFromProjectRow(row sqlc.ListProjectUsageLogsRow) UsageLogRead {
 	}
 }
 
-func usageLogFromProjectRunRow(row sqlc.ListProjectUsageLogsByRunRow) UsageLogRead {
+func usageLogFromWorkspaceRunRow(row sqlc.ListWorkspaceUsageLogsByRunRow) UsageLogRead {
 	return UsageLogRead{
 		ID:           row.ID,
 		WorkspaceID:  row.WorkspaceID,
-		ProjectID:    row.ProjectID,
 		AgentRunID:   row.AgentRunID,
 		Provider:     row.Provider,
 		Model:        row.Model,
@@ -8562,7 +7878,6 @@ func usageLogFromRunRow(row sqlc.ListUsageLogsByRunRow) UsageLogRead {
 	return UsageLogRead{
 		ID:           row.ID,
 		WorkspaceID:  row.WorkspaceID,
-		ProjectID:    row.ProjectID,
 		AgentRunID:   row.AgentRunID,
 		Provider:     row.Provider,
 		Model:        row.Model,
@@ -8692,135 +8007,128 @@ func newID() string {
 
 var _ txBeginner = txBeginnerFunc(nil)
 
-// ProjectAgentRuntime is the (project_agent, agent) config pair the OpenCode Connector
-// pulls back from the DB for admin "warm" actions (no Prompt context to derive them from).
-type ProjectAgentRuntime struct {
-	ProjectAgentID     string
-	WorkspaceID        string
-	ProjectID          string
-	AgentID            string
-	ConnectorType      string
-	ProjectAgentConfig map[string]any
-	AgentConfig        map[string]any
+// AgentRuntime is the agent config the OpenCode Connector pulls back
+// from the DB for admin "warm" actions (no Prompt context to derive it from).
+type AgentRuntime struct {
+	AgentID       string
+	WorkspaceID   string
+	ConnectorType string
+	AgentConfig   map[string]any
 }
 
-// GetProjectAgentRuntime returns the (project_agent.config, agent.config) blobs.
-// Filters out disabled / soft-deleted rows so warm cannot revive a turned-off agent.
-// Returns wrapped pgx.ErrNoRows when no live row matches (callers map to HTTP 404).
-func (s *Store) GetProjectAgentRuntime(ctx context.Context, workspaceID, projectAgentID string) (ProjectAgentRuntime, error) {
+// GetAgentRuntime returns the agent.config blob. Filters out disabled /
+// soft-deleted rows so warm cannot revive a turned-off agent. Returns
+// wrapped pgx.ErrNoRows when no live row matches (callers map to HTTP 404).
+func (s *Store) GetAgentRuntime(ctx context.Context, workspaceID, agentID string) (AgentRuntime, error) {
 	wsUUID, err := uuid(workspaceID)
 	if err != nil {
-		return ProjectAgentRuntime{}, fmt.Errorf("project agent runtime: workspace_id: %w", err)
+		return AgentRuntime{}, fmt.Errorf("agent runtime: workspace_id: %w", err)
 	}
-	paUUID, err := uuid(projectAgentID)
+	aUUID, err := uuid(agentID)
 	if err != nil {
-		return ProjectAgentRuntime{}, fmt.Errorf("project agent runtime: project_agent_id: %w", err)
+		return AgentRuntime{}, fmt.Errorf("agent runtime: agent_id: %w", err)
 	}
-	row, err := sqlc.New(s.db).GetProjectAgentRuntime(ctx, sqlc.GetProjectAgentRuntimeParams{
-		ProjectAgentID: paUUID,
-		WorkspaceID:    wsUUID,
+	row, err := sqlc.New(s.db).GetAgentRuntime(ctx, sqlc.GetAgentRuntimeParams{
+		AgentID:     aUUID,
+		WorkspaceID: wsUUID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ProjectAgentRuntime{}, fmt.Errorf("project agent runtime: %w", err)
+			return AgentRuntime{}, fmt.Errorf("agent runtime: %w", err)
 		}
-		return ProjectAgentRuntime{}, err
+		return AgentRuntime{}, err
 	}
-	return ProjectAgentRuntime{
-		ProjectAgentID:     row.ProjectAgentID,
-		WorkspaceID:        row.WorkspaceID,
-		ProjectID:          row.ProjectID,
-		AgentID:            row.AgentID,
-		ConnectorType:      row.ConnectorType,
-		ProjectAgentConfig: unmarshalJSONOrEmpty(row.ProjectAgentConfig),
-		AgentConfig:        unmarshalJSONOrEmpty(row.AgentConfig),
+	return AgentRuntime{
+		AgentID:       row.AgentID,
+		WorkspaceID:   row.WorkspaceID,
+		ConnectorType: row.ConnectorType,
+		AgentConfig:   unmarshalJSONOrEmpty(row.AgentConfig),
 	}, nil
 }
 
-// ProjectAgentRuntimeBinding is the read-side view of
-// project_agents.runtime_id. Empty RuntimeID means the user has not yet
-// picked a runtime for this agent.
-type ProjectAgentRuntimeBinding struct {
-	ProjectAgentID string `json:"project_agent_id"`
-	WorkspaceID    string `json:"workspace_id"`
-	RuntimeID      string `json:"runtime_id"`
+// AgentRuntimeBinding is the read-side view of agents.runtime_id. Empty
+// RuntimeID means the user has not yet picked a runtime for this agent.
+type AgentRuntimeBinding struct {
+	AgentID     string `json:"agent_id"`
+	WorkspaceID string `json:"workspace_id"`
+	RuntimeID   string `json:"runtime_id"`
 }
 
-// GetProjectAgentRuntimeBinding returns the explicit runtime binding
-// for a project_agent. Used by the agent settings page to populate the
-// runtime picker. Returns ErrUnknownProjectAgent when the row does not
-// exist (or has been soft-deleted / belongs to a different workspace),
-// so handlers can map it to a 404.
-func (s *Store) GetProjectAgentRuntimeBinding(ctx context.Context, workspaceID, projectAgentID string) (ProjectAgentRuntimeBinding, error) {
+// GetAgentRuntimeBinding returns the explicit runtime binding for an
+// agent. Used by the agent settings page to populate the runtime picker.
+// Returns ErrUnknownAgent when the row does not exist (or has been
+// soft-deleted / belongs to a different workspace), so handlers can map
+// it to a 404.
+func (s *Store) GetAgentRuntimeBinding(ctx context.Context, workspaceID, agentID string) (AgentRuntimeBinding, error) {
 	wsUUID, err := uuid(workspaceID)
 	if err != nil {
-		return ProjectAgentRuntimeBinding{}, fmt.Errorf("project agent runtime binding: workspace_id: %w", err)
+		return AgentRuntimeBinding{}, fmt.Errorf("agent runtime binding: workspace_id: %w", err)
 	}
-	paUUID, err := uuid(projectAgentID)
+	aUUID, err := uuid(agentID)
 	if err != nil {
-		return ProjectAgentRuntimeBinding{}, fmt.Errorf("project agent runtime binding: project_agent_id: %w", err)
+		return AgentRuntimeBinding{}, fmt.Errorf("agent runtime binding: agent_id: %w", err)
 	}
-	row, err := sqlc.New(s.db).GetProjectAgentRuntimeBinding(ctx, sqlc.GetProjectAgentRuntimeBindingParams{
-		ProjectAgentID: paUUID,
-		WorkspaceID:    wsUUID,
+	row, err := sqlc.New(s.db).GetAgentRuntimeBinding(ctx, sqlc.GetAgentRuntimeBindingParams{
+		AgentID:     aUUID,
+		WorkspaceID: wsUUID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ProjectAgentRuntimeBinding{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, projectAgentID)
+			return AgentRuntimeBinding{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
 		}
-		return ProjectAgentRuntimeBinding{}, err
+		return AgentRuntimeBinding{}, err
 	}
-	return ProjectAgentRuntimeBinding{
-		ProjectAgentID: row.ProjectAgentID,
-		WorkspaceID:    row.WorkspaceID,
-		RuntimeID:      row.RuntimeID,
+	return AgentRuntimeBinding{
+		AgentID:     row.AgentID,
+		WorkspaceID: row.WorkspaceID,
+		RuntimeID:   row.RuntimeID,
 	}, nil
 }
 
-// SetProjectAgentRuntimeInput carries the parameters for binding a
-// project_agent to a runtime. Empty RuntimeID is a valid clear request
-// (turns the agent back into an unbound state).
-type SetProjectAgentRuntimeInput struct {
-	WorkspaceID    string
-	ProjectAgentID string
-	RuntimeID      string // empty → clear
+// SetAgentRuntimeInput carries the parameters for binding an agent to a
+// runtime. Empty RuntimeID is a valid clear request (turns the agent
+// back into an unbound state).
+type SetAgentRuntimeInput struct {
+	WorkspaceID string
+	AgentID     string
+	RuntimeID   string // empty → clear
 }
 
-// SetProjectAgentRuntime binds (or clears) the runtime a project_agent dispatches on.
-// Empty RuntimeID writes NULL. Returns ErrUnknownProjectAgent on no match.
+// SetAgentRuntime binds (or clears) the runtime an agent dispatches on.
+// Empty RuntimeID writes NULL. Returns ErrUnknownAgent on no match.
 // Caller must validate that the runtime belongs to the same workspace.
-func (s *Store) SetProjectAgentRuntime(ctx context.Context, input SetProjectAgentRuntimeInput) (ProjectAgentRuntimeBinding, error) {
+func (s *Store) SetAgentRuntime(ctx context.Context, input SetAgentRuntimeInput) (AgentRuntimeBinding, error) {
 	wsUUID, err := uuid(input.WorkspaceID)
 	if err != nil {
-		return ProjectAgentRuntimeBinding{}, fmt.Errorf("set project agent runtime: workspace_id: %w", err)
+		return AgentRuntimeBinding{}, fmt.Errorf("set agent runtime: workspace_id: %w", err)
 	}
-	paUUID, err := uuid(input.ProjectAgentID)
+	aUUID, err := uuid(input.AgentID)
 	if err != nil {
-		return ProjectAgentRuntimeBinding{}, fmt.Errorf("set project agent runtime: project_agent_id: %w", err)
+		return AgentRuntimeBinding{}, fmt.Errorf("set agent runtime: agent_id: %w", err)
 	}
 	var runtimeUUID pgtype.UUID
 	if v := strings.TrimSpace(input.RuntimeID); v != "" {
 		parsed, err := uuid(v)
 		if err != nil {
-			return ProjectAgentRuntimeBinding{}, fmt.Errorf("set project agent runtime: runtime_id: %w", err)
+			return AgentRuntimeBinding{}, fmt.Errorf("set agent runtime: runtime_id: %w", err)
 		}
 		runtimeUUID = parsed
 	}
-	row, err := sqlc.New(s.db).SetProjectAgentRuntime(ctx, sqlc.SetProjectAgentRuntimeParams{
-		RuntimeID:      runtimeUUID,
-		ProjectAgentID: paUUID,
-		WorkspaceID:    wsUUID,
+	row, err := sqlc.New(s.db).SetAgentRuntime(ctx, sqlc.SetAgentRuntimeParams{
+		RuntimeID:   runtimeUUID,
+		AgentID:     aUUID,
+		WorkspaceID: wsUUID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ProjectAgentRuntimeBinding{}, fmt.Errorf("%w: %s", ErrUnknownProjectAgent, input.ProjectAgentID)
+			return AgentRuntimeBinding{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
 		}
-		return ProjectAgentRuntimeBinding{}, err
+		return AgentRuntimeBinding{}, err
 	}
-	return ProjectAgentRuntimeBinding{
-		ProjectAgentID: row.ProjectAgentID,
-		WorkspaceID:    row.WorkspaceID,
-		RuntimeID:      row.RuntimeID,
+	return AgentRuntimeBinding{
+		AgentID:     row.AgentID,
+		WorkspaceID: row.WorkspaceID,
+		RuntimeID:   row.RuntimeID,
 	}, nil
 }
 
