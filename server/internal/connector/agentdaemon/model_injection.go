@@ -724,7 +724,7 @@ func mapKeys(m map[string]any) []string {
 
 // renderStaticAgentOptions copies the agent-tunable keys the daemon's
 // agent adapters know about into the prompt_request payload.
-// Project-level overrides win, then workspace-level.
+// Values are read from the agent's merged config.
 func renderStaticAgentOptions(in connector.PromptInput) map[string]any {
 	opts := map[string]any{}
 	for _, key := range []string{

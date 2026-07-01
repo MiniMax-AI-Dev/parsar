@@ -2026,10 +2026,10 @@ func TestReadRoutesRejectMalformedUUIDs(t *testing.T) {
 		name string
 		path string
 	}{
-		{name: "project agents", path: "/api/v1/workspaces/not-a-uuid/agents"},
-		{name: "project agent runs", path: "/api/v1/workspaces/not-a-uuid/agent-runs"},
-		{name: "project audit records", path: "/api/v1/workspaces/not-a-uuid/audit-records"},
-		{name: "project usage", path: "/api/v1/workspaces/not-a-uuid/usage"},
+		{name: "workspace agents", path: "/api/v1/workspaces/not-a-uuid/agents"},
+		{name: "workspace agent runs", path: "/api/v1/workspaces/not-a-uuid/agent-runs"},
+		{name: "workspace audit records", path: "/api/v1/workspaces/not-a-uuid/audit-records"},
+		{name: "workspace usage", path: "/api/v1/workspaces/not-a-uuid/usage"},
 		{name: "conversation timeline", path: "/api/v1/conversations/not-a-uuid/timeline"},
 		{name: "agent run detail", path: "/api/v1/agent-runs/not-a-uuid"},
 	}
@@ -2505,7 +2505,7 @@ func (stubRuntimeStore) CompleteAgentRun(ctx context.Context, input store.Comple
 		MessageID:       "output-message-1",
 		Status:          "completed",
 		ChildRunIDs:     []string{"child-run-1"},
-		SkippedMentions: []store.SkippedAgentMention{{Mention: "@后端Agent", AgentID: "project-agent-2", Reason: "self_trigger"}},
+		SkippedMentions: []store.SkippedAgentMention{{Mention: "@后端Agent", AgentID: "agent-2", Reason: "self_trigger"}},
 		StartedAt:       time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC),
 		FinishedAt:      time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC),
 		Usage:           usage,

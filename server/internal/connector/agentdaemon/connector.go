@@ -8,7 +8,7 @@
 // only thing this package needs from the daemon side is the protocol
 // types in internal/agentdaemon/proto.
 //
-// agent_kind is resolved from project/agent config and validated against
+// agent_kind is resolved from the agent config and validated against
 // the selected daemon session's heartbeat-advertised capabilities before
 // sending prompt_request. Older daemons that only expose the legacy
 // claude_available signal are treated as claude_code-only.

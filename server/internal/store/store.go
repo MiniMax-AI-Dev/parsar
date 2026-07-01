@@ -1219,7 +1219,7 @@ type FeishuAgentRoute struct {
 
 // FeishuSharedBotAgent is one selectable target shown by a shared Feishu
 // Bot's /list command. The shared Bot owns the app credentials, while the
-// selected Agent owns the workspace/project execution semantics.
+// selected Agent owns the workspace execution semantics.
 type FeishuSharedBotAgent struct {
 	AgentID       string
 	WorkspaceID   string
@@ -2517,7 +2517,7 @@ limit 1`, gateway, externalChatID, externalThreadID).Scan(&id)
 // lands in the chat but on a different thread than the asking
 // conversation should still be delivered as the answer. Returns
 // ErrUnknownConversation when no conversation in the chat has an open
-// ask. Workspace / project scoping is intentionally omitted — the
+// ask. Workspace scoping is intentionally omitted — the
 // caller has already resolved the bot route and the chat_id is
 // already a workspace-scoped identifier in Feishu's model.
 func (s *Store) FindPendingAskByChat(ctx context.Context, gateway, externalChatID string) (conversationID string, slot PromptForUserChoiceInflightSlot, err error) {
@@ -7457,7 +7457,7 @@ func runtimePtr(value string) *string {
 
 // agentConfigJSON builds the JSON to be written into agents.config. `bindings`
 // carries `credential_bindings` / `model_credential_binding` extracted from the
-// caller's project-agent config; without piping them through here the runtime's
+// caller's agent config; without piping them through here the runtime's
 // ParseCredentialBindings (which reads agent_config) would always see {}.
 func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string, runtime, connectorType string, bindings map[string]any) ([]byte, error) {
 	config := map[string]any{"capabilities": normalizeStringSlice(capabilities)}

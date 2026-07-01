@@ -58,7 +58,7 @@ func newHandler(deps Deps) *handler {
 
 // RegisterAdminRoutes mounts the workspace-UI tree. Caller MUST wrap
 // this with auth.Middleware.Require so auth.UserIDFromContext returns
-// the session user. Per-handler workspace/project membership checks
+// the session user. Per-handler workspace membership checks
 // run inside.
 func RegisterAdminRoutes(r chi.Router, deps Deps) {
 	if deps.Membership == nil {

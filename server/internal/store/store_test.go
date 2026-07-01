@@ -464,7 +464,7 @@ func TestSeedDevFixtureReactivatesSeededAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 	if seededAgain.Agents != 1 {
-		t.Fatalf("expected one reactivated project agent, got %+v", seededAgain)
+		t.Fatalf("expected one reactivated agent, got %+v", seededAgain)
 	}
 
 	agents, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
@@ -472,7 +472,7 @@ func TestSeedDevFixtureReactivatesSeededAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(agents) != 3 {
-		t.Fatalf("expected seed to restore 3 enabled project agents, got %d: %+v", len(agents), agents)
+		t.Fatalf("expected seed to restore 3 enabled agents, got %d: %+v", len(agents), agents)
 	}
 
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
@@ -589,7 +589,7 @@ func TestGatewayMessageResolvesExternalConversationID(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.WorkspaceID != ids.WorkspaceID {
-		t.Fatalf("expected external conversation to resolve demo project, got %+v", result)
+		t.Fatalf("expected external conversation to resolve demo workspace, got %+v", result)
 	}
 
 	var conversationID, externalChatID, externalThreadID string
@@ -1472,7 +1472,7 @@ func TestCompleteAgentRunWritesEmptyUsageWhenNoneReported(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(usage) != 1 || usage[0].AgentRunID != completed.RunID || usage[0].InputTokens != 0 || usage[0].OutputTokens != 0 {
-		t.Fatalf("expected empty usage readable by project/run, got %+v", usage)
+		t.Fatalf("expected empty usage readable by workspace/run, got %+v", usage)
 	}
 }
 
@@ -1897,7 +1897,7 @@ func TestRecordAgentRunExecutionSnapshotFreezesRuntimeRead(t *testing.T) {
 		 where id = $1::uuid`,
 		ids.BackendAgentID,
 	); err != nil {
-		t.Fatalf("mutate project agent config after snapshot: %v", err)
+		t.Fatalf("mutate agent config after snapshot: %v", err)
 	}
 
 	detail, err := store.GetAgentRun(ctx, runID)
@@ -2146,7 +2146,7 @@ func TestCompleteAgentRunRejectsInvalidAgentRelation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if outputMessageID.Valid {
-		t.Fatalf("expected invalid project agent relation to leave output_message_id null, got %s", outputMessageID.String)
+		t.Fatalf("expected invalid agent relation to leave output_message_id null, got %s", outputMessageID.String)
 	}
 }
 
@@ -2286,7 +2286,7 @@ func assertAuditEventCount(t *testing.T, db *pgxpool.Pool, workspaceID string, t
 		t.Fatal(err)
 	}
 	if count != want {
-		t.Fatalf("expected %d audit events for project=%s target_type=%q, got %d", want, workspaceID, targetType, count)
+		t.Fatalf("expected %d audit events for workspace=%s target_type=%q, got %d", want, workspaceID, targetType, count)
 	}
 }
 
@@ -2518,7 +2518,7 @@ func TestCreateWorkspaceConversationCreatesActiveWebConversation(t *testing.T) {
 		t.Fatalf("expected web/thread/active defaults, got surface=%s form=%s status=%s", conv.Surface, conv.Form, conv.Status)
 	}
 	if conv.WorkspaceID != ids.WorkspaceID {
-		t.Fatalf("expected workspace inherited from project, got %q want %q", conv.WorkspaceID, ids.WorkspaceID)
+		t.Fatalf("expected conversation to inherit workspace, got %q want %q", conv.WorkspaceID, ids.WorkspaceID)
 	}
 	if conv.Metadata["source"] != "demo" {
 		t.Fatalf("expected metadata persisted, got %+v", conv.Metadata)
@@ -2607,7 +2607,7 @@ func TestCreateWorkspaceConversationDefaultsAndValidates(t *testing.T) {
 	}
 
 	if _, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{WorkspaceID: "00000000-0000-0000-0000-000000000000"}); !errors.Is(err, ErrUnknownWorkspace) {
-		t.Fatalf("expected ErrUnknownWorkspace for missing project, got %v", err)
+		t.Fatalf("expected ErrUnknownWorkspace for missing workspace, got %v", err)
 	}
 }
 
@@ -2663,7 +2663,7 @@ func TestCreateWorkspaceConversationRejectsForeignAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Random UUID — not a agent in this project.
+	// Random UUID — not an agent in this workspace.
 	_, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID:    ids.WorkspaceID,
 		Title:          "should fail",
@@ -2846,7 +2846,7 @@ func TestSoftDeleteConversationHidesFromUserSurfaces(t *testing.T) {
 		}
 	}
 	if !foundBefore {
-		t.Fatalf("pre-delete: conversation %s not in project list", conv.ID)
+		t.Fatalf("pre-delete: conversation %s not in workspace list", conv.ID)
 	}
 
 	if err := store.SoftDeleteConversation(ctx, conv.ID); err != nil {
@@ -2862,7 +2862,7 @@ func TestSoftDeleteConversationHidesFromUserSurfaces(t *testing.T) {
 	}
 	for _, c := range after {
 		if c.ID == conv.ID {
-			t.Fatalf("post-delete: conversation %s still in project list", conv.ID)
+			t.Fatalf("post-delete: conversation %s still in workspace list", conv.ID)
 		}
 	}
 	if err := store.UpdateConversationTitle(ctx, conv.ID, "zombie"); !errors.Is(err, ErrUnknownConversation) {
@@ -3291,14 +3291,14 @@ func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	flushAudit(t, auditIng)
 	assertAuditEvent(t, db, ids.WorkspaceID, "agent.disabled", "agent", ids.BackendAgentID)
 
-	// listing active project agents should drop the disabled one
+	// listing active agents should drop the disabled one
 	agents, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, agent := range agents {
 		if agent.AgentID == ids.BackendAgentID {
-			t.Fatalf("expected disabled project agent excluded from list, got %+v", agent)
+			t.Fatalf("expected disabled agent excluded from list, got %+v", agent)
 		}
 	}
 

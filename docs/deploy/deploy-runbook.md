@@ -227,7 +227,7 @@ make bootstrap
 | 真实 auth（其它 OAuth provider，如 GitHub / Google / email magic link） | 未实现 | 后续 phase |
 | Smoke — 部署后探活（/healthz、/readyz、/api/v1/health） | 已落地，见 `health-and-smoke.md` 的 lite 模式 | — |
 | Smoke — bootstrap 链路（status / dev_auth shim / provision / idempotency） | 已落地，见 `health-and-smoke.md` 的 core 模式 | — |
-| Smoke — AgentRun / audit / usage 端到端 | 缺 `/api/v1/workspaces/{wid}/projects/{pid}/{agent-runs,audit-records,usage}` 等 cookie-session 入口；smoke-core 把这一项标 SKIP/TODO | 后续 phase |
+| Smoke — AgentRun / audit / usage 端到端 | 缺 `/api/v1/workspaces/{wid}/{agent-runs,audit-records,usage}` 等 cookie-session 入口；smoke-core 把这一项标 SKIP/TODO | 后续 phase |
 | Audit sink 真实化（Kafka / 自托管存储） | 当前 in-memory + Postgres sink；接口已抽象 | 后续 phase |
 | Memory L0-L3 | 未实现 | 后续 phase |
 | Capability marketplace | 未实现 | 后续 phase |

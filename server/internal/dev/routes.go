@@ -1805,8 +1805,8 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 		}
 
 		// Local-device binding: when the user picked a paired daemon
-		// in the create form, the device_id sits in pa.config but
-		// pa.runtime_id stays NULL. Mirror device_id → runtime_id so
+		// in the create form, the device_id sits in agents.config but
+		// agents.runtime_id stays NULL. Mirror device_id → runtime_id so
 		// the FK join lights up. device_id IS a runtime.id.
 		if result.Agent.Config != nil {
 			if mode, _ := result.Agent.Config["daemon_mode"].(string); mode == "local" {

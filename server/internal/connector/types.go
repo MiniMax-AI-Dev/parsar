@@ -21,7 +21,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
-// SandboxInfo is the per-project-agent sandbox snapshot returned by
+// SandboxInfo is the per-agent sandbox snapshot returned by
 // SandboxStatus. Shared between the agent_daemon provider (producer)
 // and the dev admin handlers (consumer) so neither package imports the
 // other.

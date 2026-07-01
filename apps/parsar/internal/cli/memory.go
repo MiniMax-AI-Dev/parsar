@@ -28,7 +28,7 @@ func runMemory(ctx *runContext, args []string) error {
 }
 
 var memorySubcommands = []command{
-	{name: "list", summary: "List user / project memories", run: runMemoryList},
+	{name: "list", summary: "List user / workspace memories", run: runMemoryList},
 	{name: "add", summary: "Create a new memory", run: runMemoryAdd},
 	{name: "edit", summary: "Replace title/body/why/tags on an existing memory", run: runMemoryEdit},
 	{name: "rm", summary: "Soft-delete a memory", run: runMemoryRm},
@@ -47,8 +47,8 @@ func printMemoryHelp(w io.Writer) {
 
 func runMemoryList(ctx *runContext, args []string) error {
 	fs := newFlagSet("memory list")
-	scope := fs.String("scope", "user", "scope: user | project")
-	mtype := fs.String("type", "", "memory_type filter: user | feedback | project | reference")
+	scope := fs.String("scope", "user", "scope: user | workspace")
+	mtype := fs.String("type", "", "memory_type filter: user | feedback | workspace | reference")
 	tagCSV := fs.String("tag", "", "comma-separated tags")
 	limit := fs.Int("limit", 0, "max rows (0 = server default)")
 	jsonOut := fs.Bool("json", false, "emit JSON instead of the table")
@@ -87,11 +87,11 @@ func runMemoryList(ctx *runContext, args []string) error {
 
 func runMemoryAdd(ctx *runContext, args []string) error {
 	fs := newFlagSet("memory add")
-	scope := fs.String("scope", "user", "scope: user | project")
-	mtype := fs.String("type", "", "memory_type: user | feedback | project | reference (required)")
+	scope := fs.String("scope", "user", "scope: user | workspace")
+	mtype := fs.String("type", "", "memory_type: user | feedback | workspace | reference (required)")
 	title := fs.String("title", "", "optional short title")
 	body := fs.String("body", "", "memory body (required; use - to read from stdin)")
-	why := fs.String("why", "", "rationale (recommended for feedback / project types)")
+	why := fs.String("why", "", "rationale (recommended for feedback / workspace types)")
 	tagCSV := fs.String("tag", "", "comma-separated tags")
 	jsonOut := fs.Bool("json", false, "emit JSON of the created memory")
 	if err := fs.Parse(args); err != nil {
