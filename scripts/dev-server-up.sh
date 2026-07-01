@@ -33,7 +33,13 @@ LOG_DIR="${HOME}/.parsar/logs"
 BIN_PATH="${BIN_DIR}/parsar-server"
 LOG_PATH="${LOG_DIR}/server.log"
 TMUX_SESSION="parsar-server"
-PG_CONTAINER="parsar-postgres-1"
+# Preferred container name (back-compat). When it isn't running we fall
+# back to resolving the compose service, which is auto-named
+# "<project>-postgres-1" — and the project defaults to the checkout dir,
+# so a worktree named e.g. "im-history-tool" produces
+# "im-history-tool-postgres-1", not "parsar-postgres-1".
+PG_CONTAINER="${PARSAR_PG_CONTAINER:-parsar-postgres-1}"
+COMPOSE_FILE_REL="docker-compose.dev.yml"
 
 REBUILD=0
 PORT="${PARSAR_ADDR_PORT:-${PARSAR_DEV_SERVER_PORT}}"
@@ -85,15 +91,58 @@ for cli in docker tmux curl; do
   fi
 done
 
-# ── detect Postgres docker port ──────────────────────────────────────
-PG_PORT="$(docker port "${PG_CONTAINER}" 5432 2>/dev/null | sed -E 's/.*:([0-9]+)$/\1/' | head -1 || true)"
+# ── resolve the Postgres container's published 5432 port ─────────────
+# The compose file publishes 5432 on a host port that can drift, so we
+# always ask docker for the live mapping rather than trusting a constant.
+COMPOSE_FILE="${REPO_ROOT}/${COMPOSE_FILE_REL}"
+
+resolve_pg_port() {
+  # 1) explicit / back-compat container name
+  local p
+  p="$(docker port "${PG_CONTAINER}" 5432 2>/dev/null | sed -E 's/.*:([0-9]+)$/\1/' | head -1 || true)"
+  if [[ -n "${p}" ]]; then echo "${p}"; return 0; fi
+  # 2) compose service (auto-named "<project>-postgres-1"); project name
+  #    defaults to the checkout dir, so this Just Works in a worktree.
+  local cid
+  cid="$(docker compose -f "${COMPOSE_FILE}" ps -q postgres 2>/dev/null | head -1 || true)"
+  if [[ -n "${cid}" ]]; then
+    docker port "${cid}" 5432 2>/dev/null | sed -E 's/.*:([0-9]+)$/\1/' | head -1
+  fi
+}
+
+PG_PORT="$(resolve_pg_port)"
 if [[ -z "${PG_PORT}" ]]; then
-  echo "[dev-server-up] could not resolve Postgres port from container '${PG_CONTAINER}'" >&2
-  echo "                hint: start the dev DB with 'make dev' (or 'docker compose -f docker-compose.dev.yml up -d postgres')" >&2
+  echo "[dev-server-up] no Postgres container running; starting compose service 'postgres'"
+  docker compose -f "${COMPOSE_FILE}" up -d postgres
+  # wait for the container to report healthy before probing its port
+  cid="$(docker compose -f "${COMPOSE_FILE}" ps -q postgres 2>/dev/null | head -1 || true)"
+  if [[ -n "${cid}" ]]; then
+    echo -n "[dev-server-up] waiting for postgres health "
+    for _ in $(seq 1 30); do
+      if [[ "$(docker inspect -f '{{.State.Health.Status}}' "${cid}" 2>/dev/null)" == "healthy" ]]; then
+        echo " ok"; break
+      fi
+      sleep 1; echo -n "."
+    done
+  fi
+  PG_PORT="$(resolve_pg_port)"
+fi
+if [[ -z "${PG_PORT}" ]]; then
+  echo "[dev-server-up] could not resolve Postgres port (tried container '${PG_CONTAINER}' and compose service 'postgres')" >&2
+  echo "                hint: start the dev DB with 'docker compose -f ${COMPOSE_FILE_REL} up -d postgres'" >&2
   exit 1
 fi
 DATABASE_URL="$(parsar_dev_database_url 127.0.0.1 "${PG_PORT}")"
 echo "[dev-server-up] postgres port: ${PG_PORT}"
+
+# ── apply migrations (idempotent; goose skips already-applied) ───────
+# A fresh dev DB has no schema, so the server would boot then fail every
+# query with "relation ... does not exist". Migrate before starting.
+echo "[dev-server-up] applying migrations"
+( cd "${REPO_ROOT}/server" \
+  && DATABASE_URL="${DATABASE_URL}" \
+     PARSAR_MIGRATIONS_DIR="${REPO_ROOT}/server/migrations" \
+     go run ./cmd/migrate )
 
 # ── stop any prior incarnation ───────────────────────────────────────
 if tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
@@ -105,8 +154,13 @@ pkill -f "${BIN_PATH}" 2>/dev/null || true
 sleep 1
 
 # ── start under tmux (survives sandbox bash exit) ────────────────────
+# The server refuses to boot without either real Feishu creds or mock
+# mode, and without a resolvable agent_daemon owner URL. Supply dev
+# defaults here (override by pre-exporting the same vars).
+FEISHU_MOCK="${PARSAR_FEISHU_MOCK:-true}"
+OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-http://127.0.0.1:${PORT}}"
 tmux new-session -d -s "${TMUX_SESSION}" \
-  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
+  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}' '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
 
 # ── readiness probe ──────────────────────────────────────────────────
 echo -n "[dev-server-up] waiting for :${PORT} "
