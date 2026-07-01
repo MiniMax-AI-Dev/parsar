@@ -1,10 +1,8 @@
 
 
 <p align="center">
-  <img src=".github/assets/parsar-logo.png" alt="Parsar" width="88" height="88" />
+  <img src=".github/assets/parsar-banner.png" alt="Parsar" width="520" />
 </p>
-
-<h3 align="center">Parsar</h3>
 
 <p align="center">
   <b>Your team's intent, parsed into action.</b>
