@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 
-export type ConnectorPlatform = "feishu" | "slack" | "discord"
+export type ConnectorPlatform = "feishu" | "slack" | "discord" | "teams"
 
 interface PlatformSelectorProps {
   value: ConnectorPlatform
@@ -22,7 +22,7 @@ export function PlatformSelector({
   testId,
 }: PlatformSelectorProps) {
   const { t } = useTranslation("admin")
-  const options: ConnectorPlatform[] = ["feishu", "slack", "discord"]
+  const options: ConnectorPlatform[] = ["feishu", "slack", "discord", "teams"]
 
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2">

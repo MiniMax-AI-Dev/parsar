@@ -5,10 +5,12 @@ import {
   readFeishuConnector,
   readSlackConnector,
   readDiscordConnector,
+  readTeamsConnector,
 } from "../../../lib/api-connectors"
 import { FeishuConnectorFields } from "./feishuFields"
 import { SlackConnectorFields } from "./slackFields"
 import { DiscordConnectorFields } from "./discordFields"
+import { TeamsConnectorFields } from "./teamsFields"
 import { PlatformSelector, type ConnectorPlatform } from "./PlatformSelector"
 
 interface ChannelConnectorPanelProps {
@@ -38,6 +40,7 @@ export function ChannelConnectorPanel({
   const feishuConfig = useMemo(() => readFeishuConnector(connectors), [connectors])
   const slackConfig = useMemo(() => readSlackConnector(connectors), [connectors])
   const discordConfig = useMemo(() => readDiscordConnector(connectors), [connectors])
+  const teamsConfig = useMemo(() => readTeamsConnector(connectors), [connectors])
 
   const [platform, setPlatform] = useState<ConnectorPlatform>("feishu")
 
@@ -64,6 +67,14 @@ export function ChannelConnectorPanel({
         <DiscordConnectorFields
           workspaceID={workspaceID}
           current={discordConfig}
+          canEdit={canEdit}
+          onToast={onToast}
+        />
+      )}
+      {platform === "teams" && (
+        <TeamsConnectorFields
+          workspaceID={workspaceID}
+          current={teamsConfig}
           canEdit={canEdit}
           onToast={onToast}
         />
