@@ -7,6 +7,7 @@ const devAPIURL = process.env.PARSAR_DEV_API_URL ?? process.env.VITE_PARSAR_API_
 const devProxy: ProxyOptions = {
   target: devAPIURL,
   changeOrigin: true,
+  ws: true,
   // When the upstream Go server is down, reply 503 with a JSON body so the
   // frontend recognises it as "server unreachable" instead of vite's default
   // ECONNREFUSED 404.
@@ -36,6 +37,7 @@ export default defineConfig({
     proxy: {
       '/dev': devProxy,
       '/api': devProxy,
+      '/agent-daemon': devProxy,
     },
   },
 })
