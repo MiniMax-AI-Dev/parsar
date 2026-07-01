@@ -101,6 +101,7 @@ export function FeishuConnectorFields({
   const missingRequired = draft.enabled && (
     !draft.app_id.trim() ||
     (!draft.app_secret_ref.trim() && !secretInputs.appSecret.trim()) ||
+    !draft.bot_open_id.trim() ||
     (draft.event_mode === "webhook" && !draft.verification_token_ref.trim() && !secretInputs.verificationToken.trim())
   )
 
@@ -221,6 +222,7 @@ export function FeishuConnectorFields({
           <Field
             label={t("connections.connector.feishu.fields.botOpenId.label")}
             hint={t("connections.connector.feishu.fields.botOpenId.hint")}
+            required
           >
             <input
               type="text"

@@ -2642,7 +2642,7 @@
           },
           "botOpenId": {
             "label": "Bot open ID",
-            "hint": "Optional. The bot's open_id (ou_…), from the Bot menu or contact API; used to skip self-sent messages."
+            "hint": "Required. The bot's open_id (ou_…), from the Bot menu or contact API; needed to recognize @mentions and skip self-sent messages."
           },
           "eventMode": {
             "label": "Event mode",

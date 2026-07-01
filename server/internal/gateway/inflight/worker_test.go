@@ -29,6 +29,14 @@ type fakeStore struct {
 	secrets   map[string]store.SecretPayload // secret_id -> payload
 	secretErr error
 
+	// workspaceConnectors feeds GetWorkspaceConnectorByAppID (keyed by
+	// app_id) — the frontend-configured outbound credential source of
+	// truth. Default empty: the fake returns connectorErr (defaults to a
+	// not-found error) so resolveCredentials falls through to the env
+	// default / legacy agents.config paths, matching pre-existing tests.
+	workspaceConnectors map[string]store.WorkspaceConnectorRead
+	connectorErr        error
+
 	// delivered captures every MarkGatewayOutboundDelivered the driver
 	// fires after a successful terminal patch. Tests that assert the
 	// gateway_delivered_at stamp was issued inspect this slice.
@@ -186,6 +194,18 @@ func (f *fakeStore) GetAgentByFeishuAppID(_ context.Context, appID string) (stor
 		return store.FeishuAgentRoute{}, store.ErrUnknownFeishuAgent
 	}
 	return route, nil
+}
+
+func (f *fakeStore) GetWorkspaceConnectorByAppID(_ context.Context, _, appID string) (store.WorkspaceConnectorRead, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if conn, ok := f.workspaceConnectors[appID]; ok {
+		return conn, nil
+	}
+	if f.connectorErr != nil {
+		return store.WorkspaceConnectorRead{}, f.connectorErr
+	}
+	return store.WorkspaceConnectorRead{}, errors.New("workspace connector not found")
 }
 
 func (f *fakeStore) GetSecretPayload(_ context.Context, _, secretID string) (store.SecretPayload, error) {

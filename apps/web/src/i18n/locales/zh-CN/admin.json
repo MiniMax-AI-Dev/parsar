@@ -2642,7 +2642,7 @@
           },
           "botOpenId": {
             "label": "Bot open ID",
-            "hint": "可选。机器人的 open_id(以 ou_ 开头),可在机器人菜单或通讯录 API 获取,用于跳过机器人自己发的消息。"
+            "hint": "必填。机器人的 open_id(以 ou_ 开头),可在机器人菜单或通讯录 API 获取;用于识别 @机器人 以及跳过机器人自己发的消息。"
           },
           "eventMode": {
             "label": "事件模式",

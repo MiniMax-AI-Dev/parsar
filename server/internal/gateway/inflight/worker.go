@@ -49,6 +49,13 @@ type Storer interface {
 	// every tick.
 	MarkGatewayOutboundDelivered(ctx context.Context, input store.MarkGatewayOutboundDeliveredInput) (store.MarkGatewayOutboundDeliveredResult, error)
 	GetAgentByFeishuAppID(ctx context.Context, appID string) (store.FeishuAgentRoute, error)
+	// GetWorkspaceConnectorByAppID resolves the frontend-configured
+	// workspace_im_connectors row for (platform, app_id). This is the
+	// source of truth for outbound credentials — the inbound path already
+	// routes through it, so resolving outbound here removes the historic
+	// inbound/outbound asymmetry where a frontend-only bot could receive
+	// but not reply.
+	GetWorkspaceConnectorByAppID(ctx context.Context, platform, appID string) (store.WorkspaceConnectorRead, error)
 	GetSecretPayload(ctx context.Context, workspaceID string, secretID string) (store.SecretPayload, error)
 
 	ListActiveFeishuInflightConversations(ctx context.Context, cutoff time.Time, limit int32) ([]store.FeishuInflightConversation, error)
@@ -397,10 +404,20 @@ func (w *Worker) TickOnce(ctx context.Context) (processed int, err error) {
 // ErrUnresolvableOutbound when the source_app_id no longer matches a
 // live Agent (dead-letter signal).
 func (w *Worker) resolveCredentials(ctx context.Context, msg gateway.PendingOutboundMessage) (gateway.OutboundCredentials, error) {
+	// 1) Frontend-configured workspace connector is the source of truth.
+	//    The inbound path already routes through workspace_im_connectors;
+	//    resolving outbound here too removes the asymmetry where a bot
+	//    configured only in the UI could receive but never reply.
+	if creds, ok := w.resolveWorkspaceConnectorCredentials(ctx, msg.SourceAppID); ok {
+		return creds, nil
+	}
+
+	// 2) Env-default shared bot fallback.
 	if w.isDefaultSharedBotApp(msg.SourceAppID) {
 		return gateway.OutboundCredentials{AppID: w.defaultBot.AppID, AppSecret: w.defaultBot.AppSecret}, nil
 	}
 
+	// 3) Legacy agents.config fallback.
 	route, err := w.store.GetAgentByFeishuAppID(ctx, msg.SourceAppID)
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownFeishuAgent) {
@@ -436,6 +453,59 @@ func (w *Worker) resolveCredentials(ctx context.Context, msg gateway.PendingOutb
 
 func (w *Worker) isDefaultSharedBotApp(appID string) bool {
 	return w.defaultBot.configured() && strings.TrimSpace(appID) == w.defaultBot.AppID
+}
+
+// resolveWorkspaceConnectorCredentials resolves outbound Feishu credentials
+// from the frontend-configured workspace_im_connectors row — the source of
+// truth. Returns ok=false to fall through to the env-default bot and the
+// legacy agents.config path whenever there is no usable connector (no row,
+// disabled, missing secret ref, or an unreadable/undecryptable payload). Soft
+// failures are logged, never fatal: outbound must never dead-letter on a
+// bookkeeping miss when a fallback credential might still deliver.
+func (w *Worker) resolveWorkspaceConnectorCredentials(ctx context.Context, appID string) (gateway.OutboundCredentials, bool) {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return gateway.OutboundCredentials{}, false
+	}
+	conn, err := w.store.GetWorkspaceConnectorByAppID(ctx, "feishu", appID)
+	if err != nil {
+		// No connector row for this app_id (the common miss) or a transient
+		// read error — fall back to env-default / legacy paths either way.
+		return gateway.OutboundCredentials{}, false
+	}
+	if !conn.Enabled {
+		return gateway.OutboundCredentials{}, false
+	}
+	secretRef := connectorConfigString(conn.Config, "app_secret_ref")
+	if secretRef == "" {
+		return gateway.OutboundCredentials{}, false
+	}
+	payload, err := w.store.GetSecretPayload(ctx, conn.WorkspaceID, secretRef)
+	if err != nil {
+		w.logger.Warn("feishu outbound: read workspace connector app_secret payload failed", "app_id", appID, "err", err.Error())
+		return gateway.OutboundCredentials{}, false
+	}
+	decrypted, err := w.secrets.Decrypt(payload.EncryptedPayload)
+	if err != nil {
+		w.logger.Warn("feishu outbound: decrypt workspace connector app_secret failed", "app_id", appID, "err", err.Error())
+		return gateway.OutboundCredentials{}, false
+	}
+	rawSecret, _ := decrypted[w.secretKey].(string)
+	rawSecret = strings.TrimSpace(rawSecret)
+	if rawSecret == "" {
+		return gateway.OutboundCredentials{}, false
+	}
+	return gateway.OutboundCredentials{AppID: conn.AppID, AppSecret: rawSecret}, true
+}
+
+// connectorConfigString reads a trimmed string field out of a decoded
+// workspace_im_connectors config map.
+func connectorConfigString(config map[string]any, key string) string {
+	if config == nil {
+		return ""
+	}
+	v, _ := config[key].(string)
+	return strings.TrimSpace(v)
 }
 
 // clientFor returns the cached FeishuTenantClient for (workspace, app_id)

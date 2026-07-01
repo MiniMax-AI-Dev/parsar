@@ -170,7 +170,7 @@ type UpsertWorkspaceFeishuConnectorInput struct {
 	AppSecretRef         string
 	VerificationTokenRef string
 	EncryptKeyRef        string // optional — only when event encryption is on
-	BotOpenID            string // optional — dedup self-sent messages
+	BotOpenID            string // required when enabled — @mention & self-sender recognition
 	EventMode            string // websocket | webhook
 }
 
@@ -251,7 +251,10 @@ func (s *Store) UpsertWorkspaceFeishuConnector(ctx context.Context, input Upsert
 		EventMode:            normalizeFeishuEventMode(input.EventMode),
 	}
 	if snap.Enabled {
-		if snap.AppID == "" || snap.AppSecretRef == "" || (snap.EventMode != "websocket" && snap.VerificationTokenRef == "") {
+		// bot_open_id is required: it's how the inbound path recognizes an @Bot
+		// mention (ShouldSkipGroupWithoutMention) and self-sender messages —
+		// without it the bot silently drops group messages it should answer.
+		if snap.AppID == "" || snap.AppSecretRef == "" || snap.BotOpenID == "" || (snap.EventMode != "websocket" && snap.VerificationTokenRef == "") {
 			return WorkspaceConnectorChange{}, ErrFeishuConnectorIncomplete
 		}
 	}
