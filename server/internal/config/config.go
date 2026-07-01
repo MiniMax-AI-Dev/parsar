@@ -20,6 +20,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -145,6 +147,10 @@ type SandboxConfig struct {
 // surface "OSS not configured" rather than failing server boot.
 type StorageConfig struct {
 	OSS OSSConfig `yaml:"oss"`
+	// BlobBackend selects the capability-blob backend: "pg" (default,
+	// stores zips in Postgres — zero external infra) or "oss" (Aliyun
+	// OSS; requires storage.oss.* configured). Env PARSAR_BLOB_BACKEND.
+	BlobBackend string `yaml:"blob_backend"`
 }
 
 // OSSConfig is the Aliyun OSS connection knobs. Fields map 1:1 to
@@ -223,6 +229,9 @@ func Default() Config {
 				Addr:    ":4318",
 			},
 		},
+		Storage: StorageConfig{
+			BlobBackend: "pg",
+		},
 		Gateway: GatewayConfig{
 			Feishu: FeishuConfig{
 				Scope:         "contact:user.id:readonly contact:user.base:readonly contact:user.email:readonly",
@@ -239,21 +248,49 @@ func Default() Config {
 type Profile string
 
 const (
-	// ProfileDev is the local-loop posture: any dev knob set
-	// (PARSAR_FEISHU_MOCK=true or PARSAR_DEV_AUTH=true).
+	// ProfileDev is the local-loop posture, entered when ANY dev
+	// signal is present: PARSAR_DEV_AUTH=true, PARSAR_FEISHU_MOCK=true,
+	// or a loopback PARSAR_PUBLIC_URL (127.0.0.0/8, localhost, ::1).
+	// The loopback signal is what lets real-Feishu OIDC be tested on
+	// http://127.0.0.1 without tripping the production secure-cookie /
+	// master-key checks — loopback traffic never leaves the host, so
+	// relaxing the prod posture there is sound (see isLoopback).
 	ProfileDev Profile = "dev"
 
 	// ProfileProd is the deployment posture.
 	ProfileProd Profile = "prod"
 )
 
-// Profile returns the inferred posture. Any single dev knob flips
+// Profile returns the inferred posture. Any single dev signal flips
 // the whole process into dev.
 func (c Config) Profile() Profile {
-	if c.Auth.DevAuth || c.Gateway.Feishu.Mock {
+	if c.Auth.DevAuth || c.Gateway.Feishu.Mock || isLoopback(c.Server.PublicURL) {
 		return ProfileDev
 	}
 	return ProfileProd
+}
+
+// isLoopback reports whether publicURL points at the local host.
+// Both http and https loopback count as dev: loopback traffic never
+// crosses the network, so the production secure-cookie requirement is
+// moot regardless of scheme. Empty, unparseable, or any non-loopback
+// host returns false, so a real public deployment (real domain) keeps
+// the strict prod posture — this relaxation is self-limiting.
+func isLoopback(publicURL string) bool {
+	raw := strings.TrimSpace(publicURL)
+	if raw == "" {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname() // strips the port and IPv6 brackets
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback() // 127.0.0.0/8 and ::1
 }
 
 // BuildPublicURL returns an absolute URL for a Parsar-owned path.

@@ -16,6 +16,7 @@ import {
   useWorkspaceRuntimes,
   type Runtime,
 } from "../../lib/api-runtimes"
+import { useBootstrapStatus } from "../../lib/api-bootstrap"
 
 interface PairDaemonDialogProps {
   open: boolean
@@ -37,6 +38,11 @@ export function PairDaemonDialog({
 }: PairDaemonDialogProps) {
   const { t } = useTranslation("admin")
   const create = useCreateRuntimePairing(workspaceID)
+  // Prefer the server's configured public URL (PARSAR_PUBLIC_URL) over the
+  // browser origin so the minted command is correct even when the admin
+  // reaches the UI on a different host than daemons must dial back on.
+  const statusQ = useBootstrapStatus()
+  const serverPublicURL = statusQ.data?.public_url?.trim() ?? ""
   // Poll runtime list here (5s) so the dialog can react when the daemon
   // flips online, even when opened from a form with its own non-polling list.
   const listQ = useWorkspaceRuntimes(workspaceID, "agent_daemon")
@@ -167,7 +173,7 @@ export function PairDaemonDialog({
               })}
             </p>
             <DaemonCommandBlock
-              command={buildOneLineCommand(result.token, result.runtimeName)}
+              command={buildOneLineCommand(result.token, result.runtimeName, serverPublicURL)}
               label={t("runtime.agentDaemon.pair.oneLineLabel", {
                 defaultValue: "Copy and run on the target machine",
               })}
@@ -254,8 +260,8 @@ function DaemonCommandBlock({
 // argv (see apps/parsar-daemon/internal/cli/connect.go). The piped
 // install script chmods the binary and execs `connect -b`, so the
 // operator never sees the binary, its path, or the token.
-function buildOneLineCommand(token: string, deviceName: string): string {
-  const origin = serverOrigin()
+function buildOneLineCommand(token: string, deviceName: string, publicURL?: string): string {
+  const origin = serverOrigin(publicURL)
   return [
     `curl -fsSL ${origin}/api/v1/parsar-daemon/install.sh |`,
     `PARSAR_DAEMON_CONNECT_URL=${origin}`,
@@ -265,7 +271,9 @@ function buildOneLineCommand(token: string, deviceName: string): string {
   ].join(" ")
 }
 
-function serverOrigin(): string {
+function serverOrigin(publicURL?: string): string {
+  const configured = publicURL?.trim()
+  if (configured) return configured.replace(/\/+$/, "")
   return typeof window !== "undefined" && window.location?.origin
     ? window.location.origin.replace(/\/+$/, "")
     : "https://<your-parsar-server>"

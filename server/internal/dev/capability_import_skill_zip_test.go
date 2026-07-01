@@ -39,6 +39,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/parser"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 )
 
 // makeSkillZip is the in-memory zip builder used by these tests. Mirrors
@@ -76,7 +77,7 @@ const goodSkillMd = "---\n" +
 // download zip bytes without a real OSS backend. Kept separate from
 // the existing helper to avoid changing the signature every other test
 // relies on.
-func capabilityTestRouterWithOSS(t *testing.T, workspaceRoles map[string]string, ossClient OSSClient) (http.Handler, *capabilityRBACStore) {
+func capabilityTestRouterWithOSS(t *testing.T, workspaceRoles map[string]string, ossClient *fakeOSSClient) (http.Handler, *capabilityRBACStore) {
 	t.Helper()
 	db := openDevRouteTestDB(t)
 	s := store.New(db)
@@ -87,7 +88,11 @@ func capabilityTestRouterWithOSS(t *testing.T, workspaceRoles map[string]string,
 	insertWorkspaceMember(t, db, testUserAID, "member")
 	rbac := &capabilityRBACStore{RuntimeStore: s, workspaceRoles: workspaceRoles}
 	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, rbac, WithOSSClient(ossClient))
+	var bs blob.Store
+	if ossClient != nil {
+		bs = blob.NewOSSStore(ossClient)
+	}
+	RegisterRoutesWithStore(r, rbac, WithBlobStore(bs))
 	return r, rbac
 }
 
@@ -155,9 +160,9 @@ func TestCapabilityImportPreview_SkillZip_HappyPath(t *testing.T) {
 }
 
 // TestCapabilityImportPreview_SkillZip_OssNotConfigured_503 confirms
-// the 503 branch fires when the deployment has no OSS configured. We
-// pass nil as the OSS client to RegisterRoutesWithStore via
-// WithOSSClient and verify the response shape.
+// the 503 branch fires when the deployment has no blob store configured.
+// We pass nil as the client so capabilityTestRouterWithOSS wires a nil
+// blob.Store, and verify the response shape.
 func TestCapabilityImportPreview_SkillZip_OssNotConfigured_503(t *testing.T) {
 	t.Setenv("PARSAR_MASTER_KEY", "test-master-key-test-master-key-")
 	wid := store.DefaultDevFixtureIDs().WorkspaceID

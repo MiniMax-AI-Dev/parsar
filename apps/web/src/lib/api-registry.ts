@@ -15,7 +15,7 @@ const KEY_GATEWAYS = (wsId: string) => ["admin", "gateways", wsId] as const
 async function listConnectors(wsId: string | null): Promise<ListConnectorsResponse> {
   if (!wsId) return { connectors: [] }
   return apiRequest<ListConnectorsResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(wsId)}/connectors`
+    `/api/v1/workspaces/${encodeURIComponent(wsId)}/connector-usage`
   )
 }
 

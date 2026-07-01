@@ -411,19 +411,20 @@ where (config->'connectors'->'feishu'->>'enabled')::boolean = true
   and status = 'active'
   and deleted_at is null;
 
--- B phase Feishu IM routing (docs/feishu-routing.md §4.1):
--- FindUserByFeishuUnionID resolves an inbound Feishu sender to its
--- Parsar user_id. We key on union_id because the OAuth login flow
--- stores union_id (cross-tenant stable) in auth_identities.subject,
--- not per-app open_id. Returns pgx.ErrNoRows for unregistered senders;
--- the gate translates that into Visibility public/tenant decisions.
+-- Multi-platform IM routing (docs/feishu-routing.md §4.1):
+-- FindUserByPlatformSubject resolves an inbound sender to its Parsar
+-- user_id by (provider, subject). The subject is the cross-tenant stable
+-- id the OAuth login flow stores in auth_identities.subject — Feishu keys
+-- on union_id, Slack on its workspace user id — never a per-app local id.
+-- Returns pgx.ErrNoRows for unregistered senders; the gate translates that
+-- into Visibility public/tenant decisions.
 
--- name: FindUserByFeishuUnionID :one
+-- name: FindUserByPlatformSubject :one
 select u.id::text
 from auth_identities ai
 join users u on u.id = ai.user_id
-where ai.provider = 'feishu'
-  and ai.subject = @union_id::text
+where ai.provider = @provider::text
+  and ai.subject = @subject::text
   and u.deleted_at is null
   and u.status = 'active'
 limit 1;
@@ -935,7 +936,9 @@ select
   m.workspace_id::text,
   m.conversation_id::text,
   m.sender_type,
-  m.sender_id::text,
+  -- system-authored messages (e.g. scheduled-task triggers) have a NULL
+  -- sender_id; coalesce so the row scans into a non-nullable string.
+  coalesce(m.sender_id::text, ''::text)::text as m_sender_id,
   m.kind,
   m.content_format,
   m.content,
@@ -1356,18 +1359,23 @@ with run_event_max as (
   group by agent_run_id
 ),
 picked as (
-  select c.id, r.id as run_id
+  select c.id, c.platform, r.id as run_id
   from conversations c
   join agent_runs r on r.conversation_id = c.id
   -- INNER (not LEFT) join: a run is only claimable once it has >=1
   -- renderable event. Without a rem row the first-send branch below
   -- (agent_run_id <> r.id) would otherwise claim a run carrying only
   -- non-renderable lifecycle events (run.cancelled/requeued/superseded)
-  -- and spam an empty card. The sibling ListActive query reaches the
-  -- same exclusion via its `seq_emitted < max_seq` predicate.
+  -- or a freshly-queued run with no events yet, and spam an empty card.
+  -- The sibling ListActive query reaches the same exclusion via its
+  -- `seq_emitted < max_seq` predicate.
   join run_event_max rem on rem.agent_run_id = r.id
   left join messages m on m.id = r.output_message_id
-  where c.platform = 'feishu'
+  -- Platform predicate is parameterized (was hardcoded 'feishu') so the
+  -- driver can claim any platform whose neutral Channel is registered on
+  -- the worker. The worker passes only platforms it can actually deliver
+  -- to, so a row is never claimed without a sink.
+  where c.platform = any(@platforms::text[])
     and c.status = 'active'
     and c.deleted_at is null
     and c.external_id <> ''
@@ -1457,6 +1465,7 @@ select claimed.id::text                 as conversation_id,
        claimed.external_id              as external_chat_id,
        claimed.external_thread_id       as external_thread_id,
        claimed.source_app_id            as source_app_id,
+       picked.platform                  as platform,
        claimed.metadata                 as conversation_metadata,
        picked.run_id::text              as agent_run_id,
        r.status                         as run_status,
@@ -1474,7 +1483,16 @@ select claimed.id::text                 as conversation_id,
        -- Empty string when the trigger row is missing or carries no
        -- open_id (legacy fixtures, system-initiated runs); the ping
        -- helper degrades to a plain-text message.
-       coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id
+       coalesce(trig.metadata->>'sender_open_id', '')::text as sender_open_id,
+       -- tenant_key is the platform workspace id (Slack team_id, Feishu
+       -- tenant_key) the inbound router stamped onto the trigger message
+       -- metadata. The neutral outbound path threads it into the
+       -- ReplyTarget so a multi-workspace Slack channel resolves the
+       -- per-team bot token at send time. Feishu ignores it (its token
+       -- comes from the transport-injected cache, unchanged). Empty when
+       -- the trigger row is missing (legacy fixtures); the resolver falls
+       -- back to the static/env token.
+       coalesce(trig.metadata->>'tenant_key', '')::text as tenant_key
 from picked
 join claimed on claimed.id = picked.id
 join agent_runs r on r.id = picked.run_id
@@ -1963,6 +1981,40 @@ select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_v
 from secrets
 where id = @id::uuid
   and deleted_at is null;
+
+-- name: ResolveSlackBotSecretByTeam :one
+-- Resolve the active Slack bot-token secret for a workspace, keyed by the
+-- Slack team_id stamped in metadata at install time. kind='slack_bot' is a
+-- free-text convention (the secrets table has no kind CHECK), so no migration
+-- is needed; metadata->>'team_id' scopes the row to one workspace. The neutral
+-- Slack channel decrypts encrypted_payload to mint the per-call Web API bearer,
+-- so a re-installed app rotates without a process restart. Newest active row
+-- wins when two installs share a team (re-install supersedes).
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'slack_bot'
+  and status = 'active'
+  and metadata->>'team_id' = @team_id::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1;
+
+-- name: ResolveDiscordBotSecretByGuild :one
+-- Resolve the active Discord bot-token secret for a guild, keyed by the Discord
+-- guild_id stamped in metadata at install time. kind='discord_bot' is a
+-- free-text convention (the secrets table has no kind CHECK), so no migration
+-- is needed; metadata->>'guild_id' scopes the row to one guild. The neutral
+-- Discord channel decrypts encrypted_payload to mint the per-call API/Gateway
+-- bearer, so a re-installed bot rotates without a process restart. Newest active
+-- row wins when two installs share a guild (re-install supersedes).
+select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
+from secrets
+where kind = 'discord_bot'
+  and status = 'active'
+  and metadata->>'guild_id' = @guild_id::text
+  and deleted_at is null
+order by created_at desc, id desc
+limit 1;
 
 -- name: DisableSecret :one
 update secrets
@@ -3969,4 +4021,369 @@ left join agents a
  and a.deleted_at is null
 where c.id = @conversation_id::uuid;
 
+-- ============================================================
+-- scheduled_tasks
+-- ============================================================
 
+-- name: CreateScheduledTask :one
+insert into scheduled_tasks(
+  id, agent_id, name, prompt, cron_expr, timezone,
+  enabled, feishu_chat_id, feishu_chat_name, next_run_at, created_by, created_at, updated_at
+)
+values (@id::uuid, @agent_id::uuid, @name, @prompt, @cron_expr, @timezone,
+        @enabled, @feishu_chat_id, @feishu_chat_name, @next_run_at, @created_by, @now, @now)
+returning
+  id::text                                  as id,
+  agent_id::text                    as agent_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at;
+
+-- name: GetScheduledTask :one
+select
+  t.id::text                                  as id,
+  t.agent_id::text                    as agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  -- Derive the display status from the linked run's live status so the
+  -- list/detail never get stuck on the 'queued' dispatch stamp. Task-level
+  -- states (skipped_overlap / auto_disabled) take precedence when set.
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = @id::uuid and t.deleted_at is null;
+
+-- name: ListScheduledTasksByAgent :many
+select
+  t.id::text                                  as id,
+  t.agent_id::text                    as agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.agent_id = @agent_id::uuid and t.deleted_at is null
+order by t.created_at desc;
+
+-- name: ListScheduledTasksByWorkspacePage :many
+-- Workspace-wide list (paginated): every scheduled task across all of the
+-- workspace's agents, newest first. last_status is derived from the linked run
+-- (see GetScheduledTask). The (created_at, id) tie-break keeps OFFSET paging
+-- stable; pair with CountScheduledTasksByWorkspace for the page count.
+select
+  t.id::text                                  as id,
+  t.agent_id::text                    as agent_id,
+  coalesce(t.conversation_id::text, '')::text as conversation_id,
+  t.name, t.prompt, t.cron_expr, t.timezone, t.enabled,
+  coalesce(t.feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(t.feishu_chat_name, '')::text      as feishu_chat_name,
+  t.next_run_at, t.last_run_at,
+  coalesce(t.last_run_id::text, '')::text     as last_run_id,
+  coalesce(
+    case when t.last_status in ('skipped_overlap', 'auto_disabled') then t.last_status
+         else coalesce(r.status, t.last_status) end,
+    ''
+  )::text                                     as last_status,
+  t.consecutive_failures,
+  coalesce(t.created_by::text, '')::text      as created_by,
+  t.created_at, t.updated_at
+from scheduled_tasks t
+join agents a on a.id = t.agent_id
+left join agent_runs r on r.id = t.last_run_id
+where a.workspace_id = @workspace_id::uuid and t.deleted_at is null
+order by t.created_at desc, t.id desc
+limit @item_limit offset @item_offset;
+
+-- name: CountScheduledTasksByWorkspace :one
+-- Companion to ListScheduledTasksByWorkspacePage: total rows under the same
+-- filter so the pager can render "第 X-Y 条,共 N 条" and gate the Next button.
+select count(*)::bigint as total
+from scheduled_tasks t
+join agents a on a.id = t.agent_id
+where a.workspace_id = @workspace_id::uuid and t.deleted_at is null;
+
+-- name: GetScheduledTaskScope :one
+-- Resolve workspace/agent for RBAC gating from a task id.
+select
+  t.id::text             as id,
+  a.id::text             as agent_id,
+  a.workspace_id::text   as workspace_id
+from scheduled_tasks t
+join agents a on a.id = t.agent_id
+where t.id = @id::uuid and t.deleted_at is null;
+
+-- name: UpdateScheduledTask :one
+-- Re-enabling clears the failure state that tripped auto-disable. Without this,
+-- a task auto-disabled at the failure threshold keeps consecutive_failures >=
+-- threshold and last_status='auto_disabled'; the next cron fire would re-count
+-- the prior failed run and re-disable before dispatching, so flipping enabled
+-- back on via the UI would never actually run. Scoped to the disabled->enabled
+-- transition (old enabled=false, new enabled=true) so editing an already-
+-- enabled task doesn't wipe a meaningful in-flight failure count. last_run_id
+-- is intentionally left intact so the self-overlap guard still sees an active
+-- prior run.
+update scheduled_tasks
+set name = @name,
+    prompt = @prompt,
+    cron_expr = @cron_expr,
+    timezone = @timezone,
+    enabled = @enabled,
+    next_run_at = @next_run_at,
+    consecutive_failures = case
+      when enabled = false and @enabled = true then 0
+      else consecutive_failures
+    end,
+    last_status = case
+      when enabled = false and @enabled = true then ''
+      else last_status
+    end,
+    updated_at = @now::timestamptz
+where id = @id::uuid and deleted_at is null
+returning
+  id::text                                  as id,
+  agent_id::text                    as agent_id,
+  coalesce(conversation_id::text, '')::text as conversation_id,
+  name, prompt, cron_expr, timezone, enabled,
+  coalesce(feishu_chat_id, '')::text        as feishu_chat_id,
+  coalesce(feishu_chat_name, '')::text      as feishu_chat_name,
+  next_run_at, last_run_at,
+  coalesce(last_run_id::text, '')::text     as last_run_id,
+  last_status, consecutive_failures,
+  coalesce(created_by::text, '')::text      as created_by,
+  created_at, updated_at;
+
+-- name: SoftDeleteScheduledTask :exec
+update scheduled_tasks
+set deleted_at = @now::timestamptz, updated_at = @now::timestamptz
+where id = @id::uuid and deleted_at is null;
+
+-- name: ClaimDueScheduledTasks :many
+-- Multi-pod-safe: FOR UPDATE OF t SKIP LOCKED so sibling pods get disjoint
+-- batches; claim lease (claimed_at/claimed_by) recovers crashed claims.
+-- Mirrors ClaimPendingQueuedFeishuRuns. Returns only what the scheduler
+-- needs to compute next_run_at; FireScheduledTaskRun re-reads FOR UPDATE.
+with picked as (
+  select t.id
+  from scheduled_tasks t
+  where t.enabled = true
+    and t.deleted_at is null
+    and t.next_run_at is not null
+    and t.next_run_at <= @now::timestamptz
+    and (
+      t.claimed_at is null
+      or t.claimed_at < @stale_before::timestamptz
+      or t.claimed_by = @claimed_by::text
+    )
+  order by t.next_run_at asc
+  limit @item_limit
+  for update of t skip locked
+),
+claimed as (
+  update scheduled_tasks t
+  set claimed_at = @now::timestamptz,
+      claimed_by = @claimed_by::text,
+      updated_at = @now::timestamptz
+  from picked
+  where t.id = picked.id
+  returning t.id, t.cron_expr, t.timezone
+)
+select claimed.id::text   as id,
+       claimed.cron_expr  as cron_expr,
+       claimed.timezone   as timezone
+from claimed;
+
+-- name: GetScheduledTaskForUpdate :one
+-- Row-lock the task and read the last run's terminal status for the
+-- self-overlap + failure-accounting decision in FireScheduledTaskRun.
+select
+  t.id::text                                   as id,
+  t.agent_id::text                     as agent_id,
+  coalesce(t.conversation_id::text, '')::text  as conversation_id,
+  t.name                                       as name,
+  t.prompt                                     as prompt,
+  t.timezone                                   as timezone,
+  t.enabled                                    as enabled,
+  t.consecutive_failures                       as consecutive_failures,
+  coalesce(t.last_run_id::text, '')::text      as last_run_id,
+  coalesce(r.status, '')::text                 as last_run_status,
+  coalesce(t.created_by::text, '')::text       as created_by
+from scheduled_tasks t
+left join agent_runs r on r.id = t.last_run_id
+where t.id = @id::uuid and t.deleted_at is null
+for update of t;
+
+-- name: CreateScheduledAgentRun :exec
+-- 定时 run: trigger_source='scheduled_task', trigger_channel='cron',
+-- trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
+-- 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
+insert into agent_runs(
+  id, workspace_id, conversation_id,
+  trigger_message_id, trigger_source, trigger_channel, trigger_ref_type, trigger_ref_id,
+  requested_by_type, requested_by_id,
+  agent_id, connector_type, status, visibility, metadata,
+  created_at, updated_at
+)
+values (@id::uuid, @workspace_id::uuid, @conversation_id::uuid,
+        @trigger_message_id::uuid, 'scheduled_task', 'cron', 'scheduled_task', @trigger_ref_id::uuid,
+        'user', @requested_by_id,
+        @agent_id::uuid, @connector_type, 'queued', 'workspace', @metadata::jsonb, @now, @now);
+
+-- name: MarkScheduledTaskDispatched :exec
+-- After a cron dispatch: stamp last run, set consecutive_failures to the
+-- recomputed value, advance next_run_at, release claim.
+update scheduled_tasks
+set last_run_at = @now::timestamptz,
+    last_run_id = @last_run_id::uuid,
+    conversation_id = @conversation_id::uuid,
+    last_status = 'queued',
+    consecutive_failures = @consecutive_failures::int,
+    next_run_at = @next_run_at,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: AdvanceScheduledTaskAfterSkip :exec
+-- Self-overlap skip: advance next_run_at, release claim, no run dispatched.
+update scheduled_tasks
+set next_run_at = @next_run_at,
+    last_status = 'skipped_overlap',
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: DisableScheduledTaskForFailures :exec
+-- Threshold reached: auto-disable, keep next_run_at advanced for re-enable.
+update scheduled_tasks
+set enabled = false,
+    last_status = 'auto_disabled',
+    consecutive_failures = @consecutive_failures::int,
+    next_run_at = @next_run_at,
+    claimed_at = null,
+    claimed_by = '',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: MarkScheduledTaskRunNow :exec
+-- run-now is out-of-band: stamp last run only, DO NOT touch next_run_at
+-- or consecutive_failures.
+update scheduled_tasks
+set last_run_at = @now::timestamptz,
+    last_run_id = @last_run_id::uuid,
+    conversation_id = @conversation_id::uuid,
+    last_status = 'queued',
+    updated_at = @now::timestamptz
+where id = @id::uuid;
+
+-- name: ListAgentRunsByScheduledTask :many
+select
+  id::text                                   as id,
+  conversation_id::text                      as conversation_id,
+  agent_id::text                     as agent_id,
+  connector_type,
+  status,
+  failure_reason,
+  trigger_source,
+  trigger_channel,
+  coalesce(trigger_ref_id::text, '')::text   as trigger_ref_id,
+  created_at, started_at, finished_at, updated_at
+from agent_runs
+where trigger_ref_type = 'scheduled_task' and trigger_ref_id = @task_id::uuid
+order by created_at desc
+limit @item_limit;
+
+
+
+-- ============================================================
+-- workspace_im_connectors — workspace 维度 IM 连接器(feishu/slack/discord)
+-- 见 migration 000002。凭据密文在 secrets(vault),本表 config 只存
+-- *_ref 与非敏感字段。app_id 是 workspace-bot 的通用 join key。
+-- ============================================================
+
+-- name: UpsertWorkspaceIMConnector :one
+-- 按 (workspace_id, platform) 唯一约束 upsert。冲突时更新 app_id /
+-- enabled / config / updated_at,保留 id / created_by / created_at。
+-- 若 (platform, app_id) 撞了别的 workspace,会触发 uk_wic_platform_appid
+-- 唯一冲突并报错(由 store 层映射成 *_app_id_in_use)。
+insert into workspace_im_connectors (
+  id, workspace_id, platform, app_id, enabled, config, created_by, created_at, updated_at
+) values (
+  @id::uuid, @workspace_id::uuid, @platform::text, @app_id::text,
+  @enabled::boolean, @config, nullif(@created_by::text, '')::uuid, @now, @now
+)
+on conflict (workspace_id, platform) where deleted_at is null
+do update set
+  app_id     = excluded.app_id,
+  enabled    = excluded.enabled,
+  config     = excluded.config,
+  updated_at = excluded.updated_at
+returning
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at;
+
+-- name: GetWorkspaceIMConnectors :many
+-- 拉取某 workspace 全部平台的有效连接器(前端面板初始化用)。
+select
+  id::text, workspace_id::text, platform, app_id, enabled, config,
+  created_at, updated_at
+from workspace_im_connectors
+where workspace_id = @workspace_id::uuid
+  and deleted_at is null
+order by platform;
+
+-- name: GetWorkspaceConnectorByAppID :one
+-- 出站 resolver 按 (platform, app_id) 反查启用的连接器,取 config 里的
+-- *_ref 解密 token。
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = @platform::text
+  and c.app_id = @app_id::text
+  and c.enabled = true
+  and c.deleted_at is null
+limit 1;
+
+-- name: ListWorkspaceConnectorsByPlatform :many
+-- 入站 reconciler 按平台扫描所有启用的连接器,为每条 (workspace_id,
+-- app_id) 维持一条长连接。
+select
+  c.id::text, c.workspace_id::text, w.name as workspace_name,
+  c.platform, c.app_id, c.enabled, c.config, c.created_at, c.updated_at
+from workspace_im_connectors c
+join workspaces w on w.id = c.workspace_id
+where c.platform = @platform::text
+  and c.enabled = true
+  and c.app_id <> ''
+  and c.deleted_at is null
+order by c.workspace_id, c.app_id;

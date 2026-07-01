@@ -2,7 +2,7 @@
 
 > **面向:** 想在本机自用或验收 Parsar 的开发者 / AI 编码 agent(Claude Code、Cursor、Codex 等)。
 > **给你什么:** 几分钟内拉起一个可用的 Parsar(mock 登录,无需配置飞书或任何密钥),并把你本机的 Claude Code / OpenCode / Codex 接入成一台**在线设备**——全程「浏览器复制一条命令 → 终端粘贴 → 设备在线」。
-> **不在本页:** 自部署 / 生产部署(真实飞书 OIDC、自定义端口与密钥、bootstrap token)是另一条路径,见 `deploy/compose/compose.example.yml` 与 `docs/deploy/`。
+> **不在本页:** 自部署 / 生产部署(真实飞书 OIDC、自定义端口与密钥、bootstrap token)是另一条路径,见 `deploy/compose/compose.selfhost.yml` 与 `docs/deploy/`。
 
 ---
 

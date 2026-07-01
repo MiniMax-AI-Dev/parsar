@@ -10,7 +10,7 @@
 > - [feishu-bot-per-agent.md](./feishu-bot-per-agent.md) — 把单个 Agent 暴露成飞书机器人（每个挂飞书的 Agent 一份）。
 > - [health-and-smoke.md](./health-and-smoke.md) — `/healthz`、`/readyz`、`smoke.sh` 检查器。
 > - [config.example.yaml](./config.example.yaml) — 注释齐全的 YAML 模板。
-> - [`deploy/compose/compose.example.yml`](../../deploy/compose/compose.example.yml) — 单机部署 compose 起点。
+> - [`deploy/compose/compose.selfhost.yml`](../../deploy/compose/compose.selfhost.yml) — 单机部署 compose 起点。
 > - [`deploy/compose/.env.example`](../../deploy/compose/.env.example) — env 注入模板。
 
 ---
@@ -20,8 +20,8 @@
 ```text
 1. 准备 Postgres：空库可用 + 凭证就绪
 2. 准备 config / env：见 §2
-3. 跑数据库 migration            (./parsar-migrate 或 docker run parsar:<tag> parsar-migrate 或 make migrate-dev)
-4. 启动 server                  (./parsar-server  或 docker run parsar:<tag>)
+3. 跑数据库 migration            (parsar-migrate 或 docker run parsar:<tag> parsar-migrate 或 make migrate-dev)
+4. 启动 server                  (parsar-server  或 docker run parsar:<tag>)
 5. 健康检查通过                  (/healthz + /readyz 均返回 200)
 6. 创建第一个 owner + workspace  (HTTP API 或 CLI，二选一)
 7. 关闭 bootstrap token         (从 env 移除 PARSAR_BOOTSTRAP_TOKEN 并重启 server)
@@ -33,10 +33,11 @@
 > 不查 schema；`/readyz` 只校验 DB 可连通。任何 conversation/agent 调用
 > 在未 migrate 的空库上都会 500。
 
-> `./parsar-server` 和 `./parsar-migrate` 是 production image 里 `WORKDIR`
-> 下的两个 binary(由仓库根 `Dockerfile` + `make docker-build` 构建)。本地 dev
-> 不需要这两个 binary —— 用 `make server` / `make migrate-dev` 走
-> `go run ./cmd/...` 即可。
+> `parsar-server` 和 `parsar-migrate` 是 production image 里装在 `$PATH`
+> 上(`/usr/local/bin`)的 binary,所以按**裸名**调用,而不是 `./parsar-...`
+> —— image 的 `WORKDIR` 是 `/var/lib/parsar`,那里并没有这些文件(由仓库根
+> `Dockerfile` + `make docker-build` 构建)。本地 dev 不需要这两个 binary
+> —— 用 `make server` / `make migrate-dev` 走 `go run ./cmd/...` 即可。
 
 > step 8 的 smoke-core 不是装饰：它复跑 step 5 的三条探活，并额外确认
 > `/api/v1/bootstrap/status` 已对外开放、`dev_auth_enabled=false`（生产硬约束）、
@@ -259,7 +260,7 @@ make bootstrap
 ```text
 deploy/compose/
 ├── README.md                  目录说明 + 三种部署形态
-├── compose.example.yml       parsar-server + postgres 两 service
+├── compose.selfhost.yml       parsar-server + postgres 两 service
 └── .env.example               env 模板（全是 placeholder）
 ```
 
@@ -281,11 +282,11 @@ sudo cp docs/deploy/config.example.yaml /etc/parsar/config.yaml
 # 把每一个 <placeholder> 换成真值 —— 真凭证仍然走 env，不写文件。
 
 # 3. 拉起 postgres + server
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env up -d
+docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env up -d
 
 # 4. 跑 migration（容器内执行，连同一份 DATABASE_URL）
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env \
-  exec parsar-server ./parsar-migrate
+docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env \
+  exec parsar-server parsar-migrate
 
 # 5. Smoke check
 scripts/smoke.sh --api-url http://127.0.0.1:8080
@@ -297,16 +298,16 @@ curl -sf -X POST http://127.0.0.1:8080/api/v1/bootstrap \
   -d '{"email":"admin@example.com","name":"First Admin","workspace_name":"Acme"}'
 
 # 7. 关闭 bootstrap：把 .env 里 PARSAR_BOOTSTRAP_TOKEN 删掉，然后
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env \
+docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env \
   up -d --force-recreate parsar-server
 ```
 
 ### 7.2 校验 compose 文件语法
 
-每次改完 `compose.example.yml` 或 `.env.example`，跑一次：
+每次改完 `compose.selfhost.yml` 或 `.env.example`，跑一次：
 
 ```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env config >/dev/null
+docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env config >/dev/null
 ```
 
 `docker compose config` 会展开所有 `${VAR}` 并校验 YAML / schema，
@@ -314,7 +315,7 @@ docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.
 
 ### 7.3 K8s / 其它 orchestrator
 
-`compose.example.yml` 不是 K8s manifest，但可以照搬：
+`compose.selfhost.yml` 不是 K8s manifest，但可以照搬：
 
 - env block → Deployment.spec.template.spec.containers[].env
 - healthcheck → `livenessProbe` 用 `/healthz`、`readinessProbe` 用 `/readyz`

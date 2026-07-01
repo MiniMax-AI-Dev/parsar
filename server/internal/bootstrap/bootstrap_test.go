@@ -371,3 +371,26 @@ func TestRegisterRoutesNilSvcGracefullyFails(t *testing.T) {
 		t.Fatalf("status = %d", rec.Code)
 	}
 }
+
+func TestStatusIncludesPublicURL(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, "tk", WithPublicURL("https://parsar.example.com/"))
+	st, err := svc.Status(context.Background(), false)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if st.PublicURL != "https://parsar.example.com/" {
+		t.Fatalf("PublicURL = %q, want %q", st.PublicURL, "https://parsar.example.com/")
+	}
+}
+
+func TestStatusPublicURLEmptyByDefault(t *testing.T) {
+	svc := NewService(&fakeRepo{}, "tk")
+	st, err := svc.Status(context.Background(), false)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if st.PublicURL != "" {
+		t.Fatalf("PublicURL = %q, want empty", st.PublicURL)
+	}
+}

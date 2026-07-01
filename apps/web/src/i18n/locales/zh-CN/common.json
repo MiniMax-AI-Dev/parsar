@@ -143,6 +143,7 @@
       "approvals": "收件箱",
       "conversations": "对话",
       "runs": "运行",
+      "scheduled": "定时任务",
       "agents": "Agent",
       "connections": "连接",
       "capabilities": "能力",

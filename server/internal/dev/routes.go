@@ -23,11 +23,12 @@ import (
 	authfeishu "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/feishushared"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/httprunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -106,11 +107,11 @@ type RuntimeStore interface {
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	// ClearGatewaySessionSelection wipes a stored selection — see the
-	// matching method on feishushared.Store. Forwarded here so the
-	// HTTP webhook path satisfies feishushared.Store when it dispatches
+	// matching method on router.Store. Forwarded here so the
+	// HTTP webhook path satisfies router.Store when it dispatches
 	// into HandleInbound for shared-bot routing mode.
 	ClearGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) error
-	FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error)
+	FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error)
 	IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error)
 	// GetWorkspaceVisibility + ListActiveWorkspaceOwnerNames feed the
 	// visibility=workspace rejection card so the Feishu sender sees
@@ -120,9 +121,9 @@ type RuntimeStore interface {
 	GetWorkspaceVisibility(ctx context.Context, workspaceID string) (string, error)
 	ListActiveWorkspaceOwnerNames(ctx context.Context, workspaceID string, limit int32) ([]string, error)
 	// FindConversationByExternalRef + CancelAllInflightForConversation
-	// are forwarded so the HTTP webhook path satisfies feishushared.Store
+	// are forwarded so the HTTP webhook path satisfies router.Store
 	// for the /cancel command — without these the shared-bot dispatch
-	// site (RegisterRoutesWithStore → feishushared.HandleInbound) fails
+	// site (RegisterRoutesWithStore → router.HandleInbound) fails
 	// to compile.
 	FindConversationByExternalRef(ctx context.Context, gateway, externalChatID, externalThreadID string) (string, error)
 	CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]store.SupersededRun, error)
@@ -180,6 +181,25 @@ type RuntimeStore interface {
 	ApproveJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	RejectJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error
+
+	// workspace 维度 IM 连接器(feishu/slack/discord 统一存储)。
+	// GET 面板初始化 + 三个平台的 upsert 写入。读取走 member 网关、
+	// 写入走 owner/admin 网关(见路由注册)。
+	GetWorkspaceIMConnectors(ctx context.Context, workspaceID string) ([]store.WorkspaceConnectorRead, error)
+	UpsertWorkspaceSlackConnector(ctx context.Context, input store.UpsertWorkspaceSlackConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+	UpsertWorkspaceDiscordConnector(ctx context.Context, input store.UpsertWorkspaceDiscordConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+	UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+
+	// 定时任务(scheduled tasks)
+	ListScheduledTasksByAgent(ctx context.Context, agentID string) ([]store.ScheduledTaskRead, error)
+	ListScheduledTasksByWorkspace(ctx context.Context, workspaceID string, limit, offset int32) (store.ListScheduledTasksByWorkspaceResult, error)
+	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	GetScheduledTask(ctx context.Context, taskID string) (store.ScheduledTaskRead, error)
+	GetScheduledTaskScope(ctx context.Context, taskID string) (store.ScheduledTaskScope, error)
+	UpdateScheduledTask(ctx context.Context, in store.UpdateScheduledTaskInput) (store.ScheduledTaskRead, error)
+	SoftDeleteScheduledTask(ctx context.Context, taskID string) error
+	RunScheduledTaskNow(ctx context.Context, taskID string) (string, error)
+	ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error)
 }
 
 type FeishuAppRegistrationClient interface {
@@ -227,10 +247,10 @@ type routerConfig struct {
 	// ctx so background goroutines exit cleanly on shutdown. Defaults
 	// to context.Background() when unwired (fine for unit tests).
 	dispatchCtx context.Context
-	// ossClient backs the capability-plugin upload/download flow. Nil
-	// means OSS is not configured — upload presign + plugin import
-	// 503 with "OSS not configured" rather than failing boot.
-	ossClient OSSClient
+	// blobStore backs the capability plugin/skill upload + import flow.
+	// Nil means the selected backend is unavailable — upload presign +
+	// import 503 rather than failing boot.
+	blobStore blob.Store
 
 	// feishuJoinURLBuilder is invoked by the visibility=workspace
 	// rejection card so the Feishu rejection surfaces a markdown
@@ -502,6 +522,14 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/agents/{agentID}/profile", configureAgentProfile(runtimeStore))
 			r.Post("/agents/{agentID}/disable", disableAgent(runtimeStore))
 			r.Post("/agents/{agentID}/enable", enableAgent(runtimeStore))
+			r.Get("/agents/{agentID}/scheduled-tasks", listScheduledTasks(runtimeStore))
+			r.Post("/agents/{agentID}/scheduled-tasks", createScheduledTask(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/scheduled-tasks", listScheduledTasksByWorkspace(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}", getScheduledTask(runtimeStore))
+			r.Patch("/scheduled-tasks/{taskID}", updateScheduledTask(runtimeStore))
+			r.Delete("/scheduled-tasks/{taskID}", deleteScheduledTask(runtimeStore))
+			r.Post("/scheduled-tasks/{taskID}/run-now", runScheduledTaskNow(runtimeStore))
+			r.Get("/scheduled-tasks/{taskID}/runs", listScheduledTaskRuns(runtimeStore))
 			// Runtime binding: user picks which Runtime this agent
 			// runs on. Replaces the legacy auto-sandbox path.
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}/runtime", getAgentRuntimeBinding(runtimeStore))
@@ -510,6 +538,13 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Patch("/agents/{agentID}/visibility", updateAgentVisibility(runtimeStore))
 			r.Get("/agents/{agentID}/connector/feishu/diagnostics", getAgentFeishuConnectorDiagnostics(runtimeStore))
 			r.Patch("/agents/{agentID}/connector/feishu", updateAgentFeishuConnector(runtimeStore))
+			// Workspace-dimension IM connectors (feishu/slack/discord).
+			// Read = any member; write = owner/admin (a misconfigured bot
+			// can leak the workspace to the internet).
+			r.Get("/workspaces/{workspaceID}/connectors", gateWorkspaceMember(runtimeStore, listWorkspaceConnectors(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/slack", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceSlackConnector(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/discord", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceDiscordConnector(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/feishu", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceFeishuConnector(runtimeStore)))
 			r.Post("/agents/{agentID}/connector/feishu/provision/begin", beginAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Post("/agents/{agentID}/connector/feishu/provision/poll", pollAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Delete("/agents/{agentID}", deleteAgent(runtimeStore))
@@ -537,14 +572,14 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/capabilities", createWorkspaceCapability(runtimeStore))
 			// Capability import — preview is a pure parse; commit runs
 			// the all-or-nothing materialization.
-			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.ossClient))
-			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.ossClient))
+			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.blobStore))
+			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
 			// Plugin upload presign — browser PUTs the zip directly to
-			// OSS, then calls import/commit with the returned ossKey.
-			// presign-download checks ossKey belongs to the calling
+			// the blob backend, then calls import/commit with the returned
+			// ossKey. presign-download checks ossKey belongs to the calling
 			// workspace to close the cross-tenant read hole.
-			r.Post("/workspaces/{workspaceID}/uploads/presign-upload", presignUpload(runtimeStore, cfg.ossClient))
-			r.Post("/workspaces/{workspaceID}/uploads/presign-download", presignDownload(runtimeStore, cfg.ossClient))
+			r.Post("/workspaces/{workspaceID}/uploads/presign-upload", presignUpload(runtimeStore, cfg.blobStore))
+			r.Post("/workspaces/{workspaceID}/uploads/presign-download", presignDownload(runtimeStore, cfg.blobStore))
 			// Workspace-scoped credential_kinds CRUD (table is global;
 			// scoped for RBAC consistency with import endpoints).
 			r.Get("/workspaces/{workspaceID}/credential-kinds", listCredentialKinds(runtimeStore))
@@ -562,7 +597,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/undeprecate", undeprecateWorkspaceCapability(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions", listWorkspaceCapabilityVersions(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions", createWorkspaceCapabilityVersion(runtimeStore))
-			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit", commitCapabilityVersionImport(runtimeStore, cfg.ossClient))
+			r.Post("/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit", commitCapabilityVersionImport(runtimeStore, cfg.blobStore))
 			r.Post("/agent-runs/{runID}/cancel", cancelAgentRun(runtimeStore, cfg))
 			r.Post("/conversations/{conversationID}/cancel-all", cancelConversationRuns(runtimeStore, cfg))
 			r.Put("/workspaces/{workspaceID}/runtime/credential", gateWorkspaceOwnerOrAdmin(runtimeStore, putRuntimeCredential(runtimeStore)))
@@ -581,7 +616,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}/metrics", getAgentMetrics(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agent-runs/{runID}/events", listAgentRunEvents(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/audit-records", listWorkspaceAuditRecords(runtimeStore))
-			r.Get("/workspaces/{workspaceID}/connectors", listWorkspaceConnectors(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/connector-usage", listWorkspaceConnectorUsage(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/gateways", listWorkspaceGateways())
 			r.Get("/workspaces/{workspaceID}/members", listWorkspaceMembers(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/members", addWorkspaceMember(runtimeStore))
@@ -824,11 +859,11 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to decode feishu connector"})
 			return
 		}
-		if ok && feishushared.IsSharedRoutingMode(hostCfg.RoutingMode) {
-			reply := func(ctx context.Context, agent gatewaypkg.FeishuRouteAgent, event gatewaypkg.FeishuInboundEvent, text string) error {
+		if ok && router.IsSharedRoutingMode(hostCfg.RoutingMode) {
+			reply := func(ctx context.Context, agent gatewaypkg.FeishuRouteAgent, _ gatewaypkg.InboundEvent, text string) error {
 				return sendFeishuImmediateText(ctx, runtimeStore, agent, event, text)
 			}
-			outcome, err := feishushared.HandleInbound(r.Context(), runtimeStore, host, event, reply, nil, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
+			outcome, err := router.HandleInbound(r.Context(), runtimeStore, host, gatewaypkg.NeutralFromFeishuEvent(event), reply, nil, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to handle shared feishu bot inbound"})
 				return
@@ -844,7 +879,7 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 			return
 		}
 
-		decision, err := gatewaypkg.RouteFeishuInboundToAgent(r.Context(), route, event, host, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
+		decision, err := gatewaypkg.RouteInboundToAgent(r.Context(), route, gatewaypkg.NeutralFromFeishuEvent(event), host, gatewaypkg.GateConfig{JoinURLBuilder: joinURLBuilder})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to route feishu inbound"})
 			return
@@ -897,13 +932,13 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 		}
 		createGatewayInboundFromRequest(w, r, runtimeStore, gatewayInboundRequest{
 			Gateway:          "feishu",
-			Conversation:     feishushared.ConversationTitle(decision.NormalizedText),
+			Conversation:     router.ConversationTitle(decision.NormalizedText),
 			ConversationForm: conversationForm,
 			Text:             decision.NormalizedText,
 			ExternalChatID:   event.ChatID,
 			// ThreadKey (not ReplyAnchorMessageID): every inbound in
 			// the same Feishu 话题 lands in the same Parsar
-			// conversation. Mirrors feishushared/router.go.
+			// conversation. Mirrors gateway/router/router.go.
 			ExternalThreadID:  event.ThreadKey(),
 			ExternalMessageID: event.MessageID,
 			ExternalUserID:    externalUserID,
@@ -956,11 +991,11 @@ func (r feishuRuntimeRouter) GetAgentByID(ctx context.Context, agentID string) (
 	}, nil
 }
 
-func (r feishuRuntimeRouter) FindUserIDByFeishuUnionID(ctx context.Context, unionID string) (string, error) {
-	userID, err := r.store.FindUserIDByFeishuUnionID(ctx, unionID)
+func (r feishuRuntimeRouter) FindUserIDByPlatformSubject(ctx context.Context, platform, subject string) (string, error) {
+	userID, err := r.store.FindUserIDByPlatformSubject(ctx, platform, subject)
 	if err != nil {
-		if errors.Is(err, store.ErrUnknownFeishuUser) {
-			return "", gatewaypkg.ErrFeishuRouterUnknownUser
+		if errors.Is(err, store.ErrUnknownPlatformUser) {
+			return "", gatewaypkg.ErrRouterUnknownUser
 		}
 		return "", err
 	}
@@ -2239,6 +2274,158 @@ func updateAgentFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"feishu_connector": change})
+	}
+}
+
+// ============================================================
+// Workspace-dimension IM connectors (feishu / slack / discord)
+// ------------------------------------------------------------
+// Bound to the workspace, NOT to an agent: the same dimension as the
+// /list a user picks an agent from after @-summoning the shared bot.
+// Credentials live in the vault; the table stores only *_ref UUIDs +
+// non-secret fields. RBAC is enforced by the route gate middleware
+// (member for GET, owner/admin for PATCH), so the handlers trust the
+// URL workspaceID.
+// ============================================================
+
+type updateWorkspaceSlackConnectorBody struct {
+	Enabled          bool   `json:"enabled"`
+	AppID            string `json:"app_id"`
+	BotTokenRef      string `json:"bot_token_ref"`
+	AppTokenRef      string `json:"app_token_ref"`
+	SigningSecretRef string `json:"signing_secret_ref"`
+	EventMode        string `json:"event_mode"`
+}
+
+type updateWorkspaceDiscordConnectorBody struct {
+	Enabled      bool   `json:"enabled"`
+	AppID        string `json:"app_id"`
+	BotTokenRef  string `json:"bot_token_ref"`
+	PublicKeyRef string `json:"public_key_ref"`
+	Intents      string `json:"intents"`
+}
+
+type updateWorkspaceFeishuConnectorBody struct {
+	Enabled              bool   `json:"enabled"`
+	AppID                string `json:"app_id"`
+	AppSecretRef         string `json:"app_secret_ref"`
+	VerificationTokenRef string `json:"verification_token_ref"`
+	EncryptKeyRef        string `json:"encrypt_key_ref"`
+	BotOpenID            string `json:"bot_open_id"`
+	EventMode            string `json:"event_mode"`
+}
+
+// listWorkspaceConnectors returns all platforms' connector rows for the
+// workspace, decoded (config jsonb → map). Backs the admin panel's
+// initial state. Never exposes secret plaintext (only *_ref UUIDs).
+func listWorkspaceConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		connectors, err := runtimeStore.GetWorkspaceIMConnectors(r.Context(), workspaceID)
+		if err != nil {
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connectors": connectors})
+	}
+}
+
+func updateWorkspaceSlackConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceSlackConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceSlackConnector(r.Context(), store.UpsertWorkspaceSlackConnectorInput{
+			WorkspaceID:      workspaceID,
+			Enabled:          req.Enabled,
+			AppID:            req.AppID,
+			BotTokenRef:      req.BotTokenRef,
+			AppTokenRef:      req.AppTokenRef,
+			SigningSecretRef: req.SigningSecretRef,
+			EventMode:        req.EventMode,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrSlackConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "slack_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrSlackAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "slack_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
+	}
+}
+
+func updateWorkspaceDiscordConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceDiscordConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceDiscordConnector(r.Context(), store.UpsertWorkspaceDiscordConnectorInput{
+			WorkspaceID:  workspaceID,
+			Enabled:      req.Enabled,
+			AppID:        req.AppID,
+			BotTokenRef:  req.BotTokenRef,
+			PublicKeyRef: req.PublicKeyRef,
+			Intents:      req.Intents,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrDiscordConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "discord_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrDiscordAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "discord_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
+	}
+}
+
+func updateWorkspaceFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceFeishuConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceFeishuConnector(r.Context(), store.UpsertWorkspaceFeishuConnectorInput{
+			WorkspaceID:          workspaceID,
+			Enabled:              req.Enabled,
+			AppID:                req.AppID,
+			AppSecretRef:         req.AppSecretRef,
+			VerificationTokenRef: req.VerificationTokenRef,
+			EncryptKeyRef:        req.EncryptKeyRef,
+			BotOpenID:            req.BotOpenID,
+			EventMode:            req.EventMode,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrFeishuConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "feishu_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrFeishuAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "feishu_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
 	}
 }
 
@@ -3526,10 +3713,10 @@ func listWorkspaceAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// listWorkspaceConnectors aggregates connector types in use by
+// listWorkspaceConnectorUsage aggregates connector types in use by
 // agents in a workspace. There is no `connectors` table — the
 // connector identity lives on each agent's `connector_type` field.
-func listWorkspaceConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
+func listWorkspaceConnectorUsage(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})

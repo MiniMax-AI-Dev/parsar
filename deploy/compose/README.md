@@ -12,7 +12,7 @@ injected from outside the repo.
 
 | File | Purpose |
 |---|---|
-| `compose.example.yml` | Two-service compose (`postgres` + `parsar-server`) with image / volumes / health checks. |
+| `compose.selfhost.yml` | Two-service compose (`postgres` + `parsar-server`) with image / volumes / health checks. |
 | `.env.example` | Every env var the compose file references, plus the env vars Parsar reads at runtime. All values are placeholders. |
 
 ## Three operator paths
@@ -20,13 +20,13 @@ injected from outside the repo.
 Pick the one that matches your environment, then read the matching
 section in `docs/deploy/deploy-runbook.md`:
 
-1. **Single host, bundled Postgres** — use `compose.example.yml` as-is.
+1. **Single host, bundled Postgres** — use `compose.selfhost.yml` as-is.
    Bind-mount a config file in if you want; otherwise rely on env-only
    injection.
 2. **Single host, external Postgres** — comment out the `postgres`
-   service block in `compose.example.yml`, override `DATABASE_URL` in
+   service block in `compose.selfhost.yml`, override `DATABASE_URL` in
    `.env`, keep everything else.
-3. **Kubernetes** — copy the env block from `compose.example.yml`
+3. **Kubernetes** — copy the env block from `compose.selfhost.yml`
    into your Deployment manifest, copy the health-check block into
    your `livenessProbe` / `readinessProbe` (per
    `docs/deploy/health-and-smoke.md`), and store secrets in a K8s
@@ -47,20 +47,22 @@ open-source repo; any real secret here is a leak.
 
 ## Image build contract
 
-The `parsar-server` image referenced by `PARSAR_SERVER_IMAGE` MUST
-contain two binaries at its `WORKDIR`:
+The `parsar-server` image referenced by `PARSAR_SERVER_IMAGE` ships its
+binaries on `$PATH` at `/usr/local/bin`, so they are invoked by **bare
+name** (NOT `./parsar-...` — the image's `WORKDIR` is `/var/lib/parsar`,
+which does not contain them):
 
-- `./parsar-server` — the long-running HTTP server (compose
-  `command:` defaults to this).
-- `./parsar-migrate` — the goose-driven migration runner used by
-  the runbook's `docker compose ... exec parsar-server ./parsar-migrate`
-  step.
+- `parsar-server` — the long-running HTTP server (the image `CMD`
+  defaults to `/usr/local/bin/parsar-server`).
+- `parsar-migrate` — the goose-driven migration runner used by the
+  runbook's `docker compose ... exec parsar-server parsar-migrate` step.
+- `parsar-bootstrap` — the first-owner provisioning CLI (used when the
+  HTTP bootstrap endpoint is disabled).
 
 The Dockerfile that builds this image lives at the repo root
-(`Dockerfile`); `make docker-build` produces an image whose `WORKDIR`
-satisfies this contract. Operators building their own image must
-produce the same two binaries at `WORKDIR` for the runbook to work as
-written.
+(`Dockerfile`); `make docker-build` produces an image satisfying this
+contract. Operators building their own image must install the same
+binaries on `$PATH` for the runbook to work as written.
 
 > The dev path (`make server` / `make migrate-dev`) does NOT need this
 > image — it shells out via `go run ./cmd/server` / `go run ./cmd/migrate`.
@@ -70,7 +72,7 @@ written.
 After filling `.env`, run:
 
 ```bash
-docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env config
+docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env config
 ```
 
 This expands every `${VAR}` and prints the merged config without

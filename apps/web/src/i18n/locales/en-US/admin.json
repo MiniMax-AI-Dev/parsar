@@ -1111,7 +1111,8 @@
         "runs": "Runs",
         "audit": "Audit",
         "dynamics": "Activity",
-        "config": "Config"
+        "config": "Config",
+        "scheduled": "Scheduled"
       },
       "dynamics": {
         "current": {
@@ -2130,8 +2131,6 @@
     "sharedPlaceholder": "Pick a shared secret…",
     "sharedNewQueued": "Will create: {{name}}",
     "sharedNewEdit": "Edit",
-    "publicWarning": "Public agents may be called by users without a Parsar account. Model and capability credentials must use shared secrets; personal options are disabled.",
-    "tenantHint": "Tenant agents may be called from other workspaces. Callers must configure their own credentials or the capability is disabled — use shared secrets to avoid this.",
     "modelBindingTitle": "Model credential",
     "modelBindingPersonal": "Each caller's own API key",
     "modelBindingShared": "Use a shared API key",
@@ -2586,6 +2585,161 @@
       "submit": "Create",
       "cancel": "Cancel",
       "errorGeneric": "Failed to create, please try again later"
+    },
+    "connector": {
+      "adminOnly": "Only workspace owners and admins can edit connector settings.",
+      "savedBadge": "Saved",
+      "actions": {
+        "save": "Save",
+        "reset": "Reset"
+      },
+      "platformSelect": {
+        "label": "Platform",
+        "options": {
+          "feishu": "Feishu",
+          "slack": "Slack",
+          "discord": "Discord"
+        }
+      },
+      "feishu": {
+        "title": "Feishu connector",
+        "description": "Bind one Feishu bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Feishu connector saved.",
+        "docLink": {
+          "label": "Open the Feishu Open Platform to create / manage your bot",
+          "href": "https://open.feishu.cn/app"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Feishu messages through this bot.",
+            "toggle": "Enable Feishu bot"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "Credentials & Basic Info page → App ID (starts with cli_)."
+          },
+          "appSecret": {
+            "label": "App secret",
+            "hint": "Credentials & Basic Info page → App Secret. Stored encrypted.",
+            "savedHint": "A saved app secret is in place (Credentials & Basic Info → App Secret). Enter a new value to replace it."
+          },
+          "verificationToken": {
+            "label": "Verification token",
+            "hint": "Event Subscriptions page → Verification Token. Required for webhook mode. Stored encrypted.",
+            "savedHint": "A saved verification token is in place (Event Subscriptions → Verification Token). Enter a new value to replace it."
+          },
+          "encryptKey": {
+            "label": "Encrypt key",
+            "hint": "Event Subscriptions page → Encrypt Key. Optional; decrypts event payloads. Stored encrypted.",
+            "savedHint": "A saved encrypt key is in place (Event Subscriptions → Encrypt Key). Enter a new value to replace it."
+          },
+          "botOpenId": {
+            "label": "Bot open ID",
+            "hint": "Optional. The bot's open_id (ou_…), from the Bot menu or contact API; used to skip self-sent messages."
+          },
+          "eventMode": {
+            "label": "Event mode",
+            "hint": "WebSocket opens a long-lived connection (works on localhost); webhook receives HTTP callbacks.",
+            "options": {
+              "websocket": "WebSocket",
+              "webhook": "Webhook"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Feishu app ID is already bound to another workspace.",
+          "incomplete": "The Feishu connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Feishu connector. Please try again."
+        }
+      },
+      "slack": {
+        "title": "Slack connector",
+        "description": "Bind one Slack bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Slack connector saved.",
+        "docLink": {
+          "label": "Create a Slack app at api.slack.com/apps",
+          "href": "https://api.slack.com/apps"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Slack messages through this bot.",
+            "toggle": "Enable Slack bot"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "Basic Information page → App Credentials → App ID (starts with A)."
+          },
+          "botToken": {
+            "label": "Bot token",
+            "hint": "OAuth & Permissions tab → Bot User OAuth Token (xoxb-…). Install the app to your workspace first. Stored encrypted.",
+            "savedHint": "A saved bot token is in place (OAuth & Permissions → Bot User OAuth Token). Enter a new xoxb token to replace it."
+          },
+          "appToken": {
+            "label": "App-level token",
+            "hint": "Basic Information → App-Level Tokens → Generate Token with the connections:write scope (xapp-…). Required for socket mode. Stored encrypted.",
+            "savedHint": "A saved app-level token is in place (Basic Information → App-Level Tokens). Enter a new xapp token to replace it."
+          },
+          "signingSecret": {
+            "label": "Signing secret",
+            "hint": "Basic Information → App Credentials → Signing Secret. Required for events mode. Stored encrypted.",
+            "savedHint": "A saved signing secret is in place (Basic Information → App Credentials → Signing Secret). Enter a new value to replace it."
+          },
+          "eventMode": {
+            "label": "Event mode",
+            "hint": "Socket opens a long-lived connection (works on localhost, needs an xapp token); events receives HTTP callbacks (needs a signing secret).",
+            "options": {
+              "socket": "Socket mode",
+              "events": "Events API"
+            }
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Slack app ID is already bound to another workspace.",
+          "incomplete": "The Slack connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Slack connector. Please try again."
+        }
+      },
+      "discord": {
+        "title": "Discord connector",
+        "description": "Bind one Discord bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Discord connector saved.",
+        "docLink": {
+          "label": "Create a Discord app in the Developer Portal",
+          "href": "https://discord.com/developers/applications"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Discord messages through this bot.",
+            "toggle": "Enable Discord bot"
+          },
+          "appId": {
+            "label": "Application ID",
+            "hint": "General Information page → Application ID."
+          },
+          "botToken": {
+            "label": "Bot token",
+            "hint": "Bot tab → Reset Token to reveal the bot token. Stored encrypted.",
+            "savedHint": "A saved bot token is in place (Bot tab → Token). Enter a new value to replace it."
+          },
+          "publicKey": {
+            "label": "Public key",
+            "hint": "General Information page → Public Key. Verifies interaction signatures. Stored encrypted.",
+            "savedHint": "A saved public key is in place (General Information → Public Key). Enter a new value to replace it."
+          },
+          "intents": {
+            "label": "Gateway intents",
+            "hint": "Enable matching intents under Bot → Privileged Gateway Intents (e.g. MESSAGE CONTENT) or message bodies arrive empty."
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Discord application ID is already bound to another workspace.",
+          "incomplete": "The Discord connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Discord connector. Please try again."
+        }
+      }
     }
   },
   "specs": {
@@ -2753,6 +2907,62 @@
       "dialogTitle": "Audit history",
       "dialogDescription": "Every create / update / delete event recorded for this memory.",
       "unavailableUserScope": "Audit for user-scope memory requires a Workspace-level audit endpoint, coming in a follow-up release."
+    }
+  },
+  "scheduledTasks": {
+    "title": "Scheduled tasks",
+    "subtitle": "At each fire time, runs the agent once in a clean session; results land in run history.",
+    "new": "New task",
+    "empty": "No scheduled tasks yet — create one from the top right.",
+    "loadError": "Failed to load scheduled tasks",
+    "noAgents": "This project has no available agents yet — create and enable an agent before configuring scheduled tasks.",
+    "never": "—",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "col": { "name": "Name", "frequency": "Frequency", "status": "Status", "nextRun": "Next run", "actions": "Actions" },
+    "action": { "edit": "Edit", "runNow": "Run now", "delete": "Delete" },
+    "runNowOk": "Triggered a run",
+    "runNowErr": "Failed to trigger",
+    "deleteConfirm": "Delete this scheduled task? Past runs are kept.",
+    "status": { "queued": "Queued", "running": "Running", "completed": "Succeeded", "failed": "Failed", "cancelled": "Cancelled", "interrupted": "Interrupted", "skipped_overlap": "Skipped (overlap)", "auto_disabled": "Auto-disabled", "none": "Not run yet" },
+    "pagination": { "prev": "Previous", "next": "Next", "range": "Showing {{from}}-{{to}} of {{total}}" },
+    "freq": { "hourly": "Hourly", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "weekday": "Weekdays", "custom": "Custom" },
+    "desc": {
+      "hourly": "Hourly at minute {{minute}}",
+      "daily": "Daily at {{time}}",
+      "weekly": "Weekly on {{day}} at {{time}}",
+      "monthly": "Monthly on day {{dom}} at {{time}}",
+      "weekday": "Weekdays at {{time}}",
+      "custom": "cron: {{cron}}",
+      "withTz": "{{desc}} ({{tz}})"
+    },
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "dialog": {
+      "createTitle": "New scheduled task",
+      "editTitle": "Edit scheduled task",
+      "name": "Name",
+      "agent": "Executing agent",
+      "namePlaceholder": "Daily standup summary",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Summarise yesterday's commits, list today's TODOs…",
+      "frequency": "Frequency",
+      "time": "Time",
+      "dayOfWeek": "Day of week",
+      "dayOfMonth": "Day of month",
+      "minute": "Minute",
+      "timezone": "Timezone",
+      "cronLabel": "cron expression",
+      "cronPlaceholder": "0 9 * * *",
+      "preview": "Schedule preview",
+      "feishu": "Push to Feishu group",
+      "feishuDisabledHint": "Coming in a later release; Web-only for now.",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "nameRequired": "Name is required",
+      "agentRequired": "Select an executing agent",
+      "promptRequired": "Prompt is required",
+      "cronInvalid": "cron must have 5 fields (min hour dom mon dow)"
     }
   }
 }

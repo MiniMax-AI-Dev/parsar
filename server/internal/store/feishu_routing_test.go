@@ -122,7 +122,7 @@ func TestGetAgentByFeishuAppID_EmptyAppIDFastFail(t *testing.T) {
 	}
 }
 
-func TestFindUserIDByFeishuUnionID_HappyPath(t *testing.T) {
+func TestFindUserIDByPlatformSubject_HappyPath(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	ids := DefaultDevFixtureIDs()
@@ -130,31 +130,31 @@ func TestFindUserIDByFeishuUnionID_HappyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	userID, err := New(db).FindUserIDByFeishuUnionID(ctx, "ou_feishu_admin")
+	userID, err := New(db).FindUserIDByPlatformSubject(ctx, "feishu", "ou_feishu_admin")
 	if err != nil {
-		t.Fatalf("FindUserIDByFeishuUnionID: %v", err)
+		t.Fatalf("FindUserIDByPlatformSubject: %v", err)
 	}
 	if userID != ids.UserID {
 		t.Errorf("user_id = %q, want %q", userID, ids.UserID)
 	}
 }
 
-// TestFindUserIDByFeishuUnionID_UnknownReturnsTypedError lets the
-// visibility gate branch on ErrUnknownFeishuUser.
-func TestFindUserIDByFeishuUnionID_UnknownReturnsTypedError(t *testing.T) {
+// TestFindUserIDByPlatformSubject_UnknownReturnsTypedError lets the
+// visibility gate branch on ErrUnknownPlatformUser.
+func TestFindUserIDByPlatformSubject_UnknownReturnsTypedError(t *testing.T) {
 	db := openTestDB(t)
-	_, err := New(db).FindUserIDByFeishuUnionID(context.Background(), "ou_does_not_exist_anywhere")
-	if !errors.Is(err, ErrUnknownFeishuUser) {
-		t.Fatalf("expected ErrUnknownFeishuUser, got %v", err)
+	_, err := New(db).FindUserIDByPlatformSubject(context.Background(), "feishu", "ou_does_not_exist_anywhere")
+	if !errors.Is(err, ErrUnknownPlatformUser) {
+		t.Fatalf("expected ErrUnknownPlatformUser, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "ou_does_not_exist_anywhere") {
-		t.Errorf("error must echo union_id for debug; got %q", err)
+		t.Errorf("error must echo subject for debug; got %q", err)
 	}
 }
 
-// TestFindUserIDByFeishuUnionID_OtherProviderIgnored: only
-// provider='feishu' identities should match.
-func TestFindUserIDByFeishuUnionID_OtherProviderIgnored(t *testing.T) {
+// TestFindUserIDByPlatformSubject_OtherProviderIgnored: a subject linked
+// under one provider must be invisible to a lookup keyed on another.
+func TestFindUserIDByPlatformSubject_OtherProviderIgnored(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	ids := DefaultDevFixtureIDs()
@@ -171,7 +171,7 @@ func TestFindUserIDByFeishuUnionID_OtherProviderIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := New(db).FindUserIDByFeishuUnionID(ctx, subject); !errors.Is(err, ErrUnknownFeishuUser) {
+	if _, err := New(db).FindUserIDByPlatformSubject(ctx, "feishu", subject); !errors.Is(err, ErrUnknownPlatformUser) {
 		t.Errorf("expected oidc-only subject to be invisible to feishu lookup, got %v", err)
 	}
 }
