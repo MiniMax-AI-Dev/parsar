@@ -18,8 +18,14 @@ import (
 // unusedStore satisfies router.Store via a nil embedded interface: any method
 // call panics. The skip-path tests assert routing is short-circuited before
 // router.HandleInbound, so the store must never be touched — a panic here is a
-// loud test failure.
+// loud test failure. HasThreadInboundHistory is the one real method: the mention
+// gate consults it on every group message, and a no-history (false) answer keeps
+// the skip-path tests exercising the mention-required branch.
 type unusedStore struct{ router.Store }
+
+func (unusedStore) HasThreadInboundHistory(context.Context, string, string, string) (bool, error) {
+	return false, nil
+}
 
 // --- fixtures: event_callback envelopes the adapter's Normalize accepts ------
 
@@ -45,6 +51,15 @@ const reactionEnvelope = `{
   "type":"event_callback","team_id":"T1","api_app_id":"A123",
   "event":{"type":"reaction_added","user":"U8","reaction":"thumbsup",
     "item":{"type":"message","channel":"C1","ts":"1700000000.000100"}}
+}`
+
+// channelThreadReply is a public-channel message with no @mention that lands in
+// an existing thread (thread_ts set) — the reply the history-backed continuation
+// gate must admit once the bot was activated in that thread.
+const channelThreadReply = `{
+  "type":"event_callback","team_id":"T1","api_app_id":"A123",
+  "event":{"type":"message","user":"U7","text":"more please","ts":"1700000012.000300",
+    "thread_ts":"1700000009.000000","channel":"C5","channel_type":"channel","event_ts":"1700000012.000300"}
 }`
 
 func newTestRunner(t *testing.T) *Runner {
@@ -335,5 +350,75 @@ func TestPostToResponseURL_PostsJSONBody(t *testing.T) {
 	defer fail.Close()
 	if err := postToResponseURL(context.Background(), fail.URL, body); err == nil {
 		t.Fatal("a non-2xx response_url status must surface as an error")
+	}
+}
+
+// --- thread continuation -----------------------------------------------------
+
+// errRoutingReached is the sentinel a threadHistoryStore returns from the first
+// routing lookup, so a test can prove the mention gate admitted a non-@ message
+// (routing was entered) without standing up a full routing store.
+var errRoutingReached = errors.New("routing reached")
+
+// threadHistoryStore admits a non-@ message past the mention gate by reporting
+// thread history, then halts HandleInbound at its first store lookup
+// (FindUserIDByPlatformSubject) with errRoutingReached — network-free proof that
+// the gate passed. Every other router.Store method panics via the nil embed.
+type threadHistoryStore struct {
+	router.Store
+	hasHistory bool
+	sawLookup  bool
+}
+
+func (s *threadHistoryStore) HasThreadInboundHistory(_ context.Context, _, _, _ string) (bool, error) {
+	return s.hasHistory, nil
+}
+
+func (s *threadHistoryStore) FindUserIDByPlatformSubject(_ context.Context, _, _ string) (string, error) {
+	s.sawLookup = true
+	return "", errRoutingReached
+}
+
+func newRunnerWithStore(t *testing.T, st router.Store) *Runner {
+	t.Helper()
+	r, err := New(Config{
+		BotToken: "xoxb-test",
+		AppToken: "xapp-test",
+		Channel:  slackchannel.New(slackchannel.Config{AppID: "A123", BotToken: "xoxb-test", AppToken: "xapp-test"}),
+		Store:    st,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	r.botUserID = "UBOT"
+	return r
+}
+
+// TestHandleEvent_ContinuesActivatedThread: a non-@ reply in a thread the bot was
+// already activated in (history present) skips the mention gate and enters
+// routing — aligning Slack with the Feishu 话题续聊 rule.
+func TestHandleEvent_ContinuesActivatedThread(t *testing.T) {
+	st := &threadHistoryStore{hasHistory: true}
+	r := newRunnerWithStore(t, st)
+	err := r.handleEvent(context.Background(), []byte(channelThreadReply))
+	if !errors.Is(err, errRoutingReached) {
+		t.Fatalf("a non-@ reply in an activated thread must reach routing, got err=%v", err)
+	}
+	if !st.sawLookup {
+		t.Fatal("expected routing to be entered (FindUserIDByPlatformSubject called)")
+	}
+}
+
+// TestHandleEvent_SkipsThreadWithoutHistory: the same thread reply, but with no
+// prior activation, still requires an @mention — the gate drops it before
+// routing.
+func TestHandleEvent_SkipsThreadWithoutHistory(t *testing.T) {
+	st := &threadHistoryStore{hasHistory: false}
+	r := newRunnerWithStore(t, st)
+	if err := r.handleEvent(context.Background(), []byte(channelThreadReply)); err != nil {
+		t.Fatalf("handleEvent: %v", err)
+	}
+	if st.sawLookup {
+		t.Fatal("a thread with no prior history must not route a non-@ reply")
 	}
 }

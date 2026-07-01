@@ -24,9 +24,10 @@
 // round-trip via the adapter's Reply transport. Component (button / select /
 // modal) deliveries route through the adapter's HandleAction; the rendered card
 // is sent back via InteractionRespond. discordgo owns reconnection, so a dropped
-// socket resumes without runner involvement. Thread continuation without a fresh
-// @mention is deferred (history lookup is nil here), so group/channel messages
-// always require an explicit @mention. The MESSAGE_CONTENT gateway intent is
+// socket resumes without runner involvement. Thread continuation is enabled: a
+// Discord thread is itself a channel, so a follow-up in a thread the bot was
+// already activated in routes without a fresh @mention (history-backed, mirroring
+// the Feishu 话题 path). The MESSAGE_CONTENT gateway intent is
 // privileged and must be enabled in the Discord Developer Portal or message
 // bodies arrive empty.
 package discordrunner
@@ -58,9 +59,12 @@ const maxSeen = 4096
 // gatewayIntents is the privileged-aware intent set the runner identifies with:
 // guild + DM message delivery, plus MESSAGE_CONTENT so the bot actually receives
 // message bodies (without it content arrives empty for non-mention messages).
+// IntentGuilds populates the session's channel/thread State cache so thread
+// continuation can classify a channel id without a REST round-trip.
 // MESSAGE_CONTENT is a privileged intent and must be toggled on in the Discord
 // Developer Portal for the bot.
-const gatewayIntents = discordgo.IntentGuildMessages |
+const gatewayIntents = discordgo.IntentGuilds |
+	discordgo.IntentGuildMessages |
 	discordgo.IntentDirectMessages |
 	discordgo.IntentMessageContent
 
@@ -102,6 +106,14 @@ type Runner struct {
 	// method value assigns directly.
 	respond func(i *discordgo.Interaction, resp *discordgo.InteractionResponse, opts ...discordgo.RequestOption) error
 
+	// isThread reports whether a channel id refers to a Discord thread (public /
+	// private / news thread) rather than a regular channel. A thread's own id is
+	// the stable session key, so a message in it carries the thread as its root —
+	// grouping every follow-up into one conversation without a re-@mention. Pulled
+	// out as a field so tests inject a deterministic classifier; New wires the
+	// session-State-backed resolver.
+	isThread func(channelID string) bool
+
 	mu   sync.Mutex
 	seen map[string]struct{}
 }
@@ -140,7 +152,30 @@ func New(cfg Config) (*Runner, error) {
 		respond:   session.InteractionRespond,
 		seen:      make(map[string]struct{}),
 	}
+	r.isThread = r.channelIsThread
 	return r, nil
+}
+
+// channelIsThread classifies a Discord channel id as a thread (public / private
+// / news thread) or not, preferring the session's State cache (populated by the
+// IntentGuilds intent) and falling back to a REST lookup on a cache miss. A
+// lookup failure classifies as not-a-thread so the mention gate stays strict
+// rather than admitting a non-mention message on a bad read.
+func (r *Runner) channelIsThread(channelID string) bool {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return false
+	}
+	if r.session.State != nil {
+		if ch, err := r.session.State.Channel(channelID); err == nil && ch != nil {
+			return ch.IsThread()
+		}
+	}
+	ch, err := r.session.Channel(channelID)
+	if err != nil || ch == nil {
+		return false
+	}
+	return ch.IsThread()
 }
 
 // Run resolves the bot identity (once, if not pre-set), registers the gateway
@@ -228,9 +263,15 @@ func (r *Runner) handleMessage(ctx context.Context, payload []byte) error {
 	if gateway.IsSelfSender(event, r.botUserID) {
 		return nil
 	}
-	// Group/channel messages must @mention the bot. hist is nil in 5c, so thread
-	// continuation without a mention is not yet auto-admitted.
-	if gateway.ShouldSkipGroupWithoutMention(ctx, nil, event, r.botUserID) {
+	// A Discord thread is itself a channel: a message in it carries the thread as
+	// channel_id. Stamping that id into the root slot gives every message in the
+	// thread a shared ThreadKey, so the activating @mention and its follow-ups
+	// group into one conversation and history-backed continuation can match.
+	r.enrichThread(&event)
+	// Group/channel messages must @mention the bot, unless the message lands in a
+	// thread the bot was already activated in — then it's a 话题续聊 and no fresh
+	// @mention is required (mirrors the Feishu path).
+	if gateway.ShouldSkipGroupWithoutMention(ctx, discordThreadHist{r.store}, event, r.botUserID) {
 		return nil
 	}
 	outcome, err := router.HandleInbound(ctx, r.store, r.host, event, r.reply, nil, r.gateCfg)
@@ -242,6 +283,40 @@ func (r *Runner) handleMessage(ctx context.Context, payload []byte) error {
 		"accepted", outcome.Accepted,
 		"reason", outcome.Reason)
 	return nil
+}
+
+// enrichThread stamps a Discord thread channel's own id into the event's thread
+// and root slots. It runs before the mention gate so both the activating
+// @mention and later follow-ups in the thread share a ThreadKey (the thread id),
+// which is what history-backed continuation and conversation grouping key on. It
+// is a no-op for DMs, for a message already carrying a thread id, and for a
+// regular (non-thread) channel — there each message stays its own root, so a
+// plain-channel reply still needs an explicit @mention.
+func (r *Runner) enrichThread(event *gateway.InboundEvent) {
+	if event == nil || r.isThread == nil {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(event.ChatType), "dm") {
+		return
+	}
+	channelID := strings.TrimSpace(event.ExternalChatID)
+	if channelID == "" || strings.TrimSpace(event.ExternalRootID) != "" {
+		return
+	}
+	if !r.isThread(channelID) {
+		return
+	}
+	event.ExternalThreadID = channelID
+	event.ExternalRootID = channelID
+}
+
+// discordThreadHist binds the runner's store to the discord platform so the
+// neutral gate's platform-agnostic ThreadHistoryLookup resolves 话题续聊 history
+// against discord conversations only.
+type discordThreadHist struct{ store router.Store }
+
+func (h discordThreadHist) HasThreadInboundHistory(ctx context.Context, externalChatID, threadKey string) (bool, error) {
+	return h.store.HasThreadInboundHistory(ctx, string(channel.PlatformDiscord), externalChatID, threadKey)
 }
 
 // handleInteraction is the pure dispatch core for component/modal callbacks: it

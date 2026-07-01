@@ -33,6 +33,9 @@ type Store interface {
 	// queued/running run on that conversation.
 	FindConversationByExternalRef(ctx context.Context, gateway, externalChatID, externalThreadID string) (string, error)
 	CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]store.SupersededRun, error)
+	// Backs the "已激活话题续聊不必再 @" rule: reports whether the bot has
+	// previously accepted an inbound message in this (platform, chat, thread).
+	HasThreadInboundHistory(ctx context.Context, platform, externalChatID, threadKey string) (bool, error)
 }
 
 type ReplyFunc func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error

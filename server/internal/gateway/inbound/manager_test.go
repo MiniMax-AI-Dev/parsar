@@ -562,6 +562,12 @@ func (f *inboundFakeStore) HasFeishuThreadInboundHistory(_ context.Context, _, _
 	return f.threadHistory, nil
 }
 
+func (f *inboundFakeStore) HasThreadInboundHistory(_ context.Context, _, _, _ string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.threadHistory, nil
+}
+
 // ResolveAgentNameForConversation is the no-op stub for the title-
 // fallback path used by patch + immediate-reply notice paths.
 // Tests that care can populate inboundFakeStore.agentNameByConversation;

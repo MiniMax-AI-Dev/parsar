@@ -13,11 +13,12 @@
 // the bot id. Like Feishu/Slack this is a pure decode: bot-loop and mention
 // gating are the shared manager's policy, not the adapter's.
 //
-// Thread handling is deferred (Capabilities.Threads is false in 5a): a Discord
-// thread is itself a channel, so a message posted in a thread already carries the
-// thread as its channel_id and routes correctly without a separate
-// ExternalThreadID. Filling the thread/root slots (so ThreadKey groups a thread
-// on its parent) lands when native thread creation is enabled.
+// Normalize stays a pure decoder and does NOT classify threads: a message in a
+// thread already carries the thread as its channel_id, so it routes correctly on
+// channel_id alone. Populating the thread/root slots (so ThreadKey groups a
+// thread's follow-ups for no-@mention continuation) needs the live session to
+// tell a thread channel from a regular one, so it lives in the runner's
+// enrichThread step, not here.
 package discord
 
 import (
