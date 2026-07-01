@@ -20,7 +20,7 @@ const KEY_CONNECTORS = (workspaceID: string) =>
 
 /* --- Wire types --------------------------------------------------------- */
 
-export type ConnectorPlatform = "feishu" | "slack" | "discord"
+export type ConnectorPlatform = "feishu" | "slack" | "discord" | "teams"
 
 /** One decoded row from workspace_im_connectors. `config` holds the *_ref
  *  UUIDs + non-secret fields; column fields (app_id/enabled) are hoisted. */
@@ -72,6 +72,14 @@ export interface DiscordConnectorInput {
   bot_token_ref: string
   public_key_ref: string
   intents: string
+}
+
+/** Teams connector PATCH body — mirrors updateWorkspaceTeamsConnectorBody. */
+export interface TeamsConnectorInput {
+  enabled: boolean
+  app_id: string
+  app_password_ref: string
+  tenant_id: string
 }
 
 /** Feishu connector PATCH body — mirrors updateWorkspaceFeishuConnectorBody. */
@@ -152,6 +160,10 @@ export function useUpdateWorkspaceFeishuConnector(workspaceID: string | null) {
   return useUpdateConnector<FeishuConnectorInput>(workspaceID, "feishu")
 }
 
+export function useUpdateWorkspaceTeamsConnector(workspaceID: string | null) {
+  return useUpdateConnector<TeamsConnectorInput>(workspaceID, "teams")
+}
+
 /* --- Config extractors -------------------------------------------------- */
 //
 // Pull a single platform's persisted config out of the connectors list. Each
@@ -197,6 +209,19 @@ export function readDiscordConnector(
     bot_token_ref: configString(conn.config, "bot_token_ref"),
     public_key_ref: configString(conn.config, "public_key_ref"),
     intents: configString(conn.config, "intents"),
+  }
+}
+
+export function readTeamsConnector(
+  connectors: WorkspaceConnector[] | undefined,
+): TeamsConnectorInput | undefined {
+  const conn = pickConnector(connectors, "teams")
+  if (!conn) return undefined
+  return {
+    enabled: conn.enabled,
+    app_id: conn.app_id,
+    app_password_ref: configString(conn.config, "app_password_ref"),
+    tenant_id: configString(conn.config, "tenant_id"),
   }
 }
 

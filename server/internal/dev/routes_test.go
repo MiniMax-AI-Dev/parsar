@@ -4161,3 +4161,7 @@ func (stubRuntimeStore) UpsertWorkspaceDiscordConnector(ctx context.Context, inp
 func (stubRuntimeStore) UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
 	return store.WorkspaceConnectorChange{}, nil
 }
+
+func (stubRuntimeStore) UpsertWorkspaceTeamsConnector(ctx context.Context, input store.UpsertWorkspaceTeamsConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	return store.WorkspaceConnectorChange{}, nil
+}

@@ -2604,7 +2604,8 @@
         "options": {
           "feishu": "Feishu",
           "slack": "Slack",
-          "discord": "Discord"
+          "discord": "Discord",
+          "teams": "Microsoft Teams"
         }
       },
       "feishu": {
@@ -2744,6 +2745,40 @@
           "appIdInUse": "This Discord application ID is already bound to another workspace.",
           "incomplete": "The Discord connector is incomplete. Fill in all required fields.",
           "generic": "Failed to save the Discord connector. Please try again."
+        }
+      },
+      "teams": {
+        "title": "Microsoft Teams connector",
+        "description": "Bind one Teams bot for this workspace. All agents reachable from this workspace share this bot.",
+        "saved": "Teams connector saved.",
+        "docLink": {
+          "label": "Register a bot in the Azure Bot / App registrations portal",
+          "href": "https://portal.azure.com"
+        },
+        "fields": {
+          "enabled": {
+            "label": "Enabled",
+            "hint": "Turn on to route Teams messages through this bot.",
+            "toggle": "Enable Teams bot"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "Azure App registrations → your app → Application (client) ID."
+          },
+          "appPassword": {
+            "label": "App password",
+            "hint": "Azure App registrations → Certificates & secrets → Client secret value. Stored encrypted.",
+            "savedHint": "A saved app password is in place (Certificates & secrets → Client secret). Enter a new value to replace it."
+          },
+          "tenantId": {
+            "label": "Tenant ID",
+            "hint": "Optional. Directory (tenant) ID for a single-tenant bot; leave empty for a multi-tenant (botframework.com) bot."
+          }
+        },
+        "errors": {
+          "appIdInUse": "This Teams app ID is already bound to another workspace.",
+          "incomplete": "The Teams connector is incomplete. Fill in all required fields.",
+          "generic": "Failed to save the Teams connector. Please try again."
         }
       }
     }

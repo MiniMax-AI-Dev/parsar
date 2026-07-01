@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ============================================================
@@ -35,6 +35,8 @@ var (
 	ErrSlackAppIDInUse            = errors.New("another workspace has already registered this Slack bot app_id")
 	ErrDiscordConnectorIncomplete = errors.New("discord connector enabled requires app_id and bot_token_ref")
 	ErrDiscordAppIDInUse          = errors.New("another workspace has already registered this Discord bot app_id")
+	ErrTeamsConnectorIncomplete   = errors.New("teams connector enabled requires app_id and app_password_ref")
+	ErrTeamsAppIDInUse            = errors.New("another workspace has already registered this Teams bot app_id")
 )
 
 // WorkspaceConnectorChange 是三个 Upsert 方法的统一返回值。Config 已去掉
@@ -104,6 +106,28 @@ func (s WorkspaceDiscordConnectorSnapshot) toConfigMap() map[string]any {
 	}
 }
 
+// WorkspaceTeamsConnectorSnapshot mirrors a Teams connector's config plus its
+// column fields. app_password_ref points at the AAD client secret used to mint
+// the outbound Connector bearer; tenant_id is non-secret (empty = multi-tenant
+// botframework.com authority).
+type WorkspaceTeamsConnectorSnapshot struct {
+	Enabled        bool   `json:"enabled"`
+	AppID          string `json:"app_id"`
+	AppPasswordRef string `json:"app_password_ref"`
+	TenantID       string `json:"tenant_id"`
+}
+
+func (s WorkspaceTeamsConnectorSnapshot) isZero() bool {
+	return !s.Enabled && s.AppID == "" && s.AppPasswordRef == "" && s.TenantID == ""
+}
+
+func (s WorkspaceTeamsConnectorSnapshot) toConfigMap() map[string]any {
+	return map[string]any{
+		"app_password_ref": s.AppPasswordRef,
+		"tenant_id":        s.TenantID,
+	}
+}
+
 // WorkspaceFeishuConnectorSnapshot mirrors a Feishu connector's config plus
 // column fields. Distinct from the agent-dimension FeishuConnectorSnapshot.
 type WorkspaceFeishuConnectorSnapshot struct {
@@ -161,6 +185,14 @@ type UpsertWorkspaceDiscordConnectorInput struct {
 	BotTokenRef  string
 	PublicKeyRef string // optional — interactions endpoint verification
 	Intents      string // optional non-secret gateway intents bitmask/list
+}
+
+type UpsertWorkspaceTeamsConnectorInput struct {
+	WorkspaceID    string
+	Enabled        bool
+	AppID          string // microsoft app id
+	AppPasswordRef string // AAD client secret ref
+	TenantID       string // optional — empty = multi-tenant botframework.com
 }
 
 type UpsertWorkspaceFeishuConnectorInput struct {
@@ -235,6 +267,32 @@ func (s *Store) UpsertWorkspaceDiscordConnector(ctx context.Context, input Upser
 		config:      snap.toConfigMap(),
 		actorID:     actorID,
 		appIDInUse:  ErrDiscordAppIDInUse,
+	})
+}
+
+// UpsertWorkspaceTeamsConnector writes the Teams connector for a workspace.
+// When Enabled, app_id + app_password_ref are required → ErrTeamsConnectorIncomplete.
+// app_id collisions across workspaces surface as ErrTeamsAppIDInUse.
+func (s *Store) UpsertWorkspaceTeamsConnector(ctx context.Context, input UpsertWorkspaceTeamsConnectorInput, actorID string) (WorkspaceConnectorChange, error) {
+	snap := WorkspaceTeamsConnectorSnapshot{
+		Enabled:        input.Enabled,
+		AppID:          strings.TrimSpace(input.AppID),
+		AppPasswordRef: strings.TrimSpace(input.AppPasswordRef),
+		TenantID:       strings.TrimSpace(input.TenantID),
+	}
+	if snap.Enabled {
+		if snap.AppID == "" || snap.AppPasswordRef == "" {
+			return WorkspaceConnectorChange{}, ErrTeamsConnectorIncomplete
+		}
+	}
+	return s.upsertWorkspaceConnector(ctx, workspaceConnectorUpsert{
+		platform:    "teams",
+		workspaceID: input.WorkspaceID,
+		appID:       snap.AppID,
+		enabled:     snap.Enabled,
+		config:      snap.toConfigMap(),
+		actorID:     actorID,
+		appIDInUse:  ErrTeamsAppIDInUse,
 	})
 }
 

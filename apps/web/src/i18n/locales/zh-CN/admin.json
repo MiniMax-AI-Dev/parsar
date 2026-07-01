@@ -2604,7 +2604,8 @@
         "options": {
           "feishu": "飞书",
           "slack": "Slack",
-          "discord": "Discord"
+          "discord": "Discord",
+          "teams": "Microsoft Teams"
         }
       },
       "feishu": {
@@ -2744,6 +2745,40 @@
           "appIdInUse": "该 Discord Application ID 已绑定到另一个工作区。",
           "incomplete": "Discord 连接器信息不完整,请填写所有必填项。",
           "generic": "保存 Discord 连接器失败,请重试。"
+        }
+      },
+      "teams": {
+        "title": "Microsoft Teams 连接器",
+        "description": "为本工作区绑定一个 Teams 机器人。从本工作区可达的所有 Agent 共用此机器人。",
+        "saved": "Teams 连接器已保存。",
+        "docLink": {
+          "label": "前往 Azure 门户注册 Bot / 应用",
+          "href": "https://portal.azure.com"
+        },
+        "fields": {
+          "enabled": {
+            "label": "启用",
+            "hint": "开启后,Teams 消息将通过此机器人路由。",
+            "toggle": "启用 Teams 机器人"
+          },
+          "appId": {
+            "label": "App ID",
+            "hint": "Azure「应用注册」→ 你的应用 → 应用程序(客户端) ID。"
+          },
+          "appPassword": {
+            "label": "应用密码",
+            "hint": "Azure「应用注册」→ 证书和密码 → 客户端密码值。加密存储。",
+            "savedHint": "已保存应用密码(证书和密码 → 客户端密码)。如需更换请输入新值。"
+          },
+          "tenantId": {
+            "label": "租户 ID",
+            "hint": "可选。单租户机器人填目录(租户) ID;多租户(botframework.com)机器人留空。"
+          }
+        },
+        "errors": {
+          "appIdInUse": "该 Teams App ID 已绑定到另一个工作区。",
+          "incomplete": "Teams 连接器信息不完整,请填写所有必填项。",
+          "generic": "保存 Teams 连接器失败,请重试。"
         }
       }
     }
