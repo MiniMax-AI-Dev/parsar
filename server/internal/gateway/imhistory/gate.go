@@ -21,6 +21,7 @@ package imhistory
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -64,6 +65,11 @@ func (o Options) withDefaults() Options {
 type Gate struct {
 	opts Options
 
+	// log is the timing/diagnostic sink. nil means silent — the production
+	// wiring in cmd/server sets it so we can attribute slow requests to
+	// sandbox startup vs Feishu rate-limit retry without changing tests.
+	log *slog.Logger
+
 	// now/sleep are injected so tests drive cache expiry and retry backoff
 	// without wall-clock waits.
 	now   func() time.Time
@@ -90,6 +96,10 @@ func New(opts Options) *Gate {
 	}
 }
 
+// SetLogger attaches a structured logger used for per-request timing and
+// retry diagnostics. nil disables logging; safe to call once during boot.
+func (g *Gate) SetLogger(l *slog.Logger) { g.log = l }
+
 // Fetch runs req through f under the Gate's guarantees. platform scopes the
 // cache + serialization key so two platforms with the same chat id never
 // collide. The returned result is the adapter's own (already oldest-first,
@@ -98,8 +108,13 @@ func (g *Gate) Fetch(ctx context.Context, platform channel.Platform, f channel.H
 	key := cacheKey(platform, req)
 
 	if res, ok := g.cacheGet(key); ok {
+		if g.log != nil {
+			g.log.Debug("imhistory: cache hit", "platform", platform, "chat", req.ExternalChatID)
+		}
 		return res, nil
 	}
+
+	start := g.now()
 
 	// Serialize same-chat requests: hold the per-chat lock across the fetch so
 	// concurrent callers queue instead of bursting the platform.
@@ -110,10 +125,29 @@ func (g *Gate) Fetch(ctx context.Context, platform channel.Platform, f channel.H
 	// Double-check: a request we queued behind may have just populated the
 	// cache while we waited for the lock.
 	if res, ok := g.cacheGet(key); ok {
+		if g.log != nil {
+			g.log.Debug("imhistory: cache hit after lock wait", "platform", platform, "chat", req.ExternalChatID, "lock_wait", g.now().Sub(start))
+		}
 		return res, nil
 	}
 
-	res, err := g.fetchWithRetry(ctx, f, req)
+	res, retries, totalSleep, err := g.fetchWithRetry(ctx, f, req)
+	if g.log != nil {
+		attrs := []any{
+			"platform", platform,
+			"chat", req.ExternalChatID,
+			"thread", req.ExternalThreadID,
+			"elapsed", g.now().Sub(start),
+			"retries", retries,
+			"total_sleep", totalSleep,
+		}
+		if err != nil {
+			attrs = append(attrs, "err", err)
+			g.log.Warn("imhistory: fetch failed", attrs...)
+		} else {
+			g.log.Info("imhistory: fetch ok", attrs...)
+		}
+	}
 	if err != nil {
 		return channel.FetchHistoryResult{}, err
 	}
@@ -124,27 +158,38 @@ func (g *Gate) Fetch(ctx context.Context, platform channel.Platform, f channel.H
 // fetchWithRetry calls f, absorbing rate-limit errors by sleeping the suggested
 // Retry-After (capped by MaxBackoff) and retrying up to MaxRetries times. Any
 // non-rate-limit error is returned immediately; ctx cancellation aborts the
-// wait.
-func (g *Gate) fetchWithRetry(ctx context.Context, f channel.HistoryFetcher, req channel.FetchHistoryRequest) (channel.FetchHistoryResult, error) {
-	var lastErr error
+// wait. Returns (result, retries, totalSleep, err) so callers can attribute
+// slow requests to rate-limit backoff.
+func (g *Gate) fetchWithRetry(ctx context.Context, f channel.HistoryFetcher, req channel.FetchHistoryRequest) (channel.FetchHistoryResult, int, time.Duration, error) {
+	var (
+		lastErr    error
+		retries    int
+		totalSleep time.Duration
+	)
 	for attempt := 0; attempt <= g.opts.MaxRetries; attempt++ {
 		res, err := f.FetchHistory(ctx, req)
 		if err == nil {
-			return res, nil
+			return res, retries, totalSleep, nil
 		}
 		var rl *channel.RateLimitedError
 		if !errors.As(err, &rl) {
-			return channel.FetchHistoryResult{}, err
+			return channel.FetchHistoryResult{}, retries, totalSleep, err
 		}
 		lastErr = err
 		if attempt == g.opts.MaxRetries {
 			break
 		}
-		if werr := g.sleep(ctx, capBackoff(rl.RetryAfter, g.opts.MaxBackoff)); werr != nil {
-			return channel.FetchHistoryResult{}, werr
+		wait := capBackoff(rl.RetryAfter, g.opts.MaxBackoff)
+		if g.log != nil {
+			g.log.Debug("imhistory: 429 retry", "platform", rl.Platform, "retry_after", rl.RetryAfter, "capped", wait, "attempt", attempt+1, "max", g.opts.MaxRetries)
 		}
+		if werr := g.sleep(ctx, wait); werr != nil {
+			return channel.FetchHistoryResult{}, retries, totalSleep, werr
+		}
+		retries++
+		totalSleep += wait
 	}
-	return channel.FetchHistoryResult{}, lastErr
+	return channel.FetchHistoryResult{}, retries, totalSleep, lastErr
 }
 
 func (g *Gate) lockFor(key string) *sync.Mutex {

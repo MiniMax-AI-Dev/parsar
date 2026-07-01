@@ -702,11 +702,13 @@ func main() {
 		// endpoint skipped (the tool injection is likewise skipped). The Gate
 		// supplies the never-fail guarantees (serialize + retry + cache).
 		if imHistorySigner != nil {
+			imHistoryGate := imhistory.New(imhistory.Options{})
+			imHistoryGate.SetLogger(log.With("component", "imhistory"))
 			imhistoryapi.RegisterRoutes(r, imhistoryapi.Deps{
 				Store:    dbStore,
 				Resolver: imHistoryResolver,
 				Signer:   imHistorySigner,
-				Gate:     imhistory.New(imhistory.Options{}),
+				Gate:     imHistoryGate,
 			})
 			log.Bg().Info("im history endpoint mounted", "path", "/internal/im/history")
 		}
