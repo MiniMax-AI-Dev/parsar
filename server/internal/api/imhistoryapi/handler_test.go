@@ -105,8 +105,10 @@ func TestFetch_HappyPath(t *testing.T) {
 	if got.Messages[0].CreatedAt == "" {
 		t.Fatal("CreatedAt must be RFC3339, got empty")
 	}
-	// Routing tuple + limit reached the fetcher.
-	if ff.gotReq.ExternalChatID != "oc_1" || ff.gotReq.ExternalThreadID != "om_root" || ff.gotReq.Limit != 10 {
+	// Routing tuple + limit reached the fetcher. ExternalThreadID must be
+	// empty even when the conversation ref has one — the on-demand tool
+	// always pulls group-chat history, not thread-scoped.
+	if ff.gotReq.ExternalChatID != "oc_1" || ff.gotReq.ExternalThreadID != "" || ff.gotReq.Limit != 10 {
 		t.Fatalf("fetcher req = %+v", ff.gotReq)
 	}
 	if res.gotRef.SourceAppID != "cli_x" {

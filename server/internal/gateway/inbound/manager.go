@@ -738,7 +738,14 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 		metadata["attachments"] = att
 	}
 
-	threadID := inbound.ReplyAnchorMessageID()
+	// Use ThreadKey (root/anchor) — NOT ReplyAnchorMessageID — for the
+	// conversation dedupe key. ReplyAnchorMessageID intentionally returns
+	// the inbound's own MessageID to dodge the Feishu reply-fanout bug,
+	// but feeding that into external_thread_id makes every reply look
+	// like a fresh conversation. ThreadKey() matches what FindConversationByExternalRef
+	// (manager.go:928) already queries with, so replies inside the same
+	// 话题 fold back into the original conversation.
+	threadID := inbound.ThreadKey()
 	created, err := m.store.CreateInboundIMMessage(ctx, store.CreateInboundIMMessageInput{
 		ConversationTitle: sharedrouter.ConversationTitle(decision.NormalizedText),
 		Text:              decision.NormalizedText,
