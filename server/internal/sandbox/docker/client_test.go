@@ -321,3 +321,47 @@ func TestKillToleratesMissingContainer(t *testing.T) {
 		t.Fatalf("expected nil error when container already gone, got %v", err)
 	}
 }
+
+func TestCreateAppliesResourceLimitsWhenSet(t *testing.T) {
+	var got recordedCall
+	fake := &fakeRunner{handler: func(call recordedCall) (execResult, error) {
+		got = call
+		return execResult{Stdout: "cid\n"}, nil
+	}}
+	client := &Client{
+		Image:     "img",
+		Memory:    "2g",
+		CPUs:      "1.5",
+		PidsLimit: "512",
+		runner:    fake.run,
+	}
+	if _, err := client.Create(context.Background(), e2b.CreateInput{}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	joined := strings.Join(got.Args, " ")
+	for _, want := range []string{"--memory 2g", "--cpus 1.5", "--pids-limit 512"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected %q in args, got %v", want, got.Args)
+		}
+	}
+}
+
+func TestCreateOmitsResourceLimitsWhenUnset(t *testing.T) {
+	// Defaults must be byte-for-byte unchanged: no limit flags unless the
+	// operator opts in via env.
+	var got recordedCall
+	fake := &fakeRunner{handler: func(call recordedCall) (execResult, error) {
+		got = call
+		return execResult{Stdout: "cid\n"}, nil
+	}}
+	client := &Client{Image: "img", runner: fake.run}
+	if _, err := client.Create(context.Background(), e2b.CreateInput{}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	joined := strings.Join(got.Args, " ")
+	for _, unwanted := range []string{"--memory", "--cpus", "--pids-limit"} {
+		if strings.Contains(joined, unwanted) {
+			t.Fatalf("expected no %q flag when unset, got %v", unwanted, got.Args)
+		}
+	}
+}

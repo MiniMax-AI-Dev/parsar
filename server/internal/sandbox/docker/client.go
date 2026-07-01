@@ -33,7 +33,14 @@ type Client struct {
 	Image       string
 	Network     string
 	HostGateway bool
-	runner      runnerFunc
+	// Optional container resource limits, passed straight to `docker run`
+	// when non-empty (empty = flag omitted, docker's default). A malformed
+	// value makes `docker run` exit non-zero, which Create surfaces as an
+	// error, so no pre-validation is needed here.
+	Memory    string // --memory, e.g. "2g"
+	CPUs      string // --cpus, e.g. "1.5"
+	PidsLimit string // --pids-limit, e.g. "512"
+	runner    runnerFunc
 }
 
 func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox, error) {
@@ -43,6 +50,15 @@ func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox
 	}
 	if c.HostGateway {
 		args = append(args, "--add-host", "host.docker.internal:host-gateway")
+	}
+	if m := strings.TrimSpace(c.Memory); m != "" {
+		args = append(args, "--memory", m)
+	}
+	if cpus := strings.TrimSpace(c.CPUs); cpus != "" {
+		args = append(args, "--cpus", cpus)
+	}
+	if pids := strings.TrimSpace(c.PidsLimit); pids != "" {
+		args = append(args, "--pids-limit", pids)
 	}
 	for k, v := range input.Metadata {
 		args = append(args, "--label", k+"="+v)

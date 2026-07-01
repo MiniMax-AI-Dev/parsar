@@ -46,6 +46,8 @@ func dockerDialBackURL(serverURL string) (string, bool) {
 //   - AGENT_DAEMON_SANDBOX_DOCKER_IMAGE — local image tag to run.
 //   - AGENT_DAEMON_SANDBOX_DOCKER_NETWORK — optional docker network to join
 //     (use the compose network when the server runs as a compose service).
+//   - AGENT_DAEMON_SANDBOX_DOCKER_MEMORY / _CPUS / _PIDS_LIMIT — optional
+//     `docker run` resource caps; unset = docker defaults (unbounded).
 func buildDockerAgentDaemonSandboxProvider(
 	env func(string) string,
 	cfg config.Config,
@@ -79,11 +81,7 @@ func buildDockerAgentDaemonSandboxProvider(
 		hostGateway = false
 	}
 
-	client := &dockersandbox.Client{
-		Image:       image,
-		Network:     network,
-		HostGateway: hostGateway,
-	}
+	client := dockerClientFromEnv(env, image, network, hostGateway)
 	provider, err := connagentdaemon.NewE2BSandboxProvider(connagentdaemon.E2BProviderConfig{
 		Client:       client,
 		Store:        dbStore,
@@ -106,6 +104,24 @@ func buildDockerAgentDaemonSandboxProvider(
 		"image", image,
 		"network", network,
 		"server_url", serverURL,
-		"host_gateway", hostGateway)
+		"host_gateway", hostGateway,
+		"memory", client.Memory,
+		"cpus", client.CPUs,
+		"pids_limit", client.PidsLimit)
 	return provider
+}
+
+// dockerClientFromEnv builds the docker sandbox client, folding in the
+// optional AGENT_DAEMON_SANDBOX_DOCKER_{MEMORY,CPUS,PIDS_LIMIT} resource caps.
+// Empty env values leave the corresponding `docker run` flag off, so the
+// default (unbounded) behavior is unchanged.
+func dockerClientFromEnv(env func(string) string, image, network string, hostGateway bool) *dockersandbox.Client {
+	return &dockersandbox.Client{
+		Image:       image,
+		Network:     network,
+		HostGateway: hostGateway,
+		Memory:      strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_MEMORY")),
+		CPUs:        strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_CPUS")),
+		PidsLimit:   strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT")),
+	}
 }
