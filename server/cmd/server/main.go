@@ -371,7 +371,7 @@ func main() {
 		})
 		agentDaemonRegistry := agentdaemongateway.NewRegistry()
 		agentDaemonAuth := agentdaemongateway.NewAuthenticator(dbStore)
-		publicWSURL := buildAgentDaemonWSURL(cfg)
+		publicWSURL := resolveAgentDaemonPublicWSURL(envLookup, cfg)
 		agentDaemonPodID := resolveAgentDaemonOwnerPodID(envLookup)
 		agentDaemonOwnerURL, err := resolveAgentDaemonOwnerURL(envLookup, cfg)
 		if err != nil {
@@ -1271,6 +1271,12 @@ func buildAgentDaemonSandboxProvider(
 ) connagentdaemon.SandboxProvider {
 	if env == nil {
 		env = os.Getenv
+	}
+	// Local-docker backend short-circuit: when AGENT_DAEMON_SANDBOX_BACKEND
+	// is "docker" this returns a container-backed provider and we skip the
+	// e2b-specific API-key/CA/pod-IP wiring below entirely.
+	if p := buildDockerAgentDaemonSandboxProvider(env, cfg, dbStore, registry, binder, selfPodID); p != nil {
+		return p
 	}
 	template := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE"))
 	if template == "" {

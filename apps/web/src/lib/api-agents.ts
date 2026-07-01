@@ -42,11 +42,20 @@ const KEY_AGENT_METRICS = (
 
 /* --- Network ------------------------------------------------------------ */
 
+// The agent-list endpoint keys rows `agent_id` (store.AgentRead) but the app
+// reads `.id`; backfill it once here, the choke point feeding useAgents.
+function normalizeAgentId(a: Agent): Agent {
+  if (a.id) return a
+  const agentID = (a as Agent & { agent_id?: string }).agent_id
+  return agentID ? { ...a, id: agentID } : a
+}
+
 async function listAgents(workspaceID: string | null): Promise<ListAgentsResponse> {
   if (!workspaceID) return { agents: [] }
-  return apiRequest<ListAgentsResponse>(
+  const res = await apiRequest<ListAgentsResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents`
   )
+  return { ...res, agents: (res.agents ?? []).map(normalizeAgentId) }
 }
 
 async function listAgentRuns(
