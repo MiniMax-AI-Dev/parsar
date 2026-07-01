@@ -100,6 +100,18 @@ type Config struct {
 	// MasterKey is turned into Secrets by New when Secrets is nil.
 	MasterKey string
 
+	// IMHistoryEndpoint is the public URL of the internal on-demand
+	// chat-history endpoint (…/internal/im/history) that the auto-mounted
+	// fetch_chat_history MCP tool calls back into. Empty disables the tool
+	// injection (the agent simply won't see the tool).
+	IMHistoryEndpoint string
+
+	// IMHistoryTokenSigner mints the per-conversation bearer token the
+	// auto-mounted fetch_chat_history tool presents to IMHistoryEndpoint. It
+	// MUST sign with the same secret the endpoint verifies (both derive from
+	// the master key). Nil disables the tool injection.
+	IMHistoryTokenSigner func(conversationID string) string
+
 	// ExecutionRecorder persists the per-run execution snapshot. Nil
 	// keeps tests on the pre-snapshot behavior.
 	ExecutionRecorder ExecutionSnapshotRecorder
@@ -165,6 +177,8 @@ type Connector struct {
 	oss               OSSPresigner
 	systemMessages    CapabilitySystemMessageStore
 	sandboxBindings   SandboxBindingReader
+	imHistoryEndpoint string
+	imHistoryToken    func(conversationID string) string
 	log               *slog.Logger
 }
 
@@ -246,6 +260,8 @@ func New(cfg Config) *Connector {
 		oss:               cfg.OSS,
 		systemMessages:    cfg.SystemMessages,
 		sandboxBindings:   cfg.SandboxBindingReader,
+		imHistoryEndpoint: cfg.IMHistoryEndpoint,
+		imHistoryToken:    cfg.IMHistoryTokenSigner,
 		log:               cfg.Log,
 	}
 }

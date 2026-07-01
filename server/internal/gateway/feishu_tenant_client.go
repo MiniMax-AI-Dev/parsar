@@ -388,6 +388,15 @@ type FeishuFetchedMessage struct {
 	UpperMessageID string
 	ChatID         string
 
+	// History-projection fields: only ListMessagesByChatPage populates these
+	// (the GET-by-id path leaves them zero). CreateTime is a millisecond epoch
+	// string; SenderType "app" marks a bot-authored message.
+	RootID     string
+	ThreadID   string
+	CreateTime string
+	SenderID   string
+	SenderType string
+
 	// SubItems is non-empty only when the upstream response carries
 	// data.items beyond items[0] — Feishu's GET on a merge_forward
 	// message sometimes inlines the sub-messages here. When empty on
@@ -498,7 +507,14 @@ func (c *FeishuTenantClient) ListMessagesByChatPage(ctx context.Context, appSecr
 		ParentID       string `json:"parent_id"`
 		UpperMessageID string `json:"upper_message_id"`
 		ChatID         string `json:"chat_id"`
-		Body           struct {
+		RootID         string `json:"root_id"`
+		ThreadID       string `json:"thread_id"`
+		CreateTime     string `json:"create_time"`
+		Sender         struct {
+			ID         string `json:"id"`
+			SenderType string `json:"sender_type"`
+		} `json:"sender"`
+		Body struct {
 			Content string `json:"content"`
 		} `json:"body"`
 	}
@@ -528,6 +544,11 @@ func (c *FeishuTenantClient) ListMessagesByChatPage(ctx context.Context, appSecr
 			ParentID:       strings.TrimSpace(r.ParentID),
 			UpperMessageID: strings.TrimSpace(r.UpperMessageID),
 			ChatID:         strings.TrimSpace(r.ChatID),
+			RootID:         strings.TrimSpace(r.RootID),
+			ThreadID:       strings.TrimSpace(r.ThreadID),
+			CreateTime:     strings.TrimSpace(r.CreateTime),
+			SenderID:       strings.TrimSpace(r.Sender.ID),
+			SenderType:     strings.TrimSpace(r.Sender.SenderType),
 		})
 	}
 	next := ""

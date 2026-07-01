@@ -2518,6 +2518,40 @@ limit 1`, gateway, externalChatID, externalThreadID).Scan(&id)
 	return id, nil
 }
 
+// ConversationIMRef is the platform routing tuple for a conversation: enough
+// for the history endpoint to pick the right channel adapter and target chat
+// without re-deriving it from the inbound path.
+type ConversationIMRef struct {
+	Platform         string
+	ExternalID       string // the chat/channel id
+	ExternalThreadID string // "" for a top-level conversation
+	SourceAppID      string // the bot app id this conversation is bound to
+}
+
+// GetConversationIMRef returns the platform routing tuple for an active
+// conversation. platform / external_id / external_thread_id / source_app_id are
+// first-class columns on the conversations table. Returns ErrUnknownConversation
+// when the id is unknown or soft-deleted.
+func (s *Store) GetConversationIMRef(ctx context.Context, conversationID string) (ConversationIMRef, error) {
+	conversationUUID, err := uuid(conversationID)
+	if err != nil {
+		return ConversationIMRef{}, err
+	}
+	var ref ConversationIMRef
+	err = s.db.QueryRow(ctx, `
+select platform, external_id, coalesce(external_thread_id, ''), coalesce(source_app_id, '')
+from conversations
+where id = $1
+  and deleted_at is null`, conversationUUID).Scan(&ref.Platform, &ref.ExternalID, &ref.ExternalThreadID, &ref.SourceAppID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ConversationIMRef{}, fmt.Errorf("%w: %s", ErrUnknownConversation, conversationID)
+		}
+		return ConversationIMRef{}, err
+	}
+	return ref, nil
+}
+
 // FindPendingAskByChat returns the most recently updated conversation
 // on the given chat that still has an open PromptForUserChoice slot.
 // Used by the inbound ask-pending fast path: a free-text reply that

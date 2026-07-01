@@ -19,6 +19,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 	feishuchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/feishu"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // workerTransport adapts a *Worker to the channel/feishu Transport seam. It is
@@ -58,6 +59,25 @@ func (w *Worker) channelFor(platform, sourceAppID string) (channel.Channel, bool
 	}
 	ch, ok := w.channels[channel.Platform(platform)]
 	return ch, ok
+}
+
+// HistoryFetcher resolves the live channel.HistoryFetcher for a conversation's
+// platform + bound bot, satisfying the internal history endpoint's resolver
+// seam. It reuses channelFor (Feishu built per-call from the transport, others
+// from the registry) and type-asserts the adapter to the optional
+// HistoryFetcher capability. found is false when the platform has no adapter or
+// its adapter cannot fetch history, so the endpoint degrades to an empty page
+// rather than failing.
+func (w *Worker) HistoryFetcher(_ context.Context, ref store.ConversationIMRef) (channel.HistoryFetcher, channel.Platform, bool) {
+	ch, ok := w.channelFor(ref.Platform, ref.SourceAppID)
+	if !ok || ch == nil {
+		return nil, "", false
+	}
+	hf, ok := ch.(channel.HistoryFetcher)
+	if !ok {
+		return nil, "", false
+	}
+	return hf, ch.Platform(), true
 }
 
 // OutboundSender resolves the per-bot credentials and a cached tenant client

@@ -21,6 +21,7 @@ import (
 	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
 	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/api"
+	imhistoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/imhistoryapi"
 	runtimeapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/runtime"
 	specmemapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/specmem"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
@@ -41,6 +42,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/discordrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/slackrunner"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/imhistory"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
@@ -336,6 +338,18 @@ func main() {
 	// below can wrap the agent_daemon AgentConnector as a
 	// PermissionRouter. Stays empty when dbStore is nil.
 	connectorReg := connector.NewRegistry()
+	// Shared signer for the auto-mounted fetch_chat_history tool. Hoisted to
+	// function scope so both the agent_daemon connector (mints per-conversation
+	// tokens) and the internal history endpoint (verifies them) share one
+	// master-key-derived secret. Nil ⇒ empty master key ⇒ both are skipped.
+	var imHistorySigner *imhistoryapi.Signer
+	if secret := imhistoryapi.DeriveSecret(cfg.Secret.MasterKey); secret != "" {
+		if s, err := imhistoryapi.NewSigner(secret); err != nil {
+			log.Bg().Error("im history signer init failed", "error", err)
+		} else {
+			imHistorySigner = s
+		}
+	}
 	if dbStore != nil {
 		// Shared connector registry: every AgentConnector registers
 		// under its Type() so dev router / permission decide / run
@@ -393,6 +407,16 @@ func main() {
 			RunStatusReader:   dbStore,
 			Capabilities:      dbStore,
 			MasterKey:         cfg.Secret.MasterKey,
+			// Auto-mounted fetch_chat_history tool: the endpoint URL the
+			// sandbox calls back into, plus the per-conversation token signer.
+			// Nil signer (empty master key) disables the injection.
+			IMHistoryEndpoint: cfg.BuildPublicURL("/internal/im/history"),
+			IMHistoryTokenSigner: func() func(string) string {
+				if imHistorySigner == nil {
+					return nil
+				}
+				return imHistorySigner.Token
+			}(),
 			// Spec/memory SessionStart injection. override_system_prompt
 			// still wins; nil is a no-op.
 			SpecMemory: specmemSvc,
@@ -615,6 +639,11 @@ func main() {
 	}
 	dev.RegisterRoutesWithStore(r, runtimeStore, opts...)
 
+	// imHistoryResolver is bound to the outbound worker once it is built
+	// (later in boot than routes are registered); until then the internal
+	// history endpoint reports an empty page rather than failing.
+	imHistoryResolver := &imhistoryapi.LateResolver{}
+
 	// Runtime lifecycle API: admin tree behind session middleware,
 	// runtime credential tree open at chi with Bearer auth enforced
 	// inside the package. Wired AFTER dev.RegisterRoutesWithStore so
@@ -664,6 +693,22 @@ func main() {
 				"ws_path", "/agent-daemon/ws",
 				"bootstrap_path", "/agent-daemon/bootstrap",
 				"status_path", "/agent-daemon/device-status")
+		}
+
+		// Internal on-demand chat-history endpoint the auto-mounted
+		// fetch_chat_history MCP tool calls back into. Reuses imHistorySigner
+		// (built above for the connector's token minting) so both sides share
+		// one master-key-derived secret. Nil signer ⇒ empty master key ⇒
+		// endpoint skipped (the tool injection is likewise skipped). The Gate
+		// supplies the never-fail guarantees (serialize + retry + cache).
+		if imHistorySigner != nil {
+			imhistoryapi.RegisterRoutes(r, imhistoryapi.Deps{
+				Store:    dbStore,
+				Resolver: imHistoryResolver,
+				Signer:   imHistorySigner,
+				Gate:     imhistory.New(imhistory.Options{}),
+			})
+			log.Bg().Info("im history endpoint mounted", "path", "/internal/im/history")
 		}
 	}
 
@@ -874,6 +919,10 @@ func main() {
 			log.Bg().Error("feishu outbound worker init failed", "error", err)
 			os.Exit(1)
 		} else if worker != nil {
+			// Bind the internal history endpoint to the live worker: it resolves
+			// the per-conversation channel adapter (Feishu per-call, others from
+			// the registry) and type-asserts the HistoryFetcher capability.
+			imHistoryResolver.Set(worker)
 			go func() {
 				if err := worker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 					log.Bg().Error("feishu outbound worker exited", "error", err)
