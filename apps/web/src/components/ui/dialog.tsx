@@ -38,7 +38,7 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-line bg-surface p-5 shadow-2xl shadow-slate-900/10 focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-line bg-surface p-6 shadow-[0_24px_60px_-15px_rgb(0_0_0/0.18),0_8px_24px_-8px_rgb(0_0_0/0.10)] focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
       {...props}
@@ -46,7 +46,7 @@ export const DialogContent = React.forwardRef<
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close
-          className="absolute right-3.5 top-3.5 rounded-md p-1 text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          className="absolute right-3.5 top-3.5 rounded-md p-1 text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-fg/15"
           aria-label="Close"
         >
           <X className="h-4 w-4" strokeWidth={2} />
