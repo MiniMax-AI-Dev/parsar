@@ -2485,6 +2485,10 @@ func (stubRuntimeStore) HasFeishuThreadInboundHistory(_ context.Context, _, _ st
 	return false, nil
 }
 
+func (stubRuntimeStore) HasThreadInboundHistory(_ context.Context, _, _, _ string) (bool, error) {
+	return false, nil
+}
+
 func (stubRuntimeStore) DeleteAgent(ctx context.Context, agentID string, actorID string) (store.DeleteAgentResult, int64, error) {
 	if agentID == "00000000-0000-0000-0000-000000000999" {
 		return store.DeleteAgentResult{}, 2, store.ErrInFlightAgentRuns

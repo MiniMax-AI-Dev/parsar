@@ -95,6 +95,9 @@ type Storer interface {
 	// HasFeishuThreadInboundHistory backs the "话题续聊不必再 @" rule in
 	// isGroupMessageWithoutBotMention.
 	HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadID string) (bool, error)
+	// HasThreadInboundHistory is the platform-scoped form used by the shared
+	// router's neutral inbound gate.
+	HasThreadInboundHistory(ctx context.Context, platform, externalChatID, threadKey string) (bool, error)
 
 	// ResolveAgentNameForConversation returns the per-card header title
 	// for inbound paths without an agent_run in hand. Returns empty on

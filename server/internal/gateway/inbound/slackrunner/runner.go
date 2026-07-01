@@ -16,9 +16,9 @@
 // the rendered replace_original card is POSTed to the interaction's
 // response_url (the Socket Mode ack envelope does NOT update the source message
 // for a block_actions click), while the envelope itself is bare-acked.
-// Slash-command routing is still deferred. Thread continuation without a fresh
-// @mention is also deferred (history lookup is nil here), so group/channel
-// messages always require an explicit @mention.
+// Slash-command routing is still deferred. Thread continuation is enabled:
+// a follow-up in a thread the bot was already activated in routes without a
+// fresh @mention (history-backed, mirroring the Feishu 话题 path).
 package slackrunner
 
 import (
@@ -221,6 +221,15 @@ func (r *Runner) dispatch(ctx context.Context, evt socketmode.Event) {
 	}
 }
 
+// slackThreadHist binds the runner's store to the slack platform so the
+// neutral gate's platform-agnostic ThreadHistoryLookup resolves 话题续聊
+// history against slack conversations only.
+type slackThreadHist struct{ store router.Store }
+
+func (h slackThreadHist) HasThreadInboundHistory(ctx context.Context, externalChatID, threadKey string) (bool, error) {
+	return h.store.HasThreadInboundHistory(ctx, string(channel.PlatformSlack), externalChatID, threadKey)
+}
+
 // handleEvent is the pure dispatch core: decode → dedup → neutral gates →
 // route. It takes the raw event_callback payload (not the socket Event) so it
 // is unit-testable with a captured webhook JSON and no live websocket.
@@ -239,9 +248,10 @@ func (r *Runner) handleEvent(ctx context.Context, payload []byte) error {
 	if gateway.IsSelfSender(event, r.botUserID) {
 		return nil
 	}
-	// Group/channel messages must @mention the bot. hist is nil in N4, so
-	// thread continuation without a mention is not yet auto-admitted.
-	if gateway.ShouldSkipGroupWithoutMention(ctx, nil, event, r.botUserID) {
+	// Group/channel messages must @mention the bot, unless the message lands
+	// in a thread the bot was already activated in — then it's a 话题续聊 and
+	// no fresh @mention is required (mirrors the Feishu path).
+	if gateway.ShouldSkipGroupWithoutMention(ctx, slackThreadHist{r.store}, event, r.botUserID) {
 		return nil
 	}
 	outcome, err := router.HandleInbound(ctx, r.store, r.host, event, r.reply, nil, r.gateCfg)

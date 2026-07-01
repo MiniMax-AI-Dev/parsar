@@ -35,6 +35,9 @@ type fakeSharedStore struct {
 	cancelledRunsByConversation map[string][]store.SupersededRun
 	// cancelCalls records (conversation_id, reason) pairs for assertions.
 	cancelCalls []struct{ ConversationID, Reason string }
+	// threadHistory seeds HasThreadInboundHistory keyed by
+	// (platform|chat|thread); absence returns false.
+	threadHistory map[string]bool
 }
 
 func newFakeSharedStore() *fakeSharedStore {
@@ -186,6 +189,10 @@ func (f *fakeSharedStore) CancelAllInflightForConversation(ctx context.Context, 
 		return nil, nil
 	}
 	return f.cancelledRunsByConversation[conversationID], nil
+}
+
+func (f *fakeSharedStore) HasThreadInboundHistory(_ context.Context, platform, externalChatID, threadKey string) (bool, error) {
+	return f.threadHistory[platform+"|"+externalChatID+"|"+threadKey], nil
 }
 
 func TestHandleInboundListRepliesWithSelectableAgents(t *testing.T) {

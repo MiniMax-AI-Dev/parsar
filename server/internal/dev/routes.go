@@ -132,6 +132,9 @@ type RuntimeStore interface {
 	// to let users continue a 话题 (thread) conversation without re-
 	// @mentioning the bot on every message.
 	HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadID string) (bool, error)
+	// HasThreadInboundHistory is the platform-scoped form used by the shared
+	// router's neutral inbound gate.
+	HasThreadInboundHistory(ctx context.Context, platform, externalChatID, threadKey string) (bool, error)
 	DeleteAgent(ctx context.Context, agentID string, actorID string) (store.DeleteAgentResult, int64, error)
 	CreateSecret(ctx context.Context, input store.CreateSecretInput, encryptedPayload []byte) (store.SecretRead, error)
 	ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]store.SecretRead, error)

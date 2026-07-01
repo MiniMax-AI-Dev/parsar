@@ -17,8 +17,14 @@ import (
 // unusedStore satisfies router.Store via a nil embedded interface: any method
 // call panics. The skip-path tests assert routing is short-circuited before
 // router.HandleInbound, so the store must never be touched — a panic here is a
-// loud test failure.
+// loud test failure. HasThreadInboundHistory is the one real method: the mention
+// gate consults it on every group message, and a no-history (false) answer keeps
+// the skip-path tests exercising the mention-required branch.
 type unusedStore struct{ router.Store }
+
+func (unusedStore) HasThreadInboundHistory(context.Context, string, string, string) (bool, error) {
+	return false, nil
+}
 
 // --- fixtures: MESSAGE_CREATE payloads the adapter's Normalize accepts --------
 
@@ -52,6 +58,9 @@ func newTestRunner(t *testing.T) *Runner {
 		t.Fatalf("New: %v", err)
 	}
 	r.botUserID = "BOT" // pre-set so handleMessage skips the @me round-trip
+	// Default to "not a thread" so the mention gate stays strict and no test
+	// reaches the live discordgo channel lookup New wires by default.
+	r.isThread = func(string) bool { return false }
 	return r
 }
 
@@ -169,6 +178,7 @@ func newRoutedRunner(t *testing.T, router *fakeActionRouter) *Runner {
 		t.Fatalf("New: %v", err)
 	}
 	r.botUserID = "BOT"
+	r.isThread = func(string) bool { return false }
 	return r
 }
 
@@ -277,4 +287,121 @@ func TestAnswer_UpdateMessageVsDefer(t *testing.T) {
 	if gotData != nil {
 		t.Errorf("empty ack must carry no data, got %+v", gotData)
 	}
+}
+
+// --- thread continuation -----------------------------------------------------
+
+// errRoutingReached is the sentinel a threadHistoryStore returns from the first
+// routing lookup, so a test can prove the mention gate admitted a non-@ message
+// (routing was entered) without standing up a full routing store.
+var errRoutingReached = errors.New("routing reached")
+
+// threadHistoryStore admits a non-@ message past the mention gate by reporting
+// thread history, then halts HandleInbound at its first store lookup
+// (FindUserIDByPlatformSubject) with errRoutingReached — network-free proof that
+// the gate passed. Every other router.Store method panics via the nil embed.
+type threadHistoryStore struct {
+	router.Store
+	hasHistory bool
+	sawLookup  bool
+}
+
+func (s *threadHistoryStore) HasThreadInboundHistory(_ context.Context, _, _, _ string) (bool, error) {
+	return s.hasHistory, nil
+}
+
+func (s *threadHistoryStore) FindUserIDByPlatformSubject(_ context.Context, _, _ string) (string, error) {
+	s.sawLookup = true
+	return "", errRoutingReached
+}
+
+func newRunnerWithStore(t *testing.T, st router.Store, isThread bool) *Runner {
+	t.Helper()
+	r, err := New(Config{
+		BotToken: "bot-test",
+		Channel:  discordchannel.New(discordchannel.Config{AppID: "A123", BotToken: "bot-test"}),
+		Store:    st,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	r.botUserID = "BOT"
+	r.isThread = func(string) bool { return isThread }
+	return r
+}
+
+// TestHandleMessage_ContinuesActivatedThread: a non-@ message posted in a thread
+// the bot was already activated in (history present) skips the mention gate and
+// enters routing — the Discord twin of the Feishu 话题续聊 rule.
+func TestHandleMessage_ContinuesActivatedThread(t *testing.T) {
+	st := &threadHistoryStore{hasHistory: true}
+	r := newRunnerWithStore(t, st, true)
+	err := r.handleMessage(context.Background(), []byte(channelNoMention))
+	if !errors.Is(err, errRoutingReached) {
+		t.Fatalf("a non-@ message in an activated thread must reach routing, got err=%v", err)
+	}
+	if !st.sawLookup {
+		t.Fatal("expected routing to be entered (FindUserIDByPlatformSubject called)")
+	}
+}
+
+// TestHandleMessage_SkipsThreadWithoutHistory: the same thread message, but with
+// no prior activation, still requires an @mention — the gate drops it before
+// routing.
+func TestHandleMessage_SkipsThreadWithoutHistory(t *testing.T) {
+	st := &threadHistoryStore{hasHistory: false}
+	r := newRunnerWithStore(t, st, true)
+	if err := r.handleMessage(context.Background(), []byte(channelNoMention)); err != nil {
+		t.Fatalf("handleMessage: %v", err)
+	}
+	if st.sawLookup {
+		t.Fatal("a thread with no prior history must not route a non-@ message")
+	}
+}
+
+// TestEnrichThread covers the thread/root stamping: a thread channel gets its id
+// mirrored into both slots (a shared ThreadKey); a regular channel, a DM, an
+// already-rooted event, and a runner with no resolver are all left untouched.
+func TestEnrichThread(t *testing.T) {
+	t.Run("thread channel stamps both slots", func(t *testing.T) {
+		r := newRunnerWithStore(t, unusedStore{}, true)
+		ev := gateway.InboundEvent{ExternalChatID: "th-1", ChatType: "channel"}
+		r.enrichThread(&ev)
+		if ev.ExternalThreadID != "th-1" || ev.ExternalRootID != "th-1" {
+			t.Fatalf("thread = %q root = %q, want both th-1", ev.ExternalThreadID, ev.ExternalRootID)
+		}
+		if ev.ThreadKey() != "th-1" {
+			t.Fatalf("ThreadKey = %q, want th-1", ev.ThreadKey())
+		}
+	})
+
+	t.Run("regular channel untouched", func(t *testing.T) {
+		r := newRunnerWithStore(t, unusedStore{}, false)
+		ev := gateway.InboundEvent{ExternalChatID: "c1", ExternalMessageID: "m1", ChatType: "channel"}
+		r.enrichThread(&ev)
+		if ev.ExternalRootID != "" || ev.ExternalThreadID != "" {
+			t.Fatalf("regular channel must not be stamped, got thread=%q root=%q", ev.ExternalThreadID, ev.ExternalRootID)
+		}
+		if ev.ThreadKey() != "m1" {
+			t.Fatalf("ThreadKey = %q, want the message id m1", ev.ThreadKey())
+		}
+	})
+
+	t.Run("dm untouched even in a thread channel", func(t *testing.T) {
+		r := newRunnerWithStore(t, unusedStore{}, true)
+		ev := gateway.InboundEvent{ExternalChatID: "d1", ChatType: "dm"}
+		r.enrichThread(&ev)
+		if ev.ExternalRootID != "" {
+			t.Fatalf("dm must not be stamped, got root=%q", ev.ExternalRootID)
+		}
+	})
+
+	t.Run("already-rooted untouched", func(t *testing.T) {
+		r := newRunnerWithStore(t, unusedStore{}, true)
+		ev := gateway.InboundEvent{ExternalChatID: "th-2", ExternalRootID: "orig", ChatType: "channel"}
+		r.enrichThread(&ev)
+		if ev.ExternalRootID != "orig" {
+			t.Fatalf("existing root must be preserved, got %q", ev.ExternalRootID)
+		}
+	})
 }

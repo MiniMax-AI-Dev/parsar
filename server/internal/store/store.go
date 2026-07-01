@@ -2562,16 +2562,17 @@ limit 1`, gateway, externalChatID).Scan(&id, &slotRaw)
 	return id, slot, nil
 }
 
-// HasFeishuThreadInboundHistory reports whether the bot has previously
-// accepted an inbound message in the given (chat_id, thread_key) pair on
-// the feishu gateway. Used by the inbound mention gate to allow follow-up
-// messages in a Feishu 话题 without requiring @mention on every reply.
-// Returns false (no error) when either argument is empty. Caller passes
-// the thread *key* (FeishuInboundEvent.ThreadKey()), not the message_id.
-func (s *Store) HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadKey string) (bool, error) {
+// HasThreadInboundHistory reports whether the bot has previously accepted an
+// inbound message in the given (chat_id, thread_key) pair on the named
+// gateway platform. Used by the inbound mention gate to allow follow-up
+// messages within an already-activated thread without requiring @mention on
+// every reply. Returns false (no error) when any argument is empty. Caller
+// passes the thread *key* (InboundEvent.ThreadKey()), not the message_id.
+func (s *Store) HasThreadInboundHistory(ctx context.Context, platform, externalChatID, threadKey string) (bool, error) {
+	platform = strings.TrimSpace(platform)
 	externalChatID = strings.TrimSpace(externalChatID)
 	threadKey = strings.TrimSpace(threadKey)
-	if externalChatID == "" || threadKey == "" {
+	if platform == "" || externalChatID == "" || threadKey == "" {
 		return false, nil
 	}
 	var exists bool
@@ -2579,15 +2580,21 @@ func (s *Store) HasFeishuThreadInboundHistory(ctx context.Context, externalChatI
 select exists (
   select 1
   from conversations c
-  where c.platform = 'feishu'
-    and c.external_id = $1
-    and c.external_thread_id = $2
+  where c.platform = $1
+    and c.external_id = $2
+    and c.external_thread_id = $3
     and c.deleted_at is null
-)`, externalChatID, threadKey).Scan(&exists)
+)`, platform, externalChatID, threadKey).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
 	return exists, nil
+}
+
+// HasFeishuThreadInboundHistory is the Feishu-scoped shorthand for
+// HasThreadInboundHistory, kept for the existing Feishu inbound gate call site.
+func (s *Store) HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadKey string) (bool, error) {
+	return s.HasThreadInboundHistory(ctx, "feishu", externalChatID, threadKey)
 }
 
 func (s *Store) ConfigureDevConversationExternalRef(ctx context.Context, input ConfigureDevConversationExternalRefInput) (ConfigureDevConversationExternalRefResult, error) {
