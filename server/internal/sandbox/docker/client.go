@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"strconv"
@@ -55,9 +56,24 @@ func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox
 	if err != nil {
 		return e2b.Sandbox{}, err
 	}
-	return e2b.Sandbox{SandboxID: strings.TrimSpace(res.Stdout)}, nil
+	// Create is a control-plane verb: unlike RunCommand, a non-zero docker
+	// exit means the operation failed, not a payload. Surface it (with
+	// stderr) instead of returning an empty-id sandbox that reads as success.
+	if res.ExitCode != 0 {
+		return e2b.Sandbox{}, fmt.Errorf("dockersandbox: docker run failed (exit %d): %s", res.ExitCode, strings.TrimSpace(res.Stderr))
+	}
+	id := strings.TrimSpace(res.Stdout)
+	if id == "" {
+		return e2b.Sandbox{}, fmt.Errorf("dockersandbox: docker run returned no container id (stderr: %s)", strings.TrimSpace(res.Stderr))
+	}
+	return e2b.Sandbox{SandboxID: id}, nil
 }
 
+// RunCommand execs into the container and returns the command's exit code as
+// Status (Create/Kill treat non-zero as failure; here it's the payload). Note
+// a docker-level launch failure — e.g. the container is gone — surfaces as
+// docker exec's own 125/126/127, indistinguishable from the command exiting
+// with those codes; callers see it as a failed command with docker's stderr.
 func (c *Client) RunCommand(ctx context.Context, input e2b.RunCommandInput) (e2b.CommandResult, error) {
 	args := []string{"exec"}
 	if cwd := strings.TrimSpace(input.CWD); cwd != "" {
@@ -90,14 +106,30 @@ func (c *Client) Kill(ctx context.Context, sandboxID string) error {
 	if sandboxID == "" {
 		return errors.New("dockersandbox: sandbox id is empty")
 	}
-	_, err := c.runnerOrDefault()(ctx, "docker", []string{"rm", "-f", sandboxID}, nil)
-	return err
+	res, err := c.runnerOrDefault()(ctx, "docker", []string{"rm", "-f", sandboxID}, nil)
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		// Removing an already-gone container is idempotent success; any other
+		// non-zero exit (daemon unreachable, permission denied) must surface
+		// so Release/Reap don't record a leaked container as killed.
+		if strings.Contains(res.Stderr, "No such container") {
+			return nil
+		}
+		return fmt.Errorf("dockersandbox: docker rm -f %s failed (exit %d): %s", sandboxID, res.ExitCode, strings.TrimSpace(res.Stderr))
+	}
+	return nil
 }
 
 func (c *Client) Renew(_ context.Context, _ string, _ int) error {
 	return nil
 }
 
+// GetInfo returns synthetic metadata: local containers have no control-plane,
+// so State is always "running" and EndAt a fixed future TTL. It is NOT a
+// liveness probe — a crashed container still reports "running". The provider
+// only consumes EndAt (optional status metadata), so this is sufficient.
 func (c *Client) GetInfo(_ context.Context, sandboxID string) (e2b.SandboxRuntimeInfo, error) {
 	now := time.Now()
 	return e2b.SandboxRuntimeInfo{

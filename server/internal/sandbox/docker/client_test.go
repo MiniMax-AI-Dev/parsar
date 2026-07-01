@@ -259,3 +259,65 @@ func TestRunCommandExecsBashWrapperAndReturnsExitStatus(t *testing.T) {
 		t.Fatalf("expected raw command as final arg, got %q", call.Args[len(call.Args)-1])
 	}
 }
+
+func TestCreateReturnsErrorOnNonZeroExit(t *testing.T) {
+	// `docker run` failing (image missing, daemon down, bad --network) exits
+	// non-zero with an empty stdout. Create is a control-plane verb, so this
+	// must be a Go error — not a Sandbox{SandboxID:""} reported as success —
+	// and the error must carry docker's stderr for diagnosis.
+	fake := &fakeRunner{handler: func(recordedCall) (execResult, error) {
+		return execResult{ExitCode: 125, Stderr: "Unable to find image 'missing:tag' locally\nno such image"}, nil
+	}}
+	client := &Client{Image: "missing:tag", runner: fake.run}
+
+	sb, err := client.Create(context.Background(), e2b.CreateInput{})
+	if err == nil {
+		t.Fatalf("expected error on non-zero docker run exit, got sandbox %+v", sb)
+	}
+	if !strings.Contains(err.Error(), "no such image") {
+		t.Fatalf("expected docker stderr in error, got %q", err.Error())
+	}
+}
+
+func TestCreateReturnsErrorOnEmptyContainerID(t *testing.T) {
+	// A zero exit but blank stdout still yields no usable container id; the
+	// provider must not proceed with an empty SandboxID.
+	fake := &fakeRunner{handler: func(recordedCall) (execResult, error) {
+		return execResult{ExitCode: 0, Stdout: "  \n"}, nil
+	}}
+	client := &Client{Image: "img", runner: fake.run}
+
+	if sb, err := client.Create(context.Background(), e2b.CreateInput{}); err == nil {
+		t.Fatalf("expected error on empty container id, got sandbox %+v", sb)
+	}
+}
+
+func TestKillReturnsErrorOnNonZeroExit(t *testing.T) {
+	// A real `docker rm -f` failure (e.g. daemon unreachable) must surface so
+	// Release/Reap don't record a leaked container as successfully killed.
+	fake := &fakeRunner{handler: func(recordedCall) (execResult, error) {
+		return execResult{ExitCode: 1, Stderr: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"}, nil
+	}}
+	client := &Client{Image: "img", runner: fake.run}
+
+	err := client.Kill(context.Background(), "cid42")
+	if err == nil {
+		t.Fatalf("expected error on non-zero docker rm exit")
+	}
+	if !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
+		t.Fatalf("expected docker stderr in error, got %q", err.Error())
+	}
+}
+
+func TestKillToleratesMissingContainer(t *testing.T) {
+	// Kill must stay idempotent: removing an already-gone container is a
+	// success, not an error, so retries/Reap don't wedge on it.
+	fake := &fakeRunner{handler: func(recordedCall) (execResult, error) {
+		return execResult{ExitCode: 1, Stderr: "Error: No such container: cid42"}, nil
+	}}
+	client := &Client{Image: "img", runner: fake.run}
+
+	if err := client.Kill(context.Background(), "cid42"); err != nil {
+		t.Fatalf("expected nil error when container already gone, got %v", err)
+	}
+}
