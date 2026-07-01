@@ -418,7 +418,7 @@ export function AgentsPage() {
         />
       ) : agents.length === 0 ? (
         <EmptyState
-          illustration
+          icon={Bot}
           title={t("agents.empty.title")}
           description={t("agents.empty.description")}
           action={

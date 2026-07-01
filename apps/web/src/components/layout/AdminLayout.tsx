@@ -171,12 +171,6 @@ export function AdminLayout({
         </aside>}
 
         <main className="relative flex-1 overflow-y-auto">
-          {/* Faint isometric grid texture for subtle depth — very low opacity,
-              tiled, non-interactive. */}
-          <div
-            aria-hidden
-            className="pointer-events-none fixed inset-0 bg-[url('/brand/grid-texture.png')] bg-[length:440px_440px] opacity-25"
-          />
           {fullBleed ? (
             children
           ) : (

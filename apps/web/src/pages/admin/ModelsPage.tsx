@@ -598,7 +598,7 @@ export function ModelsPage() {
         />
       ) : allModels.length === 0 ? (
         <EmptyState
-          illustration
+          icon={Database}
           title={t("models.empty.title")}
           description={t("models.empty.description")}
           action={
