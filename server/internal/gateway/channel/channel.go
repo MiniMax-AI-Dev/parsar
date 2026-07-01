@@ -21,6 +21,7 @@ const (
 	PlatformFeishu   Platform = "feishu"
 	PlatformSlack    Platform = "slack"
 	PlatformDiscord  Platform = "discord"
+	PlatformTeams    Platform = "teams"
 	PlatformWeCom    Platform = "wecom"
 	PlatformDingTalk Platform = "dingtalk"
 )

@@ -38,9 +38,11 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 	discordchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/discord"
 	slackchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/slack"
+	teamschannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/teams"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/discordrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/slackrunner"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/teamsrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
@@ -823,6 +825,21 @@ func main() {
 					log.Bg().Error("discord gateway runner exited", "error", err)
 				}
 			}()
+		}
+	}
+
+	// Microsoft Teams webhook inbound runner. Opt-in via PARSAR_TEAMS_WEBHOOK=
+	// true. Unlike Slack/Discord (socket/gateway Run loops) Teams delivers
+	// inbound activities as HTTPS POSTs, so the runner is an http.Handler mounted
+	// on the chi router rather than a goroutine. Feeds the same neutral
+	// router.HandleInbound pipeline; inbound only. Shares the router store; no DDL.
+	if dbStore != nil {
+		if runner, err := buildTeamsRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+			log.Bg().Error("teams webhook runner init failed", "error", err)
+			os.Exit(1)
+		} else if runner != nil {
+			r.Post("/api/teams/messages", runner.Handler())
+			log.Bg().Info("teams webhook runner mounted", "path", "/api/teams/messages")
 		}
 	}
 
@@ -1693,6 +1710,103 @@ func buildDiscordRunner(env func(string) string, dbStore *store.Store, connector
 	log.Bg().Info("discord gateway runner configured",
 		"app_id", appID != "",
 		"action_router", len(adapterOpts) > 1) // >1: pick store is always present
+	return runner, nil
+}
+
+// buildTeamsRunner constructs the Microsoft Teams webhook inbound runner from
+// env. Returns nil (silent skip) when the feature flag is off, mirroring
+// buildSlackRunner/buildDiscordRunner. Unlike those, the returned runner is an
+// http.Handler (Teams delivers inbound as HTTPS POSTs) — main.go mounts
+// runner.Handler() on the chi router rather than launching a Run goroutine.
+//
+// Env contract:
+//   - PARSAR_TEAMS_WEBHOOK       (default off; "true" enables)
+//   - PARSAR_TEAMS_APP_ID        (REQUIRED when enabled; the Microsoft App Id —
+//     both the inbound JWT audience and the outbound AAD client_id)
+//   - PARSAR_TEAMS_APP_PASSWORD  (REQUIRED when enabled; the app secret used to
+//     mint the outbound AAD Connector token for synchronous replies / card acks)
+//   - PARSAR_TEAMS_TENANT_ID     (optional; pins a single-tenant token authority,
+//     empty selects the multi-tenant botframework.com authority)
+//
+// Inbound vs outbound auth are asymmetric (the classic Bot Framework pitfall):
+// WithTokenVerifier(NewJWKSVerifier(appID)) checks the inbound JWT bearer, while
+// the outbound Connector transport mints an AAD client-credentials bearer from
+// (app id, password). The two never share a token.
+//
+// Card-action routing mirrors the Slack shape: with PARSAR_MASTER_KEY set we
+// build a neutral inbound.Manager and inject its CardActionRouter so Teams
+// Adaptive Card button clicks resolve permissions / choices / credential forms;
+// without it the adapter runs router-less and a click just echoes a neutral
+// "received" ack.
+func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*teamsrunner.Runner, error) {
+	if !truthy(env("PARSAR_TEAMS_WEBHOOK")) {
+		return nil, nil
+	}
+	appID := strings.TrimSpace(env("PARSAR_TEAMS_APP_ID"))
+	if appID == "" {
+		return nil, errors.New("PARSAR_TEAMS_WEBHOOK=true requires PARSAR_TEAMS_APP_ID (the Microsoft App Id)")
+	}
+	appPassword := strings.TrimSpace(env("PARSAR_TEAMS_APP_PASSWORD"))
+	if appPassword == "" {
+		return nil, errors.New("PARSAR_TEAMS_WEBHOOK=true requires PARSAR_TEAMS_APP_PASSWORD (the app secret for outbound Connector auth)")
+	}
+	tenantID := strings.TrimSpace(env("PARSAR_TEAMS_TENANT_ID"))
+
+	var teamsJoinURLBuilder func(string) string
+	if strings.TrimSpace(publicURL) != "" {
+		root := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+		teamsJoinURLBuilder = func(workspaceID string) string {
+			return root + "/join-workspace?id=" + workspaceID + "&from=teams"
+		}
+	}
+
+	// Inbound JWT verifier: the Microsoft App Id is the enforced audience. Always
+	// built here (appID is required), so a webhook POST that fails Bot Framework
+	// auth is a 401 rather than silently trusted.
+	adapterOpts := []teamschannel.Option{
+		teamschannel.WithTokenVerifier(teamschannel.NewJWKSVerifier(appID)),
+	}
+
+	// Best-effort card-action router: needs the secret vault (credential-form
+	// encryption) plus the connector-backed permission/choice routers. Absent a
+	// master key the adapter stays router-less rather than failing inbound.
+	if masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY")); masterKey != "" {
+		secretsSvc, err := secrets.New(masterKey)
+		if err != nil {
+			return nil, fmt.Errorf("teams webhook: init secrets service: %w", err)
+		}
+		actionMgr, err := inbound.NewManager(inbound.Options{
+			Store:                     dbStore,
+			Secrets:                   secretsSvc,
+			Logger:                    slogFeishuInboundLogger{},
+			JoinURLBuilder:            teamsJoinURLBuilder,
+			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
+			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("teams webhook: init action manager: %w", err)
+		}
+		adapterOpts = append(adapterOpts, teamschannel.WithActionRouter(actionMgr.CardActionRouter()))
+	} else {
+		log.Bg().Warn("teams webhook: PARSAR_MASTER_KEY unset; button clicks echo 'received' (no permission/choice/credential routing)")
+	}
+
+	adapter := teamschannel.New(teamschannel.Config{
+		AppID:       appID,
+		AppPassword: appPassword,
+		TenantID:    tenantID,
+	}, adapterOpts...)
+	runner, err := teamsrunner.New(teamsrunner.Config{
+		Channel:    adapter,
+		Store:      dbStore,
+		GateConfig: gatewaypkg.GateConfig{JoinURLBuilder: teamsJoinURLBuilder},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("teams webhook: init runner: %w", err)
+	}
+	log.Bg().Info("teams webhook runner configured",
+		"tenant_pinned", tenantID != "",
+		"action_router", len(adapterOpts) > 1) // >1: JWT verifier is always present
 	return runner, nil
 }
 

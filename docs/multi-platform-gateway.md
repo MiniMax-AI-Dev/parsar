@@ -302,20 +302,28 @@ type ExternalIdentity struct {
 
 ## 5. 平台能力差异(写进各自的 adapter,不是 driver)
 
-| 能力 | 飞书 | Slack | Discord | 企业微信 | 钉钉 |
-|---|---|---|---|---|---|
-| 入站鉴权 | verify token + AES-CBC | Signing Secret HMAC + url_verification | Ed25519 / Gateway WS | WXBizMsgCrypt AES | HMAC / Stream 模式 |
-| 入站接法 | webhook 或 WS | Events API / Socket Mode | Interactions / Gateway | 回调 URL | HTTP 回调 / Stream |
-| 用户 ID 维度 | union_id / open_id | user(Team 维度) | user(global) | userid(corp 维度) | userid / unionid |
-| **流式 PATCH** | ✅ 互动卡 | ✅ chat.update | ✅ message edit | ⚠️ 客服消息可编辑 | ⚠️ ActionCard |
-| 卡片格式 | 互动卡 | Block Kit | Embeds + components | 模板卡 / markdown | ActionCard |
-| 字符上限 | 30 KB(卡片) | 40 000(blocks) | 2 000(embed)/4 000 总 | 2 048 字节(markdown) | 6 000 字符 |
-| 凭证模型 | app_access_token | bot token(常驻) | bot token(常驻) | corpid+secret→token | appkey+secret→token |
-| 线程 | root_id / parent_id | thread_ts | 不支持 | 不支持 | 不支持 |
+| 能力 | 飞书 | Slack | Discord | 企业微信 | 钉钉 | Teams |
+|---|---|---|---|---|---|---|
+| 入站鉴权 | verify token + AES-CBC | Signing Secret HMAC + url_verification | Ed25519 / Gateway WS | WXBizMsgCrypt AES | HMAC / Stream 模式 | Bot Framework JWT(RS256/JWKS) |
+| 入站接法 | webhook 或 WS | Events API / Socket Mode | Interactions / Gateway | 回调 URL | HTTP 回调 / Stream | Bot Framework webhook(HTTPS POST) |
+| 用户 ID 维度 | union_id / open_id | user(Team 维度) | user(global) | userid(corp 维度) | userid / unionid | aadObjectId / 29:(tenant 维度) |
+| **流式 PATCH** | ✅ 互动卡 | ✅ chat.update | ✅ message edit | ⚠️ 客服消息可编辑 | ⚠️ ActionCard | ⚠️ PUT activity(整卡,非分块) |
+| 卡片格式 | 互动卡 | Block Kit | Embeds + components | 模板卡 / markdown | ActionCard | Adaptive Card |
+| 字符上限 | 30 KB(卡片) | 40 000(blocks) | 2 000(embed)/4 000 总 | 2 048 字节(markdown) | 6 000 字符 | 28 KB(卡片) |
+| 凭证模型 | app_access_token | bot token(常驻) | bot token(常驻) | corpid+secret→token | appkey+secret→token | AAD client-credentials(app id+password→token) |
+| 线程 | root_id / parent_id | thread_ts | 不支持 | 不支持 | 不支持 | conversation.id(root activity) |
 
 **关键决策:Slack / Discord / 飞书都能流式 PATCH,直接用 `StreamPatches`;
 企微 / 钉钉不支持,降级为 `StreamTerminalOnly`(只发终态卡,中间不发
 "执行中")。**
+
+**Teams 特有:出入站鉴权不对称——入站是 Bot Framework 签发的 JWT(RS256,
+issuer `https://api.botframework.com`,audience==MicrosoftAppId,走 JWKS 验签),
+出站是 AAD client-credentials 换取的 bearer(scope
+`https://api.botframework.com/.default`)。两条鉴权链路职责不同,刻意拆到
+`verify.go`(入站验签)与 `outbound.go` 的 `connectorSender`(出站取 token),
+不共用一个 credential 类型。群消息必须 @机器人才路由,收敛在
+`gateway.ShouldSkipGroupWithoutMention`。**
 
 ---
 
