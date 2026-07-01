@@ -46,8 +46,11 @@ func dockerDialBackURL(serverURL string) (string, bool) {
 //   - AGENT_DAEMON_SANDBOX_DOCKER_IMAGE — local image tag to run.
 //   - AGENT_DAEMON_SANDBOX_DOCKER_NETWORK — optional docker network to join
 //     (use the compose network when the server runs as a compose service).
-//   - AGENT_DAEMON_SANDBOX_DOCKER_MEMORY / _CPUS / _PIDS_LIMIT — optional
-//     `docker run` resource caps; unset = docker defaults (unbounded).
+//   - AGENT_DAEMON_SANDBOX_DOCKER_MEMORY / _CPUS — optional `docker run`
+//     resource caps; unset = built-in default (4g / 2 CPU). Set to
+//     0/unlimited/none to remove the cap.
+//   - AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT — optional pids cap; unset = no
+//     cap (docker default).
 func buildDockerAgentDaemonSandboxProvider(
 	env func(string) string,
 	cfg config.Config,
@@ -111,17 +114,42 @@ func buildDockerAgentDaemonSandboxProvider(
 	return provider
 }
 
-// dockerClientFromEnv builds the docker sandbox client, folding in the
-// optional AGENT_DAEMON_SANDBOX_DOCKER_{MEMORY,CPUS,PIDS_LIMIT} resource caps.
-// Empty env values leave the corresponding `docker run` flag off, so the
-// default (unbounded) behavior is unchanged.
+// Built-in sandbox caps used when the operator sets no override: a
+// conservative default stops one runaway sandbox starving the host (raise it
+// with the env var, or disable it with 0/unlimited). PidsLimit has no default
+// — a low pids cap breaks parallel builds (`make -j`, `go test ./...`).
+const (
+	defaultDockerMemory = "4g"
+	defaultDockerCPUs   = "2"
+)
+
+// dockerClientFromEnv builds the docker sandbox client, resolving the
+// AGENT_DAEMON_SANDBOX_DOCKER_{MEMORY,CPUS,PIDS_LIMIT} caps: memory and cpus
+// fall back to the built-in default when unset, pids stays off; see
+// resolveDockerLimit for the 0/unlimited escape hatch.
 func dockerClientFromEnv(env func(string) string, image, network string, hostGateway bool) *dockersandbox.Client {
 	return &dockersandbox.Client{
 		Image:       image,
 		Network:     network,
 		HostGateway: hostGateway,
-		Memory:      strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_MEMORY")),
-		CPUs:        strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_CPUS")),
-		PidsLimit:   strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT")),
+		Memory:      resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_MEMORY"), defaultDockerMemory),
+		CPUs:        resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_CPUS"), defaultDockerCPUs),
+		PidsLimit:   resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT"), ""),
 	}
+}
+
+// resolveDockerLimit resolves one resource cap: empty env → built-in default;
+// "0"/"unlimited"/"none" (case-insensitive) → "" so Create omits the flag
+// (docker's unbounded default); otherwise the literal value, passed through
+// unvalidated (a bad value fails `docker run`, which Create surfaces).
+func resolveDockerLimit(raw, def string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def
+	}
+	switch strings.ToLower(raw) {
+	case "0", "unlimited", "none":
+		return ""
+	}
+	return raw
 }

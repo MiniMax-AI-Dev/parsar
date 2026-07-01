@@ -39,9 +39,34 @@ func TestDockerClientFromEnvReadsResourceLimits(t *testing.T) {
 	}
 }
 
-func TestDockerClientFromEnvOmitsUnsetLimits(t *testing.T) {
+func TestDockerClientFromEnvAppliesBuiltInDefaults(t *testing.T) {
+	// With the env unset the operator still gets a safe built-in cap (2 CPU /
+	// 4GB) so one runaway sandbox can't starve the host. PidsLimit stays unset:
+	// a low pids cap is a classic build-breaker (make -j, go test ./...).
 	c := dockerClientFromEnv(func(string) string { return "" }, "img", "", false)
-	if c.Memory != "" || c.CPUs != "" || c.PidsLimit != "" {
-		t.Fatalf("expected empty limits when env unset, got %+v", c)
+	if c.CPUs != "2" || c.Memory != "4g" {
+		t.Fatalf("expected default 2 CPU / 4g, got cpus=%q memory=%q", c.CPUs, c.Memory)
+	}
+	if c.PidsLimit != "" {
+		t.Fatalf("expected pids-limit unset by default, got %q", c.PidsLimit)
+	}
+}
+
+func TestDockerClientFromEnvEscapeHatchDisablesDefault(t *testing.T) {
+	// An operator who wants docker's unbounded default back sets the env to
+	// 0/unlimited/none (case-insensitive, trimmed); the flag is then omitted
+	// rather than falling back to the built-in cap.
+	for _, off := range []string{"0", "unlimited", "none", "UNLIMITED", " None "} {
+		env := func(k string) string {
+			switch k {
+			case "AGENT_DAEMON_SANDBOX_DOCKER_MEMORY", "AGENT_DAEMON_SANDBOX_DOCKER_CPUS":
+				return off
+			}
+			return ""
+		}
+		c := dockerClientFromEnv(env, "img", "", false)
+		if c.Memory != "" || c.CPUs != "" {
+			t.Fatalf("escape hatch %q: expected limits omitted, got cpus=%q memory=%q", off, c.CPUs, c.Memory)
+		}
 	}
 }
