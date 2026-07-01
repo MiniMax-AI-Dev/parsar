@@ -357,7 +357,7 @@ func main() {
 		})
 		agentDaemonRegistry := agentdaemongateway.NewRegistry()
 		agentDaemonAuth := agentdaemongateway.NewAuthenticator(dbStore)
-		publicWSURL := buildAgentDaemonWSURL(cfg)
+		publicWSURL := resolveAgentDaemonPublicWSURL(envLookup, cfg)
 		agentDaemonPodID := resolveAgentDaemonOwnerPodID(envLookup)
 		agentDaemonOwnerURL, err := resolveAgentDaemonOwnerURL(envLookup, cfg)
 		if err != nil {

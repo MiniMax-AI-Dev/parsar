@@ -36,6 +36,30 @@ func dockerDialBackURL(serverURL string) (string, bool) {
 	return u.String(), true
 }
 
+// resolveAgentDaemonPublicWSURL returns the ws:// URL the daemon dials after
+// bootstrap. It starts from the scheme-swapped PublicURL
+// (buildAgentDaemonWSURL) and, when the local-docker sandbox backend is active
+// without a user-defined docker network, applies the same loopback →
+// host.docker.internal rewrite used for the bootstrap ServerURL. Without it a
+// container daemon dials 127.0.0.1 — itself — never reaching the host server,
+// so the run stays unassigned. A configured network makes the server reachable
+// by service name, so the loopback URL is left intact (mirrors the gating in
+// buildDockerAgentDaemonSandboxProvider).
+func resolveAgentDaemonPublicWSURL(env func(string) string, cfg config.Config) string {
+	if env == nil {
+		env = os.Getenv
+	}
+	base := buildAgentDaemonWSURL(cfg)
+	if strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_BACKEND")) != "docker" {
+		return base
+	}
+	if strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_NETWORK")) != "" {
+		return base
+	}
+	rewritten, _ := dockerDialBackURL(base)
+	return rewritten
+}
+
 // buildDockerAgentDaemonSandboxProvider wires a local-docker-backed
 // SandboxProvider for the agent_daemon connector. Returns nil when the
 // docker backend is not requested (caller falls back to the e2b builder,
