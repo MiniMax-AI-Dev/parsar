@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import { useAdminView, type AdminView } from "../../lib/admin-router"
 import {
-  MessageSquare, Play, Inbox,
+  MessageSquare, Play,
   CalendarClock,
   Bot, Wrench, Database, Plug,
   Users, Settings,
@@ -44,7 +44,6 @@ const menuGroups: MenuGroup[] = [
       { id: "conversations", itemKey: "conversations", icon: MessageSquare },
       { id: "runs", itemKey: "runs", icon: Play },
       { id: "scheduled", itemKey: "scheduled", icon: CalendarClock },
-      { id: "approvals", itemKey: "approvals", icon: Inbox },
     ],
   },
   {
