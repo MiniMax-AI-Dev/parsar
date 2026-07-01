@@ -4387,3 +4387,19 @@ where c.platform = @platform::text
   and c.app_id <> ''
   and c.deleted_at is null
 order by c.workspace_id, c.app_id;
+
+-- name: GetBuiltinCapabilityEnabled :one
+-- 内置能力(如 fetch_chat_history)的 per-agent 开关查询。无行代表默认开启,
+-- 由调用方在 pgx.ErrNoRows 时兜底为 true。
+select enabled
+from agent_builtin_capabilities
+where agent_id = @agent_id::uuid
+  and capability_key = @capability_key::text;
+
+-- name: SetBuiltinCapabilityEnabled :exec
+-- upsert 内置能力的 per-agent 开关;首次写入即建行,后续翻转仅改 enabled。
+insert into agent_builtin_capabilities (agent_id, capability_key, enabled, created_at, updated_at)
+values (@agent_id::uuid, @capability_key::text, @enabled::boolean, now(), now())
+on conflict (agent_id, capability_key) do update set
+  enabled    = excluded.enabled,
+  updated_at = now();

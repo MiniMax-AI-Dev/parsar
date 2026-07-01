@@ -1201,6 +1201,12 @@
             "switchAction": "请切到可用版本"
           }
         },
+        "builtin": {
+          "badge": "系统内置",
+          "on": "已开启",
+          "off": "已关闭",
+          "toggleError": "切换失败:{{message}}"
+        },
         "actions": {
           "enable": "+ 启用",
           "enableConfirm": "启用",

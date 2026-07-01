@@ -40,6 +40,17 @@ type Agent struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+// 内置能力的 per-agent 开关;无行=默认开启,enabled=false=该 Agent 关闭
+type AgentBuiltinCapability struct {
+	AgentID pgtype.UUID `json:"agent_id"`
+	// 内置能力稳定标识(如 parsar_chat_history)
+	CapabilityKey string `json:"capability_key"`
+	// 是否为该 Agent 启用该内置能力
+	Enabled   bool               `json:"enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Agent capability 绑定表
 type AgentCapability struct {
 	// 绑定记录 ID

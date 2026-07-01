@@ -1,5 +1,10 @@
 package agentdaemon
 
+import (
+	"context"
+	"strings"
+)
+
 // Auto-mounted fetch_chat_history MCP tool.
 //
 // Every agent_daemon-backed Claude Code agent gets this stdio MCP server for
@@ -121,4 +126,21 @@ func (c *Connector) imHistoryMCPServer(conversationID string) (name string, entr
 		},
 	}
 	return imHistoryServerName, entry, true
+}
+
+// imHistoryEnabledForAgent reports whether the built-in fetch_chat_history tool
+// should be injected for this agent. Built-ins default to ON, so a nil store,
+// an empty agent id, or a lookup error all resolve to enabled — a bookkeeping
+// failure must never silently strip the tool. Only an explicit disabled flag
+// (agent_builtin_capabilities.enabled = false) suppresses injection.
+func (c *Connector) imHistoryEnabledForAgent(ctx context.Context, agentID string) bool {
+	if c.capabilities == nil || strings.TrimSpace(agentID) == "" {
+		return true
+	}
+	enabled, err := c.capabilities.IsBuiltinCapabilityEnabled(ctx, agentID, imHistoryServerName)
+	if err != nil {
+		c.log.Debug("agent_daemon: im-history builtin flag lookup failed; defaulting on", "agent_id", agentID, "err", err)
+		return true
+	}
+	return enabled
 }

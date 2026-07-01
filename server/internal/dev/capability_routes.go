@@ -68,6 +68,45 @@ type agentCapabilityBody struct {
 	PinningMode string `json:"pinning_mode,omitempty"`
 }
 
+// builtinCapability describes a runtime-injected tool that every eligible agent
+// gets automatically (no capability_version row). It is surfaced in the agent
+// capability list as an "installed, default-ON" card the owner can toggle off.
+type builtinCapability struct {
+	Key         string
+	Name        string
+	Description string
+	Type        string
+}
+
+// builtinCapabilities is the single source of truth for runtime-injected
+// built-ins the frontend should display + toggle. Keys MUST match the server
+// name the connector injects (agentdaemon.imHistoryServerName). Kept as a small
+// local table to avoid importing the connector package (which would risk an
+// import cycle); the value is a stable protocol constant.
+var builtinCapabilities = []builtinCapability{
+	{
+		Key:         "parsar_chat_history",
+		Name:        "聊天记录查询 (fetch_chat_history)",
+		Description: "让 Agent 按需拉取当前群聊的历史消息。默认开启;关闭后本 Agent 将无法调用该工具。",
+		Type:        "mcp",
+	},
+}
+
+// builtinCapabilityBody is the toggle payload for a built-in capability.
+type builtinCapabilityBody struct {
+	Enabled bool `json:"enabled"`
+}
+
+// lookupBuiltinCapability returns the registry entry for a key, or false.
+func lookupBuiltinCapability(key string) (builtinCapability, bool) {
+	for _, b := range builtinCapabilities {
+		if b.Key == key {
+			return b, true
+		}
+	}
+	return builtinCapability{}, false
+}
+
 type uninstallMarketplaceBody struct {
 	SourceCapabilityID string `json:"source_capability_id"`
 }
@@ -748,6 +787,34 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 				},
 			})
 		}
+		// Surface runtime-injected built-ins as installed, default-ON cards.
+		// These have no capability_version row; the enabled flag comes from
+		// the per-agent override table (absent row = ON).
+		for _, b := range builtinCapabilities {
+			builtinEnabled, err := runtimeStore.IsBuiltinCapabilityEnabled(r.Context(), agentID, b.Key)
+			if err != nil {
+				writeCapabilityError(w, err, "failed to read builtin capability flag")
+				return
+			}
+			installedAny = append(installedAny, map[string]any{
+				"id":                    "builtin:" + b.Key,
+				"agent_id":              agentID,
+				"capability_id":         "builtin:" + b.Key,
+				"capability_version_id": "",
+				"enabled":               builtinEnabled,
+				"built_in":              true,
+				"builtin_key":           b.Key,
+				"configuration":         map[string]any{},
+				"capability": map[string]any{
+					"id":          "builtin:" + b.Key,
+					"type":        b.Type,
+					"name":        b.Name,
+					"description": b.Description,
+					"built_in":    true,
+					"builtin_key": b.Key,
+				},
+			})
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "agent_id": agentID, "installed": installedAny, "available": availableAny, "marketplace_available": marketplace})
 	}
 }
@@ -810,6 +877,33 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// setBuiltinCapability toggles a runtime-injected built-in on/off for one agent.
+// Only the agent owner may change it; the key is validated against the built-in
+// registry so callers can't create arbitrary rows.
+func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
+		if !ok {
+			return
+		}
+		key := strings.TrimSpace(chi.URLParam(r, "key"))
+		if _, known := lookupBuiltinCapability(key); !known {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown builtin capability"})
+			return
+		}
+		var body builtinCapabilityBody
+		if err := decodeBody(r, &body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		if err := runtimeStore.SetBuiltinCapabilityEnabled(r.Context(), agentID, key, body.Enabled); err != nil {
+			writeCapabilityError(w, err, "failed to set builtin capability")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"agent_id": agentID, "builtin_key": key, "enabled": body.Enabled})
 	}
 }
 

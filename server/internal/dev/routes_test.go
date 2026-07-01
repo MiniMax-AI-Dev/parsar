@@ -2299,6 +2299,14 @@ func (stubRuntimeStore) DeleteAgentCapability(ctx context.Context, agentID strin
 	return nil
 }
 
+func (stubRuntimeStore) IsBuiltinCapabilityEnabled(ctx context.Context, agentID, key string) (bool, error) {
+	return true, nil
+}
+
+func (stubRuntimeStore) SetBuiltinCapabilityEnabled(ctx context.Context, agentID, key string, enabled bool) error {
+	return nil
+}
+
 func (stubRuntimeStore) CreateAgent(ctx context.Context, input store.CreateAgentInput) (store.CreateAgentResult, error) {
 	agentConfig := map[string]any{"capabilities": input.Capabilities}
 	for k, v := range input.AgentConfig {

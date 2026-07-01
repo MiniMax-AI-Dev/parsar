@@ -203,6 +203,11 @@ type RuntimeStore interface {
 	SoftDeleteScheduledTask(ctx context.Context, taskID string) error
 	RunScheduledTaskNow(ctx context.Context, taskID string) (string, error)
 	ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error)
+
+	// 内置能力(runtime-injected,如 fetch_chat_history)的 per-agent 开关。
+	// 无行=默认开启;写 enabled=false 关闭该 Agent 的内置能力。
+	IsBuiltinCapabilityEnabled(ctx context.Context, agentID, key string) (bool, error)
+	SetBuiltinCapabilityEnabled(ctx context.Context, agentID, key string, enabled bool) error
 }
 
 type FeishuAppRegistrationClient interface {
@@ -659,6 +664,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable", enableAgentCapability(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade", upgradeAgentCapability(runtimeStore))
 			r.Delete("/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}", deleteAgentCapability(runtimeStore))
+			r.Put("/workspaces/{workspaceID}/agents/{agentID}/builtin-capabilities/{key}", setBuiltinCapability(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/conversations", listWorkspaceConversations(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/conversations", createWorkspaceConversation(runtimeStore))
 			r.Get("/conversations/{conversationID}", getConversation(runtimeStore))

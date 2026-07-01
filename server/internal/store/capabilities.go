@@ -931,6 +931,34 @@ func (s *Store) DeleteAgentCapability(ctx context.Context, agentID string, capab
 	return fmt.Errorf("%w: %s", ErrUnknownAgentCapability, capabilityVersionID)
 }
 
+// IsBuiltinCapabilityEnabled reports whether a runtime-injected built-in tool
+// (e.g. fetch_chat_history) is enabled for the agent. Built-ins default to ON:
+// no row means enabled, so pgx.ErrNoRows resolves to true.
+func (s *Store) IsBuiltinCapabilityEnabled(ctx context.Context, agentID, key string) (bool, error) {
+	enabled, err := sqlc.New(s.db).GetBuiltinCapabilityEnabled(ctx, sqlc.GetBuiltinCapabilityEnabledParams{
+		AgentID:       mustUUID(agentID),
+		CapabilityKey: key,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return true, nil
+		}
+		return false, err
+	}
+	return enabled, nil
+}
+
+// SetBuiltinCapabilityEnabled upserts the per-agent on/off flag for a built-in
+// tool. Writing enabled=true is a no-op relative to the default but records an
+// explicit row; enabled=false is what disables the tool for this agent.
+func (s *Store) SetBuiltinCapabilityEnabled(ctx context.Context, agentID, key string, enabled bool) error {
+	return sqlc.New(s.db).SetBuiltinCapabilityEnabled(ctx, sqlc.SetBuiltinCapabilityEnabledParams{
+		AgentID:       mustUUID(agentID),
+		CapabilityKey: key,
+		Enabled:       enabled,
+	})
+}
+
 func pgNullableText(value string) pgtype.Text {
 	value = strings.TrimSpace(value)
 	if value == "" {

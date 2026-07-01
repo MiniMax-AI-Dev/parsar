@@ -1201,6 +1201,12 @@
             "switchAction": "Switch to an available version"
           }
         },
+        "builtin": {
+          "badge": "Built-in",
+          "on": "On",
+          "off": "Off",
+          "toggleError": "Toggle failed: {{message}}"
+        },
         "actions": {
           "enable": "+ Enable",
           "enableConfirm": "Enable",

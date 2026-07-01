@@ -4220,6 +4220,27 @@ func (q *Queries) GetAgentWorkspace(ctx context.Context, agentID pgtype.UUID) (s
 	return workspace_id, err
 }
 
+const getBuiltinCapabilityEnabled = `-- name: GetBuiltinCapabilityEnabled :one
+select enabled
+from agent_builtin_capabilities
+where agent_id = $1::uuid
+  and capability_key = $2::text
+`
+
+type GetBuiltinCapabilityEnabledParams struct {
+	AgentID       pgtype.UUID `json:"agent_id"`
+	CapabilityKey string      `json:"capability_key"`
+}
+
+// 内置能力(如 fetch_chat_history)的 per-agent 开关查询。无行代表默认开启,
+// 由调用方在 pgx.ErrNoRows 时兜底为 true。
+func (q *Queries) GetBuiltinCapabilityEnabled(ctx context.Context, arg GetBuiltinCapabilityEnabledParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getBuiltinCapabilityEnabled, arg.AgentID, arg.CapabilityKey)
+	var enabled bool
+	err := row.Scan(&enabled)
+	return enabled, err
+}
+
 const getCapability = `-- name: GetCapability :one
 select c.id::text as id, c.workspace_id::text as workspace_id, c.type, c.name,
   c.description, c.visibility, c.status, lv.required_credentials,
@@ -9887,6 +9908,26 @@ func (q *Queries) SetAgentRuntime(ctx context.Context, arg SetAgentRuntimeParams
 		&i.Config,
 	)
 	return i, err
+}
+
+const setBuiltinCapabilityEnabled = `-- name: SetBuiltinCapabilityEnabled :exec
+insert into agent_builtin_capabilities (agent_id, capability_key, enabled, created_at, updated_at)
+values ($1::uuid, $2::text, $3::boolean, now(), now())
+on conflict (agent_id, capability_key) do update set
+  enabled    = excluded.enabled,
+  updated_at = now()
+`
+
+type SetBuiltinCapabilityEnabledParams struct {
+	AgentID       pgtype.UUID `json:"agent_id"`
+	CapabilityKey string      `json:"capability_key"`
+	Enabled       bool        `json:"enabled"`
+}
+
+// upsert 内置能力的 per-agent 开关;首次写入即建行,后续翻转仅改 enabled。
+func (q *Queries) SetBuiltinCapabilityEnabled(ctx context.Context, arg SetBuiltinCapabilityEnabledParams) error {
+	_, err := q.db.Exec(ctx, setBuiltinCapabilityEnabled, arg.AgentID, arg.CapabilityKey, arg.Enabled)
+	return err
 }
 
 const setSandboxPoolAutoRenewThreshold = `-- name: SetSandboxPoolAutoRenewThreshold :exec

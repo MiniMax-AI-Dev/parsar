@@ -258,6 +258,10 @@ export interface Capability {
   created_at: string
   updated_at: string
   deleted_at?: string
+  /** True for runtime-injected built-ins (no capability_version row). */
+  built_in?: boolean
+  /** Stable server-name key for built-ins (matches the toggle route param). */
+  builtin_key?: string
 }
 
 export interface CapabilityVersion {
@@ -315,6 +319,10 @@ export interface AgentCapability {
   created_at: string
   updated_at: string
   capability?: Capability
+  /** True for runtime-injected built-ins (no capability_version row). */
+  built_in?: boolean
+  /** Stable server-name key for built-ins; used by the toggle mutation. */
+  builtin_key?: string
 }
 
 export interface EnableAgentCapabilityRequest {

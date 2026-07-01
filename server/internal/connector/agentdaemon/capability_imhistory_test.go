@@ -2,10 +2,13 @@ package agentdaemon
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 )
+
+var errStubBuiltinLookup = errors.New("stub: builtin flag lookup failed")
 
 // fixedSigner mints a deterministic token so tests can assert the connector
 // threads the signer output into the MCP entry's env verbatim.
@@ -101,4 +104,50 @@ func TestResolveCapabilityAdditions_SkipsNonClaudeTarget(t *testing.T) {
 	if _, ok := got.MCPServers[imHistoryServerName]; ok {
 		t.Fatal("history tool must not inject for non-claude target")
 	}
+}
+
+// TestResolveCapabilityAdditions_HistoryToolGatedByBuiltinFlag: when the
+// per-agent built-in flag reports OFF, the runtime injection is suppressed so
+// the agent can no longer call the tool. A store returning ON (or no row) keeps
+// it mounted.
+func TestResolveCapabilityAdditions_HistoryToolGatedByBuiltinFlag(t *testing.T) {
+	in := connector.PromptInput{AgentID: "pa-1", ConversationID: "conv-1"}
+
+	t.Run("disabled suppresses injection", func(t *testing.T) {
+		c := enabledConnector()
+		c.capabilities = stubCapabilityStore{
+			builtinDisabled: map[string]bool{imHistoryServerName: true},
+		}
+		got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+		if err != nil {
+			t.Fatalf("resolveCapabilityAdditions: %v", err)
+		}
+		if _, ok := got.MCPServers[imHistoryServerName]; ok {
+			t.Fatalf("history tool must be suppressed when built-in flag is OFF: %#v", got.MCPServers)
+		}
+	})
+
+	t.Run("enabled keeps injection", func(t *testing.T) {
+		c := enabledConnector()
+		c.capabilities = stubCapabilityStore{} // no disabled entries => default ON
+		got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+		if err != nil {
+			t.Fatalf("resolveCapabilityAdditions: %v", err)
+		}
+		if _, ok := got.MCPServers[imHistoryServerName]; !ok {
+			t.Fatalf("history tool must inject when built-in flag is ON: %#v", got.MCPServers)
+		}
+	})
+
+	t.Run("flag lookup error defaults to injecting", func(t *testing.T) {
+		c := enabledConnector()
+		c.capabilities = stubCapabilityStore{builtinErr: errStubBuiltinLookup}
+		got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+		if err != nil {
+			t.Fatalf("resolveCapabilityAdditions: %v", err)
+		}
+		if _, ok := got.MCPServers[imHistoryServerName]; !ok {
+			t.Fatalf("history tool must inject when the flag lookup fails (never block on bookkeeping): %#v", got.MCPServers)
+		}
+	})
 }

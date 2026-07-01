@@ -19,10 +19,13 @@ import (
 // CapabilityRuntimeStore is the capability surface the agent_daemon
 // connector needs. GetEnabledCapabilitiesForAgent lists what's enabled
 // on the agent; GetUserCredentialByUserKind resolves per-user
-// credentials for MCP env placeholder substitution.
+// credentials for MCP env placeholder substitution;
+// IsBuiltinCapabilityEnabled reports the per-agent on/off flag for a
+// runtime-injected built-in tool (default ON).
 type CapabilityRuntimeStore interface {
 	GetEnabledCapabilitiesForAgent(ctx context.Context, agentID string) ([]store.EnabledCapabilityRead, error)
 	GetUserCredentialByUserKind(ctx context.Context, userID, kind string) (store.UserCredentialRead, bool, error)
+	IsBuiltinCapabilityEnabled(ctx context.Context, agentID, key string) (bool, error)
 }
 
 // OSSPresigner is the narrow surface for the object-storage backend:
@@ -267,7 +270,7 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 	// regardless of the early returns below). Gated to the Claude Code MCP
 	// schema for the MVP; other agent kinds consume MCP config differently.
 	if agentKindToRenderTarget(agentKind) == render.TargetClaudeCode {
-		if name, entry, ok := c.imHistoryMCPServer(strings.TrimSpace(in.ConversationID)); ok {
+		if name, entry, ok := c.imHistoryMCPServer(strings.TrimSpace(in.ConversationID)); ok && c.imHistoryEnabledForAgent(ctx, in.AgentID) {
 			result.MCPServers = map[string]any{name: entry}
 		}
 	}

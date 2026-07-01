@@ -85,6 +85,7 @@ import {
   useDeleteAgentCapabilityMutation,
   useEnableAgentCapabilityMutation,
   useAgentCapabilitiesQuery,
+  useToggleBuiltinCapabilityMutation,
 } from "../../lib/api-capabilities"
 import { useMyCredentials } from "../../lib/api-credentials"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
@@ -843,6 +844,62 @@ function capabilityFromBinding(binding: AgentCapability, workspaceID: string | n
 
 function tCapabilityFallback(capabilityID: string) {
   return `Capability ${capabilityID.slice(0, 8)}`
+}
+
+// BuiltinCapabilityCard renders a runtime-injected built-in (e.g. chat-history)
+// as a default-ON card with a single on/off toggle. Built-ins have no
+// capability_version, so this deliberately skips the version-query machinery in
+// CapabilityCard; toggling off writes the per-agent disable flag which the
+// connector reads at prompt time to suppress injection.
+function BuiltinCapabilityCard({
+  binding,
+  agent,
+  workspaceID,
+  isAdmin,
+  onToast,
+}: {
+  binding: AgentCapability
+  agent: Agent
+  workspaceID: string | null
+  isAdmin: boolean
+  onToast: (message: string) => void
+}) {
+  const { t } = useTranslation("admin")
+  const capability = binding.capability
+  const key = binding.builtin_key ?? capability?.builtin_key ?? ""
+  const mut = useToggleBuiltinCapabilityMutation(workspaceID, agent.id)
+  const enabled = binding.enabled
+  const onToggle = (next: boolean) => {
+    if (!key || mut.isPending) return
+    mut.mutate(
+      { key, enabled: next },
+      { onError: (e) => onToast(t("agents.detail.capabilities.builtin.toggleError", { message: e instanceof Error ? e.message : String(e) })) },
+    )
+  }
+  return (
+    <div className="rounded-md border border-line p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-fg">{capability?.name ?? key}</span>
+            {capability?.type && <CapabilityTypeBadge type={capability.type} />}
+            <Badge variant="neutral">{t("agents.detail.capabilities.builtin.badge")}</Badge>
+          </div>
+          {capability?.description && <p className="mt-1 text-sm text-fg-subtle">{capability.description}</p>}
+        </div>
+        <label className={`flex shrink-0 items-center gap-2 text-sm ${isAdmin ? "cursor-pointer" : "cursor-not-allowed opacity-60"} text-fg-subtle`}>
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={enabled}
+            disabled={!isAdmin || mut.isPending}
+            onChange={(e) => onToggle(e.target.checked)}
+          />
+          <span>{enabled ? t("agents.detail.capabilities.builtin.on") : t("agents.detail.capabilities.builtin.off")}</span>
+        </label>
+      </div>
+    </div>
+  )
 }
 
 function CapabilityCard({
@@ -1701,7 +1758,7 @@ function AgentConfigTab({
   const credentials = credentialsQ.data?.credentials ?? []
   const installedIDs = new Set(installedCapabilities.map((item) => item.capability_id))
   const enabledCaps = installedCapabilities
-    .filter((item) => item.enabled)
+    .filter((item) => item.enabled || item.built_in)
     .map((item) => {
       const raw = item as AgentCapability & { capability?: Capability }
       return {
@@ -1831,18 +1888,29 @@ function ConfigCapabilitiesSection({
         />
       ) : (
         <div className="space-y-2">
-          {enabledCaps.map((item) => (
-            <CapabilityCard
-              key={item.binding.id ?? item.capability?.id}
-              item={item}
-              agent={agent}
-              workspaceID={workspaceID}
-              credentials={credentials}
-              language={language}
-              mode="enabled"
-              onToast={onToast}
-            />
-          ))}
+          {enabledCaps.map((item) =>
+            item.binding.built_in ? (
+              <BuiltinCapabilityCard
+                key={item.binding.id ?? item.capability?.id}
+                binding={item.binding}
+                agent={agent}
+                workspaceID={workspaceID}
+                isAdmin={isAdmin}
+                onToast={onToast}
+              />
+            ) : (
+              <CapabilityCard
+                key={item.binding.id ?? item.capability?.id}
+                item={item}
+                agent={agent}
+                workspaceID={workspaceID}
+                credentials={credentials}
+                language={language}
+                mode="enabled"
+                onToast={onToast}
+              />
+            )
+          )}
         </div>
       )}
 

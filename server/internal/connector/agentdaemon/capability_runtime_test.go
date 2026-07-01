@@ -22,6 +22,12 @@ type stubCapabilityStore struct {
 	rows        []store.EnabledCapabilityRead
 	err         error
 	credentials map[string]store.UserCredentialRead // key = "userID:kind"
+
+	// builtinDisabled maps capability_key -> true when the built-in should
+	// report as OFF. Absence => default ON (mirrors the store's no-row
+	// semantics). builtinErr, when set, is returned for every lookup.
+	builtinDisabled map[string]bool
+	builtinErr      error
 }
 
 func (s stubCapabilityStore) GetEnabledCapabilitiesForAgent(_ context.Context, _ string) ([]store.EnabledCapabilityRead, error) {
@@ -35,6 +41,16 @@ func (s stubCapabilityStore) GetUserCredentialByUserKind(_ context.Context, user
 	key := userID + ":" + kind
 	cred, ok := s.credentials[key]
 	return cred, ok, nil
+}
+
+func (s stubCapabilityStore) IsBuiltinCapabilityEnabled(_ context.Context, _, key string) (bool, error) {
+	if s.builtinErr != nil {
+		return false, s.builtinErr
+	}
+	if s.builtinDisabled[key] {
+		return false, nil
+	}
+	return true, nil
 }
 
 // ---------------------------------------------------------------------------

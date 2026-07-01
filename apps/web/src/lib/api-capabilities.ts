@@ -253,6 +253,18 @@ async function deleteAgentCapability(
   )
 }
 
+async function setBuiltinCapabilityEnabled(
+  workspaceID: string,
+  agentID: string,
+  key: string,
+  enabled: boolean,
+) {
+  return apiRequest(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/builtin-capabilities/${encodeURIComponent(key)}`,
+    { method: "PUT", body: { enabled } },
+  )
+}
+
 export function useCapabilitiesQuery(workspaceID: string | null, name = "", type = "", page?: number, pageSize?: number) {
   return useQuery({
     queryKey: KEY_CAPABILITIES(workspaceID ?? "_none", name.trim(), type.trim(), page, pageSize),
@@ -382,6 +394,25 @@ export function useDeleteAgentCapabilityMutation(
     mutationFn: (capabilityVersionID: string) => {
       if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
       return deleteAgentCapability(workspaceID, agentID, capabilityVersionID)
+    },
+    retry: noUnreachableRetry,
+    onSuccess: () => {
+      if (workspaceID && agentID) {
+        qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
+      }
+    },
+  })
+}
+
+export function useToggleBuiltinCapabilityMutation(
+  workspaceID: string | null,
+  agentID: string | null,
+) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) => {
+      if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
+      return setBuiltinCapabilityEnabled(workspaceID, agentID, key, enabled)
     },
     retry: noUnreachableRetry,
     onSuccess: () => {
