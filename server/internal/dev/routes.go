@@ -18,7 +18,6 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	authfeishu "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
@@ -30,6 +29,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 var mentionPattern = regexp.MustCompile(`@[\p{Han}A-Za-z0-9_-]+`)
@@ -191,6 +191,7 @@ type RuntimeStore interface {
 	GetWorkspaceIMConnectors(ctx context.Context, workspaceID string) ([]store.WorkspaceConnectorRead, error)
 	UpsertWorkspaceSlackConnector(ctx context.Context, input store.UpsertWorkspaceSlackConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 	UpsertWorkspaceDiscordConnector(ctx context.Context, input store.UpsertWorkspaceDiscordConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
+	UpsertWorkspaceTeamsConnector(ctx context.Context, input store.UpsertWorkspaceTeamsConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 	UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 
 	// 定时任务(scheduled tasks)
@@ -547,6 +548,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/connectors", gateWorkspaceMember(runtimeStore, listWorkspaceConnectors(runtimeStore)))
 			r.Patch("/workspaces/{workspaceID}/connector/slack", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceSlackConnector(runtimeStore)))
 			r.Patch("/workspaces/{workspaceID}/connector/discord", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceDiscordConnector(runtimeStore)))
+			r.Patch("/workspaces/{workspaceID}/connector/teams", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceTeamsConnector(runtimeStore)))
 			r.Patch("/workspaces/{workspaceID}/connector/feishu", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceFeishuConnector(runtimeStore)))
 			r.Post("/agents/{agentID}/connector/feishu/provision/begin", beginAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Post("/agents/{agentID}/connector/feishu/provision/poll", pollAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
@@ -1850,9 +1852,9 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 			if mode, _ := result.Agent.Config["daemon_mode"].(string); mode == "local" {
 				if deviceID, _ := result.Agent.Config["device_id"].(string); strings.TrimSpace(deviceID) != "" {
 					if _, bindErr := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
-						WorkspaceID:    workspaceID,
-						AgentID: result.Agent.ID,
-						RuntimeID:      deviceID,
+						WorkspaceID: workspaceID,
+						AgentID:     result.Agent.ID,
+						RuntimeID:   deviceID,
 					}); bindErr != nil {
 						// Non-fatal: row is created, the user can
 						// re-save from the edit dialog to retry.
@@ -1888,9 +1890,9 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 						return
 					}
 					if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
-						WorkspaceID:    workspaceID,
-						AgentID: paID,
-						RuntimeID:      deviceID,
+						WorkspaceID: workspaceID,
+						AgentID:     paID,
+						RuntimeID:   deviceID,
 					}); bindErr != nil {
 						// Sandbox is alive but runtime_id write failed.
 						// Dispatch shows "未绑定 Runtime" until a retry
@@ -2308,6 +2310,13 @@ type updateWorkspaceDiscordConnectorBody struct {
 	Intents      string `json:"intents"`
 }
 
+type updateWorkspaceTeamsConnectorBody struct {
+	Enabled        bool   `json:"enabled"`
+	AppID          string `json:"app_id"`
+	AppPasswordRef string `json:"app_password_ref"`
+	TenantID       string `json:"tenant_id"`
+}
+
 type updateWorkspaceFeishuConnectorBody struct {
 	Enabled              bool   `json:"enabled"`
 	AppID                string `json:"app_id"`
@@ -2389,6 +2398,37 @@ func updateWorkspaceDiscordConnector(runtimeStore RuntimeStore) http.HandlerFunc
 				return
 			case errors.Is(err, store.ErrDiscordAppIDInUse):
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "discord_app_id_in_use", "detail": err.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"connector": change})
+	}
+}
+
+func updateWorkspaceTeamsConnector(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req updateWorkspaceTeamsConnectorBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceTeamsConnector(r.Context(), store.UpsertWorkspaceTeamsConnectorInput{
+			WorkspaceID:    workspaceID,
+			Enabled:        req.Enabled,
+			AppID:          req.AppID,
+			AppPasswordRef: req.AppPasswordRef,
+			TenantID:       req.TenantID,
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrTeamsConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "teams_connector_incomplete", "detail": err.Error()})
+				return
+			case errors.Is(err, store.ErrTeamsAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "teams_app_id_in_use", "detail": err.Error()})
 				return
 			}
 			writeStoreAgentError(w, err)
@@ -3594,11 +3634,11 @@ func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"workspace_id": workspaceID,
-			"statuses":   statuses,
-			"agent_runs": result.Runs,
-			"total":      result.Total,
-			"limit":      limit,
-			"offset":     offset,
+			"statuses":     statuses,
+			"agent_runs":   result.Runs,
+			"total":        result.Total,
+			"limit":        limit,
+			"offset":       offset,
 		})
 	}
 }
@@ -3694,12 +3734,12 @@ func listWorkspaceAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 
 		q := r.URL.Query()
 		filter := store.ListAuditRecordsFilter{
-			WorkspaceID:  workspaceID,
-			Source:     strings.TrimSpace(q.Get("source")),
-			EventType:  strings.TrimSpace(q.Get("event_type")),
-			ActorID:    strings.TrimSpace(q.Get("actor_id")),
-			TargetType: strings.TrimSpace(q.Get("target_type")),
-			TargetID:   strings.TrimSpace(q.Get("target_id")),
+			WorkspaceID: workspaceID,
+			Source:      strings.TrimSpace(q.Get("source")),
+			EventType:   strings.TrimSpace(q.Get("event_type")),
+			ActorID:     strings.TrimSpace(q.Get("actor_id")),
+			TargetType:  strings.TrimSpace(q.Get("target_type")),
+			TargetID:    strings.TrimSpace(q.Get("target_id")),
 		}
 		records, err := runtimeStore.ListAuditRecords(r.Context(), filter, parseLimit(r, 100))
 		if err != nil {
@@ -3707,7 +3747,7 @@ func listWorkspaceAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"workspace_id":    workspaceID,
+			"workspace_id":  workspaceID,
 			"source":        filter.Source,
 			"event_type":    filter.EventType,
 			"target_type":   filter.TargetType,
@@ -3781,7 +3821,7 @@ func listWorkspaceConnectorUsage(runtimeStore RuntimeStore) http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, map[string]any{
 			"workspace_id": workspaceID,
-			"connectors": out,
+			"connectors":   out,
 		})
 	}
 }
@@ -4857,7 +4897,7 @@ func createWorkspaceConversation(runtimeStore RuntimeStore) http.HandlerFunc {
 			}
 		}
 		conversation, err := runtimeStore.CreateWorkspaceConversation(r.Context(), store.CreateWorkspaceConversationInput{
-			WorkspaceID:      workspaceID,
+			WorkspaceID:    workspaceID,
 			Title:          req.Title,
 			Surface:        req.Surface,
 			Form:           req.Form,

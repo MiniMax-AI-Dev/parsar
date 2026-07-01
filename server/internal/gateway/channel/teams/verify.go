@@ -73,14 +73,18 @@ func (c *Channel) Verify(r *http.Request, body []byte) (verified []byte, challen
 // and cached with a TTL so a rotation is picked up without a restart and a
 // verified request costs no network round-trip.
 type jwksVerifier struct {
-	audience    string
-	issuer      string
-	openIDURL   string
-	httpClient  *http.Client
-	refreshTTL  time.Duration
-	mu          sync.RWMutex
-	keys        map[string]*rsa.PublicKey
-	lastRefresh time.Time
+	audience string
+	// audienceAllowed, when set, replaces the single-audience check: the token's
+	// own aud claim(s) are validated against this predicate (multi-tenant — one
+	// webhook serving many workspace app_ids). audience is ignored while set.
+	audienceAllowed func(string) bool
+	issuer          string
+	openIDURL       string
+	httpClient      *http.Client
+	refreshTTL      time.Duration
+	mu              sync.RWMutex
+	keys            map[string]*rsa.PublicKey
+	lastRefresh     time.Time
 }
 
 // VerifierOption customizes a jwksVerifier (test injection of the HTTP client /
@@ -134,6 +138,27 @@ func NewJWKSVerifier(appID string, opts ...VerifierOption) TokenVerifier {
 	return v
 }
 
+// NewMultiTenantJWKSVerifier builds a Bot Framework token verifier for a single
+// webhook that serves many workspace bots. Instead of enforcing one fixed
+// audience it validates each token's own aud claim against allowed — the closure
+// answers "is this app_id a registered, enabled Teams connector (or the env
+// bot)?". Signature/issuer/JWKS handling is identical to the single-tenant path;
+// only the audience check differs.
+func NewMultiTenantJWKSVerifier(allowed func(string) bool, opts ...VerifierOption) TokenVerifier {
+	v := &jwksVerifier{
+		audienceAllowed: allowed,
+		issuer:          botFrameworkIssuer,
+		openIDURL:       botFrameworkOpenIDConfig,
+		httpClient:      &http.Client{Timeout: 10 * time.Second},
+		refreshTTL:      12 * time.Hour,
+		keys:            map[string]*rsa.PublicKey{},
+	}
+	for _, o := range opts {
+		o(v)
+	}
+	return v
+}
+
 // Verify strips the bearer scheme and validates the JWT. A malformed header, a
 // bad signature, a wrong issuer/audience or an expired token all surface as
 // errors so Verify rejects the request.
@@ -163,15 +188,40 @@ func (v *jwksVerifier) Verify(ctx context.Context, authorizationHeader string) e
 
 	parserOpts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{"RS256"}),
-		jwt.WithAudience(v.audience),
+	}
+	if v.audienceAllowed == nil {
+		// Single-tenant: enforce the one fixed audience during parse.
+		parserOpts = append(parserOpts, jwt.WithAudience(v.audience))
 	}
 	if v.issuer != "" {
 		parserOpts = append(parserOpts, jwt.WithIssuer(v.issuer))
 	}
-	if _, err := jwt.Parse(raw, keyfunc, parserOpts...); err != nil {
+	token, err := jwt.Parse(raw, keyfunc, parserOpts...)
+	if err != nil {
 		return err
 	}
+	if v.audienceAllowed != nil {
+		// Multi-tenant: the token is signature/issuer-valid; now the aud claim
+		// must name an app_id we actually serve.
+		auds, err := token.Claims.GetAudience()
+		if err != nil {
+			return fmt.Errorf("read audience claim: %w", err)
+		}
+		if !audienceAccepted(auds, v.audienceAllowed) {
+			return fmt.Errorf("token audience %v is not a registered teams bot", auds)
+		}
+	}
 	return nil
+}
+
+// audienceAccepted reports whether any audience entry passes the allow predicate.
+func audienceAccepted(auds []string, allowed func(string) bool) bool {
+	for _, a := range auds {
+		if a = strings.TrimSpace(a); a != "" && allowed(a) {
+			return true
+		}
+	}
+	return false
 }
 
 // keyForKID returns the RSA public key for a JWT kid, refreshing the JWKS cache

@@ -1714,24 +1714,29 @@ func buildDiscordRunner(env func(string) string, dbStore *store.Store, connector
 }
 
 // buildTeamsRunner constructs the Microsoft Teams webhook inbound runner from
-// env. Returns nil (silent skip) when the feature flag is off, mirroring
+// env. Returns nil (silent skip) when neither feature flag is set, mirroring
 // buildSlackRunner/buildDiscordRunner. Unlike those, the returned runner is an
 // http.Handler (Teams delivers inbound as HTTPS POSTs) — main.go mounts
 // runner.Handler() on the chi router rather than launching a Run goroutine.
 //
-// Env contract:
-//   - PARSAR_TEAMS_WEBHOOK       (default off; "true" enables)
-//   - PARSAR_TEAMS_APP_ID        (REQUIRED when enabled; the Microsoft App Id —
-//     both the inbound JWT audience and the outbound AAD client_id)
-//   - PARSAR_TEAMS_APP_PASSWORD  (REQUIRED when enabled; the app secret used to
-//     mint the outbound AAD Connector token for synchronous replies / card acks)
-//   - PARSAR_TEAMS_TENANT_ID     (optional; pins a single-tenant token authority,
+// Two modes share this one webhook:
+//   - PARSAR_TEAMS_WEBHOOK=true    single env bot (PARSAR_TEAMS_APP_ID/APP_PASSWORD
+//     required; the App Id is the fixed inbound JWT audience and outbound client_id).
+//   - PARSAR_TEAMS_CONNECTORS=true DB-backed multi-tenant: one webhook serving
+//     every workspace_im_connectors teams row. Requires PARSAR_MASTER_KEY (vault
+//     seal). Each inbound request self-resolves: the JWT's own aud claim is checked
+//     against the enabled connector set, and outbound replies decrypt that
+//     workspace's app_password per call. Env creds become an optional fallback.
+//
+// Either flag mounts the webhook; when both are set the connector path layers in
+// front of the env bot. Other env:
+//   - PARSAR_TEAMS_TENANT_ID   (optional; pins a single-tenant token authority,
 //     empty selects the multi-tenant botframework.com authority)
 //
 // Inbound vs outbound auth are asymmetric (the classic Bot Framework pitfall):
-// WithTokenVerifier(NewJWKSVerifier(appID)) checks the inbound JWT bearer, while
-// the outbound Connector transport mints an AAD client-credentials bearer from
-// (app id, password). The two never share a token.
+// the token verifier checks the inbound JWT bearer, while the outbound Connector
+// transport mints an AAD client-credentials bearer from (app id, password). The
+// two never share a token.
 //
 // Card-action routing mirrors the Slack shape: with PARSAR_MASTER_KEY set we
 // build a neutral inbound.Manager and inject its CardActionRouter so Teams
@@ -1739,16 +1744,25 @@ func buildDiscordRunner(env func(string) string, dbStore *store.Store, connector
 // without it the adapter runs router-less and a click just echoes a neutral
 // "received" ack.
 func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*teamsrunner.Runner, error) {
-	if !truthy(env("PARSAR_TEAMS_WEBHOOK")) {
+	connectorsMode := truthy(env("PARSAR_TEAMS_CONNECTORS"))
+	if !truthy(env("PARSAR_TEAMS_WEBHOOK")) && !connectorsMode {
 		return nil, nil
 	}
 	appID := strings.TrimSpace(env("PARSAR_TEAMS_APP_ID"))
-	if appID == "" {
-		return nil, errors.New("PARSAR_TEAMS_WEBHOOK=true requires PARSAR_TEAMS_APP_ID (the Microsoft App Id)")
-	}
 	appPassword := strings.TrimSpace(env("PARSAR_TEAMS_APP_PASSWORD"))
-	if appPassword == "" {
-		return nil, errors.New("PARSAR_TEAMS_WEBHOOK=true requires PARSAR_TEAMS_APP_PASSWORD (the app secret for outbound Connector auth)")
+	if connectorsMode {
+		if strings.TrimSpace(env("PARSAR_MASTER_KEY")) == "" {
+			return nil, errors.New("PARSAR_TEAMS_CONNECTORS=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+		}
+	} else {
+		// Single env bot: both credentials are required so a webhook POST that
+		// fails Bot Framework auth is a 401 rather than silently trusted.
+		if appID == "" {
+			return nil, errors.New("PARSAR_TEAMS_WEBHOOK=true requires PARSAR_TEAMS_APP_ID (the Microsoft App Id)")
+		}
+		if appPassword == "" {
+			return nil, errors.New("PARSAR_TEAMS_WEBHOOK=true requires PARSAR_TEAMS_APP_PASSWORD (the app secret for outbound Connector auth)")
+		}
 	}
 	tenantID := strings.TrimSpace(env("PARSAR_TEAMS_TENANT_ID"))
 
@@ -1760,16 +1774,35 @@ func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorRe
 		}
 	}
 
-	// Inbound JWT verifier: the Microsoft App Id is the enforced audience. Always
-	// built here (appID is required), so a webhook POST that fails Bot Framework
-	// auth is a 401 rather than silently trusted.
+	// Inbound JWT verifier. Single-bot pins the one env App Id as the audience;
+	// connectors mode validates each token's own aud against the enabled teams
+	// connector set (+ env bot), so one webhook authenticates many workspace bots.
+	var verifier teamschannel.TokenVerifier
+	if connectorsMode {
+		verifier = teamschannel.NewMultiTenantJWKSVerifier(storeAllowsTeamsAppID(dbStore, appID))
+	} else {
+		verifier = teamschannel.NewJWKSVerifier(appID)
+	}
 	adapterOpts := []teamschannel.Option{
-		teamschannel.WithTokenVerifier(teamschannel.NewJWKSVerifier(appID)),
+		teamschannel.WithTokenVerifier(verifier),
+	}
+
+	// Connectors mode: layer the DB (app_id → app_password) resolver in front of
+	// the env static so outbound replies use each workspace's own secret.
+	if connectorsMode {
+		credResolver, err := buildTeamsCredentialResolver(env, dbStore)
+		if err != nil {
+			return nil, fmt.Errorf("teams webhook: init credential resolver: %w", err)
+		}
+		if credResolver != nil {
+			adapterOpts = append(adapterOpts, teamschannel.WithCredentialResolver(credResolver))
+		}
 	}
 
 	// Best-effort card-action router: needs the secret vault (credential-form
 	// encryption) plus the connector-backed permission/choice routers. Absent a
 	// master key the adapter stays router-less rather than failing inbound.
+	actionRouterWired := false
 	if masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY")); masterKey != "" {
 		secretsSvc, err := secrets.New(masterKey)
 		if err != nil {
@@ -1787,6 +1820,7 @@ func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorRe
 			return nil, fmt.Errorf("teams webhook: init action manager: %w", err)
 		}
 		adapterOpts = append(adapterOpts, teamschannel.WithActionRouter(actionMgr.CardActionRouter()))
+		actionRouterWired = true
 	} else {
 		log.Bg().Warn("teams webhook: PARSAR_MASTER_KEY unset; button clicks echo 'received' (no permission/choice/credential routing)")
 	}
@@ -1805,8 +1839,10 @@ func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorRe
 		return nil, fmt.Errorf("teams webhook: init runner: %w", err)
 	}
 	log.Bg().Info("teams webhook runner configured",
+		"connectors_mode", connectorsMode,
+		"env_bot", appID != "",
 		"tenant_pinned", tenantID != "",
-		"action_router", len(adapterOpts) > 1) // >1: JWT verifier is always present
+		"action_router", actionRouterWired)
 	return runner, nil
 }
 
@@ -2223,8 +2259,12 @@ func buildDiscordCredentialResolver(env func(string) string, dbStore *store.Stor
 type workspaceConnectorResolver struct {
 	store    *store.Store
 	secrets  *secrets.Service
-	platform string // "slack" | "discord"
+	platform string // "slack" | "discord" | "teams"
 	tokenRef string // config key holding the secret id (e.g. "bot_token_ref")
+	// extract reads the credential value out of the decrypted payload. Nil
+	// defaults to botTokenFromPayload (Slack/Discord bot tokens); Teams injects
+	// appPasswordFromPayload since its secret is keyed "app_password".
+	extract  func(map[string]any) string
 	fallback channel.CredentialResolver
 }
 
@@ -2252,7 +2292,11 @@ func (r *workspaceConnectorResolver) Resolve(ctx context.Context, botID string) 
 	if err != nil {
 		return channel.Credential{}, fmt.Errorf("%s channel: decrypt bot token for app_id %s: %w", r.platform, appID, err)
 	}
-	token := strings.TrimSpace(botTokenFromPayload(decrypted))
+	extract := r.extract
+	if extract == nil {
+		extract = botTokenFromPayload
+	}
+	token := strings.TrimSpace(extract(decrypted))
 	if token == "" {
 		return channel.Credential{}, fmt.Errorf("%s channel: connector secret for app_id %s has no token value", r.platform, appID)
 	}
@@ -2297,6 +2341,73 @@ func wrapWithWorkspaceConnectorResolver(env func(string) string, dbStore *store.
 		tokenRef: "bot_token_ref",
 		fallback: legacy,
 	}, nil
+}
+
+// appPasswordFromPayload reads a Teams AAD client secret out of a decrypted
+// secret payload. It prefers the connector-specific "app_password" key, then
+// falls back to the generic shared-credential keys so a secret minted by any of
+// the standard forms still resolves.
+func appPasswordFromPayload(payload map[string]any) string {
+	for _, key := range []string{"app_password", "client_secret", "api_key", "token", "value"} {
+		if v, ok := payload[key].(string); ok && strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// buildTeamsCredentialResolver assembles the outbound Teams credential resolver.
+// With a master key + store it returns a workspace-dimension resolver keyed on
+// the Microsoft App Id (config.app_password_ref → vault secret → app password),
+// falling back to the env static (PARSAR_TEAMS_APP_ID/APP_PASSWORD) when a bot
+// has no connector row. Without a master key it returns nil so the caller keeps
+// the adapter's Config-derived static resolver.
+func buildTeamsCredentialResolver(env func(string) string, dbStore *store.Store) (channel.CredentialResolver, error) {
+	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
+	if masterKey == "" || dbStore == nil {
+		return nil, nil
+	}
+	secretsSvc, err := secrets.New(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("teams credential resolver: init secrets service: %w", err)
+	}
+	fallback := teamschannel.NewStaticCredentialResolver(
+		strings.TrimSpace(env("PARSAR_TEAMS_APP_ID")),
+		strings.TrimSpace(env("PARSAR_TEAMS_APP_PASSWORD")),
+	)
+	return &workspaceConnectorResolver{
+		store:    dbStore,
+		secrets:  secretsSvc,
+		platform: "teams",
+		tokenRef: "app_password_ref",
+		extract:  appPasswordFromPayload,
+		fallback: fallback,
+	}, nil
+}
+
+// storeAllowsTeamsAppID builds the multi-tenant inbound-JWT audience predicate:
+// an app_id is accepted when it matches the env bot id, or an enabled Teams
+// connector row exists for it. GetWorkspaceConnectorByAppID returns only enabled
+// rows, so a disabled connector's app_id is rejected — the token audience must
+// name a bot this deployment actively serves.
+func storeAllowsTeamsAppID(dbStore *store.Store, envAppID string) func(string) bool {
+	envAppID = strings.TrimSpace(envAppID)
+	return func(appID string) bool {
+		appID = strings.TrimSpace(appID)
+		if appID == "" {
+			return false
+		}
+		if envAppID != "" && appID == envAppID {
+			return true
+		}
+		if dbStore == nil {
+			return false
+		}
+		if _, err := dbStore.GetWorkspaceConnectorByAppID(context.Background(), "teams", appID); err == nil {
+			return true
+		}
+		return false
+	}
 }
 
 // buildOutboundChannels assembles the neutral outbound channel registry the

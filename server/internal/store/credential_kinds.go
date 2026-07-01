@@ -19,6 +19,7 @@ type builtInCredentialKindSeed struct {
 var builtInCredentialKindSeeds = []builtInCredentialKindSeed{
 	{Code: "github_pat", DisplayName: "GitHub \u8bbf\u95ee\u4ee4\u724c", Description: "GitHub Personal Access Token", Source: CredentialKindSourcePlatformOAuth},
 	{Code: "slack_bot_token", DisplayName: "Slack Bot Token", Description: "Slack Bot Token (xoxb-...)", Source: CredentialKindSourceUserDefined},
+	{Code: "teams_app_password", DisplayName: "Teams 应用密码", Description: "Microsoft Teams Bot AAD client secret", Source: CredentialKindSourceUserDefined},
 	{Code: "postgres_dsn", DisplayName: "Postgres \u8fde\u63a5\u4e32", Description: "Postgres DSN", Source: CredentialKindSourceUserDefined},
 	{Code: "notion_integration", DisplayName: "Notion \u96c6\u6210 token", Description: "Notion Integration Token", Source: CredentialKindSourceUserDefined},
 	{Code: "jira_api_token", DisplayName: "Jira API Token", Description: "Atlassian Jira API Token", Source: CredentialKindSourceUserDefined},
@@ -31,6 +32,7 @@ var builtInCredentialKindSeeds = []builtInCredentialKindSeed{
 var SupportedCredentialKinds = []string{
 	"github_pat",
 	"slack_bot_token",
+	"teams_app_password",
 	"postgres_dsn",
 	"notion_integration",
 	"jira_api_token",
