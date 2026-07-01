@@ -375,7 +375,7 @@ export function AgentsPage() {
         title={t("agents.page.title")}
         description={t("agents.page.description")}
         action={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" strokeWidth={2} /> {t("agents.actions.create")}
           </Button>
         }

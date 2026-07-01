@@ -373,6 +373,7 @@ function ModelsTable({
                     <Button
                       variant="ghost"
                       size="icon"
+                      shape="circle"
                       className="h-8 w-8"
                       onClick={() => onTest(m)}
                       disabled={!canTest}
@@ -388,6 +389,7 @@ function ModelsTable({
                     <Button
                       variant="ghost"
                       size="icon"
+                      shape="circle"
                       className="h-8 w-8"
                       onClick={() => onRequestEdit(m)}
                       disabled={!canEdit}
@@ -403,6 +405,7 @@ function ModelsTable({
                     <Button
                       variant="ghost"
                       size="icon"
+                      shape="circle"
                       className="h-8 w-8"
                       onClick={() => onRequestDuplicate(m)}
                       title={t("models.actions.copy")}
@@ -599,7 +602,7 @@ export function ModelsPage() {
           title={t("models.empty.title")}
           description={t("models.empty.description")}
           action={
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" /> {t("models.actions.addModel")}
             </Button>
           }
@@ -645,6 +648,7 @@ export function ModelsPage() {
               </Button>
               <Button
                 size="sm"
+                shape="pill"
                 onClick={() => setCreateOpen(true)}
                 disabled={!wsId}
               >

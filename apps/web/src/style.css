@@ -36,55 +36,56 @@
    * `danger / warning / success / info / accent` — semantic
    * ---------------------------------------------------------- */
 
-  /* Foreground */
-  --color-fg:          oklch(0.21 0.034 264.665);  /* slate-900  */
-  --color-fg-emphasis: oklch(0.28 0.037 259.97);   /* slate-800  */
-  --color-fg-muted:    oklch(0.45 0.04 257.28);    /* slate-600  */
-  --color-fg-subtle:   oklch(0.55 0.046 257.42);   /* slate-500  */
-  --color-fg-faint:    oklch(0.71 0.035 256.79);   /* slate-400  */
+  /* Foreground — true neutral grey (chroma 0), no blue tint. Lightness
+     ladder preserved so hierarchy/contrast is unchanged. */
+  --color-fg:          oklch(0.19 0 0);   /* near-black ink */
+  --color-fg-emphasis: oklch(0.27 0 0);
+  --color-fg-muted:    oklch(0.45 0 0);
+  --color-fg-subtle:   oklch(0.55 0 0);
+  --color-fg-faint:    oklch(0.71 0 0);
   --color-fg-on-emphasis: oklch(0.985 0 0);        /* white      */
 
-  /* Background → produces bg-surface / bg-surface-subtle / etc. */
+  /* Background → produces bg-surface / bg-surface-subtle / etc. Pure greys. */
   --color-surface:         oklch(1 0 0);               /* white      */
-  --color-surface-subtle:  oklch(0.98 0.003 247.86);   /* slate-50   */
-  --color-surface-muted:   oklch(0.96 0.006 247.9);    /* slate-100  */
-  --color-surface-emphasis: oklch(0.21 0.034 264.665); /* slate-900  */
-  --color-surface-inverse: oklch(0.13 0.028 261.69);   /* slate-950  */
+  --color-surface-subtle:  oklch(0.985 0 0);
+  --color-surface-muted:   oklch(0.955 0 0);
+  --color-surface-emphasis: oklch(0.19 0 0);           /* ink        */
+  --color-surface-inverse: oklch(0.13 0 0);            /* near-black */
 
   /* Border → produces border-line / border-line-muted / etc. The token is
      called `line` instead of `border` so utilities read border-line not
-     border-border. */
-  --color-line:         oklch(0.93 0.013 255.51);  /* slate-200 */
-  --color-line-muted:   oklch(0.97 0.003 247.86);  /* slate-100 */
-  --color-line-strong:  oklch(0.87 0.022 252.89);  /* slate-300 */
+     border-border. Pure neutral. */
+  --color-line:         oklch(0.92 0 0);
+  --color-line-muted:   oklch(0.965 0 0);
+  --color-line-strong:  oklch(0.86 0 0);
 
   /* Semantic — every state has a `*-subtle` background + `*-strong` border
-     + `*` foreground triad so callsites pick one set and stop tasting
-     numbers (red-500 vs red-700 vs red-900 etc). */
-  --color-danger:           oklch(0.58 0.22 27.27);   /* red-600  */
-  --color-danger-emphasis:  oklch(0.51 0.21 27.49);   /* red-700  */
-  --color-danger-subtle:    oklch(0.97 0.013 17.38);  /* red-50   */
-  --color-danger-border:    oklch(0.88 0.06 18.33);   /* red-200  */
+     + `*` foreground triad. Deliberately DESATURATED (chroma slashed to
+     ~0.04–0.06): states stay recognisable but never shout, matching the
+     monochrome / Tesla-Apple restraint. */
+  --color-danger:           oklch(0.52 0.09 27.27);   /* muted brick red */
+  --color-danger-emphasis:  oklch(0.46 0.085 27.49);
+  --color-danger-subtle:    oklch(0.975 0.008 17.38);
+  --color-danger-border:    oklch(0.9 0.02 18.33);
 
-  --color-warning:          oklch(0.55 0.16 60.06);   /* amber-700 */
-  --color-warning-emphasis: oklch(0.47 0.13 56.43);   /* amber-800 */
-  --color-warning-subtle:   oklch(0.98 0.022 95.28);  /* amber-50  */
-  --color-warning-border:   oklch(0.88 0.07 84.04);   /* amber-200 */
+  --color-warning:          oklch(0.52 0.055 60.06);  /* muted ochre */
+  --color-warning-emphasis: oklch(0.45 0.05 56.43);
+  --color-warning-subtle:   oklch(0.98 0.012 95.28);
+  --color-warning-border:   oklch(0.9 0.025 84.04);
 
-  --color-success:          oklch(0.5 0.14 159.85);   /* emerald-700 */
-  --color-success-emphasis: oklch(0.43 0.12 160.74);  /* emerald-800 */
-  --color-success-subtle:   oklch(0.97 0.025 154.97); /* emerald-50  */
-  --color-success-border:   oklch(0.86 0.07 153.65);  /* emerald-200 */
+  --color-success:          oklch(0.48 0.055 159.85); /* muted moss */
+  --color-success-emphasis: oklch(0.42 0.05 160.74);
+  --color-success-subtle:   oklch(0.975 0.012 154.97);
+  --color-success-border:   oklch(0.89 0.025 153.65);
 
-  --color-info:             oklch(0.55 0.19 252.5);   /* blue-600 */
-  --color-info-emphasis:    oklch(0.49 0.18 254.55);  /* blue-700 */
-  --color-info-subtle:      oklch(0.97 0.013 236.96); /* blue-50  */
-  --color-info-border:      oklch(0.88 0.06 246.86);  /* blue-200 */
+  --color-info:             oklch(0.5 0.045 252.5);   /* muted slate-blue */
+  --color-info-emphasis:    oklch(0.44 0.04 254.55);
+  --color-info-subtle:      oklch(0.975 0.008 236.96);
+  --color-info-border:      oklch(0.9 0.02 246.86);
 
-  /* Accent = primary action color. Currently mirrors fg so CTA stays
-     ink-black; if we re-skin (brand color) only this token changes. */
+  /* Accent = primary action color. Mirrors fg so CTA stays ink-black. */
   --color-accent:           var(--color-fg);
-  --color-accent-emphasis:  oklch(0.13 0.028 261.69); /* slate-950 */
+  --color-accent-emphasis:  oklch(0.13 0 0);
   --color-accent-fg:        var(--color-fg-on-emphasis);
 }
 
@@ -96,13 +97,16 @@
 :root {
   color: #121212;
   background: #ffffff;
-  /* Kimi-style type system: clean sans for everything (no serif display).
-     Inter renders Latin; Noto Sans SC renders Chinese (Inter has no CJK
-     glyphs); system fonts are the final fallback. */
+  /* Monochrome type system. Inter renders Latin body/UI; Noto Sans SC renders
+     Chinese (Inter has no CJK glyphs); system fonts are the final fallback.
+     Display headings use Space Grotesk (see --font-display). */
   --font-sans:
     "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
     system-ui, Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Noto Sans CJK SC", sans-serif;
+  --font-display:
+    "Space Grotesk", "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   font-family: var(--font-sans);
   font-feature-settings: "calt", "ss01";
   font-variation-settings: normal;
@@ -113,13 +117,13 @@
   letter-spacing: -0.011em;
 }
 
-/* Display headings (page/hero titles). Kimi has no serif — titles are a
-   tight, heavy sans. Keeps the `.font-display` hook so existing markup that
-   opted in still gets the intended treatment, just sans now. */
+/* Display headings (page/hero titles): Space Grotesk — a calm, angular
+   geometric sans for a technical, Tesla/Apple-adjacent feel. Latin only, so
+   Chinese falls through to the sans stack (Space Grotesk has no CJK). */
 .font-display {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /* Slightly tighter tracking on display text (page titles, section headings). */
@@ -146,9 +150,18 @@ samp,
   box-sizing: border-box;
 }
 
+/* Base rem raised from the browser default 16px to 17px. The UI leaned
+   heavily on text-sm(14)/text-xs(12) which read cramped; raising the root
+   scales every rem-based size up ~6% (text-sm→14.9, text-base→17) so body
+   text breathes without editing 100+ callsites. */
+html {
+  font-size: 17px;
+}
+
 body {
   margin: 0;
   min-width: 960px;
+  line-height: 1.6;
 }
 
 button,
