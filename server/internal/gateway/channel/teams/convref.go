@@ -27,10 +27,16 @@ func trim(s string) string { return strings.TrimSpace(s) }
 // the reply POST targets; TenantID scopes a proactive send (Teams rejects a
 // send with no tenant on a channel conversation); BotAppID is the recipient bot
 // captured inbound so a multi-bot deployment resolves the right credential.
+// TeamID + GraphChannelID carry the Microsoft Graph routing tuple the history
+// fetcher needs (channel messages are addressed as
+// /teams/{team-id}/channels/{channel-id}/messages). Empty when the inbound
+// carried no channelData (personal/groupChat).
 type ConversationRef struct {
-	ServiceURL string
-	TenantID   string
-	BotAppID   string
+	ServiceURL     string
+	TenantID       string
+	BotAppID       string
+	TeamID         string
+	GraphChannelID string
 }
 
 // ConversationStore caches the ConversationRef for a conversation id. The runner

@@ -73,6 +73,16 @@ type channelData struct {
 	Tenant struct {
 		ID string `json:"id"`
 	} `json:"tenant"`
+	// Channel.ID is the Microsoft Graph channel id, used as the path segment of
+	// /teams/{team-id}/channels/{channel-id}/messages for history fetches.
+	Channel struct {
+		ID string `json:"id"`
+	} `json:"channel"`
+	// Team.ID is the Microsoft Graph team id, the parent scope of a channel
+	// message. Personal/groupChat messages leave it empty.
+	Team struct {
+		ID string `json:"id"`
+	} `json:"team"`
 }
 
 // atTagRe matches a Teams <at ...>label</at> mention token, whose bare form is
@@ -95,6 +105,14 @@ func (c *Channel) Normalize(verified []byte) (gateway.InboundEvent, error) {
 	convID := strings.TrimSpace(act.Conv.ID)
 	tenant := firstNonEmpty(act.Conv.TenantID, act.ChannelDat.Tenant.ID)
 	platformUser := firstNonEmpty(act.From.AADObjectID, act.From.ID)
+	// channelData.channel.id is the Microsoft Graph channel id (the path
+	// segment the Graph API history endpoint needs). It wins over activity.channelId
+	// (the channel registration name "msteams") when both are present.
+	graphChannelID := strings.TrimSpace(act.ChannelDat.Channel.ID)
+	if graphChannelID == "" {
+		graphChannelID = strings.TrimSpace(act.ChannelID)
+	}
+	teamID := strings.TrimSpace(act.ChannelDat.Team.ID)
 
 	ev := gateway.InboundEvent{
 		Platform:          string(c.Platform()),
@@ -119,7 +137,8 @@ func (c *Channel) Normalize(verified []byte) (gateway.InboundEvent, error) {
 			"tenant_id":         strings.TrimSpace(tenant),
 			"recipient_id":      strings.TrimSpace(act.Recipient.ID),
 			"conversation_type": strings.TrimSpace(act.Conv.ConversationType),
-			"channel_id":        strings.TrimSpace(act.ChannelID),
+			"channel_id":        graphChannelID,
+			"team_id":           teamID,
 		},
 	}
 	if loc := strings.TrimSpace(act.Locale); loc != "" {
@@ -144,9 +163,11 @@ func conversationRefFrom(verified []byte) (string, ConversationRef, bool) {
 		return "", ConversationRef{}, false
 	}
 	return convID, ConversationRef{
-		ServiceURL: strings.TrimSpace(act.ServiceURL),
-		TenantID:   firstNonEmpty(act.Conv.TenantID, act.ChannelDat.Tenant.ID),
-		BotAppID:   strings.TrimSpace(act.Recipient.ID),
+		ServiceURL:     strings.TrimSpace(act.ServiceURL),
+		TenantID:       firstNonEmpty(act.Conv.TenantID, act.ChannelDat.Tenant.ID),
+		BotAppID:       strings.TrimSpace(act.Recipient.ID),
+		TeamID:         strings.TrimSpace(act.ChannelDat.Team.ID),
+		GraphChannelID: firstNonEmpty(act.ChannelDat.Channel.ID, act.ChannelID),
 	}, true
 }
 
@@ -207,4 +228,34 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// GraphChannelLocation is the (team, channel) id pair the Microsoft Graph
+// history endpoint needs. Both come from channelData on the inbound activity;
+// channel.id is preferred over the activity.channelId (which is just the
+// channel registration name "msteams"). Empty fields mean "not routable" — the
+// fetcher returns a 502 rather than calling Graph with placeholder ids.
+type GraphChannelLocation struct {
+	TeamID    string
+	ChannelID string
+}
+
+// graphLocationFrom pulls (team-id, channel-id) from a verified activity so
+// the history fetcher can address the Graph messages endpoint without
+// re-implementing the field dance. team_id is empty for personal/groupChat
+// conversations (the Graph chats API is a different endpoint — out of scope
+// for this fetcher).
+func graphLocationFrom(verified []byte) GraphChannelLocation {
+	var act activity
+	if err := json.Unmarshal(verified, &act); err != nil {
+		return GraphChannelLocation{}
+	}
+	ch := strings.TrimSpace(act.ChannelDat.Channel.ID)
+	if ch == "" {
+		ch = strings.TrimSpace(act.ChannelID)
+	}
+	return GraphChannelLocation{
+		TeamID:    strings.TrimSpace(act.ChannelDat.Team.ID),
+		ChannelID: ch,
+	}
 }
