@@ -1,6 +1,6 @@
 -- +goose Up
 -- ==============================================================
--- 000004_teams_connector_platform — 放宽 platform CHECK,纳入 teams
+-- 000005_teams_connector_platform — 放宽 platform CHECK,纳入 teams
 -- ==============================================================
 -- 背景:
 --   000002 的内联 CHECK 只允许 feishu/slack/discord。Teams 复用同一张
