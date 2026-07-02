@@ -769,7 +769,7 @@ type WorkspaceImConnector struct {
 	ID pgtype.UUID `json:"id"`
 	// 所属 workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// IM 平台: feishu / slack / discord
+	// IM 平台: feishu / slack / discord / teams
 	Platform string `json:"platform"`
 	// 平台应用 ID(配置时即可知, workspace-bot 的通用 join key)
 	AppID string `json:"app_id"`
