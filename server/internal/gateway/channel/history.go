@@ -25,8 +25,15 @@ type HistoryMessage struct {
 type FetchHistoryRequest struct {
 	ExternalChatID   string // required
 	ExternalThreadID string // optional: scope to one thread
-	Limit            int    // requested count; the adapter clamps to its platform cap
-	Cursor           string // opaque page cursor from a prior FetchHistoryResult
+	// SourceAppID is the bound bot's platform app id (Slack/Discord app id,
+	// Microsoft App Id for Teams, Feishu app_id). The fetcher resolves the
+	// live bot credential via its Channel's CredentialResolver keyed on this —
+	// a per-call resolve means a rotated vault secret takes effect without
+	// recreating the channel. Empty means the fetcher's channel does not need
+	// per-bot credentials (Feishu, which builds the transport per-call).
+	SourceAppID string
+	Limit       int    // requested count; the adapter clamps to its platform cap
+	Cursor      string // opaque page cursor from a prior FetchHistoryResult
 }
 
 // FetchHistoryResult is a bounded page of messages ordered oldest-first, plus

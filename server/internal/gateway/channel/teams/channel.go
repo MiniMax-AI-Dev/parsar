@@ -93,6 +93,11 @@ type Channel struct {
 	// Action.Submit payloads through. nil until WithActionRouter; HandleAction
 	// then echoes a neutral "received" ack so a click never hangs.
 	actions channel.ActionRouter
+
+	// historyLister is the FetchHistory seam — nil means "build a real
+	// Microsoft Graph lister from c.creds on every call" (see history.go).
+	// Tests inject a fake via WithHistoryLister.
+	historyLister teamsHistoryLister
 }
 
 // Option customizes a Channel at construction.
@@ -140,6 +145,14 @@ func WithConversationStore(s ConversationStore) Option {
 // empty) disables verification for local debugging.
 func WithTokenVerifier(v TokenVerifier) Option {
 	return func(c *Channel) { c.verifier = v }
+}
+
+// WithHistoryLister injects a fake history lister so FetchHistory is
+// unit-testable without the Microsoft Graph HTTP client. Lives next to the
+// other Option helpers for symmetry, but is unexported — only test files in
+// this package use it.
+func WithHistoryLister(l teamsHistoryLister) Option {
+	return func(c *Channel) { c.historyLister = l }
 }
 
 // Compile-time assertions that *Channel satisfies the contract and the optional

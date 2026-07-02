@@ -69,6 +69,11 @@ type Channel struct {
 	// WithSenderFactory; production uses defaultSenderFactory (slack-go).
 	newSender func(token string) slackSender
 
+	// historyLister is the FetchHistory seam — nil means "build a real
+	// slack-go lister from c.creds on every call" (see history.go).
+	// Tests inject a fake via withHistoryLister.
+	historyLister slackHistoryLister
+
 	// actions injects the neutral card-action router HandleAction routes
 	// decoded block_actions through. nil until a caller supplies
 	// WithActionRouter; HandleAction then decodes + echoes a neutral "received"
@@ -93,6 +98,14 @@ func WithSenderFactory(f func(token string) slackSender) Option {
 // permission / credential-form / user-choice handlers (wired with the runner).
 func WithActionRouter(r channel.ActionRouter) Option {
 	return func(c *Channel) { c.actions = r }
+}
+
+// withHistoryLister injects a fake history lister so FetchHistory is
+// unit-testable without slack-go's HTTP client. Lives next to the other
+// Option helpers for symmetry, but is unexported — only test files in this
+// package use it.
+func withHistoryLister(l slackHistoryLister) Option {
+	return func(c *Channel) { c.historyLister = l }
 }
 
 // WithCredentialResolver overrides the bot-token resolver. Production injects a

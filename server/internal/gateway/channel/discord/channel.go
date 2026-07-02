@@ -75,6 +75,11 @@ type Channel struct {
 	// (action.go / pickstore.go). nil until a caller supplies WithPickStore; the
 	// runner injects one so the pure adapter holds no live state.
 	picks ComponentPickStore
+
+	// historyLister is the FetchHistory seam — nil means "build a real
+	// discordgo lister from c.creds on every call" (see history.go). Tests
+	// inject a fake via withHistoryLister.
+	historyLister discordHistoryLister
 }
 
 // Option customizes a Channel at construction.
