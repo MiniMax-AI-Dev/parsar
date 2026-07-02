@@ -1795,3 +1795,113 @@ func TestQuotedChainText_MergeForwardMixedTextAndImageChildren(t *testing.T) {
 		t.Fatalf("expected 2 attachments (image child + post-with-img child), got %d", len(attachments))
 	}
 }
+
+// fakeConnectorReader is a minimal ConnectorReader for Reconcile tests:
+// it returns a fixed list of Feishu workspace connectors.
+type fakeConnectorReader struct {
+	feishu []store.WorkspaceConnectorRead
+}
+
+func (f fakeConnectorReader) ListWorkspaceConnectorsByPlatform(_ context.Context, platform string) ([]store.WorkspaceConnectorRead, error) {
+	if !strings.EqualFold(platform, "feishu") {
+		return nil, nil
+	}
+	return append([]store.WorkspaceConnectorRead(nil), f.feishu...), nil
+}
+
+func (f fakeConnectorReader) GetWorkspaceConnectorByAppID(_ context.Context, _, appID string) (store.WorkspaceConnectorRead, error) {
+	for _, c := range f.feishu {
+		if strings.EqualFold(strings.TrimSpace(c.AppID), strings.TrimSpace(appID)) {
+			return c, nil
+		}
+	}
+	return store.WorkspaceConnectorRead{}, errors.New("connector not found")
+}
+
+// TestManager_ReconcileDefaultSharedSkippedWhenConnectorClaimsAppID pins the
+// dual-connection dedup: when a workspace_im_connectors Feishu connector owns
+// an app_id, the env-backed default shared bot must NOT open a second
+// websocket for the SAME app_id (Feishu routes each event to only one
+// long-connection, so a duplicate socket races the connector for inbound and
+// can silently drop group @-mentions). When no connector claims the app_id,
+// the env default shared bot still starts as before.
+func TestManager_ReconcileDefaultSharedSkippedWhenConnectorClaimsAppID(t *testing.T) {
+	const appID = "cli_shared"
+
+	newMgr := func(t *testing.T, withConnector bool) *Manager {
+		t.Helper()
+		st := newInboundFakeStore()
+		// Secret backing the workspace connector's app_secret_ref so its
+		// client can actually start (the dedup itself does not depend on
+		// this — the app_id is claimed before startClient runs — but a
+		// started connector client makes the positive case realistic).
+		st.secrets["ref-shared"] = store.SecretPayload{
+			EncryptedPayload: []byte(`{"app_secret":"conn-secret"}`),
+		}
+		opts := Options{
+			Store:   st,
+			Secrets: inboundFakeDecrypter{},
+			// Point the SDK at a dead local host so the background ws
+			// dial fails fast instead of reaching the real Feishu edge.
+			Domain: "http://127.0.0.1:1",
+			DefaultSharedBot: DefaultSharedBotConfig{
+				AppID:     appID,
+				AppSecret: "env-secret",
+			},
+		}
+		if withConnector {
+			opts.Connectors = fakeConnectorReader{feishu: []store.WorkspaceConnectorRead{{
+				ID:            "conn-1",
+				WorkspaceID:   "ws-1",
+				WorkspaceName: "Platform",
+				Platform:      "feishu",
+				AppID:         appID,
+				Enabled:       true,
+				Config: map[string]any{
+					"event_mode":     "websocket",
+					"app_secret_ref": "ref-shared",
+					"bot_open_id":    "ou_conn_bot",
+				},
+			}}}
+		}
+		m, err := NewManager(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+
+	hasClient := func(m *Manager, key string) bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		_, ok := m.clients[key]
+		return ok
+	}
+
+	t.Run("connector claims app_id -> default shared skipped", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		m := newMgr(t, true)
+		if err := m.Reconcile(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if hasClient(m, defaultClientKey(appID)) {
+			t.Fatalf("default shared bot opened a duplicate socket for app_id %q already owned by a workspace connector", appID)
+		}
+		if !hasClient(m, clientKey("ws-1", appID)) {
+			t.Fatalf("workspace connector client for app_id %q was not started", appID)
+		}
+	})
+
+	t.Run("no connector -> default shared starts", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		m := newMgr(t, false)
+		if err := m.Reconcile(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if !hasClient(m, defaultClientKey(appID)) {
+			t.Fatalf("default shared bot did not start for unclaimed app_id %q", appID)
+		}
+	})
+}

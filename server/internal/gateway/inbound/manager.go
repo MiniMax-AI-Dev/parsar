@@ -343,22 +343,13 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	}
 
 	wanted := make(map[string]struct{}, len(routes)+1)
-	if m.defaultBot.configured() {
-		route, cfg := m.defaultSharedRouteAndConfig()
-		key := defaultClientKey(cfg.AppID)
-		wanted[key] = struct{}{}
-		if !m.hasClient(key) {
-			if err := m.startClientWithSecret(ctx, route, cfg, key, m.defaultBot.AppSecret, "default_shared"); err != nil {
-				m.logger.Warn("feishu websocket inbound: start default shared client failed", "app_id", cfg.AppID, "err", err.Error())
-			}
-		}
-	}
 
 	// New-table-first: workspace_im_connectors is the three-platform unified
 	// store. A Feishu connector configured via the admin panel opens a
 	// workspace-scoped shared-bot websocket here; its app_id is remembered so
-	// the legacy agents.config loop below skips a duplicate socket for the same
-	// bot (new table wins).
+	// BOTH the env default-shared bot (below) and the legacy agents.config loop
+	// skip a duplicate socket for the same bot (new table wins). Reconciled
+	// first precisely so those later blocks can consult newTableAppIDs.
 	newTableAppIDs := map[string]struct{}{}
 	if m.connectors != nil {
 		conns, err := m.connectors.ListWorkspaceConnectorsByPlatform(ctx, "feishu")
@@ -379,6 +370,31 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			}
 			if err := m.startClient(ctx, route, cfg, key); err != nil {
 				m.logger.Warn("feishu websocket inbound: start workspace connector client failed", "workspace_id", conn.WorkspaceID, "app_id", appID, "err", err.Error())
+			}
+		}
+	}
+
+	// Env-backed default shared bot. Skip when a workspace connector already
+	// owns this app_id: otherwise the env bot opens a SECOND long-connection
+	// for the same Feishu app and races the connector for inbound events.
+	// Feishu delivers each event to only one connection, so a group @-mention
+	// landing on the env socket gets dropped when its bot-local-id is empty
+	// (PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID unset) — while the connector, which
+	// auto-resolved and persisted the bot open_id at bind time, would have
+	// matched it. New table wins here too; the stale-client sweep below then
+	// tears down any env socket left over from a prior reconcile.
+	if m.defaultBot.configured() {
+		route, cfg := m.defaultSharedRouteAndConfig()
+		appID := strings.TrimSpace(cfg.AppID)
+		if _, claimed := newTableAppIDs[appID]; claimed {
+			m.logger.Info("feishu websocket inbound: default shared bot skipped — app_id owned by a workspace connector", "app_id", appID)
+		} else {
+			key := defaultClientKey(cfg.AppID)
+			wanted[key] = struct{}{}
+			if !m.hasClient(key) {
+				if err := m.startClientWithSecret(ctx, route, cfg, key, m.defaultBot.AppSecret, "default_shared"); err != nil {
+					m.logger.Warn("feishu websocket inbound: start default shared client failed", "app_id", cfg.AppID, "err", err.Error())
+				}
 			}
 		}
 	}
