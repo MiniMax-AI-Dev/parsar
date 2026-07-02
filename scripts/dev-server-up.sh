@@ -159,8 +159,19 @@ sleep 1
 # defaults here (override by pre-exporting the same vars).
 FEISHU_MOCK="${PARSAR_FEISHU_MOCK:-true}"
 OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-http://127.0.0.1:${PORT}}"
+# Feishu Bot IM (websocket inbound + outbound reply cards). Mirrors
+# docker-compose.local.yml so the script path is turnkey — profile not
+# fork. Gates default ON but stay override-friendly; with no bot bound
+# the manager just idles. Bot credentials are NOT set here: they flow in
+# through the Web UI bind card into the encrypted vault (hot-reloaded
+# every ~30s), so no App Secret ever needs to live in env. MASTER_KEY
+# defaults to the same dev constant the admin UI hardcodes
+# (server/cmd/server/main.go devMasterKeyDefault) so the vault lines up.
+FEISHU_WEBSOCKET="${PARSAR_FEISHU_WEBSOCKET:-true}"
+FEISHU_OUTBOUND="${PARSAR_FEISHU_OUTBOUND:-true}"
+MASTER_KEY="${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
 tmux new-session -d -s "${TMUX_SESSION}" \
-  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}' '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
+  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_FEISHU_WEBSOCKET=${FEISHU_WEBSOCKET} PARSAR_FEISHU_OUTBOUND=${FEISHU_OUTBOUND} PARSAR_MASTER_KEY='${MASTER_KEY}' PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}' '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
 
 # ── readiness probe ──────────────────────────────────────────────────
 echo -n "[dev-server-up] waiting for :${PORT} "
