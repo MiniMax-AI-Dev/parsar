@@ -90,16 +90,16 @@ func (h *handler) fetchHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Group-chat history is the tool's promise: scope to chat, not thread.
-	// external_thread_id on the conversation ref is the dedupe key for
-	// "find or create conversation", which is not the same as a history
-	// scope — passing it through would scope a "what did this group chat
-	// about?" prompt to one thread and miss the rest of the chat. The MCP
-	// schema does not expose a thread override today; if it ever does, it
-	// should land here as an explicit query param.
+	// Group-chat history is the tool's promise: default scope is the whole chat.
+	// thread_id is an optional explicit override — the agent passes a
+	// platform-native thread id when it wants to narrow history to one thread
+	// (Slack thread_ts / Discord thread channel id / Teams reply message id).
+	// The conversation ref's external_thread_id is the dedupe key for "find or
+	// create conversation" — not a history scope — so it is NOT used here.
 	req := channel.FetchHistoryRequest{
 		ExternalChatID:   ref.ExternalID,
-		ExternalThreadID: "",
+		ExternalThreadID: strings.TrimSpace(q.Get("thread_id")),
+		SourceAppID:      ref.SourceAppID,
 		Limit:            parseLimit(q.Get("limit")),
 		Cursor:           strings.TrimSpace(q.Get("cursor")),
 	}

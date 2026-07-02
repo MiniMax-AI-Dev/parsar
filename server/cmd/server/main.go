@@ -2483,6 +2483,34 @@ func storeAllowsTeamsAppID(dbStore *store.Store, envAppID string) func(string) b
 // token per call) so sharing the runner's instance is unnecessary.
 func buildOutboundChannels(env func(string) string, dbStore *store.Store) (map[channel.Platform]channel.Channel, error) {
 	channels := map[channel.Platform]channel.Channel{}
+	teamsAppID := strings.TrimSpace(env("PARSAR_TEAMS_APP_ID"))
+	teamsAppPassword := strings.TrimSpace(env("PARSAR_TEAMS_APP_PASSWORD"))
+	teamsTenantID := strings.TrimSpace(env("PARSAR_TEAMS_TENANT_ID"))
+	teamsWebhook := truthy(env("PARSAR_TEAMS_WEBHOOK")) || truthy(env("PARSAR_TEAMS_CONNECTORS"))
+	teamsResolver, err := buildTeamsCredentialResolver(env, dbStore)
+	if err != nil {
+		return nil, err
+	}
+	// Teams registers for the inflight worker whenever the webhook/connectors
+	// path is on and a credential is resolvable — either the env app
+	// id+password or the workspace-dimension DB resolver (multi-bot). The
+	// per-call resolver does both: env static under the hood, DB-fronted
+	// when a master key + store are available.
+	if teamsWebhook && (teamsResolver != nil || (teamsAppID != "" && teamsAppPassword != "")) {
+		opts := []teamschannel.Option{}
+		if teamsResolver != nil {
+			opts = append(opts, teamschannel.WithCredentialResolver(teamsResolver))
+		}
+		channels[channel.PlatformTeams] = teamschannel.New(teamschannel.Config{
+			AppID:       teamsAppID,
+			AppPassword: teamsAppPassword,
+			TenantID:    teamsTenantID,
+		}, opts...)
+		log.Bg().Info("teams outbound channel registered for inflight worker",
+			"workspace_resolver", teamsResolver != nil,
+			"env_bot", teamsAppID != "",
+			"tenant_pinned", teamsTenantID != "")
+	}
 	slackBot := strings.TrimSpace(env("PARSAR_SLACK_BOT_TOKEN"))
 	slackApp := strings.TrimSpace(env("PARSAR_SLACK_APP_TOKEN"))
 	dbResolver, err := buildSlackCredentialResolver(env, dbStore)

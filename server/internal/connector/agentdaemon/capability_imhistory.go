@@ -40,7 +40,7 @@ var http=require("http"),https=require("https");
 var BASE=process.env.PARSAR_IM_HISTORY_URL||"";
 var TOKEN=process.env.PARSAR_IM_HISTORY_TOKEN||"";
 var CONV=process.env.PARSAR_CONVERSATION_ID||"";
-var TOOL={name:"fetch_chat_history",description:"Fetch recent IM group-chat history for the CURRENT conversation. Returns messages newest-first as JSON. Use limit to request a page size (silently clamped to the platform cap; Feishu caps at 50 per page) and next_cursor from a prior response to page further back.",inputSchema:{type:"object",properties:{limit:{type:"integer",description:"Max messages to return (clamped to platform cap, e.g. 50 on Feishu)."},cursor:{type:"string",description:"Opaque next_cursor from a previous call to fetch older messages."}}}};
+var TOOL={name:"fetch_chat_history",description:"Fetch recent IM group-chat history for the CURRENT conversation across Feishu/Slack/Discord/Teams. Returns messages oldest-first as JSON. Use limit to request a page size (silently clamped to the platform cap; Feishu 50, Slack 15, Discord 100, Teams 50 per page) and next_cursor from a prior response to page further back. Optional thread_id scopes history to one platform-native thread (Slack thread_ts / Discord thread channel id / Teams reply message id).",inputSchema:{type:"object",properties:{limit:{type:"integer",description:"Max messages to return (clamped to platform cap, e.g. 50 on Feishu/Teams, 15 on Slack, 100 on Discord)."},cursor:{type:"string",description:"Opaque next_cursor from a previous call to fetch older messages."},thread_id:{type:"string",description:"Optional platform-native thread id to scope history. Slack thread_ts, Discord thread channel id, or Teams reply message id. Empty/unset = whole chat."}}}};
 function send(m){process.stdout.write(JSON.stringify(m)+"\n");}
 function doFetch(a,cb){
   var u;
@@ -48,6 +48,7 @@ function doFetch(a,cb){
   u.searchParams.set("conversation_id",CONV);
   if(a&&a.limit!=null)u.searchParams.set("limit",String(a.limit));
   if(a&&a.cursor)u.searchParams.set("cursor",String(a.cursor));
+  if(a&&a.thread_id)u.searchParams.set("thread_id",String(a.thread_id));
   var lib=u.protocol==="https:"?https:http;
   var rq=lib.request(u,{method:"GET",headers:{Authorization:"Bearer "+TOKEN}},function(res){var b="";res.on("data",function(d){b+=d;});res.on("end",function(){cb(null,b);});});
   rq.on("error",function(e){cb(e);});
@@ -94,7 +95,7 @@ while IFS= read -r line; do
       printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"parsar-chat-history","version":"0.1.0"}}}\n' "${id:-0}"
       ;;
     *'"tools/list"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"tools":[{"name":"fetch_chat_history","description":"Fetch recent IM group-chat history for the current conversation.","inputSchema":{"type":"object","properties":{"limit":{"type":"integer"},"cursor":{"type":"string"}}}}]}}\n' "${id:-0}"
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"tools":[{"name":"fetch_chat_history","description":"Fetch recent IM group-chat history for the current conversation.","inputSchema":{"type":"object","properties":{"limit":{"type":"integer"},"cursor":{"type":"string"},"thread_id":{"type":"string","description":"Optional platform-native thread id (Slack thread_ts / Discord thread channel id / Teams reply message id)."}}}}]}}\n' "${id:-0}"
       ;;
     *'"tools/call"'*)
       printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"Node.js is not installed on this machine, so chat history cannot be fetched. Please install Node.js and try again."}],"isError":true}}\n' "${id:-0}"

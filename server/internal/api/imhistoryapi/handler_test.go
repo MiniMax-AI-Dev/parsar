@@ -105,9 +105,9 @@ func TestFetch_HappyPath(t *testing.T) {
 	if got.Messages[0].CreatedAt == "" {
 		t.Fatal("CreatedAt must be RFC3339, got empty")
 	}
-	// Routing tuple + limit reached the fetcher. ExternalThreadID must be
-	// empty even when the conversation ref has one — the on-demand tool
-	// always pulls group-chat history, not thread-scoped.
+	// Routing tuple + limit reached the fetcher. With no `thread_id` query
+	// param the request is the default whole-channel scope; the conversation
+	// ref's external_thread_id is a dedupe key, not a history scope.
 	if ff.gotReq.ExternalChatID != "oc_1" || ff.gotReq.ExternalThreadID != "" || ff.gotReq.Limit != 10 {
 		t.Fatalf("fetcher req = %+v", ff.gotReq)
 	}
@@ -182,6 +182,28 @@ func TestFetch_FetcherError(t *testing.T) {
 	rec := doGet(h, "/internal/im/history?conversation_id=conv-1", sgn.Token("conv-1"))
 	if rec.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502", rec.Code)
+	}
+}
+
+// TestFetch_ThreadIDPassthrough: a `thread_id` query param is forwarded
+// verbatim to the platform fetcher as ExternalThreadID. The agent uses it
+// to scope a Slack history pull to one thread, a Discord pull to one thread
+// channel, or a Teams pull to one chatMessage replies list.
+func TestFetch_ThreadIDPassthrough(t *testing.T) {
+	ref := store.ConversationIMRef{Platform: "slack", ExternalID: "C123", SourceAppID: "T123"}
+	ff := &fakeFetcher{res: channel.FetchHistoryResult{Messages: nil, Cap: 15}}
+	res := &fakeResolver{fetcher: ff, platform: channel.PlatformSlack, found: true}
+	h := newServer(t, Deps{Store: fakeStore{ref: ref}, Resolver: res})
+	sgn, _ := NewSigner(testSecret)
+	rec := doGet(h, "/internal/im/history?conversation_id=conv-1&thread_id=1700000000.000200", sgn.Token("conv-1"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if ff.gotReq.ExternalThreadID != "1700000000.000200" {
+		t.Fatalf("ExternalThreadID = %q, want %q", ff.gotReq.ExternalThreadID, "1700000000.000200")
+	}
+	if ff.gotReq.ExternalChatID != "C123" || ff.gotReq.SourceAppID != "T123" {
+		t.Fatalf("routing tuple lost: %+v", ff.gotReq)
 	}
 }
 
