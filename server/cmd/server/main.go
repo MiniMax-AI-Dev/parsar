@@ -1959,21 +1959,27 @@ func buildSlackInboundManager(env func(string) string, dbStore *store.Store, con
 	if err != nil {
 		return nil, fmt.Errorf("slack connectors: init action manager: %w", err)
 	}
-	sharedOpts := []slackchannel.Option{slackchannel.WithActionRouter(actionMgr.CardActionRouter())}
+	actionRouterOpt := slackchannel.WithActionRouter(actionMgr.CardActionRouter())
 	resolver, err := buildSlackCredentialResolver(env, dbStore)
 	if err != nil {
 		return nil, fmt.Errorf("slack connectors: build credential resolver: %w", err)
 	}
-	if resolver != nil {
-		sharedOpts = append(sharedOpts, slackchannel.WithCredentialResolver(resolver))
-	}
 
 	newAdapter := func(appID, botToken, appToken string) *slackchannel.Channel {
+		opts := []slackchannel.Option{actionRouterOpt}
+		// The Manager already decrypted this connector's bot token and hands it
+		// in via Config.BotToken (the channel's default resolver returns it).
+		// Only fall back to the shared per-team resolver when no per-connector
+		// token was supplied — otherwise it would re-resolve by team_id, miss
+		// the connector's app_id-keyed secret, and drop to an empty env token.
+		if strings.TrimSpace(botToken) == "" && resolver != nil {
+			opts = append(opts, slackchannel.WithCredentialResolver(resolver))
+		}
 		return slackchannel.New(slackchannel.Config{
 			AppID:    appID,
 			BotToken: botToken,
 			AppToken: appToken,
-		}, sharedOpts...)
+		}, opts...)
 	}
 
 	mgr, err := slackrunner.NewManager(slackrunner.ManagerConfig{
@@ -2040,7 +2046,13 @@ func buildDiscordInboundManager(env func(string) string, dbStore *store.Store, c
 			discordchannel.WithPickStore(discordchannel.NewMemoryPickStore()),
 			discordchannel.WithActionRouter(sharedActionRouter),
 		}
-		if resolver != nil {
+		// The Manager already decrypted this connector's bot token and hands it
+		// in via Config.BotToken (the channel's default resolver returns it).
+		// Only fall back to the shared guild-keyed resolver when no per-connector
+		// token was supplied — otherwise it would re-resolve by guild_id, miss
+		// the connector's app_id-keyed secret, and drop to an empty env token
+		// ("missing bot token").
+		if strings.TrimSpace(botToken) == "" && resolver != nil {
 			opts = append(opts, discordchannel.WithCredentialResolver(resolver))
 		}
 		return discordchannel.New(discordchannel.Config{
@@ -2529,11 +2541,13 @@ func buildOutboundChannels(env func(string) string, dbStore *store.Store) (map[c
 	if err != nil {
 		return nil, err
 	}
-	// Register when Slack is configured (app token present) and we can resolve
-	// a token for at least one workspace: either a per-team DB resolver or the
-	// static env bot token. Without both, leave Slack unregistered so the
-	// worker stays pure-Feishu.
-	if slackApp != "" && (dbResolver != nil || slackBot != "") {
+	// Register when we can resolve a bot token for at least one workspace:
+	// either the workspace/per-team DB resolver or the static env bot token.
+	// The outbound path only calls chat.postMessage, which needs the bot token
+	// (xoxb) — not the app-level Socket Mode token — so PARSAR_SLACK_APP_TOKEN
+	// is irrelevant here and must not gate registration (connector-mode has no
+	// env app token yet still replies via the SourceAppID-keyed DB resolver).
+	if dbResolver != nil || slackBot != "" {
 		opts := []slackchannel.Option{}
 		if dbResolver != nil {
 			opts = append(opts, slackchannel.WithCredentialResolver(dbResolver))
