@@ -79,14 +79,13 @@ export function AdminLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-subtle/60 text-fg antialiased">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line/70 bg-surface px-4">
-        <div className="flex items-center gap-2">
+      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line/70 bg-surface px-5">
+        <div className="flex items-center">
           <img
             src="/favicon.png"
-            alt=""
-            className="h-7 w-7"
+            alt="Parsar"
+            className="h-9 w-9"
           />
-          <span className="text-sm font-semibold tracking-display">{t("appName")}</span>
         </div>
 
         <WorkspaceSwitcher />
@@ -97,7 +96,7 @@ export function AdminLayout({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {!hideSidebar && <aside className="flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line/70 bg-surface px-2.5 py-3">
+        {!hideSidebar && <aside className="flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line/70 bg-surface px-3 py-4">
           {menuGroups.map((group, idx) => {
             const isCollapsed = !!collapsed[group.groupKey]
             return (
@@ -134,10 +133,11 @@ export function AdminLayout({
                         type="button"
                         onClick={() => navigate(item.id)}
                         className={cn(
-                          "group flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-base transition-colors",
+                          "group relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
+                          "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-fg before:transition-opacity",
                           isActive
-                            ? "bg-surface-muted font-medium text-fg"
-                            : "font-normal text-fg-muted hover:bg-surface-muted/60 hover:text-fg"
+                            ? "bg-surface-muted font-medium text-fg before:opacity-100"
+                            : "font-normal text-fg-muted before:opacity-0 hover:bg-surface-muted/60 hover:text-fg"
                         )}
                       >
                         <Icon
@@ -170,11 +170,11 @@ export function AdminLayout({
           })}
         </aside>}
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="relative flex-1 overflow-y-auto">
           {fullBleed ? (
             children
           ) : (
-            <div className={cn("mx-auto max-w-screen-2xl px-8 py-8", contentClassName)}>
+            <div className={cn("relative mx-auto max-w-6xl px-10 py-10", contentClassName)}>
               {children}
             </div>
           )}

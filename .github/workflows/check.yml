@@ -44,7 +44,7 @@ jobs:
           cache: true
 
       - name: Cache Go build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/go-build

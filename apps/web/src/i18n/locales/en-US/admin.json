@@ -75,6 +75,8 @@
     "createProvider": {
       "fields": {
         "providerType": "Provider type",
+        "providerSearch": "Search providers…",
+        "providerEmpty": "No matching providers",
         "baseURL": "Base URL",
         "adapterHint": "Adapter package: {{adapter}}",
         "apiKey": "API key",
@@ -99,6 +101,10 @@
         "namePlaceholder": "e.g. Claude Opus 4.5",
         "modelKey": "Model key",
         "modelKeyPlaceholder": "claude-3-5-sonnet-20241022",
+        "modelKeyCatalogHint": "Pick from this provider's known models, or type any model id.",
+        "modelKeySearch": "Search or type a model id…",
+        "modelKeyUse": "Use",
+        "modelKeyEmpty": "No matching models — type any id",
         "credentialMode": "Credential mode"
       },
       "credentialMode": {
