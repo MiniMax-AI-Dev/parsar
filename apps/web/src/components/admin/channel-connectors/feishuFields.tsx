@@ -98,10 +98,11 @@ export function FeishuConnectorFields({
   const dirty = !configEqual(draft, current ?? EMPTY_CONFIG) || secretInputsDirty(secretInputs)
   const saving = mut.isPending || createSecretMut.isPending
 
+  // bot_open_id is intentionally NOT required: when left blank the server
+  // derives it from the app credentials (bot/v3/info) at save time.
   const missingRequired = draft.enabled && (
     !draft.app_id.trim() ||
     (!draft.app_secret_ref.trim() && !secretInputs.appSecret.trim()) ||
-    !draft.bot_open_id.trim() ||
     (draft.event_mode === "webhook" && !draft.verification_token_ref.trim() && !secretInputs.verificationToken.trim())
   )
 
@@ -126,6 +127,10 @@ export function FeishuConnectorFields({
         }
         if (code === "feishu_connector_incomplete") {
           setErrorMsg(t("connections.connector.feishu.errors.incomplete"))
+          return
+        }
+        if (code === "feishu_bot_open_id_resolve_failed") {
+          setErrorMsg(t("connections.connector.feishu.errors.botOpenIdResolveFailed"))
           return
         }
       }
@@ -222,12 +227,11 @@ export function FeishuConnectorFields({
           <Field
             label={t("connections.connector.feishu.fields.botOpenId.label")}
             hint={t("connections.connector.feishu.fields.botOpenId.hint")}
-            required
           >
             <input
               type="text"
               value={draft.bot_open_id}
-              placeholder="ou_xxxxxxxxxxxxxxxx"
+              placeholder={t("connections.connector.feishu.fields.botOpenId.placeholder")}
               onChange={(e) => setDraft({ ...draft, bot_open_id: e.target.value })}
               disabled={!canEdit || saving}
               className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"

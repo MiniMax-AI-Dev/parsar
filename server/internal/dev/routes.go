@@ -2251,6 +2251,12 @@ func updateAgentFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
+		botOpenID, err := resolveFeishuBotOpenID(r.Context(), runtimeStore, agent.WorkspaceID, req.AppID, req.AppSecretRef, req.BotOpenID)
+		if err != nil {
+			log.Bg().Warn("feishu bot open_id auto-resolve failed", "agent_id", agentID, "app_id", req.AppID, "err", err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_bot_open_id_resolve_failed", "detail": err.Error()})
+			return
+		}
 		change, err := runtimeStore.UpdateAgentFeishuConnector(r.Context(), store.UpdateAgentFeishuConnectorInput{
 			AgentID:              agentID,
 			Enabled:              req.Enabled,
@@ -2258,7 +2264,7 @@ func updateAgentFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 			AppSecretRef:         req.AppSecretRef,
 			VerificationTokenRef: req.VerificationTokenRef,
 			EncryptKeyRef:        req.EncryptKeyRef,
-			BotOpenID:            req.BotOpenID,
+			BotOpenID:            botOpenID,
 			EventMode:            req.EventMode,
 			RoutingMode:          req.RoutingMode,
 		}, actorIDFromRequest(r))
@@ -2452,6 +2458,12 @@ func updateWorkspaceFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc 
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
+		botOpenID, err := resolveFeishuBotOpenID(r.Context(), runtimeStore, workspaceID, req.AppID, req.AppSecretRef, req.BotOpenID)
+		if err != nil {
+			log.Bg().Warn("feishu bot open_id auto-resolve failed", "workspace_id", workspaceID, "app_id", req.AppID, "err", err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_bot_open_id_resolve_failed", "detail": err.Error()})
+			return
+		}
 		change, err := runtimeStore.UpsertWorkspaceFeishuConnector(r.Context(), store.UpsertWorkspaceFeishuConnectorInput{
 			WorkspaceID:          workspaceID,
 			Enabled:              req.Enabled,
@@ -2459,7 +2471,7 @@ func updateWorkspaceFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc 
 			AppSecretRef:         req.AppSecretRef,
 			VerificationTokenRef: req.VerificationTokenRef,
 			EncryptKeyRef:        req.EncryptKeyRef,
-			BotOpenID:            req.BotOpenID,
+			BotOpenID:            botOpenID,
 			EventMode:            req.EventMode,
 		}, actorIDFromRequest(r))
 		if err != nil {
@@ -2634,6 +2646,33 @@ func validateProvisionedFeishuBot(ctx context.Context, appID, appSecret, openAPI
 	validateCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return client.BotInfo(validateCtx, appSecret)
+}
+
+// resolveFeishuBotOpenID fills in the bot's open_id when the caller left it
+// blank. The value is derivable from the app credentials (bot/v3/info returns
+// it), so the bind form no longer needs it as a manual field. When botOpenID is
+// already set it is returned untouched; when app_id or app_secret_ref is absent
+// there is nothing to derive from, so the blank is passed through and the store's
+// own completeness check decides whether that is acceptable.
+func resolveFeishuBotOpenID(ctx context.Context, runtimeStore RuntimeStore, workspaceID, appID, appSecretRef, botOpenID string) (string, error) {
+	botOpenID = strings.TrimSpace(botOpenID)
+	if botOpenID != "" {
+		return botOpenID, nil
+	}
+	appID = strings.TrimSpace(appID)
+	appSecretRef = strings.TrimSpace(appSecretRef)
+	if appID == "" || appSecretRef == "" {
+		return "", nil
+	}
+	appSecret, err := loadFeishuSecretString(ctx, runtimeStore, workspaceID, appSecretRef, "app_secret", "secret", "value", "api_key")
+	if err != nil {
+		return "", err
+	}
+	info, err := validateProvisionedFeishuBot(ctx, appID, appSecret, feishuOpenAPIBaseURL(""))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(info.OpenID), nil
 }
 
 func createFeishuAppSecretFromProvisioning(ctx context.Context, runtimeStore RuntimeStore, workspaceID, agentName, appID, appSecret, actorID string) (store.SecretRead, error) {

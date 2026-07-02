@@ -2648,8 +2648,9 @@
             "savedHint": "A saved encrypt key is in place (Event Subscriptions → Encrypt Key). Enter a new value to replace it."
           },
           "botOpenId": {
-            "label": "Bot open ID",
-            "hint": "Required. The bot's open_id (ou_…), from the Bot menu or contact API; needed to recognize @mentions and skip self-sent messages."
+            "label": "Bot open ID (optional)",
+            "hint": "Leave blank — the server auto-fetches it from the app credentials (bot/v3/info) on save. To set it manually, use the bot's open_id (ou_…). Used to recognize @mentions and skip self-sent messages.",
+            "placeholder": "Auto-fetched if blank, or ou_xxxx"
           },
           "eventMode": {
             "label": "Event mode",
@@ -2663,6 +2664,7 @@
         "errors": {
           "appIdInUse": "This Feishu app ID is already bound to another workspace.",
           "incomplete": "The Feishu connector is incomplete. Fill in all required fields.",
+          "botOpenIdResolveFailed": "Couldn't auto-fetch the bot open_id. Check the App ID / App Secret, or enter it manually.",
           "generic": "Failed to save the Feishu connector. Please try again."
         }
       },

@@ -2648,8 +2648,9 @@
             "savedHint": "已保存 Encrypt Key(事件订阅 → Encrypt Key)。如需更换请输入新值。"
           },
           "botOpenId": {
-            "label": "Bot open ID",
-            "hint": "必填。机器人的 open_id(以 ou_ 开头),可在机器人菜单或通讯录 API 获取;用于识别 @机器人 以及跳过机器人自己发的消息。"
+            "label": "Bot open ID(可选)",
+            "hint": "留空即可:保存时服务器会用 App 凭证自动获取(bot/v3/info)。如需手动指定,填机器人的 open_id(以 ou_ 开头)。用于识别 @机器人 及跳过机器人自己发的消息。",
+            "placeholder": "留空自动获取,或填 ou_xxxx"
           },
           "eventMode": {
             "label": "事件模式",
@@ -2663,6 +2664,7 @@
         "errors": {
           "appIdInUse": "该飞书 App ID 已绑定到另一个工作区。",
           "incomplete": "飞书连接器信息不完整,请填写所有必填项。",
+          "botOpenIdResolveFailed": "无法自动获取 Bot open_id,请检查 App ID / App Secret 是否正确,或手动填写。",
           "generic": "保存飞书连接器失败,请重试。"
         }
       },
