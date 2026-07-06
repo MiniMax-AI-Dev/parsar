@@ -91,7 +91,15 @@ export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
             />
           </div>
 
-          <div className="max-h-[240px] overflow-auto py-1">
+          {/* Radix DropdownMenu swallows wheel events; re-drive scroll so the
+              nested list responds to the wheel, not only the scrollbar thumb. */}
+          <div
+            className="max-h-[240px] overflow-auto py-1"
+            onWheel={(e) => {
+              e.currentTarget.scrollTop += e.deltaY
+              e.stopPropagation()
+            }}
+          >
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-sm text-fg-subtle">
                 {t("models.createProvider.fields.providerEmpty", "No matching providers")}

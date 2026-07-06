@@ -90,7 +90,17 @@ export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: P
             />
           </div>
 
-          <div className="max-h-[220px] overflow-auto py-1">
+          {/* Radix DropdownMenu.Content owns wheel/arrow navigation and swallows
+              the wheel event, so a nested overflow-auto list scrolls only via
+              its scrollbar thumb. Re-drive the scroll here and stop the event
+              from reaching the menu so the wheel works over the 70+ presets. */}
+          <div
+            className="max-h-[220px] overflow-auto py-1"
+            onWheel={(e) => {
+              e.currentTarget.scrollTop += e.deltaY
+              e.stopPropagation()
+            }}
+          >
             {showFreeText && (
               <DropdownMenu.Item
                 onSelect={() => commit(typed)}
