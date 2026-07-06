@@ -172,6 +172,11 @@ COPY --from=web-builder /src/apps/web/dist /app/web/dist
 # the parsar user's perspective.
 COPY server/migrations /app/migrations
 
+# OpenAPI spec. Baked in so /docs (Swagger UI) and /api/v1/openapi.yaml
+# work out of the box; RegisterDocsRoutes unmounts silently when the
+# file is missing, which is what caused the SPA fallback previously.
+COPY docs/openapi/openapi.yaml /app/docs/openapi/openapi.yaml
+
 # Default deployment knobs. Override at `docker run -e ...` time;
 # values are non-secret defaults that match the on-disk layout we
 # just wrote above.
@@ -179,6 +184,7 @@ ENV PARSAR_ADDR=":8080" \
     PARSAR_DATA_DIR="/var/lib/parsar" \
     PARSAR_MIGRATIONS_DIR="/app/migrations" \
     PARSAR_WEB_DIST="/app/web/dist" \
+    PARSAR_OPENAPI_SPEC="/app/docs/openapi/openapi.yaml" \
     PARSAR_DAEMON_BINARY_DIR="/usr/local/share/parsar/daemon"
 
 USER ${PARSAR_USER}

@@ -118,26 +118,32 @@ func serveOpenAPISpec(path string) http.HandlerFunc {
 	}
 }
 
-// docsHTML is the Stoplight Elements single-page viewer. Pinned to a
-// concrete version so a CDN upgrade cannot silently change the rendering.
-// Pointing at `/api/v1/openapi.yaml` (same origin) avoids any CORS or
-// mixed-content edge case in dev or behind a TLS-terminating proxy.
+// docsHTML is the Swagger UI single-page viewer. Pinned to a concrete
+// version so a CDN upgrade cannot silently change the rendering. Left
+// sidebar shows METHOD + PATH for every operation, which is what
+// developers scan for when hunting an endpoint.
 const docsHTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>{{TITLE}}</title>
-<link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@8.4.6/styles.min.css" />
-<script src="https://unpkg.com/@stoplight/elements@8.4.6/web-components.min.js" defer></script>
-<style>html,body,elements-api{height:100%;margin:0;}</style>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css" />
+<style>html,body{margin:0;height:100%;}#ui{height:100%;}</style>
 </head>
 <body>
-<elements-api
-  apiDescriptionUrl="/api/v1/openapi.yaml"
-  router="hash"
-  layout="sidebar"
-/>
+<div id="ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script>
+  window.ui = SwaggerUIBundle({
+    url: "/api/v1/openapi.yaml",
+    dom_id: "#ui",
+    deepLinking: true,
+    docExpansion: "list",
+    operationsSorter: "alpha",
+    tagsSorter: "alpha",
+  });
+</script>
 </body>
 </html>`
 

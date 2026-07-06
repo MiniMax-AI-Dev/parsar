@@ -191,6 +191,9 @@ services:
       PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
     volumes:
       - parsar-local-data:/var/lib/parsar
+      # Overlay the hand-maintained OpenAPI spec so /docs updates without
+      # a full image rebuild. RegisterDocsRoutes re-reads on every request.
+      - ./docs/openapi/openapi.yaml:/app/docs/openapi/openapi.yaml:ro
     # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`
     # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
     # so the default probe reports the container "unhealthy" even though it
