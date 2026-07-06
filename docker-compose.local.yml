@@ -91,9 +91,14 @@ services:
       parsar-init:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:${PARSAR_LOCAL_PORT:-18080}:8080"
+      - "${PARSAR_BIND_ADDR:-0.0.0.0}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
       DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
+      # Network proxy — only needed if your host requires a proxy for internet
+      # access (e.g. pulling MCP packages inside sandbox). Leave empty if not.
+      http_proxy: "${HTTP_PROXY:-}"
+      https_proxy: "${HTTPS_PROXY:-}"
+      no_proxy: "localhost,127.0.0.1,postgres,parsar-server"
       # Auth mode. Default (no .env) = mock auth -> ProfileDev: full cookie
       # login as admin@example.com, no IdP, zero secrets. To test REAL 飞书
       # OIDC against this same 127.0.0.1 stack, drop a gitignored .env next to
@@ -117,6 +122,7 @@ services:
       # in the Feishu console. (PARSAR_DEV_AUTH stays unset: we want real
       # cookie login, not the header bypass.)
       PARSAR_FEISHU_MOCK: "${PARSAR_FEISHU_MOCK:-true}"
+      PARSAR_FEISHU_REDIRECT_URI: "${PARSAR_FEISHU_REDIRECT_URI:-}"
       PARSAR_FEISHU_APP_ID: "${PARSAR_FEISHU_APP_ID:-}"
       PARSAR_FEISHU_APP_SECRET: "${PARSAR_FEISHU_APP_SECRET:-}"
       # Any non-empty value satisfies IsWebhookConfigured (needed to boot in
@@ -130,7 +136,7 @@ services:
       # Public URL must match the host port the browser hits so OAuth
       # callbacks AND the minted one-line connect command line up. Kept in
       # sync with the published port via the same variable.
-      PARSAR_PUBLIC_URL: "http://127.0.0.1:${PARSAR_LOCAL_PORT:-18080}"
+      PARSAR_PUBLIC_URL: "http://${PARSAR_HOST_IP:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}"
       # TOFU first-owner: when no PARSAR_OWNER_EMAIL was pre-seeded above, the
       # first successful login (mock admin@example.com, or the real Feishu
       # identity) claims first-owner — creating its workspace + owner
@@ -157,7 +163,7 @@ services:
       # (apps/web/src/lib/api-models.ts DEV_MASTER_KEY) so the secret vault
       # stays in sync. Bot App ID/Secret are NOT here — they go through the
       # Web UI bind card into the encrypted vault.
-      PARSAR_MASTER_KEY: "parsar-dev-master-key-2026"
+      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
       PARSAR_FEISHU_WEBSOCKET: "true"
       PARSAR_FEISHU_OUTBOUND: "true"
       # Workspace-dimension IM connector reconcilers (workspace_im_connectors
@@ -189,11 +195,25 @@ services:
       PARSAR_DISCORD_GATEWAY: "${PARSAR_DISCORD_GATEWAY:-}"
       PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
       PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
+      # Docker sandbox — Agent runs inside a sandboxed container with
+      # Claude Code + Codex + parsar-daemon. Server uses `docker exec` to
+      # dispatch commands. Build the sandbox image first:
+      #   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+      AGENT_DAEMON_SANDBOX_BACKEND: "docker"
+      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${AGENT_DAEMON_SANDBOX_DOCKER_IMAGE:-parsar-sandbox:local}"
+      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "parsar_default"
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - parsar-local-data:/var/lib/parsar
       # Overlay the hand-maintained OpenAPI spec so /docs updates without
       # a full image rebuild. RegisterDocsRoutes re-reads on every request.
       - ./docs/openapi/openapi.yaml:/app/docs/openapi/openapi.yaml:ro
+      # Docker sandbox — the server calls `docker` against the host
+      # daemon to acquire/release sandbox containers. The GID mapping
+      # above (DOCKER_GID) grants the parsar user rights on the socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
     # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`
     # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
     # so the default probe reports the container "unhealthy" even though it

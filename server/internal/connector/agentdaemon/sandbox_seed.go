@@ -102,6 +102,23 @@ func renderClaudeSettings() ([]byte, error) {
 	return json.MarshalIndent(settings, "", "  ")
 }
 
+// ConnectorForAgentKind maps the per-agent agent_kind string (from
+// AgentConfig) to the SandboxConnector enum used by the seed step.
+// Unknown kinds default to Claude — the daemon's heartbeat validation
+// catches unsupported kinds at prompt time, so the seed step does not
+// need to be the gatekeeper.
+func ConnectorForAgentKind(agentKind string) SandboxConnector {
+	switch strings.TrimSpace(agentKind) {
+	case "codex":
+		return SandboxConnectorCodex
+	case "opencode":
+		return SandboxConnectorOpenCode
+	default:
+		// claude_code, "", pi, and anything unknown → Claude
+		return SandboxConnectorClaude
+	}
+}
+
 // seedPlatformConfig writes the runtime config file the agent CLI
 // inside the sandbox reads on boot. Called from coldStart after
 // e2b.Create succeeds and BEFORE parsar-daemon connect — Claude Code
@@ -117,15 +134,14 @@ func seedPlatformConfig(ctx context.Context, client E2BClient, sb e2b.Sandbox, c
 		// boots Claude (parsar-daemon-claudecode).
 		return seedClaudeConfig(ctx, client, sb, envdURL)
 	case SandboxConnectorOpenCode:
-		// TODO(phase8-followup): wire when an opencode-based template
-		// exists. Hook scripts are already baked under
-		// /opt/parsar/hooks/opencode/.
+		// TODO: wire spec/memory injection via OpenCode hook scripts
+		// at /opt/parsar/hooks/opencode/. CLI binary is available in
+		// the image; daemon discovers and registers it via heartbeat.
 		return nil
 	case SandboxConnectorCodex:
-		// TODO(phase8-followup): Codex has no hook surface — its
-		// equivalent is rendering the full spec+memory bundle into
-		// ~/.codex/AGENTS.md at boot. Requires plumbing specmemory
-		// service into the provider.
+		// TODO: Codex has no hook surface — render spec+memory into
+		// ~/.codex/AGENTS.md at boot. CLI binary is available in the
+		// image; daemon discovers and registers it via heartbeat.
 		return nil
 	default:
 		return fmt.Errorf("sandbox_seed: unknown connector %q", conn)
