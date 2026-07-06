@@ -11,9 +11,32 @@ info:
     `PARSAR_FEISHU_VERIFICATION_TOKEN` when
     `PARSAR_FEISHU_MOCK` is not true. `PARSAR_FEISHU_ENCRYPT_KEY`
     is optional unless Feishu event encryption is enabled.
+tags:
+  - name: health
+  - name: bootstrap
+  - name: auth
+  - name: me
+  - name: connections
+  - name: workspaces
+  - name: workspace-members
+  - name: projects
+  - name: agents
+  - name: agent-runs
+  - name: conversations
+  - name: scheduled-tasks
+  - name: models
+  - name: secrets
+  - name: capabilities
+  - name: sandboxes
+  - name: uploads
+  - name: runtimes
+  - name: feishu
+  - name: dev
+  - name: misc
 paths:
   /api/v1/capabilities/marketplace:
     get:
+      tags: [capabilities]
       operationId: listDevMarketplaceCapabilities
       summary: List public marketplace capabilities visible to a workspace
       parameters:
@@ -47,6 +70,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
   /api/v1/health:
     get:
+      tags: [health]
       operationId: getHealth
       summary: Health check
       responses:
@@ -69,6 +93,7 @@ paths:
 
   /api/v1/bootstrap/status:
     get:
+      tags: [bootstrap]
       operationId: getBootstrapStatus
       summary: First-owner bootstrap posture (public)
       description: |
@@ -130,6 +155,7 @@ paths:
 
   /api/v1/bootstrap:
     post:
+      tags: [bootstrap]
       operationId: createBootstrapFirstOwner
       summary: Provision the first workspace owner (token-gated, single use)
       description: |
@@ -256,6 +282,7 @@ paths:
 
   /api/v1/workspaces/{workspaceID}/settings:
     get:
+      tags: [workspaces]
       operationId: getDevWorkspaceSettings
       summary: Read workspace admin settings
       parameters:
@@ -274,6 +301,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
+      tags: [workspaces]
       operationId: patchDevWorkspaceSettings
       summary: Touch workspace admin settings
       parameters:
@@ -297,6 +325,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
   /api/v1/workspaces/{workspaceID}/agents:
     get:
+      tags: [agents]
       operationId: listDevAgents
       summary: List active agents in a workspace
       parameters:
@@ -319,6 +348,7 @@ paths:
         '503':
           description: Database-backed read APIs are disabled
     post:
+      tags: [agents]
       operationId: createDevAgent
       summary: Create an agent in a workspace
       parameters:
@@ -356,6 +386,7 @@ paths:
                   - $ref: '#/components/schemas/InvalidRuntimeError'
   /api/v1/agents/{agentID}:
     patch:
+      tags: [agents]
       operationId: updateDevAgent
       summary: Update mutable agent fields
       parameters:
@@ -391,6 +422,7 @@ paths:
                   - $ref: '#/components/schemas/UnknownCapabilityError'
                   - $ref: '#/components/schemas/ImmutableRuntimeError'
     delete:
+      tags: [agents]
       operationId: deleteDevAgent
       summary: Soft-delete an agent
       parameters:
@@ -408,6 +440,7 @@ paths:
           $ref: '#/components/responses/InFlightRuns'
   /api/v1/agents/{agentID}/visibility:
     patch:
+      tags: [agents]
       operationId: updateDevAgentVisibility
       summary: Update an agent's visibility
       parameters:
@@ -443,6 +476,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/agents/{agentID}/connector/feishu/diagnostics:
     get:
+      tags: [agents]
       operationId: getDevAgentFeishuConnectorDiagnostics
       summary: Inspect Feishu Bot connector delivery diagnostics for an Agent
       description: |
@@ -475,6 +509,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/agents/{agentID}/connector/feishu:
     patch:
+      tags: [agents]
       operationId: updateDevAgentFeishuConnector
       summary: Bind (or rebind) an Agent to a Feishu Bot self-built app
       description: |
@@ -554,6 +589,7 @@ paths:
                     description: Human-readable verbose message for logs / devtools.
   /api/v1/agents/{agentID}/connector/feishu/provision/begin:
     post:
+      tags: [agents]
       operationId: beginDevAgentFeishuProvisioning
       summary: Begin Feishu Bot QR provisioning for an Agent
       description: |
@@ -583,6 +619,7 @@ paths:
           description: Feishu app-registration provisioning is not configured.
   /api/v1/agents/{agentID}/connector/feishu/provision/poll:
     post:
+      tags: [agents]
       operationId: pollDevAgentFeishuProvisioning
       summary: Poll Feishu Bot QR provisioning for an Agent
       description: |
@@ -644,6 +681,7 @@ paths:
           description: Feishu app-registration provisioning is not configured.
   /dev/seed:
     get:
+      tags: [dev]
       operationId: getDevSeed
       summary: Development seed fixture
       description: |
@@ -709,6 +747,7 @@ paths:
                             format: uuid
   /dev/auth/verify:
     post:
+      tags: [dev]
       operationId: verifyDevAuth
       summary: Verify development auth code
       responses:
@@ -716,6 +755,7 @@ paths:
           description: Development auth token
   /api/v1/auth/feishu/start:
     get:
+      tags: [auth]
       operationId: feishuOAuthStart
       summary: Begin Feishu OIDC login
       description: Mints a CSRF state, drops a short-lived HttpOnly state cookie scoped to /api/v1/auth/feishu, and 302-redirects the browser to the Feishu authorize URL. In mock mode (PARSAR_FEISHU_MOCK=true) the redirect lands straight on the callback with a fixture code.
@@ -728,6 +768,7 @@ paths:
           description: Feishu OIDC not configured
   /api/v1/auth/logout:
     post:
+      tags: [auth]
       operationId: authLogout
       summary: Log out the current session
       description: Revokes the current session row and clears the session cookie. Idempotent — returns 204 even when no session is present.
@@ -738,6 +779,7 @@ paths:
           description: Session store not wired
   /api/v1/auth/feishu/callback:
     get:
+      tags: [auth]
       operationId: feishuOAuthCallback
       summary: Complete Feishu OIDC login callback
       description: Exchanges the Feishu OIDC code for a Parsar session cookie. First-time login (new user) triggers automatic personal workspace bootstrap (best-effort; bootstrap failure does not block login).
@@ -761,6 +803,7 @@ paths:
           description: Feishu OIDC exchange failed
   /api/v1/connections/github/start:
     get:
+      tags: [connections]
       operationId: githubConnectionOAuthStart
       summary: Begin personal GitHub account connection
       description: Requires a signed-in Parsar user. Mints a CSRF state cookie and redirects the browser to GitHub OAuth. The callback stores the resulting access token as the current user's github_pat credential so Agents can use existing credential injection for GitHub API and HTTPS git operations.
@@ -773,6 +816,7 @@ paths:
           description: GitHub OAuth is not configured
   /api/v1/connections/github/callback:
     get:
+      tags: [connections]
       operationId: githubConnectionOAuthCallback
       summary: Complete personal GitHub account connection
       description: Requires the Parsar session cookie from the initiating user. Exchanges the GitHub OAuth code for an access token, encrypts it, and creates or rotates the user's active github_pat credential.
@@ -800,6 +844,7 @@ paths:
           description: GitHub OAuth is not configured
   /dev/gateway/inbound:
     post:
+      tags: [dev]
       operationId: createDevGatewayInbound
       summary: Create an external gateway-shaped inbound message
       description: |
@@ -871,6 +916,7 @@ paths:
           description: Invalid request or unknown active agent mention/conversation/sender
   /api/v1/feishu/events/message:
     post:
+      tags: [feishu]
       operationId: createDevFeishuMessageEvent
       summary: Accept a Feishu message event through the dev gateway seam
       description: Feishu-shaped dev/prod adapter endpoint. In production mode it verifies the Feishu Verification Token and decrypts event-encrypted payloads when `PARSAR_FEISHU_ENCRYPT_KEY` is configured; mock mode skips verification for local e2e. URL verification challenges return 200 with the echoed challenge. Normal message events are normalized through gateway.NormalizeFeishuInbound, then reuse the same Gateway inbound scheduling path as /dev/gateway/inbound.
@@ -938,6 +984,7 @@ paths:
           description: Unexpected persistence failure
   /api/v1/conversations/{conversationID}/external-ref:
     post:
+      tags: [conversations]
       operationId: configureDevConversationExternalRef
       summary: Configure a dev gateway external conversation mapping
       description: Dev-only lightweight mapping from gateway external chat/thread ids to an existing conversation. This uses existing conversations.platform/external_id/external_thread_id columns and does not add SCIM/SSO identity sync tables.
@@ -974,6 +1021,7 @@ paths:
           description: User lacks required role on this workspace
   /dev/gateway/outbound:
     get:
+      tags: [dev]
       operationId: listDevGatewayOutbound
       summary: List pending gateway outbound messages
       description: Dev-only outbound read model over existing agent output messages. Messages are pending while they have not been marked delivered in metadata.
@@ -997,6 +1045,7 @@ paths:
           description: Database-backed gateway outbound is disabled
   /dev/gateway/outbound/{messageID}/delivered:
     post:
+      tags: [dev]
       operationId: markDevGatewayOutboundDelivered
       summary: Mark a gateway outbound message delivered (ops escape hatch)
       description: |
@@ -1037,6 +1086,7 @@ paths:
           description: Database-backed gateway outbound is disabled
   /dev/http-agent/runs/{runID}/invoke:
     post:
+      tags: [dev]
       operationId: invokeDevHTTPAgentRun
       summary: Invoke a queued HTTP connector agent run
       description: Dev-only connector harness. Loads one active queued/running agent_run with connector_type=http, POSTs a small invocation payload to an external HTTP Agent endpoint, then reuses the completion path to write output message, usage, audit, and optional child runs from @Agent mentions in the HTTP Agent response. Does not poll, retry, store secrets, or run background workers.
@@ -1076,6 +1126,7 @@ paths:
           description: HTTP Agent network failure, non-2xx response, or invalid JSON response
   /api/v1/agents/{agentID}/connector:
     post:
+      tags: [agents]
       operationId: configureDevAgentConnector
       summary: Configure an Agent connector for dev harness runs
       description: Dev-only shortcut for local demos/tests. Updates the workspace Agent so future mentioned runs use connector_type=http without raw SQL. HTTP connector requires an explicit http(s) endpoint in agent config.
@@ -1114,6 +1165,7 @@ paths:
           description: Database-backed connector config is disabled
   /api/v1/workspaces/{workspaceID}/capabilities:
     get:
+      tags: [capabilities]
       operationId: listDevCapabilities
       summary: List workspace capabilities
       parameters:
@@ -1161,6 +1213,7 @@ paths:
         '503':
           description: Database-backed capability APIs are disabled
     post:
+      tags: [capabilities]
       operationId: createDevCapability
       summary: Create a workspace capability
       parameters:
@@ -1190,6 +1243,7 @@ paths:
           description: Database-backed capability APIs are disabled
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}:
     get:
+      tags: [capabilities]
       operationId: getDevCapability
       summary: Get workspace capability detail
       parameters:
@@ -1209,6 +1263,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
+      tags: [capabilities]
       operationId: patchDevCapability
       summary: Patch workspace capability metadata
       parameters:
@@ -1237,6 +1292,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/capabilities/uninstall:
     post:
+      tags: [capabilities]
       operationId: uninstallDevMarketplaceCapability
       summary: Remove a marketplace capability from all agents in a workspace
       parameters:
@@ -1276,6 +1332,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/capabilities/marketplace-installs:
     get:
+      tags: [capabilities]
       operationId: listDevWorkspaceMarketplaceInstalls
       summary: List marketplace capabilities installed in a workspace (reverse query)
       description: Returns the marketplace capabilities currently bound to any agent in the workspace, derived from agent_capabilities reverse query (no install relationship table per Capability Marketplace v0.1).
@@ -1304,6 +1361,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/install-count:
     get:
+      tags: [capabilities]
       operationId: getDevCapabilityInstallCount
       summary: Count how many other workspaces have installed a published capability
       description: Source-workspace owners only — the capability must belong to {workspaceID}; cross-workspace requests return 404 to avoid leaking install metrics of foreign capabilities (Decision #7 isolation).
@@ -1332,6 +1390,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/enabled-agents:
     get:
+      tags: [capabilities]
       operationId: listDevMarketplaceEnabledAgents
       summary: List agents in this workspace that have a marketplace capability enabled
       description: Returns the agents inside {workspaceID} that have the capability enabled. Used by the uninstall confirmation dialog and the marketplace capability detail page.
@@ -1375,6 +1434,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/publish:
     post:
+      tags: [capabilities]
       operationId: publishDevCapability
       summary: Publish a workspace capability to the marketplace
       parameters:
@@ -1397,6 +1457,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/unpublish:
     post:
+      tags: [capabilities]
       operationId: unpublishDevCapability
       summary: Return a published capability to workspace visibility
       parameters:
@@ -1411,6 +1472,7 @@ paths:
                 $ref: '#/components/schemas/Capability'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/deprecate:
     post:
+      tags: [capabilities]
       operationId: deprecateDevCapability
       summary: Mark a published capability as deprecated
       parameters:
@@ -1425,6 +1487,7 @@ paths:
                 $ref: '#/components/schemas/Capability'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/undeprecate:
     post:
+      tags: [capabilities]
       operationId: undeprecateDevCapability
       summary: Clear a capability deprecation marker
       parameters:
@@ -1439,6 +1502,7 @@ paths:
                 $ref: '#/components/schemas/Capability'
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/versions:
     get:
+      tags: [capabilities]
       operationId: listDevCapabilityVersions
       summary: List capability versions
       parameters:
@@ -1467,6 +1531,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
+      tags: [capabilities]
       operationId: createDevCapabilityVersion
       summary: Add a capability version
       parameters:
@@ -1495,6 +1560,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/me/credentials:
     get:
+      tags: [me]
       operationId: listDevMyCredentials
       summary: List current user's credentials
       responses:
@@ -1517,6 +1583,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
+      tags: [me]
       operationId: createDevMyCredential
       summary: Create a credential for the current user
       requestBody:
@@ -1542,6 +1609,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/me/credentials/{credentialID}:
     patch:
+      tags: [me]
       operationId: patchDevMyCredential
       summary: Rename or rotate one of the current user's credentials
       parameters:
@@ -1568,6 +1636,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
+      tags: [me]
       operationId: deleteDevMyCredential
       summary: Soft-delete one of the current user's credentials
       parameters:
@@ -1587,6 +1656,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities:
     get:
+      tags: [agents]
       operationId: listDevAgentCapabilities
       summary: List installed and available capabilities for an agent
       parameters:
@@ -1627,6 +1697,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable:
     post:
+      tags: [agents]
       operationId: enableDevAgentCapability
       summary: Enable or switch a capability version on an agent
       parameters:
@@ -1662,6 +1733,7 @@ paths:
           description: Capability version input is invalid
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade:
     post:
+      tags: [agents]
       operationId: upgradeDevAgentCapability
       summary: Upgrade an enabled marketplace capability to a new version
       parameters:
@@ -1696,6 +1768,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}:
     delete:
+      tags: [agents]
       operationId: deleteDevAgentCapability
       summary: Disable a capability binding on an agent
       parameters:
@@ -1715,6 +1788,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/secrets:
     get:
+      tags: [secrets]
       operationId: listDevSecrets
       summary: List workspace secrets without encrypted payloads
       parameters:
@@ -1738,6 +1812,7 @@ paths:
         '503':
           description: Database-backed secret vault is disabled
     post:
+      tags: [secrets]
       operationId: createDevSecret
       summary: Create an encrypted workspace secret
       description: Dev-only secret vault endpoint. The request payload is encrypted by the server-side secret vault key and only metadata plus masked value is returned.
@@ -1779,6 +1854,7 @@ paths:
           description: Database-backed secret vault is disabled
   /api/v1/workspaces/{workspaceID}/secrets/{secretID}/disable:
     post:
+      tags: [secrets]
       operationId: disableDevSecret
       summary: Disable a workspace secret
       description: Marks the secret disabled without deleting the record or returning encrypted payload. Runners must not inject disabled secrets into runtime environments.
@@ -1808,6 +1884,7 @@ paths:
           description: Database-backed secret vault is disabled
   /api/v1/workspaces/{workspaceID}/model-providers:
     get:
+      tags: [models]
       operationId: listDevModelProviders
       summary: List workspace model providers
       description: Dev-only model registry endpoint. Returns active and disabled provider records so historical bindings remain inspectable.
@@ -1832,6 +1909,7 @@ paths:
         '503':
           description: Database-backed model registry is disabled
     post:
+      tags: [models]
       operationId: createDevModelProvider
       summary: Create a workspace model provider
       description: Creates a provider profile that may reference an existing secret by ID. Secret plaintext is never accepted or returned by this endpoint.
@@ -1878,6 +1956,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/model-providers/{providerID}/disable:
     post:
+      tags: [models]
       operationId: disableDevModelProvider
       summary: Disable a workspace model provider
       description: Marks the provider disabled without deleting it. Disabled providers remain visible in lists but are excluded from model runtime resolution for new runs.
@@ -1907,6 +1986,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/model-providers/{providerID}:
     patch:
+      tags: [models]
       operationId: updateDevModelProvider
       summary: Update editable fields of a workspace model provider
       description: |
@@ -1969,6 +2049,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models:
     get:
+      tags: [models]
       operationId: listDevModels
       summary: List workspace models
       description: Dev-only model registry endpoint. Returns active and disabled model records so historical agent profile and run references remain inspectable.
@@ -1993,6 +2074,7 @@ paths:
         '503':
           description: Database-backed model registry is disabled
     post:
+      tags: [models]
       operationId: createDevModel
       summary: Create a workspace model under a provider
       description: Creates a model profile linked to a provider. Newly created models are active until disabled.
@@ -2040,6 +2122,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models/{modelID}/disable:
     post:
+      tags: [models]
       operationId: disableDevModel
       summary: Disable a workspace model
       description: Marks the model disabled without deleting it. Disabled models remain visible in lists but are excluded from runtime resolution for new runs.
@@ -2069,6 +2152,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models/{modelID}/test:
     post:
+      tags: [models]
       operationId: testDevModelConnectivity
       summary: Test model connectivity
       description: Sends a minimal provider-shaped request to OpenAI chat-completions compatible providers and Anthropic messages compatible providers. Other adapters return supported=false without contacting upstream.
@@ -2117,6 +2201,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/workspaces/{workspaceID}/models/{modelID}:
     patch:
+      tags: [models]
       operationId: updateDevModel
       summary: Update editable fields of a workspace model
       description: |
@@ -2173,6 +2258,7 @@ paths:
           description: Database-backed model registry is disabled
   /api/v1/agents/{agentID}/profile:
     post:
+      tags: [agents]
       operationId: configureDevAgentProfile
       summary: Configure an Agent profile (runtime/model/workdir/system prompt)
       description: Dev-only endpoint for updating per-agent profile config. When `model_id` is provided, the server validates that both the model and its provider are active in the agent's workspace before persisting.
@@ -2214,6 +2300,7 @@ paths:
           description: Database-backed agent profile config is disabled
   /api/v1/agents/{agentID}/disable:
     post:
+      tags: [agents]
       operationId: disableDevAgent
       summary: Disable an agent (status='disabled') so mentions stop creating runs
       description: Sets the agent status to 'disabled', writes an agent.disabled audit event, and removes the agent from agents list responses. Mentions of the agent in subsequent fake IM / gateway messages will not produce queued runs until the agent is enabled again.
@@ -2237,6 +2324,7 @@ paths:
           description: Database-backed agent lifecycle is disabled
   /api/v1/agents/{agentID}/enable:
     post:
+      tags: [agents]
       operationId: enableDevAgent
       summary: Re-enable a previously disabled agent
       description: Sets the agent status back to 'active', writes an agent.enabled audit event, and restores the agent to agents list responses so mentions create runs again.
@@ -2260,6 +2348,7 @@ paths:
           description: Database-backed agent lifecycle is disabled
   /dev/http-agent/runner/run-once:
     post:
+      tags: [dev]
       operationId: runDevHTTPAgentRunnerOnce
       summary: Claim and invoke one queued HTTP connector run
       description: Dev-only single-shot runner. Claims at most one oldest active queued agent_run with connector_type=http, marks it running, invokes its configured HTTP Agent endpoint, and completes it through the same output/usage/audit/child-run path as direct invoke. It does not poll, retry, run as a daemon, or claim fake/opencode runs.
@@ -2276,6 +2365,7 @@ paths:
           description: Database-backed HTTP runner is disabled
   /api/v1/conversations/{conversationID}/timeline:
     get:
+      tags: [conversations]
       operationId: getDevConversationTimeline
       summary: Read a conversation timeline with messages and related agent runs
       description: Run summaries include user_facing_reason on failed runs so the UI can render a short Chinese explanation instead of raw error text.
@@ -2302,6 +2392,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/conversations/{conversationID}/messages:
     post:
+      tags: [conversations]
       operationId: createDevConversationUserMessage
       summary: User-side send message to a conversation (admin UI entry)
       parameters:
@@ -2355,6 +2446,7 @@ paths:
           description: Empty or too-long content, or unknown agent in mentioned_agent_ids
   /api/v1/conversations/{conversationID}/runs/{runID}/start:
     post:
+      tags: [conversations]
       operationId: startDevConversationAgentRun
       summary: Start a pending conversation agent run with streaming dispatch
       description: Starts a queued agent_run created by POST /api/v1/conversations/{conversationID}/messages. The handler marks the run running, dispatches agent_daemon connector streaming asynchronously, publishes PromptEvent SSE frames through the run stream broker, and persists the final assistant message when the run completes.
@@ -2388,6 +2480,7 @@ paths:
           description: invalid_run_state; run must be queued before start
   /api/v1/conversations/{conversationID}/runs/{runID}/stream:
     get:
+      tags: [conversations]
       operationId: streamDevConversationAgentRun
       summary: Subscribe to session-level agent run SSE events
       description: |
@@ -2421,6 +2514,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/conversations:
     get:
+      tags: [conversations]
       operationId: listDevConversations
       summary: List active conversations within a workspace
       description: |
@@ -2465,6 +2559,7 @@ paths:
         '503':
           description: Database-backed read APIs are disabled
     post:
+      tags: [conversations]
       operationId: createDevConversation
       summary: Create a new conversation within a workspace
       description: |
@@ -2515,6 +2610,7 @@ paths:
           description: Database-backed conversation creation is disabled
   /api/v1/conversations/{conversationID}:
     get:
+      tags: [conversations]
       operationId: getDevConversation
       summary: Read a single conversation summary
       description: |
@@ -2536,6 +2632,7 @@ paths:
         '503':
           description: Database-backed read APIs are disabled
     patch:
+      tags: [conversations]
       operationId: updateDevConversationTitle
       summary: Rename a conversation
       description: |
@@ -2579,6 +2676,7 @@ paths:
         '503':
           description: Database-backed write APIs are disabled
     delete:
+      tags: [conversations]
       operationId: deleteDevConversation
       summary: Soft-delete a conversation
       description: |
@@ -2607,6 +2705,7 @@ paths:
           description: Database-backed write APIs are disabled
   /api/v1/agent-runs/{runID}:
     get:
+      tags: [agent-runs]
       operationId: getDevAgentRun
       summary: Read one agent run detail
       description: Includes usage rows for completed runs and user_facing_reason on failed runs.
@@ -2630,6 +2729,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/agent-runs/{runID}/requeue:
     post:
+      tags: [agent-runs]
       operationId: requeueDevAgentRun
       summary: Requeue a failed agent run for dev retry
       description: Dev-only explicit retry endpoint. Only failed runs can be requeued; it resets status to queued, clears started_at/finished_at, records retry metadata, and writes an agent_run.requeued audit event. It does not automatically retry or create a new run.
@@ -2664,6 +2764,7 @@ paths:
           description: Database-backed retry is disabled
   /api/v1/agent-runs/{runID}/cancel:
     post:
+      tags: [agent-runs]
       operationId: cancelDevAgentRun
       summary: Cancel an in-flight agent run
       description: Cancels a running run, best-effort aborts the owning OpenCode session, marks the run cancelled, and emits an agent_run.cancelled audit event. Already terminal runs return 422.
@@ -2698,6 +2799,7 @@ paths:
           description: Database-backed cancel is disabled
   /api/v1/workspaces/{workspaceID}/agent-runs:
     get:
+      tags: [agent-runs]
       operationId: listDevAgentRuns
       summary: List workspace agent runs, optionally filtered by status
       description: Run summaries include user_facing_reason on failed runs so a Chinese-readable error sentence is available alongside the raw status.
@@ -2725,6 +2827,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/agent-runs/{runID}/events:
     get:
+      tags: [agent-runs]
       operationId: listDevAgentRunEvents
       summary: List persisted events for one agent run
       description: |
@@ -2771,6 +2874,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/audit-records:
     get:
+      tags: [workspaces]
       operationId: listDevAuditRecords
       summary: List workspace audit records
       description: |
@@ -2878,6 +2982,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/connectors:
     get:
+      tags: [workspaces]
       operationId: listDevConnectors
       summary: List connector types in use by a workspace
       description: |
@@ -2925,6 +3030,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/gateways:
     get:
+      tags: [workspaces]
       operationId: listDevWorkspaceGateways
       summary: List known gateway types
       description: |
@@ -2971,6 +3077,7 @@ paths:
           description: Malformed workspace UUID
   /api/v1/workspaces/{workspaceID}/usage:
     get:
+      tags: [workspaces]
       operationId: listDevUsage
       summary: List workspace usage logs
       description: Dev-only governance read API for fake runtime usage rows. Records are ordered by created_at descending. Unknown active workspaces return 404; malformed workspace IDs or agent_run_id filters return 400.
@@ -3000,6 +3107,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/me:
     get:
+      tags: [me]
       operationId: getDevMe
       summary: Get the current dev caller identity
       description: |
@@ -3035,6 +3143,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/me/workspaces:
     get:
+      tags: [me]
       operationId: listDevMyWorkspaces
       summary: List the calling user's workspaces (header workspace switcher)
       description: |
@@ -3067,6 +3176,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces:
     post:
+      tags: [workspaces]
       operationId: createDevWorkspace
       summary: Create a new workspace
       description: |
@@ -3097,6 +3207,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}:
     patch:
+      tags: [workspaces]
       operationId: updateDevWorkspace
       summary: Rename a workspace (name only — slug is permanent)
       description: |
@@ -3134,6 +3245,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/archive:
     post:
+      tags: [workspaces]
       operationId: archiveDevWorkspace
       summary: Soft-delete (archive) a workspace
       description: |
@@ -3163,6 +3275,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/members:
     get:
+      tags: [workspace-members]
       operationId: listDevWorkspaceMembers
       summary: List workspace members
       description: Dev-only read API. Returns workspace memberships joined with user email/name/status. Unknown / deleted workspaces return an empty list, not 404 (mirror of secrets behaviour).
@@ -3188,6 +3301,7 @@ paths:
         '503':
           description: Database-backed read APIs are disabled
     post:
+      tags: [workspace-members]
       operationId: addDevWorkspaceMember
       summary: Add a workspace member (admin-side, Phase 2 dev path)
       description: |
@@ -3235,6 +3349,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/members/{userID}:
     patch:
+      tags: [workspace-members]
       operationId: updateDevWorkspaceMemberRole
       summary: Update a workspace member's role
       description: Flip an existing member's role between owner / admin / member / viewer. Returns 404 if the membership is unknown or already soft-deleted.
@@ -3274,6 +3389,7 @@ paths:
         '503':
           description: Database-backed read APIs are disabled
     delete:
+      tags: [workspace-members]
       operationId: removeDevWorkspaceMember
       summary: Remove a workspace member (soft-delete)
       description: Soft-deletes the workspace membership. The user record itself is preserved so it can be re-added later. Returns the removed ws_member row.
@@ -3303,6 +3419,7 @@ paths:
           description: Database-backed read APIs are disabled
   /api/v1/workspaces/{workspaceID}/runtime/status:
     get:
+      tags: [runtimes]
       operationId: getDevWorkspaceRuntimeStatus
       summary: Runtime banner status (sandbox credential health + per-workspace sandbox-agent population)
       description: |
@@ -3426,6 +3543,7 @@ paths:
           description: Runtime status not wired (server started without WithRuntimeStatus)
   /api/v1/workspaces/{workspaceID}/runtime/try-connection:
     post:
+      tags: [runtimes]
       operationId: postDevWorkspaceRuntimeTryConnection
       summary: Spawn an ephemeral test sandbox and run the 3-check connectivity pipeline
       description: |
@@ -3579,6 +3697,7 @@ paths:
             callers.
   /api/v1/workspaces/{workspaceID}/runtime/credential:
     put:
+      tags: [runtimes]
       operationId: putDevWorkspaceRuntimeCredential
       summary: Register or overwrite the workspace's sandbox runtime credential
       description: |
@@ -3648,6 +3767,7 @@ paths:
                   error:
                     type: string
     delete:
+      tags: [runtimes]
       operationId: deleteDevWorkspaceRuntimeCredential
       summary: Clear the workspace's sandbox runtime credential pointer
       description: |
@@ -3684,6 +3804,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/workspaces/{workspaceID}/sandboxes:
     get:
+      tags: [sandboxes]
       operationId: listDevWorkspaceSandboxes
       summary: List active persistent sandboxes in a workspace
       description: |
@@ -3729,6 +3850,7 @@ paths:
           description: Sandbox store not configured (sandbox runner mode disabled)
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox:
     get:
+      tags: [agents]
       operationId: getDevAgentSandbox
       summary: Get the active persistent sandbox binding for one agent
       description: |
@@ -3753,6 +3875,7 @@ paths:
           description: Sandbox store not configured
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill:
     post:
+      tags: [agents]
       operationId: killDevAgentSandbox
       summary: Force-kill the active persistent sandbox for an agent
       description: |
@@ -3778,6 +3901,7 @@ paths:
           description: Sandbox binding store / runner not configured
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild:
     post:
+      tags: [agents]
       operationId: rebuildDevAgentSandbox
       summary: Kill the active persistent sandbox and pre-warm a fresh one
       description: |
@@ -3818,6 +3942,7 @@ paths:
           description: Sandbox binding store / runner not configured
   /api/v1/workspaces/{workspaceID}/sandbox-pool:
     get:
+      tags: [workspaces]
       operationId: listDevSandboxPool
       summary: Sandbox pool stats + paginated active entries
       description: |
@@ -3859,6 +3984,7 @@ paths:
             Body carries `configured: false` for the admin UI.
   /api/v1/workspaces/{workspaceID}/sandbox-pool/spawn:
     post:
+      tags: [workspaces]
       operationId: spawnDevSandboxPool
       summary: Batch-spawn N blank sandboxes into one workspace pool
       description: |
@@ -3887,6 +4013,7 @@ paths:
           description: Sandbox pool not configured
   /api/v1/workspaces/{workspaceID}/sandbox-pool/{sandboxID}/renew:
     post:
+      tags: [workspaces]
       operationId: renewDevSandboxPoolEntry
       summary: Admin-issued manual renew on one pool entry
       description: |
@@ -3920,6 +4047,7 @@ paths:
           description: Sandbox pool not configured / renewer not configured
   /api/v1/workspaces/{workspaceID}/sandbox-pool/{sandboxID}/kill:
     post:
+      tags: [workspaces]
       operationId: killDevSandboxPoolEntry
       summary: Admin-issued terminal kill on one pool entry
       description: |
@@ -3948,6 +4076,7 @@ paths:
           description: Sandbox pool not configured
   /api/v1/workspaces/{workspaceID}/sandbox-pool/{sandboxID}/auto-renew:
     patch:
+      tags: [workspaces]
       operationId: patchDevSandboxPoolAutoRenew
       summary: Update one entry's auto-renew threshold
       description: |
@@ -3989,6 +4118,7 @@ paths:
 #     /api/v1/runtimes/{id}/heartbeat
   /api/v1/workspaces/{workspaceID}/runtimes:
     get:
+      tags: [runtimes]
       operationId: listWorkspaceRuntimes
       summary: List runtimes registered in a workspace
       description: |
@@ -4052,6 +4182,7 @@ paths:
         '403':
           description: Caller is not a workspace member
     post:
+      tags: [runtimes]
       operationId: createRuntimePairing
       summary: Mint a runtime pairing token (admin only)
       description: |
@@ -4112,6 +4243,7 @@ paths:
           description: Caller is not workspace owner/admin
   /api/v1/workspaces/{workspaceID}/runtimes/{runtimeID}:
     get:
+      tags: [runtimes]
       operationId: getWorkspaceRuntime
       summary: Runtime detail
       parameters:
@@ -4127,6 +4259,7 @@ paths:
         '404':
           description: Runtime not found or deleted
     patch:
+      tags: [runtimes]
       operationId: patchWorkspaceRuntime
       summary: Rename runtime
       description: |
@@ -4155,6 +4288,7 @@ paths:
         '404':
           description: Runtime not found
     delete:
+      tags: [runtimes]
       operationId: deleteWorkspaceRuntime
       summary: Soft-delete the runtime
       description: |
@@ -4172,6 +4306,7 @@ paths:
   # -------------------------------------------------------------------
   /api/v1/runtimes/pair:
     post:
+      tags: [runtimes]
       operationId: pairRuntime
       summary: Runtime pair handshake
       description: |
@@ -4223,6 +4358,7 @@ paths:
           description: Pairing token invalid, expired, or already consumed
   /api/v1/runtimes/{runtimeID}/heartbeat:
     post:
+      tags: [runtimes]
       operationId: runtimeHeartbeat
       summary: Runtime heartbeat
       description: |
