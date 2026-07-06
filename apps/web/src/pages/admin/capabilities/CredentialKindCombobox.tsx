@@ -107,7 +107,15 @@ export function CredentialKindCombobox({
               />
             </div>
 
-            <div className="max-h-[200px] overflow-auto py-1">
+            {/* Radix DropdownMenu swallows wheel events; re-drive scroll so the
+                nested list responds to the wheel, not only the scrollbar thumb. */}
+            <div
+              className="max-h-[200px] overflow-auto py-1"
+              onWheel={(e) => {
+                e.currentTarget.scrollTop += e.deltaY
+                e.stopPropagation()
+              }}
+            >
               {kindsQ.isLoading ? (
                 <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
