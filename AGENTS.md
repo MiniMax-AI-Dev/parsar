@@ -6,6 +6,11 @@ baseline, web UI rules, and the required `make check` — lives in
 [`CONTRIBUTING.md`](./CONTRIBUTING.md). Read it before any
 implementation, refactor, or schema / API change.
 
+## Language
+
+Except for user-facing internationalized bilingual copy, comments and
+documentation must be written in English.
+
 ## HTTP contract (swaggo generation)
 
 `docs/openapi/openapi.yaml` is a **build artifact**, not a hand-edited
