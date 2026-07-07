@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
@@ -34,10 +35,13 @@ type LoginHandler struct {
 	now      func() time.Time
 }
 
-// NewLoginHandler builds a handler.
+// NewLoginHandler builds a handler. logger may be nil; when nil the
+// handler falls back to internal/obs/log which routes through the
+// project's slog ContextHandler (trace_id attribution, etc.). Callers
+// with a scoped logger of their own can pass one in verbatim.
 func NewLoginHandler(q Querier, sessions auth.SessionStore, secure bool, logger *slog.Logger) *LoginHandler {
 	if logger == nil {
-		logger = slog.Default()
+		logger = log.With("component", "auth.password")
 	}
 	return &LoginHandler{
 		q:        q,
