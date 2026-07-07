@@ -106,6 +106,11 @@ make check
   schema, add a **new** migration numbered strictly above the current
   head; CI (`.github/workflows/migrations.yml`) rejects edits to
   landed files and numeric regressions.
+- After editing `server/internal/db/queries/*.sql`, run
+  `make sqlc-generate` and commit the regenerated
+  `server/internal/db/sqlc/*.go` alongside the SQL. CI
+  (`.github/workflows/sqlc.yml`) reruns the generator and fails the
+  build on any drift.
 - API contracts live on the handler: every `http.HandlerFunc` factory
   must carry a swaggo annotation block (`@Summary`, `@Tags`, `@Param`,
   `@Success/@Failure`, `@Router`) directly above the `func`. After
