@@ -42,6 +42,10 @@ func CheckCLIAvailable(ctx context.Context, binary string) (string, error) {
 		return "", fmt.Errorf("pi --version failed: %s", msg)
 	}
 	out := strings.TrimSpace(stdout.String())
+	if out == "" {
+		// pi writes version to stderr
+		out = strings.TrimSpace(stderr.String())
+	}
 	if i := strings.IndexByte(out, '\n'); i >= 0 {
 		out = out[:i]
 	}

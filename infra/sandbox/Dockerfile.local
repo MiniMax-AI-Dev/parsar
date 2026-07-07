@@ -85,6 +85,11 @@ RUN npm install -g @openai/codex \
  && codex --version \
  || echo "codex install skipped (npm install failed)"
 
+# --- Pi CLI (via npm) ---
+RUN npm install -g @earendil-works/pi-coding-agent \
+ && pi --version \
+ || echo "pi install skipped (npm install failed)"
+
 # --- Hook scripts (Claude Code + OpenCode) ---
 # Pre-baked under /opt/parsar/hooks/. Claude hooks are Python, OpenCode
 # hooks are JS. Both call `parsar inject snapshot/incremental` at runtime.

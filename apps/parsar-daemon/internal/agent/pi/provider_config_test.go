@@ -60,11 +60,11 @@ func TestWritePiModelsJSON_AnthropicProvider(t *testing.T) {
 	if p.API != "anthropic-messages" {
 		t.Errorf("api = %q, want anthropic-messages", p.API)
 	}
-	// CRITICAL: pi treats a bare apiKey string as a LITERAL key, and only a
-	// "$NAME" string as an env reference (resolve-config-value.ts:138-143).
-	// Writing the bare env name would send the literal text as the key → 401.
-	if p.APIKey != "$PARSAR_PI_API_KEY" {
-		t.Errorf("apiKey = %q, want $PARSAR_PI_API_KEY (env reference, not literal)", p.APIKey)
+	// pi 0.74.2 resolveConfigValue() looks up process.env[apiKey] and falls
+	// back to the literal. A "$" prefix would look up process.env["$FOO"]
+	// which never matches — writing the bare env name is required.
+	if p.APIKey != "PARSAR_PI_API_KEY" {
+		t.Errorf("apiKey = %q, want PARSAR_PI_API_KEY (bare env name, no $)", p.APIKey)
 	}
 	if p.Headers["X-Sub-Module"] != "claude-code-internal" {
 		t.Errorf("headers[X-Sub-Module] = %q, want claude-code-internal", p.Headers["X-Sub-Module"])
@@ -243,7 +243,7 @@ func TestApplyPiManagedProvider_WritesModelsAndSetsEnv(t *testing.T) {
 	}
 
 	p := readModelsJSON(t, agentDir).Providers[piManagedProviderSlug]
-	if p.APIKey != "$PARSAR_PI_API_KEY" || p.BaseURL != "https://platform-api.example.com" {
+	if p.APIKey != "PARSAR_PI_API_KEY" || p.BaseURL != "https://platform-api.example.com" {
 		t.Errorf("models.json not materialised correctly: %+v", p)
 	}
 

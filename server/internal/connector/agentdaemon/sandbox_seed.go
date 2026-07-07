@@ -31,6 +31,7 @@ const (
 	SandboxConnectorClaude   SandboxConnector = "claude"
 	SandboxConnectorOpenCode SandboxConnector = "opencode"
 	SandboxConnectorCodex    SandboxConnector = "codex"
+	SandboxConnectorPi       SandboxConnector = "pi"
 )
 
 // In-image absolute paths to the hook scripts baked by
@@ -113,8 +114,10 @@ func ConnectorForAgentKind(agentKind string) SandboxConnector {
 		return SandboxConnectorCodex
 	case "opencode":
 		return SandboxConnectorOpenCode
+	case "pi":
+		return SandboxConnectorPi
 	default:
-		// claude_code, "", pi, and anything unknown → Claude
+		// claude_code, "", and anything unknown → Claude
 		return SandboxConnectorClaude
 	}
 }
@@ -142,6 +145,11 @@ func seedPlatformConfig(ctx context.Context, client E2BClient, sb e2b.Sandbox, c
 		// TODO: Codex has no hook surface — render spec+memory into
 		// ~/.codex/AGENTS.md at boot. CLI binary is available in the
 		// image; daemon discovers and registers it via heartbeat.
+		return nil
+	case SandboxConnectorPi:
+		// TODO: wire spec/memory injection for pi. CLI binary is
+		// available in the image; daemon discovers and registers it
+		// via heartbeat.
 		return nil
 	default:
 		return fmt.Errorf("sandbox_seed: unknown connector %q", conn)
