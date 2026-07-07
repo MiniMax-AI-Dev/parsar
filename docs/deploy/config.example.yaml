@@ -1,142 +1,161 @@
-# Parsar 配置示例 —— 通用 baseline
+# Parsar configuration example — generic baseline
 #
-# 用法：
-#   1. 把本文件复制到一个 *不在 repo 里* 的位置，例如：
+# Usage:
+#   1. Copy this file to a location *outside the repo*, e.g.:
 #        cp docs/deploy/config.example.yaml ~/.parsar/config.yaml
-#      生产部署通常用 /etc/parsar/config.yaml 或部署平台的 secret 模板。
-#   2. 把 <placeholder> 部分换成自己的真实值（**不要往 repo 里塞**）。
-#   3. 启动 server 前 export PARSAR_CONFIG_FILE：
+#      Production deployments typically use /etc/parsar/config.yaml or the
+#      secret template of your deploy platform.
+#   2. Replace each <placeholder> with your real value (**do not commit
+#      these into the repo**).
+#   3. Export PARSAR_CONFIG_FILE before starting the server:
 #        export PARSAR_CONFIG_FILE=$HOME/.parsar/config.yaml
 #        parsar-server
-#      或在 compose / K8s 里把这个绝对路径设进容器 env。
+#      Or set the absolute path into the container env in compose / K8s.
 #
-# 加载优先级：built-in defaults < YAML 文件 < 环境变量。生产中 secret
-# 通常用 env 注入，文件只放非敏感的部署形态（监听地址、scope、runner
-# 类型等）。
+# Load precedence: built-in defaults < YAML file < environment variables.
+# In production, secrets are usually injected via env; the file only holds
+# non-sensitive deployment shape (listen address, scopes, runner types, ...).
 #
-# **本文件里不放任何真实 secret / 真实部署地址**。真实 token、master
-# key、app secret、内部域名等只允许出现在用户本地 shell env / 部署
-# 平台 secret manager。
+# **No real secrets or real deploy addresses belong in this file.** Real
+# tokens, master keys, app secrets, internal domains, etc. only ever live
+# in the operator's local shell env or the deploy-platform secret manager.
 #
-# 配套文件：
-#   docs/deploy/deploy-runbook.md          —— 部署冷启动顺序
-#   docs/deploy/health-and-smoke.md        —— /healthz、/readyz、smoke
-#   deploy/compose/compose.selfhost.yml     —— docker compose 部署起点
-#   deploy/compose/.env.example            —— env 模板
+# Companion files:
+#   docs/deploy/deploy-runbook.md          — deploy cold-start order
+#   docs/deploy/health-and-smoke.md        — /healthz, /readyz, smoke
+#   deploy/compose/compose.selfhost.yml    — Docker Compose deploy starting point
+#   deploy/compose/.env.example            — env template
 
 server:
   addr: ":8080"
-  # 对外可见的绝对 URL；Feishu / GitHub / Slack 等 OAuth callback 会以此为基底。
-  # 用于构造 callback —— 必须能从用户浏览器访问。
+  # Absolute URL visible to the outside world. Feishu / GitHub / Slack OAuth
+  # callbacks are built from this. Must be reachable from the user's browser.
   public_url: "https://parsar.example.com"
-  # Runtime 状态目录（audit ingester scratch、opencode 每次 run 的 scratch、
-  # smoke evidence）。必须在 repo / CWD 之外。
-  # 默认 ~/.parsar；如果用 systemd / 容器，设成 /var/lib/parsar 这类受管目录。
+  # Runtime state directory (audit ingester scratch, per-run opencode scratch,
+  # smoke evidence). Must live outside the repo / CWD.
+  # Default ~/.parsar; for systemd / containers, set to a managed path such as
+  # /var/lib/parsar.
   data_dir: "~/.parsar"
 
 database:
-  # 必填。Parsar 只支持 Postgres。
-  # 注意：连接串里的密码也是 secret，建议改用 DATABASE_URL env，
-  # YAML 里只放主机和库名结构示意。
+  # Required. Parsar only supports Postgres.
+  # The password embedded in the connection string is a secret; prefer the
+  # DATABASE_URL env var and keep the YAML to host/db shape only.
   url: "postgres://parsar:CHANGE_ME_TO_REAL_PASSWORD@127.0.0.1:5432/parsar?sslmode=disable"
 
 auth:
-  # 生产必须为 false。X-Parsar-Dev-User-ID dev shim 只用于本地开发。
-  # 启动 Validate() 会拒绝 prod profile + dev_auth=true 的组合。
+  # Must be false in production. The X-Parsar-Dev-User-ID dev shim is for
+  # local development only. Validate() rejects prod profile + dev_auth=true
+  # at startup.
   dev_auth: false
   cookie:
-    # 反向代理终止 TLS 后必须 true，否则 session cookie 走 HTTP 会泄。
+    # Must be true once a reverse proxy terminates TLS; otherwise the
+    # session cookie leaks over plain HTTP.
     secure: true
 
 secret:
-  # Secret vault 主密钥（AES-GCM 包裹 workspace secret）。
-  # 生产必填；推荐 32 字节以上随机：openssl rand -hex 32
-  # **强烈建议留空让 env 接管 → 部署平台 secret manager 注入。**
-  # 一旦上线就不要轮换 —— 当前没有原地 re-encrypt 工具，换 key 需要
-  # 重新加密所有 workspace secret。
+  # Master key for the secret vault (AES-GCM wraps every workspace secret).
+  # Required in production; recommend at least 32 random bytes:
+  # openssl rand -hex 32.
+  # **Strongly prefer leaving this empty and injecting via env from your
+  # deploy platform's secret manager.**
+  # Do not rotate this once you go live — there is no in-place re-encrypt
+  # tool today, so rotating the key means re-encrypting every workspace
+  # secret.
   master_key: ""
 
 gateway:
   feishu:
-    # 本地开发可以开 mock。生产必关，启动会拒。
+    # Local dev can enable mock. Must be off in production; startup rejects it.
     mock: false
-    # 飞书开放平台应用凭证；全部走 env 注入。
-    # 配置位置见 docs/deploy/feishu-prod.md §1。
+    # Feishu Open Platform app credentials — all injected via env.
+    # See docs/deploy/feishu-prod.md §1 for where to configure them.
     app_id: ""
     app_secret: ""
     redirect_uri: ""
-    # 默认 scope 已经覆盖 user.id / user.base / user.email；
-    # 仅当追加额外 scope 时填。
+    # The default scope set already covers user.id / user.base / user.email;
+    # only fill this when you need to append extra scopes.
     scope: ""
-    # 默认 https://accounts.feishu.cn / https://open.feishu.cn。
-    # 如果走反代或自建 Lark，覆盖这两个 host。
+    # Defaults are https://accounts.feishu.cn / https://open.feishu.cn.
+    # Override these hosts when behind a reverse proxy or on self-hosted Lark.
     authorize_base: ""
     api_base: ""
-    # Feishu 事件订阅 Verification Token / Encrypt Key —— env 注入。
+    # Feishu event subscription Verification Token / Encrypt Key — env-injected.
     verification_token: ""
     encrypt_key: ""
-    # 登录成功后 redirect 目标；默认 "/"。
+    # Redirect target after successful login; defaults to "/".
     login_redirect_url: ""
 
-# Runtime profile 目前走 env 注入，不放 YAML：
+# Runtime profile is currently env-injected, not placed in YAML:
 #   PARSAR_RUNTIME_PROFILE=managed
-# agent_daemon sandbox provider 接上时 server 也会自动推断 managed；
-# 显式 env 主要用于部署兜底。managed 表示云端沙盒由部署平台托管，
-# workspace 管理员不需要在 UI 录入 E2B Key。
+# The server also auto-detects managed once an agent_daemon sandbox provider
+# is wired up; the explicit env is mainly a deploy-time fallback. `managed`
+# means the deploy platform hosts the cloud sandbox, so workspace admins do
+# not have to enter an E2B key in the UI.
 
-# GitHub 个人账号连接（OAuth App）目前走 env 注入，不放 YAML：
+# GitHub personal-account connection (OAuth App) is currently env-injected,
+# not placed in YAML:
 #   PARSAR_GITHUB_CLIENT_ID=<OAuth App client id>
 #   PARSAR_GITHUB_CLIENT_SECRET=<OAuth App client secret>
 #   PARSAR_GITHUB_REDIRECT_URI=https://parsar.example.com/api/v1/connections/github/callback
 #   PARSAR_GITHUB_SCOPE="repo read:user user:email"
-# redirect_uri 留空时，server 会用 server.public_url 自动构造上述 callback。
+# When redirect_uri is empty, the server derives the callback from
+# server.public_url automatically.
 
 model:
-  # opencode CLI 二进制路径；留空则走 $PATH 查找。
-  # 镜像若把 opencode 装到非标路径，在这里写绝对路径。
+  # Path to the opencode CLI binary; empty means look it up on $PATH.
+  # If the image installs opencode at a non-standard path, put the absolute
+  # path here.
   opencode_bin: ""
 
 storage:
-  # 对象存储 —— 仅在启用 Plugin capability 上传时必填。
-  # 任一必填字段为空 = 不构造 client → /uploads/* 走 503,
-  # MCP / Skill capability 不受影响。
-  # 真凭证一律走 PARSAR_OSS_* env 注入，YAML 仅留占位提示。
+  # Object storage — only required when Plugin capability uploads are enabled.
+  # If any required field is empty, the client is not built and /uploads/*
+  # returns 503; MCP / Skill capability is unaffected.
+  # Real credentials always flow through PARSAR_OSS_* env vars; the YAML
+  # only carries placeholder hints.
   #
-  # 当前默认实现走阿里云 OSS SDK；后续将抽象为 ObjectStorage interface,
-  # 支持 MinIO / S3 / Cloudflare R2 等 S3 兼容后端（参见 oss-release/issues）。
+  # The current default implementation uses the Alibaba Cloud OSS SDK; a
+  # future ObjectStorage interface will support MinIO / S3 / Cloudflare R2
+  # and other S3-compatible backends (see oss-release/issues).
   #
-  # Region 期望裸 region code (cn-shanghai, cn-hangzhou …)，
-  # 不要带 oss- 前缀；oss-cn-shanghai 那种形式只在 base_url 里出现。
+  # Region expects the bare region code (cn-shanghai, cn-hangzhou, ...);
+  # do NOT include the oss- prefix — that form (oss-cn-shanghai) only
+  # appears inside base_url.
   oss:
     region: ""
     bucket: ""
     access_key_id: ""
     access_key_secret: ""
-    # bucket 公网 origin，与 object key 拼接生成
-    # capability_versions.oss_url。形如
+    # Bucket public origin; concatenated with the object key to produce
+    # capability_versions.oss_url. Shape:
     # https://<bucket>.oss-cn-<region>.aliyuncs.com
     base_url: ""
-    # 反代或走 VPC endpoint 时覆盖；留空让 SDK 从 region 推。
+    # Override when going through a reverse proxy or VPC endpoint; leave
+    # empty to let the SDK derive it from region.
     endpoint: ""
 
 audit:
   otlp:
-    # 嵌入式 OTLP/HTTP receiver。默认关闭；只有需要把审计事件 fan-out
-    # 到 OpenTelemetry collector（Grafana / Tempo / Loki / Honeycomb /
-    # Datadog）时才开。
-    # 即使开启，canonical 审计仍写 audit_records 表，fan-out 失败只 log
-    # 不阻塞 canonical 写入。
+    # Embedded OTLP/HTTP receiver. Off by default; only enable when you
+    # want to fan audit events out to an OpenTelemetry collector (Grafana /
+    # Tempo / Loki / Honeycomb / Datadog).
+    # Even when enabled, the canonical audit still writes to audit_records;
+    # fan-out failures are logged, not blocking.
     enabled: false
-    # Receiver 监听地址。Default ":4318"（OTel HTTP 标准 port）。
+    # Receiver listen address. Default ":4318" (OTel HTTP standard port).
     addr: ":4318"
-    # HMAC-SHA256 签名 key，用于校验 sandbox sidecar 上报的 Bearer token。
-    # enabled=true 时必填（Validate() 拒空 key）；推荐：openssl rand -hex 32。
-    # 走 env 注入。
+    # HMAC-SHA256 signing key used to validate the Bearer token reported by
+    # the sandbox sidecar. Required when enabled=true (Validate() rejects an
+    # empty key); recommend: openssl rand -hex 32.
+    # Injected via env.
     signing_key: ""
-    # 沙盒等外部 producer 访问本 receiver 的完整 URL（与 addr 不同：
-    # addr 是本地 bind，external_endpoint 是公网/集群可见的 URL）。
-    # 留空 → spawn 时不注入 OTel env，sandbox 不会自动上报。
+    # Full URL that external producers (sandboxes, etc.) hit for this
+    # receiver. Different from addr: addr is the local bind, whereas
+    # external_endpoint is the URL visible from the public network /
+    # cluster. Empty → no OTel env is injected at spawn time, so sandboxes
+    # will not report automatically.
     external_endpoint: ""
-    # 把 audit 事件 fan-out 给自有的 OTel collector 的 URL。
-    # 留空 = 不 fan-out。
+    # URL of your own OTel collector to fan audit events out to.
+    # Empty = no fan-out.
     fanout_endpoint: ""

@@ -92,7 +92,7 @@ type Storer interface {
 	// conversation — common when the user replies as a fresh message
 	// instead of a thread reply.
 	FindPendingAskByChat(ctx context.Context, gateway, externalChatID string) (string, store.PromptForUserChoiceInflightSlot, error)
-	// HasFeishuThreadInboundHistory backs the "话题续聊不必再 @" rule in
+	// HasFeishuThreadInboundHistory backs the "thread continuation skips @-mention" rule in
 	// isGroupMessageWithoutBotMention.
 	HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadID string) (bool, error)
 	// HasThreadInboundHistory is the platform-scoped form used by the shared
@@ -212,8 +212,8 @@ type Options struct {
 	PromptForUserChoiceRouter PromptForUserChoiceRouter
 
 	// JoinURLBuilder, when non-nil, mints the absolute URL the
-	// visibility=workspace rejection card surfaces as a "申请加入" link.
-	// Nil falls back to "请联系上述管理员加入".
+	// visibility=workspace rejection card surfaces as a "Request to join" link.
+	// Nil falls back to "Contact one of the admins above to join".
 	JoinURLBuilder func(workspaceID string) string
 
 	// Connectors, when non-nil, is the workspace_im_connectors source. It
@@ -570,7 +570,7 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	// Debug: surface thread-related fields to diagnose why the
 	// "thread follow-up without @" continuity rule in
 	// isGroupMessageWithoutBotMention sometimes doesn't trigger for
-	// replies inside a Feishu 话题 panel of a regular group chat.
+	// replies inside a Feishu thread panel of a regular group chat.
 	m.logger.Info("feishu websocket inbound: thread-field debug",
 		"app_id", inbound.AppID,
 		"message_id", inbound.MessageID,
@@ -689,12 +689,12 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 		if err != nil {
 			if errors.Is(err, store.ErrUnknownConversation) {
 				return m.sendImmediateText(ctx, decision.Agent, inbound,
-					"当前会话还没有进行中的任务，无法取消。")
+					"This conversation has no in-progress tasks to cancel.")
 			}
 			m.logger.Warn("feishu cancel command: conversation lookup failed",
 				"chat_id", inbound.ChatID, "thread_id", threadKey, "err", err.Error())
 			return m.sendImmediateText(ctx, decision.Agent, inbound,
-				"取消失败：查询会话出错，请稍后再试。")
+				"Cancel failed: error querying conversation, please retry later.")
 		}
 		reason := "feishu_user_cancel"
 		if cancelCmd.Scope == "all" {
@@ -705,15 +705,15 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 			m.logger.Warn("feishu cancel command: bulk cancel failed",
 				"conversation_id", conversationID, "scope", cancelCmd.Scope, "err", err.Error())
 			return m.sendImmediateText(ctx, decision.Agent, inbound,
-				"取消失败，请稍后再试。")
+				"Cancel failed, please retry later.")
 		}
 		if len(cancelled) == 0 {
 			return m.sendImmediateText(ctx, decision.Agent, inbound,
-				"当前没有进行中的任务。")
+				"No in-progress tasks.")
 		}
-		msg := fmt.Sprintf("已取消 %d 个任务。", len(cancelled))
+		msg := fmt.Sprintf("Cancelled %d task(s).", len(cancelled))
 		if cancelCmd.Scope != "all" && len(cancelled) > 1 {
-			msg = fmt.Sprintf("已取消 %d 个进行中任务（如只想取消单个，请使用 web 端卡片上的取消按钮）。", len(cancelled))
+			msg = fmt.Sprintf("Cancelled %d in-progress task(s). (To cancel a single task, use the cancel button on the card in the web UI.)", len(cancelled))
 		}
 		return m.sendImmediateText(ctx, decision.Agent, inbound, msg)
 	}
@@ -760,7 +760,7 @@ func (m *Manager) handleMessage(ctx context.Context, appID string, event *larkim
 	// but feeding that into external_thread_id makes every reply look
 	// like a fresh conversation. ThreadKey() matches what FindConversationByExternalRef
 	// (manager.go:928) already queries with, so replies inside the same
-	// 话题 fold back into the original conversation.
+	// thread fold back into the original conversation.
 	threadID := inbound.ThreadKey()
 	created, err := m.store.CreateInboundIMMessage(ctx, store.CreateInboundIMMessageInput{
 		ConversationTitle: sharedrouter.ConversationTitle(decision.NormalizedText),
@@ -1312,12 +1312,12 @@ const inboundMergeForwardMaxDepth = 5
 // for sub-message hits before giving up.
 const inboundMergeForwardListMaxPages = 5
 
-// expandMergeForward renders a merge_forward parent into a "[会话记录]"
+// expandMergeForward renders a merge_forward parent into a "[Conversation history]"
 // block by walking its sub-messages. Two-step lookup: prefer the
 // inline data.items[1..] returned by GetMessage, fall back to listing
 // the chat container and filtering by upper_message_id.
 //
-// Returns "[会话记录]" placeholder (not "") when children can't be
+// Returns "[Conversation history]" placeholder (not "") when children can't be
 // located so the LLM at least knows a forwarded conversation was
 // attached but unrenderable. Also surfaces any image_keys carried by
 // child messages (image type + post-with-embedded-img) with each
@@ -1349,7 +1349,7 @@ func (m *Manager) expandMergeForward(ctx context.Context, client *gateway.Feishu
 		"child_count", len(subs),
 	)
 	if len(subs) == 0 {
-		return "[会话记录]", nil
+		return "[Conversation history]", nil
 	}
 
 	lines := make([]string, 0, len(subs))
@@ -1381,15 +1381,15 @@ func (m *Manager) expandMergeForward(ctx context.Context, client *gateway.Feishu
 		lines = append(lines, line)
 	}
 	if len(lines) == 0 && len(images) == 0 {
-		return "[会话记录]", nil
+		return "[Conversation history]", nil
 	}
 	if len(lines) == 0 {
 		// All children were image-only; show a placeholder so the LLM
 		// reads the block as "forwarded conversation, here are the
 		// images" rather than dropping it.
-		return "[会话记录]\n[/会话记录]", images
+		return "[Conversation history]\n[/Conversation history]", images
 	}
-	return "[会话记录]\n" + strings.Join(lines, "\n---\n") + "\n[/会话记录]", images
+	return "[Conversation history]\n" + strings.Join(lines, "\n---\n") + "\n[/Conversation history]", images
 }
 
 // listMergeForwardChildren paginates the parent's chat container,
@@ -1678,7 +1678,7 @@ func (m *Manager) handleCardAction(ctx context.Context, appID string, event *cal
 				"action", meta.Action,
 				"err", err.Error(),
 			)
-			return ackToast("info", "操作已收到")
+			return ackToast("info", "Received")
 		}
 		return sdkResponseFromAck(ack)
 	case "credential_form_submit":
@@ -1693,14 +1693,14 @@ func (m *Manager) handleCardAction(ctx context.Context, appID string, event *cal
 				"action", meta.Action,
 				"err", err.Error(),
 			)
-			return ackToast("info", "操作已收到")
+			return ackToast("info", "Received")
 		}
 		return sdkResponseFromAck(ack)
 	case "credential_form_acknowledged":
 		// Placeholder button required by Feishu's "form container needs
 		// a name-bearing interactive component" rule; clicks toast and
 		// go nowhere (the card is already terminal).
-		return ackToast("info", "本卡片已结束")
+		return ackToast("info", "This card has ended")
 	case "ask_user_choice_submit":
 		// Routed through the neutral channel.ActionRouter seam (3c.3): the
 		// SDK event is projected into a neutral CardAction and the
@@ -1713,23 +1713,23 @@ func (m *Manager) handleCardAction(ctx context.Context, appID string, event *cal
 				"action", meta.Action,
 				"err", err.Error(),
 			)
-			return ackToast("info", "操作已收到")
+			return ackToast("info", "Received")
 		}
 		return sdkResponseFromAck(ack)
 	case "ask_user_choice_pick":
 		// Legacy per-option button from the pre-form AskUserQuestion card.
 		// Cards sent before this deploy still carry this action; clicks
 		// land here. The slot is unchanged on the server side — the daemon
-		// 10-min watchdog will still fire — but a silent "操作已收到"
+		// 10-min watchdog will still fire — but a silent "Received"
 		// toast misleads the user into thinking it worked. Tell them
 		// directly to re-send so they don't sit waiting.
 		m.logger.Info("feishu inbound: legacy ask_user_choice_pick click (card pre-dates form upgrade)",
 			"open_message_id", meta.OpenMessageID,
 			"operator_open_id", meta.OperatorOpenID,
 		)
-		return ackToast("info", "卡片已升级,请重新 @机器人 发起本轮问题")
+		return ackToast("info", "Card has been upgraded; please @-mention the bot again to start a new round")
 	default:
-		return ackToast("info", "操作已收到")
+		return ackToast("info", "Received")
 	}
 }
 
@@ -1853,7 +1853,7 @@ func (m *Manager) buildPromptForUserChoiceDoneCardMap(ctx context.Context, conv 
 // patchPromptForUserChoiceDoneCard removed — the click handler now
 // returns the done card body inline via ackToastWithCard, which the
 // Feishu client renders directly without a follow-up PATCH. A
-// PATCH-only flow would snap the client back to "待回答" a beat later
+// PATCH-only flow would snap the client back to "Awaiting reply" a beat later
 // (see ackToastWithCard's comment); ackToastWithCard pins the new
 // content as canonical. If a future path needs an out-of-band patch
 // (e.g. stale sweep), restore the function and call

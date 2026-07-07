@@ -311,7 +311,7 @@ export function CreateModelDialog({
   const [authScheme, setAuthScheme] = useState<"api-key" | "bearer">("api-key")
   // Non-UI config keys carried verbatim from the duplicate source so
   // capabilities / limits / modalities / etc. survive the copy. Cleared
-  // when the dialog opens fresh ("+ 新建模型" path) so a vanilla create
+  // when the dialog opens fresh ("+ New model" path) so a vanilla create
   // doesn't inherit anything.
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown>>({})
 

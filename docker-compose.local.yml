@@ -1,4 +1,4 @@
-# Parsar 本地版 (local all-in-one) — Phase 1 deliverable.
+# Parsar local edition (all-in-one) — Phase 1 deliverable.
 #
 # One command, single machine, zero secrets to generate:
 #
@@ -6,7 +6,7 @@
 #
 # Brings up Postgres + a one-shot init (migrate + first-owner bootstrap) +
 # parsar-server with mock auth. Open http://127.0.0.1:18080, click
-# 「接入新设备」, copy the single command, run it on THIS host, and your
+# "Pair new device", copy the single command, run it on THIS host, and your
 # local Claude Code / OpenCode / Codex login is paired in.
 #
 # Profile not fork: this is the SAME image as the self-host deployment
@@ -151,7 +151,7 @@ services:
       https_proxy: "${HTTPS_PROXY:-}"
       no_proxy: "localhost,127.0.0.1,postgres,parsar-server"
       # Auth mode. Default (no .env) = mock auth -> ProfileDev: full cookie
-      # login as admin@example.com, no IdP, zero secrets. To test REAL 飞书
+      # login as admin@example.com, no IdP, zero secrets. To test REAL Feishu
       # OIDC against this same 127.0.0.1 stack, drop a gitignored .env next to
       # this file with the real values (compose auto-loads it):
       #

@@ -396,7 +396,7 @@ export function CreateAgentDialog({
     const params = new URLSearchParams(window.location.search.replace(/^\?+/, "?"))
     if (mode === "create") {
       // Clone path: an `agent` prop in create mode means prefill from that
-      // source (with a "副本/Copy" name suffix). URL params still win — the
+      // source (with a "Copy" name suffix). URL params still win — the
       // connector-wizard return-to flow relies on them.
       const cloneSource = agent
       const cloneSuffix = cloneSource?.name ? " (Copy)" : ""

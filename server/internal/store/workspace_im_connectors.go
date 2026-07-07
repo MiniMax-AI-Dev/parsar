@@ -13,23 +13,27 @@ import (
 )
 
 // ============================================================
-// workspace_im_connectors — workspace 维度的 IM 连接器(feishu/slack/
-// discord)。见 migration 000002 与 db/queries/store.sql。
+// workspace_im_connectors — workspace-scoped IM connectors (feishu/slack/
+// discord). See migration 000002 and db/queries/store.sql.
 //
-// 设计要点:
-//   - 凭据密文存在 secrets(vault),本表 config(jsonb) 只存 *_ref(UUID
-//     指针)与非敏感字段(event_mode / intents 等)。
-//   - app_id 是 workspace-bot 的通用 join key:配置保存时即可知,而
-//     team_id(Slack)/guild_id(Discord)只有 Bot 入驻后才知道。
-//   - (workspace_id, platform) 唯一 → 每个 workspace 每平台至多一个连接器;
-//     (platform, app_id) 唯一 → 同一 app_id 不能被两个 workspace 占用,
-//     冲突时 pg 报 23505,被映射成 *_app_id_in_use。
+// Design notes:
+//   - Credential ciphertext lives in secrets(vault); this table's config
+//     (jsonb) only stores *_ref (UUID pointers) and non-sensitive fields
+//     (event_mode / intents, etc.).
+//   - app_id is the universal join key for workspace-bot pairing: it is
+//     known at config save time, whereas team_id (Slack) / guild_id
+//     (Discord) are only known after the Bot has joined.
+//   - (workspace_id, platform) unique -> each workspace has at most one
+//     connector per platform; (platform, app_id) unique -> the same
+//     app_id cannot be occupied by two workspaces. On conflict pg raises
+//     23505, which is mapped to *_app_id_in_use.
 // ============================================================
 
 const auditWorkspaceIMConnectorUpdated = "workspace.im_connector.updated"
 
-// 连接器配置不完整 / app_id 冲突的错误哨兵。HTTP 层把它们映射成
-// 422 *_connector_incomplete 与 409 *_app_id_in_use。
+// Sentinel errors for incomplete connector config / app_id conflicts.
+// The HTTP layer maps these to 422 *_connector_incomplete and 409
+// *_app_id_in_use.
 var (
 	ErrSlackConnectorIncomplete   = errors.New("slack connector enabled requires app_id, bot_token_ref, and (socket: app_token_ref / events: signing_secret_ref)")
 	ErrSlackAppIDInUse            = errors.New("another workspace has already registered this Slack bot app_id")
@@ -39,8 +43,9 @@ var (
 	ErrTeamsAppIDInUse            = errors.New("another workspace has already registered this Teams bot app_id")
 )
 
-// WorkspaceConnectorChange 是三个 Upsert 方法的统一返回值。Config 已去掉
-// 列字段(id/workspace_id/platform/app_id/enabled),只剩 *_ref 与模式。
+// WorkspaceConnectorChange is the unified return value of the three Upsert
+// methods. Config strips the column fields (id/workspace_id/platform/app_id/enabled),
+// leaving only *_ref values and the mode.
 type WorkspaceConnectorChange struct {
 	ID          string         `json:"id"`
 	WorkspaceID string         `json:"workspace_id"`
@@ -50,12 +55,14 @@ type WorkspaceConnectorChange struct {
 	Config      map[string]any `json:"config"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 
-	// Noop=true 表示新配置与旧配置逐字段相等,handler 仍返回 200 但抑制审计。
+	// Noop=true means the new config is field-for-field equal to the old
+	// config; the handler still returns 200 but suppresses the audit event.
 	Noop bool `json:"noop,omitempty"`
 }
 
 // ------------------------------------------------------------
-// Snapshots — 每平台 config 子树的扁平视图(含列字段以便逐字段比对 noop)。
+// Snapshots — flat view of each platform's config subtree (including column
+// fields for field-by-field noop comparison).
 // ------------------------------------------------------------
 
 // WorkspaceSlackConnectorSnapshot mirrors a Slack connector's config plus

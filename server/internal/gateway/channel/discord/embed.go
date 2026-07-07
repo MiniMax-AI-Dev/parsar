@@ -76,11 +76,11 @@ const defaultCardTitle = "Agent"
 // errCardFallbackMessage mirrors the Feishu/Slack adapters' failed-run fallback
 // copy so a TerminalResult with an empty ErrorMessage renders the same
 // user-facing failure text across platforms.
-const errCardFallbackMessage = "Agent 运行失败，请稍后重试。"
+const errCardFallbackMessage = "Agent run failed. Please retry later."
 
 // ackReceived mirrors Feishu's/Slack's default toast so an unrouted click looks
 // the same to the user across platforms (consumed by action.go in 5c).
-const ackReceived = "操作已收到"
+const ackReceived = "Received"
 
 // --- Discord wire structs (typed for deterministic JSON key order) ----------
 

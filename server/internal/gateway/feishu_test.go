@@ -8,12 +8,12 @@ func TestNormalizeFeishuInbound(t *testing.T) {
 	event.Event.Message.ChatID = "oc_456"
 	event.Event.Message.ChatType = "group"
 	event.Event.Message.ThreadID = "omt_789"
-	event.Event.Message.Content = `{"text":"@后端Agent 看一下"}`
+	event.Event.Message.Content = `{"text":"@backend-agent take a look"}`
 	event.Event.Sender.SenderID.OpenID = "ou_123"
 	event.Event.Sender.TenantKey = "tenant_1"
 
 	inbound := NormalizeFeishuInbound(event)
-	if inbound.Gateway != "feishu" || inbound.Message.ID != "om_123" || inbound.Message.Text != "@后端Agent 看一下" {
+	if inbound.Gateway != "feishu" || inbound.Message.ID != "om_123" || inbound.Message.Text != "@backend-agent take a look" {
 		t.Fatalf("unexpected inbound message: %+v", inbound)
 	}
 	if inbound.Actor.ID != "ou_123" || inbound.ConversationRef.ID != "oc_456" || inbound.ConversationRef.ThreadID != "omt_789" {

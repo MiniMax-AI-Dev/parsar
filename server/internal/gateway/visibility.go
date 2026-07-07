@@ -52,8 +52,8 @@ const (
 )
 
 // WorkspaceInfo carries human-readable context for rejection-text
-// rendering. Empty OwnerNames omits the "管理员" line. Empty JoinURL
-// (private workspace) falls back to "请联系上述管理员加入"; callers
+// rendering. Empty OwnerNames omits the "Admins" line. Empty JoinURL
+// (private workspace) falls back to "Contact one of the admins above to join"; callers
 // pre-compute OwnerNames / JoinURL only when they know the gate denies.
 type WorkspaceInfo struct {
 	Name       string
@@ -75,7 +75,7 @@ func VisibilityGate(v Visibility, sender SenderState, ws WorkspaceInfo, cfg Gate
 		return Decision{
 			Allowed:   false,
 			Reason:    ReasonInvalidVisibility,
-			ReplyHint: "Agent 配置异常 (visibility 未知)，请联系管理员。",
+			ReplyHint: "Agent misconfigured (unknown visibility); please contact an admin.",
 		}
 	}
 
@@ -125,9 +125,9 @@ func workspaceOnlyReply(ws WorkspaceInfo) string {
 	name := strings.TrimSpace(ws.Name)
 	var lines []string
 	if name == "" {
-		lines = append(lines, "此 Agent 仅其所在 workspace 成员可用。")
+		lines = append(lines, "This Agent is only available to members of its workspace.")
 	} else {
-		lines = append(lines, fmt.Sprintf("此 Agent 仅 %s workspace 成员可用。", name))
+		lines = append(lines, fmt.Sprintf("This Agent is only available to members of the %s workspace.", name))
 	}
 
 	if line := ownerLine(ws.OwnerNames); line != "" {
@@ -136,16 +136,16 @@ func workspaceOnlyReply(ws WorkspaceInfo) string {
 
 	switch {
 	case strings.TrimSpace(ws.JoinURL) != "":
-		lines = append(lines, fmt.Sprintf("你可以 [申请加入 workspace](%s)。", strings.TrimSpace(ws.JoinURL)))
+		lines = append(lines, fmt.Sprintf("You can [Request to join workspace](%s).", strings.TrimSpace(ws.JoinURL)))
 	case len(ws.OwnerNames) > 0:
-		lines = append(lines, "请联系上述管理员加入。")
+		lines = append(lines, "Contact one of the admins above to join.")
 	default:
-		lines = append(lines, "请联系管理员开通。")
+		lines = append(lines, "Contact an admin to request access.")
 	}
 	return strings.Join(lines, "\n")
 }
 
-// ownerLine formats "管理员: A、B 等 N 人". Returns "" on empty input.
+// ownerLine formats "Admins: A, B and N others". Returns "" on empty input.
 // For >2 names, lists first 2 + count; full list is one click away on web.
 func ownerLine(names []string) string {
 	cleaned := make([]string, 0, len(names))
@@ -158,21 +158,21 @@ func ownerLine(names []string) string {
 		return ""
 	}
 	if len(cleaned) <= 2 {
-		return "管理员: " + strings.Join(cleaned, "、")
+		return "Admins: " + strings.Join(cleaned, ", ")
 	}
-	return fmt.Sprintf("管理员: %s 等 %d 人", strings.Join(cleaned[:2], "、"), len(cleaned))
+	return fmt.Sprintf("Admins: %s and %d others", strings.Join(cleaned[:2], ", "), len(cleaned))
 }
 
 func registerHint(registerURL string) string {
 	if registerURL == "" {
-		return "您还未绑定账号，请联系管理员获取 Parsar 网页端地址，通过「飞书登录」完成绑定后再使用机器人。"
+		return "You haven't linked an account yet. Please ask an admin for the Parsar web URL and sign in via \"Feishu login\" before using the bot."
 	}
-	return fmt.Sprintf("您还未绑定账号，请前往 Parsar 网页端（%s），通过「飞书登录」完成绑定后再使用机器人。", registerURL)
+	return fmt.Sprintf("You haven't linked an account yet. Please go to the Parsar web UI (%s) and sign in via \"Feishu login\" before using the bot.", registerURL)
 }
 
 func guestRegisterHint(registerURL string) string {
 	if registerURL == "" {
-		return "您还未绑定账号，请联系管理员获取 Parsar 网页端地址，通过「飞书登录」完成绑定后再使用机器人。"
+		return "You haven't linked an account yet. Please ask an admin for the Parsar web URL and sign in via \"Feishu login\" before using the bot."
 	}
-	return fmt.Sprintf("您还未绑定账号，请前往 Parsar 网页端（%s），通过「飞书登录」完成绑定后再使用机器人。", registerURL)
+	return fmt.Sprintf("You haven't linked an account yet. Please go to the Parsar web UI (%s) and sign in via \"Feishu login\" before using the bot.", registerURL)
 }

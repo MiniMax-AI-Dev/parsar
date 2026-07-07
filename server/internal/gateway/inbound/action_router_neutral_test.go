@@ -217,7 +217,7 @@ func TestRouteAction_SlackUserChoiceSubmitFillsNeutralResult(t *testing.T) {
 		Platform:   channel.PlatformSlack,
 		OperatorID: "U_picker",
 		Values:     map[string]string{"request_id": "req-slack"},
-		FormValues: map[string]any{"q0": "选项A"},
+		FormValues: map[string]any{"q0": "Option A"},
 	})
 	if err != nil {
 		t.Fatalf("RouteAction: %v", err)
@@ -253,7 +253,7 @@ func TestRouteAction_FeishuChoiceKeepsNativeReplaceCard(t *testing.T) {
 		Platform:   channel.PlatformFeishu,
 		OperatorID: "ou_picker",
 		Values:     map[string]string{"request_id": "req-feishu"},
-		FormValues: map[string]any{"q0": "选项A"},
+		FormValues: map[string]any{"q0": "Option A"},
 	})
 	if err != nil {
 		t.Fatalf("RouteAction: %v", err)

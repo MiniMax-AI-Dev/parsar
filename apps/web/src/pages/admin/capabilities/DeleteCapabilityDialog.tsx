@@ -21,11 +21,12 @@ interface DeleteCapabilityDialogProps {
   onConfirm: () => void
 }
 
-// 删除 = 释放 capability.name 占用,后端写 deleted_at。若仍被 agent 绑定,
-// 后端返回 409 + envelope { code: "capability_in_use", message: "中文提示",
-// binding_count: N }。envelope.message 已经是可直接展示的中文文案,这里直接渲染。
-// 跟 DeprecateCapabilityDialog 的写法对齐,但走独立 dialog 是因为语义
-// 不同:删除是一次性的,没有 toggle / 装机数。
+// Delete = release the capability.name slot; the server writes deleted_at.
+// If any agent is still bound the server returns 409 with envelope
+// { code: "capability_in_use", message: "<localized>", binding_count: N }.
+// envelope.message is already a display-ready string, so we render it as-is.
+// Same shape as DeprecateCapabilityDialog, but a separate dialog because the
+// semantics differ: delete is one-shot, with no toggle / install count.
 export function DeleteCapabilityDialog({ capability, pending, error, onOpenChange, onConfirm }: DeleteCapabilityDialogProps) {
   const { t } = useTranslation("admin")
   const errMsg = error instanceof ApiError ? error.envelope.message : error instanceof Error ? error.message : null

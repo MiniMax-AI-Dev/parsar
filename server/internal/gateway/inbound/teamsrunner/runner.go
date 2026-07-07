@@ -12,7 +12,7 @@
 //     routes through the adapter's HandleAction; the rendered ack card is posted
 //     back into the conversation as a new activity.
 //   - A plain message activity is Normalize-d, de-duplicated, run through the
-//     shared neutral gates (self-echo, group-without-mention with 话题续聊
+//     shared neutral gates (self-echo, group-without-mention with thread-continuation
 //     history continuation), then routed via the same router.HandleInbound the
 //     Feishu/Slack paths use.
 //
@@ -176,7 +176,7 @@ func (r *Runner) handleAction(ctx context.Context, convID string, verified []byt
 }
 
 // teamsThreadHist binds the runner's store to the teams platform so the neutral
-// gate's platform-agnostic ThreadHistoryLookup resolves 话题续聊 history against
+// gate's platform-agnostic ThreadHistoryLookup resolves thread-continuation history against
 // teams conversations only.
 type teamsThreadHist struct{ store router.Store }
 
@@ -201,7 +201,7 @@ func (r *Runner) handleMessage(ctx context.Context, verified []byte) error {
 		return nil
 	}
 	// Group/channel messages must @mention the bot, unless the message lands in
-	// a thread the bot was already activated in — then it's a 话题续聊 and no
+	// a thread the bot was already activated in — then it's a thread continuation and no
 	// fresh @mention is required (mirrors the Feishu/Slack path).
 	if gateway.ShouldSkipGroupWithoutMention(ctx, teamsThreadHist{r.store}, event, r.botLocalID) {
 		return nil

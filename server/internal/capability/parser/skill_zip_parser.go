@@ -176,10 +176,10 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		preview := ignored
 		more := ""
 		if len(preview) > 8 {
-			more = fmt.Sprintf(" 等 %d 个", len(ignored)-8)
+			more = fmt.Sprintf(" and %d more", len(ignored)-8)
 			preview = preview[:8]
 		}
-		warnings = append(warnings, fmt.Sprintf("忽略了 %d 个文件: %s%s", len(ignored), strings.Join(preview, ", "), more))
+		warnings = append(warnings, fmt.Sprintf("ignored %d files: %s%s", len(ignored), strings.Join(preview, ", "), more))
 	}
 
 	if skillRes.Spec.Skill == nil {

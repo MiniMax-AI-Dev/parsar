@@ -46,7 +46,7 @@ const defaultCardTitle = "Agent"
 // errCardFallbackMessage mirrors the Feishu adapter's failed-run fallback copy
 // (cards.go) so a TerminalResult with an empty ErrorMessage renders the same
 // user-facing failure text across platforms.
-const errCardFallbackMessage = "Agent 运行失败，请稍后重试。"
+const errCardFallbackMessage = "Agent run failed. Please retry later."
 
 // truncatedNote is appended (as a context block) when a card would exceed the
 // 50-block limit, so the user knows output was clipped.

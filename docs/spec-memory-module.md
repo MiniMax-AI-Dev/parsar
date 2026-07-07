@@ -1,64 +1,71 @@
-# Spec & Memory 模块方案
+# Spec & Memory module design
 
 ## Context
 
-Parsar 当前缺一套"把工程约定 / 用户偏好 / 项目背景注入到每次 agent 对话"的中心化机制。
-现状是每次对话都要靠用户在 chat 里现场告诉 agent "我们项目用 Go + gin"、"别再用 Promise.all" 这类规则,导致:
+Parsar currently lacks a centralized mechanism to inject "engineering
+conventions / user preferences / project background" into every agent
+conversation. Today the user has to tell the agent things like "our project
+uses Go + gin" or "stop using Promise.all" in every chat, which causes:
 
-1. **重复劳动** — 不同 sandbox / 不同 session / 不同 agent 之间无法共享上下文
-2. **规则漂移** — 用户口头给的约定 agent 不记得,下一轮就忘
-3. **冷启动昂贵** — 新建一个 project_agent,前几轮总在喂背景
+1. **Repeated effort** — no shared context across sandboxes / sessions / agents.
+2. **Rule drift** — verbal conventions get lost by the next turn.
+3. **Expensive cold start** — the first few turns on a new project_agent are always spent feeding background.
 
-类似 Claude Code 的 auto-memory 和外部产品(如 Trellis)已经证明"把 spec/memory 持久化 + 自动注入"是有效的产品形态。
-本方案在 parsar 上自研一套同等能力,**不引入外部代码**(规避 AGPL + 避免抄袭嫌疑),**MVP 聚焦 spec + memory 两类内容**,**支持 claude code / opencode / codex 三平台**。
+Claude Code's auto-memory and external products like Trellis have proven
+that "persist spec/memory + auto-inject" is a working product shape. This
+proposal builds an equivalent capability in-house on parsar, **does not
+import external code** (avoids AGPL + copying concerns), **the MVP focuses
+on spec + memory**, and **covers claude code / opencode / codex**.
 
-预期结果:用户在 UI 里维护一份 workspace 级 spec 和 user/project 级 memory,所有 sandbox 自动注入,
-agent 主动写回新发现的规则,跨 sandbox 自然共享。
+Expected outcome: users maintain a workspace-level spec plus user/project
+memory in the UI; every sandbox injects them automatically; the agent
+writes back newly-discovered rules on its own; sandboxes naturally share
+context.
 
 ---
 
-## 设计决策汇总(已与用户对齐 22 条)
+## Summary of design decisions (22 aligned with the user)
 
-| # | 决策 | 选择 |
+| # | Decision | Choice |
 |---|------|------|
-| 1 | 数据权威源 | DB-first(server 唯一权威,sandbox 只是消费者 + 写回客户端) |
-| 2 | MVP 范围 | 仅 spec + memory(暂不做 tasks / workflow) |
-| 3 | MVP 平台 | claude code / opencode / codex |
-| 4 | spec 粒度 | 多 fragment(扁平 title+body+tags,非文件树) |
-| 5 | spec scope | workspace 级 |
-| 6 | memory scope | user + project 级,两种独立 |
-| 7 | memory 4 类 | user / feedback / project / reference |
-| 8 | 注入策略 | 全量(MVP),后续可演进按 tag 智能注入 |
-| 9 | 注入时机 | SessionStart 全量 + per-turn 增量 |
-| 10 | per-turn 含义 | session 内启动后他人新写的(增量,非重复全量) |
-| 11 | Codex 平台 | 降级为只 SessionStart(无 per-turn hook) |
-| 12 | 写回方式 | sandbox 内 `parsar` CLI |
-| 13 | memory 写入触发 | Agent 自觉(system prompt 元指令 + agent 调 `parsar memory add`) |
-| 14 | 审批模式 | 直接写 + 审计(无 approval 流) |
-| 15 | CLI 鉴权 | 复用 runtime pairing → runner_credential(扩展现有机制) |
-| 16 | 预置内容 | 只预置 hook 脚本 + `parsar` CLI,不预置 CLAUDE.md / AGENTS.md |
-| 17 | spec 冷启动 | 手写 + agent 写回 + import 三路 |
-| 18 | import 来源(MVP) | 只文本粘贴,后端拆 fragment |
-| 19 | CLI 命名 | `parsar`(沿用 `parsar-daemon-*` 约定) |
-| 20 | 表设计 | 新增 `spec_fragments` + `memories`,audit 复用 `audit_records` |
-| 21 | 平台覆盖 | 所有 hook / plugin 各平台单独适配 |
-| 22 | 不引入 Trellis 代码 | 自研,避免 AGPL + 抄袭嫌疑 |
+| 1 | Source of truth | DB-first (server is the sole authority; sandboxes are consumers + write-back clients) |
+| 2 | MVP scope | spec + memory only (no tasks / workflow yet) |
+| 3 | MVP platforms | claude code / opencode / codex |
+| 4 | spec granularity | Multiple fragments (flat title + body + tags, not a file tree) |
+| 5 | spec scope | workspace level |
+| 6 | memory scope | user + project levels, two independent kinds |
+| 7 | 4 memory types | user / feedback / project / reference |
+| 8 | Injection strategy | Full injection (MVP); can evolve into tag-based smart injection later |
+| 9 | Injection timing | SessionStart full + per-turn incremental |
+| 10 | Meaning of per-turn | Deltas written by others after session start (incremental, not another full injection) |
+| 11 | Codex | Degraded to SessionStart only (no per-turn hook) |
+| 12 | Write-back path | The `parsar` CLI inside the sandbox |
+| 13 | Trigger for memory writes | Agent-initiated (system-prompt meta-instructions + agent calls `parsar memory add`) |
+| 14 | Approval flow | Direct write + audit (no approval flow) |
+| 15 | CLI auth | Reuse runtime pairing → runner_credential (extend the existing mechanism) |
+| 16 | Preloaded content | Only preload the hook scripts + the `parsar` CLI; no preloaded CLAUDE.md / AGENTS.md |
+| 17 | spec cold start | Handwritten + agent write-back + import — three paths |
+| 18 | Import source (MVP) | Only text paste; the backend splits into fragments |
+| 19 | CLI name | `parsar` (matches `parsar-daemon-*` convention) |
+| 20 | Table design | New `spec_fragments` + `memories`; audit reuses `audit_records` |
+| 21 | Platform coverage | Every hook / plugin adapts per platform |
+| 22 | No Trellis code | Build in-house; avoid AGPL + copying concerns |
 
 ---
 
-## 1. 数据模型
+## 1. Data model
 
-### 1.1 设计原则:枚举值由代码侧管理
+### 1.1 Design principle: enum values are managed on the code side
 
-所有"取值有限的字符串字段"(`source` / `scope` / `memory_type` 等)在 DB 层只用 `TEXT NOT NULL`,
-**不加 `CHECK (col IN (...))` 约束**。原因:
+All "string fields with a bounded set of values" (`source` / `scope` /
+`memory_type`, etc.) use `TEXT NOT NULL` at the DB layer and **no
+`CHECK (col IN (...))` constraint**. Reasons:
 
-- 加新值时不用改 migration(避免 schema 演进卡 enum)
-- 代码侧统一管理常量,validation 集中在 handler / CLI 入口层
-- 未来要从 `source='agent'` 细分成 `source='agent:auto'` / `source='agent:proposed'` 这种,
-  DB 层不阻塞,只改代码 enum + handler 校验
+- Adding a value does not need a migration (schema evolution is not blocked on enums).
+- Constants centralize on the code side; validation lives at handler / CLI entry points.
+- If we later want to split `source='agent'` into `source='agent:auto'` / `source='agent:proposed'`, the DB stays out of the way — we change the code enum + handler validation.
 
-**Go 侧 enum 常量定义(`server/internal/specmemory/types.go`):**
+**Go-side enum constants (`server/internal/specmemory/types.go`):**
 
 ```go
 type Source string
@@ -67,7 +74,7 @@ const (
     SourceAgent      Source = "agent"
     SourceImport     Source = "import"
     SourceUser       Source = "user"
-    SourceAutoReview Source = "auto-review"   // 二期 review 兜底用,MVP 不写但常量先占位
+    SourceAutoReview Source = "auto-review"   // reserved for phase-2 review fallback; MVP does not write but the constant is reserved
 )
 func (s Source) Valid() bool { ... }
 
@@ -86,15 +93,19 @@ const (
 )
 ```
 
-handler / CLI 在入参时调 `.Valid()` 校验;sqlc 生成的 model 字段类型用 `string`,
-service 层做 Source/Scope/MemoryType 之间的转换。
+Handlers / CLI call `.Valid()` on incoming values; sqlc-generated model
+fields are typed `string`, and the service layer converts between
+Source/Scope/MemoryType.
 
-**字段间的结构性约束**(scope='project' 必须有 project_id)依然保留在 DB 层,
-因为它不是枚举值约束,而是防数据腐烂的关系约束,跟扩展性无关。
+**Structural constraints between fields** (scope='project' requires
+project_id) are kept in the DB, because they are not enum constraints
+but relational-integrity constraints and have nothing to do with
+extensibility.
 
-### 1.2 新增表 `spec_fragments`
+### 1.2 New table `spec_fragments`
 
-workspace 级,扁平多片段(每片段独立可编辑可注入)。
+Workspace-level, flat multi-fragment (each fragment is independently
+editable and injectable).
 
 ```sql
 CREATE TABLE spec_fragments (
@@ -103,39 +114,39 @@ CREATE TABLE spec_fragments (
   title           TEXT NOT NULL,
   body            TEXT NOT NULL,
   tags            TEXT[] NOT NULL DEFAULT '{}',
-  source          TEXT NOT NULL,              -- 代码侧 specmemory.Source 管理
-  created_by      UUID REFERENCES users(id),  -- agent 写入时为 NULL
-  agent_actor     TEXT,                       -- agent 写入时记录 connector 名 + project_agent_id
+  source          TEXT NOT NULL,              -- managed via specmemory.Source on the code side
+  created_by      UUID REFERENCES users(id),  -- NULL when written by an agent
+  agent_actor     TEXT,                       -- when written by an agent, record connector name + project_agent_id
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at      TIMESTAMPTZ                 -- 软删
+  deleted_at      TIMESTAMPTZ                 -- soft delete
 );
 CREATE INDEX idx_spec_fragments_workspace ON spec_fragments(workspace_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_spec_fragments_tags ON spec_fragments USING GIN(tags) WHERE deleted_at IS NULL;
 ```
 
-### 1.3 新增表 `memories`
+### 1.3 New table `memories`
 
-user 级和 project 级共用一张表,通过 `scope` 字段区分。
+User-level and project-level share one table, distinguished by `scope`.
 
 ```sql
 CREATE TABLE memories (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  scope           TEXT NOT NULL,              -- 代码侧 specmemory.Scope 管理
+  scope           TEXT NOT NULL,              -- managed via specmemory.Scope on the code side
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  project_id      UUID REFERENCES projects(id) ON DELETE CASCADE, -- scope='project' 时非空
-  memory_type     TEXT NOT NULL,              -- 代码侧 specmemory.MemoryType 管理
-  title           TEXT,                       -- 可选,简短标题
-  body            TEXT NOT NULL,              -- 主体
-  why             TEXT,                       -- feedback/project 类推荐填写
+  project_id      UUID REFERENCES projects(id) ON DELETE CASCADE, -- non-null when scope='project'
+  memory_type     TEXT NOT NULL,              -- managed via specmemory.MemoryType on the code side
+  title           TEXT,                       -- optional short title
+  body            TEXT NOT NULL,              -- body
+  why             TEXT,                       -- recommended for feedback/project types
   tags            TEXT[] NOT NULL DEFAULT '{}',
-  source          TEXT NOT NULL,              -- 代码侧 specmemory.Source 管理
-  agent_actor     TEXT,                       -- agent 写入时记录连接器名 + project_agent_id
-  conversation_id UUID REFERENCES conversations(id), -- agent 写入时关联会话
+  source          TEXT NOT NULL,              -- managed via specmemory.Source on the code side
+  agent_actor     TEXT,                       -- when written by an agent, record connector name + project_agent_id
+  conversation_id UUID REFERENCES conversations(id), -- link to the conversation when written by an agent
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at      TIMESTAMPTZ,
-  -- 仅保留字段间结构性约束(防关系腐烂,跟扩展性无关)
+  -- Only keep the structural constraints between fields (guards relational integrity; unrelated to extensibility)
   CONSTRAINT project_scope_requires_project_id
     CHECK ((scope = 'user' AND project_id IS NULL) OR (scope = 'project' AND project_id IS NOT NULL))
 );
@@ -143,73 +154,81 @@ CREATE INDEX idx_memories_user ON memories(user_id, scope) WHERE deleted_at IS N
 CREATE INDEX idx_memories_project ON memories(project_id) WHERE deleted_at IS NULL AND scope = 'project';
 ```
 
-### 1.4 Audit(复用 `audit_records`)
+### 1.4 Audit (reuses `audit_records`)
 
-直接用 `server/migrations/000001_init.sql:1055-1102` 已有的表,新增 event_type:
+Use the existing table from `server/migrations/000001_init.sql:1055-1102`;
+new event_types:
 - `spec_fragment.created` / `.updated` / `.deleted`
 - `memory.created` / `.updated` / `.deleted`
-- `spec.injected` / `memory.injected`(可选,debug 用)
+- `spec.injected` / `memory.injected` (optional, for debug)
 
-actor_type 用 `user` / `agent`,actor_id 对应 user_id / project_agent_id。
-通过 `server/internal/audit/postgres.go` 现有 `PostgresSink.Write()` 接口写入。
+`actor_type` is `user` / `agent`; `actor_id` corresponds to
+`user_id` / `project_agent_id`. Write via the existing
+`server/internal/audit/postgres.go` `PostgresSink.Write()` interface.
 
-### 1.5 迁移文件位置
+### 1.5 Migration file location
 
-新建 `server/migrations/000005_spec_memory.sql`,遵循 goose 格式(参考现有 `000003_capability_canonical.sql`)。
+Create `server/migrations/000005_spec_memory.sql`; follow the goose
+format (reference the existing `000003_capability_canonical.sql`).
 
 ---
 
-## 2. Server 模块
+## 2. Server module
 
-### 2.1 新增 package `server/internal/specmemory/`
+### 2.1 New package `server/internal/specmemory/`
 
-职责:
-- DB 操作(CRUD spec_fragments / memories)
-- 注入数据组装(把数据库内容渲染成 prompt 段)
-- import 服务(粘贴文本 → 拆 fragment)
-- audit 日志记录
+Responsibilities:
+- DB operations (CRUD on spec_fragments / memories).
+- Injection-data assembly (render DB content into prompt sections).
+- Import service (paste text → split into fragments).
+- Audit logging.
 
-文件组织建议:
+Suggested file layout:
 ```
 server/internal/specmemory/
-  types.go           # enum 常量(Source / Scope / MemoryType)+ 业务级 struct
-  store.go           # sqlc 包装 + 业务级 CRUD(string ↔ enum 转换)
-  injector.go        # 注入数据组装(SnapshotSpec / SnapshotMemory / IncrementalMemory)
-  importer.go        # 文本拆 fragment
-  prompts.go         # 注入到 prompt 的模板(段标题、格式、元指令)
-  service.go         # 对外接口,被 connector 和 handler 调用
+  types.go           # enum constants (Source / Scope / MemoryType) + business-level structs
+  store.go           # sqlc wrapping + business-level CRUD (string ↔ enum conversion)
+  injector.go        # injection-data assembly (SnapshotSpec / SnapshotMemory / IncrementalMemory)
+  importer.go        # split text into fragments
+  prompts.go         # prompt-side templates (section titles, format, meta-instructions)
+  service.go         # public interface, called by the connector and handlers
 ```
 
-sqlc 查询放 `server/internal/db/queries/spec_fragments.sql` 和 `memories.sql`(沿用现有 sqlc 约定,参考 `audit_records.sql`)。
+sqlc queries live at `server/internal/db/queries/spec_fragments.sql` and
+`memories.sql` (following the current sqlc convention, cf.
+`audit_records.sql`).
 
-### 2.2 注入入口接入
+### 2.2 Injection hookup
 
 **OpenCode connector** — `server/internal/connector/opencode/connector.go:Prompt()` L444:
-在第 529 行 `stringFrom(mergedConfig, "system_prompt")` 拿到原始 system_prompt 后,
-追加调用 `specmemory.Service.RenderInjection(ctx, workspaceID, userID, projectID, ...)` 返回的内容,
-拼到 system_prompt 末尾(或固定标记块内)。
+after `stringFrom(mergedConfig, "system_prompt")` on line 529 has the raw
+system_prompt, append what
+`specmemory.Service.RenderInjection(ctx, workspaceID, userID, projectID, ...)`
+returns, either at the end of system_prompt or inside a fixed marker block.
 
 **AgentDaemon connector** — `server/internal/connector/agentdaemon/model_injection.go:renderStaticAgentOptions()` L163-183:
-在 `system_prompt` 和 `override_system_prompt` 提取之后,新增第三个来源 `spec_memory_injection`,优先级最低(被 override 覆盖)。
-通过 `agent_options` map 走 `PromptRequestPayload.AgentOptions` 传到 sandbox 内。
+after `system_prompt` and `override_system_prompt` are extracted, add a
+third source `spec_memory_injection` at the lowest precedence (overridden
+by override). Pass through the `agent_options` map into
+`PromptRequestPayload.AgentOptions` and on into the sandbox.
 
-**注入数据形状**:
+**Injection shape:**
 
 ```go
 type Injection struct {
     SpecBlock          string  // <spec> ... </spec>
     MemoryBlock        string  // <memory> ... </memory>
     MemoryWriteGuide   string  // <memory-write-guide> ... </memory-write-guide>
-    IncrementalMemory  string  // 仅 per-turn,只含 session 启动后的新增
+    IncrementalMemory  string  // per-turn only; contains only what was added after session start
 }
 ```
 
-`SessionStart` 注入 SpecBlock + MemoryBlock + MemoryWriteGuide(全量)。
-`per-turn` 注入仅 IncrementalMemory(差量)。
+`SessionStart` injects SpecBlock + MemoryBlock + MemoryWriteGuide (full).
+`per-turn` injects IncrementalMemory only (delta).
 
-### 2.3 注入段格式(关键)
+### 2.3 Injection section format (important)
 
-详见 `prompts.go` 内的模板。固定结构:
+See templates in `prompts.go`. Fixed structure:
 
 ```
 <spec workspace="{workspace_name}">
@@ -236,24 +255,24 @@ type Injection struct {
 You have a persistent memory via `parsar memory add --type X --body "..." [--why "..."]`.
 
 Types:
-- user: 用户角色、偏好、长期目标
-- feedback: 用户的明确纠正 / 已确认的非显然决策(必须填 --why)
-- project: 当前项目背景、里程碑、决策动因(必须填 --why)
-- reference: 外部仪表盘、文档、Slack channel 等指针
+- user: user role, preferences, long-term goals
+- feedback: explicit user corrections / confirmed non-obvious decisions (must include --why)
+- project: current project background, milestones, decision rationale (must include --why)
+- reference: external pointers such as dashboards, docs, Slack channels
 
 When to save:
-任何时候用户透露了对未来对话有帮助的稳定信息。安静写入,不要在对话里宣布。
+Whenever the user reveals stable information that will help future conversations. Save quietly; do not announce it in the chat.
 
 When NOT to save:
-- 任何可以从代码 / git history 推断的内容
-- bug fix recipe(代码本身就是答案)
-- ephemeral 任务上下文
+- Anything inferable from the code / git history
+- Bug-fix recipes (the code is the answer)
+- Ephemeral task context
 </memory-write-guide>
 ```
 
 ### 2.4 HTTP / gRPC API
 
-新增 handler(沿用现有 `server/internal/handler/` 模式):
+New handlers (following the current `server/internal/handler/` pattern):
 
 ```
 GET    /api/v1/workspaces/:wid/spec/fragments
@@ -268,25 +287,27 @@ POST   /api/v1/memories
 PATCH  /api/v1/memories/:id
 DELETE /api/v1/memories/:id
 
-# 给 sandbox CLI / hook 调
+# Called by the sandbox CLI / hook
 GET    /api/v1/agent-runtime/injection/snapshot?workspace_id=&user_id=&project_id=
 GET    /api/v1/agent-runtime/injection/incremental?session_id=&since=
-POST   /api/v1/agent-runtime/spec/fragments     # agent 写入,无 user_id
-POST   /api/v1/agent-runtime/memories            # agent 写入,无 user_id
+POST   /api/v1/agent-runtime/spec/fragments     # agent write; no user_id
+POST   /api/v1/agent-runtime/memories            # agent write; no user_id
 ```
 
-`/api/v1/agent-runtime/*` 走 runner_credential 鉴权(见 3.3)。其他走现有 user session 鉴权。
+`/api/v1/agent-runtime/*` uses runner_credential auth (see 3.3); the rest
+use the existing user-session auth.
 
 ---
 
-## 3. Sandbox 集成
+## 3. Sandbox integration
 
-### 3.1 `parsar` CLI 设计
+### 3.1 `parsar` CLI design
 
-Go 二进制,放 `/usr/local/bin/parsar`(与 `parsar-daemon` 同位置)。
-源码新建 `cmd/parsar/`(独立 binary,和 server 共享 model)。
+Go binary at `/usr/local/bin/parsar` (co-located with `parsar-daemon`).
+Source under a new `cmd/parsar/` (independent binary; shares models with
+the server).
 
-子命令:
+Subcommands:
 ```
 parsar spec list [--tag X]
 parsar spec add --title "..." --body "..." [--tag a,b]
@@ -298,36 +319,40 @@ parsar memory add --type <type> --body "..." [--title ...] [--why ...] [--tag a,
 parsar memory edit <id> ...
 parsar memory rm <id>
 
-parsar sync                        # 重新拉取注入快照(调试用)
+parsar sync                        # re-pull the injection snapshot (debug)
 parsar --version
 ```
 
-环境变量(由 sandbox provider 注入):
+Environment variables (injected by the sandbox provider):
 ```
 PARSAR_SERVER_URL=https://api.parsar.internal
 PARSAR_RUNNER_TOKEN=<pairing-derived token>
 PARSAR_RUNTIME_ID=<uuid>
 PARSAR_WORKSPACE_ID=<uuid>
 PARSAR_USER_ID=<uuid>
-PARSAR_PROJECT_ID=<uuid>            # 可空
+PARSAR_PROJECT_ID=<uuid>            # may be empty
 PARSAR_CONNECTOR=claude|opencode|codex
 PARSAR_PROJECT_AGENT_ID=<uuid>
 PARSAR_CONVERSATION_ID=<uuid>
 ```
 
-CLI 调用 `/api/v1/agent-runtime/...` endpoint,header 带 `Authorization: Bearer $PARSAR_RUNNER_TOKEN`。
+The CLI hits `/api/v1/agent-runtime/...` endpoints with header
+`Authorization: Bearer $PARSAR_RUNNER_TOKEN`.
 
-### 3.2 Hook 脚本(三平台各一组)
+### 3.2 Hook scripts (three platforms, one set each)
 
-预装到镜像内 `/opt/parsar/hooks/` 下,各平台启动时由 server 生成 `.claude/settings.json` 或等价配置指向这些脚本。
+Preinstalled in the image at `/opt/parsar/hooks/`; on startup for each
+platform the server generates `.claude/settings.json` or an equivalent
+config pointing at these scripts.
 
 **Claude Code (Python):**
 ```
-/opt/parsar/hooks/claude/session-start.py        # 调 /injection/snapshot,返回 hookSpecificOutput
-/opt/parsar/hooks/claude/user-prompt-submit.py   # 调 /injection/incremental,additionalContext 输出
+/opt/parsar/hooks/claude/session-start.py        # calls /injection/snapshot; returns hookSpecificOutput
+/opt/parsar/hooks/claude/user-prompt-submit.py   # calls /injection/incremental; emits additionalContext
 ```
 
-通过 `~/.claude/settings.json` 或 `/workspace/.claude/settings.json` 配置(由 server 生成,见 3.4):
+Configured via `~/.claude/settings.json` or
+`/workspace/.claude/settings.json` (generated by the server, see 3.4):
 ```json
 {
   "hooks": {
@@ -339,268 +364,281 @@ CLI 调用 `/api/v1/agent-runtime/...` endpoint,header 带 `Authorization: Beare
 
 **OpenCode (JS plugin):**
 ```
-/opt/parsar/hooks/opencode/session-injection.js   # 注册 chat.message 第一条消息时拼 snapshot
-/opt/parsar/hooks/opencode/per-turn-injection.js  # 注册 tool 或 message 钩子拼增量
+/opt/parsar/hooks/opencode/session-injection.js   # registers the first chat.message hook to attach the snapshot
+/opt/parsar/hooks/opencode/per-turn-injection.js  # registers a tool or message hook to attach the delta
 ```
 
-通过 `~/.config/opencode/config.toml` 或 `.opencode/config.toml` 配置 plugin 路径(由 server 生成)。
-插件用 `fetch()` 调 server endpoint。
+Configured via `~/.config/opencode/config.toml` or `.opencode/config.toml`
+pointing to the plugin path (generated by the server). The plugin calls
+the server endpoint via `fetch()`.
 
-**Codex (降级方案):**
-- 无 per-turn,只 SessionStart
-- sandbox 启动时 server 生成 `~/.codex/AGENTS.md`,内容 = snapshot 注入(spec + memory + write-guide)
-- 不挂任何 hook 脚本
-- agent 调 `parsar memory add` 仍可写回(CLI 一致)
+**Codex (degraded path):**
+- No per-turn; SessionStart only.
+- When the sandbox starts, the server generates `~/.codex/AGENTS.md`; its content = the snapshot injection (spec + memory + write-guide).
+- No hook scripts.
+- The agent can still call `parsar memory add` to write back (CLI is uniform).
 
-**所有 hook 脚本依赖 `parsar` CLI 或 `curl` 直接调 endpoint**,与 server 通信走 `PARSAR_RUNNER_TOKEN`。
-建议统一让 hook 通过 `parsar inject snapshot` / `parsar inject incremental` 子命令拿数据,
-hook 脚本只负责把 CLI stdout 拼到平台要求的格式(stdout JSON / additionalContext / 等)。
-这样后续修改注入逻辑只改 Go CLI 一处,不用改三处 hook。
+**All hook scripts depend on the `parsar` CLI or `curl` directly** to
+call the endpoint; server communication goes through
+`PARSAR_RUNNER_TOKEN`. Prefer letting the hook call `parsar inject
+snapshot` / `parsar inject incremental` to get data, and have the hook
+only pipe the CLI stdout into the format the platform expects (JSON on
+stdout / additionalContext / etc.). That way future changes to the
+injection logic touch only one Go CLI, not three hook scripts.
 
-### 3.3 鉴权(复用 runtime pairing)
+### 3.3 Auth (reuse runtime pairing)
 
-参考已对齐的设计 — 新增 `runtime_type = 'agent_runtime'`(沿用 user feedback memory:
-*"用 runtimes 的 pairing_token → runner_credential 流程,新增 runtime_type"*)。
+Refer to the previously aligned design — add
+`runtime_type = 'agent_runtime'` (matching the aligned user feedback:
+*"use the runtimes pairing_token → runner_credential flow; add a
+runtime_type"*).
 
-**流程:**
-1. `SandboxProvider.Acquire()` 在创建 sandbox 时调用 `CreateRuntimePairing()`,
-   除了给 `parsar-daemon` 颁发 token,**再颁发一份给 `parsar` CLI 用**(可以是同一 runtime 的两个 derived token,或两份独立 runtime)。
-   推荐:**单个 runtime 颁发的 token 同时给 daemon 和 CLI 用**,scope 字段标记权限范围。
-2. token 通过环境变量 `PARSAR_RUNNER_TOKEN` 传入 sandbox(server provider 在 `RunCommand()` 里 export)。
-3. server 端新增中间件 `auth.RunnerCredentialMiddleware`,识别 `/api/v1/agent-runtime/*` 路径,
-   查 `runtimes` 表的 `pairing_token_hash`,校验后把 runtime 关联的 workspace/project/user 注入 ctx。
+**Flow:**
+1. `SandboxProvider.Acquire()` calls `CreateRuntimePairing()` when creating a sandbox and issues a token for `parsar-daemon` **plus another one for the `parsar` CLI** (two derived tokens on the same runtime, or two independent runtimes).
+   Recommended: **one runtime issuing a single token used by both the daemon and the CLI**, with a scope field indicating the permission range.
+2. The token is passed into the sandbox via `PARSAR_RUNNER_TOKEN` (the server provider exports it in `RunCommand()`).
+3. Server-side, add middleware `auth.RunnerCredentialMiddleware` on
+   `/api/v1/agent-runtime/*` paths that checks the token against
+   `runtimes.pairing_token_hash` and injects the associated workspace / project / user into the request context.
 
-**新增 store 方法**(在 `server/internal/store/store.go` 现有 `CreateRuntimePairing()` 旁边):
+**New store method** (next to the existing
+`CreateRuntimePairing()` in `server/internal/store/store.go`):
 ```go
 ValidateRunnerToken(ctx, token) (RuntimeIdentity, error)
 // RuntimeIdentity: { RuntimeID, WorkspaceID, UserID, ProjectID, ProjectAgentID, Scope }
 ```
 
-### 3.4 Dockerfile 修改
+### 3.4 Dockerfile changes
 
-文件:`infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile`
+File: `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile`
 
-新增内容(在现有 parsar-daemon 安装段后):
+New content (after the existing parsar-daemon install section):
 ```dockerfile
 # parsar CLI
 ARG PARSAR_VERSION=...
 RUN curl -fSL "$GITLAB_URL/parsar-$PARSAR_VERSION-linux-amd64" -o /usr/local/bin/parsar \
     && chmod +x /usr/local/bin/parsar
 
-# Hook scripts (从 build context COPY,源在 infra/e2b-templates/parsar-daemon-claudecode/hooks/)
+# Hook scripts (COPYed from the build context; source at infra/e2b-templates/parsar-daemon-claudecode/hooks/)
 COPY hooks/claude /opt/parsar/hooks/claude
 COPY hooks/opencode /opt/parsar/hooks/opencode
 RUN chmod +x /opt/parsar/hooks/claude/*.py
 ```
 
-Hook 脚本源放 `infra/e2b-templates/parsar-daemon-claudecode/hooks/{claude,opencode}/` 下。
+Hook script sources go under
+`infra/e2b-templates/parsar-daemon-claudecode/hooks/{claude,opencode}/`.
 
-**`.claude/settings.json` / opencode config 不在镜像里 seed**,而是 sandbox 启动后由 server 调 e2b Exec 写入(因为内容含 runtime-specific 值)。
-扩展 `SandboxProvider.Acquire()` 后的 `RunCommand()` 链,在启动 `parsar-daemon connect` 之前先写入这些配置文件。
+**`.claude/settings.json` / opencode config are not seeded into the
+image**; instead, after the sandbox starts, the server calls e2b Exec to
+write them (they contain runtime-specific values). Extend the
+`RunCommand()` chain after `SandboxProvider.Acquire()` to write these
+config files before starting `parsar-daemon connect`.
 
-### 3.5 Sandbox 生命周期改造
+### 3.5 Sandbox lifecycle changes
 
-文件:`server/internal/connector/agentdaemon/sandbox_provider.go`
+File: `server/internal/connector/agentdaemon/sandbox_provider.go`
 
-在 `Acquire()` 当前链路上加一步:
-1. `CreateRuntimePairing()` ← 已有
-2. `e2b.Create()` ← 已有
-3. **新增**: `seedPlatformConfig(ctx, sandbox, connector, runtimeContext)` — 调 e2b Exec 写入 `.claude/settings.json` 或等价配置
-4. `RunCommand(parsar-daemon connect ...)` ← 已有,新增环境变量 `PARSAR_*`
-5. `WaitForDevice()` / `Binder.Bind()` ← 已有
+Insert one step into the current `Acquire()` chain:
+1. `CreateRuntimePairing()` ← existing
+2. `e2b.Create()` ← existing
+3. **New**: `seedPlatformConfig(ctx, sandbox, connector, runtimeContext)` — calls e2b Exec to write `.claude/settings.json` or the equivalent config
+4. `RunCommand(parsar-daemon connect ...)` ← existing; add `PARSAR_*` env vars
+5. `WaitForDevice()` / `Binder.Bind()` ← existing
 
-新增辅助函数 `seedPlatformConfig` 放在 `sandbox_provider.go` 或独立 `sandbox_seed.go`。
-
----
-
-## 4. 写回流程
-
-### 4.1 Agent 主动写 memory
-
-1. SessionStart 注入的 `<memory-write-guide>` 教 agent 在合适时机写
-2. Agent 在工具调用中执行 `parsar memory add --type feedback --body "..." --why "..."`
-3. `parsar` CLI 调 `POST /api/v1/agent-runtime/memories`,header 带 token
-4. server 校验 token → 写入 `memories` 表 → 写入 `audit_records`(actor_type=agent, actor_id=project_agent_id)
-5. 下一轮 user prompt 时,per-turn hook 拉增量,新写的 memory 自动进入 prompt
-
-### 4.2 User 在 UI 改 spec / memory
-
-1. UI 调 `/api/v1/workspaces/:wid/spec/fragments` 等 endpoint(走 user session 鉴权)
-2. server 写入表 + audit
-3. 下一次 SessionStart 时新内容自动注入
-4. 当前进行中的 session 通过 per-turn 增量拉到(注入 incremental 段)
-
-### 4.3 冲突处理(MVP 简化)
-
-- spec_fragments / memories 是细粒度记录,单条 update 用乐观锁(`updated_at` 作 version)
-- 同一条同时改:后写覆盖前写,UI 弹"内容已被他人更新"提示
-- 没有 git 式 merge,因为粒度本来就细
+Put the helper `seedPlatformConfig` in `sandbox_provider.go` or a new
+`sandbox_seed.go`.
 
 ---
 
-## 5. 三平台适配差异速查表
+## 4. Write-back flow
 
-| 维度 | Claude Code | OpenCode | Codex |
+### 4.1 Agent proactively writes memory
+
+1. The `<memory-write-guide>` block injected on SessionStart teaches the agent when to write.
+2. During a tool call, the agent runs `parsar memory add --type feedback --body "..." --why "..."`.
+3. The `parsar` CLI hits `POST /api/v1/agent-runtime/memories` with the token header.
+4. Server validates the token → writes to `memories` → writes to `audit_records` (`actor_type=agent`, `actor_id=project_agent_id`).
+5. On the next user prompt, the per-turn hook pulls the delta and the new memory reaches the prompt automatically.
+
+### 4.2 User edits spec / memory in the UI
+
+1. The UI calls `/api/v1/workspaces/:wid/spec/fragments` etc. (via user-session auth).
+2. Server writes to the tables + audit.
+3. On the next SessionStart, the new content is injected automatically.
+4. In-progress sessions pick it up via the per-turn incremental (injected in the incremental section).
+
+### 4.3 Conflict handling (MVP simplification)
+
+- spec_fragments / memories are fine-grained records; single-row updates use optimistic locking (`updated_at` as version).
+- Concurrent edits on the same row: last writer wins; the UI shows "content was updated by someone else".
+- No git-style merge, because the granularity is already fine.
+
+---
+
+## 5. Cross-platform adaptation cheatsheet
+
+| Dimension | Claude Code | OpenCode | Codex |
 |------|-------------|----------|-------|
-| SessionStart 注入 | hook 脚本 `additionalContext` | plugin `chat.message` 钩子 | `AGENTS.md` 启动文件 |
-| per-turn 增量注入 | hook 脚本 `UserPromptSubmit` | plugin `chat.message` 钩子 | **不支持(降级)** |
-| 注入位置 | system prompt 前 / `<context>` 块 | message parts | AGENTS.md |
-| 配置文件位置 | `.claude/settings.json` | `~/.config/opencode/config.toml` | `~/.codex/AGENTS.md` |
-| 配置生成时机 | sandbox 启动后由 server 写入 | sandbox 启动后由 server 写入 | sandbox 启动后由 server 写入(整个 AGENTS.md) |
-| Hook 脚本语言 | Python(stdin/stdout JSON) | JS(plugin factory) | 无 |
-| Hook 通过 parsar CLI 调 server | ✅ | ✅ | N/A |
-| 写回 memory 路径 | `parsar memory add` | `parsar memory add` | `parsar memory add` |
+| SessionStart injection | Hook script `additionalContext` | Plugin `chat.message` hook | `AGENTS.md` startup file |
+| Per-turn incremental injection | Hook script `UserPromptSubmit` | Plugin `chat.message` hook | **Not supported (degraded)** |
+| Injection location | Before system prompt / `<context>` block | Message parts | AGENTS.md |
+| Config file location | `.claude/settings.json` | `~/.config/opencode/config.toml` | `~/.codex/AGENTS.md` |
+| Config generation timing | Written by the server after sandbox start | Written by the server after sandbox start | Written by the server after sandbox start (whole AGENTS.md) |
+| Hook script language | Python (JSON on stdin/stdout) | JS (plugin factory) | None |
+| Hook calls the server via the parsar CLI | ✅ | ✅ | N/A |
+| Write-back path for memory | `parsar memory add` | `parsar memory add` | `parsar memory add` |
 
 ---
 
-## 6. MVP 范围 & 不做的事
+## 6. MVP scope & non-goals
 
-**做:**
-- spec_fragments / memories 两张表 + audit 复用
-- workspace 级 spec UI(列表 + 详情编辑 + 标签)
-- user / project 级 memory UI(分类列表 + 编辑 + audit 入口)
-- 文本粘贴 import(后端拆 fragment,简单按 H2/H3 切片)
-- `parsar` CLI 完整子命令
-- Claude / OpenCode SessionStart + per-turn hook
-- Codex SessionStart 注入(AGENTS.md 生成)
-- runner_credential 鉴权扩展
-- agent 自觉写 memory 元指令
+**Do:**
+- Two tables (spec_fragments / memories) + audit reuse.
+- Workspace-level spec UI (list + detail editing + tags).
+- User / project memory UI (categorized list + editing + audit entry).
+- Text-paste import (backend splits fragments simply by H2/H3).
+- Full `parsar` CLI subcommands.
+- Claude / OpenCode SessionStart + per-turn hooks.
+- Codex SessionStart injection (AGENTS.md generation).
+- Runner-credential auth extension.
+- Meta-instruction for agents to write memory proactively.
 
-**不做(留二期):**
-- tag-based 智能注入(只全量)
-- 后置 LLM review 兜底(只 agent 自觉)
-- import 来源:文件上传 / 仓库扫描(只文本粘贴)
-- Trellis 式目录结构 spec(只扁平 fragment)
-- memory 版本管理 / 回退
-- 团队级 memory 共享(只 user / project)
-- approval / 审批流(直接写 + 审计)
+**Do not (deferred):**
+- Tag-based smart injection (only full for now).
+- Post-hoc LLM review fallback (agent-initiated only).
+- Import sources: file upload / repo scan (text-paste only).
+- Trellis-style directory-structured spec (flat fragments only).
+- Memory version history / rollback.
+- Team-level memory sharing (only user / project).
+- Approval flow (direct write + audit).
 
 ---
 
-## 7. 落地任务清单(可独立分配)
+## 7. Landing checklist (independently assignable)
 
-### Phase 1: 数据层(必须最先)
-1. 写 migration `server/migrations/000005_spec_memory.sql`(spec_fragments + memories + 约束 + 索引)
-2. 写 sqlc 查询 `server/internal/db/queries/spec_fragments.sql` + `memories.sql`
-3. 跑 `make sqlc` 生成 Go 代码
+### Phase 1: data layer (must go first)
+1. Write migration `server/migrations/000005_spec_memory.sql` (spec_fragments + memories + constraints + indexes).
+2. Write sqlc queries `server/internal/db/queries/spec_fragments.sql` + `memories.sql`.
+3. Run `make sqlc` to generate Go code.
 
-### Phase 2: Server 业务层
-4. 新建 package `server/internal/specmemory/`(types / store / injector / importer / service / prompts)。**types.go 先建,定义 Source / Scope / MemoryType 三个 enum 常量与 Valid() 校验,后续所有模块依赖它。**
-5. 实现 importer:简单按 markdown H2/H3 切片(import 用)
-6. 实现 injector:渲染 SpecBlock / MemoryBlock / MemoryWriteGuide / IncrementalMemory 模板
-7. 接入 `audit_records` 写入(用现有 `audit.PostgresSink`)
+### Phase 2: server business layer
+4. Create package `server/internal/specmemory/` (types / store / injector / importer / service / prompts). **types.go first: define the Source / Scope / MemoryType enum constants + `Valid()` — every downstream module depends on them.**
+5. Implement the importer: split simply by markdown H2/H3 (for import).
+6. Implement the injector: render SpecBlock / MemoryBlock / MemoryWriteGuide / IncrementalMemory templates.
+7. Hook up writes to `audit_records` (use the existing `audit.PostgresSink`).
 
-### Phase 3: 鉴权扩展
-8. 扩展 `runtimes` 表的 `runtime_type` 取值(加 'agent_runtime')— 或确认现有字段能复用
-9. 在 store 新增 `ValidateRunnerToken(ctx, token) (RuntimeIdentity, error)`
-10. 新增中间件 `server/internal/middleware/runner_credential.go`,挂到 `/api/v1/agent-runtime/*` 路由
+### Phase 3: auth extension
+8. Extend the value set of `runtimes.runtime_type` (add 'agent_runtime') — or confirm the current field can be reused.
+9. Add `ValidateRunnerToken(ctx, token) (RuntimeIdentity, error)` to the store.
+10. Add middleware `server/internal/middleware/runner_credential.go`; attach it to the `/api/v1/agent-runtime/*` route.
 
-### Phase 4: HTTP Handler
-11. UI 端 spec / memory CRUD handler(走 user session 鉴权)
-12. agent-runtime 端 inject snapshot / incremental / 写回 handler(走 runner credential)
-13. import handler
+### Phase 4: HTTP handlers
+11. UI-side spec / memory CRUD handlers (user-session auth).
+12. Agent-runtime-side inject snapshot / incremental / write-back handlers (runner-credential auth).
+13. Import handler.
 
-### Phase 5: 注入接入(connector 改造)
-14. OpenCode connector `Prompt()` 在 system_prompt 拼接处调 `specmemory.Service.RenderInjection()`
-15. AgentDaemon connector `renderStaticAgentOptions()` 加 `spec_memory_injection` 第三来源
-16. 单元测试覆盖注入字符串拼接
+### Phase 5: injection hookup (connector changes)
+14. OpenCode connector `Prompt()`: call `specmemory.Service.RenderInjection()` at the system_prompt concat site.
+15. AgentDaemon connector `renderStaticAgentOptions()`: add `spec_memory_injection` as the third source.
+16. Unit tests covering injection-string concatenation.
 
 ### Phase 6: `parsar` CLI
-17. 新建 `cmd/parsar/main.go`,实现子命令(用现有 cobra 或类似)
-18. CLI 复用 server 的 model struct,HTTP 调用走 token
-19. 跨平台编译(linux/amd64 + linux/arm64),发布到 GitLab artifact
+17. Create `cmd/parsar/main.go`; implement subcommands (existing cobra or similar).
+18. CLI reuses server model structs; HTTP calls carry the token.
+19. Cross-compile (linux/amd64 + linux/arm64), publish to GitLab artifact.
 
-### Phase 7: Sandbox 镜像 & Hook
-20. 修改 `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile` 安装 `parsar` 二进制 + COPY hook 脚本目录
-21. 新建 `infra/e2b-templates/parsar-daemon-claudecode/hooks/claude/{session-start.py, user-prompt-submit.py}`
-22. 新建 `infra/e2b-templates/parsar-daemon-claudecode/hooks/opencode/{session-injection.js, per-turn-injection.js}`
-23. 三平台 hook 脚本统一改成 "调 `parsar inject ...` 拿数据"(注入逻辑集中在 Go 侧)
+### Phase 7: sandbox image & hooks
+20. Modify `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile` to install the `parsar` binary + COPY the hook script directory.
+21. Create `infra/e2b-templates/parsar-daemon-claudecode/hooks/claude/{session-start.py, user-prompt-submit.py}`.
+22. Create `infra/e2b-templates/parsar-daemon-claudecode/hooks/opencode/{session-injection.js, per-turn-injection.js}`.
+23. Rewrite the three-platform hooks uniformly to "call `parsar inject ...` for data" (injection logic centralizes in Go).
 
-### Phase 8: Sandbox 生命周期改造
-24. `sandbox_provider.go` 的 Acquire 链路加 `seedPlatformConfig()` 步骤,写入平台特定配置
-25. 改造 `RunCommand(parsar-daemon ...)` 注入 `PARSAR_*` 全套环境变量
+### Phase 8: sandbox lifecycle changes
+24. Add `seedPlatformConfig()` to the `Acquire` chain in `sandbox_provider.go`; write platform-specific configs.
+25. Update `RunCommand(parsar-daemon ...)` to inject the full `PARSAR_*` env set.
 
 ### Phase 9: UI
-26. Spec fragment 列表 + 详情编辑(workspace 设置页下增加 tab)
-27. Memory 列表(分 user / project)+ 详情 + audit 入口
-28. Import 大文本框 + 拆分预览 + 入库
+26. Spec fragment list + detail editing (add a tab to the workspace settings page).
+27. Memory list (split user / project) + detail + audit entry.
+28. Import textarea + split preview + save.
 
-### Phase 10: 验证 & 上线
-29. 集成测试:三平台各跑一遍 SessionStart 注入 + agent 调 `parsar memory add` 写回
-30. 文档:README / 用户使用指南 / 内部开发者文档
+### Phase 10: validation & rollout
+29. Integration test: for each platform, run one SessionStart injection + agent-invoked `parsar memory add` write-back.
+30. Docs: README / user guide / internal developer docs.
 
-依赖关系:Phase 1 → 2 → (3 || 4 || 5) → 6 → (7 || 8) → 9 → 10。
-3、4、5 可并行;6 依赖 3;7、8 依赖 6;9 依赖 4。
+Dependencies: Phase 1 → 2 → (3 || 4 || 5) → 6 → (7 || 8) → 9 → 10.
+Phases 3, 4, 5 can run in parallel; 6 depends on 3; 7, 8 depend on 6; 9
+depends on 4.
 
 ---
 
-## 8. 关键文件路径速查
+## 8. Key file locations
 
-| 用途 | 文件 |
+| Purpose | File |
 |------|------|
-| 迁移 | `server/migrations/000005_spec_memory.sql`(新建) |
-| sqlc 查询 | `server/internal/db/queries/spec_fragments.sql`、`memories.sql`(新建) |
-| 业务 package | `server/internal/specmemory/`(新建) |
-| 鉴权中间件 | `server/internal/middleware/runner_credential.go`(新建) |
-| 注入接入(OpenCode) | `server/internal/connector/opencode/connector.go:529`(改造) |
-| 注入接入(AgentDaemon) | `server/internal/connector/agentdaemon/model_injection.go:163-183`(改造) |
-| sandbox 生命周期 | `server/internal/connector/agentdaemon/sandbox_provider.go`(改造,新增 seedPlatformConfig) |
-| Proto(无需改) | `internal/agentdaemon/proto/outbound.go`(已支持 AgentOptions map) |
-| Audit 接入(无需改表) | `server/internal/audit/postgres.go:24-50` 现有 `PostgresSink.Write()` |
-| Dockerfile | `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile`(改造) |
-| Hook 脚本 | `infra/e2b-templates/parsar-daemon-claudecode/hooks/{claude,opencode}/`(新建) |
-| CLI 源码 | `cmd/parsar/`(新建) |
-| UI | 取决于前端项目结构,通常 `web/src/pages/workspace/spec/` 等(参照现有 workspace settings 页) |
+| Migration | `server/migrations/000005_spec_memory.sql` (new) |
+| sqlc queries | `server/internal/db/queries/spec_fragments.sql`, `memories.sql` (new) |
+| Business package | `server/internal/specmemory/` (new) |
+| Auth middleware | `server/internal/middleware/runner_credential.go` (new) |
+| Injection hookup (OpenCode) | `server/internal/connector/opencode/connector.go:529` (change) |
+| Injection hookup (AgentDaemon) | `server/internal/connector/agentdaemon/model_injection.go:163-183` (change) |
+| Sandbox lifecycle | `server/internal/connector/agentdaemon/sandbox_provider.go` (change; add seedPlatformConfig) |
+| Proto (no change) | `internal/agentdaemon/proto/outbound.go` (already supports the AgentOptions map) |
+| Audit hookup (no schema change) | `server/internal/audit/postgres.go:24-50` current `PostgresSink.Write()` |
+| Dockerfile | `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile` (change) |
+| Hook scripts | `infra/e2b-templates/parsar-daemon-claudecode/hooks/{claude,opencode}/` (new) |
+| CLI source | `cmd/parsar/` (new) |
+| UI | Depends on the frontend layout; typically `web/src/pages/workspace/spec/` etc. (mirror the existing workspace settings page) |
 
 ---
 
-## 9. 风险与开放问题
+## 9. Risks and open questions
 
-### 风险
-1. **Hook 脚本失败兜底** — 如果 `/injection/snapshot` 超时或失败,hook 是返回空(降级为无注入)还是中断 session?
-   建议:返回空 + 服务端写 audit + 在 sandbox 内打 warning log,session 继续。
-2. **token 泄露** — `PARSAR_RUNNER_TOKEN` 在 sandbox 内任何进程可读。
-   缓解:token 短 TTL(1 小时)+ sandbox 关闭即吊销 + 只能访问 `/api/v1/agent-runtime/*` 路径。
-3. **注入大小膨胀** — 用户 memory 几百条时 system prompt 会很大。
-   MVP 不做截断,二期按 tag / 时间窗筛选。
-4. **多 connector 同 project 并发** — 同一 project 多个 sandbox 同时跑,memory 增量同步频率需要测。
-   方案:per-turn hook 用 `since` 参数(上一次拉取时间)做增量游标。
-5. **Codex 降级体验差** — 没有 per-turn,session 中 agent 写回的 memory 当 session 看不到。
-   方案:在 Codex 注入的 AGENTS.md 末尾加一句"如新增 memory 请在下一次会话生效",承认这是已知限制。
+### Risks
+1. **Hook script failure fallback** — if `/injection/snapshot` times out or fails, does the hook return empty (degrade to no injection) or abort the session?
+   Recommendation: return empty + server writes an audit + sandbox logs a warning; the session continues.
+2. **Token leakage** — `PARSAR_RUNNER_TOKEN` is readable by every process in the sandbox.
+   Mitigation: short TTL (1h) + revoke on sandbox close + restrict to `/api/v1/agent-runtime/*` paths only.
+3. **Injection size bloat** — with hundreds of user memories the system prompt gets big.
+   MVP does no truncation; phase 2 filters by tag / time window.
+4. **Concurrent same-project connectors** — multiple sandboxes running on the same project; memory-delta sync frequency needs testing.
+   Approach: the per-turn hook takes a `since` parameter (last pull time) as an incremental cursor.
+5. **Codex degraded UX** — no per-turn; memories the agent writes back mid-session are not visible in the same session.
+   Approach: append "New memory will take effect in the next session" to the AGENTS.md injected on Codex; acknowledge this as a known limitation.
 
-### 开放问题(实施时再决策,不阻塞 plan)
-1. **session_id 来源** — Conversation ID 在 sandbox 内通过什么环境变量传?是否每轮 hook 也要带 since 游标?
-2. **import 切片策略** — H2 切 vs H3 切 vs LLM 切?MVP 先 H2 切 + 用户预览修改。
-3. **Audit 保留时长 / 谁能查** — 沿用 audit_records 现有策略即可,不在本方案决策范围。
-4. **memory why 字段是否强制** — feedback / project 类推荐填,但 schema 不强制(NOT NULL),由 CLI / UI 引导用户。
-5. **是否给 user/project memory 加 importance / 排序权重字段** — 二期再说,MVP 用 updated_at desc。
+### Open questions (defer to implementation; do not block the plan)
+1. **Source of session_id** — how is the Conversation ID passed into the sandbox as an env var? Does every per-turn hook also need a `since` cursor?
+2. **Import splitting strategy** — H2 vs H3 vs LLM? MVP does H2 first + user-preview edit.
+3. **Audit retention / who can query** — reuse the existing audit_records policy; out of scope for this proposal.
+4. **Is the memory `why` field mandatory** — recommended for feedback / project types, but the schema does not enforce (not NOT NULL); the CLI / UI guides the user.
+5. **Whether user/project memory needs an importance / sort field** — decide in phase 2; MVP sorts by `updated_at desc`.
 
 ---
 
-## 10. Verification(怎么验)
+## 10. Verification (how to prove it works)
 
-### 10.1 单元测试
-- `specmemory/injector_test.go`:给定一组 fragments + memories,渲染出的字符串符合模板
-- `specmemory/importer_test.go`:给定一段 markdown,拆出来的 fragments 数量 / title / body 正确
-- `middleware/runner_credential_test.go`:有效 token / 过期 token / 无 token 三种 case
+### 10.1 Unit tests
+- `specmemory/injector_test.go`: given a set of fragments + memories, the rendered string matches the template.
+- `specmemory/importer_test.go`: given a markdown blob, the fragment count / title / body split correctly.
+- `middleware/runner_credential_test.go`: valid token / expired token / no token — three cases.
 
-### 10.2 集成测试(三平台)
-跑一个 e2e 脚本:
-1. 创建 workspace + project + project_agent
-2. 在 spec UI 加 2 条 fragment
-3. 在 memory UI 加 1 条 user memory
-4. 启动 sandbox(分别用 claude / opencode / codex connector)
-5. 第一轮 prompt:让 agent 复述 spec — 期望它能引用 fragment 内容
-6. 用户回复:"我们项目用 cursor 不用 offset 做分页" — 期望 agent 调 `parsar memory add --type feedback`
-7. 查 `memories` 表,新行存在,actor_type=agent
-8. 第二轮 prompt:让 agent 复述 memory — 期望它能引用刚才学到的
+### 10.2 Integration test (three platforms)
+Run an e2e script:
+1. Create workspace + project + project_agent.
+2. Add 2 fragments in the spec UI.
+3. Add 1 user memory in the memory UI.
+4. Start a sandbox (once each with claude / opencode / codex connectors).
+5. First-turn prompt: have the agent restate the spec — expect it to reference fragment content.
+6. User reply: "we use cursor pagination, not offset" — expect the agent to call `parsar memory add --type feedback`.
+7. Check the `memories` table: the new row exists, `actor_type=agent`.
+8. Second-turn prompt: have the agent restate memory — expect it to reference what it just learned.
 
-### 10.3 手动验证(Claude Code 路径优先)
-- `e2b spawn` 一个 sandbox,exec `cat /workspace/.claude/settings.json` 看配置生成对不对
-- exec `/opt/parsar/hooks/claude/session-start.py < empty.json` 看 stdout 是不是合法 JSON
-- exec `parsar memory list --scope user` 看 CLI 能否调通
-- 在 sandbox 内 exec `parsar memory add --type user --body "test"`,查表确认写入 + audit
+### 10.3 Manual verification (Claude Code path first)
+- `e2b spawn` a sandbox; exec `cat /workspace/.claude/settings.json` and confirm the generated config looks right.
+- Exec `/opt/parsar/hooks/claude/session-start.py < empty.json`; confirm stdout is valid JSON.
+- Exec `parsar memory list --scope user`; confirm the CLI works.
+- Inside the sandbox, exec `parsar memory add --type user --body "test"`; verify the table row + audit.
 
-### 10.4 平台对比验证
-- 三平台同一 spec / memory,prompt 注入后实际打到模型的内容做 diff,确认核心内容一致(忽略平台固有差异)
-- token 用量对比:无注入 vs 有注入(MVP 全量),看实际开销
+### 10.4 Cross-platform sanity check
+- With the same spec / memory across three platforms, diff the content actually landed in the model after prompt injection; confirm the core content matches (ignore platform-inherent differences).
+- Token usage comparison: no injection vs with injection (MVP full); see the actual cost.

@@ -19,7 +19,7 @@ interface DevicePickerProps {
   /** Keep the currently-bound device visible even if it is not freshly selectable. */
   preserveSelected?: boolean
   disabled?: boolean
-  /** When set, an inline "接入新设备" entry is shown that opens this callback. */
+  /** When set, an inline "Add new device" entry is shown that opens this callback. */
   onAddDevice?: () => void
 }
 

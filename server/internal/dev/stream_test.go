@@ -95,7 +95,7 @@ func minimalValidPromptBody(t *testing.T) []byte {
 		WorkspaceID:           "00000000-0000-0000-0000-000000000002",
 		ConversationID:        "00000000-0000-0000-0000-000000000012",
 		AgentID:               "00000000-0000-0000-0000-000000000007",
-		AgentName:             "后端Agent",
+		AgentName:             "Backend Agent",
 		TriggerMessageContent: "stream me",
 		AgentConfig: map[string]any{
 			"model_id": "00000000-0000-0000-0000-0000000000aa",

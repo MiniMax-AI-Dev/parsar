@@ -6,9 +6,9 @@ const seed = {
   workspace: { id: 'dev_workspace', name: 'Demo Workspace', slug: 'demo' },
   users: [{ id: 'dev_admin', email: 'admin@example.com', name: 'Dev Admin', role: 'owner' }],
   agents: [
-    { id: 'agent_product', name: '产品Agent', slug: 'product-agent' },
-    { id: 'agent_backend', name: '后端Agent', slug: 'backend-agent' },
-    { id: 'agent_test', name: '测试Agent', slug: 'test-agent' },
+    { id: 'agent_product', name: 'Product Agent', slug: 'product-agent' },
+    { id: 'agent_backend', name: 'Backend Agent', slug: 'backend-agent' },
+    { id: 'agent_test', name: 'Test Agent', slug: 'test-agent' },
   ],
   conversations: [{ id: 'conv_demo_group', title: 'Demo Group', visibility: 'workspace' }],
 }

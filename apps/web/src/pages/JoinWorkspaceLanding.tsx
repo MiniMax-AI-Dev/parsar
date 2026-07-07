@@ -14,7 +14,7 @@ import {
 import type { DiscoverableWorkspace } from "../lib/api-types"
 
 /**
- * Landing page for the Feishu rejection card's "申请加入" link. Reads
+ * Landing page for the Feishu rejection card's "Join" link. Reads
  * ?id=<workspace_id>&from=feishu. Standalone (vs. reusing
  * DiscoverWorkspacesDialog) so the targeted workspace context isn't lost.
  */

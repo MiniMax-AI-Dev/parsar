@@ -265,7 +265,7 @@ func (h *handler) createPairing(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrRuntimeNameTaken) {
 			// Surface a friendly 409 instead of leaking SQLSTATE 23505.
 			writeError(w, http.StatusConflict, "name_taken",
-				fmt.Sprintf("名称「%s」已被其他设备使用,请换一个", strings.TrimSpace(body.Name)))
+				fmt.Sprintf("Name %q is already used by another device, please choose another", strings.TrimSpace(body.Name)))
 			return
 		}
 		writeError(w, http.StatusBadRequest, "create_failed", err.Error())
@@ -601,7 +601,7 @@ func (h *handler) patchRuntime(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, store.ErrRuntimeNameTaken) {
 			writeError(w, http.StatusConflict, "name_taken",
-				fmt.Sprintf("名称「%s」已被其他设备使用,请换一个", strings.TrimSpace(body.Name)))
+				fmt.Sprintf("Name %q is already used by another device, please choose another", strings.TrimSpace(body.Name)))
 			return
 		}
 		writeError(w, http.StatusBadRequest, "patch_failed", err.Error())

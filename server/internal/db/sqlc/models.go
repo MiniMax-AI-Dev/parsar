@@ -8,222 +8,222 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// workspace 级 Agent 定义表
+// Workspace-level Agent definition table
 type Agent struct {
 	// Agent ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// Agent 展示名
+	// Agent display name
 	Name string `json:"name"`
-	// workspace 内 Agent 标识
+	// Agent identifier within the workspace
 	Slug string `json:"slug"`
-	// Agent 描述
+	// Agent description
 	Description string `json:"description"`
-	// Agent 连接器类型
+	// Agent connector type
 	ConnectorType string `json:"connector_type"`
-	// Agent 可见范围
+	// Agent visibility scope
 	Visibility string `json:"visibility"`
-	// 启用状态
+	// Enabled state
 	Status string `json:"status"`
-	// Agent JSON 配置
+	// Agent JSON config
 	Config []byte `json:"config"`
-	// 显式绑定的 runtime; NULL=未绑定(dispatch 时报错引导用户去 agent 设置页选择)
+	// Explicitly bound runtime; NULL = unbound (dispatch errors out and points the user to the agent settings page)
 	RuntimeID pgtype.UUID `json:"runtime_id"`
-	// 创建人
+	// Created by
 	CreatedBy pgtype.UUID `json:"created_by"`
-	// 创建时间
+	// Created at
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近更新时间
+	// Last updated at
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=活跃
+	// Soft-delete timestamp; NULL = active
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 内置能力的 per-agent 开关;无行=默认开启,enabled=false=该 Agent 关闭
+// Per-agent switch for built-in capabilities; no row = default enabled, enabled=false = this Agent turned it off
 type AgentBuiltinCapability struct {
 	AgentID pgtype.UUID `json:"agent_id"`
-	// 内置能力稳定标识(如 parsar_chat_history)
+	// Stable identifier for the built-in capability (e.g. parsar_chat_history)
 	CapabilityKey string `json:"capability_key"`
-	// 是否为该 Agent 启用该内置能力
+	// Whether this built-in capability is enabled for this agent
 	Enabled   bool               `json:"enabled"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Agent capability 绑定表
+// Agent capability binding table
 type AgentCapability struct {
-	// 绑定记录 ID
+	// Binding record ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 agent
+	// Owning agent
 	AgentID pgtype.UUID `json:"agent_id"`
-	// 绑定的 capability
+	// Bound capability
 	CapabilityID pgtype.UUID `json:"capability_id"`
-	// 锁定的版本; RESTRICT 防止误删仍被使用的版本
+	// Pinned version; RESTRICT prevents deletion of a version still in use
 	CapabilityVersionID pgtype.UUID `json:"capability_version_id"`
-	// latest=dispatch 时查 capability 最新版本; pinned=锁 capability_version_id 列
+	// latest = look up the capability's latest version at dispatch; pinned = lock the capability_version_id column
 	PinningMode string `json:"pinning_mode"`
-	// 绑定启用状态
+	// Binding enabled state
 	Enabled bool `json:"enabled"`
-	// 能力实例配置
+	// Capability instance configuration
 	Configuration []byte `json:"configuration"`
-	// 绑定时间
+	// Binding time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近修改时间
+	// Last updated at
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// agent_daemon device_id 到当前 WebSocket owner pod 的租约表
+// Lease from agent_daemon device_id to its current WebSocket owner pod
 type AgentDaemonDeviceOwner struct {
 	// agent_daemon runtime/device id
 	DeviceID pgtype.UUID `json:"device_id"`
-	// 设备所属 workspace
+	// Owning workspace of the device
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 当前持有该 device WebSocket 的 pod id
+	// Pod id currently holding this device's WebSocket
 	OwnerPodID string `json:"owner_pod_id"`
-	// 当前 owner pod 的内部可达 URL, 用于跨 pod 转发
+	// Internally reachable URL of the current owner pod, used for cross-pod forwarding
 	OwnerUrl string `json:"owner_url"`
-	// fencing token; 每次 claim 递增, 续租/释放必须匹配
+	// Fencing token; incremented on every claim, renew/release must match
 	Generation int64 `json:"generation"`
-	// owner 状态: connected / draining / expired
+	// Owner status: connected / draining / expired
 	Status string `json:"status"`
-	// 本代 owner 连接建立时间
+	// Connection time of the current generation
 	ConnectedAt pgtype.Timestamptz `json:"connected_at"`
-	// 当前 owner 最近续租/心跳时间
+	// Most recent renew/heartbeat time from the current owner
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
-	// owner 租约过期时间
+	// Owner lease expiration time
 	LeaseExpiresAt pgtype.Timestamptz `json:"lease_expires_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Agent 执行记录表
+// Agent execution records
 type AgentRun struct {
-	// run ID
+	// Run ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属会话
+	// Owning conversation
 	ConversationID pgtype.UUID `json:"conversation_id"`
-	// 触发消息 ID
+	// Triggering message ID
 	TriggerMessageID pgtype.UUID `json:"trigger_message_id"`
-	// run 触发来源(WHAT): message=用户消息; agent=另一 agent; scheduled_task=定时任务; webhook=外部事件; issue=工单; manual=管理员手动
+	// Run trigger source (WHAT): message = user message; agent = another agent; scheduled_task; webhook = external event; issue = ticket; manual = admin manual
 	TriggerSource string `json:"trigger_source"`
-	// run 触发通道(HOW): web=内置 UI; im=即时通讯; api=外部 API; cron=定时调度; internal=系统内部
+	// Run trigger channel (HOW): web = built-in UI; im = instant messaging; api = external API; cron = scheduled; internal = system internal
 	TriggerChannel string `json:"trigger_channel"`
-	// 触发源对象类型
+	// Trigger source object type
 	TriggerRefType string `json:"trigger_ref_type"`
-	// 触发源对象 ID
+	// Trigger source object ID
 	TriggerRefID pgtype.UUID `json:"trigger_ref_id"`
-	// 请求方类型
+	// Requester type
 	RequestedByType string `json:"requested_by_type"`
-	// 请求方 ID
+	// Requester ID
 	RequestedByID pgtype.UUID `json:"requested_by_id"`
-	// 本次 run 使用的 agent
+	// Agent used for this run
 	AgentID pgtype.UUID `json:"agent_id"`
-	// 执行连接器类型快照
+	// Connector type snapshot
 	ConnectorType string `json:"connector_type"`
-	// 外部运行 ID
+	// External run ID
 	ExternalRunID string `json:"external_run_id"`
-	// 承载执行的 runtime
+	// Runtime carrying execution
 	RuntimeID pgtype.UUID `json:"runtime_id"`
-	// 本次 run 工作目录快照
+	// Working-directory snapshot for this run
 	WorkingDirectory string `json:"working_directory"`
-	// run 终态/过渡态: queued=入队; running=执行中; completed/failed=正常终态; cancelled=用户主动取消; interrupted=系统打断(如 runtime crash)
+	// Run terminal/transitional state: queued; running; completed/failed (normal terminal); cancelled (user-initiated); interrupted (system interrupt, e.g. runtime crash)
 	Status string `json:"status"`
-	// run 可见范围
+	// Run visibility scope
 	Visibility string `json:"visibility"`
-	// 输出消息 ID
+	// Output message ID
 	OutputMessageID pgtype.UUID `json:"output_message_id"`
-	// 失败原因
+	// Failure reason
 	FailureReason string `json:"failure_reason"`
-	// run 元数据
+	// Run metadata
 	Metadata []byte `json:"metadata"`
-	// 入队时间
+	// Enqueue time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 开始执行时间
+	// Execution start time
 	StartedAt pgtype.Timestamptz `json:"started_at"`
-	// 终态时间
+	// Terminal state time
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
-	// 任何字段变更时刷新
+	// Refreshed on any field change
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// agent_run 产物表
+// Artifacts produced by an agent_run
 type AgentRunArtifact struct {
-	// 产物 ID
+	// Artifact ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 run
+	// Owning run
 	AgentRunID pgtype.UUID `json:"agent_run_id"`
-	// 产物显示名
+	// Artifact display name
 	Name string `json:"name"`
-	// 产物载体: file=可下载文件; link=外链(URI 为完整 URL); inline=正文随 metadata 内联
+	// Artifact medium: file = downloadable file; link = external link (URI is a full URL); inline = body inlined via metadata
 	Medium string `json:"medium"`
-	// 产物语义分类(free-form,不做 CHECK 约束): report / log / patch / pr_ref / image_thumbnail 等; '=未分类
+	// Artifact semantic classification (free-form, no CHECK constraint): report / log / patch / pr_ref / image_thumbnail / ...; '' = uncategorized
 	Kind string `json:"kind"`
-	// 产物 URI
+	// Artifact URI
 	Uri string `json:"uri"`
-	// 产物可见范围
+	// Artifact visibility scope
 	Visibility string `json:"visibility"`
-	// 产物元数据
+	// Artifact metadata
 	Metadata []byte `json:"metadata"`
-	// 产物创建时间
+	// Artifact creation time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// agent_run 流式事件表
+// Streaming events for an agent_run
 type AgentRunEvent struct {
-	// 事件行主键
+	// Event row primary key
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属 run
+	// Owning run
 	AgentRunID pgtype.UUID `json:"agent_run_id"`
-	// run 内事件序号
+	// Sequence number within the run
 	Sequence int64 `json:"sequence"`
-	// 事件类型
+	// Event type
 	EventKind string `json:"event_kind"`
-	// 事件载荷
+	// Event payload
 	Payload []byte `json:"payload"`
-	// 事件发生时间
+	// Event occurrence time
 	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
-	// 落库时间
+	// Persistence time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// 合规审计流水表
+// Compliance audit stream
 type AuditRecord struct {
-	// 自增 ID
+	// Auto-increment ID
 	ID int64 `json:"id"`
-	// 审计来源分类
+	// Audit source classification
 	Source string `json:"source"`
-	// 审计事件类型
+	// Audit event type
 	EventType string `json:"event_type"`
-	// 触发者类型
+	// Actor type
 	ActorType string `json:"actor_type"`
-	// 触发者 ID; system 事件可留空
+	// Actor ID; may be null for system events
 	ActorID pgtype.UUID `json:"actor_id"`
-	// 操作对象类型
+	// Target object type
 	TargetType string `json:"target_type"`
-	// 操作对象 ID
+	// Target object ID
 	TargetID pgtype.UUID `json:"target_id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 脱敏事件上下文
+	// Redacted event context
 	Payload []byte `json:"payload"`
-	// 事件发生时间
+	// Event occurrence time
 	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
 }
 
-// 用户外部身份绑定表
+// External identity bindings for a user
 type AuthIdentity struct {
 	ID pgtype.UUID `json:"id"`
-	// 本地用户
+	// Local user
 	UserID pgtype.UUID `json:"user_id"`
-	// 身份提供方: email=本地邮箱密码 / feishu=飞书登录 / oidc=通用 OIDC
+	// Identity provider: email = local email/password / feishu = Feishu login / oidc = generic OIDC
 	Provider string `json:"provider"`
-	// 外部唯一标识
+	// External unique identifier
 	Subject string `json:"subject"`
 	// Identity-provider profile. provider=email uses {"password_hash":"<bcrypt>","hashed_at":"<RFC3339>","last_used_at":"<RFC3339>"}; OIDC providers stash the userinfo response.
 	Metadata  []byte             `json:"metadata"`
@@ -231,579 +231,579 @@ type AuthIdentity struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Agent capability 目录表
+// Agent capability catalog
 type Capability struct {
-	// 能力 ID
+	// Capability ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 能力类型: skill=opencode 内置工具脚本; mcp=标准 MCP server
+	// Capability type: skill = opencode built-in tool script; mcp = standard MCP server
 	Type string `json:"type"`
-	// 能力名称
+	// Capability name
 	Name string `json:"name"`
-	// 能力描述
+	// Capability description
 	Description string `json:"description"`
-	// 分类标签(jsonb 字符串数组); 由 capability_tag 表合并而来
+	// Categorization tags (jsonb string array); merged in from the capability_tag table
 	Tags []byte `json:"tags"`
-	// workspace=本 workspace 可见 / public=全平台可见。不含 tenant 层级——跨 workspace 共享走 marketplace 流程(000023)而非 visibility 字段
+	// workspace = visible to this workspace / public = visible platform-wide. No tenant tier -- cross-workspace sharing goes through the marketplace flow (000023) rather than the visibility field
 	Visibility string `json:"visibility"`
-	// 能力启用状态
+	// Capability enabled state
 	Status string `json:"status"`
-	// 发布者
+	// Publisher
 	CreatorID pgtype.UUID `json:"creator_id"`
-	// 发布时间
+	// Publish time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近更新时间
+	// Last updated at
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软下线时间戳
+	// Soft-deprecation timestamp
 	DeprecatedAt pgtype.Timestamptz `json:"deprecated_at"`
-	// 软删除时间戳
+	// Soft-delete timestamp
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// capability plugin/skill zip 的 PG 存储后端(PARSAR_BLOB_BACKEND=pg 时启用)
+// PG storage backend for capability plugin/skill zips (enabled when PARSAR_BLOB_BACKEND=pg)
 type CapabilityBlob struct {
-	// 不透明存储引用 = capability_version.oss_key 的值(PG 后端形如 pg:<uuid>)
+	// Opaque storage reference = value of capability_version.oss_key (PG backend shape: pg:<uuid>)
 	StorageRef string `json:"storage_ref"`
-	// 归属 workspace;PG 后端据此做跨租户归属校验
+	// Owning workspace; PG backend uses this for cross-tenant ownership checks
 	WorkspaceID string `json:"workspace_id"`
-	// zip 原始字节(≤ 64 MiB,上限在应用层强制)
+	// Raw zip bytes (<= 64 MiB, upper bound enforced in the application layer)
 	Bytes []byte `json:"bytes"`
-	// zip 的 SHA-256 摘要(64 字符 hex),写入时计算
+	// SHA-256 digest of the zip (64-char hex), computed on write
 	Sha256 string `json:"sha256"`
-	// zip 字节数;Stat 用
+	// Zip byte count; used by Stat
 	SizeBytes int64 `json:"size_bytes"`
-	// 写入时间
+	// Write time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// capability 版本表
+// Capability versions
 type CapabilityVersion struct {
-	// 版本 ID
+	// Version ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 capability
+	// Owning capability
 	CapabilityID pgtype.UUID `json:"capability_id"`
-	// 版本号
+	// Version string
 	Version string `json:"version"`
-	// 源码仓库 URL
+	// Source repo URL
 	GitRepoUrl pgtype.Text `json:"git_repo_url"`
-	// git tag 或 commit
+	// git tag or commit
 	GitRef pgtype.Text `json:"git_ref"`
-	// 仓库内路径
+	// Path within the repo
 	Path pgtype.Text `json:"path"`
-	// 内联版本内容(per-scaffold rendered); 旧路径回退用
+	// Inline version content (per-scaffold rendered); legacy fallback path
 	Content []byte `json:"content"`
-	// 导入时的原始粘贴内容快照; 形如 {"format":"json|toml|markdown","body":"…"}
+	// Snapshot of the raw pasted content at import time; shape {"format":"json|toml|markdown","body":"…"}
 	SourcePayload []byte `json:"source_payload"`
-	// canonical_spec 的 schema 版本; v1 起 = 1
+	// canonical_spec schema version; = 1 starting from v1
 	SchemaVersion int16 `json:"schema_version"`
-	// 清洗后的规范化结构(canonical.Spec); Renderer 转 per-scaffold rendered;NULL 时 fallback content
+	// Normalized structure after cleaning (canonical.Spec); Renderer turns it into per-scaffold rendered; falls back to content when NULL
 	CanonicalSpec []byte `json:"canonical_spec"`
-	// Plugin 类型: 对象在 OSS bucket 内的 key;mcp/skill 类型为空字符串
+	// Plugin type: object key within the OSS bucket; empty string for mcp/skill types
 	OssKey string `json:"oss_key"`
-	// Plugin 类型: zip 文件 SHA-256 摘要 (64 字符 hex);mcp/skill 类型为空字符串
+	// Plugin type: SHA-256 digest of the zip file (64-char hex); empty string for mcp/skill types
 	Sha256 string `json:"sha256"`
-	// 该版本所需凭据清单(数组,快照); 元素形如 {kind, required, description}; kind 对应 user_credentials.kind, 由代码 registry 校验; 与本版本 content 里的 ${PARSAR_CREDENTIAL:<kind>} 占位符对应
+	// Credential requirements for this version (array snapshot); each element shaped {kind, required, description}; kind matches user_credentials.kind and is validated against the code registry; corresponds to ${PARSAR_CREDENTIAL:<kind>} placeholders in this version's content
 	RequiredCredentials []byte `json:"required_credentials"`
-	// 版本发布者
+	// Version publisher
 	CreatorID pgtype.UUID `json:"creator_id"`
-	// 发布时间
+	// Publish time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// 会话与上游 connector session 绑定表
+// Conversation to upstream connector session bindings
 type ConnectorSessionBinding struct {
-	// 绑定记录 ID
+	// Binding record ID
 	ID int64 `json:"id"`
-	// 会话 ID
+	// Conversation ID
 	ConversationID string `json:"conversation_id"`
-	// connector 类型, 如 opencode/claude_code/codex/http_agent
+	// Connector type, e.g. opencode/claude_code/codex/http_agent
 	ConnectorType string `json:"connector_type"`
-	// connector 私有绑定 key, 如 OpenCode pool_key
+	// Connector-private binding key, e.g. OpenCode pool_key
 	BindingKey string `json:"binding_key"`
-	// 上游 agent/connector session ID
+	// Upstream agent/connector session ID
 	UpstreamSessionID string `json:"upstream_session_id"`
-	// connector 私有绑定元数据
+	// Connector-private binding metadata
 	Metadata []byte `json:"metadata"`
-	// 绑定建立时间
+	// Binding creation time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近复用时间
+	// Most recent reuse time
 	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
 }
 
-// 会话表
+// Conversation table
 type Conversation struct {
-	// 会话 ID
+	// Conversation ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 会话顶层入口: web=内置 UI; im=即时通讯(具体平台见 platform 列); api=外部 API 触发
+	// Top-level entry point: web = built-in UI; im = instant messaging (see platform column for details); api = external API trigger
 	Surface string `json:"surface"`
-	// 会话形态: thread=单线程对话(web 默认); group=群聊; dm=私聊; oneshot=一次性请求(api 默认)
+	// Conversation form: thread = single-threaded (web default); group = group chat; dm = direct message; oneshot = one-shot request (api default)
 	Form string `json:"form"`
-	// 会话标题
+	// Conversation title
 	Title string `json:"title"`
-	// 外部平台标识
+	// External platform identifier
 	Platform string `json:"platform"`
-	// 外部会话 ID
+	// External conversation ID
 	ExternalID string `json:"external_id"`
-	// 外部线程 ID
+	// External thread ID
 	ExternalThreadID string `json:"external_thread_id"`
-	// 来源应用 ID
+	// Source app ID
 	SourceAppID string `json:"source_app_id"`
-	// 会话状态
+	// Conversation status
 	Status string `json:"status"`
-	// 会话元数据
+	// Conversation metadata
 	Metadata  []byte             `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳
+	// Soft-delete timestamp
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 凭据类型注册表; 管理员可通过 capability 导入 UI 直接新建
+// Credential-type registry; admins can add new kinds directly via the capability import UI
 type CredentialKind struct {
-	// credential kind 主键
+	// Credential kind primary key
 	ID pgtype.UUID `json:"id"`
-	// 系统内唯一短码; 对应 user_credentials.kind 文本
+	// Globally unique short code; matches user_credentials.kind text
 	Code string `json:"code"`
-	// 展示名(中英文同栏); 至少非空
+	// Display name (single column for CN/EN); required non-empty
 	DisplayName string `json:"display_name"`
-	// 类型说明; 展示给最终用户
+	// Type description; shown to end users
 	Description string `json:"description"`
-	// value 校验 schema(预留); v1 不强校验
+	// Value validation schema (reserved); v1 does not enforce it
 	ValueSchema []byte `json:"value_schema"`
-	// 分类: platform_oauth=平台内置 OAuth provider / platform_model=LLM provider API key / user_defined=管理员临时新增
+	// Classification: platform_oauth = built-in OAuth provider / platform_model = LLM provider API key / user_defined = ad-hoc admin addition
 	Source string `json:"source"`
-	// 系统种子标记; built_in=true 不允许删除
+	// System-seed flag; built_in=true rows cannot be deleted
 	BuiltIn bool `json:"built_in"`
-	// 新建管理员; built_in=true 行此列 NULL
+	// Admin who added the row; NULL on built_in=true rows
 	CreatedBy pgtype.UUID        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=活跃
+	// Soft-delete timestamp; NULL = active
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// Gateway 外部会话的路由选择状态
+// Route-selection state for external Gateway conversations
 type GatewaySession struct {
 	ID pgtype.UUID `json:"id"`
-	// 外部平台标识，如 feishu/slack/webhook
+	// External platform identifier, e.g. feishu/slack/webhook
 	Platform string `json:"platform"`
-	// 外部会话 ID，如飞书 chat_id
+	// External conversation ID, e.g. Feishu chat_id
 	ExternalID string `json:"external_id"`
-	// 外部线程 ID；chat 级选择为空字符串
+	// External thread ID; empty string for chat-level selection
 	ExternalThreadID string `json:"external_thread_id"`
-	// 当前选中的 Parsar Agent
+	// Currently selected Parsar Agent
 	SelectedAgentID pgtype.UUID `json:"selected_agent_id"`
-	// Gateway session 元数据
+	// Gateway session metadata
 	Metadata  []byte             `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// user/workspace 级 memory,agent 自觉写入 + 用户事后审计
+// user/workspace-level memory, self-written by agents + audited by users afterwards
 type Memory struct {
-	// memory 内部 ID
+	// Internal memory ID
 	ID pgtype.UUID `json:"id"`
-	// 作用域 (user/workspace); 取值由 specmemory.Scope 管理
+	// Scope (user/workspace); values managed by specmemory.Scope
 	Scope string `json:"scope"`
-	// memory 归属用户; scope=workspace 时也填,用于排重与审计
+	// Owning user; also set when scope=workspace, for dedup and audit
 	UserID pgtype.UUID `json:"user_id"`
-	// 所属 workspace; scope=user 时为 NULL,scope=workspace 时必填
+	// Owning workspace; NULL when scope=user, required when scope=workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 类型 (user/feedback/workspace/reference); 取值由 specmemory.MemoryType 管理
+	// Type (user/feedback/workspace/reference); values managed by specmemory.MemoryType
 	MemoryType string `json:"memory_type"`
-	// 简短标题,可选
+	// Short title, optional
 	Title string `json:"title"`
-	// 主体内容
+	// Main body
 	Body string `json:"body"`
-	// feedback/workspace 类推荐填写的动因说明
+	// Recommended rationale for feedback/workspace types
 	Why string `json:"why"`
-	// 标签数组
+	// Tag array
 	Tags []string `json:"tags"`
-	// 来源 (user/agent/auto-review); 取值由 specmemory.Source 管理
+	// Source (user/agent/auto-review); values managed by specmemory.Source
 	Source string `json:"source"`
-	// agent 写入时记录 connector:agentID; 人工写入为空
+	// On agent writes, records connector:agentID; empty on human writes
 	AgentActor string `json:"agent_actor"`
-	// agent 写入时关联的会话 ID; 会话被删时置 NULL,不连带删 memory
+	// Associated conversation ID on agent writes; set to NULL when the conversation is deleted, memory is not cascade-deleted
 	ConversationID pgtype.UUID        `json:"conversation_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=未删除
+	// Soft-delete timestamp; NULL = not deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 会话时间线消息表
+// Conversation timeline messages
 type Message struct {
-	// 消息 ID
+	// Message ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属会话
+	// Owning conversation
 	ConversationID pgtype.UUID `json:"conversation_id"`
-	// 发送方类型: user=真人; agent=Agent 输出; system=Parsar 系统事件; external=外部 IM 用户(未注册)
+	// Sender type: user = human; agent = Agent output; system = Parsar system event; external = external IM user (unregistered)
 	SenderType string `json:"sender_type"`
-	// 对应 user_id 或 agent_id; system / external 可为空
+	// Corresponding user_id or agent_id; system / external may be null
 	SenderID pgtype.UUID `json:"sender_id"`
-	// 消息语义类别: message=普通会话消息; artifact=产物消息; system_event=系统事件; error=错误。错误来源(agent/runtime/validation)放 metadata.error.source
+	// Message semantic kind: message = normal conversation message; artifact = artifact message; system_event = system event; error. Error source (agent/runtime/validation) lives in metadata.error.source
 	Kind string `json:"kind"`
-	// 消息正文渲染格式: text=纯文本; markdown=Markdown; card=结构化卡片(schema 见 metadata.card)
+	// Message body rendering format: text = plain text; markdown; card = structured card (schema under metadata.card)
 	ContentFormat string `json:"content_format"`
-	// 消息可见范围
+	// Message visibility scope
 	Visibility string `json:"visibility"`
-	// 消息正文
+	// Message body
 	Content string `json:"content"`
-	// 消息元数据
+	// Message metadata
 	Metadata  []byte             `json:"metadata"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳
+	// Soft-delete timestamp
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 组织级共享 LLM model catalog
+// Organization-level shared LLM model catalog
 type Model struct {
-	// 模型主键
+	// Model primary key
 	ID pgtype.UUID `json:"id"`
-	// 机器可读稳定标识(自动生成, 全局唯一)
+	// Machine-readable stable identifier (auto-generated, globally unique)
 	Slug string `json:"slug"`
-	// 模型展示名
+	// Model display name
 	Name string `json:"name"`
-	// provider 类型: anthropic / openai / ...
+	// Provider type: anthropic / openai / ...
 	ProviderType string `json:"provider_type"`
-	// opencode SDK adapter 包名(@ai-sdk/anthropic 等)
+	// opencode SDK adapter package name (@ai-sdk/anthropic, ...)
 	Adapter string `json:"adapter"`
 	// API base URL
 	BaseUrl string `json:"base_url"`
-	// provider 侧模型 ID
+	// Provider-side model ID
 	ModelKey string `json:"model_key"`
-	// 凭据模式: inline_secret(共享) / credential_ref(用户私有)
+	// Credential mode: inline_secret (shared) / credential_ref (user-private)
 	CredentialMode string `json:"credential_mode"`
-	// inline_secret 模式下绑定的共享 secret; NULL=待配置
+	// Shared secret bound under inline_secret mode; NULL = not yet configured
 	SecretID pgtype.UUID `json:"secret_id"`
-	// credential_ref 模式下绑定的 credential_kinds.code
+	// credential_kinds.code bound under credential_ref mode
 	CredentialKindCode pgtype.Text `json:"credential_kind_code"`
-	// 模型配置: capabilities/limits/headers/modalities/options 等
+	// Model config: capabilities/limits/headers/modalities/options/etc.
 	Config []byte `json:"config"`
-	// 启用状态: active / disabled
+	// Enabled state: active / disabled
 	Status string `json:"status"`
-	// 创建人(用于编辑/删除权限校验)
+	// Created by (used for edit/delete permission checks)
 	CreatedBy pgtype.UUID        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除标记
+	// Soft-delete marker
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// Agent runtime 注册表
+// Agent runtime registry
 type Runtime struct {
-	// runtime 主键, 由 server 端生成
+	// Runtime primary key, generated on the server side
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// runtime 类型: local=用户本机 Runner / sandbox=E2B 等远端沙盒 / external=外接 HTTP Agent
+	// Runtime type: local = user local Runner / sandbox = E2B or other remote sandbox / external = external HTTP Agent
 	Type string `json:"type"`
-	// runtime 名称
+	// Runtime name
 	Name string `json:"name"`
-	// runtime provider
+	// Runtime provider
 	Provider string `json:"provider"`
-	// 所属用户
+	// Owning user
 	OwnerUserID pgtype.UUID `json:"owner_user_id"`
-	// runner 版本号
+	// Runner version
 	Version string `json:"version"`
-	// runner 主机名
+	// Runner hostname
 	Hostname string `json:"hostname"`
-	// runtime 配置: runner_public_key/runner_credential_hash 等运行态配置(原 metadata 已并入)
+	// Runtime config: runner_public_key/runner_credential_hash and other runtime-state fields (formerly metadata, now merged in)
 	Config []byte `json:"config"`
-	// 配对令牌哈希
+	// Pairing token hash
 	PairingTokenHash pgtype.Text `json:"pairing_token_hash"`
-	// 配对令牌过期时间
+	// Pairing token expiration time
 	PairingTokenExpiresAt pgtype.Timestamptz `json:"pairing_token_expires_at"`
-	// runtime 连通性: pending_pairing=待配对 / offline=配对后无心跳 / online=心跳正常 / error=runtime 自报故障
+	// Runtime connectivity: pending_pairing / offline = no heartbeat after pairing / online = heartbeat healthy / error = runtime reported failure
 	Liveness string `json:"liveness"`
-	// 最近心跳时间
+	// Most recent heartbeat time
 	LastHeartbeatAt pgtype.Timestamptz `json:"last_heartbeat_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	// 软删除标记; 非空表示已删除
+	// Soft-delete marker; non-null means deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 统一沙盒实例表。记录 workspace 范围内所有 provider 沙盒(如 E2B): 预热池沙盒(allocation_status=pooled)、已绑定到 agent 的持久沙盒(bound)、以及历史终止行(released)。不存 envd_access_token / endpoint URL 等敏感运行态信息; 这些只在进程内存中保存。
+// Unified sandbox instance table. Records every provider sandbox (e.g. E2B) inside a workspace: pre-warmed pool sandboxes (allocation_status=pooled), sandboxes already bound to an agent (bound), and historically terminated rows (released). Does not store sensitive runtime info such as envd_access_token / endpoint URL; those live only in process memory.
 type Sandbox struct {
-	// 沙盒实例主键
+	// Sandbox instance primary key
 	ID pgtype.UUID `json:"id"`
-	// 归属 workspace; 预热池也按 workspace 隔离, 防止 credential / usage / permission 跨租户
+	// Owning workspace; the pre-warm pool is also isolated per workspace to prevent credential / usage / permission bleed across tenants
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 绑定的 agent; pooled 行为空, bound 行必填
+	// Bound agent; empty on pooled rows, required on bound rows
 	AgentID pgtype.UUID `json:"agent_id"`
-	// 沙盒人类可读名(可空), 主要用于 admin UI 展示
+	// Human-readable sandbox name (nullable), mainly for admin UI display
 	Name pgtype.Text `json:"name"`
-	// 与 connector 的 buildPoolKey 输出对齐; pooled 行为空, bound 行必填
+	// Aligned with the connector's buildPoolKey output; empty on pooled rows, required on bound rows
 	CacheKey pgtype.Text `json:"cache_key"`
-	// 后端 provider(E2B 等)的真实沙盒 ID, 全局唯一
+	// True sandbox ID from the backend provider (E2B etc.), globally unique
 	SandboxID string `json:"sandbox_id"`
-	// 模板 ID(E2B template_id), 决定沙盒镜像
+	// Template ID (E2B template_id) determining the sandbox image
 	TemplateID string `json:"template_id"`
-	// 生命周期: spawning=创建中 / running=可用 / renewing=续期中 / killing=终止中 / killed=已正常终止 / killed_orphaned=启动扫描清理 / killed_error=异常终止
+	// Lifecycle: spawning = creating / running = usable / renewing = renewing / killing = terminating / killed = terminated normally / killed_orphaned = cleaned up by startup scan / killed_error = terminated abnormally
 	LifecycleStatus string `json:"lifecycle_status"`
-	// 归属状态: pooled=workspace 预热池可 claim / bound=已绑定到 agent / released=已释放历史行
+	// Allocation state: pooled = pre-warmed for workspace, claimable / bound = bound to an agent / released = historically released row
 	AllocationStatus string `json:"allocation_status"`
-	// 沙盒续期秒数; Renew 后 provider 生命周期延长到 now + timeout_seconds
+	// Sandbox renewal seconds; after Renew the provider lifecycle extends to now + timeout_seconds
 	TimeoutSeconds int32 `json:"timeout_seconds"`
-	// 自动续期阈值: 0=关闭; >0=剩余生命周期低于该秒数时自动续期
+	// Auto-renew threshold: 0 = disabled; >0 = auto-renew when the remaining lifetime drops below this many seconds
 	AutoRenewThresholdSeconds int32 `json:"auto_renew_threshold_seconds"`
-	// provider 侧当前生命周期到期时间; 自动续期扫描依赖此字段
+	// Current provider-side lifecycle expiration; auto-renew scan depends on this column
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	// 最近一次续期成功或 claim handoff 时间
+	// Most recent successful renew or claim handoff time
 	LastRenewedAt pgtype.Timestamptz `json:"last_renewed_at"`
-	// 审计上下文(spawn run_id、E2B 元数据、kill reason、source=pool/fresh 等), 不进入查询
+	// Audit context (spawn run_id, E2B metadata, kill reason, source=pool/fresh, etc.); not part of queries
 	Metadata []byte `json:"metadata"`
-	// 沙盒实例创建时间
+	// Sandbox instance creation time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近一次使用/状态更新时间(空闲 TTL 和 admin 列表依赖此字段)
+	// Most recent use / state-update time (idle TTL and admin list depend on this column)
 	LastActiveAt pgtype.Timestamptz `json:"last_active_at"`
-	// 终止时间; 非空表示沙盒已不可用, 仅作历史记录
+	// Termination time; non-null means the sandbox is unusable and kept only for history
 	KilledAt pgtype.Timestamptz `json:"killed_at"`
 }
 
-// 定时任务: 锚定 agent, 到点用独立 session 触发一次 agent run
+// Scheduled tasks: anchored on an agent, fires one agent run in its own session when due
 type ScheduledTask struct {
 	ID pgtype.UUID `json:"id"`
-	// 触发的 agent (runnable 单元)
+	// Agent to trigger (runnable unit)
 	AgentID pgtype.UUID `json:"agent_id"`
-	// 最近一次 run 的对话 (创建后为 NULL, 每次派发回填)
+	// Conversation of the most recent run (NULL when created, backfilled on each dispatch)
 	ConversationID pgtype.UUID `json:"conversation_id"`
 	Name           string      `json:"name"`
 	Prompt         string      `json:"prompt"`
-	// 标准 5 段 cron 表达式
+	// Standard 5-field cron expression
 	CronExpr string `json:"cron_expr"`
-	// IANA 时区, 解释 cron_expr
+	// IANA timezone used to interpret cron_expr
 	Timezone string `json:"timezone"`
 	Enabled  bool   `json:"enabled"`
-	// phase 2 投递目标群; null = web only
+	// Phase 2 delivery target chat; null = web only
 	FeishuChatID   pgtype.Text `json:"feishu_chat_id"`
 	FeishuChatName pgtype.Text `json:"feishu_chat_name"`
-	// 调度器算出的下次触发 (UTC)
+	// Next-fire time computed by the scheduler (UTC)
 	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
 	LastRunAt pgtype.Timestamptz `json:"last_run_at"`
-	// 最近一次派发的 agent_run
+	// Most recently dispatched agent_run
 	LastRunID  pgtype.UUID `json:"last_run_id"`
 	LastStatus string      `json:"last_status"`
-	// 连续失败计数, 到阈值自动停用
+	// Consecutive failure count; auto-disables at threshold
 	ConsecutiveFailures int32 `json:"consecutive_failures"`
-	// 多 pod claim 租约时间
+	// Multi-pod claim lease time
 	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
-	// 多 pod claim 持有者
+	// Multi-pod claim holder
 	ClaimedBy string `json:"claimed_by"`
-	// 执行身份 = 创建者
+	// Execution identity = creator
 	CreatedBy pgtype.UUID        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 组织级加密凭据表(共享 catalog)
+// Organization-level encrypted credential table (shared catalog)
 type Secret struct {
-	// secret 主键
+	// Secret primary key
 	ID pgtype.UUID `json:"id"`
-	// 机器可读的稳定标识(自动生成, 全局唯一)
+	// Machine-readable stable identifier (auto-generated, globally unique)
 	Slug string `json:"slug"`
-	// secret 展示名(可重复, 可修改)
+	// Secret display name (may repeat, may be edited)
 	Name string `json:"name"`
-	// secret 用途分类: model_provider/runtime/capability_inline/feishu_bot
+	// Secret usage classification: model_provider/runtime/capability_inline/feishu_bot
 	Kind string `json:"kind"`
-	// 提供方标识
+	// Provider identifier
 	Provider string `json:"provider"`
-	// 认证类型
+	// Auth type
 	AuthType string `json:"auth_type"`
-	// 加密后的凭证 payload
+	// Encrypted credential payload
 	EncryptedPayload []byte `json:"encrypted_payload"`
-	// 包封密钥版本
+	// Wrapping key version
 	KeyVersion string `json:"key_version"`
-	// 非敏感元数据
+	// Non-sensitive metadata
 	Metadata []byte `json:"metadata"`
-	// 启用状态: active=可用 / disabled=管理员禁用
+	// Enabled state: active = usable / disabled = admin-disabled
 	Status string `json:"status"`
-	// 创建人
+	// Created by
 	CreatedBy pgtype.UUID        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除标记; 非空表示已删除
+	// Soft-delete marker; non-null means deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// workspace 级 spec 片段,每条独立可注入可编辑
+// Workspace-level spec fragments, each independently injectable and editable
 type SpecFragment struct {
-	// fragment 内部 ID
+	// Internal fragment ID
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 片段标题
+	// Fragment title
 	Title string `json:"title"`
-	// 片段 markdown 正文
+	// Fragment markdown body
 	Body string `json:"body"`
-	// 标签数组,未来用于按 tag 智能注入
+	// Tag array, future use for smart injection by tag
 	Tags []string `json:"tags"`
-	// 来源类别 (manual/agent/import); 取值由 specmemory.Source 管理
+	// Source category (manual/agent/import); values managed by specmemory.Source
 	Source string `json:"source"`
-	// 人工创建者 user_id; agent 写入时为 NULL
+	// Human creator user_id; NULL on agent writes
 	CreatedBy pgtype.UUID `json:"created_by"`
-	// agent 写入时记录 connector:agentID; 人工创建时为空字符串
+	// On agent writes, records connector:agentID; empty string on human creation
 	AgentActor string             `json:"agent_actor"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=未删除
+	// Soft-delete timestamp; NULL = not deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// LLM 调用用量记录表
+// LLM call usage records
 type UsageLog struct {
-	// 计费记录主键
+	// Billing record primary key
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 关联 run
+	// Associated run
 	AgentRunID pgtype.UUID `json:"agent_run_id"`
-	// provider 标识
+	// Provider identifier
 	Provider string `json:"provider"`
-	// 模型 key
+	// Model key
 	Model string `json:"model"`
-	// 输入 token 数, 非负
+	// Input token count, non-negative
 	InputTokens int32 `json:"input_tokens"`
-	// 输出 token 数, 非负
+	// Output token count, non-negative
 	OutputTokens int32 `json:"output_tokens"`
-	// 折算成本(USD)
+	// Converted cost (USD)
 	CostUsd pgtype.Numeric `json:"cost_usd"`
-	// 原始调用元数据
+	// Raw call metadata
 	Raw []byte `json:"raw"`
-	// 记录创建时间
+	// Record creation time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// 平台核心人员表
+// Platform-wide user table
 type User struct {
-	// 内部用户 ID
+	// Internal user ID
 	ID pgtype.UUID `json:"id"`
-	// 业务唯一标识
+	// Business-unique identifier
 	Email string `json:"email"`
-	// 用户显示名
+	// User display name
 	Name string `json:"name"`
-	// 账号状态: active=正常 / disabled=被禁用
+	// Account status: active = normal / disabled = banned
 	Status string `json:"status"`
-	// 注册时间
+	// Registration time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近修改时间
+	// Last updated at
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=未删除
+	// Soft-delete timestamp; NULL = not deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 用户外部能力凭据表
+// User-owned external capability credentials
 type UserCredential struct {
-	// 凭据 ID
+	// Credential ID
 	ID pgtype.UUID `json:"id"`
-	// 所属用户
+	// Owning user
 	UserID pgtype.UUID `json:"user_id"`
-	// 凭据类型; 由代码 registry 校验
+	// Credential type; validated against the code-side registry
 	Kind string `json:"kind"`
-	// 凭据展示名
+	// Credential display name
 	DisplayName string `json:"display_name"`
-	// 加密后的凭据密文
+	// Encrypted credential ciphertext
 	Ciphertext []byte `json:"ciphertext"`
-	// 加密密钥版本
+	// Encryption key version
 	KeyVersion string `json:"key_version"`
-	// 最近使用时间
+	// Most recent use time
 	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	// 最近修改时间
+	// Last updated at
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳
+	// Soft-delete timestamp
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// 用户登录会话表
+// User login sessions
 type UserSession struct {
-	// 会话 token
+	// Session token
 	ID string `json:"id"`
-	// 会话所属用户
+	// Owning user
 	UserID pgtype.UUID `json:"user_id"`
-	// 登录设备 UA
+	// Login device UA
 	UserAgent string `json:"user_agent"`
-	// 登录来源 IP
+	// Login source IP
 	Ip string `json:"ip"`
-	// 会话创建时间
+	// Session creation time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	// 最近请求时间
+	// Most recent request time
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
-	// 过期时间
+	// Expiration time
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	// 主动注销时间; NULL=未撤销
+	// Explicit logout time; NULL = not revoked
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 }
 
-// 团队级租户容器
+// Team-level tenant container
 type Workspace struct {
-	// workspace 内部 ID
+	// Internal workspace ID
 	ID pgtype.UUID `json:"id"`
-	// 展示名
+	// Display name
 	Name string `json:"name"`
-	// URL/CLI 标识
+	// URL/CLI identifier
 	Slug string `json:"slug"`
-	// 可见性: public=可被其他用户发现并申请加入 / private=仅邀请
+	// Visibility: public = discoverable and joinable by request / private = invite-only
 	Visibility string `json:"visibility"`
-	// workspace JSON 配置
+	// Workspace JSON config
 	Config []byte `json:"config"`
-	// 创建人
+	// Created by
 	CreatedBy pgtype.UUID        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=未删除
+	// Soft-delete timestamp; NULL = not deleted
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// workspace 维度的 IM 连接器绑定(feishu/slack/discord 统一存储)
+// Workspace-level IM connector bindings (feishu/slack/discord stored together)
 type WorkspaceImConnector struct {
-	// 连接器主键
+	// Connector primary key
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// IM 平台: feishu / slack / discord / teams
+	// IM platform: feishu / slack / discord / teams
 	Platform string `json:"platform"`
-	// 平台应用 ID(配置时即可知, workspace-bot 的通用 join key)
+	// Platform app ID (known at config time; universal join key for workspace-bot)
 	AppID string `json:"app_id"`
-	// 是否启用(启用后 reconciler 才会为其建立入站连接)
+	// Whether enabled (only then does the reconciler establish an inbound connection)
 	Enabled bool `json:"enabled"`
-	// 非敏感配置 + 密钥引用(*_ref 指向 secrets.id; 含 event_mode/intents 等)
+	// Non-sensitive config + secret references (*_ref points to secrets.id; includes event_mode/intents/etc.)
 	Config []byte `json:"config"`
-	// 创建人
+	// Created by
 	CreatedBy pgtype.UUID        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=有效
+	// Soft-delete timestamp; NULL = active
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
-// workspace 成员与角色表(含申请状态机)
+// Workspace members and roles (with join-request state machine)
 type WorkspaceMember struct {
 	ID pgtype.UUID `json:"id"`
-	// 所属 workspace
+	// Owning workspace
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	// 所属用户
+	// Owning user
 	UserID pgtype.UUID `json:"user_id"`
-	// 工作区角色: owner=拥有者 / admin=管理员 / member=普通成员 / viewer=只读
+	// Workspace role: owner / admin / member / viewer (read-only)
 	Role string `json:"role"`
-	// 成员状态: pending=待审批 / active=正式成员 / rejected=申请被拒(保留行做审计)
+	// Membership status: pending / active / rejected (row kept for audit)
 	Status string `json:"status"`
-	// 用户提交申请时的理由(可空); active 行无意义
+	// Reason submitted with the join request (nullable); meaningless on active rows
 	RequestReason pgtype.Text `json:"request_reason"`
-	// 审批人 user_id(同意或拒绝时填入)
+	// Reviewer user_id (set on approve or reject)
 	ReviewedBy pgtype.UUID `json:"reviewed_by"`
-	// 审批时间(同意或拒绝时填入)
+	// Review time (set on approve or reject)
 	ReviewedAt pgtype.Timestamptz `json:"reviewed_at"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	// 软删除时间戳; NULL=当前有效成员
+	// Soft-delete timestamp; NULL = currently active member
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }

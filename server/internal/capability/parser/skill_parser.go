@@ -30,7 +30,7 @@ var frontmatterPattern = regexp.MustCompile(`(?s)\A---\r?\n(.*?)\r?\n---\r?\n?`)
 
 // ParseSkill converts a pasted markdown skill file into a canonical.Spec.
 // Frontmatter handling is best-effort: yaml.v3 first, then a line-based
-// fallback for values like `description: 流程是: 解析输入` that confuse the
+// fallback for values like `description: The flow is: parse input` that confuse the
 // YAML mapping detector. Slug is no longer required at parse time —
 // commitCapabilityImport derives one from the form name (or a random
 // fallback) so an unparseable frontmatter never blocks import.
@@ -54,7 +54,7 @@ func ParseSkill(raw string, format SourceFormat) (SkillParseResult, error) {
 		slug = kebabFromName(front.Name)
 	}
 	if slug == "" {
-		warnings = append(warnings, "frontmatter 未提供 slug 或 name —— 提交时会用表单里填写的名称派生 slug")
+		warnings = append(warnings, "frontmatter provided no slug or name — on submit the slug will be derived from the name entered in the form")
 	}
 
 	title := strings.TrimSpace(front.Title)
@@ -103,10 +103,10 @@ func splitSkillDoc(raw string) (skillFrontmatter, string, []string) {
 		// YAML failed; fall back to line-based extraction of the five known keys.
 		fallback, recovered := parseFrontmatterLines(yamlBlock)
 		if recovered {
-			warnings = append(warnings, fmt.Sprintf("frontmatter YAML 解析失败,已用简单字段提取兜底: %v", err))
+			warnings = append(warnings, fmt.Sprintf("frontmatter YAML parse failed, fell back to simple field extraction: %v", err))
 			return fallback, body, warnings
 		}
-		warnings = append(warnings, fmt.Sprintf("frontmatter YAML 解析失败且无法字段提取兜底,请在弹窗里手动填写名称: %v", err))
+		warnings = append(warnings, fmt.Sprintf("frontmatter YAML parse failed and field extraction fallback also failed, please fill the name manually in the dialog: %v", err))
 		return skillFrontmatter{}, body, warnings
 	}
 	return front, body, warnings

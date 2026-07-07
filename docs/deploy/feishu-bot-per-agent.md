@@ -1,266 +1,302 @@
-# 飞书 Bot 接入指南（per-Agent / shared）
+# Feishu Bot connection guide (per-Agent / shared)
 
-本文档面向把 Parsar Agent 暴露成飞书机器人的运维 / 项目管理员，覆盖两种接入方式：
+For operators and project admins who want to expose a Parsar Agent as a Feishu
+bot. Covers both connection modes:
 
-- `direct`（默认）：一个飞书 Bot 绑定一个 Agent。
-- `shared`：一个统一飞书 Bot 作为入口，用户在飞书里用 `/list`、`/select` 切换目标 Agent。
+- `direct` (default): one Feishu Bot bound to one Agent.
+- `shared`: a single unified Feishu Bot acts as the entry point; users switch
+  the target Agent inside Feishu via `/list` and `/select`.
 
-端到端流程仍然是：**飞书开放平台建 Bot 应用 → Parsar secret vault 灌凭证 → 在 Agent 详情页绑定 → 把 Bot 加进飞书群 → 群里 @ Bot 跑通**。
+The end-to-end flow is always: **create a Bot app on the Feishu Open
+Platform → inject credentials into the Parsar secret vault → bind on the
+Agent detail page → add the Bot to a Feishu group → @ the Bot in the group to
+verify**.
 
-适用部署：开源版本和内部部署都一样。本流程不依赖任何 fork-only 代码。
+Applies to both open-source and internal deployments — no fork-only code is
+involved.
 
-> **架构边界（先读再做）**
+> **Architectural boundary (read first)**
 >
-> Parsar 把飞书"自建应用"分两类，对应不同 Parsar 资源：
+> Parsar splits Feishu "custom apps" into two categories that correspond to
+> different Parsar resources:
 >
-> | 应用类型 | 用途 | 配置位置 | 数量 |
+> | App type | Purpose | Configuration | Count |
 > | --- | --- | --- | --- |
-> | **OAuth 平台应用** | Parsar 用户用飞书账号登录 Web 后台 | env `PARSAR_FEISHU_APP_ID/SECRET` | 一个 Parsar 实例固定 1 个 |
-> | **Bot 应用（本文档主题）** | direct：一个 Agent 的飞书入口；shared：统一命令入口 | `agents.config.connectors.feishu` | 默认每个挂飞书的 Agent 一个，也可配置共享 host Bot |
+> | **OAuth platform app** | Parsar users log in to the web UI with Feishu | env `PARSAR_FEISHU_APP_ID/SECRET` | Fixed at 1 per Parsar instance |
+> | **Bot app (subject of this doc)** | direct: Feishu entry point of one Agent; shared: unified command entry point | `agents.config.connectors.feishu` | Default one per Feishu-connected Agent; can also be configured as a shared host Bot |
 >
-> 这两件事产品语义完全不同，必须分开建（凭证泄露面、scope、生命周期都不同）。
-> 详见 `docs/feishu-routing.md §2`。
+> These two are semantically different products and must be created
+> separately (different credential exposure surfaces, scopes, and
+> lifecycles). See `docs/feishu-routing.md §2` for the deeper rationale.
 >
-> **OAuth 应用如何建** → 看 `docs/deploy/feishu-prod.md`，**不在本文档范围**。
-> 本文档只讲 Bot 应用。
+> **How to create the OAuth app** → see `docs/deploy/feishu-prod.md`; **not in
+> the scope of this document**. This document only covers Bot apps.
 
 ---
 
-## 0. 前置条件
+## 0. Prerequisites
 
-开干前确认：
+Before you start, verify:
 
-- [ ] Parsar server 已经 deploy 并通过 `smoke.sh --core`（详见 `deploy-runbook.md`）
-- [ ] 你已经用飞书账号登录 Parsar Web，并且是目标 workspace 的 **owner / admin**
-  （Bot 配置 RBAC 限制 owner / admin；普通 member 看不到表单）
-- [ ] 已经创建至少一个 Agent（connector_type = agent_daemon 或 http）
-- [ ] 你在飞书租户里有创建自建应用的权限（一般 IT 管理员开通；个人 lark.com 也行）
-- [ ] Parsar server 对外有可访问 HTTPS 域名（飞书事件订阅强制 HTTPS）
+- [ ] Parsar server is deployed and passes `smoke.sh --core` (see `deploy-runbook.md`).
+- [ ] You have logged in to the Parsar web UI with your Feishu account and are the **owner / admin** of the target workspace (the Bot config is RBAC-gated to owner / admin; regular members do not see the form).
+- [ ] You have created at least one Agent (connector_type = agent_daemon or http).
+- [ ] You have permission in the Feishu tenant to create custom apps (usually granted by the IT admin; personal lark.com accounts also work).
+- [ ] Parsar server has a publicly reachable HTTPS domain (Feishu event subscriptions require HTTPS).
 
-如果上面任一项缺，先回 `deploy-runbook.md` / `feishu-prod.md` 补齐。
+If any of the above is missing, go back to `deploy-runbook.md` /
+`feishu-prod.md` and complete them first.
 
 ---
 
-## 1. 飞书开放平台：建 Bot 自建应用
+## 1. Feishu Open Platform: create the Bot custom app
 
-### 1.1 创建应用
+### 1.1 Create the app
 
-1. 打开 [飞书开放平台](https://open.feishu.cn/app)（lark.com 用户用 `https://open.larksuite.com/app`）。
-2. 「创建企业自建应用」→ 填名称（建议带 Agent 名，如 `Parsar · 产品答疑 Bot`）+ 简介 + 图标。
-3. **不要**复用 OAuth 平台应用的那一个。你要的就是另起炉灶的一个新应用。
+1. Open the [Feishu Open Platform](https://open.feishu.cn/app) (Lark users go to `https://open.larksuite.com/app`).
+2. Click "Create custom app" → fill in name (a good pattern is to include the Agent name, e.g. `Parsar · Product Q&A Bot`), description, icon.
+3. **Do not** reuse the OAuth platform app. This must be a brand-new, independent app.
 
-### 1.2 记录基础凭证
+### 1.2 Record the base credentials
 
-应用创建后进入「凭证与基础信息」页，**记录 4 个值**（待会儿要灌进 Parsar）：
+Once the app is created, go to "Credentials & Basic Info" and **record four values** (you will inject them into Parsar shortly):
 
-| 飞书后台名称 | Parsar 字段 | 备注 |
+| Feishu console name | Parsar field | Notes |
 |---|---|---|
-| App ID | `app_id` | 形如 `cli_a1b2c3d4e5f6g7h8` |
-| App Secret | App Secret（保存时自动写入 secret vault 并生成 `app_secret_ref`） | **只显示一次**，立刻拷下来 |
-| Verification Token | Verification Token（保存时自动写入 `verification_token_ref`） | 1.4 节配置事件订阅时拿 |
-| Encrypt Key（可选） | Encrypt Key（保存时自动写入 `encrypt_key_ref`） | 1.4 节如果开启事件加密才有 |
+| App ID | `app_id` | Looks like `cli_a1b2c3d4e5f6g7h8` |
+| App Secret | App Secret (auto-written into the secret vault on save, produces `app_secret_ref`) | **Displayed only once** — copy it immediately |
+| Verification Token | Verification Token (auto-written into `verification_token_ref` on save) | Retrieved from §1.4 event subscription |
+| Encrypt Key (optional) | Encrypt Key (auto-written into `encrypt_key_ref` on save) | Only present when event encryption is enabled in §1.4 |
 
-> **永远不要把这 4 个值 commit 进任何 repo 或 docs 默认值。** 它们走 Parsar
-> secret vault（运行时加密 + 审计），明文只在你本地剪贴板里短暂存在。
+> **Never commit these four values into any repo or docs default.** They flow
+> through the Parsar secret vault (runtime encryption + audit); the plaintext
+> only briefly exists on your local clipboard.
 
-### 1.3 申请权限（scope）
+### 1.3 Request permissions (scopes)
 
-进「权限管理」页，**至少申请**：
+Go to "Permission Management" and request at least:
 
-| Scope | 用途 |
+| Scope | Purpose |
 |---|---|
-| `im:message` | 接收 IM 消息事件 |
-| `im:message.group_at_msg:readonly` | 接收群里 @Bot 的消息 |
-| `im:message.p2p_msg:readonly` | 接收 p2p 私聊消息（如果想 1:1 也能聊） |
-| `im:message:send_as_bot` | 以 Bot 身份发消息 |
-| `im:chat:readonly` | 读群信息（出站发消息要 chat_id） |
-| `contact:user.id:readonly` | 把消息发送人 open_id 映射到 union_id（visibility gate 需要） |
+| `im:message` | Receive IM message events |
+| `im:message.group_at_msg:readonly` | Receive @Bot messages in groups |
+| `im:message.p2p_msg:readonly` | Receive p2p private messages (if you want 1:1 chat too) |
+| `im:message:send_as_bot` | Send messages as the Bot |
+| `im:chat:readonly` | Read chat info (outbound sends need chat_id) |
+| `contact:user.id:readonly` | Map the sender's open_id to union_id (needed by the visibility gate) |
 
-申请后**必须发布版本并让租户管理员审批**，否则 scope 不生效。
+After requesting scopes you **must** publish a version and get tenant-admin
+approval; scopes are inactive until then.
 
-> **企业管理员通常不会立刻批。** 提交后跟 IT 同事打个招呼加速。审批不通过这条链路就废了。
+> **Enterprise admins usually do not approve immediately.** Ping IT to speed
+> things along after submission. If the approval is rejected, this path is dead.
 
-### 1.4 开启「机器人」能力
+### 1.4 Enable the "Bot" capability
 
-进「应用能力 → 机器人」，**点击开启**。
+Go to "App Capabilities → Bot" and **click Enable**.
 
-> 飞书"自建应用"默认只是个 OAuth 容器；不开机器人能力的话 Bot 没法被加进群、@Bot 也收不到事件。**这是最常被漏的一步**。
+> By default a Feishu "custom app" is only an OAuth container; without the
+> Bot capability enabled, the Bot cannot be added to a group and no @Bot
+> events reach you. **This is the most commonly missed step.**
 
-### 1.5 配置事件订阅
+### 1.5 Configure event subscription
 
-进「事件订阅」页：
+Go to "Event Subscription":
 
-1. **请求地址**：填 `https://<your-parsar-domain>/api/v1/feishu/events/message`
-   - 必须 HTTPS，飞书拒绝 HTTP
-   - 路径**就是 `/api/v1/feishu/events/message`**，不要改名
-2. **Verification Token**：飞书会自动生成。**拷下来**——下面 §3 的绑定卡片会自动存进 secret vault
-3. **加密（可选）**：如果点开「事件加密」，会生成 Encrypt Key——**拷下来**
-4. 点「保存」时飞书会发一个 `url_verification` 挑战，Parsar 内置 handler 自动回 `{"challenge":"..."}`
-   - 失败时排查：见 `feishu-prod.md §6.1 / §6.2`
-5. **订阅事件**：在事件列表里至少订阅
-   - `im.message.receive_v1`（接收消息事件，最重要）
+1. **Request URL**: `https://<your-parsar-domain>/api/v1/feishu/events/message`
+   - Must be HTTPS; Feishu rejects HTTP.
+   - The path is **exactly** `/api/v1/feishu/events/message`; do not rename.
+2. **Verification Token**: Feishu auto-generates one. **Copy it** — the bind
+   card in §3 below writes it into the secret vault automatically.
+3. **Encryption (optional)**: if you enable "Event Encryption", an Encrypt
+   Key is generated — **copy it too**.
+4. When you click "Save", Feishu sends a `url_verification` challenge; the
+   built-in Parsar handler auto-replies `{"challenge":"..."}`.
+   - If this fails, see `feishu-prod.md §6.1 / §6.2` for troubleshooting.
+5. **Subscribe to events**: at minimum enable
+   - `im.message.receive_v1` (message-received event; the important one).
 
-> 订阅事件后**一定要再次发布版本**让租户管理员审批，否则订阅不生效。
+> After subscribing you **must publish a new version** and get tenant-admin
+> approval, otherwise the subscription is inactive.
 
 ---
 
-## 2. Parsar：Secret Vault 保存规则
+## 2. Parsar: secret vault storage rules
 
-不需要先去「Secrets」页手动创建这些条目。Agent 详情页的飞书 Bot 绑定卡片会在保存时把 App Secret / Verification Token / Encrypt Key 自动写入 Secret Vault，并且只把 `app_secret_ref` / `verification_token_ref` / `encrypt_key_ref` 存进 Agent 配置。
+You do not have to manually pre-create these entries on the Secrets page.
+On save, the Feishu Bot bind card on the Agent detail page automatically
+writes App Secret / Verification Token / Encrypt Key into the secret vault,
+and only stores `app_secret_ref` / `verification_token_ref` /
+`encrypt_key_ref` into the Agent config.
 
-> Secret vault 用 `PARSAR_MASTER_KEY` 加密；vault 里只存密文，UI 永远不回显明文（只显示 masked 预览）。
+> The secret vault encrypts with `PARSAR_MASTER_KEY`; only ciphertext lives
+> in the vault, and the UI never re-displays plaintext (only a masked preview).
 
-自动创建的 Secret 使用以下约定（Encrypt Key 可选）：
+The auto-created secrets use these conventions (Encrypt Key is optional):
 
-| kind | provider | payload 字段 |
+| kind | provider | payload field |
 |---|---|---|
 | `feishu_app_secret` | `feishu` | `app_secret` |
 | `feishu_verification_token` | `feishu` | `verification_token` |
-| `feishu_encrypt_key` *(仅事件加密开启时)* | `feishu` | `encrypt_key` |
+| `feishu_encrypt_key` *(only when event encryption is on)* | `feishu` | `encrypt_key` |
 
-后续轮换时，在绑定卡片里重新输入新值并保存即可；留空表示继续使用当前已保存的 Secret。
-
----
-
-## 3. Parsar：在 Agent 详情页绑定 Bot
-
-进「Agents」页（`?admin=agents`），选你要挂 Bot 的 Agent → **Connector tab**。
-
-下面会看到两块：
-
-- 上面：现有的 connector 信息（agent_daemon / http）
-- 下面：**「飞书 Bot 绑定」卡片**
-
-在「飞书 Bot 绑定」卡片填：
-
-| 字段 | 值来源 | 必填 |
-|---|---|---|
-| Bot 接入 | 选择「默认 Bot」或「独立 Bot」 | 默认 Bot 不需要单独填写飞书应用 |
-| App ID | 1.2 节的 App ID | 独立 Bot 启用时必填 |
-| App Secret | 1.2 节的 App Secret；保存时自动存成 Secret | 没有已保存值时必填 |
-| Verification Token | 1.5 节拷的 Verification Token；保存时自动存成 Secret | webhook 模式且没有已保存值时必填 |
-| Encrypt Key（可选） | 1.5 节拷的 Encrypt Key；保存时自动存成 Secret | 仅事件加密开启时填 |
-| Bot Open ID（可选） | 留空，第一次跑通后再回填（见 §5） | 选填 |
-
-点「保存」。选择「独立 Bot」后，这个 Agent 会从默认 Bot 的可选列表中移除。
-
-**可能的错误**：
-
-| 错误 | 含义 | 解决 |
-|---|---|---|
-| `feishu_connector_incomplete`（422） | 勾了启用但有必填没填 | 检查 App ID + App Secret + Verification Token |
-| `feishu_app_id_in_use`（409） | 这个 App ID 已经绑在本实例的另一个启用 Agent 上 | 换 App ID，或先把那个 Agent 的飞书绑定 disable |
-| 红字"无可用 Secret" | 当前 workspace 没有 active Secret | 回 §2 创建 Secret |
-
-保存成功后 audit 会落一条 `agent.feishu_connector.updated`。
+To rotate later, re-enter the new value in the bind card and save; leaving
+the field blank means "keep using the currently stored Secret".
 
 ---
 
-## 4. 飞书租户：把 Bot 加进群（或 1:1）
+## 3. Parsar: bind the Bot on the Agent detail page
 
-### 4.1 群聊
+Go to the "Agents" page (`?admin=agents`), pick the Agent you want to attach
+a Bot to → **Connector tab**.
 
-1. 在飞书任意群点设置 → 群机器人 → 添加机器人
-2. 搜你 §1.1 建的 Bot 名 → 添加
-3. direct 模式：群成员 **@Bot** 发消息 → 应该被 Parsar 收到 → 触发当前 Agent run → Bot 回消息
-4. shared 模式：群成员先 **@Bot /list**，再 **@Bot /select <编号或 slug>**，之后普通消息进入选中的 Agent → Bot 回消息
+You will see two blocks:
 
-### 4.2 1:1 私聊
+- Top: existing connector info (agent_daemon / http).
+- Bottom: **the "Feishu Bot binding" card**.
 
-1. 飞书全局搜 Bot 名 → 直接发消息（部分租户管理员策略可能禁用，看 IT 配置）
+Fill in the Feishu Bot binding card:
 
-> **Agent visibility 必须 ≥ 发起人覆盖范围**：
+| Field | Source | Required |
+|---|---|---|
+| Bot connection | Pick "Default Bot" or "Dedicated Bot" | Default Bot requires no separate Feishu app details |
+| App ID | App ID from §1.2 | Required when Dedicated Bot is enabled |
+| App Secret | App Secret from §1.2; auto-saved as a Secret | Required when no stored value exists |
+| Verification Token | Verification Token from §1.5; auto-saved as a Secret | Required in webhook mode when no stored value exists |
+| Encrypt Key (optional) | Encrypt Key from §1.5; auto-saved as a Secret | Only when event encryption is enabled |
+| Bot Open ID (optional) | Leave blank; fill after the first successful run (see §5) | Optional |
+
+Click Save. Once you pick "Dedicated Bot", this Agent is removed from the
+Default Bot's selectable list.
+
+**Possible errors:**
+
+| Error | Meaning | Fix |
+|---|---|---|
+| `feishu_connector_incomplete` (422) | Enabled but required field missing | Check App ID + App Secret + Verification Token |
+| `feishu_app_id_in_use` (409) | The App ID is already bound to another enabled Agent on this instance | Use a different App ID, or disable the Feishu binding of the other Agent first |
+| Red "No available Secret" | Current workspace has no active Secret | Go back to §2 and create a Secret |
+
+On success, audit records `agent.feishu_connector.updated`.
+
+---
+
+## 4. Feishu tenant: add the Bot to a group (or 1:1)
+
+### 4.1 Group chat
+
+1. In any Feishu group: Settings → Group bots → Add bot.
+2. Search for the Bot name you created in §1.1 → Add.
+3. direct mode: a group member **@Bot** with a message → should be received by Parsar → triggers a run on the current Agent → Bot replies.
+4. shared mode: the member first **@Bot /list**, then **@Bot /select <index or slug>**; subsequent plain messages route to the selected Agent → Bot replies.
+
+### 4.2 1:1 private chat
+
+1. Global-search the Bot name in Feishu → send a direct message (some tenant policies disable this; check with IT).
+
+> **Agent visibility must be ≥ the sender's reachable scope:**
 >
-> - `visibility=workspace`（默认）：只接受该 workspace 成员的 @Bot
-> - `visibility=tenant`：所有已注册 Parsar 用户都能 @Bot
-> - `visibility=public`：任何飞书用户都能 @Bot（含未注册）
+> - `visibility=workspace` (default): only accepts @Bot from members of that workspace.
+> - `visibility=tenant`: all registered Parsar users can @Bot.
+> - `visibility=public`: any Feishu user can @Bot (including those not yet registered on Parsar).
 >
-> 在 Agent 详情页的 Overview tab 改 visibility（owner/admin 权限）。
-> 详见 `docs/feishu-routing.md §3`。
+> Change visibility on the Agent detail page's Overview tab (owner/admin
+> permission). See `docs/feishu-routing.md §3`.
 
-### 4.3 群里 @Bot 不回的常见原因
+### 4.3 Common reasons a group @Bot gets no reply
 
-| 现象 | 原因 | 排查 |
+| Symptom | Cause | Diagnosis |
 |---|---|---|
-| @Bot 完全无反应，Parsar 没收到 webhook | 事件订阅 URL 不通 / scope 没审批 | 飞书后台「事件订阅」点测试连接；检查租户管理员是否审批了 `im:message` scope |
-| Parsar 收到 webhook 但日志说 `unknown app_id` | App ID 没写进 Agent 配置 / Agent 没启用 / Agent 已删 | 检查 Agent 详情页的 `enabled` 勾选；DB 里 `select config->'connectors'->'feishu' from agents where id=...` |
-| Parsar 收到 webhook + 路由到了 Agent 但 visibility 拒绝 | 发起人不在 visibility 范围 | 检查 Agent visibility + 发起人是否已注册 Parsar |
-| Agent 跑了但 Bot 没回 | 出站 worker 没起来 / 凭证错 / 飞书 API 报错 | server 日志 grep `inflight`；检查 `PARSAR_FEISHU_OUTBOUND=true` env 是否打开 |
+| @Bot gets zero reaction; Parsar receives no webhook | Event subscription URL unreachable / scopes not approved | Click "Test connection" on the Feishu event-subscription page; check whether the tenant admin approved the `im:message` scope |
+| Parsar receives the webhook but logs say `unknown app_id` | App ID missing from Agent config / Agent disabled / Agent deleted | Check the Agent detail page's `enabled` toggle; in the DB run `select config->'connectors'->'feishu' from agents where id=...` |
+| Parsar receives the webhook and routes to the Agent, but visibility rejects | Sender is out of the visibility scope | Check Agent visibility + whether the sender is a registered Parsar user |
+| The Agent ran but the Bot did not reply | Outbound worker not up / bad credentials / Feishu API error | Grep the server log for `inflight`; verify that `PARSAR_FEISHU_OUTBOUND=true` env is set |
 
 ---
 
-## 4.4 AgentRun 回写验收
+## 4.4 AgentRun write-back verification
 
-真实飞书端 E2E 时，除了确认 Parsar 收到入站事件，还要确认 AgentRun 结果会回到同一条飞书消息 thread：
+For real-Feishu E2E, beyond confirming that Parsar received the inbound
+event, also confirm the AgentRun result is written back to the same Feishu
+message thread:
 
-| 场景 | 期望 |
+| Scenario | Expectation |
 |---|---|
-| Agent 正常输出文本 | Bot 在原群聊 / 私聊 thread 回复 Agent 输出 |
-| Agent 完成但没有输出 | Bot 回复 `Runtime completed this run with no output.` |
-| Agent 执行失败 | Bot 回复一条用户可见失败提示；详细错误仍在 Parsar Run detail / lifecycle event 中排查 |
+| Agent produces normal text output | Bot replies with the Agent output in the original group / DM thread |
+| Agent completes with no output | Bot replies `Runtime completed this run with no output.` |
+| Agent execution fails | Bot posts a user-visible failure message; detailed errors remain in Parsar Run detail / lifecycle events for triage |
 
-若 Parsar 里能看到 run 已经 completed / failed，但飞书没有回复：
+If Parsar shows the run as completed / failed but no reply arrives on
+Feishu:
 
-1. 确认 `PARSAR_FEISHU_OUTBOUND=true`，并检查 server 日志里的 `inflight` 发送 / 重试记录。
-2. 查对应 conversation 是否是飞书来源：`conversations.platform='feishu'` 且 `external_id` 非空。
-3. 查 run 产出的 agent message metadata 是否包含 `run_id`，且没有 `gateway_delivered_at`。
-4. 若 message 已有 `gateway_retry_next_at`，等待退避窗口或查看上一条飞书 API 错误。
-5. 若 message 已有 `gateway_delivery_status='dead'`，说明超过重试上限，需要按日志里的飞书错误修配置后重新触发。
+1. Verify `PARSAR_FEISHU_OUTBOUND=true` and check the server log for `inflight` send / retry entries.
+2. Verify the conversation is Feishu-sourced: `conversations.platform='feishu'` and `external_id` is non-empty.
+3. Verify the run's agent message metadata carries `run_id` and lacks `gateway_delivered_at`.
+4. If the message already has `gateway_retry_next_at`, wait for the backoff window or inspect the last Feishu API error.
+5. If the message shows `gateway_delivery_status='dead'`, the retry limit was hit; fix per the logged Feishu error and re-trigger.
 
-## 5. 加固：填 Bot Open ID（推荐）
+## 5. Hardening: fill in Bot Open ID (recommended)
 
-第一次跑通后回到 §3 的 Agent Connector tab，回填 **Bot Open ID**：
+After the first successful run, go back to §3's Agent Connector tab and fill
+in **Bot Open ID**:
 
-1. 飞书后台 → 应用 → 「凭证与基础信息」页，找 **Bot 的 open_id**（形如 `ou_xxxxxxxx`）
-2. 填进 Parsar Agent 详情页的 Bot Open ID 字段 → 保存
+1. Feishu console → App → "Credentials & Basic Info", find the **Bot's open_id** (like `ou_xxxxxxxx`).
+2. Enter it in the Bot Open ID field on the Parsar Agent detail page → Save.
 
-**为什么填**：避免 Bot 把自己刚发的消息当成新的入站事件（消息环路自吃）。
-不填也能跑，但极端情况会环路放大流量。
-
----
-
-## 6. 多 Agent：默认 Bot 与独立 Bot
-
-### 6.1 默认 Bot：团队入口
-
-默认 Bot 是团队入口，不需要在当前 Agent 上单独填写飞书应用。没有绑定独立 Bot 的 Agent 可以留在默认 Bot 的可选列表里，由默认入口统一承接。
-
-### 6.2 独立 Bot：每个 Agent 一个 Bot
-
-如果某个 Agent 需要单独的飞书应用、单独进群或单独做权限治理，选择「独立 Bot」，然后重复 §1 → §3 流程。保存后，这个 Agent 会从默认 Bot 的可选列表中移除，入站和出站都走它自己的 Bot 凭证。
-
-**反例（不要这么干）**：
-
-- ❌ 两个启用的独立 Bot Agent 共用同一个 Bot App ID → 409 `feishu_app_id_in_use`，硬阻止
-- ❌ 在 OAuth 平台应用上加机器人能力 → 凭证耦合，未来 OAuth 凭证泄露会牵连所有 Bot
+**Why**: prevents the Bot from treating its own outgoing messages as fresh
+inbound events (message self-loop). It runs without this too, but under
+edge cases the loop can amplify traffic.
 
 ---
 
-## 7. 安全注意事项
+## 6. Multiple Agents: Default Bot vs Dedicated Bot
 
-- App Secret / Verification Token / Encrypt Key **永远不进 repo**，全部走 Secret vault
-- 任何文档 / `.env.example` 模板里只放 `<placeholder>`，真值仅在部署 env 或 vault
-- `bot_open_id` 不是密文，可以放 jsonb config（事实上就在 `agents.config.connectors.feishu.bot_open_id`）
-- 改 visibility 是高敏感操作（特别是切到 `public`），仅 workspace owner/admin 可操作，会写 audit `agent.visibility.changed`
-- 改 Bot 绑定本身也写 audit `agent.feishu_connector.updated`，含 old/new app_id 但**不含 *_ref 值**
+### 6.1 Default Bot: team-wide entry point
+
+The Default Bot is a team-wide entry point; you do not need to fill in
+Feishu app details on individual Agents. Agents that have not bound a
+Dedicated Bot can remain in the Default Bot's selectable list and be served
+through the unified entry.
+
+### 6.2 Dedicated Bot: one Bot per Agent
+
+If an Agent needs its own Feishu app — its own group presence or its own
+permission governance — pick "Dedicated Bot" and repeat §1 → §3. After
+saving, the Agent is removed from the Default Bot's selectable list; both
+inbound and outbound traffic use its own Bot credentials.
+
+**Anti-patterns (do not do this):**
+
+- ❌ Two enabled Dedicated-Bot Agents sharing the same Bot App ID → 409 `feishu_app_id_in_use`, hard-blocked.
+- ❌ Enabling the Bot capability on the OAuth platform app → credential coupling; a future OAuth credential leak drags every Bot down with it.
 
 ---
 
-## 8. 已知限制（follow-up）
+## 7. Security notes
 
-| 项 | 现状 | 跟进 |
+- App Secret / Verification Token / Encrypt Key **never enter the repo**; they all flow through the Secret vault.
+- Any docs / `.env.example` template only ever contains `<placeholder>`; real values live only in the deploy env or vault.
+- `bot_open_id` is not sensitive; it can sit in the jsonb config (it does, in `agents.config.connectors.feishu.bot_open_id`).
+- Changing visibility is a high-sensitivity operation (especially switching to `public`); it is restricted to workspace owner/admin and writes an audit record `agent.visibility.changed`.
+- Changing the Bot binding itself also writes audit record `agent.feishu_connector.updated`, including old/new app_id — but **not** the `*_ref` values.
+
+---
+
+## 8. Known limitations (follow-up)
+
+| Item | Current state | Follow-up |
 |---|---|---|
-| Bot 凭证轮换后出站 worker token 缓存 | 最长 ≤7200s token TTL 内继续用旧 token | 跟进让 PATCH 主动 invalidate worker token cache |
-| 同 app_id 并发 PATCH 到两个 Agent 的 TOCTOU 窗口 | 应用层 probe + row lock 但无 UNIQUE 索引兜底 | 跟进加 `UNIQUE PARTIAL INDEX WHERE enabled=true` |
-| Feishu Secret kind 仍是自由文本 | UI 自动创建时写入 `feishu_*` kind，但 server 暂不做 enum 校验 | 跟进 server 端注册 `feishu_*` kind enum |
-| 群即 conversation 语义 | 独立 Bot 模式仍按现有 conversation 续接规则 | 继续观察真实客户使用 |
-| OSS lazy mode（OAuth app = Bot app） | 未实现 | 跟进 env flag 允许复用 |
+| Outbound worker token cache after Bot credential rotation | Old token continues in use up to the ≤7200s token TTL | Add a way for PATCH to actively invalidate the worker token cache |
+| TOCTOU window when the same app_id is PATCHed concurrently to two Agents | Application-layer probe + row lock, without a UNIQUE index safety net | Add `UNIQUE PARTIAL INDEX WHERE enabled=true` |
+| Feishu Secret kind is still free text | The UI writes `feishu_*` kind on auto-creation, but the server does not enforce an enum | Server-side registration of a `feishu_*` kind enum |
+| Group-as-conversation semantics | Dedicated Bot mode still follows the current conversation-continuation rules | Watch real customer usage |
+| OSS lazy mode (OAuth app = Bot app) | Not implemented | An env flag to allow reuse |
 
 ---
 
-## 9. 相关文档
+## 9. Related docs
 
-- `docs/feishu-routing.md` — 飞书 IM 路由 + Agent visibility 设计 source-of-truth
-- `docs/deploy/feishu-prod.md` — OAuth 平台应用（用户登录）的生产配置
-- `docs/deploy/deploy-runbook.md` — 部署冷启动顺序
-- `docs/deploy/health-and-smoke.md` — 健康检查 + smoke 脚本
+- `docs/feishu-routing.md` — source-of-truth design for Feishu IM routing + Agent visibility.
+- `docs/deploy/feishu-prod.md` — production config for the OAuth platform app (user login).
+- `docs/deploy/deploy-runbook.md` — deploy cold-start order.
+- `docs/deploy/health-and-smoke.md` — health checks + smoke script.

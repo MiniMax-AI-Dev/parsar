@@ -80,7 +80,7 @@ type ActionResultCard struct {
 	Approved     bool           // permission verdict: rendered green when true, red when false
 	Rejected     bool           // credential submit rejected by the authorization gate
 	RejectReason string         // user-facing reason when Rejected (operator / chat mismatch)
-	Summary      string         // credential-saved / user-choice "已记录: …" summary line
+	Summary      string         // credential-saved / user-choice "Recorded: …" summary line
 }
 
 // ActionRouter consumes a decoded, neutral CardAction and returns the

@@ -29,8 +29,8 @@ func TestFeishuInboundReactionLookupsRoundTrip(t *testing.T) {
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		SenderEmail:       "admin@example.com",
-		Text:              "需要 reaction 的消息",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "message that needs a reaction",
+		Mentions:          []string{"@backend-agent"},
 		Source:            "gateway",
 		Gateway:           "feishu",
 		ExternalChatID:    "oc_reaction_test",

@@ -324,7 +324,7 @@ func TestConversationRunStreamStartRejectsNonQueuedMissingAndNonMember(t *testin
 func createStreamTestRun(t *testing.T, r http.Handler, ids store.DevFixtureIDs, userID string) string {
 	t.Helper()
 	path := "/api/v1/conversations/" + ids.ConversationID + "/messages"
-	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, path, `{"content":"请 @产品Agent 用流式回复"}`, userID))
+	res := serveConversationMessageRequest(r, newConversationMessageRequest(http.MethodPost, path, `{"content":"please @Product Agent reply in streaming mode"}`, userID))
 	if res.Code != http.StatusCreated {
 		t.Fatalf("create message status = %d body=%s, want 201", res.Code, res.Body.String())
 	}
@@ -696,7 +696,7 @@ func TestEventPersistencePayload_Thinking(t *testing.T) {
 // the contract: an EventDone without final content emits a payload that
 // includes a translated user_visible_message. The Feishu inflight driver
 // consumes this to render the terminal ErrorCard; without it the card
-// degrades to a generic "Agent 运行失败".
+// degrades to a generic "Agent run failed".
 func TestEventPersistencePayload_RunFailedCarriesUserVisibleMessage(t *testing.T) {
 	t.Parallel()
 	ev := connector.PromptEvent{
@@ -723,7 +723,7 @@ func TestEventPersistencePayload_RunFailedCarriesUserVisibleMessage(t *testing.T
 	if got, _ := payload["user_visible_message"].(string); got == "" {
 		t.Error("payload missing user_visible_message — driver ErrorCard would fall back to generic copy")
 	} else if got == "capability_credential_missing" {
-		t.Errorf("payload[\"user_visible_message\"] = %q, want it translated by mapUserFacingReason (e.g. mentions 凭据)", got)
+		t.Errorf("payload[\"user_visible_message\"] = %q, want it translated by mapUserFacingReason (e.g. mentions credential)", got)
 	}
 	if got, _ := payload["source"].(string); got != "agent_runtime" {
 		t.Errorf("payload[\"source\"] = %q, want agent_runtime preserved", got)

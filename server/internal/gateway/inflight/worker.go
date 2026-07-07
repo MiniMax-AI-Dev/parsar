@@ -105,7 +105,7 @@ type Storer interface {
 
 	// ClaimPendingQueuedFeishuRuns must use a claim CTE — without it,
 	// every sibling pod's tick SELECT-ed the same queued runs and the
-	// user got N duplicates of the same "排队中" card.
+	// user got N duplicates of the same "Queued" card.
 	ClaimPendingQueuedFeishuRuns(ctx context.Context, input store.ClaimPendingQueuedFeishuRunsInput) ([]store.PendingQueuedFeishuRun, error)
 	QueuePositionForRun(ctx context.Context, runID string) (int, error)
 	StampQueueCardSent(ctx context.Context, runID string, now time.Time) error
@@ -379,7 +379,7 @@ func (w *Worker) Run(ctx context.Context) error {
 // worker deterministically without Run + sleeps.
 //
 // Delegates to:
-//   - QueueCardTickOnce: one-shot "排队中" placeholders for queued runs
+//   - QueueCardTickOnce: one-shot "Queued" placeholders for queued runs
 //   - InflightTickOnce: per-conversation working/permission card
 //     patching for the run currently holding the inflight slot
 //

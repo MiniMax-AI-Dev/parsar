@@ -51,7 +51,7 @@ func TestCapabilityCreateRequiresWorkspaceAdmin(t *testing.T) {
 }
 
 // TestCapabilityListFiltersByTypeAndName exercises the ?type and ?name query
-// params plumbed from the frontend "全部 / MCP / Skill / Plugin" tabs and the
+// params plumbed from the frontend "All / MCP / Skill / Plugin" tabs and the
 // search box. Backend filter logic lives in store.ListCapabilities; this test
 // guards the HTTP layer wiring so a future refactor doesn't silently drop the
 // query parameter parsing.
@@ -651,9 +651,10 @@ func TestSyncAgentCapabilitiesBindsMarketplaceByName(t *testing.T) {
 	}
 }
 
-// TestCapabilityDeleteFreesUniqueNameSlot 复现 bug:被"废弃"的能力名字仍占
-// 着唯一索引;只有真正 delete(写 deleted_at)才能让同名重新导入成功。
-// 链路:create -> deprecate -> 同名 import 仍冲突 -> delete -> 同名 import 成功。
+// TestCapabilityDeleteFreesUniqueNameSlot reproduces the bug: a "deprecated"
+// capability's name still occupies the unique index; only a real delete
+// (writing deleted_at) lets a same-name re-import succeed.
+// Flow: create -> deprecate -> same-name import still conflicts -> delete -> same-name import succeeds.
 func TestCapabilityDeleteFreesUniqueNameSlot(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
@@ -729,10 +730,10 @@ func TestCapabilityDeleteRejectedWhenAgentBound(t *testing.T) {
 	if body.Message == "" {
 		t.Fatalf("409 should carry a human message, got empty (body=%s)", del.Body.String())
 	}
-	// Guard against the misleading "让作者标记下架" suggestion — the whole point
+	// Guard against the misleading "ask the author to mark as deprecated" suggestion — the whole point
 	// of this MR is that deprecate does NOT free the name slot, so the 409
 	// message must not nudge users in that direction.
-	if strings.Contains(body.Message, "标记下架") {
+	if strings.Contains(body.Message, "deprecate") {
 		t.Fatalf("409 message must not suggest deprecate (which does not free the name slot), got: %s", body.Message)
 	}
 

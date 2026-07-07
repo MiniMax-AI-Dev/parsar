@@ -8,7 +8,7 @@ import (
 )
 
 // TestQueueCardTickOnce_MultiPodClaimNoDuplicates is the regression
-// pin for the prod 2026-06-15 "排队中（第 2 位）"-card-spam: two
+// pin for the prod 2026-06-15 "Queued (position 2)"-card-spam: two
 // pods both ticked, both ListPendingQueuedFeishuRuns SELECTed the
 // same queued runs, both Feishu-sent, the user saw ~3 duplicates
 // per run.

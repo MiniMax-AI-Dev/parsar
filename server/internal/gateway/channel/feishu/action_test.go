@@ -120,7 +120,7 @@ func TestDecodeAction_BadJSON(t *testing.T) {
 
 // TestRenderFeishuAck_ToastOnly locks the toast-only response wire shape.
 func TestRenderFeishuAck_ToastOnly(t *testing.T) {
-	out, err := renderFeishuAck(channel.ActionAck{ToastKind: "success", ToastContent: "已批准"})
+	out, err := renderFeishuAck(channel.ActionAck{ToastKind: "success", ToastContent: "Approved"})
 	if err != nil {
 		t.Fatalf("renderFeishuAck: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestRenderFeishuAck_ToastOnly(t *testing.T) {
 	if err := json.Unmarshal(out, &resp); err != nil {
 		t.Fatalf("ack not valid JSON: %v", err)
 	}
-	if resp.Toast == nil || resp.Toast.Type != "success" || resp.Toast.Content != "已批准" {
+	if resp.Toast == nil || resp.Toast.Type != "success" || resp.Toast.Content != "Approved" {
 		t.Fatalf("toast = %+v", resp.Toast)
 	}
 	if resp.Card != nil {

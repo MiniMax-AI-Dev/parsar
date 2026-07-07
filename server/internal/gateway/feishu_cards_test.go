@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// TestBuildDoneCard_Shape locks the shape of the green "已完成" card so
+// TestBuildDoneCard_Shape locks the shape of the green "Completed" card so
 // drift in the builder is caught at PR time, not when a user notices
 // their card looks wrong in Feishu. We assert structural keys + the
 // template / tag values that drive the visual treatment; we don't
@@ -30,8 +30,8 @@ func TestBuildDoneCard_Shape(t *testing.T) {
 	if !ok {
 		t.Fatalf("BuildDoneCard: tag[0] not a map: %T", tags[0])
 	}
-	if got := mapField(t, tag, "text")["content"]; got != "已完成" {
-		t.Errorf("BuildDoneCard: tag content = %v, want 已完成", got)
+	if got := mapField(t, tag, "text")["content"]; got != "Completed" {
+		t.Errorf("BuildDoneCard: tag content = %v, want Completed", got)
 	}
 
 	body := mapField(t, card, "body")
@@ -94,7 +94,7 @@ func TestBuildDoneCard_ThinkingPanelCollapsedByDefault(t *testing.T) {
 		content, _ := title["content"].(string)
 		if content == "Thinking" {
 			thinking = el
-		} else if strings.HasPrefix(content, "执行记录") {
+		} else if strings.HasPrefix(content, "Run log") {
 			history = el
 		}
 	}
@@ -172,7 +172,7 @@ func TestBuildDoneCard_NoThinkingPanelWhenEmpty(t *testing.T) {
 }
 
 // TestBuildRunningCard_StepsOnly is the "just started, no model
-// reply yet" shape — header tag must stay "执行中" and the body has
+// reply yet" shape — header tag must stay "Running" and the body has
 // no markdown / hr. Replaces the old TestBuildWorkingCard_Shape.
 func TestBuildRunningCard_StepsOnly(t *testing.T) {
 	steps := []StepInfo{{Tool: "Bash", Label: "running tests"}}
@@ -181,8 +181,8 @@ func TestBuildRunningCard_StepsOnly(t *testing.T) {
 	assertString(t, header, "template", "indigo")
 	tags := sliceField(t, header, "text_tag_list")
 	tag, _ := tags[0].(map[string]any)
-	if got := mapField(t, tag, "text")["content"]; got != "执行中" {
-		t.Errorf("status tag = %v, want 执行中 (no streaming text)", got)
+	if got := mapField(t, tag, "text")["content"]; got != "Running" {
+		t.Errorf("status tag = %v, want Running (no streaming text)", got)
 	}
 	subtitle := mapField(t, header, "subtitle")
 	if got := subtitle["content"]; got != "1 steps · 5s" {
@@ -202,13 +202,13 @@ func TestBuildRunningCard_StepsOnly(t *testing.T) {
 
 // TestBuildRunningCard_StreamingFlipsStatusTag pins the visible cue
 // that the model has started producing a reply: as soon as
-// streamingText is non-empty, the status tag flips "执行中" → "生成中…".
+// streamingText is non-empty, the status tag flips "Running" → "Generating…".
 func TestBuildRunningCard_StreamingFlipsStatusTag(t *testing.T) {
 	steps := []StepInfo{{Tool: "Bash", Label: "running tests"}}
 	card := BuildRunningCard("", steps, "partial reply", 5*time.Second, time.Time{})
 	tag, _ := sliceField(t, mapField(t, card, "header"), "text_tag_list")[0].(map[string]any)
-	if got := mapField(t, tag, "text")["content"]; got != "生成中…" {
-		t.Errorf("status tag = %v, want 生成中…", got)
+	if got := mapField(t, tag, "text")["content"]; got != "Generating…" {
+		t.Errorf("status tag = %v, want Generating…", got)
 	}
 }
 
@@ -224,7 +224,7 @@ func TestBuildRunningCard_LayoutOrder(t *testing.T) {
 		{Tool: "Edit", Label: "Edit · file.go", StartedAt: started.Add(2 * time.Second), EndedAt: started.Add(3 * time.Second)},
 		{Tool: "Bash", Label: "Bash · go test", StartedAt: started.Add(4 * time.Second)},
 	}
-	card := BuildRunningCard("", steps, "我来排查这个 session。", 10*time.Second, started.Add(7*time.Second))
+	card := BuildRunningCard("", steps, "Let me debug this session.", 10*time.Second, started.Add(7*time.Second))
 	elements := sliceField(t, mapField(t, card, "body"), "elements")
 	if len(elements) != 4 {
 		t.Fatalf("elements = %d, want 4 (markdown + hr + current step + collapsible)", len(elements))
@@ -246,8 +246,8 @@ func TestBuildRunningCard_LayoutOrder(t *testing.T) {
 	panel, _ := elements[3].(map[string]any)
 	panelHeader, _ := panel["header"].(map[string]any)
 	headerTitle, _ := panelHeader["title"].(map[string]any)
-	if got, _ := headerTitle["content"].(string); !strings.Contains(got, "执行记录") {
-		t.Errorf("history label = %q, want it to start with '执行记录' (DoneCard parity)", got)
+	if got, _ := headerTitle["content"].(string); !strings.Contains(got, "Run log") {
+		t.Errorf("history label = %q, want it to start with 'Run log' (DoneCard parity)", got)
 	}
 }
 
@@ -410,8 +410,8 @@ func TestBuildErrorCard_Shape(t *testing.T) {
 	assertString(t, header, "template", "red")
 	tags := sliceField(t, header, "text_tag_list")
 	tag, _ := tags[0].(map[string]any)
-	if got := mapField(t, tag, "text")["content"]; got != "失败" {
-		t.Errorf("BuildErrorCard: tag content = %v, want 失败", got)
+	if got := mapField(t, tag, "text")["content"]; got != "Failed" {
+		t.Errorf("BuildErrorCard: tag content = %v, want Failed", got)
 	}
 }
 
@@ -432,7 +432,7 @@ func TestBuildErrorCard_FirstLineOnly(t *testing.T) {
 }
 
 // TestBuildErrorCard_DetailLink pins the deep-link path: when
-// detailURL is non-empty, a markdown "查看本轮详情" link is appended
+// detailURL is non-empty, a markdown "View this round" link is appended
 // beneath the first-line body so users can jump from the Feishu card
 // to the full run page in the Parsar web UI. Empty detailURL must
 // degrade gracefully to body-only (no broken/empty link).
@@ -442,7 +442,7 @@ func TestBuildErrorCard_DetailLink(t *testing.T) {
 	elements := sliceField(t, body, "elements")
 	first, _ := elements[0].(map[string]any)
 	got, _ := first["content"].(string)
-	wantSub := "[查看本轮详情](https://parsar.example.com/?admin=runs&id=run-x)"
+	wantSub := "[View this round](https://parsar.example.com/?admin=runs&id=run-x)"
 	if !strings.Contains(got, wantSub) {
 		t.Errorf("BuildErrorCard body = %q, want substring %q", got, wantSub)
 	}
@@ -456,7 +456,7 @@ func TestBuildErrorCard_DetailLink(t *testing.T) {
 	elements2 := sliceField(t, body2, "elements")
 	first2, _ := elements2[0].(map[string]any)
 	got2, _ := first2["content"].(string)
-	if strings.Contains(got2, "查看本轮详情") {
+	if strings.Contains(got2, "View this round") {
 		t.Errorf("BuildErrorCard body = %q, want no link when detailURL is empty", got2)
 	}
 }
@@ -468,7 +468,7 @@ func TestBuildErrorCard_DetailLink(t *testing.T) {
 // under a markdown link. Empty hint must not introduce stray
 // whitespace.
 func TestBuildErrorCard_GuestHint(t *testing.T) {
-	hint := "您还未绑定账号，请前往 Parsar 网页端完成绑定后再使用机器人。"
+	hint := "You haven't linked an account yet. Please finish binding on the Parsar web UI before using the bot."
 	card := BuildErrorCard("", "boom", "", "https://parsar.example.com/?admin=runs&id=run-x", hint)
 	body := mapField(t, card, "body")
 	first, _ := sliceField(t, body, "elements")[0].(map[string]any)
@@ -476,7 +476,7 @@ func TestBuildErrorCard_GuestHint(t *testing.T) {
 	if !strings.Contains(got, hint) {
 		t.Errorf("BuildErrorCard body = %q, want guest hint %q included", got, hint)
 	}
-	if idxHint, idxLink := strings.Index(got, hint), strings.Index(got, "[查看本轮详情]"); idxHint < 0 || idxLink < 0 || idxHint > idxLink {
+	if idxHint, idxLink := strings.Index(got, hint), strings.Index(got, "[View this round]"); idxHint < 0 || idxLink < 0 || idxHint > idxLink {
 		t.Errorf("BuildErrorCard body = %q: hint must precede the detail link (hint@%d link@%d)", got, idxHint, idxLink)
 	}
 
@@ -493,7 +493,7 @@ func TestBuildErrorCard_GuestHint(t *testing.T) {
 
 // TestBuildErrorCard_RawErrorOnlyOnGenericCopy locks the contract
 // that the un-mapped error excerpt surfaces ONLY when message is one
-// of the generic "请展开本轮错误详情..." copies. Other mapped messages
+// of the generic "Expand this round for error details" copies. Other mapped messages
 // carry an actionable hint already (401, rate-limit, …) and appending
 // raw connector text would be noise / could leak internal jargon.
 func TestBuildErrorCard_RawErrorOnlyOnGenericCopy(t *testing.T) {
@@ -504,12 +504,12 @@ func TestBuildErrorCard_RawErrorOnlyOnGenericCopy(t *testing.T) {
 		raw      string
 		wantSeen bool
 	}{
-		{"generic default", "Agent 执行失败，请展开本轮错误详情查看具体原因。", "opencode: malformed JSON at step 7", true},
-		{"opencode generic", "Agent 本地执行失败，请展开本轮错误详情查看原因。", "opencode exec exit status 2", true},
-		{"specific 401", "模型服务身份验证失败，请确认 Secret 配置。", "401 unauthorized: invalid api key", false},
-		{"specific rate limit", "模型服务被限流，请稍后重试。", "429 too many requests", false},
-		{"empty raw", "Agent 执行失败，请展开本轮错误详情查看具体原因。", "", false},
-		{"raw equal to body", "Agent 执行失败，请展开本轮错误详情查看具体原因。", "Agent 执行失败，请展开本轮错误详情查看具体原因。", false},
+		{"generic default", "Agent run failed. Expand this round for error details to see the specific cause.", "opencode: malformed JSON at step 7", true},
+		{"opencode generic", "Agent run failed locally. Expand this round for error details.", "opencode exec exit status 2", true},
+		{"specific 401", "Model service authentication failed; please check Secret configuration.", "401 unauthorized: invalid api key", false},
+		{"specific rate limit", "Model service is rate-limited; please retry later.", "429 too many requests", false},
+		{"empty raw", "Agent run failed. Expand this round for error details to see the specific cause.", "", false},
+		{"raw equal to body", "Agent run failed. Expand this round for error details to see the specific cause.", "Agent run failed. Expand this round for error details to see the specific cause.", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -518,9 +518,9 @@ func TestBuildErrorCard_RawErrorOnlyOnGenericCopy(t *testing.T) {
 			elements := sliceField(t, body, "elements")
 			first, _ := elements[0].(map[string]any)
 			got, _ := first["content"].(string)
-			has := strings.Contains(got, "错误详情:")
+			has := strings.Contains(got, "Error details:")
 			if has != tc.wantSeen {
-				t.Errorf("BuildErrorCard body = %q\n got 错误详情 prefix? %v, want %v", got, has, tc.wantSeen)
+				t.Errorf("BuildErrorCard body = %q\n got Error details prefix? %v, want %v", got, has, tc.wantSeen)
 			}
 		})
 	}
@@ -534,7 +534,7 @@ func TestBuildErrorCard_RawErrorTruncatesAndKeepsFirstLineOnly(t *testing.T) {
 	t.Parallel()
 	long := strings.Repeat("a", errorCardRawDetailLimit+50)
 	rawMulti := long + "\nstack: foo.go:42\nstack: bar.go:17"
-	card := BuildErrorCard("", "Agent 执行失败，请展开本轮错误详情查看具体原因。", rawMulti, "", "")
+	card := BuildErrorCard("", "Agent run failed. Expand this round for error details to see the specific cause.", rawMulti, "", "")
 	body := mapField(t, card, "body")
 	elements := sliceField(t, body, "elements")
 	first, _ := elements[0].(map[string]any)
@@ -547,12 +547,12 @@ func TestBuildErrorCard_RawErrorTruncatesAndKeepsFirstLineOnly(t *testing.T) {
 	}
 	// Capped excerpt must not push body past detail-link region: a
 	// non-empty detailURL still appends after the excerpt.
-	cardWithLink := BuildErrorCard("", "Agent 执行失败，请展开本轮错误详情查看具体原因。", rawMulti, "https://parsar.example.com/?admin=runs&id=run-x", "")
+	cardWithLink := BuildErrorCard("", "Agent run failed. Expand this round for error details to see the specific cause.", rawMulti, "https://parsar.example.com/?admin=runs&id=run-x", "")
 	body2 := mapField(t, cardWithLink, "body")
 	elements2 := sliceField(t, body2, "elements")
 	first2, _ := elements2[0].(map[string]any)
 	got2, _ := first2["content"].(string)
-	if !strings.Contains(got2, "[查看本轮详情]") {
+	if !strings.Contains(got2, "[View this round]") {
 		t.Errorf("BuildErrorCard body lost detail link after raw excerpt: %q", got2)
 	}
 }
@@ -827,8 +827,8 @@ func TestBuildCredentialFormCard_FormShape(t *testing.T) {
 		t.Fatal("submit button missing")
 	}
 	// Pin the button's own `name` field. Feishu rejects the entire
-	// form-container card with 200530 ("表单容器中的交互组件的 name 属性
-	// 为空") when any name-bearing component inside the form is
+	// form-container card with 200530 ("interactive-component name attribute
+	// empty inside form container") when any name-bearing component inside the form is
 	// missing its name. A prior regression silently dropped this on a
 	// merge (commit ef9b1343, 2026-06-17) and the inputs alone passed
 	// the existing shape assertions while the submit click broke in
@@ -877,7 +877,7 @@ func TestBuildCredentialFormCard_EmptyFieldsRenderNoSubmit(t *testing.T) {
 //  1. PATCH silently reverts schema-shape changes that drop the form
 //     container (prod 2026-06-17: green flashed for a moment, then the
 //     client snapped back to the orange form).
-//  2. PATCH sends 200530 ("表单容器内交互组件的 name 属性为空") when
+//  2. PATCH sends 200530 ("interactive-component name attribute empty inside form container") when
 //     the form container holds zero name-bearing components — markdown
 //     alone is not enough.
 //
@@ -964,11 +964,11 @@ func TestCredentialFormCards_DeclareUpdateMulti(t *testing.T) {
 
 // TestBuildQueueCard_PositionLabel pins the queue card's headline
 // text across all positions we render. Prod 2026-06-15: a user with
-// 1 running + 1 queued saw "排队中（第 2 位）" because the SQL
+// 1 running + 1 queued saw "Queued (position 2)" because the SQL
 // counted the running sibling. After QueuePositionForRun was
 // fixed to count queued-only, position=1 means "next, the running
 // sibling is currently being served" — and the card's display path
-// (position > 1 ? numbered : bare) maps that to plain "排队中".
+// (position > 1 ? numbered : bare) maps that to plain "Queued".
 func TestBuildQueueCard_PositionLabel(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -976,10 +976,10 @@ func TestBuildQueueCard_PositionLabel(t *testing.T) {
 		position  int
 		wantLabel string
 	}{
-		{"position 0 (compute failed) → bare 排队中", 0, "排队中"},
-		{"position 1 (next) → bare 排队中, no '第 1 位'", 1, "排队中"},
-		{"position 2 → 排队中（第 2 位）", 2, "排队中（第 2 位）"},
-		{"position 5 → 排队中（第 5 位）", 5, "排队中（第 5 位）"},
+		{"position 0 (compute failed) → bare Queued", 0, "Queued"},
+		{"position 1 (next) → bare Queued, no 'position 1'", 1, "Queued"},
+		{"position 2 → Queued (position 2)", 2, "Queued (position 2)"},
+		{"position 5 → Queued (position 5)", 5, "Queued (position 5)"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1019,8 +1019,8 @@ func TestTruncateMarkdown_BelowCapPassesThrough(t *testing.T) {
 // shape must keep both endpoints intact so the user always sees the
 // model's latest tokens at the bottom.
 func TestTruncateMarkdown_PreservesHeadAndTail(t *testing.T) {
-	head := "HEAD_MARKER_前缀"
-	tail := "尾部_TAIL_MARKER"
+	head := "HEAD_MARKER_prefix"
+	tail := "suffix_TAIL_MARKER"
 	body := head + strings.Repeat("X", markdownBodyCap*2) + tail
 	out := truncateMarkdown(body)
 	if len(out) > markdownBodyCap {
@@ -1042,7 +1042,7 @@ func TestTruncateMarkdown_PreservesHeadAndTail(t *testing.T) {
 // The output's head must end on a rune boundary (no 0xEF/0xBF/0xBD
 // replacement runes, no half-rune trailing bytes).
 func TestTruncateMarkdown_UTF8Safe(t *testing.T) {
-	// One '中' is 3 bytes. Spam enough to overflow the cap multiple
+	// The rune below is a 3-byte CJK character. Spam enough to overflow the cap multiple
 	// times so the head boundary lands inside a rune for at least one
 	// alignment.
 	body := strings.Repeat("中", markdownBodyCap)

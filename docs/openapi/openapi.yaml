@@ -387,7 +387,7 @@ definitions:
       name:
         type: string
       visibility:
-        description: '"public" / "private";空 → 服务端默认 "private"'
+        description: '"public" / "private"; empty → server defaults to "private"'
         type: string
     type: object
   dev.credentialBody:
@@ -852,7 +852,7 @@ definitions:
       name:
         type: string
       visibility:
-        description: '"public" / "private";nil → 不变'
+        description: '"public" / "private"; nil → unchanged'
         type: string
     type: object
   dev.updateWorkspaceSlackConnectorBody:

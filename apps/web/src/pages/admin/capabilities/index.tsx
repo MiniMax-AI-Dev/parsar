@@ -695,7 +695,7 @@ function CapabilityRowActions({
 }
 
 /**
- * "更多操作" menu for cross-workspace marketplace actions (publish,
+ * "More actions" menu for cross-workspace marketplace actions (publish,
  * deprecate). View-detail also lives here as a fallback entry point.
  */
 function CapabilityRowMoreMenu({
@@ -744,10 +744,13 @@ function CapabilityRowMoreMenu({
                 onSelect={() => onMarketAction(published ? "unpublish" : "publish")}
               />
               {/*
-                "删除"释放 capability.name 的 workspace 唯一索引,允许重新
-                导入同名能力。后端会拒绝仍被 agent 绑定的删除请求(409)。
-                "作者下架"(deprecate)是另一回事——它表达"作者宣告维护停滞、
-                已装机用户冻结版本",入口挪到了详情页的 marketplace 面板。
+                "Delete" releases the capability.name workspace-unique index,
+                allowing a same-name capability to be re-imported. The server
+                rejects deletes that still have bound agents (409).
+                "Deprecate" is a separate concept — the author signals that
+                maintenance has stopped and existing installs freeze on the
+                current version. That entry point lives on the detail page's
+                marketplace panel.
               */}
               <CapabilityMenuItem
                 icon={Trash2}

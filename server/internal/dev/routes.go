@@ -116,7 +116,7 @@ type RuntimeStore interface {
 	IsActiveWorkspaceMember(ctx context.Context, workspaceID, userID string) (bool, error)
 	// GetWorkspaceVisibility + ListActiveWorkspaceOwnerNames feed the
 	// visibility=workspace rejection card so the Feishu sender sees
-	// "管理员: A、B" plus a "申请加入 workspace" link. Both are read-
+	// "Admins: A, B" plus a "Join workspace" link. Both are read-
 	// only and failures are swallowed by the gateway — the rejection
 	// goes out regardless, just without the enrichment.
 	GetWorkspaceVisibility(ctx context.Context, workspaceID string) (string, error)
@@ -130,7 +130,7 @@ type RuntimeStore interface {
 	CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]store.SupersededRun, error)
 	// HasFeishuThreadInboundHistory reports whether the Feishu gateway
 	// has previously stored an inbound message in (chat × thread). Used
-	// to let users continue a 话题 (thread) conversation without re-
+	// to let users continue a thread conversation without re-
 	// @mentioning the bot on every message.
 	HasFeishuThreadInboundHistory(ctx context.Context, externalChatID, threadID string) (bool, error)
 	// HasThreadInboundHistory is the platform-scoped form used by the shared
@@ -177,7 +177,7 @@ type RuntimeStore interface {
 	RemoveWorkspaceMember(ctx context.Context, workspaceID string, userID string, now time.Time) (store.RemoveWorkspaceMemberResult, error)
 	SearchUsers(ctx context.Context, input store.SearchUsersInput) ([]store.SearchUsersResultItem, error)
 
-	// 工作区主动申请加入(self-service join request)
+	// Workspace self-service join request
 	ListDiscoverableWorkspaces(ctx context.Context, input store.ListDiscoverableWorkspacesInput) (store.ListDiscoverableWorkspacesResult, error)
 	ListPendingJoinRequests(ctx context.Context, workspaceID string) ([]store.PendingJoinRequestRead, error)
 	CountPendingJoinRequests(ctx context.Context, workspaceID string) (int64, error)
@@ -186,16 +186,17 @@ type RuntimeStore interface {
 	RejectJoinRequest(ctx context.Context, input store.ReviewJoinRequestInput) (store.WorkspaceMemberRead, error)
 	WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error
 
-	// workspace 维度 IM 连接器(feishu/slack/discord 统一存储)。
-	// GET 面板初始化 + 三个平台的 upsert 写入。读取走 member 网关、
-	// 写入走 owner/admin 网关(见路由注册)。
+	// Workspace-scoped IM connectors (feishu/slack/discord unified storage).
+	// GET initializes the panel + upserts write for three platforms. Reads
+	// go through the member gateway; writes go through the owner/admin gateway
+	// (see route registration).
 	GetWorkspaceIMConnectors(ctx context.Context, workspaceID string) ([]store.WorkspaceConnectorRead, error)
 	UpsertWorkspaceSlackConnector(ctx context.Context, input store.UpsertWorkspaceSlackConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 	UpsertWorkspaceDiscordConnector(ctx context.Context, input store.UpsertWorkspaceDiscordConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 	UpsertWorkspaceTeamsConnector(ctx context.Context, input store.UpsertWorkspaceTeamsConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 	UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error)
 
-	// 定时任务(scheduled tasks)
+	// Scheduled tasks
 	ListScheduledTasksByAgent(ctx context.Context, agentID string) ([]store.ScheduledTaskRead, error)
 	ListScheduledTasksByWorkspace(ctx context.Context, workspaceID string, limit, offset int32) (store.ListScheduledTasksByWorkspaceResult, error)
 	CreateScheduledTask(ctx context.Context, in store.CreateScheduledTaskInput) (store.ScheduledTaskRead, error)
@@ -206,8 +207,8 @@ type RuntimeStore interface {
 	RunScheduledTaskNow(ctx context.Context, taskID string) (string, error)
 	ListAgentRunsByScheduledTask(ctx context.Context, taskID string, limit int32) ([]store.ScheduledTaskRunRead, error)
 
-	// 内置能力(runtime-injected,如 fetch_chat_history)的 per-agent 开关。
-	// 无行=默认开启;写 enabled=false 关闭该 Agent 的内置能力。
+	// Per-agent switch for built-in capabilities (runtime-injected, e.g. fetch_chat_history).
+	// No row = default enabled; write enabled=false to disable this Agent's built-in capability.
 	IsBuiltinCapabilityEnabled(ctx context.Context, agentID, key string) (bool, error)
 	SetBuiltinCapabilityEnabled(ctx context.Context, agentID, key string, enabled bool) error
 }
@@ -264,8 +265,8 @@ type routerConfig struct {
 
 	// feishuJoinURLBuilder is invoked by the visibility=workspace
 	// rejection card so the Feishu rejection surfaces a markdown
-	// "申请加入 workspace" link. Nil keeps the card link-free and
-	// falls back to "请联系上述管理员加入".
+	// "Join workspace" link. Nil keeps the card link-free and
+	// falls back to "Please contact the administrator above to join".
 	feishuJoinURLBuilder func(workspaceID string) string
 }
 
@@ -426,8 +427,8 @@ func WithAgentDaemonSandbox(provider AgentDaemonSandboxManager) RouterOption {
 }
 
 // WithFeishuJoinURLBuilder wires the function the visibility=workspace
-// rejection card uses to mint absolute "申请加入" URLs. Nil keeps the
-// card link-free and falls back to "请联系上述管理员加入".
+// rejection card uses to mint absolute "Join request" URLs. Nil keeps the
+// card link-free and falls back to "Please contact the administrator above to join".
 func WithFeishuJoinURLBuilder(builder func(workspaceID string) string) RouterOption {
 	return func(cfg *routerConfig) {
 		cfg.feishuJoinURLBuilder = builder
@@ -633,12 +634,12 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/members", addWorkspaceMember(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/members/{userID}", updateWorkspaceMemberRole(runtimeStore))
 			r.Delete("/workspaces/{workspaceID}/members/{userID}", removeWorkspaceMember(runtimeStore))
-			// 工作区主动申请加入(self-service join request):
-			//   POST   /workspaces/{wid}/join-requests              用户提交申请(身份:已登录)
-			//   DELETE /workspaces/{wid}/join-requests/mine          申请人自助撤回自己的 pending
-			//   GET    /workspaces/{wid}/join-requests              owner/admin 看待审批清单
-			//   POST   /workspaces/{wid}/join-requests/{rid}/approve owner/admin 同意
-			//   POST   /workspaces/{wid}/join-requests/{rid}/reject  owner/admin 拒绝
+			// Workspace self-service join request:
+			//   POST   /workspaces/{wid}/join-requests              User submits request (identity: logged in)
+			//   DELETE /workspaces/{wid}/join-requests/mine          Requester self-withdraws own pending
+			//   GET    /workspaces/{wid}/join-requests              owner/admin views pending approval list
+			//   POST   /workspaces/{wid}/join-requests/{rid}/approve owner/admin approves
+			//   POST   /workspaces/{wid}/join-requests/{rid}/reject  owner/admin rejects
 			r.Post("/workspaces/{workspaceID}/join-requests", createJoinRequest(runtimeStore))
 			r.Delete("/workspaces/{workspaceID}/join-requests/mine", withdrawOwnJoinRequest(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/join-requests", listJoinRequests(runtimeStore))
@@ -652,7 +653,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/archive", archiveWorkspace(runtimeStore))
 			r.Get("/me", meHandler(runtimeStore))
 			r.Get("/me/workspaces", listMyWorkspaces(runtimeStore))
-			// 工作区发现:返回当前用户可申请加入的 public 工作区
+			// Workspace discovery: returns public workspaces the current user can request to join
 			r.Get("/me/discoverable-workspaces", listDiscoverableWorkspaces(runtimeStore))
 			// Platform-wide user picker. Backs the search box in
 			// AddMember dialogs. Any authenticated user can search;
@@ -989,7 +990,7 @@ func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookCo
 			Text:             decision.NormalizedText,
 			ExternalChatID:   event.ChatID,
 			// ThreadKey (not ReplyAnchorMessageID): every inbound in
-			// the same Feishu 话题 lands in the same Parsar
+			// the same Feishu thread lands in the same Parsar
 			// conversation. Mirrors gateway/router/router.go.
 			ExternalThreadID:  event.ThreadKey(),
 			ExternalMessageID: event.MessageID,
@@ -1130,7 +1131,7 @@ type feishuThreadHistoryLookup interface {
 //  1. p2p chat → false.
 //  2. mentions present: include bot_open_id → false; else → true.
 //  3. no mentions in a group: if (chat_id, thread_id) has prior bot
-//     history → false (话题续聊不必再 @); else → true.
+//     history → false (thread follow-up doesn't need re-@); else → true.
 //
 // bot_open_id missing → bot defaults to refusing all group messages;
 // operator must configure via the connector panel or provisioning.
@@ -1663,7 +1664,7 @@ func configureAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
 
 		// Local-device binding: mirror createAgent so editing a
 		// local-mode agent's bound device keeps the agent's runtime_id in
-		// sync. Without this the admin list keeps reading "未绑定 Runtime".
+		// sync. Without this the admin list keeps reading "Runtime not bound".
 		if result.AgentConfig != nil {
 			if mode, _ := result.AgentConfig["daemon_mode"].(string); mode == "local" {
 				if deviceID, _ := result.AgentConfig["device_id"].(string); strings.TrimSpace(deviceID) != "" {
@@ -1725,7 +1726,7 @@ func enableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 
 // getAgentRuntimeBinding returns the runtime currently bound to
 // this agent. Empty runtime_id means the user hasn't picked one
-// yet — the dispatcher surfaces "请绑定 Runtime" when a run starts.
+// yet — the dispatcher surfaces "Please bind a Runtime" when a run starts.
 // getAgentRuntimeBinding returns the agent's current runtime binding.
 //
 //	@Summary		Get an agent's runtime binding
@@ -2094,7 +2095,7 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 						RuntimeID:   deviceID,
 					}); bindErr != nil {
 						// Sandbox is alive but runtime_id write failed.
-						// Dispatch shows "未绑定 Runtime" until a retry
+						// Dispatch shows "Runtime not bound" until a retry
 						// succeeds or admin Rebuild rewrites.
 						log.Bg().Error("eager sandbox acquired but runtime_id persist failed",
 							"agent_id", paID,
@@ -2294,13 +2295,13 @@ func syncAgentCapabilities(
 			latestVersionID = versions[0].ID // sorted created_at desc
 		}
 
-		// 默认 pinning_mode 取决于来源:
-		//   * 本地 capability:用户的预期是"勾上就跟最新"。reupload 后
-		//     无需再编辑 agent,本地工作坊里的 skill 迭代也不会有
-		//     breaking change 风险(同一团队拥有)。
-		//   * marketplace:发布者的新版本可能携带 breaking change,
-		//     保留 pinned 让 UpgradeCapabilityDialog 主动确认路径继续
-		//     有效,用户得显式从 picker 选 latest 才会自动跟随。
+		// Default pinning_mode depends on the source:
+		//   * Local capability: user's expectation is "check it and follow the latest". After reupload,
+		//     no need to re-edit the agent, and skill iteration in the local workshop has no
+		//     breaking-change risk (owned by the same team).
+		//   * Marketplace: the publisher's new version may carry breaking changes,
+		//     keep pinned so the UpgradeCapabilityDialog explicit-confirm path remains
+		//     valid; the user must explicitly pick latest from the picker to auto-follow.
 		mode := store.PinningModeLatest
 		if cap.fromMarketplace {
 			mode = store.PinningModePinned
@@ -4240,7 +4241,7 @@ func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 
 		// `?status=` accepts a comma-separated list so the admin
-		// "进行中" tab can union {running,queued} in one round-trip.
+		// "In progress" tab can union {running,queued} in one round-trip.
 		// Empty values are stripped. The SQL `cardinality(...) = 0`
 		// branch handles the no-filter case.
 		statuses := parseStatusList(r.URL.Query().Get("status"))
@@ -4265,7 +4266,7 @@ func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 
 // getAgentMetrics returns aggregated run-history counters for
 // a single agent over a sliding window. Powers the agent-detail
-// "近 N 天表现" panel: completion count, success rate, average duration.
+// "Last N days performance" panel: completion count, success rate, average duration.
 // `?days=` is optional and clamps to [1, 365]; default 30.
 // getAgentMetrics returns runtime/usage metrics for an agent.
 //
@@ -4742,7 +4743,7 @@ func devActorID(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 type createWorkspaceRequest struct {
 	Name       string `json:"name"`
-	Visibility string `json:"visibility,omitempty"` // "public" / "private";空 → 服务端默认 "private"
+	Visibility string `json:"visibility,omitempty"` // "public" / "private"; empty → server defaults to "private"
 }
 
 // createWorkspace creates a new workspace with the caller as owner.
@@ -4792,7 +4793,7 @@ func createWorkspace(runtimeStore RuntimeStore) http.HandlerFunc {
 
 type updateWorkspaceRequest struct {
 	Name       *string `json:"name,omitempty"`
-	Visibility *string `json:"visibility,omitempty"` // "public" / "private";nil → 不变
+	Visibility *string `json:"visibility,omitempty"` // "public" / "private"; nil → unchanged
 }
 
 // updateWorkspace applies a partial update to a workspace.
@@ -5109,15 +5110,15 @@ func removeWorkspaceMember(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 // ============================================================
-// 工作区主动申请加入(self-service join request)handlers
+// Workspace self-service join request handlers
 //
-//   POST /api/v1/workspaces/{wid}/join-requests              提交申请
-//   GET  /api/v1/workspaces/{wid}/join-requests              owner/admin 列表
-//   POST /api/v1/workspaces/{wid}/join-requests/{rid}/approve owner/admin 同意
-//   POST /api/v1/workspaces/{wid}/join-requests/{rid}/reject  owner/admin 拒绝
+//   POST /api/v1/workspaces/{wid}/join-requests              submit request
+//   GET  /api/v1/workspaces/{wid}/join-requests              owner/admin list
+//   POST /api/v1/workspaces/{wid}/join-requests/{rid}/approve owner/admin approve
+//   POST /api/v1/workspaces/{wid}/join-requests/{rid}/reject  owner/admin reject
 //
-// WHERE status='pending' 守卫在 SQL 层原子化,双 admin 竞态会拿到
-// ErrJoinRequestAlreadyHandled,转换成 409。
+// The WHERE status='pending' guard is atomic at the SQL layer; two admins racing
+// will get ErrJoinRequestAlreadyHandled, which converts to a 409.
 // ============================================================
 
 type createJoinRequestRequest struct {
@@ -5144,7 +5145,7 @@ func createJoinRequest(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
 			return
 		}
-		// 可选 reason;选填,长度软限 — 防 abuse 但不强制 schema
+		// Optional reason; optional field, length soft limit — prevents abuse without enforcing schema
 		if len(body.Reason) > 1000 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "reason must be 1000 characters or less"})
 			return
@@ -5157,7 +5158,7 @@ func createJoinRequest(runtimeStore RuntimeStore) http.HandlerFunc {
 		})
 		if err != nil {
 			if errors.Is(err, store.ErrUnknownWorkspace) {
-				// 含两种情况:不存在 / 私有不公开 —— 一律 404 防枚举
+				// Covers two cases: does not exist / private and not open — always 404 to prevent enumeration
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace not found or not open to join requests"})
 				return
 			}
@@ -5177,9 +5178,10 @@ func createJoinRequest(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// withdrawOwnJoinRequest — 申请人自助撤回 pending 申请。路径不带
-// requestID:申请人只有一行 pending,(workspace_id, current_user_id)
-// 唯一定位,客户端也不用持有 request id。
+// withdrawOwnJoinRequest — requester self-withdraws a pending request. Path
+// carries no requestID: the requester has only one pending row, and
+// (workspace_id, current_user_id) uniquely locates it, so the client doesn't
+// need to hold a request id either.
 func withdrawOwnJoinRequest(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -5197,7 +5199,7 @@ func withdrawOwnJoinRequest(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		if err := runtimeStore.WithdrawOwnJoinRequest(r.Context(), workspaceID, userID, time.Now().UTC()); err != nil {
 			if errors.Is(err, store.ErrJoinRequestAlreadyHandled) {
-				// 没找到 pending 行:可能已被 owner 批准 / 拒绝,或者本来就没申请过
+				// No pending row found: may have been approved/rejected by owner, or the user never applied
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "no pending request to withdraw"})
 				return
 			}
@@ -5284,7 +5286,7 @@ func reviewJoinRequestHandler(runtimeStore RuntimeStore, approve bool) http.Hand
 		}
 		if err != nil {
 			if errors.Is(err, store.ErrJoinRequestAlreadyHandled) {
-				// 已被其他 admin 处理 / row 不是 pending 状态
+				// Already handled by another admin / row is not in pending state
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "join request already handled"})
 				return
 			}
@@ -5296,14 +5298,15 @@ func reviewJoinRequestHandler(runtimeStore RuntimeStore, approve bool) http.Hand
 }
 
 // listDiscoverableWorkspaces — `GET /api/v1/me/discoverable-workspaces`
-// 当前用户可以申请加入的 public 工作区。
+// Public workspaces the current user can request to join.
 //
 // Query params:
-//   - q     : 模糊搜索 workspace.name (case-insensitive),为空时返回全部
-//   - limit : 默认 50,clamp 到 [1, 100]
-//   - offset: 默认 0
+//   - q     : fuzzy search on workspace.name (case-insensitive); empty returns all
+//   - limit : default 50, clamped to [1, 100]
+//   - offset: default 0
 //
-// Response 带 total 字段(过滤后总数),前端做"查看全部 (N)" 和 pager。
+// Response carries a `total` field (post-filter count); the frontend uses it for
+// "View all (N)" and pagination.
 func listDiscoverableWorkspaces(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -5320,7 +5323,7 @@ func listDiscoverableWorkspaces(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
-		// 限制搜索词长度,防止恶意超长字符串拖慢 ILIKE 索引扫描
+		// Limit search-term length to prevent malicious overlong strings from slowing ILIKE index scans
 		if len(q) > 100 {
 			q = q[:100]
 		}

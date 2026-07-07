@@ -156,18 +156,21 @@ type AddWorkspaceMemberRow struct {
 }
 
 // Add a user to a workspace with the given role + status. Idempotent on
-// (workspace_id, user_id). If a non-deleted row exists (active 或 pending),
-// 直接返回它(让调用方据 status 自行判断是 "已是成员" 还是 "申请中"); 若行被
-// 软删除则复活成请求的 (role, status); 否则插入新行。
+// (workspace_id, user_id). If a non-deleted row exists (active or pending),
+// return it directly (the caller decides based on status whether it's
+// "already a member" or "pending"); if the row is soft-deleted, revive
+// it with the requested (role, status); otherwise insert a new row.
 //
-// 注意:这里没有区分 active / pending —— 调用方传 @status,handler 自己决定:
-//   - owner 直接 add member 入口:@status = 'active'
-//   - 用户自助申请加入入口:@status = 'pending'
-//   - bootstrap:@status = 'active'
+// Note: this does not distinguish active vs. pending -- callers pass
+// @status, and the handler decides:
+//   - owner "add member" flow: @status = 'active'
+//   - self-service join request: @status = 'pending'
+//   - bootstrap: @status = 'active'
 //
-// 唯一索引 uk_workspace_members_active 排除了 rejected 行,因此被拒后
-// 复活 / 重新插入都不冲突;若数据库里残留一条 rejected 行,SoftDeleteRejectedJoinRequest
-// 会在申请入口先把它清掉,再走这个 query。
+// The unique index uk_workspace_members_active excludes rejected rows,
+// so revive / re-insert after a rejection never conflicts; if a
+// rejected row lingers in the DB, SoftDeleteRejectedJoinRequest clears
+// it in the join-request flow before running this query.
 func (q *Queries) AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMemberParams) (AddWorkspaceMemberRow, error) {
 	row := q.db.QueryRow(ctx, addWorkspaceMember,
 		arg.Role,
@@ -272,11 +275,11 @@ type ApproveJoinRequestRow struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 同意:原子地把 pending → active,记审批人 + 时间。
-// WHERE status='pending' 防双 admin 竞态 —— 第二个 admin 的 UPDATE
-// 影响 0 行,handler 据此返回 409。同时校验 workspace_id 一致,避免
-// 跨 workspace 串号(URL 里的 workspace_id 与行里的 workspace_id 不
-// 一致时拒绝)。
+// Approve: atomically flip pending -> active, recording reviewer + time.
+// The WHERE status='pending' guards against a double-admin race -- the
+// second admin's UPDATE affects 0 rows and the handler returns 409 on
+// that basis. Also cross-checks workspace_id to avoid cross-workspace
+// ID crossover (URL workspace_id must match the row's workspace_id).
 func (q *Queries) ApproveJoinRequest(ctx context.Context, arg ApproveJoinRequestParams) (ApproveJoinRequestRow, error) {
 	row := q.db.QueryRow(ctx, approveJoinRequest,
 		arg.ReviewedBy,
@@ -810,7 +813,7 @@ type ClaimPendingQueuedFeishuRunsRow struct {
 // Multi-pod-safe replacement for the prior ListPendingQueuedFeishuRuns.
 // Without a claim, every sibling pod's tick SELECT-ed the same queued
 // runs, every pod called Feishu SendMessage, and the user saw N
-// duplicate "排队中" cards (the prod regression on 2026-06-15:
+// duplicate "queued" cards (the prod regression on 2026-06-15:
 // 4 queued runs × 2 pods → up to 8 cards, only 1 ended up with the
 // queue_card_sent_at stamp because StampQueueCardSent's last-writer-
 // wins UPDATE hid the storm). The metadata stamp is too late to
@@ -1109,8 +1112,9 @@ type ConfigureDevConversationExternalRefRow struct {
 	ExternalThreadID string `json:"external_thread_id"`
 }
 
-// 把内置 dev seed 对话改成绑定外部 IM 会话(飞书群等):
-// surface 切到 'im',form 由调用方指定(group/dm),并写入外部三件套。
+// Convert the built-in dev-seed conversation to bind an external IM
+// conversation (Feishu group, etc.): switch surface to 'im', let the
+// caller pass form (group/dm), and write the external triple (chat/user/message IDs).
 func (q *Queries) ConfigureDevConversationExternalRef(ctx context.Context, arg ConfigureDevConversationExternalRefParams) (ConfigureDevConversationExternalRefRow, error) {
 	row := q.db.QueryRow(ctx, configureDevConversationExternalRef,
 		arg.ConversationForm,
@@ -1188,8 +1192,9 @@ where wm.role = 'owner'
 // already completed and the endpoint must refuse so a leaked
 // PARSAR_BOOTSTRAP_TOKEN cannot back-door a fresh admin in.
 //
-// 必须只数 status='active' 的 owner 行 —— pending 不算 owner;
-// 否则一条 pending join-request 行会把 bootstrap 闸门误锁。
+// Must only count status='active' owner rows -- pending does not count
+// as owner; otherwise a lone pending join-request row would falsely
+// lock the bootstrap gate.
 func (q *Queries) CountActiveWorkspaceOwners(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countActiveWorkspaceOwners)
 	var owner_count int64
@@ -1203,9 +1208,10 @@ from agent_capabilities ac
 where ac.capability_id = $1::uuid
 `
 
-// 数所有 agent_capabilities 引用——包括本 workspace 内部的 agent 绑定和跨 workspace
-// 的 marketplace 装机方。用于删除拦截:capability 被任何 agent 绑着就不能删,
-// 否则那些 agent 会突然看到 "capability not found"。
+// Counts every agent_capabilities reference -- including in-workspace
+// agent bindings and cross-workspace marketplace installs. Used as a
+// delete gate: a capability bound by any agent cannot be deleted,
+// otherwise those agents would suddenly see "capability not found".
 func (q *Queries) CountAgentBindingsForCapability(ctx context.Context, capabilityID pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countAgentBindingsForCapability, capabilityID)
 	var column_1 int64
@@ -1246,9 +1252,11 @@ type CountDiscoverableWorkspacesParams struct {
 	UserID  pgtype.UUID `json:"user_id"`
 }
 
-// 与 ListDiscoverableWorkspaces 同样的过滤条件,只取总数。前端用它驱动
-// "查看全部 (N)" 标签 + 分页器。注意:这里的"总数"是匹配 search_q 的
-// 总数, 不是平台 public 工作区总数 — 搜索后底部 pager 跟着结果走。
+// Same filter as ListDiscoverableWorkspaces, count only. The frontend
+// drives the "View all (N)" tab and the pager from this. Note: this
+// is the total matching search_q, not the platform's total number of
+// public workspaces -- after a search, the pager at the bottom
+// follows the results.
 func (q *Queries) CountDiscoverableWorkspaces(ctx context.Context, arg CountDiscoverableWorkspacesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countDiscoverableWorkspaces, arg.SearchQ, arg.UserID)
 	var total int64
@@ -1295,7 +1303,7 @@ where workspace_id = $1::uuid
   and status = 'pending'
 `
 
-// 审批 Tab 上的 badge:此 workspace 的待审批数量。
+// Badge on the approvals tab: number of pending requests in this workspace.
 func (q *Queries) CountPendingJoinRequests(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countPendingJoinRequests, workspaceID)
 	var pending_count int64
@@ -1331,7 +1339,7 @@ where a.workspace_id = $1::uuid and t.deleted_at is null
 `
 
 // Companion to ListScheduledTasksByWorkspacePage: total rows under the same
-// filter so the pager can render "第 X-Y 条,共 N 条" and gate the Next button.
+// filter so the pager can render "showing X-Y of N" and gate the Next button.
 func (q *Queries) CountScheduledTasksByWorkspace(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countScheduledTasksByWorkspace, workspaceID)
 	var total int64
@@ -1359,7 +1367,7 @@ type CountWorkspaceAgentRunsParams struct {
 }
 
 // Companion to ListWorkspaceAgentRunsPage. Returns the total row count
-// under the SAME filter so the UI can render "第 X-Y 条,共 N 条" and
+// under the SAME filter so the UI can render "showing X-Y of N" and
 // decide when to disable the "next page" button. Joins mirror the list
 // query so counts and rows never disagree.
 func (q *Queries) CountWorkspaceAgentRuns(ctx context.Context, arg CountWorkspaceAgentRunsParams) (int64, error) {
@@ -1518,9 +1526,10 @@ type CreateAgentRunParams struct {
 	Now              pgtype.Timestamptz `json:"now"`
 }
 
-// 2026-06-04 schema: trigger_type 拆成 trigger_source(WHAT) + trigger_channel(HOW)。
-// 用户消息触发: trigger_source='message',trigger_channel 由调用方传入
-// (web / im / api),不再用 metadata.platform 间接区分。
+// 2026-06-04 schema: trigger_type is split into trigger_source (WHAT) + trigger_channel (HOW).
+// User-message triggers: trigger_source='message', trigger_channel is
+// passed by the caller (web / im / api); we no longer rely on
+// metadata.platform to distinguish this indirectly.
 func (q *Queries) CreateAgentRun(ctx context.Context, arg CreateAgentRunParams) error {
 	_, err := q.db.Exec(ctx, createAgentRun,
 		arg.ID,
@@ -1731,8 +1740,8 @@ type CreateChildAgentRunParams struct {
 	Now              pgtype.Timestamptz `json:"now"`
 }
 
-// 子 run 是另一个 agent 通过 hand-off 触发的:
-// trigger_source='agent', trigger_channel='internal' 永远成立。
+// A child run is triggered by another agent via hand-off:
+// trigger_source='agent', trigger_channel='internal' always holds.
 func (q *Queries) CreateChildAgentRun(ctx context.Context, arg CreateChildAgentRunParams) error {
 	_, err := q.db.Exec(ctx, createChildAgentRun,
 		arg.ID,
@@ -1803,9 +1812,9 @@ type CreateDevConversationParams struct {
 	Now         pgtype.Timestamptz `json:"now"`
 }
 
-// 2026-06-04 schema: conversations.type 拆成 surface + form 两维
-// (web/im/api × thread/group/dm/oneshot)。Dev seed 是内置 web 的群聊
-// (Demo Group),所以 surface='web', form='group'。
+// 2026-06-04 schema: conversations.type is split into surface + form
+// (web/im/api x thread/group/dm/oneshot). The dev seed is a built-in
+// web group chat (Demo Group), so surface='web', form='group'.
 func (q *Queries) CreateDevConversation(ctx context.Context, arg CreateDevConversationParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createDevConversation, arg.ID, arg.WorkspaceID, arg.Now)
 	if err != nil {
@@ -1890,8 +1899,9 @@ type CreateDevWorkspaceMemberParams struct {
 	Now         pgtype.Timestamptz `json:"now"`
 }
 
-// Dev seed: 永远以 active owner 身份插入。子查询里加 status<>'rejected'
-// 与新唯一索引语义对齐(rejected 行不阻塞 owner 再加入)。
+// Dev seed: always insert as an active owner. The subquery's
+// status<>'rejected' predicate aligns with the new unique-index
+// semantics (rejected rows do not block an owner from re-joining).
 func (q *Queries) CreateDevWorkspaceMember(ctx context.Context, arg CreateDevWorkspaceMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createDevWorkspaceMember,
 		arg.ID,
@@ -1925,9 +1935,10 @@ type CreateMessageParams struct {
 	Now            pgtype.Timestamptz `json:"now"`
 }
 
-// 2026-06-04 schema: messages.message_type 拆成 kind + content_format。
-// 普通会话消息: kind='message', content_format='text' (默认即可)。
-// 想发 markdown / card 的消息请用专门的 CreateRichMessage 或调用方覆盖。
+// 2026-06-04 schema: messages.message_type is split into kind + content_format.
+// Normal conversation messages: kind='message', content_format='text'
+// (the defaults). For markdown / card messages use the dedicated
+// CreateRichMessage or override on the caller side.
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) error {
 	_, err := q.db.Exec(ctx, createMessage,
 		arg.ID,
@@ -1998,9 +2009,10 @@ type CreateModelRow struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 组织级共享 model. slug 由调用方传入(generateAutoSlug("model")). 凭据二选一:
-// mode='inline_secret' → secret_id 非空, credential_kind_code 必空
-// mode='credential_ref' → credential_kind_code 非空, secret_id 必空
+// Organization-level shared model. slug is supplied by the caller
+// (generateAutoSlug("model")). Credentials are one of two modes:
+// mode='inline_secret' -> secret_id set, credential_kind_code must be null
+// mode='credential_ref' -> credential_kind_code set, secret_id must be null
 func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (CreateModelRow, error) {
 	row := q.db.QueryRow(ctx, createModel,
 		arg.ID,
@@ -2070,10 +2082,12 @@ type CreateRuntimeErrorSystemMessageParams struct {
 	Now            pgtype.Timestamptz `json:"now"`
 }
 
-// 2026-06-04 schema: 旧 message_type='runtime_error' 被折叠进
-// kind='error' + metadata.error.source='runtime'(error 类别下还有
-// 'agent' / 'validation' 等其它来源,通过 metadata 区分)。
-// 这里在插入时把 source='runtime' 合进 @metadata,防止调用方漏写。
+// 2026-06-04 schema: the old message_type='runtime_error' has been
+// folded into kind='error' + metadata.error.source='runtime' (other
+// sources under the error kind include 'agent' / 'validation',
+// distinguished via metadata).
+// On insert we fold source='runtime' into @metadata so callers can't
+// forget to set it.
 func (q *Queries) CreateRuntimeErrorSystemMessage(ctx context.Context, arg CreateRuntimeErrorSystemMessageParams) error {
 	_, err := q.db.Exec(ctx, createRuntimeErrorSystemMessage,
 		arg.ID,
@@ -2221,10 +2235,12 @@ type CreateSandboxOfflineNoticeParams struct {
 	Now            pgtype.Timestamptz `json:"now"`
 }
 
-// 系统级通知:沙箱离线提示。和 runtime_error 不同 —— 这不是 "error"
-// 类别,是 system_event 类别下的一个 sub-kind,前端按
-// metadata.kind='sandbox_offline_notice' 渲染成灰底警告。允许同
-// conversation 多次插入(无 dedup),用户可能在多个时段碰到沙箱掉线。
+// System-level notice: sandbox-offline message. Different from
+// runtime_error -- this is NOT the "error" kind, it's a sub-kind under
+// 'system_event', and the frontend renders it as a grey warning based
+// on metadata.kind='sandbox_offline_notice'. Multiple inserts per
+// conversation are allowed (no dedup); a user may hit sandbox drops
+// across multiple sessions.
 func (q *Queries) CreateSandboxOfflineNotice(ctx context.Context, arg CreateSandboxOfflineNoticeParams) error {
 	_, err := q.db.Exec(ctx, createSandboxOfflineNotice,
 		arg.ID,
@@ -2318,9 +2334,9 @@ type CreateScheduledAgentRunParams struct {
 	Now              pgtype.Timestamptz `json:"now"`
 }
 
-// 定时 run: trigger_source='scheduled_task', trigger_channel='cron',
-// trigger_ref_type='scheduled_task', trigger_ref_id=task.id。
-// 执行身份 = 创建者 (requested_by_type='user', requested_by_id=created_by)。
+// Scheduled run: trigger_source='scheduled_task', trigger_channel='cron',
+// trigger_ref_type='scheduled_task', trigger_ref_id=task.id.
+// Execution identity = creator (requested_by_type='user', requested_by_id=created_by).
 func (q *Queries) CreateScheduledAgentRun(ctx context.Context, arg CreateScheduledAgentRunParams) error {
 	_, err := q.db.Exec(ctx, createScheduledAgentRun,
 		arg.ID,
@@ -2475,8 +2491,9 @@ type CreateSecretRow struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 组织级共享 secret. slug 由调用方传入 (用 generateAutoSlug("secret")),
-// name 是展示名(可重复).
+// Organization-level shared secret. slug is supplied by the caller
+// (via generateAutoSlug("secret")); name is the display name and
+// may repeat.
 func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) (CreateSecretRow, error) {
 	row := q.db.QueryRow(ctx, createSecret,
 		arg.ID,
@@ -2582,10 +2599,10 @@ type CreateSystemMessageOnceParams struct {
 	Kind           string             `json:"kind"`
 }
 
-// 2026-06-04 schema: messages.message_type 拆成 kind + content_format。
-// 系统事件消息: kind='system_event', content_format='text'。
-// 去重逻辑还是用 metadata->>'kind'(系统侧自定义事件名,例如
-// 'runtime_paired')区分,WHERE EXISTS 查的是 messages.kind。
+// 2026-06-04 schema: messages.message_type is split into kind + content_format.
+// System event messages: kind='system_event', content_format='text'.
+// Dedup still uses metadata->>'kind' (system-side custom event name,
+// e.g. 'runtime_paired'); the WHERE EXISTS matches on messages.kind.
 func (q *Queries) CreateSystemMessageOnce(ctx context.Context, arg CreateSystemMessageOnceParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createSystemMessageOnce,
 		arg.ID,
@@ -2735,7 +2752,8 @@ type CreateWorkspaceRow struct {
 // Admin-side workspace create (Phase 2 dev path). Slug is globally
 // unique; ON CONFLICT does not fire — callers detect the duplicate via
 // ErrDuplicateWorkspaceSlug after we probe with SlugExists.
-// @visibility 接受 'public' / 'private';默认私密,owner 可在设置里改。
+// @visibility accepts 'public' / 'private'; defaults to private; owner
+// can change it in settings.
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (CreateWorkspaceRow, error) {
 	row := q.db.QueryRow(ctx, createWorkspace,
 		arg.ID,
@@ -2785,10 +2803,11 @@ type CreateWorkspaceConversationRow struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// surface ∈ {web, im, api}; form ∈ {thread, group, dm, oneshot}。
-// 调用方负责传合法组合(e.g. surface='web' 通常配 form='thread',
-// surface='im' + form='group' 是飞书群,surface='api' + form='oneshot'
-// 是外部回调一次性触发)。
+// surface in {web, im, api}; form in {thread, group, dm, oneshot}.
+// Callers pass a legal combination (e.g. surface='web' usually goes
+// with form='thread'; surface='im' + form='group' is a Feishu group;
+// surface='api' + form='oneshot' is an external callback one-shot
+// trigger).
 func (q *Queries) CreateWorkspaceConversation(ctx context.Context, arg CreateWorkspaceConversationParams) (CreateWorkspaceConversationRow, error) {
 	row := q.db.QueryRow(ctx, createWorkspaceConversation,
 		arg.ID,
@@ -3900,7 +3919,7 @@ type GetAgentMetricsRow struct {
 }
 
 // Aggregates a single agent's run history over the last
-// @window_days days for the agent-detail "近 N 天表现" panel:
+// @window_days days for the agent-detail "recent N days performance" panel:
 //   - completed_count   — finished runs (status = 'completed')
 //   - failed_count      — failed/cancelled/interrupted (for success rate)
 //   - total_count       — completed + failed (excludes still-running/queued)
@@ -4068,7 +4087,7 @@ select
   -- v7 (2026-06-15): also empty when the bound runtime has been
   -- soft-deleted — the LEFT JOIN below filters those out so a stale
   -- runtime_id pointing at a dead runtime degrades to the same
-  -- "未绑定 Runtime" message instead of routing dispatch to a dead device.
+  -- "unbound Runtime" message instead of routing dispatch to a dead device.
   coalesce(rt.id::text, ''::text)::text as runtime_id
 from agent_runs r
 join conversations c on c.id = r.conversation_id
@@ -4232,8 +4251,9 @@ type GetBuiltinCapabilityEnabledParams struct {
 	CapabilityKey string      `json:"capability_key"`
 }
 
-// 内置能力(如 fetch_chat_history)的 per-agent 开关查询。无行代表默认开启,
-// 由调用方在 pgx.ErrNoRows 时兜底为 true。
+// Per-agent switch query for a built-in capability (e.g.
+// fetch_chat_history). No row means enabled by default; the caller
+// falls back to true on pgx.ErrNoRows.
 func (q *Queries) GetBuiltinCapabilityEnabled(ctx context.Context, arg GetBuiltinCapabilityEnabledParams) (bool, error) {
 	row := q.db.QueryRow(ctx, getBuiltinCapabilityEnabled, arg.AgentID, arg.CapabilityKey)
 	var enabled bool
@@ -4609,8 +4629,9 @@ type GetDiscoverableWorkspaceForJoinRow struct {
 	Visibility string `json:"visibility"`
 }
 
-// 申请入口:校验目标 workspace 既存在又是 public 的;非 public 时返回
-// 0 行,handler 据此返回 404(避免私有 workspace 存在性泄露)。
+// Join entry point: verify the target workspace exists AND is public;
+// when not public, returns 0 rows and the handler responds 404
+// (avoids leaking private-workspace existence).
 func (q *Queries) GetDiscoverableWorkspaceForJoin(ctx context.Context, workspaceID pgtype.UUID) (GetDiscoverableWorkspaceForJoinRow, error) {
 	row := q.db.QueryRow(ctx, getDiscoverableWorkspaceForJoin, workspaceID)
 	var i GetDiscoverableWorkspaceForJoinRow
@@ -4645,9 +4666,9 @@ select
   latest.id::text as latest_version_id,
   latest.version as latest_version,
   latest.created_at as latest_version_created_at,
-  -- pinning_mode='latest' 走 latest.* 字段(reupload 后自动跟随);
-  -- pinning_mode='pinned' 走 cv.* 字段(锁版本)。两套同时取出,
-  -- 让 daemon resolver 不必再发第二次 query。
+  -- pinning_mode='latest' uses the latest.* columns (auto-follows reuploads);
+  -- pinning_mode='pinned' uses cv.* (locked version). Both sets are
+  -- pulled at once so the daemon resolver doesn't need a second query.
   latest.oss_key        as latest_oss_key,
   latest.sha256         as latest_sha256,
   latest.canonical_spec as latest_canonical_spec,
@@ -4677,11 +4698,13 @@ join lateral (
     oss_key, sha256, canonical_spec, schema_version
   from capability_version
   where capability_id = c.id
-    -- 当 capability 被 deprecated 后,latest binding 应当冻结在
-    -- deprecation 之前发布的最新版本,而不是继续自动追 deprecation
-    -- 之后的版本(那批已经不在受支持范围内,跟 UpgradeAgentCapability
-    -- 显式拒绝 deprecated 升级一致)。c.deprecated_at IS NULL 时
-    -- 这一行恒真,等同于原来的"无条件取最新"。
+    -- After a capability is deprecated, latest bindings should freeze
+    -- on the newest version published before deprecation rather than
+    -- keep auto-tracking versions published afterwards (those are no
+    -- longer supported, matching UpgradeAgentCapability's explicit
+    -- rejection of deprecated upgrades). When c.deprecated_at IS NULL
+    -- this predicate is always true and behaves like the previous
+    -- "unconditionally take the latest".
     and (c.deprecated_at is null or capability_version.created_at <= c.deprecated_at)
   order by created_at desc, version desc
   limit 1
@@ -5735,8 +5758,8 @@ type GetWorkspaceConnectorByAppIDRow struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 出站 resolver 按 (platform, app_id) 反查启用的连接器,取 config 里的
-// *_ref 解密 token。
+// The outbound resolver reverse-looks-up an enabled connector by
+// (platform, app_id), then decrypts the token via the *_ref in config.
 func (q *Queries) GetWorkspaceConnectorByAppID(ctx context.Context, arg GetWorkspaceConnectorByAppIDParams) (GetWorkspaceConnectorByAppIDRow, error) {
 	row := q.db.QueryRow(ctx, getWorkspaceConnectorByAppID, arg.Platform, arg.AppID)
 	var i GetWorkspaceConnectorByAppIDRow
@@ -5775,7 +5798,8 @@ type GetWorkspaceIMConnectorsRow struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 拉取某 workspace 全部平台的有效连接器(前端面板初始化用)。
+// Fetch every active connector across all platforms for a workspace
+// (used by frontend panel initialization).
 func (q *Queries) GetWorkspaceIMConnectors(ctx context.Context, workspaceID pgtype.UUID) ([]GetWorkspaceIMConnectorsRow, error) {
 	rows, err := q.db.Query(ctx, getWorkspaceIMConnectors, workspaceID)
 	if err != nil {
@@ -5819,9 +5843,10 @@ type GetWorkspaceMemberRoleParams struct {
 	UserID      pgtype.UUID `json:"user_id"`
 }
 
-// RBAC 根节点:所有 RequireWorkspaceRole / requireWorkspaceMember / requireWorkspaceOwnerOrAdmin
-// 中间件最终都走这一句。必须只承认 status='active' 的成员行;
-// pending(申请中) 和 rejected(已拒) 在此处被自动锁住,无须散落 client 端检查。
+// RBAC entry point: RequireWorkspaceRole / requireWorkspaceMember /
+// requireWorkspaceOwnerOrAdmin middleware all bottom out here. Must
+// only accept status='active' rows; pending and rejected are locked
+// out here so client-side checks don't have to scatter.
 func (q *Queries) GetWorkspaceMemberRole(ctx context.Context, arg GetWorkspaceMemberRoleParams) (string, error) {
 	row := q.db.QueryRow(ctx, getWorkspaceMemberRole, arg.WorkspaceID, arg.UserID)
 	var role string
@@ -5851,15 +5876,18 @@ type GetWorkspaceMembershipForUserRow struct {
 }
 
 // ============================================================
-// 工作区主动申请加入(self-service join request)
+// Workspace self-service join requests
 //
-// 没有独立的 join_requests 表 —— pending / active / rejected 都是
-// workspace_members 行的不同 status,共享同一份 RBAC / 唯一性 / 软删
-// 语义。新查询只是围绕这套状态机 + visibility 的窗口。
+// There is no dedicated join_requests table -- pending / active /
+// rejected are just different statuses on workspace_members rows,
+// sharing the same RBAC / uniqueness / soft-delete semantics. The new
+// queries are simply windows over this state machine + visibility.
 // ============================================================
-// 申请前置检查:看 (workspace_id, user_id) 在非 rejected 范围内是否已存在行
-// (跟唯一索引同语义)。返回 status 让 handler 决定是否阻止重复申请 / 提示
-// "已是成员" / "申请审核中"。
+// Pre-check on the join request: does a row exist for
+// (workspace_id, user_id) in the non-rejected range? (Same semantics
+// as the unique index.) Returns status so the handler can decide
+// whether to block a duplicate request or surface "already a member" /
+// "pending review".
 func (q *Queries) GetWorkspaceMembershipForUser(ctx context.Context, arg GetWorkspaceMembershipForUserParams) (GetWorkspaceMembershipForUserRow, error) {
 	row := q.db.QueryRow(ctx, getWorkspaceMembershipForUser, arg.WorkspaceID, arg.UserID)
 	var i GetWorkspaceMembershipForUserRow
@@ -5924,9 +5952,11 @@ where id = $1::uuid
   and deleted_at is null
 `
 
-// 飞书拒绝路径用: 只在 visibility=workspace 且非成员时调用,所以单独抽一个最小
-// 投影,不复用 GetWorkspaceForOwnerView 之类带 join 的查询。返回 'public' /
-// 'private',workspace 不存在或被软删时 sql.ErrNoRows。
+// Used by the Feishu reject path: only invoked for
+// visibility=workspace when the caller is not a member, so we pull a
+// minimal projection rather than reusing something like
+// GetWorkspaceForOwnerView that carries joins. Returns 'public' /
+// 'private'; sql.ErrNoRows when the workspace is missing or soft-deleted.
 func (q *Queries) GetWorkspaceVisibilityByID(ctx context.Context, id pgtype.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getWorkspaceVisibilityByID, id)
 	var visibility string
@@ -6405,9 +6435,12 @@ type ListActiveWorkspaceOwnerNamesParams struct {
 	ItemLimit   int32       `json:"item_limit"`
 }
 
-// 飞书 visibility=workspace 拒绝卡片里展示 “管理员: A、B” 用。只取 role='owner' +
-// status='active'; 按 created_at asc 让最早的 owner(通常是创建者)排在前面,稳定
-// 截断。返回 display_name 用 users.name,name 为空时退回 email,前端层不必再判 NULL。
+// Used by the Feishu visibility=workspace reject card to show
+// "Admins: A, B". Only takes role='owner' + status='active'; ordered by
+// created_at asc so the earliest owner (usually the creator) comes
+// first for stable truncation. display_name uses users.name and falls
+// back to email when name is empty, so the frontend never has to
+// null-check.
 func (q *Queries) ListActiveWorkspaceOwnerNames(ctx context.Context, arg ListActiveWorkspaceOwnerNamesParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, listActiveWorkspaceOwnerNames, arg.WorkspaceID, arg.ItemLimit)
 	if err != nil {
@@ -6515,8 +6548,8 @@ type ListAgentRunArtifactsRow struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
-// 2026-06-04 schema: artifact_type 拆成 medium(载体: file/link/inline)
-// + kind(语义: log/transcript/code-patch/screenshot/...,业务定义)。
+// 2026-06-04 schema: artifact_type is split into medium (carrier: file/link/inline)
+// + kind (semantics: log/transcript/code-patch/screenshot/..., business-defined).
 func (q *Queries) ListAgentRunArtifacts(ctx context.Context, arg ListAgentRunArtifactsParams) ([]ListAgentRunArtifactsRow, error) {
 	rows, err := q.db.Query(ctx, listAgentRunArtifacts, arg.RunID, arg.WorkspaceID)
 	if err != nil {
@@ -7371,20 +7404,28 @@ type ListDiscoverableWorkspacesRow struct {
 	HasPendingRequest bool               `json:"has_pending_request"`
 }
 
-// 当前用户可以申请加入的 public 工作区:
+// Public workspaces the current user may apply to:
 //   - workspaces.visibility = 'public'
-//   - 该用户不是此 workspace 的 active 成员(已经是成员就不该出现在发现列表)
-//   - 但 pending(我已申请审核中) 的 workspace 仍要出现,前端通过
-//     has_pending_request=true 显示"已申请,等待审批"状态。否则用户
-//     一提交申请,workspace 就从下拉消失,体验上是"申请丢了"
-//   - rejected 行不阻塞,允许再申请,与 uk_workspace_members_active 一致
+//   - The user is not an active member of this workspace (already a
+//     member should not appear in the discover list)
+//   - But workspaces where the user has a pending join request should
+//     still appear; the frontend uses has_pending_request=true to show
+//     "requested, awaiting approval". Otherwise as soon as a user
+//     submits a request the workspace disappears from the dropdown,
+//     which feels like "the request got lost".
+//   - Rejected rows do not block, allowing re-application, matching
+//     uk_workspace_members_active.
 //
-// private 工作区永远不出现在发现列表 —— 列举它们等于泄漏租户存在性。
+// Private workspaces never appear in the discover list -- listing them
+// would leak tenant existence.
 //
-// 分页 + 搜索:
-//   - @search_q 空时跳过模糊匹配;非空时 name ILIKE '%' || q || '%' (大小写不敏感)
-//   - 切换器下拉用 limit=5 offset=0 拿首屏;Discover modal 用 limit=20 offset=N 翻页
-//   - 总数走另一个 query CountDiscoverableWorkspaces (避免 window function 复杂度)
+// Pagination + search:
+//   - Empty @search_q skips fuzzy matching; when non-empty,
+//     name ILIKE '%' || q || '%' (case-insensitive)
+//   - Switcher dropdown uses limit=5 offset=0 for the first screen;
+//     the Discover modal uses limit=20 offset=N for pagination
+//   - Total count comes from the separate CountDiscoverableWorkspaces
+//     query (avoids window-function complexity)
 func (q *Queries) ListDiscoverableWorkspaces(ctx context.Context, arg ListDiscoverableWorkspacesParams) ([]ListDiscoverableWorkspacesRow, error) {
 	rows, err := q.db.Query(ctx, listDiscoverableWorkspaces,
 		arg.UserID,
@@ -7682,7 +7723,7 @@ type ListModelsRow struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 列出所有活跃 model. 全公司共享,不再按 workspace 过滤.
+// List all active models. Company-wide shared, no longer filtered by workspace.
 func (q *Queries) ListModels(ctx context.Context, itemLimit int32) ([]ListModelsRow, error) {
 	rows, err := q.db.Query(ctx, listModels, itemLimit)
 	if err != nil {
@@ -7747,8 +7788,9 @@ type ListPendingJoinRequestsRow struct {
 	UserName      string             `json:"user_name"`
 }
 
-// 某 workspace 的待审批申请,带申请人基本信息。
-// 调用方需有 owner / admin 权限(在 handler 层 RBAC 校验)。
+// Pending join requests for one workspace, with basic requester info.
+// The caller needs owner / admin permission (RBAC-checked in the
+// handler layer).
 func (q *Queries) ListPendingJoinRequests(ctx context.Context, workspaceID pgtype.UUID) ([]ListPendingJoinRequestsRow, error) {
 	rows, err := q.db.Query(ctx, listPendingJoinRequests, workspaceID)
 	if err != nil {
@@ -8033,7 +8075,8 @@ type ListSecretsRow struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 组织级,不再按 workspace 过滤. 可按 kind 过滤(传空字符串则返回所有 kind).
+// Organization-level, no longer filtered by workspace. Optionally
+// filter by kind (pass empty string to return all kinds).
 func (q *Queries) ListSecrets(ctx context.Context, arg ListSecretsParams) ([]ListSecretsRow, error) {
 	rows, err := q.db.Query(ctx, listSecrets, arg.KindFilter, arg.ItemLimit)
 	if err != nil {
@@ -8095,7 +8138,7 @@ type ListStaleFeishuPermissionInflightCardsRow struct {
 
 // Returns conversations whose permission inflight slot has been
 // waiting longer than @stale_cutoff. The driver auto-expires these
-// (forces a Deny verdict + patches the card to "已超时") so the
+// (forces a Deny verdict + patches the card to "timed out") so the
 // agent run can resume rather than hanging indefinitely on a card
 // the user never clicked. Stewardhouse uses a 5-minute window; the
 // cutoff is passed in explicitly so the driver can experiment with
@@ -8157,7 +8200,7 @@ type ListStaleFeishuPromptForUserChoiceInflightCardsRow struct {
 // prompt_for_user_choice slot older than @stale_cutoff has either
 // already been answered (daemon timer fired, server didn't see the
 // decision yet) or the daemon went away. The outbound driver
-// auto-expires these by patching the card to "已超时" and clearing
+// auto-expires these by patching the card to "timed out" and clearing
 // the slot so the slot index doesn't leak.
 func (q *Queries) ListStaleFeishuPromptForUserChoiceInflightCards(ctx context.Context, arg ListStaleFeishuPromptForUserChoiceInflightCardsParams) ([]ListStaleFeishuPromptForUserChoiceInflightCardsRow, error) {
 	rows, err := q.db.Query(ctx, listStaleFeishuPromptForUserChoiceInflightCards, arg.StaleCutoff, arg.ItemLimit)
@@ -8385,8 +8428,9 @@ type ListUserWorkspacesRow struct {
 	Role       string             `json:"role"`
 }
 
-// `/api/v1/me/workspaces` 当前用户的工作区列表;只返回 active 成员行,
-// pending(申请中) 不出现在主切换器,审批通过后自动出现。
+// `/api/v1/me/workspaces` returns the current user's workspaces; only
+// active member rows are returned. pending rows do not appear in the
+// main switcher and show up automatically after approval.
 func (q *Queries) ListUserWorkspaces(ctx context.Context, arg ListUserWorkspacesParams) ([]ListUserWorkspacesRow, error) {
 	rows, err := q.db.Query(ctx, listUserWorkspaces, arg.UserID, arg.ItemLimit)
 	if err != nil {
@@ -8474,7 +8518,7 @@ type ListWorkspaceAgentRunsPageRow struct {
 //   - (created_at, id) tie-break — keep OFFSET pagination stable when
 //     multiple rows share a created_at.
 //   - @statuses::text[]          — empty array = "no status filter";
-//     non-empty filters via `= ANY(...)`. Lets the UI "进行中" tab union
+//     non-empty filters via `= ANY(...)`. Lets the UI "in progress" tab union
 //     {running, queued} in one round-trip.
 //   - LIMIT/OFFSET                — classic pager; pair with the
 //     CountWorkspaceAgentRuns query below for the page-count.
@@ -8640,8 +8684,8 @@ type ListWorkspaceConnectorsByPlatformRow struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 入站 reconciler 按平台扫描所有启用的连接器,为每条 (workspace_id,
-// app_id) 维持一条长连接。
+// The inbound reconciler scans all enabled connectors per platform to
+// maintain one long-lived connection per (workspace_id, app_id).
 func (q *Queries) ListWorkspaceConnectorsByPlatform(ctx context.Context, platform string) ([]ListWorkspaceConnectorsByPlatformRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceConnectorsByPlatform, platform)
 	if err != nil {
@@ -9031,7 +9075,8 @@ type ListWorkspaceMembersRow struct {
 	UserStatus  string             `json:"user_status"`
 }
 
-// 管理 UI 成员列表只看 active 成员;pending/rejected 走专门的 join-request 端点。
+// The admin member-list UI only shows active members; pending/rejected
+// go through the dedicated join-request endpoint.
 func (q *Queries) ListWorkspaceMembers(ctx context.Context, arg ListWorkspaceMembersParams) ([]ListWorkspaceMembersRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceMembers, arg.WorkspaceID, arg.ItemLimit)
 	if err != nil {
@@ -9479,8 +9524,9 @@ type RejectJoinRequestRow struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 拒绝:pending → rejected。被拒后用户可再次发起申请(SoftDeleteRejectedJoinRequest
-// 会先清掉此行再 INSERT 新 pending)。reviewed_by/reviewed_at 留作审计。
+// Reject: pending -> rejected. After rejection the user may re-apply
+// (SoftDeleteRejectedJoinRequest clears this row first, then a new
+// pending row is INSERTed). reviewed_by/reviewed_at are kept for audit.
 func (q *Queries) RejectJoinRequest(ctx context.Context, arg RejectJoinRequestParams) (RejectJoinRequestRow, error) {
 	row := q.db.QueryRow(ctx, rejectJoinRequest,
 		arg.ReviewedBy,
@@ -9767,8 +9813,9 @@ type ResolveModelRuntimeRow struct {
 }
 
 // model + (optional) inline_secret join.
-// credential_ref 模式不在这里 join user_credentials, 因为它要 by-user 查;
-// 调用方收到 ModelRuntime 后再单独查 user_credentials.
+// credential_ref mode does NOT join user_credentials here because that
+// lookup is per-user; callers query user_credentials separately after
+// receiving the ModelRuntime.
 func (q *Queries) ResolveModelRuntime(ctx context.Context, id pgtype.UUID) (ResolveModelRuntimeRow, error) {
 	row := q.db.QueryRow(ctx, resolveModelRuntime, id)
 	var i ResolveModelRuntimeRow
@@ -9967,7 +10014,8 @@ type SetBuiltinCapabilityEnabledParams struct {
 	Enabled       bool        `json:"enabled"`
 }
 
-// upsert 内置能力的 per-agent 开关;首次写入即建行,后续翻转仅改 enabled。
+// Upsert the per-agent switch for a built-in capability; the first
+// write creates the row, subsequent toggles just flip enabled.
 func (q *Queries) SetBuiltinCapabilityEnabled(ctx context.Context, arg SetBuiltinCapabilityEnabledParams) error {
 	_, err := q.db.Exec(ctx, setBuiltinCapabilityEnabled, arg.AgentID, arg.CapabilityKey, arg.Enabled)
 	return err
@@ -10098,11 +10146,15 @@ type SoftDeleteCapabilityRow struct {
 	DeprecatedAt pgtype.Timestamptz `json:"deprecated_at"`
 }
 
-// 原子写:NOT EXISTS 子查询和 UPDATE 在同一条语句里,DB 一致性快照下没有
-// "查空 binding → 别人插一条 → 我们删"这种窗口。0 行返回时调用方再 fetch
-// 一次 count 用于 409 报告(纯失败路径,正常删除只发一条 SQL)。
-// workspace_id 守卫这里也加上,defense-in-depth:handler 上层走过
-// GetCapability,但这里独立保护被绕过的情况。
+// Atomic write: NOT EXISTS subquery and the UPDATE are in one
+// statement, so under a consistent DB snapshot there's no
+// "read empty binding -> someone inserts one -> we delete" window.
+// When 0 rows come back the caller re-fetches count for the 409
+// report (purely a failure path; a normal delete only fires one
+// SQL).
+// workspace_id guard is also included here, defense-in-depth: the
+// handler goes through GetCapability up top, but we protect here
+// independently in case that is bypassed.
 func (q *Queries) SoftDeleteCapability(ctx context.Context, arg SoftDeleteCapabilityParams) (SoftDeleteCapabilityRow, error) {
 	row := q.db.QueryRow(ctx, softDeleteCapability, arg.Now, arg.ID, arg.WorkspaceID)
 	var i SoftDeleteCapabilityRow
@@ -10181,9 +10233,11 @@ type SoftDeleteRejectedJoinRequestParams struct {
 	UserID      pgtype.UUID        `json:"user_id"`
 }
 
-// 申请前置:把同一 (workspace_id, user_id) 下残留的 rejected 行清掉,
-// 让接下来的 AddWorkspaceMember(status='pending') 不必应对 rejected
-// 行的复杂复活语义。rejected 行被 deleted_at 标记后仍可作为审计追溯。
+// Pre-request step: clear any leftover rejected row for
+// (workspace_id, user_id) so the subsequent
+// AddWorkspaceMember(status='pending') does not have to deal with the
+// complex revival semantics of a rejected row. Once soft-deleted via
+// deleted_at, the rejected row still remains available for audit.
 func (q *Queries) SoftDeleteRejectedJoinRequest(ctx context.Context, arg SoftDeleteRejectedJoinRequestParams) (int64, error) {
 	result, err := q.db.Exec(ctx, softDeleteRejectedJoinRequest, arg.Now, arg.WorkspaceID, arg.UserID)
 	if err != nil {
@@ -10310,7 +10364,8 @@ type SoftDeleteWorkspaceMemberRow struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 移除 active 成员。pending(申请中) 行不在此处理(走 reject)。
+// Remove an active member. Pending rows are not handled here (they go
+// through reject).
 func (q *Queries) SoftDeleteWorkspaceMember(ctx context.Context, arg SoftDeleteWorkspaceMemberParams) (SoftDeleteWorkspaceMemberRow, error) {
 	row := q.db.QueryRow(ctx, softDeleteWorkspaceMember, arg.Now, arg.WorkspaceID, arg.UserID)
 	var i SoftDeleteWorkspaceMemberRow
@@ -10988,8 +11043,9 @@ type UpdateModelRow struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 可编辑: name / model_key / base_url / config / 凭据绑定.
-// provider_type / adapter / credential_mode 不可改 — 想要换语义就建新 model.
+// Editable: name / model_key / base_url / config / credential binding.
+// provider_type / adapter / credential_mode are immutable -- to change
+// their semantics create a new model.
 func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (UpdateModelRow, error) {
 	row := q.db.QueryRow(ctx, updateModel,
 		arg.Name,
@@ -11218,8 +11274,9 @@ type UpdateWorkspaceRow struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Rename a workspace (name and/or slug) 并可调整 visibility。调用方传期望的
-// 最终值;若想保持某字段不动就传当前值。返回新行。
+// Rename a workspace (name and/or slug) and optionally change
+// visibility. Callers pass the desired final values; to keep a field
+// unchanged, pass the current value. Returns the new row.
 func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (UpdateWorkspaceRow, error) {
 	row := q.db.QueryRow(ctx, updateWorkspace,
 		arg.Name,
@@ -11266,8 +11323,9 @@ type UpdateWorkspaceMemberRoleRow struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// 调整 active 成员的角色。pending(申请中) 或 rejected 行不在此处理 ——
-// 申请走 join-request approve/reject 端点。
+// Adjust the role of an active member. Pending or rejected rows are
+// not handled here -- those go through the join-request approve/reject
+// endpoint.
 func (q *Queries) UpdateWorkspaceMemberRole(ctx context.Context, arg UpdateWorkspaceMemberRoleParams) (UpdateWorkspaceMemberRoleRow, error) {
 	row := q.db.QueryRow(ctx, updateWorkspaceMemberRole,
 		arg.Role,
@@ -11786,14 +11844,17 @@ type UpsertWorkspaceIMConnectorRow struct {
 }
 
 // ============================================================
-// workspace_im_connectors — workspace 维度 IM 连接器(feishu/slack/discord)
-// 见 migration 000002。凭据密文在 secrets(vault),本表 config 只存
-// *_ref 与非敏感字段。app_id 是 workspace-bot 的通用 join key。
+// workspace_im_connectors -- workspace-level IM connectors (feishu/slack/discord)
+// See migration 000002. Encrypted credentials live in secrets (vault);
+// this table's config stores only *_ref pointers and non-sensitive fields.
+// app_id is the universal join key for workspace-bot.
 // ============================================================
-// 按 (workspace_id, platform) 唯一约束 upsert。冲突时更新 app_id /
-// enabled / config / updated_at,保留 id / created_by / created_at。
-// 若 (platform, app_id) 撞了别的 workspace,会触发 uk_wic_platform_appid
-// 唯一冲突并报错(由 store 层映射成 *_app_id_in_use)。
+// Upsert against the (workspace_id, platform) unique constraint. On
+// conflict, update app_id / enabled / config / updated_at while
+// keeping id / created_by / created_at.
+// If (platform, app_id) collides with another workspace, the
+// uk_wic_platform_appid unique constraint fires and the query errors
+// out (the store layer maps this to *_app_id_in_use).
 func (q *Queries) UpsertWorkspaceIMConnector(ctx context.Context, arg UpsertWorkspaceIMConnectorParams) (UpsertWorkspaceIMConnectorRow, error) {
 	row := q.db.QueryRow(ctx, upsertWorkspaceIMConnector,
 		arg.ID,
@@ -11834,12 +11895,14 @@ type WithdrawOwnPendingJoinRequestParams struct {
 	UserID      pgtype.UUID        `json:"user_id"`
 }
 
-// 申请人自助撤回自己提交的 pending 申请:把 pending 行 soft-delete
-// (与 SoftDeleteRejectedJoinRequest 同样的 deleted_at 模式)。
-// 守卫:
-//   - workspace_id + user_id 必须匹配(handler 用 session user 锁定)
-//   - 必须仍是 pending(active 行不能这样删 —— 那是退出工作区,走另一条路)
-//   - affected rows = 0 时,handler 返回 404/409 让前端刷新
+// Applicant self-withdraws their pending request: soft-delete the
+// pending row (same deleted_at pattern as SoftDeleteRejectedJoinRequest).
+// Guards:
+//   - workspace_id + user_id must match (handler pins the session user)
+//   - Must still be pending (active rows cannot be deleted this way --
+//     that's a workspace-leave flow via a different path)
+//   - When affected rows = 0, the handler returns 404/409 so the
+//     frontend refreshes.
 func (q *Queries) WithdrawOwnPendingJoinRequest(ctx context.Context, arg WithdrawOwnPendingJoinRequestParams) (int64, error) {
 	result, err := q.db.Exec(ctx, withdrawOwnPendingJoinRequest, arg.Now, arg.WorkspaceID, arg.UserID)
 	if err != nil {
@@ -11863,8 +11926,9 @@ type WorkspaceMembershipExistsParams struct {
 	UserID      pgtype.UUID `json:"user_id"`
 }
 
-// 预检:必须是 workspace 的 active 成员才行。
-// pending(申请中) 不算,因此 join request 通过前不算正式成员。
+// Precheck: must be an active member of the workspace.
+// Pending does not count, so a join request is not a real membership
+// until it has been approved.
 func (q *Queries) WorkspaceMembershipExists(ctx context.Context, arg WorkspaceMembershipExistsParams) (bool, error) {
 	row := q.db.QueryRow(ctx, workspaceMembershipExists, arg.WorkspaceID, arg.UserID)
 	var exists bool

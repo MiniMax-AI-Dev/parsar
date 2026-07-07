@@ -30,7 +30,7 @@ func seedFeishuRunForClaim(t *testing.T, store *Store, externalChatID string) (c
 	sendRes, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent claim-test",
+		Content:           "@product-agent claim-test",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {
@@ -666,7 +666,7 @@ func TestClaim_FailedRunWithoutOutputMessageStopsAfterFingerprint(t *testing.T) 
 	}
 	for _, r := range rowsTick2 {
 		if r.AgentRunID == runID {
-			t.Fatalf("failed run with terminal fingerprint was RE-CLAIMED on second tick; the per-run idempotency filter is broken. Without it the chat sees the same red 'Agent 执行失败' card every tick.")
+			t.Fatalf("failed run with terminal fingerprint was RE-CLAIMED on second tick; the per-run idempotency filter is broken. Without it the chat sees the same red 'Agent run failed' card every tick.")
 		}
 	}
 }
@@ -676,7 +676,7 @@ func TestClaim_FailedRunWithoutOutputMessageStopsAfterFingerprint(t *testing.T) 
 // agent_run_id + high seq_emitted, the claim must still pick the
 // current run so the driver can send a fresh card (was the
 // 2026-06-18 sharedbot regression where "second question in same
-// 话题" got no card until the previous run's slot cleared).
+// topic" got no card until the previous run's slot cleared).
 func TestClaim_NewRunNotBlockedByPreviousRunsWorkingSlot(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
@@ -822,7 +822,7 @@ func TestClaim_MultiFailedRunsBothExcludedAfterFingerprint(t *testing.T) {
 	sendRes, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    convID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent claim-test-second",
+		Content:           "@product-agent claim-test-second",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {

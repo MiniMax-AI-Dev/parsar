@@ -9,8 +9,8 @@ import (
 // TestBuildPingText_WithOpenID locks in the at-mention shape that
 // Feishu's msg_type=text body parses for desktop / mobile push.
 func TestBuildPingText_WithOpenID(t *testing.T) {
-	got := buildPingText("ou_bob", "任务已完成 ✓ 耗时 17s")
-	want := `<at user_id="ou_bob">用户</at> 任务已完成 ✓ 耗时 17s`
+	got := buildPingText("ou_bob", "Task complete ✓ took 17s")
+	want := `<at user_id="ou_bob">user</at> Task complete ✓ took 17s`
 	if got != want {
 		t.Errorf("buildPingText = %q, want %q", got, want)
 	}
@@ -23,8 +23,8 @@ func TestBuildPingText_WithOpenID(t *testing.T) {
 func TestBuildPingText_NoOpenID(t *testing.T) {
 	cases := []string{"", "   ", "\t\n"}
 	for _, openID := range cases {
-		got := buildPingText(openID, "任务已完成 ✓ 耗时 17s")
-		want := "任务已完成 ✓ 耗时 17s"
+		got := buildPingText(openID, "Task complete ✓ took 17s")
+		want := "Task complete ✓ took 17s"
 		if got != want {
 			t.Errorf("buildPingText(openID=%q) = %q, want %q", openID, got, want)
 		}
@@ -37,23 +37,23 @@ func TestBuildPingText_NoOpenID(t *testing.T) {
 // TestBuildPingText_TrimsInputs verifies the helper normalises stray
 // whitespace on both arguments so the rendered ping is always tidy.
 func TestBuildPingText_TrimsInputs(t *testing.T) {
-	got := buildPingText("  ou_bob  ", "  任务已完成 ✓ 耗时 17s  ")
-	want := `<at user_id="ou_bob">用户</at> 任务已完成 ✓ 耗时 17s`
+	got := buildPingText("  ou_bob  ", "  Task complete ✓ took 17s  ")
+	want := `<at user_id="ou_bob">user</at> Task complete ✓ took 17s`
 	if got != want {
 		t.Errorf("buildPingText (trimmed) = %q, want %q", got, want)
 	}
 }
 
 // TestTerminalPingMessage_FormatsDuration sanity-checks the
-// "任务已完成 ✓ 耗时 17s" template against several elapsed values so
+// "Task complete ✓ took 17s" template against several elapsed values so
 // callers don't need to think about FormatElapsed's units.
 func TestTerminalPingMessage_FormatsDuration(t *testing.T) {
 	cases := map[time.Duration]string{
-		3 * time.Second:               "任务已完成 ✓ 耗时 3s",
-		17 * time.Second:              "任务已完成 ✓ 耗时 17s",
-		60 * time.Second:              "任务已完成 ✓ 耗时 1m",
-		3*time.Minute + 5*time.Second: "任务已完成 ✓ 耗时 3m5s",
-		0:                             "任务已完成 ✓ 耗时 0s",
+		3 * time.Second:               "Task complete ✓ took 3s",
+		17 * time.Second:              "Task complete ✓ took 17s",
+		60 * time.Second:              "Task complete ✓ took 1m",
+		3*time.Minute + 5*time.Second: "Task complete ✓ took 3m5s",
+		0:                             "Task complete ✓ took 0s",
 	}
 	for d, want := range cases {
 		if got := terminalPingMessage(d); got != want {

@@ -364,7 +364,7 @@ function RunStatusBadge({ status }: { status: AgentRunStatus }) {
 const RUNS_PAGE_SIZE = 20
 
 // "running" tab unions {running, queued} so a queued run waiting on the
-// dispatcher still shows under 进行中.
+// dispatcher still shows under "Running".
 const TAB_STATUSES: Record<"all" | "running" | "failed", AgentRunStatus[]> = {
   all: [],
   running: ["running", "queued"],
@@ -464,8 +464,8 @@ export function RunsPage() {
 
           {total === 0 ? (
             // Empty state must live INSIDE the tabs container so an empty
-            // 进行中 / 失败 tab doesn't take the tab bar with it — the user
-            // has to be able to click 全部 to get back.
+            // "Running" / "Failed" tab doesn't take the tab bar with it — the user
+            // has to be able to click "All" to get back.
             <EmptyState
               icon={Play}
               title={t("runs.empty.title")}
@@ -1120,7 +1120,7 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.started"), detail: payloadValue(ev, "source"), icon: Play, color: "text-info", ...withTime }
     case "run.queued": {
       // run.queued payload may carry { position: N }; degrades to plain
-      // "排队中" when absent.
+      // "queued" when absent.
       const positionRaw = payloadValue(ev, "position")
       const position = positionRaw ? Number(positionRaw) : 0
       const detail = position > 1

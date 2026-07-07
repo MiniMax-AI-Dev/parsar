@@ -88,7 +88,7 @@ func TestResolveAgentDaemonPublicWSURLRewritesLoopbackForDockerBackend(t *testin
 	// The in-container daemon dials PublicWSURL after bootstrap. With the local
 	// docker backend and no user-defined network, a loopback host must be
 	// rewritten to host.docker.internal (mirroring the bootstrap ServerURL
-	// rewrite) or the container would dial itself and stay 待分配.
+	// rewrite) or the container would dial itself and stay unassigned.
 	var cfg config.Config
 	cfg.Server.PublicURL = "http://127.0.0.1:18090"
 	env := dockerBackendEnv(map[string]string{"AGENT_DAEMON_SANDBOX_BACKEND": "docker"})

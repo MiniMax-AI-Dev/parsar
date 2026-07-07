@@ -93,7 +93,7 @@ func parseFeishuPostContent(decoded map[string]any, metadata map[string]any) (st
 				userID := jsonMapString(node, "user_id")
 				if userID == "@_all" {
 					atAll = true
-					parts = append(parts, "@所有人")
+					parts = append(parts, "@everyone")
 					continue
 				}
 				if userID != "" {

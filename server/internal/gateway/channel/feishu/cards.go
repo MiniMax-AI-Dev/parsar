@@ -27,7 +27,7 @@ const feishuCardMIME = "feishu/interactive"
 // errCardFallbackMessage mirrors the driver's failed-run fallback copy
 // (buildFinalCardForRun) so a TerminalResult with an empty ErrorMessage
 // renders the same error card the legacy path produced.
-const errCardFallbackMessage = "Agent 运行失败，请稍后重试。"
+const errCardFallbackMessage = "Agent run failed. Please retry later."
 
 // RenderProgress renders the in-flight ("executing") card. Mirrors
 // buildMidRunCardContent: BuildRunningCard(title, steps, streamingText,

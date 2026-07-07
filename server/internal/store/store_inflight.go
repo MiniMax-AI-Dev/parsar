@@ -511,7 +511,7 @@ func (s *Store) FindConversationByPromptForUserChoiceRequestID(ctx context.Conte
 
 // ListStaleFeishuPromptForUserChoiceInflightCards is the server-side
 // belt for the daemon's 10-min watchdog. Anything older than cutoff
-// gets the card patched to "已超时" and the slot cleared by the
+// gets the card patched to "timed out" and the slot cleared by the
 // outbound driver.
 func (s *Store) ListStaleFeishuPromptForUserChoiceInflightCards(ctx context.Context, cutoff time.Time, limit int32) ([]ConversationInflightCards, error) {
 	if limit <= 0 {
@@ -549,7 +549,7 @@ func (s *Store) ListStaleFeishuPromptForUserChoiceInflightCards(ctx context.Cont
 // common FailAgentRun path) has no message row to stamp via
 // messages.metadata.gateway_delivered_at. MarkGatewayOutboundDelivered
 // no-ops on missing OutputMessageID, so the claim SQL would otherwise
-// re-pick the row every tick and re-send a red "执行失败" card.
+// re-pick the row every tick and re-send a red "run failed" card.
 //
 // Idempotent: re-stamping the same run_id is harmless; a subsequent
 // run overwrites.
@@ -705,7 +705,7 @@ func (s *Store) ListStaleFeishuPermissionInflightCards(ctx context.Context, cuto
 }
 
 // PendingQueuedFeishuRun describes one queued agent_run that hasn't
-// yet had a "排队中" placeholder card sent. The queue-card driver
+// yet had a "Queued" placeholder card sent. The queue-card driver
 // iterates these per tick — one notice card per run, stamped via
 // StampQueueCardSent to avoid double-fires.
 type PendingQueuedFeishuRun struct {
@@ -734,7 +734,7 @@ type ClaimPendingQueuedFeishuRunsInput struct {
 // metadata->>'queue_card_sent_at' is unset and were created after
 // cutoff, stamping queue_card_claim so sibling pods see a disjoint
 // batch. Replaces a previous list variant that let every pod see the
-// same row → N duplicate "排队中" cards.
+// same row → N duplicate "Queued" cards.
 func (s *Store) ClaimPendingQueuedFeishuRuns(ctx context.Context, input ClaimPendingQueuedFeishuRunsInput) ([]PendingQueuedFeishuRun, error) {
 	limit := input.Limit
 	if limit <= 0 {

@@ -77,8 +77,8 @@ export function UserSearchCombobox({
   const isLoading = trimmed.length > 0 && searchQ.isFetching
   const showEmpty = trimmed.length > 0 && !searchQ.isFetching && items.length === 0
 
-  // Trigger label: "搜索成员…" placeholder when nothing picked, otherwise
-  // a count like "已选 3 人".
+  // Trigger label: "Search members…" placeholder when nothing picked, otherwise
+  // a count like "3 selected".
   const triggerLabel =
     selected.length === 0
       ? t("members.add.search.placeholder")

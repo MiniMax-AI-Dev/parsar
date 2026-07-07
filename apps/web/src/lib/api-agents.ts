@@ -19,7 +19,7 @@ import type {
 
 const KEY_AGENTS = (workspaceID: string) => ["admin", "agents", workspaceID] as const
 // Statuses are sorted + joined to a stable string (nil/empty → "_all") so the
-// "进行中" union tab and pagination produce distinct cache entries.
+// "in progress" union tab and pagination produce distinct cache entries.
 const KEY_RUNS = (
   workspaceID: string,
   statuses?: AgentRunStatus[] | null,
@@ -67,7 +67,7 @@ async function listAgentRuns(
   if (!workspaceID) {
     return { agent_runs: [], total: 0, limit: limit ?? 100, offset: offset ?? 0 }
   }
-  // Handler accepts comma-separated `status=a,b` for the union "进行中" tab.
+  // Handler accepts comma-separated `status=a,b` for the union "in progress" tab.
   // Omit the param entirely when no filter so the backend's empty-set branch fires.
   const query: Record<string, string | number | boolean | undefined> = {
     limit: limit ?? 100,
@@ -115,7 +115,7 @@ async function cancelRunRequest(runID: string, reason?: string) {
 }
 
 // Bulk cancel every queued / running run in the conversation, regardless of
-// agent. Used by "取消全部" and the Feishu /cancel all command.
+// agent. Used by "cancel all" and the Feishu /cancel all command.
 async function cancelConversationAllRequest(conversationID: string, reason?: string) {
   return apiRequest<unknown>(
     `/api/v1/conversations/${encodeURIComponent(conversationID)}/cancel-all`,
@@ -230,7 +230,7 @@ export function useAgents(workspaceID: string | null) {
 }
 
 export interface UseAgentRunsOptions {
-  // admin "进行中" tab passes ["running","queued"]; null/undefined/empty = no filter.
+  // admin "in progress" tab passes ["running","queued"]; null/undefined/empty = no filter.
   statuses?: AgentRunStatus[] | null
   offset?: number
   limit?: number
@@ -354,10 +354,10 @@ export function useCancelRun(workspaceID: string | null) {
   })
 }
 
-// useCancelConversation drives "取消全部". onSuccess MUST invalidate the
+// useCancelConversation drives "cancel all". onSuccess MUST invalidate the
 // conversationTimeline query keyed by this conversation — otherwise
 // ChatStream's `runs.some(...)` keeps `someRunActive` true and the button +
-// "思考中" spinner stay on screen.
+// "thinking" spinner stay on screen.
 export function useCancelConversation() {
   const qc = useQueryClient()
   return useMutation({

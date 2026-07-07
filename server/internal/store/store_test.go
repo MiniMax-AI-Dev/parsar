@@ -478,8 +478,8 @@ func TestSeedDevFixtureReactivatesSeededAgents(t *testing.T) {
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "demo-group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@产品Agent @后端Agent 评估一下 memory 模块",
-		Mentions:          []string{"@产品Agent", "@后端Agent"},
+		Text:              "@product-agent @backend-agent evaluate the memory module",
+		Mentions:          []string{"@product-agent", "@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -500,8 +500,8 @@ func TestCreateInboundIMMessageCreatesSingleAgentRun(t *testing.T) {
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -515,7 +515,7 @@ func TestCreateInboundIMMessageCreatesSingleAgentRun(t *testing.T) {
 	assertAuditEventCount(t, db, result.WorkspaceID, "", 2)
 	assertAuditEvent(t, db, result.WorkspaceID, "im.message.created", "message", result.MessageID)
 	assertAuditEvent(t, db, result.WorkspaceID, "agent_run.created", "agent_run", result.RunIDs[0])
-	assertAuditMetadataOmitsSensitiveText(t, db, result.WorkspaceID, "看一下 API", "payload", "command")
+	assertAuditMetadataOmitsSensitiveText(t, db, result.WorkspaceID, "check the API", "payload", "command")
 }
 
 func TestCreateGatewayMessagePersistsGatewaySource(t *testing.T) {
@@ -529,8 +529,8 @@ func TestCreateGatewayMessagePersistsGatewaySource(t *testing.T) {
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 		Source:            "gateway",
 		Gateway:           "feishu",
 	})
@@ -578,8 +578,8 @@ func TestGatewayMessageResolvesExternalConversationID(t *testing.T) {
 
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		SenderEmail:      "admin@example.com",
-		Text:             "@后端Agent 看一下 API",
-		Mentions:         []string{"@后端Agent"},
+		Text:             "@backend-agent check the API",
+		Mentions:         []string{"@backend-agent"},
 		Source:           "gateway",
 		Gateway:          "feishu",
 		ExternalChatID:   "oc_demo",
@@ -614,8 +614,8 @@ func TestGatewayMessageDedupesExternalMessageID(t *testing.T) {
 	}
 	input := CreateInboundIMMessageInput{
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 		Source:            "gateway",
 		Gateway:           "feishu",
 		ExternalChatID:    "oc_demo",
@@ -655,8 +655,8 @@ func TestTargetedFeishuInboundCreatesConversationAndSourceAppOutbound(t *testing
 	}
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
-		Text:              "@飞书Bot 不用显式 @Agent 也应进入目标 Agent",
-		Mentions:          []string{"@飞书Bot"},
+		Text:              "@feishu-bot implicit @Agent should still route to target Agent",
+		Mentions:          []string{"@feishu-bot"},
 		Source:            "gateway",
 		Gateway:           "feishu",
 		ExternalUserID:    "ou_feishu_admin",
@@ -834,8 +834,8 @@ func TestGatewayOutboundMessagesAndDelivery(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ExternalChatID:    "oc_demo",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 		Source:            "gateway",
 		Gateway:           "dev",
 		ExternalMessageID: "om_outbound",
@@ -843,7 +843,7 @@ func TestGatewayOutboundMessagesAndDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Source: "http_agent", Content: "HTTP Agent 回复"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Source: "http_agent", Content: "HTTP Agent reply"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1015,8 +1015,8 @@ func TestClaimNextQueuedHTTPAgentRun(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1064,8 +1064,8 @@ func TestFailAgentRunWritesFailedStatusAndAudit(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1122,8 +1122,8 @@ func TestRequeueFailedAgentRun(t *testing.T) {
 	_, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1165,8 +1165,8 @@ func TestRequeueFailedAgentRunRejectsNonFailedRun(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1184,7 +1184,7 @@ func TestCancelAgentRunIsIdempotent(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent 看一下 API", Mentions: []string{"@后端Agent"}})
+	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent check the API", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1226,7 +1226,7 @@ func TestDequeueNextRunPicksOldestQueuedSibling(t *testing.T) {
 	if _, err := s.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent first", Mentions: []string{"@后端Agent"}})
+	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent first", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1235,7 +1235,7 @@ func TestDequeueNextRunPicksOldestQueuedSibling(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Distinct timestamps so "oldest first" is unambiguous.
-	created2, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent second", Mentions: []string{"@后端Agent"}})
+	created2, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent second", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1243,7 +1243,7 @@ func TestDequeueNextRunPicksOldestQueuedSibling(t *testing.T) {
 	if _, err := db.Exec(ctx, `update agent_runs set created_at = now() - interval '5 seconds' where id = $1`, run2ID); err != nil {
 		t.Fatal(err)
 	}
-	created3, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent third", Mentions: []string{"@后端Agent"}})
+	created3, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent third", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1281,12 +1281,12 @@ func TestHasInflightRunForConversationAgentDetectsSibling(t *testing.T) {
 	if _, err := s.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent one", Mentions: []string{"@后端Agent"}})
+	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent one", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	run1ID := created1.RunIDs[0]
-	created2, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent two", Mentions: []string{"@后端Agent"}})
+	created2, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent two", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1328,7 +1328,7 @@ func TestMarkAgentRunRunningBlockedByInflightSibling(t *testing.T) {
 	if _, err := s.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent one", Mentions: []string{"@后端Agent"}})
+	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent one", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1336,7 +1336,7 @@ func TestMarkAgentRunRunningBlockedByInflightSibling(t *testing.T) {
 	if _, err := db.Exec(ctx, `update agent_runs set status = 'running' where id = $1`, run1ID); err != nil {
 		t.Fatal(err)
 	}
-	created2, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent two", Mentions: []string{"@后端Agent"}})
+	created2, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent two", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1361,7 +1361,7 @@ func TestCancelAgentRunDoesNotCancelCompletedRun(t *testing.T) {
 	if _, err := store.SeedDevFixture(ctx); err != nil {
 		t.Fatal(err)
 	}
-	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@后端Agent 看一下 API", Mentions: []string{"@后端Agent"}})
+	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent check the API", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1396,8 +1396,8 @@ func TestCompleteHTTPAgentRunUsesHTTPAuditSource(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1409,7 +1409,7 @@ func TestCompleteHTTPAgentRunUsesHTTPAuditSource(t *testing.T) {
 	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{
 		RunID:   created.RunIDs[0],
 		Source:  "http_agent",
-		Content: "HTTP Agent completed, @测试Agent 补测试",
+		Content: "HTTP Agent completed, @test-agent add tests",
 		Usage: UsageInput{
 			Provider:     "fake-http-agent",
 			Model:        "http-agent-v1",
@@ -1451,8 +1451,8 @@ func TestCompleteAgentRunWritesEmptyUsageWhenNoneReported(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1488,8 +1488,8 @@ func TestCompleteAgentRunMentionCreatesChildRun(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1497,7 +1497,7 @@ func TestCompleteAgentRunMentionCreatesChildRun(t *testing.T) {
 
 	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{
 		RunID:   created.RunIDs[0],
-		Content: "我处理完了，@测试Agent 补一下回归用例",
+		Content: "I'm done here, @test-agent add regression cases",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1535,14 +1535,14 @@ func TestCompleteAgentRunSelfTriggerSkipped(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@后端Agent 我自己继续"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@backend-agent I'll keep going"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1565,14 +1565,14 @@ func TestCompleteAgentRunDuplicateTargetSkipped(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@测试Agent @test-agent 都看一下"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@TestAgent @test-agent both take a look"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1601,13 +1601,13 @@ func TestConversationTimelineShowsMessagesAndRunStatus(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "后端 Agent fake runtime output"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "backend agent fake runtime output"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1642,7 +1642,7 @@ func TestConversationTimelineIncludesFailedRunReason(t *testing.T) {
 	sent, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent 看下为什么失败",
+		Content:           "@product-agent check why it failed",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {
@@ -1670,7 +1670,7 @@ func TestConversationTimelineIncludesFailedRunReason(t *testing.T) {
 	if run.ID != runID || run.Status != "failed" {
 		t.Fatalf("expected attached failed run %s, got %+v", runID, run)
 	}
-	if run.UserFacingReason != "Agent 本地执行失败，请展开本轮错误详情查看原因。" {
+	if run.UserFacingReason != "Agent local execution failed. Please expand this run's error details for the cause." {
 		t.Fatalf("expected user-facing failure reason on attached run, got %+v", run)
 	}
 }
@@ -1687,13 +1687,13 @@ func TestConversationTimelineAndRunDetailShowAgentHandoff(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@测试Agent 补测试"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@test-agent add tests"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1734,13 +1734,13 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "后端 Agent fake runtime output"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "backend agent fake runtime output"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1792,7 +1792,7 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 	if detail.Status != "completed" || detail.OutputMessage == nil || detail.OutputMessage.ID != completed.MessageID {
 		t.Fatalf("expected completed detail with output message, got %+v", detail)
 	}
-	if detail.OutputMessage.Content != "后端 Agent fake runtime output" || len(detail.Artifacts) != 0 || len(detail.Usage) != 1 {
+	if detail.OutputMessage.Content != "backend agent fake runtime output" || len(detail.Artifacts) != 0 || len(detail.Usage) != 1 {
 		t.Fatalf("expected output content, empty artifacts, and usage, got %+v", detail)
 	}
 	if detail.Usage[0].AgentRunID != completed.RunID || detail.Usage[0].Provider != "" {
@@ -1842,8 +1842,8 @@ func TestRecordAgentRunExecutionSnapshotFreezesRuntimeRead(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 记录运行快照",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent record run snapshot",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1975,13 +1975,13 @@ func TestListWorkspaceAgentRunsFiltersByStatus(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@产品Agent @后端Agent 评估一下 API",
-		Mentions:          []string{"@产品Agent", "@后端Agent"},
+		Text:              "@product-agent @backend-agent evaluate the API",
+		Mentions:          []string{"@product-agent", "@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "产品 Agent output"}); err != nil {
+	if _, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "product agent output"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2055,8 +2055,8 @@ func TestCompleteAgentRunRejectsCompletedRunWithoutDirtyWrite(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -2126,8 +2126,8 @@ func TestCompleteAgentRunRejectsInvalidAgentRelation(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -2408,15 +2408,15 @@ func TestCompleteAgentRunSanitizesMessageAndStoresTranscript(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下日志清洗",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check log cleanup",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	runID := created.RunIDs[0]
 
-	noisy := "> build start\n\x1b[31m错误日志可忽略\x1b[0m\n$ ls -la\n后端Agent: 最终回答行 1\n后端Agent: 最终回答行 2\n"
+	noisy := "> build start\n\x1b[31merror logs are ignorable\x1b[0m\n$ ls -la\nbackend-agent: final answer line 1\nbackend-agent: final answer line 2\n"
 	result, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{
 		RunID:   runID,
 		Source:  "agent_daemon",
@@ -2440,7 +2440,7 @@ func TestCompleteAgentRunSanitizesMessageAndStoresTranscript(t *testing.T) {
 	if strings.Contains(messageContent, "> build start") || strings.Contains(messageContent, "$ ls -la") {
 		t.Fatalf("expected build/shell preamble removed, got %q", messageContent)
 	}
-	if !strings.Contains(messageContent, "最终回答行 1") {
+	if !strings.Contains(messageContent, "final answer line 1") {
 		t.Fatalf("expected final answer preserved, got %q", messageContent)
 	}
 
@@ -2467,8 +2467,8 @@ func TestCompleteAgentRunSkipsTranscriptWhenAlreadyClean(t *testing.T) {
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 干净输出",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent clean output",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -2477,7 +2477,7 @@ func TestCompleteAgentRunSkipsTranscriptWhenAlreadyClean(t *testing.T) {
 	if _, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{
 		RunID:   runID,
 		Source:  "http_agent",
-		Content: "后端Agent: 干净的最终回答。",
+		Content: "backend-agent: a clean final answer.",
 		Usage:   UsageInput{Provider: "http", Model: "clean"},
 	}); err != nil {
 		t.Fatal(err)
@@ -2502,7 +2502,7 @@ func TestCreateWorkspaceConversationCreatesActiveWebConversation(t *testing.T) {
 
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,
-		Title:       "  排查 API 报错  ",
+		Title:       "  debug API errors  ",
 		Metadata:    map[string]any{"source": "demo"},
 	})
 	if err != nil {
@@ -2511,7 +2511,7 @@ func TestCreateWorkspaceConversationCreatesActiveWebConversation(t *testing.T) {
 	if conv.ID == "" || conv.WorkspaceID != ids.WorkspaceID {
 		t.Fatalf("unexpected conversation row: %+v", conv)
 	}
-	if conv.Title != "排查 API 报错" {
+	if conv.Title != "debug API errors" {
 		t.Fatalf("expected title trimmed, got %q", conv.Title)
 	}
 	if conv.Surface != "web" || conv.Form != "thread" || conv.Status != "active" {
@@ -2556,7 +2556,7 @@ func TestRuntimeErrorSystemMessagePersistsStructuredPayload(t *testing.T) {
 		ConversationID: conv.ID,
 		SubKind:        "capability_credential_missing",
 		CapabilityID:   "00000000-0000-0000-0000-00000000c001",
-		CapabilityName: "GitHub Issue 查询",
+		CapabilityName: "GitHub Issue lookup",
 		CredentialKind: "github_pat",
 	})
 	if err != nil {
@@ -2577,7 +2577,7 @@ func TestRuntimeErrorSystemMessagePersistsStructuredPayload(t *testing.T) {
 	if senderType != "system" || kindColumn != "error" || metaKind != "runtime_error" {
 		t.Fatalf("unexpected message classification sender=%s kind=%s metaKind=%s", senderType, kindColumn, metaKind)
 	}
-	if subKind != "capability_credential_missing" || capabilityName != "GitHub Issue 查询" || credentialKind != "github_pat" || runID != "00000000-0000-0000-0000-0000000000aa" {
+	if subKind != "capability_credential_missing" || capabilityName != "GitHub Issue lookup" || credentialKind != "github_pat" || runID != "00000000-0000-0000-0000-0000000000aa" {
 		t.Fatalf("unexpected runtime metadata sub=%s cap=%s kind=%s run=%s", subKind, capabilityName, credentialKind, runID)
 	}
 }
@@ -2595,7 +2595,7 @@ func TestCreateWorkspaceConversationDefaultsAndValidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if conv.Title != "未命名会话" {
+	if conv.Title != "Untitled conversation" {
 		t.Fatalf("expected default title, got %q", conv.Title)
 	}
 	if conv.Surface != "web" || conv.Form != "thread" {
@@ -2622,7 +2622,7 @@ func TestCreateWorkspaceConversationBindsPrimaryAgent(t *testing.T) {
 
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID:    ids.WorkspaceID,
-		Title:          "评估文件附件功能",
+		Title:          "evaluate file attachment feature",
 		PrimaryAgentID: ids.BackendAgentID,
 		Metadata:       map[string]any{"source": "demo"},
 	})
@@ -2793,20 +2793,20 @@ func TestUpdateConversationTitleRenamesActiveConversation(t *testing.T) {
 	}
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,
-		Title:       "原标题",
+		Title:       "original title",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.UpdateConversationTitle(ctx, conv.ID, "  新标题  "); err != nil {
+	if err := store.UpdateConversationTitle(ctx, conv.ID, "  new title  "); err != nil {
 		t.Fatalf("rename: %v", err)
 	}
 	roundtrip, err := store.GetConversation(ctx, conv.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if roundtrip.Title != "新标题" {
-		t.Fatalf("title after rename = %q, want %q (trimmed)", roundtrip.Title, "新标题")
+	if roundtrip.Title != "new title" {
+		t.Fatalf("title after rename = %q, want %q (trimmed)", roundtrip.Title, "new title")
 	}
 	if err := store.UpdateConversationTitle(ctx, conv.ID, "   "); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("empty title: want ErrInvalidInput, got %v", err)
@@ -3223,25 +3223,26 @@ func TestMapUserFacingReasonCoversCommonFailures(t *testing.T) {
 		input  string
 		expect string
 	}{
-		{"empty", "", "Agent 执行失败，请稍后重试或联系管理员。"},
-		{"unknown", "unknown", "Agent 执行失败，请稍后重试或联系管理员。"},
-		{"secret disabled", "secret disabled or unavailable", "依赖的 Secret 已停用或缺失，请到 Secrets 页确认。"},
-		{"model missing", "model disabled or missing", "Agent 绑定的模型已停用或不存在，请到 Agents 页重新选择。"},
-		{"provider disabled", "provider disabled", "Agent 依赖的模型服务商已停用，请到 Models 页恢复或重新选择。"},
-		{"context length", "This model's maximum context length is 32k tokens", "对话内容超过模型上下文长度上限，请新开会话或精简问题后重试。"},
-		{"rate limit", "429 too many requests", "模型服务被限流，请稍后重试。"},
-		// agent_daemon 配对失效：错误文本里同时有 daemon 上下文 + 401/timeout，
-		// 必须命中"配对失效"分支而不是误归类为"模型 Secret"或"模型超时"。
-		{"daemon ws 401", "parsar-daemon: connect: permanent error (re-pair the daemon): transport.Dial: ws upgrade rejected with 401 Unauthorized", "Agent 容器配对失效，请重试。"},
-		{"daemon dial-in timeout", "sandbox acquire: agent_daemon: sandbox acquire failed: wait for daemon dial-in (deviceID=495f7b1c…): context deadline exceeded", "Agent 容器配对失效，请重试。"},
-		{"acquire sandbox binding failed", "agent_daemon: acquireSandboxBinding failed: sandbox acquire: wait for daemon dial-in: context deadline exceeded", "Agent 容器配对失效，请重试。"},
-		// 但纯模型 401（不带 daemon 上下文）仍走原分支。
-		{"unauthorized", "401 unauthorized", "模型服务身份验证失败，请确认 Secret 配置。"},
-		{"forbidden", "403 forbidden", "模型服务拒绝了请求，请确认账号权限。"},
-		{"timeout", "context deadline exceeded", "调用模型超时，请稍后重试。"},
-		{"connection refused", "dial tcp 127.0.0.1:9099: connection refused", "无法连接到模型服务，请确认网络或服务地址。"},
-		{"opencode exit", "opencode exec exit status 2", "Agent 本地执行失败，请展开本轮错误详情查看原因。"},
-		{"generic", "some unexpected runner panic", "Agent 执行失败，请展开本轮错误详情查看具体原因。"},
+		{"empty", "", "Agent run failed. Please retry later or contact an administrator."},
+		{"unknown", "unknown", "Agent run failed. Please retry later or contact an administrator."},
+		{"secret disabled", "secret disabled or unavailable", "The required Secret is disabled or missing. Please verify it on the Secrets page."},
+		{"model missing", "model disabled or missing", "The model bound to the Agent is disabled or does not exist. Please reselect it on the Agents page."},
+		{"provider disabled", "provider disabled", "The model provider the Agent depends on is disabled. Please restore it or reselect on the Models page."},
+		{"context length", "This model's maximum context length is 32k tokens", "The conversation exceeds the model's context length limit. Please start a new conversation or shorten the question and retry."},
+		{"rate limit", "429 too many requests", "The model service is rate-limited. Please retry later."},
+		// agent_daemon pairing expired: error text contains daemon context plus 401/timeout,
+		// must hit the "pairing expired" branch instead of being misclassified as "model
+		// Secret" or "model timeout".
+		{"daemon ws 401", "parsar-daemon: connect: permanent error (re-pair the daemon): transport.Dial: ws upgrade rejected with 401 Unauthorized", "Agent container pairing expired. Please retry."},
+		{"daemon dial-in timeout", "sandbox acquire: agent_daemon: sandbox acquire failed: wait for daemon dial-in (deviceID=495f7b1c…): context deadline exceeded", "Agent container pairing expired. Please retry."},
+		{"acquire sandbox binding failed", "agent_daemon: acquireSandboxBinding failed: sandbox acquire: wait for daemon dial-in: context deadline exceeded", "Agent container pairing expired. Please retry."},
+		// But a pure model 401 (without daemon context) still takes the original branch.
+		{"unauthorized", "401 unauthorized", "Model service authentication failed. Please verify the Secret configuration."},
+		{"forbidden", "403 forbidden", "The model service refused the request. Please verify account permissions."},
+		{"timeout", "context deadline exceeded", "The model call timed out. Please retry later."},
+		{"connection refused", "dial tcp 127.0.0.1:9099: connection refused", "Unable to connect to the model service. Please verify network and service address."},
+		{"opencode exit", "opencode exec exit status 2", "Agent local execution failed. Please expand this run's error details for the cause."},
+		{"generic", "some unexpected runner panic", "Agent run failed. Please expand this run's error details for the specific cause."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3256,14 +3257,14 @@ func TestUserFacingReasonFromMetadataPrefersExplicit(t *testing.T) {
 	meta := map[string]any{
 		"failed_by":          "http_agent",
 		"failure_reason":     "non-2xx",
-		"user_facing_reason": "Agent 执行失败，请稍后重试。",
+		"user_facing_reason": "Agent run failed. Please retry later.",
 	}
-	if got := userFacingReasonFromMetadata(meta); got != "Agent 执行失败，请稍后重试。" {
+	if got := userFacingReasonFromMetadata(meta); got != "Agent run failed. Please retry later." {
 		t.Fatalf("expected explicit reason wins, got %q", got)
 	}
 
 	derived := userFacingReasonFromMetadata(map[string]any{"failure_reason": "401 unauthorized"})
-	if derived != "模型服务身份验证失败，请确认 Secret 配置。" {
+	if derived != "Model service authentication failed. Please verify the Secret configuration." {
 		t.Fatalf("expected derived reason, got %q", derived)
 	}
 
@@ -3307,8 +3308,8 @@ func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	_, err = store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 看一下 API",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent check the API",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if !errors.Is(err, ErrUnknownMention) {
 		t.Fatalf("expected ErrUnknownMention when only disabled agent is mentioned, got %v", err)
@@ -3328,8 +3329,8 @@ func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	created2, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
-		Text:              "@后端Agent 再看一下",
-		Mentions:          []string{"@后端Agent"},
+		Text:              "@backend-agent take another look",
+		Mentions:          []string{"@backend-agent"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3494,7 +3495,7 @@ func TestMarkAgentRunRunningStateTransitionsAndConversationGuard(t *testing.T) {
 	sent, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent run stream store test",
+		Content:           "@product-agent run stream store test",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {
@@ -3530,7 +3531,7 @@ func TestMarkAgentRunRunningStateTransitionsAndConversationGuard(t *testing.T) {
 	sent2, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent second run",
+		Content:           "@product-agent second run",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {
@@ -3561,7 +3562,7 @@ func TestSendAssistantMessageFromRunPersistsAssistantMessageAndCompletes(t *test
 	sent, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent assistant persist",
+		Content:           "@product-agent assistant persist",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {
@@ -3957,8 +3958,8 @@ func TestResolveAgentNameForConversationReadsPrimaryAgentMetadata(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ResolveAgentNameForConversation: %v", err)
 	}
-	if name != "后端Agent" {
-		t.Errorf("agent name = %q, want fixture backend agent name 后端Agent", name)
+	if name != "Backend Agent" {
+		t.Errorf("agent name = %q, want fixture backend agent name Backend Agent", name)
 	}
 
 	// Unknown conversation must collapse to ('', nil) — the LEFT JOINs

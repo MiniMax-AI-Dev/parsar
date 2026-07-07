@@ -1,130 +1,133 @@
-# Parsar 多平台 IM 网关
+# Parsar multi-platform IM gateway
 
-> 目标:把当前飞书耦合的 IM 网关(`server/internal/gateway/`)抽象成平台中立
-> 的 `Channel` 接口,接入 Slack / Discord / 企业微信 / 钉钉。决策日期 2026-06-25。
+> Goal: extract the currently Feishu-coupled IM gateway
+> (`server/internal/gateway/`) into a platform-neutral `Channel` interface
+> and wire in Slack / Discord / WeCom / DingTalk. Decision date 2026-06-25.
 
-本文档是 PR #0 —— **接口契约**,代码动工前的最后一道闸。
-任何对 `gateway/` 的重构,改动前先读本文档;改动后更新本文档。
-
----
-
-## 1. 背景与现状
-
-Parsar 当前只接了飞书,代码在两处:
-
-- `server/internal/auth/feishu/` —— OAuth 登录(身份提供方,跟本文档无关)。
-- `server/internal/gateway/` —— **IM 消息网关**(飞书 Bot ↔ Agent 收发消息)。
-
-通用契约已经留了一半:`gateway/contract.go` 的 `InboundMessage` / `Delivery` /
-`MessageRef` / `ActorRef` / `ConversationRef` 都带 `Gateway` 字段;`gateway_sessions`
-表用 `(platform, external_id, external_thread_id)` 复合唯一键;
-`conversations.source_gateway` 是 enum 预留。
-
-但生产路径仍深度绑死飞书:
-
-- 类型层:`FeishuInboundEvent` / `FeishuRouteAgent` / `FeishuInboundDecision`,
-  `router.go` 全程用飞书专属类型。
-- store 层:`GetAgentByFeishuAppID` / `FindUserIDByFeishuUnionID` /
-  `ListFeishuSharedBotAgents` —— 方法名写死 Feishu。
-- 出站:飞书互动卡片 / reaction / AES webhook 解密 / `app_access_token`
-  缓存模型,全部 inlined 在 `feishu*` 包里。
-
-**不改的话,每加一个平台就复制一份飞书代码。** 这是本文档的动机。
+This document is PR #0 — **the interface contract**, the last checkpoint
+before code lands. Any refactor of `gateway/` must read this document
+first and update it afterwards.
 
 ---
 
-## 2. 设计原则
+## 1. Background and status
 
-### 2.1 复用已经中立的部分
+Parsar currently only integrates Feishu; the code lives in two places:
 
-- `connector/` 整套(`PromptInput` / `PromptEvent` / `Capabilities` 等)
-  完全不知道飞书存在 —— 不动。
-- `internal/agentdaemon/proto/`(server↔daemon WebSocket 协议)跟 IM 平台
-  无关 —— 不动。
-- `gateway/contract.go` 的 `InboundMessage` / `Delivery` 是基础原语,
-  已经被 `devgateway` 验证可用 —— 不动,作为子结构嵌进新接口。
-- 路由 / 可见性 / 多 Agent 选择态的逻辑
-  (`feishushared/router.go::HandleInbound` 主体) —— **只改命名,不改逻辑**。
+- `server/internal/auth/feishu/` — OAuth login (identity provider; unrelated to this document).
+- `server/internal/gateway/` — **IM message gateway** (Feishu Bot ↔ Agent send/receive).
 
-### 2.2 编译期 adapter,不做运行时插件
+Half of a generic contract is already there:
+`gateway/contract.go`'s `InboundMessage` / `Delivery` / `MessageRef` /
+`ActorRef` / `ConversationRef` all carry a `Gateway` field; the
+`gateway_sessions` table uses a composite unique key
+`(platform, external_id, external_thread_id)`; `conversations.source_gateway`
+is a reserved enum.
 
-Go 的 `plugin` 包脆弱(版本敏感、dlopen 跨平台问题、加载时机不灵活),
-不采用。**每个平台一个 Go 子包**,跟主仓库一起发版。新平台要 PR 进主仓库,
-质量门高、抽象纪律好。
+But the production path is still deeply Feishu-bound:
 
-参考:Hermes-agent 的 `BasePlatformAdapter` 模式(28+ 平台都这么写)。
+- Type layer: `FeishuInboundEvent` / `FeishuRouteAgent` / `FeishuInboundDecision`; `router.go` uses Feishu-specific types throughout.
+- Store layer: `GetAgentByFeishuAppID` / `FindUserIDByFeishuUnionID` / `ListFeishuSharedBotAgents` — the method names hard-code Feishu.
+- Outbound: Feishu interactive cards / reactions / AES webhook decryption / the `app_access_token` cache model — all inlined in `feishu*` packages.
 
-### 2.3 能力声明用 flag 集,不用类型层级
-
-每个 adapter 声明 `Capabilities`(12 个 bool / 字段)。driver 读 flag 决定
-走哪条路径,不靠 type assert / type switch 选行为。新平台 = 新文件,不改
-老代码。
-
-参考:OpenClaw 的 `ChannelCapabilities`(JS 实现,但思想直接借用)。
-
-### 2.4 入站归一化,出站本地渲染
-
-入站侧:每个平台的 raw event → `gateway.InboundEvent`(平台中立)。
-出站侧:driver 把"渲染中卡片" / "终态卡片" 概念交给 platform adapter 渲染
-成平台原生格式(Block Kit / Embed / 互动卡 / ActionCard),driver 不懂
-卡片,只懂"渲染 + 发送 + 编辑"。
-
-**不做"统一卡片 IR"** —— 四个平台的卡片语义不一样,统一了反而难用。
-
-### 2.5 不重写飞书,只搬位置
-
-PR #1 把现有飞书代码原样迁入 `channel/feishu/`,实现新接口,行为零变化。
-后续 PR 才逐步泛化。先稳后改,避免大爆炸。
+**Without a change, every new platform means copying Feishu code.** That
+is the motivation for this doc.
 
 ---
 
-## 3. 目标目录结构
+## 2. Design principles
+
+### 2.1 Reuse what is already neutral
+
+- The entire `connector/` package (`PromptInput` / `PromptEvent` / `Capabilities` and friends) is completely unaware of Feishu — leave it alone.
+- `internal/agentdaemon/proto/` (the server↔daemon WebSocket protocol) is IM-platform-agnostic — leave it alone.
+- The `InboundMessage` / `Delivery` primitives in `gateway/contract.go` are already proven by `devgateway` — leave them alone and embed them as substructures inside the new interfaces.
+- Routing / visibility / multi-Agent selection state logic (`feishushared/router.go::HandleInbound` body) — **rename only; do not touch the logic**.
+
+### 2.2 Compile-time adapters, not runtime plugins
+
+Go's `plugin` package is fragile (version-sensitive, cross-platform dlopen
+issues, inflexible loading). Not adopted. **One Go subpackage per
+platform**, released together with the main repo. New platforms must PR
+into the main repo — high quality gate, tight abstraction discipline.
+
+Reference: Hermes-agent's `BasePlatformAdapter` pattern (28+ platforms use it).
+
+### 2.3 Capability flag sets, not type hierarchies
+
+Each adapter declares `Capabilities` (12 bools / fields). The driver reads
+the flags to decide which path to take — not `type assert` / `type switch`
+selection. New platforms = new file; no old code changes.
+
+Reference: OpenClaw's `ChannelCapabilities` (JS implementation, borrowed idea).
+
+### 2.4 Normalize inbound, render locally on outbound
+
+Inbound: each platform's raw event → `gateway.InboundEvent`
+(platform-neutral). Outbound: the driver hands off "in-progress card" /
+"terminal card" concepts to the platform adapter, which renders to the
+platform's native format (Block Kit / Embed / interactive card /
+ActionCard); the driver knows nothing about cards, only "render + send +
+edit".
+
+**No "unified card IR"** — the four platforms have different card
+semantics; unifying makes it worse.
+
+### 2.5 Do not rewrite Feishu, only move it
+
+PR #1 moves the existing Feishu code into `channel/feishu/` unchanged and
+implements the new interface with zero behavior change. Later PRs
+generalize gradually. Stable first, then evolve — avoid a big bang.
+
+---
+
+## 3. Target directory structure
 
 ```text
 server/internal/gateway/
-├── contract.go                    # 不动(已是中立)
-├── channel/                       # 新增:平台适配层
+├── contract.go                    # unchanged (already neutral)
+├── channel/                       # new: platform adaptation layer
 │   ├── channel.go                 # Channel interface / Capabilities / StreamMode
 │   ├── directory.go               # DirectoryAdapter interface
 │   ├── lifecycle.go               # Lifecycle interface
 │   ├── textcodec.go               # TextCodec interface
-│   ├── feishu/                    # 现状迁入,行为零变化(PR #1)
-│   │   ├── channel.go             # 实现 Channel + 可选子接口
-│   │   ├── verify.go              # ← auth/feishu/webhook.go 迁过来
-│   │   ├── event.go               # ← gateway/feishu.go + feishu_message_parser.go
-│   │   ├── cards.go               # ← feishu_cards.go + inflight/*cards
-│   │   ├── credentials.go         # ← feishu_client.go + outbound_credentials.go
-│   │   └── stream.go              # 飞书原地 PATCH 互动卡
-│   ├── slack/                      # 首个非飞书平台(PR #4,Socket Mode,按钮-only)
-│   │   ├── channel.go              # 身份/Capabilities/Credentials;入站/传输/动作 stub(4a)
-│   │   ├── credentials.go          # bot token(xoxb)直用,不走 token 缓存
-│   │   ├── blockkit.go             # RenderProgress/RenderTerminal → Block Kit(4a,纯渲染)
-│   │   ├── textcodec.go            # mrkdwn 转换 + 长度感知切分(保留代码块边界)
-│   │   ├── outbound.go             # chat.postMessage/chat.update(PR #4b)
-│   │   ├── verify.go               # Verify:签名密钥 HMAC + url_verification(4c,纯函数)
-│   │   ├── event.go                # Normalize:app_mention/message → InboundEvent(4c,纯函数)
-│   │   ├── action.go               # HandleAction:block_actions(按钮-only)→ CardAction(4c,纯函数)
-│   │   └── socketmode.go           # Socket Mode 实时 runner(驱动上面三个解码器,PR #4d 接线)
+│   ├── feishu/                    # current code moved in unchanged (PR #1)
+│   │   ├── channel.go             # implements Channel + optional sub-interfaces
+│   │   ├── verify.go              # ← moved from auth/feishu/webhook.go
+│   │   ├── event.go               # ← from gateway/feishu.go + feishu_message_parser.go
+│   │   ├── cards.go               # ← from feishu_cards.go + inflight/*cards
+│   │   ├── credentials.go         # ← from feishu_client.go + outbound_credentials.go
+│   │   └── stream.go              # in-place PATCH of Feishu interactive cards
+│   ├── slack/                      # first non-Feishu platform (PR #4, Socket Mode, buttons-only)
+│   │   ├── channel.go              # identity / Capabilities / Credentials; inbound / transport / action stubs (4a)
+│   │   ├── credentials.go          # bot token (xoxb) used as-is, no token cache
+│   │   ├── blockkit.go             # RenderProgress/RenderTerminal → Block Kit (4a, pure rendering)
+│   │   ├── textcodec.go            # mrkdwn conversion + length-aware chunking (preserves code-block boundaries)
+│   │   ├── outbound.go             # chat.postMessage / chat.update (PR #4b)
+│   │   ├── verify.go               # Verify: signing-secret HMAC + url_verification (4c, pure functions)
+│   │   ├── event.go                # Normalize: app_mention/message → InboundEvent (4c, pure functions)
+│   │   ├── action.go               # HandleAction: block_actions (buttons only) → CardAction (4c, pure functions)
+│   │   └── socketmode.go           # Socket Mode realtime runner (drives the three decoders above; wired up in PR #4d)
 │   ├── discord/ (PR #5)
-│   ├── wecom/   (PR #6,StreamTerminalOnly)
-│   └── dingtalk/(PR #6,StreamTerminalOnly)
-├── router/                        # 重命名自 feishushared(PR #2)
-│   ├── router.go                  # 改用 channel.Event;channel.Platform() 替 "feishu"
-│   ├── commands.go                # /list /select /cancel /help,只去 Feishu 字面量
-│   ├── visibility.go              # 不动
-│   └── session.go                 # 不动
-├── inflight/                      # 重命名自 feishuoutbound(PR #3)
-│   ├── driver.go                  # 抢 inflight → 回放 → channel.RenderProgress
-│   └── retry.go                   # 1s→5s→30s→5m 退避表保留
-└── inbound/                       # 重命名自 feishuinbound(PR #3)
-    └── manager.go                 # 改用 channel.Verify + channel.Normalize
+│   ├── wecom/   (PR #6, StreamTerminalOnly)
+│   └── dingtalk/(PR #6, StreamTerminalOnly)
+├── router/                        # renamed from feishushared (PR #2)
+│   ├── router.go                  # switch to channel.Event; channel.Platform() replaces "feishu"
+│   ├── commands.go                # /list /select /cancel /help; strip Feishu literals only
+│   ├── visibility.go              # unchanged
+│   └── session.go                 # unchanged
+├── inflight/                      # renamed from feishuoutbound (PR #3)
+│   ├── driver.go                  # claim inflight → replay → channel.RenderProgress
+│   └── retry.go                   # keep the 1s→5s→30s→5m backoff table
+└── inbound/                       # renamed from feishuinbound (PR #3)
+    └── manager.go                 # switch to channel.Verify + channel.Normalize
 ```
 
 ---
 
-## 4. 接口契约
+## 4. Interface contract
 
-### 4.1 `Channel` 主接口
+### 4.1 `Channel` main interface
 
 ```go
 package channel
@@ -143,51 +146,53 @@ type Channel interface {
     Platform() Platform
     Capabilities() Capabilities
 
-    // ① 鉴权 + URL challenge(对接平台 webhook 入口)
+    // 1) Auth + URL challenge (dock into the platform's webhook entry)
     Verify(r *http.Request, body []byte) (verified []byte, challenge string, err error)
 
-    // ② 把平台原始 event 归一化为平台中立的 InboundEvent
+    // 2) Normalize the platform's raw event into a platform-neutral InboundEvent
     Normalize(verified []byte) (gateway.InboundEvent, error)
 
-    // ③ 命令回执(纯文本 / 简单卡片,不走流式)
+    // 3) Command reply (plain text / simple card; not streaming)
     Reply(ctx context.Context, target ReplyTarget, text string) error
 
-    // ④ 出站 driver 用:渲染执行中 / Done / Error 卡片
+    // 4) Outbound driver: render running / Done / Error cards
     RenderProgress(ctx context.Context, target ReplyTarget, state ProgressState) (Card, error)
     RenderTerminal(ctx context.Context, target ReplyTarget, result TerminalResult) (Card, error)
 
-    // ⑤ 流式 PATCH 同一张卡(Edit + BlockStreaming 能力才用)
+    // 5) Streaming PATCH of the same card (only used when Edit + BlockStreaming capabilities are on)
     Stream() StreamMode
     Edit(ctx context.Context, target ReplyTarget, ref MessageRef, card Card) error
     Send(ctx context.Context, target ReplyTarget, card Card) (MessageRef, error)
 
-    // ⑥ 消息操作(卡片按钮 / Action 回调)
+    // 6) Message actions (card button / Action callbacks)
     HandleAction(ctx context.Context, payload []byte) (ActionResult, error)
 
-    // ⑦ Agent prompt 提示(告诉 Agent 在哪个平台上,影响输出格式)
+    // 7) Agent prompt hint (tell the Agent which platform it is on; affects output format)
     AgentPromptHint() string
 
-    // ⑧ 凭证解析(hot-reload friendly)
+    // 8) Credentials resolver (hot-reload friendly)
     Credentials() CredentialResolver
 }
 ```
 
-#### `ProgressState` / `TerminalResult`(PR #3a 富化)
+#### `ProgressState` / `TerminalResult` (enriched in PR #3a)
 
-> **修订(PR #3a.1):** 初版 `ProgressState`/`TerminalResult` 只有
-> `{Title, Body, Done}`,过瘦——飞书执行中/终态卡片携带的是富状态(工具步骤、
-> 流式文本、thinking、usage、错误信息)。瘦结构会丢内容 = 行为变化。故 driver
-> 把已折叠好的运行状态交给适配器渲染,中立结构纳入 `gateway.StepInfo` /
-> `gateway.UsageStats`(`channel` 已 import `gateway`,无环)。Slack/Discord 把同一份
-> 中立状态渲染成各自原生 UI。
+> **Revision (PR #3a.1):** the initial `ProgressState`/`TerminalResult`
+> only had `{Title, Body, Done}`, which was too thin — Feishu's running /
+> terminal cards carry rich state (tool steps, streaming text, thinking,
+> usage, error info). A thin structure drops content = behavior change.
+> So the driver hands the adapter the already-folded running state, and
+> the neutral structure lives in `gateway.StepInfo` /
+> `gateway.UsageStats` (`channel` already imports `gateway`; no cycle).
+> Slack/Discord render the same neutral state into their own native UI.
 
 ```go
 type ProgressState struct {
-    Title         string             // 卡片标题(通常是 agent 名)
-    Steps         []gateway.StepInfo // 折叠后的工具调用步骤
-    StreamingText string             // 目前为止的流式文本
-    Elapsed       time.Duration      // 已运行时长
-    Now           time.Time          // 渲染时钟(为零时适配器取 time.Now().UTC())
+    Title         string             // card title (usually the agent name)
+    Steps         []gateway.StepInfo // folded tool-call steps
+    StreamingText string             // streaming text so far
+    Elapsed       time.Duration      // elapsed time
+    Now           time.Time          // render clock (zero → adapter uses time.Now().UTC())
     Done          bool
 }
 
@@ -197,43 +202,44 @@ type TerminalResult struct {
     Steps         []gateway.StepInfo
     Thinking      string
     Elapsed       time.Duration
-    Usage         *gateway.UsageStats // 无 usage rollup 时为 nil
-    Success       bool                // 选 Done vs Error 渲染
-    // 错误路径(Success == false 才读)
-    ErrorMessage  string // 用户可见失败文案;为空时适配器套默认
-    RawError      string // 未映射的原始错误,附在映射文案下
-    RunDetailURL  string // run 详情页深链;为空则不渲染
-    GuestHint     string // 未注册 public 访客的注册引导
+    Usage         *gateway.UsageStats // nil when there is no usage rollup
+    Success       bool                // picks Done vs Error render
+    // Error path (only read when Success == false)
+    ErrorMessage  string // user-visible failure copy; empty → adapter default
+    RawError      string // the unmapped raw error, appended below the mapped copy
+    RunDetailURL  string // deep link to the run detail page; empty = do not render
+    GuestHint     string // registration guidance for unregistered public visitors
 }
 ```
 
-适配器的 `RenderProgress`/`RenderTerminal` 是纯函数,委托现有
-`gateway.BuildRunningCard`/`BuildDoneCard`/`BuildFeishuErrorCardContent`,
-golden 测试锁定输出与现产线 `buildMidRunCardContent`/`buildFinalCardForRun`
-逐字节一致。
+The adapter's `RenderProgress` / `RenderTerminal` are pure functions,
+delegating to existing
+`gateway.BuildRunningCard` / `BuildDoneCard` / `BuildFeishuErrorCardContent`;
+golden tests pin the output byte-for-byte to the current production
+`buildMidRunCardContent` / `buildFinalCardForRun`.
 
-### 4.2 `Capabilities` 声明(吸收 OpenClaw 12 flags)
+### 4.2 `Capabilities` declaration (absorbing OpenClaw's 12 flags)
 
 ```go
 type Capabilities struct {
     ChatTypes      []string // "dm" | "group" | "channel" | "thread"
     Polls          bool
-    Reactions      bool     // emoji reaction;typing indicator 也走这条
-    Edit           bool     // 是否能 PATCH 消息本体
-    BlockStreaming bool     // 块级流式 PATCH(打字机效果)
+    Reactions      bool     // emoji reactions; typing indicator flows through here
+    Edit           bool     // whether the message body can be PATCHed
+    BlockStreaming bool     // block-level streaming PATCH (typewriter effect)
     Unsend         bool
     Reply          bool
-    Threads        bool     // 平台原生 thread
-    Media          bool     // 原生图片/视频/文件
-    NativeCommands bool     // 平台原生 slash command
-    MaxMessageLen  int      // 单条消息字符上限
-    // 不支持的能力直接 false,driver 自动降级
+    Threads        bool     // native platform thread
+    Media          bool     // native image / video / file
+    NativeCommands bool     // native platform slash command
+    MaxMessageLen  int      // per-message character cap
+    // Unsupported capabilities are simply false; the driver degrades automatically
 }
 
 type StreamMode int
 const (
-    StreamPatches      StreamMode = iota // 飞书/Slack/Discord
-    StreamTerminalOnly                   // 企业微信/钉钉
+    StreamPatches      StreamMode = iota // Feishu / Slack / Discord
+    StreamTerminalOnly                   // WeCom / DingTalk
 )
 
 func (c Capabilities) DerivedStream() StreamMode {
@@ -244,47 +250,47 @@ func (c Capabilities) DerivedStream() StreamMode {
 }
 ```
 
-### 4.3 可选子接口(隐式实现,Go duck-typing)
+### 4.3 Optional sub-interfaces (implicit implementation, Go duck-typing)
 
 ```go
-// 目录(列 bot / 群 / 成员);企微/钉钉可能只实现 ListBots
+// Directory (list bots / groups / members); WeCom / DingTalk may implement only ListBots
 type DirectoryAdapter interface {
     ListBots(ctx context.Context) ([]BotAccount, error)
     ListGroups(ctx context.Context, botID string) ([]Group, error)
     ListMembers(ctx context.Context, botID, groupID string) ([]Member, error)
 }
 
-// 文本格式化 + 截断(每个平台字符上限 + 标记语言不一样)
+// Text formatting + truncation (each platform has its own char cap + markup language)
 type TextCodec interface {
-    Format(text string) string                          // "**粗体**" → Slack "*粗体*"
-    Truncate(text string) []string                      // 长度感知切分,代码块边界保留
-    ExtractMedia(text string) ([]Media, string)         // 抽图片/文件,留下纯文本
+    Format(text string) string                          // "**bold**" → Slack "*bold*"
+    Truncate(text string) []string                      // length-aware chunking; preserve code-block boundaries
+    ExtractMedia(text string) ([]Media, string)         // pull out images / files, leave plain text
 }
 
-// 生命周期 + 健康状态
+// Lifecycle + health
 type Lifecycle interface {
     OnConnect() error
     OnDisconnect()
-    OnFatalError(code string, err error, retryable bool) // driver 收到后停 + audit
+    OnFatalError(code string, err error, retryable bool) // driver stops + audits on receipt
 }
 ```
 
-driver 用 type assert 探测:
+Driver detects these via type assertion:
 
 ```go
-if dc, ok := ch.(DirectoryAdapter); ok { ... } else { /* 降级 */ }
+if dc, ok := ch.(DirectoryAdapter); ok { ... } else { /* degrade */ }
 ```
 
-### 4.4 平台中立原语(在 `gateway.InboundEvent` 复用 contract.go)
+### 4.4 Platform-neutral primitives (reuse contract.go inside `gateway.InboundEvent`)
 
 ```go
 type InboundEvent struct {
     Platform          Platform
-    BotID             string                  // 入站事件的 app_id / bot_user_id
+    BotID             string                  // inbound event's app_id / bot_user_id
     ExternalMessageID string
     ExternalChatID    string
     ExternalThreadID  string
-    Sender            ExternalIdentity        // 平台侧 user id
+    Sender            ExternalIdentity        // platform-side user id
     Text              string
     Attachments       []Attachment
     Raw               json.RawMessage
@@ -300,82 +306,86 @@ type ExternalIdentity struct {
 
 ---
 
-## 5. 平台能力差异(写进各自的 adapter,不是 driver)
+## 5. Platform capability differences (live inside each adapter, not the driver)
 
-| 能力 | 飞书 | Slack | Discord | 企业微信 | 钉钉 | Teams |
+| Capability | Feishu | Slack | Discord | WeCom | DingTalk | Teams |
 |---|---|---|---|---|---|---|
-| 入站鉴权 | verify token + AES-CBC | Signing Secret HMAC + url_verification | Ed25519 / Gateway WS | WXBizMsgCrypt AES | HMAC / Stream 模式 | Bot Framework JWT(RS256/JWKS) |
-| 入站接法 | webhook 或 WS | Events API / Socket Mode | Interactions / Gateway | 回调 URL | HTTP 回调 / Stream | Bot Framework webhook(HTTPS POST) |
-| 用户 ID 维度 | union_id / open_id | user(Team 维度) | user(global) | userid(corp 维度) | userid / unionid | aadObjectId / 29:(tenant 维度) |
-| **流式 PATCH** | ✅ 互动卡 | ✅ chat.update | ✅ message edit | ⚠️ 客服消息可编辑 | ⚠️ ActionCard | ⚠️ PUT activity(整卡,非分块) |
-| 卡片格式 | 互动卡 | Block Kit | Embeds + components | 模板卡 / markdown | ActionCard | Adaptive Card |
-| 字符上限 | 30 KB(卡片) | 40 000(blocks) | 2 000(embed)/4 000 总 | 2 048 字节(markdown) | 6 000 字符 | 28 KB(卡片) |
-| 凭证模型 | app_access_token | bot token(常驻) | bot token(常驻) | corpid+secret→token | appkey+secret→token | AAD client-credentials(app id+password→token) |
-| 线程 | root_id / parent_id | thread_ts | 不支持 | 不支持 | 不支持 | conversation.id(root activity) |
+| Inbound auth | verify token + AES-CBC | Signing Secret HMAC + url_verification | Ed25519 / Gateway WS | WXBizMsgCrypt AES | HMAC / stream mode | Bot Framework JWT (RS256/JWKS) |
+| Inbound plumbing | webhook or WS | Events API / Socket Mode | Interactions / Gateway | callback URL | HTTP callback / stream | Bot Framework webhook (HTTPS POST) |
+| User ID dimension | union_id / open_id | user (team-scoped) | user (global) | userid (corp-scoped) | userid / unionid | aadObjectId / 29: (tenant-scoped) |
+| **Streaming PATCH** | ✅ interactive card | ✅ chat.update | ✅ message edit | ⚠️ customer-service messages editable | ⚠️ ActionCard | ⚠️ PUT activity (whole card, not chunked) |
+| Card format | interactive card | Block Kit | Embeds + components | template card / markdown | ActionCard | Adaptive Card |
+| Char cap | 30 KB (card) | 40,000 (blocks) | 2,000 (embed) / 4,000 total | 2,048 bytes (markdown) | 6,000 chars | 28 KB (card) |
+| Credential model | app_access_token | bot token (long-lived) | bot token (long-lived) | corpid+secret→token | appkey+secret→token | AAD client-credentials (app id + password → token) |
+| Threads | root_id / parent_id | thread_ts | not supported | not supported | not supported | conversation.id (root activity) |
 
-**关键决策:Slack / Discord / 飞书都能流式 PATCH,直接用 `StreamPatches`;
-企微 / 钉钉不支持,降级为 `StreamTerminalOnly`(只发终态卡,中间不发
-"执行中")。**
+**Key decision: Slack / Discord / Feishu all support streaming PATCH → use
+`StreamPatches` directly; WeCom / DingTalk do not → degrade to
+`StreamTerminalOnly` (only send the terminal card; no "running"
+mid-updates).**
 
-**Teams 特有:出入站鉴权不对称——入站是 Bot Framework 签发的 JWT(RS256,
-issuer `https://api.botframework.com`,audience==MicrosoftAppId,走 JWKS 验签),
-出站是 AAD client-credentials 换取的 bearer(scope
-`https://api.botframework.com/.default`)。两条鉴权链路职责不同,刻意拆到
-`verify.go`(入站验签)与 `outbound.go` 的 `connectorSender`(出站取 token),
-不共用一个 credential 类型。群消息必须 @机器人才路由,收敛在
-`gateway.ShouldSkipGroupWithoutMention`。**
+**Teams specifics:** inbound and outbound auth are asymmetric — inbound
+is a Bot-Framework-signed JWT (RS256, issuer
+`https://api.botframework.com`, audience == MicrosoftAppId, validated
+against the JWKS); outbound is an AAD client-credentials bearer (scope
+`https://api.botframework.com/.default`). These two auth chains are
+disjoint and split intentionally into `verify.go` (inbound) and
+`outbound.go`'s `connectorSender` (outbound) rather than sharing a
+credential type. Group messages must @-the-bot to route, gated by
+`gateway.ShouldSkipGroupWithoutMention`.
 
 ---
 
-## 6. PR 序列(7 步,每步独立可审,零阻塞飞书生产)
+## 6. PR sequence (7 steps, each independently reviewable, zero blockage to Feishu prod)
 
-| # | 改动 | 风险 | 价值 |
+| # | Change | Risk | Value |
 |---|---|---|---|
-| **0** | **本文档** | 无 | **锁定接口** |
-| 1 | 引入 `gateway/channel/` 包 + `Channel` 接口;**飞书代码原样搬入** `channel/feishu/`;老调用点继续走旧代码 | 低(纯重构) | 多平台骨架 |
-| 2 | `router.go` 去 `FeishuInboundEvent`,改用 `channel.InboundEvent`;store 三个 Feishu 方法加 `platform` 形参 + GIN 索引 | 中 | router/store 中立化 |
-| 3 | `inflight driver` 接受 `Channel`;新增 `StreamMode` 字段;`StreamTerminalOnly` 路径 | 中 | 出站框架复用 |
-| 4 | **新建 `channel/slack/`(首个非飞书平台)** | 新功能 | 验证抽象 |
-| 5 | `channel/discord/` | 新功能 | 验证 WS inbound 路径 |
-| 6 | `channel/wecom/` + `channel/dingtalk/`(均 `StreamTerminalOnly`) | 新功能 | 国内场景补齐 |
-| 7 | 删除 `auth/feishu/webhook.go` 旧路径,统一走 `channel/feishu/verify.go` | 清理 | 收尾 |
+| **0** | **This document** | None | **Lock the interface** |
+| 1 | Introduce `gateway/channel/` + the `Channel` interface; **move Feishu code as-is** into `channel/feishu/`; old callers keep using the old code | Low (pure refactor) | Multi-platform skeleton |
+| 2 | `router.go` drops `FeishuInboundEvent` for `channel.InboundEvent`; the three Feishu store methods take a `platform` param + GIN index | Medium | Neutralize router/store |
+| 3 | `inflight driver` accepts `Channel`; add a `StreamMode` field; `StreamTerminalOnly` path | Medium | Outbound framework reuse |
+| 4 | **New `channel/slack/`** (first non-Feishu platform) | New feature | Validate the abstraction |
+| 5 | `channel/discord/` | New feature | Validate the WS inbound path |
+| 6 | `channel/wecom/` + `channel/dingtalk/` (both `StreamTerminalOnly`) | New feature | Round out China-region coverage |
+| 7 | Delete `auth/feishu/webhook.go`'s old path; consolidate on `channel/feishu/verify.go` | Cleanup | Wrap-up |
 
 ---
 
-## 7. 与参考项目的对齐(已对照过)
+## 7. Alignment with reference projects (cross-checked)
 
-| 维度 | Hermes-agent | OpenClaw | 本文档(Parsar) |
+| Dimension | Hermes-agent | OpenClaw | This doc (Parsar) |
 |---|---|---|---|
-| Adapter 形态 | 抽象基类(继承) | 插件(运行时) | 子包 + 接口(Go duck-typing) |
-| 能力声明 | `REQUIRES_EDIT_FINALIZE` bool | `ChannelCapabilities` 12 flags | **`Capabilities` 12 flags(吸收 OpenClaw)** |
-| 事件归一 | ❌(各平台 raw) | `ChannelMessagingAdapter` | ✅ `gateway.InboundEvent` |
-| 文本截断 | ✅ `truncate_message` | ❌ | ✅ `TextCodec` |
-| Agent 平台提示 | `PLATFORM_HINTS` | `agentPrompt` | ✅ `AgentPromptHint()` |
-| 目录 | `channel_directory.py` | `ChannelDirectoryAdapter` | ✅ `DirectoryAdapter` |
-| 卡片按钮 | ❌ | `ChannelMessageActionAdapter` | ✅ `HandleAction()` |
-| 健康/lifecycle | `_mark_connected` | `ChannelLifecycleAdapter` | ✅ `Lifecycle` |
-| 配 CLI / 注册 | setup wizard | `ChannelSetupAdapter` | (暂不抽象,跟各平台自助) |
-| ID 重打码 | `agent/redact.py` | `ChannelSecurityAdapter` | (暂不抽象,各家差异大) |
+| Adapter shape | Abstract base class (inheritance) | Plugin (runtime) | Subpackage + interface (Go duck-typing) |
+| Capability declaration | `REQUIRES_EDIT_FINALIZE` bool | `ChannelCapabilities` 12 flags | **`Capabilities` 12 flags (adopted from OpenClaw)** |
+| Event normalization | ❌ (raw per platform) | `ChannelMessagingAdapter` | ✅ `gateway.InboundEvent` |
+| Text truncation | ✅ `truncate_message` | ❌ | ✅ `TextCodec` |
+| Agent platform hint | `PLATFORM_HINTS` | `agentPrompt` | ✅ `AgentPromptHint()` |
+| Directory | `channel_directory.py` | `ChannelDirectoryAdapter` | ✅ `DirectoryAdapter` |
+| Card buttons | ❌ | `ChannelMessageActionAdapter` | ✅ `HandleAction()` |
+| Health/lifecycle | `_mark_connected` | `ChannelLifecycleAdapter` | ✅ `Lifecycle` |
+| Config CLI / registration | setup wizard | `ChannelSetupAdapter` | (not abstracted; each platform self-services) |
+| ID redaction | `agent/redact.py` | `ChannelSecurityAdapter` | (not abstracted; per-platform differences are large) |
 
-**与 Hermes 对齐 ~90%,与 OpenClaw 对齐 ~85%。** 未对齐的两项是有意
-不为:OpenClaw 的 `SetupAdapter` 适合 JS CLI,Go 这边各平台 registration
-流程差异大不强求统一;`redact` 同理。
-
----
-
-## 8. 不在本文档范围
-
-- OAuth 登录平台化(那是 `auth/` 目录的事,跟 IM 网关是两条独立链路)。
-- `parsar-daemon` ↔ server 的 WebSocket 协议(已是平台中立)。
-- Agent Connector 抽象(`connector/types.go`,已中立)。
-- 群 → workspace 显式绑定(产品决策,见 `docs/feishu-routing.md` §8)。
-- cron / send_message 跨平台路由(Hermes 有,Parsar 暂无此功能)。
+**Alignment with Hermes ~90%, with OpenClaw ~85%.** The two we deliberately
+do not adopt: OpenClaw's `SetupAdapter` fits a JS CLI, and Go here has
+enough per-platform registration variance that forcing a common shape is
+not worth it; same story for `redact`.
 
 ---
 
-## 9. 相关文档
+## 8. Out of scope
 
-- 飞书 IM 路由产品语义:`docs/feishu-routing.md`
-- 飞书 inflight driver 重试 / 死信:`docs/feishu-driver-retry.md`
-- Agent 执行接入路径与协议:`docs/architecture.md`
-- 工程规则(worktree / 强制检查):`AGENTS.md`
+- Platform-ifying OAuth login (that lives under `auth/`; a different chain from the IM gateway).
+- The `parsar-daemon` ↔ server WebSocket protocol (already platform-neutral).
+- Agent Connector abstraction (`connector/types.go`, already neutral).
+- Explicit group → workspace binding (product decision; see `docs/feishu-routing.md` §8).
+- Cross-platform cron / send_message routing (Hermes has it; Parsar does not have this feature yet).
+
+---
+
+## 9. Related docs
+
+- Feishu IM routing product semantics: `docs/feishu-routing.md`
+- Feishu inflight driver retries / dead letters: `docs/feishu-driver-retry.md`
+- Agent execution entry paths and protocol: `docs/architecture.md`
+- Engineering rules (worktrees / mandatory checks): `AGENTS.md`

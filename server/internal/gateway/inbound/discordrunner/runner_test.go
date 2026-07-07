@@ -332,7 +332,7 @@ func newRunnerWithStore(t *testing.T, st router.Store, isThread bool) *Runner {
 
 // TestHandleMessage_ContinuesActivatedThread: a non-@ message posted in a thread
 // the bot was already activated in (history present) skips the mention gate and
-// enters routing — the Discord twin of the Feishu 话题续聊 rule.
+// enters routing — the Discord twin of the Feishu thread-continuation rule.
 func TestHandleMessage_ContinuesActivatedThread(t *testing.T) {
 	st := &threadHistoryStore{hasHistory: true}
 	r := newRunnerWithStore(t, st, true)

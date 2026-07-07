@@ -142,7 +142,7 @@ func TestInternalSubmitPromptForUserChoice_AppliesLocallyOnOwnerPod(t *testing.T
 // TestInternalSubmitPermission_StaleGenerationConflict guards against
 // the case where the owner pod has restarted (new generation) between
 // when the webhook pod read the owner row and when the POST arrived.
-// We want a 409 so the webhook pod surfaces "请稍后重试" rather than
+// We want a 409 so the webhook pod surfaces "Please retry later" rather than
 // silently sending the decision to a stale-state pod.
 func TestInternalSubmitPermission_StaleGenerationConflict(t *testing.T) {
 	c, _, sess, _, _ := newWiredHarness(t, "dev-1", "conv-1", "pa-1")

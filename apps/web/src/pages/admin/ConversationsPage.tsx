@@ -114,7 +114,7 @@ export function ConversationsPage() {
 
   const qc = useQueryClient()
 
-  // "新对话" navigates to an empty composer without pre-creating a
+  // "New conversation" navigates to an empty composer without pre-creating a
   // conv — the conv is created on first send via handleSendFromEmpty,
   // so the sidebar only shows rows with a real first user turn.
   const openCreate = () => {
@@ -123,7 +123,7 @@ export function ConversationsPage() {
 
   // First-send creates the conv + posts the message + navigates in.
   // Title derives from the first 30 chars so the sidebar gets a
-  // meaningful name immediately (server defaults to 未命名会话).
+  // meaningful name immediately (server defaults to "Untitled conversation").
   const handleSendFromEmpty = async (content: string): Promise<void> => {
     if (!wsId || !selectedAgentId) {
       throw new Error("workspace_id and agent_id required for empty-state send")
@@ -825,7 +825,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
                   // closes the EventSource without waiting for the
                   // server to send a done frame — daemon may take
                   // seconds to react to the abort, and the user
-                  // expects the "思考中" + button to disappear at
+                  // expects the "thinking" + button to disappear at
                   // the moment of the click. The server still sees
                   // the EventSource close (it cancels the ctx and
                   // bails). The /stream re-subscription path that
@@ -915,7 +915,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
             )
           )}
           {/*
-            Queued runs render an independent "排队中" chip per run,
+            Queued runs render an independent "queued" chip per run,
             distinct from the inflight working/thinking indicator
             above. Mirrors the Feishu queue-card driver behaviour
             (one chip per blocked message). Position is the timeline
@@ -951,7 +951,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
             onStartError={setChatToast}
             activeRunId={activeRunId}
             // Drop activeRunId immediately on click for the same reason
-            // the "取消全部" header button does: stop showing 思考中 /
+            // the "Cancel all" header button does: stop showing "thinking" /
             // the in-progress affordance the moment the user asks for
             // it, instead of waiting for the daemon to acknowledge the
             // abort. Server-side useCancelRun handles the actual run
@@ -1188,7 +1188,7 @@ function ComposerForm({
    * trailing Send button morphs into a Stop button (Square icon) that
    * invokes onCancelActiveRun. This is the ChatGPT/Claude.ai-style "switch
    * Send for Stop while generating" affordance, complementary to the
-   * conversation-header "取消全部" — single-run cancel here keys off the
+   * conversation-header "Cancel all" — single-run cancel here keys off the
    * specific runId the composer just dispatched.
    */
   activeRunId?: string | null
@@ -1254,7 +1254,7 @@ function ComposerForm({
   // While the conversation has an in-flight run AND the user hasn't typed
   // anything yet, the trailing button morphs from Send → Stop. Typing
   // overrides — letting users queue the next prompt while the current
-  // generation finishes mirrors the "/cancel" + "新消息" coexistence in
+  // generation finishes mirrors the "/cancel" + "new message" coexistence in
   // the Feishu side. Empty-state composer (onSendDirect) never shows
   // Stop because no run is in flight there.
   const showStop =

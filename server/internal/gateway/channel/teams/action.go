@@ -27,7 +27,7 @@ import (
 
 // ackReceived mirrors Feishu/Slack's default toast so an unrouted click looks
 // the same across platforms.
-const ackReceived = "操作已收到"
+const ackReceived = "Received"
 
 // teamsActionKinds maps a submit `data.action` value to the neutral
 // CardActionKind. Keys are identical to slack/feishu so all platforms converge

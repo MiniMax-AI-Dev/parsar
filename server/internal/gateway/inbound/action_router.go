@@ -135,7 +135,7 @@ func sdkResponseFromAck(ack channel.ActionAck) *callback.CardActionTriggerRespon
 //
 // Failure modes (all return a toast, never an error — a click must not hang):
 //   - missing request id → generic ack toast (defensive)
-//   - slot already cleared → "该请求已处理或已过期" toast
+//   - slot already cleared → "This request has already been handled or expired" toast
 //   - SubmitPermission error → retryable toast; slot stays
 //   - PatchMessage failure → log warn but still clear the slot since the
 //     verdict landed on the runtime
@@ -146,7 +146,7 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 			"open_message_id", action.ExternalMessageID,
 			"operator_open_id", action.OperatorID,
 		)
-		return channel.ActionAck{ToastKind: "info", ToastContent: "操作已收到"}, nil
+		return channel.ActionAck{ToastKind: "info", ToastContent: "Received"}, nil
 	}
 	approved := action.Kind == channel.CardActionPermissionAllow
 
@@ -157,27 +157,27 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 				"permission_request_id", requestID,
 				"operator_open_id", action.OperatorID,
 			)
-			return channel.ActionAck{ToastKind: "info", ToastContent: "该请求已处理或已过期"}, nil
+			return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}, nil
 		}
 		m.logger.Warn("feishu permission callback: lookup failed",
 			"permission_request_id", requestID,
 			"err", err.Error(),
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "查询失败,请稍后再试"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Query failed, please retry later"}, nil
 	}
 	if !conv.HasPermission {
 		m.logger.Info("feishu permission callback: no permission slot",
 			"permission_request_id", requestID,
 			"conversation_id", conv.ConversationID,
 		)
-		return channel.ActionAck{ToastKind: "info", ToastContent: "该请求已处理或已过期"}, nil
+		return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}, nil
 	}
 
 	if m.permRouter == nil {
 		m.logger.Warn("feishu permission callback: permission router not configured",
 			"permission_request_id", requestID,
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "服务未配置,请联系管理员"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Service not configured; contact an administrator"}, nil
 	}
 	if err := m.permRouter.SubmitPermission(ctx, PermissionDecision{
 		RequestID:  requestID,
@@ -189,7 +189,7 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 			"approved", approved,
 			"err", err.Error(),
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "更新失败,请稍后再试"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Update failed, please retry later"}, nil
 	}
 
 	// Patch the card into its green / red result shape under the bot that
@@ -214,9 +214,9 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 			"err", err.Error(),
 		)
 	}
-	toastKind, toastContent := "info", "已拒绝"
+	toastKind, toastContent := "info", "Rejected"
 	if approved {
-		toastKind, toastContent = "success", "已允许"
+		toastKind, toastContent = "success", "Allowed"
 	}
 	ack := channel.ActionAck{ToastKind: toastKind, ToastContent: toastContent}
 	if action.Platform != channel.PlatformFeishu {
@@ -286,11 +286,11 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 			"open_message_id", action.ExternalMessageID,
 			"operator_open_id", action.OperatorID,
 		)
-		return channel.ActionAck{ToastKind: "info", ToastContent: "操作已收到"}, nil
+		return channel.ActionAck{ToastKind: "info", ToastContent: "Received"}, nil
 	}
 	formValues := action.FormValues
 	if len(formValues) == 0 {
-		return channel.ActionAck{ToastKind: "error", ToastContent: "请填写凭据后再提交"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Please fill in the credentials before submitting"}, nil
 	}
 
 	// Extract (kind, plaintext) pairs from form_value. Fields not prefixed
@@ -317,13 +317,13 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 				"qkey", qkey,
 				"kind", kind,
 			)
-			return channel.ActionAck{ToastKind: "error", ToastContent: "请填写每个凭据后再提交"}, nil
+			return channel.ActionAck{ToastKind: "error", ToastContent: "Please fill in each credential before submitting"}, nil
 		}
 		bindings = append(bindings, kindBinding{kind: kind, plaintext: plaintext})
 		kindsForLog = append(kindsForLog, kind)
 	}
 	if len(bindings) == 0 {
-		return channel.ActionAck{ToastKind: "error", ToastContent: "请填写凭据后再提交"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Please fill in the credentials before submitting"}, nil
 	}
 
 	// Atomic claim — winning pod gets the slot, losers see NotFound. The
@@ -335,13 +335,13 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 				"qkey", qkey,
 				"operator_open_id", action.OperatorID,
 			)
-			return channel.ActionAck{ToastKind: "info", ToastContent: "该请求已过期，请重新发送消息"}, nil
+			return channel.ActionAck{ToastKind: "info", ToastContent: "This request has expired; please resend the message"}, nil
 		}
 		m.logger.Warn("feishu credential form submit: claim failed",
 			"qkey", qkey,
 			"err", err.Error(),
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "查询失败，请稍后再试"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Query failed, please retry later"}, nil
 	}
 	slot := claimed.Slot
 
@@ -356,7 +356,7 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 			"stash_initiator_open_id_present", stashedOpenID != "",
 			"conversation_id", claimed.ConversationID,
 		)
-		const toast = "凭据只能由发起人本人填写"
+		const toast = "Credentials can only be submitted by the requester"
 		ack := channel.ActionAck{ToastKind: "error", ToastContent: toast}
 		if action.Platform == channel.PlatformFeishu {
 			rejectCard := gateway.BuildCredentialFormRejectedCard(
@@ -385,7 +385,7 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 			"clicked_chat_id", clickedChat,
 			"operator_open_id", action.OperatorID,
 		)
-		const toast = "请在原会话中提交凭据"
+		const toast = "Please submit credentials in the original conversation"
 		ack := channel.ActionAck{ToastKind: "error", ToastContent: toast}
 		if action.Platform == channel.PlatformFeishu {
 			rejectCard := gateway.BuildCredentialFormRejectedCard(
@@ -429,7 +429,7 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 				"kind", b.kind,
 				"err", err.Error(),
 			)
-			return channel.ActionAck{ToastKind: "error", ToastContent: "保存凭据失败，请稍后再试"}, nil
+			return channel.ActionAck{ToastKind: "error", ToastContent: "Saving credentials failed, please retry later"}, nil
 		}
 		credentialInputs = append(credentialInputs, store.CreateUserCredentialInput{
 			UserID:         slot.InitiatorUserID,
@@ -449,7 +449,7 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 			"submitted_kinds", strings.Join(kindsForLog, ","),
 			"err", err.Error(),
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "保存凭据失败，请稍后再试"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Saving credentials failed, please retry later"}, nil
 	}
 
 	replacedCount := 0
@@ -469,7 +469,7 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 			"external_chat_id", claimed.ExternalChatID,
 			"external_thread_id", claimed.ExternalThreadID,
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "凭据已保存，但会话路由丢失，请重新 @ Agent"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Credentials saved, but conversation routing was lost; please @-mention the Agent again"}, nil
 	}
 
 	// Re-enqueue the original raw_query, busting gateway dedup by using
@@ -503,15 +503,15 @@ func (m *Manager) routeCredentialFormSubmit(ctx context.Context, action channel.
 			"qkey", qkey,
 			"err", err.Error(),
 		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "凭据已保存，但会话重启失败，请重发消息"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Credentials saved, but restarting the conversation failed; please resend the message"}, nil
 	}
 
 	// Build the toast preview shared by both platforms, then either return the
 	// finalized native card (Feishu, byte-identical legacy render) or the
 	// neutral result for the channel to render (non-Feishu).
-	toast := "已收到，正在继续会话"
+	toast := "Received, resuming the conversation"
 	if replacedCount > 0 {
-		toast = fmt.Sprintf("已替换 %d 项现有凭据，正在继续会话", replacedCount)
+		toast = fmt.Sprintf("Replaced %d existing credential(s), resuming the conversation", replacedCount)
 	}
 	ack := channel.ActionAck{ToastKind: "success", ToastContent: toast}
 	if action.Platform == channel.PlatformFeishu {
@@ -550,7 +550,7 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 			"open_message_id", action.ExternalMessageID,
 			"operator_open_id", action.OperatorID,
 		)
-		return channel.ActionAck{ToastKind: "info", ToastContent: "请稍后重试"}, nil
+		return channel.ActionAck{ToastKind: "info", ToastContent: "Please retry later"}, nil
 	}
 
 	conv, err := m.store.FindConversationByPromptForUserChoiceRequestID(ctx, requestID)
@@ -560,22 +560,22 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 				"request_id", requestID,
 				"operator_open_id", action.OperatorID,
 			)
-			return channel.ActionAck{ToastKind: "info", ToastContent: "该请求已处理或已过期"}, nil
+			return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}, nil
 		}
 		m.logger.Warn("feishu prompt_for_user_choice callback: lookup failed",
 			"request_id", requestID, "err", err.Error())
-		return channel.ActionAck{ToastKind: "error", ToastContent: "查询失败,请稍后再试"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Query failed, please retry later"}, nil
 	}
 	if !conv.HasPromptForUserChoice {
 		m.logger.Info("feishu prompt_for_user_choice callback: no slot",
 			"request_id", requestID, "conversation_id", conv.ConversationID)
-		return channel.ActionAck{ToastKind: "info", ToastContent: "该请求已处理或已过期"}, nil
+		return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}, nil
 	}
 
 	if m.pfucRouter == nil {
 		m.logger.Warn("feishu prompt_for_user_choice callback: router not configured",
 			"request_id", requestID)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "服务未配置,请联系管理员"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Service not configured; contact an administrator"}, nil
 	}
 
 	questions := conv.PromptForUserChoice.EffectiveQuestions()
@@ -604,7 +604,7 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 	if err := m.pfucRouter.SubmitPromptForUserChoice(ctx, decision); err != nil {
 		m.logger.Warn("feishu prompt_for_user_choice callback: SubmitPromptForUserChoice failed",
 			"request_id", requestID, "err", err.Error())
-		return channel.ActionAck{ToastKind: "error", ToastContent: "更新失败,请稍后再试"}, nil
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Update failed, please retry later"}, nil
 	}
 
 	// Build the done card inline AND return it on the callback response —
@@ -622,9 +622,9 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 			"request_id", requestID, "conversation_id", conv.ConversationID, "err", err.Error())
 	}
 
-	toastKind, toastContent := "success", "已记录: "+summarizePromptForUserChoiceAnswers(answers)
+	toastKind, toastContent := "success", "Recorded: "+summarizePromptForUserChoiceAnswers(answers)
 	if !anyAnswer {
-		toastKind, toastContent = "info", "已取消"
+		toastKind, toastContent = "info", "Cancelled"
 	}
 	ack := channel.ActionAck{ToastKind: toastKind, ToastContent: toastContent}
 	if feishu {

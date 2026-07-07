@@ -333,14 +333,14 @@ func (s *Store) ListScheduledTasksByAgent(ctx context.Context, agentID string) (
 }
 
 // ListScheduledTasksByWorkspaceResult bundles a page of scheduled tasks with the
-// total row count for the workspace, so the standalone 定时任务 page can paginate.
+// total row count for the workspace, so the standalone scheduled tasks page can paginate.
 type ListScheduledTasksByWorkspaceResult struct {
 	Tasks []ScheduledTaskRead
 	Total int64
 }
 
 // ListScheduledTasksByWorkspace is the workspace-wide counterpart to
-// ListScheduledTasksByAgent, powering the standalone 定时任务 page.
+// ListScheduledTasksByAgent, powering the standalone scheduled tasks page.
 // Returns a newest-first page plus the total count under the same filter.
 func (s *Store) ListScheduledTasksByWorkspace(ctx context.Context, workspaceID string, limit, offset int32) (ListScheduledTasksByWorkspaceResult, error) {
 	if limit <= 0 {
@@ -493,7 +493,7 @@ func (s *Store) dispatchScheduledRunTx(ctx context.Context, q *sqlc.Queries, tas
 	}
 
 	// Fresh conversation per dispatch: primary_agent_id surfaces it in the
-	// agent's 对话 list (ListWorkspaceConversations filters on that metadata key).
+	// agent's conversation list (ListWorkspaceConversations filters on that metadata key).
 	convID := newID()
 	convMeta, _ := json.Marshal(map[string]any{
 		"source":            "scheduled_task",

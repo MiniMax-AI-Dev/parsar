@@ -131,7 +131,7 @@ export interface Agent {
   enabled_at?: string
   /**
    * Explicit runtime binding. When set, the admin list renders "{kind} ·
-   * {name}". Empty → "未绑定" warning (dispatch is blocked).
+   * {name}". Empty → "unbound" warning (dispatch is blocked).
    *
    * `runtime_kind` mirrors `runtimes.type`; distinct from the legacy
    * top-level `runtime` field above (pre-v5 placement metadata).
@@ -338,7 +338,7 @@ export interface ListCapabilitiesResponse {
   // local agent may already be bound to). Always present.
   marketplace_installs?: Capability[]
   // Public marketplace capabilities this workspace has NOT installed yet
-  // — surfaced in the Agent picker's "能力市场" section. Filtered
+  // — surfaced in the Agent picker's "capability marketplace" section. Filtered
   // server-side to exclude installed and self-published rows.
   marketplace_available?: MarketplaceCapability[]
   page?: number
@@ -725,7 +725,7 @@ export interface ConversationTimelineRun {
   /**
    * 1-indexed position in the per-(conversation, agent) serial queue;
    * populated only for status === "queued". Absent / 0 falls back
-   * to a bare "排队中" badge.
+   * to a bare "queued" badge.
    */
   queue_position?: number
   created_at: string
@@ -925,7 +925,7 @@ export interface ListMyWorkspacesResponse {
 
 export interface CreateWorkspaceRequest {
   name: string
-  /** "public" / "private";省略 → 服务端默认 "private"。 */
+  /** "public" / "private"; omitted → server defaults to "private". */
   visibility?: WorkspaceVisibility
 }
 
@@ -935,7 +935,7 @@ export interface CreateWorkspaceResponse {
 }
 
 export interface UpdateWorkspaceRequest {
-  /** Slug is system-generated and immutable; name 和 visibility 可改。 */
+  /** Slug is system-generated and immutable; name and visibility are mutable. */
   name?: string
   visibility?: WorkspaceVisibility
 }
@@ -943,21 +943,22 @@ export interface UpdateWorkspaceRequest {
 /* --- Self-service workspace join requests ------------------------- */
 
 /**
- * 工作区主动申请加入。不新建表:申请/批准/拒绝是 workspace_members 行的
- * status 状态机过渡(pending → active / rejected)。
+ * User-initiated workspace join requests. No new table: request/approve/reject
+ * are status transitions on workspace_members rows (pending → active / rejected).
  */
 
-/** 当前用户可以申请加入的 public 工作区。 */
+/** A public workspace the current user is allowed to request to join. */
 export interface DiscoverableWorkspace {
   id: string
   name: string
   slug: string
   visibility: WorkspaceVisibility
-  /** 当前活跃成员数,用于让发现列表里有点上下文。 */
+  /** Current active member count, providing context in the discovery list. */
   member_count: number
   /**
-   * 当前用户已经对这个工作区提交了 pending 申请。前端用它把"申请加入"
-   * 按钮换成"已申请,等待审批"+"撤回"按钮。
+   * True when the current user has a pending request for this workspace. The
+   * frontend uses this to swap the "Join" button for "Requested, awaiting
+   * approval" + "Withdraw" buttons.
    */
   has_pending_request: boolean
   created_at: string
@@ -967,20 +968,20 @@ export interface DiscoverableWorkspace {
 export interface ListDiscoverableWorkspacesResponse {
   user_id: string
   workspaces: DiscoverableWorkspace[]
-  /** 过滤后的总数(供 "查看全部 (N)" 标签 + 分页器使用)。 */
+  /** Total after filtering (feeds the "View all (N)" label + paginator). */
   total: number
-  /** 服务端实际生效的 limit(对照请求,默认 50)。 */
+  /** Effective limit applied server-side (matching the request, default 50). */
   limit: number
-  /** 当前页的 offset。 */
+  /** Offset of the current page. */
   offset: number
 }
 
 export interface CreateJoinRequestRequest {
-  /** 选填,最多 1000 字符。 */
+  /** Optional, up to 1000 characters. */
   reason?: string
 }
 
-/** 一条待审批的申请,owner/admin 看到的视角。 */
+/** A pending request as seen by an owner/admin. */
 export interface PendingJoinRequest {
   id: string
   workspace_id: string

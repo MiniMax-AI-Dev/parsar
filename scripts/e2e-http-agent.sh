@@ -74,12 +74,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("content-length", "0"))
         payload = json.loads(self.rfile.read(length) or b"{}")
-        if self.path != "/agent" or payload.get("agent_slug") != "backend-agent" or "@后端Agent" not in payload.get("trigger_message_content", ""):
+        if self.path != "/agent" or payload.get("agent_slug") != "backend-agent" or "@backend-agent" not in payload.get("trigger_message_content", ""):
             self.send_response(400)
             self.end_headers()
             return
         response = {
-            "content": "HTTP Agent 完成了后端评估，@测试Agent 补充验收。",
+            "content": "HTTP Agent completed the backend assessment, @TestAgent please verify.",
             "usage": {
                 "provider": "fake-http-agent",
                 "model": "http-agent-v1",
@@ -149,7 +149,7 @@ curl -fsS "$API_URL/api/v1/conversations/00000000-0000-0000-0000-000000000012/ex
 PARSAR_API_URL="$API_URL" go run ./server/cmd/devgateway send-inbound \
   --gateway dev \
   --message-id om_http_1 \
-  --text '@后端Agent 看一下 HTTP connector' \
+  --text '@backend-agent take a look at HTTP connector' \
   --actor-id ou_demo \
   --actor-email admin@example.com \
   --chat-id oc_demo \
@@ -160,7 +160,7 @@ duplicate_response="$PARSAR_E2E_DIR/duplicate-inbound-response.json"
 PARSAR_API_URL="$API_URL" go run ./server/cmd/devgateway send-inbound \
   --gateway dev \
   --message-id om_http_1 \
-  --text '@后端Agent 看一下 HTTP connector' \
+  --text '@backend-agent take a look at HTTP connector' \
   --actor-id ou_demo \
   --actor-email admin@example.com \
   --chat-id oc_demo \
@@ -180,7 +180,7 @@ curl -fsS "$API_URL/api/v1/project-agents/00000000-0000-0000-0000-000000000010/c
 
 curl -fsS "$API_URL/dev/gateway/inbound" \
   -H 'Content-Type: application/json' \
-  -d '{"gateway":"dev","conversation":"demo-group","sender":"admin@example.com","text":"@后端Agent 再跑一次 HTTP connector"}' \
+  -d '{"gateway":"dev","conversation":"demo-group","sender":"admin@example.com","text":"@backend-agent run HTTP connector again"}' \
   > "$im_response"
 
 run_id="$(python3 - "$im_response" <<'PY'
@@ -226,20 +226,20 @@ assert (completion.get("status") or completion.get("Status")) == "completed", co
 assert child_run_ids, completion
 assert usage_row["provider"] == "fake-http-agent", completion
 assert usage_row["raw"]["source"] == "http_agent", completion
-assert invoke_result["agent_response"]["content"].startswith("HTTP Agent 完成"), invoke
+assert invoke_result["agent_response"]["content"].startswith("HTTP Agent completed"), invoke
 
 runs = timeline["agent_runs"]
 assert any(run["id"] == run_id and run["status"] == "completed" and run["connector_type"] == "http" for run in runs), runs
 assert any(run["id"] in child_run_ids and run["agent_slug"] == "test-agent" for run in runs), runs
 assert any(message["metadata"].get("source") == "gateway" and message["metadata"].get("gateway") == "dev" and message["metadata"].get("external_chat_id") == "oc_demo" for message in timeline["messages"]), timeline
-assert any("HTTP Agent 完成了后端评估" in message["content"] for message in timeline["messages"]), timeline
+assert any("HTTP Agent completed the backend assessment" in message["content"] for message in timeline["messages"]), timeline
 assert any(row["provider"] == "fake-http-agent" and row["raw"].get("source") == "http_agent" for row in usage["usage_logs"]), usage
 assert any(row["event_type"] == "im.message.created" and row["payload"].get("source") == "gateway" and row["payload"].get("gateway") == "dev" for row in audit["audit_records"]), audit
 assert any(row["event_type"] == "http_agent.completed" and row["target_id"] == run_id for row in audit["audit_records"]), audit
-outbound_message = next(message for message in outbound["messages"] if "HTTP Agent 完成了后端评估" in message["content"])
+outbound_message = next(message for message in outbound["messages"] if "HTTP Agent completed the backend assessment" in message["content"])
 assert outbound_message["external_chat_id"] == "oc_demo" and outbound_message["gateway"] == "dev", outbound
 delivery = next(delivery for delivery in outbound["deliveries"] if delivery["message_id"] == outbound_message["id"])
-assert delivery["external_chat_id"] == "oc_demo" and delivery["gateway"] == "dev" and "HTTP Agent 完成了后端评估" in delivery["text"], outbound
+assert delivery["external_chat_id"] == "oc_demo" and delivery["gateway"] == "dev" and "HTTP Agent completed the backend assessment" in delivery["text"], outbound
 
 print("HTTP Agent connector E2E passed")
 PY
@@ -247,7 +247,7 @@ PY
 outbound_message_id="$(python3 - "$outbound_response" <<'PY'
 import json, sys
 outbound = json.load(open(sys.argv[1]))
-print(next(message["id"] for message in outbound["messages"] if "HTTP Agent 完成了后端评估" in message["content"]))
+print(next(message["id"] for message in outbound["messages"] if "HTTP Agent completed the backend assessment" in message["content"]))
 PY
 )"
 
@@ -270,7 +270,7 @@ unset HTTP_AGENT_PID
 
 curl -fsS "$API_URL/dev/gateway/inbound" \
   -H 'Content-Type: application/json' \
-  -d '{"gateway":"dev","conversation":"demo-group","sender":"admin@example.com","text":"@后端Agent 触发失败路径"}' \
+  -d '{"gateway":"dev","conversation":"demo-group","sender":"admin@example.com","text":"@backend-agent trigger failure path"}' \
   > "$im_response"
 
 DATABASE_URL="$DATABASE_URL" go run ./server/cmd/httprunner --once > "$failure_response"
@@ -319,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         response = {
-            "content": "HTTP Agent 恢复后重试成功，@测试Agent 补充验收。",
+            "content": "HTTP Agent recovered and succeeded on retry, @TestAgent please verify.",
             "usage": {"provider": "fake-http-agent", "model": "http-agent-v1", "input_tokens": 11, "output_tokens": 7, "cost_usd": 0.00011},
         }
         body = json.dumps(response).encode()

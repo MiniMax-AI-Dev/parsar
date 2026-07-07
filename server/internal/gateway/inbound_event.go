@@ -55,7 +55,7 @@ type InboundEvent struct {
 // FeishuInboundEvent.ThreadKey byte-for-byte: ExternalRootID then
 // ExternalMessageID — deliberately NOT ExternalThreadID.
 //
-// Why not ExternalThreadID: Feishu's 话题 panel populates thread_id with a
+// Why not ExternalThreadID: Feishu's thread panel populates thread_id with a
 // separate identifier (omt_…) that has no overlap with the root's
 // message_id; using it would split root and replies into two
 // conversations. root_id is consistent: replies stamp the root's

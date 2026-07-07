@@ -1,4 +1,4 @@
-// Sibling of inflight_driver.go: sends a one-shot "排队中（第 N 位）"
+// Sibling of inflight_driver.go: sends a one-shot "Queued (position N)"
 // notice per queued agent_run. Stays out of the inflight slot (which
 // the running sibling owns) and uses metadata.queue_card_sent_at as
 // the idempotency marker — ClaimPendingQueuedFeishuRuns filters on it.
@@ -71,7 +71,7 @@ func (w *Worker) deliverQueueCard(ctx context.Context, run store.PendingQueuedFe
 	}
 	position, posErr := w.store.QueuePositionForRun(ctx, run.RunID)
 	if posErr != nil {
-		// Degrade to "排队中" without a number rather than skip the send.
+		// Degrade to "Queued" without a number rather than skip the send.
 		w.logger.Warn("feishu queue card: position lookup failed (degrading)",
 			"run_id", run.RunID, "err", posErr.Error())
 		position = 0

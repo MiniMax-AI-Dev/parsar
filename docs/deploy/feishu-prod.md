@@ -1,35 +1,41 @@
-# Feishu 生产登录与事件订阅部署指南
+# Feishu production login and event-subscription deployment guide
 
-本文面向把 Parsar 接入真实飞书租户的生产部署。目标是让登录、回调、事件订阅和 Cookie 会话都在 HTTPS 下可验证、可排错。
+For production deployments that integrate Parsar with a real Feishu tenant.
+The goal is to make login, callbacks, event subscriptions, and cookie
+sessions all verifiable and debuggable under HTTPS.
 
-## 1. 飞书开放平台配置
+## 1. Feishu Open Platform configuration
 
-1. 登录飞书开放平台，创建企业自建应用。
-2. 记录应用凭证：`App ID` 与 `App Secret`。
-3. 在「权限管理」申请并发布以下 OAuth scope：
+1. Log in to the Feishu Open Platform and create a custom app.
+2. Record the app credentials: `App ID` and `App Secret`.
+3. In "Permission Management" request and publish the following OAuth scopes:
    - `contact:user.id:readonly`
    - `contact:user.base:readonly`
    - `contact:user.email:readonly`
-4. 在「安全设置 / 重定向 URL」配置 Parsar 回调地址：
+4. In "Security Settings / Redirect URL" configure the Parsar callback URL:
    - `https://<your-domain>/api/v1/auth/feishu/callback`
-5. 发布应用或让管理员完成权限审批。缺少 email scope 时，登录会在回调阶段失败。
+5. Publish the app or have an admin complete the permission approval.
+   Without the email scope, login fails in the callback phase.
 
-## 2. 事件订阅配置
+## 2. Event-subscription configuration
 
-1. 打开应用「事件订阅」。
-2. 请求地址填写：
+1. Open the app's "Event Subscription" page.
+2. Fill in the request URL:
    - `https://<your-domain>/api/v1/feishu/events/message`
-3. 配置 Verification Token，并同步到 Parsar：
+3. Configure the Verification Token and mirror it into Parsar:
    - `PARSAR_FEISHU_VERIFICATION_TOKEN=<same-token>`
-4. 如开启事件加密，记录 Encrypt Key，并同步到 Parsar：
+4. If event encryption is enabled, record the Encrypt Key and mirror it into
+   Parsar:
    - `PARSAR_FEISHU_ENCRYPT_KEY=<encrypt-key>`
-5. 在飞书后台点「保存」时，飞书会发送 URL Challenge。Parsar 验 token 后会返回：
+5. When you click Save in the Feishu console, Feishu sends a URL Challenge.
+   Once Parsar validates the token, it returns:
    - `{"challenge":"..."}`
-6. 订阅消息事件，例如接收群消息 / 被 @ 消息。具体事件名称按飞书后台当前 UI 为准。
+6. Subscribe to message events (e.g. group message received / @-message
+   events). Exact event names follow the current Feishu console UI.
 
-## 3. Parsar 环境变量清单
+## 3. Parsar env-variable checklist
 
-### 3.1 生产必需
+### 3.1 Required in production
 
 ```bash
 DATABASE_URL=postgres://...
@@ -42,9 +48,10 @@ PARSAR_FEISHU_REDIRECT_URI=https://<your-domain>/api/v1/auth/feishu/callback
 PARSAR_FEISHU_VERIFICATION_TOKEN=<token from Feishu event subscription>
 ```
 
-未设置 `PARSAR_FEISHU_MOCK=true` 时，以上 Feishu OAuth 与 Verification Token 缺一项都会让 server 启动失败，避免生产环境静默缺路由。
+Without `PARSAR_FEISHU_MOCK=true`, any missing item above causes the server
+to fail to start, which prevents silently missing routes in production.
 
-### 3.2 生产可选
+### 3.2 Optional in production
 
 ```bash
 PARSAR_ADDR=:8080
@@ -61,7 +68,7 @@ PARSAR_FEISHU_WS_REFRESH_SECONDS=30
 PARSAR_FEISHU_OPENAPI_BASE_URL=https://open.feishu.cn
 ```
 
-### 3.3 仅本地开发
+### 3.3 Local development only
 
 ```bash
 PARSAR_FEISHU_MOCK=true
@@ -73,14 +80,19 @@ PARSAR_DEV_AUTH=true
 PARSAR_COOKIE_SECURE=false
 ```
 
-Mock 模式会使用 MockClient，并跳过 Feishu webhook token 验证，仅用于本地 e2e / 开发。
+Mock mode uses MockClient and skips Feishu webhook token verification — for
+local e2e / development only.
 
-## 4. HTTPS 反向代理示例
+## 4. HTTPS reverse-proxy examples
 
-Parsar 自身**不内置**反代:compose 只把 server 绑到 `127.0.0.1`,由你在前面放一层 nginx / Caddy / Cloudflare Tunnel 终止 TLS。反代除了常规 HTTP,还必须正确转发两类长连接,否则「网页一行命令接入设备」会失败:
+Parsar itself does **not** ship a reverse proxy: compose binds the server to
+`127.0.0.1`, and you place nginx / Caddy / Cloudflare Tunnel in front to
+terminate TLS. Beyond regular HTTP, the reverse proxy must correctly forward
+two kinds of long-lived connections, otherwise the "one command in the web
+UI pairs a device" flow breaks:
 
-- **WebSocket** `/agent-daemon/ws` —— 宿主机 daemon 出站拨入用的长连接(`Upgrade`/`Connection` 头 + 长读超时)。
-- **SSE** `/api/v1/...` —— agent 运行时的流式输出(必须关闭代理缓冲,否则前端看不到增量)。
+- **WebSocket** `/agent-daemon/ws` — the dial-in long connection used by the host daemon (`Upgrade` / `Connection` headers + long read timeout).
+- **SSE** `/api/v1/...` — the Agent runtime's streaming output (must disable proxy buffering, otherwise the frontend never sees incremental output).
 
 ### 4.1 Nginx
 
@@ -97,8 +109,9 @@ server {
   ssl_certificate /etc/letsencrypt/live/parsar.example.com/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/parsar.example.com/privkey.pem;
 
-  # daemon dial-in WebSocket。必须升级协议,并把读超时拉长到远超
-  # 心跳间隔,否则空闲连接会被 nginx 默认 60s 掐断。
+  # daemon dial-in WebSocket. Must upgrade the protocol and stretch the read
+  # timeout well beyond the heartbeat interval, otherwise nginx's default
+  # 60s idle timeout will cut idle connections.
   location /agent-daemon/ws {
     proxy_pass http://127.0.0.1:8080;
     proxy_http_version 1.1;
@@ -111,7 +124,7 @@ server {
     proxy_send_timeout 3600s;
   }
 
-  # agent 流式输出 (SSE)。关闭缓冲,让 token 实时下发。
+  # Agent streaming output (SSE). Disable buffering so tokens flush in real time.
   location /api/v1/ {
     proxy_pass http://127.0.0.1:8080;
     proxy_http_version 1.1;
@@ -134,13 +147,15 @@ server {
 
 ### 4.2 Caddy
 
-Caddy 的 `reverse_proxy` 默认就会处理 WebSocket 升级,只需为 SSE 关闭响应缓冲(`flush_interval -1` 表示每次写都立即 flush)。
+Caddy's `reverse_proxy` handles WebSocket upgrades out of the box; you only
+need to disable response buffering for SSE (`flush_interval -1` flushes on
+every write).
 
 ```caddyfile
 parsar.example.com {
   reverse_proxy 127.0.0.1:8080 {
     header_up X-Forwarded-Proto https
-    # SSE:禁用缓冲,逐字节 flush。WebSocket 升级 Caddy 自动处理。
+    # SSE: disable buffering, byte-level flush. WebSocket upgrade is automatic.
     flush_interval -1
   }
 }
@@ -148,7 +163,9 @@ parsar.example.com {
 
 ### 4.3 Cloudflare Tunnel
 
-不想在公网暴露入站端口时,用 `cloudflared` 把本机 `127.0.0.1:8080` 反向打洞到一个 Cloudflare 托管域名。Cloudflare 边缘默认支持 WebSocket 与 SSE,无需额外缓冲配置。
+To avoid exposing inbound ports to the public internet, use `cloudflared` to
+reverse-tunnel `127.0.0.1:8080` to a Cloudflare-managed hostname. Cloudflare
+edges support WebSocket and SSE by default, no extra buffering config needed.
 
 ```yaml
 # ~/.cloudflared/config.yml
@@ -159,7 +176,8 @@ ingress:
   - hostname: parsar.example.com
     service: http://127.0.0.1:8080
     originRequest:
-      # SSE / WS 是长连接,关掉空闲超时(默认 100s 会掐断)。
+      # SSE / WS are long connections; disable idle timeout (the default 100s
+      # would cut them).
       connectTimeout: 30s
       noHappyEyeballs: false
   - service: http_status:404
@@ -170,16 +188,28 @@ cloudflared tunnel route dns <tunnel-uuid> parsar.example.com
 cloudflared tunnel run <tunnel-uuid>
 ```
 
-### 4.4 公网 URL 与 Host 头(安全)
+### 4.4 Public URL and Host header (security)
 
-无论用哪种反代,**铸「一行接入命令」的唯一可信来源是 server 自己的 `PARSAR_PUBLIC_URL`**,而不是请求里的 `Host` / `X-Forwarded-Host` 头——后者由客户端控制,可被伪造成攻击者地址,从而把别人的 daemon 配对引流走。所以:
+Regardless of which reverse proxy you use, **the only trusted source for
+minting the "one-line pair" command is the server's own
+`PARSAR_PUBLIC_URL`** — not the request's `Host` / `X-Forwarded-Host`
+headers. Those headers are client-controlled and can be forged into an
+attacker address, which would redirect somebody else's daemon pairing to
+the attacker. Therefore:
 
-- 必须显式设置 `PARSAR_PUBLIC_URL=https://parsar.example.com`(与上面反代的 `server_name` / hostname 一致),server 据此回填网页里的一行命令与回调地址。
-- 反代照常透传 `Host` / `X-Forwarded-*` 用于日志和常规路由即可;Parsar 在铸命令时**不读这些头**(见 `bootstrap.WithPublicURL`),因此即使头被伪造也不影响接入命令的正确性。
+- You must explicitly set `PARSAR_PUBLIC_URL=https://parsar.example.com`
+  (matching the reverse proxy's `server_name` / hostname). The server uses
+  this value to fill in the one-line command and callback URL.
+- The reverse proxy still forwards `Host` / `X-Forwarded-*` for logging and
+  regular routing; Parsar does **not** read those headers when minting the
+  command (see `bootstrap.WithPublicURL`), so header forgery does not
+  compromise the pair command's correctness.
 
-生产必须保持 `PARSAR_COOKIE_SECURE=true`。如果生产模式下设置为 false，server 会启动但打印 `running prod auth on HTTP — cookies will leak` 警告。
+Production must keep `PARSAR_COOKIE_SECURE=true`. If it is set to false in
+production, the server still starts but prints the warning `running prod
+auth on HTTP — cookies will leak`.
 
-## 5. 启动与健康检查
+## 5. Startup and health checks
 
 ```bash
 export PARSAR_COOKIE_SECURE=true
@@ -191,23 +221,24 @@ export PARSAR_FEISHU_VERIFICATION_TOKEN=xxx
 parsar-server
 ```
 
-检查 server 健康：
+Check server health:
 
 ```bash
 curl -i https://parsar.example.com/api/v1/health
 ```
 
-期望：`200`，body 包含 `{"status":"ok","name":"parsar"}`。
+Expected: `200`, body contains `{"status":"ok","name":"parsar"}`.
 
-检查会话保护是否生效：
+Check that session protection is enforced:
 
 ```bash
 curl -i https://parsar.example.com/api/v1/me
 ```
 
-未登录时应返回 `401`。如果返回业务数据，说明认证中间件或代理路径配置有误。
+Should return `401` when unauthenticated. If it returns business data, the
+auth middleware or the proxy path is misconfigured.
 
-检查 Feishu Challenge：
+Check the Feishu Challenge:
 
 ```bash
 curl -i https://parsar.example.com/api/v1/feishu/events/message \
@@ -215,9 +246,9 @@ curl -i https://parsar.example.com/api/v1/feishu/events/message \
   -d '{"type":"url_verification","challenge":"hello","token":"<verification-token>"}'
 ```
 
-期望：`200` 且 body 为 `{"challenge":"hello"}`。
+Expected: `200`, body is `{"challenge":"hello"}`.
 
-检查 token 拦截：
+Check token enforcement:
 
 ```bash
 curl -i https://parsar.example.com/api/v1/feishu/events/message \
@@ -225,37 +256,37 @@ curl -i https://parsar.example.com/api/v1/feishu/events/message \
   -d '{"event":{"message":{"message_id":"om"}}}'
 ```
 
-期望：`401`。
+Expected: `401`.
 
-## 6. 排错
+## 6. Troubleshooting
 
-### 6.1 `/api/v1/feishu/events/message` 返回 401
+### 6.1 `/api/v1/feishu/events/message` returns 401
 
-- 请求体缺 `token` 字段。
-- 飞书后台 Verification Token 与 `PARSAR_FEISHU_VERIFICATION_TOKEN` 不一致。
-- 生产 env 未重启生效。
+- Missing `token` field in the request body.
+- Feishu console Verification Token does not match `PARSAR_FEISHU_VERIFICATION_TOKEN`.
+- Production env was updated but the server was not restarted.
 
-### 6.2 `/api/v1/feishu/events/message` 返回 400
+### 6.2 `/api/v1/feishu/events/message` returns 400
 
-- JSON 不合法。
-- 开启了飞书事件加密，但未配置 `PARSAR_FEISHU_ENCRYPT_KEY`。
-- Encrypt Key 与飞书后台不一致，导致解密失败。
-- 解密后事件结构不是 Parsar 当前支持的消息事件结构。
+- Malformed JSON.
+- Feishu event encryption is enabled but `PARSAR_FEISHU_ENCRYPT_KEY` is not configured.
+- The Encrypt Key does not match the Feishu console, so decryption fails.
+- After decryption, the event structure is not one of the message event structures Parsar currently supports.
 
-### 6.3 登录后 redirect 不对
+### 6.3 Login lands on the wrong redirect
 
-- 检查飞书后台 Redirect URL 是否完全等于 `PARSAR_FEISHU_REDIRECT_URI`。
-- 检查 `PARSAR_LOGIN_REDIRECT_URL` 是否指向用户实际访问的 Web origin。
-- 代理层不要改写 `/api/v1/auth/feishu/callback` 路径。
+- Check that the Feishu console Redirect URL is exactly equal to `PARSAR_FEISHU_REDIRECT_URI`.
+- Check that `PARSAR_LOGIN_REDIRECT_URL` points to the web origin the user actually visits.
+- The proxy layer must not rewrite `/api/v1/auth/feishu/callback`.
 
-### 6.4 Cookie 不生效 / 登录后仍 401
+### 6.4 Cookies do not stick / still 401 after login
 
-- 生产设置 `PARSAR_COOKIE_SECURE=true`，并确保用户通过 HTTPS 访问。
-- 域名必须与用户访问域一致，避免 callback 在 A 域、页面在 B 域。
-- 浏览器开发者工具检查 `Set-Cookie` 是否被 Secure / SameSite / domain 策略拦截。
+- Production must set `PARSAR_COOKIE_SECURE=true` and users must access over HTTPS.
+- The domain must match the user's browser domain (avoid callback on domain A while the page is on domain B).
+- Use browser DevTools to check whether `Set-Cookie` is being blocked by Secure / SameSite / domain rules.
 
-### 6.5 server 启动失败
+### 6.5 Server fails to start
 
-- 如果错误提示要求 `PARSAR_FEISHU_APP_ID/APP_SECRET/REDIRECT_URI` 和 Verification Token，说明当前是生产模式。
-- 本地开发请显式设置 `PARSAR_FEISHU_MOCK=true`。
-- 生产不要用 mock；补齐 env 后重启。
+- If the error demands `PARSAR_FEISHU_APP_ID/APP_SECRET/REDIRECT_URI` and Verification Token, you are in production mode.
+- For local development, explicitly set `PARSAR_FEISHU_MOCK=true`.
+- Do not use mock in production; supply the env vars and restart.

@@ -59,7 +59,7 @@ const InflightSlotPendingCredentialForm InflightSlotKind = "pending_credential_f
 // AgentID is stamped at stash time so the submit re-enqueue can target
 // the same agent the inbound originally hit (gateway_sessions.selected_agent_id
 // only exists for shared-bot `/select` flows; direct @-mentions and
-// per-agent DMs never write it, which used to fire a "会话路由丢失"
+// per-agent DMs never write it, which used to fire a "conversation route lost"
 // toast for the majority of credential-form paths).
 type PendingCredentialFormSlot struct {
 	// Qkey is the lookup key flowing through the Feishu callback
@@ -129,7 +129,7 @@ type ClaimedPendingCredentialForm struct {
 // ErrPendingCredentialFormNotFound is returned by
 // ClaimPendingCredentialFormSlot when no slot matches the qkey, or
 // when the matched slot's expires_at is in the past. Submit handlers
-// branch on this to render "已过期" / "已处理" toasts instead of
+// branch on this to render "expired" / "already handled" toasts instead of
 // failing loudly.
 //
 // Also returned by UpdatePendingCredentialFormSlotMessageID when the
@@ -234,13 +234,13 @@ func (s *Store) UpdatePendingCredentialFormSlotMessageID(ctx context.Context, co
 // primitive: a single statement returns the slot (and host
 // conversation coords) to exactly one caller; siblings racing on the
 // same qkey see ErrPendingCredentialFormNotFound and short-circuit
-// to a "已处理" toast without writing credentials.
+// to a "already handled" toast without writing credentials.
 //
 // Expired slots are filtered at the SQL layer (`expires_at > now()`
 // in the CTE's pre-image SELECT) so a submit landing between a slot's
 // expires_at and the sweep ticker's next pass returns
 // ErrPendingCredentialFormNotFound — same outcome as if sweep had
-// already run, giving the user a stable "已过期" toast instead of
+// already run, giving the user a stable "expired" toast instead of
 // cron-timing-dependent behaviour.
 func (s *Store) ClaimPendingCredentialFormSlot(ctx context.Context, qkey string) (ClaimedPendingCredentialForm, error) {
 	row, err := sqlc.New(s.db).ClaimPendingCredentialFormSlotByQkey(ctx, sqlc.ClaimPendingCredentialFormSlotByQkeyParams{

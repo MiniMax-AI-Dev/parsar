@@ -27,7 +27,7 @@
 // socket resumes without runner involvement. Thread continuation is enabled: a
 // Discord thread is itself a channel, so a follow-up in a thread the bot was
 // already activated in routes without a fresh @mention (history-backed, mirroring
-// the Feishu 话题 path). The MESSAGE_CONTENT gateway intent is
+// the Feishu thread path). The MESSAGE_CONTENT gateway intent is
 // privileged and must be enabled in the Discord Developer Portal or message
 // bodies arrive empty.
 package discordrunner
@@ -269,7 +269,7 @@ func (r *Runner) handleMessage(ctx context.Context, payload []byte) error {
 	// group into one conversation and history-backed continuation can match.
 	r.enrichThread(&event)
 	// Group/channel messages must @mention the bot, unless the message lands in a
-	// thread the bot was already activated in — then it's a 话题续聊 and no fresh
+	// thread the bot was already activated in — then it's a thread continuation and no fresh
 	// @mention is required (mirrors the Feishu path).
 	if gateway.ShouldSkipGroupWithoutMention(ctx, discordThreadHist{r.store}, event, r.botUserID) {
 		return nil
@@ -311,7 +311,7 @@ func (r *Runner) enrichThread(event *gateway.InboundEvent) {
 }
 
 // discordThreadHist binds the runner's store to the discord platform so the
-// neutral gate's platform-agnostic ThreadHistoryLookup resolves 话题续聊 history
+// neutral gate's platform-agnostic ThreadHistoryLookup resolves thread-continuation history
 // against discord conversations only.
 type discordThreadHist struct{ store router.Store }
 

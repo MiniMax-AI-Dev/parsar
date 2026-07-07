@@ -131,7 +131,7 @@ function isCompletedBeforeSubscribeError(message: string): boolean {
 // Matches the synthesized hang-error reason written by server run_stream.go
 // writeStreamHangError when the run is already cancelled by the time the 30s
 // first-event timer fires. Treated as clean termination (the user clicked
-// 取消全部 / /cancel), not an error. Keep prefix in sync with run_stream.go.
+// cancel all / /cancel), not an error. Keep prefix in sync with run_stream.go.
 function isUserCancelledError(message: string): boolean {
   return message.startsWith("run_cancelled:")
 }
@@ -267,9 +267,9 @@ export function useAgentRunStream(
         source.close()
         return
       }
-      // User clicked 取消全部 / sent /cancel — the server's 30s hang timer
+      // User clicked cancel all / sent /cancel — the server's 30s hang timer
       // fires because the dispatcher never published an event before the
-      // abort took effect. Collapse to status='done' so the red 流式输出中断
+      // abort took effect. Collapse to status='done' so the red stream-interrupted
       // banner stays hidden.
       if (isUserCancelledError(message)) {
         setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null }))

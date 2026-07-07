@@ -26,7 +26,7 @@ export interface SandboxBinding {
   killed_at?: string
   /** e2b-side TTL — when e2b will reap the sandbox if no Renew arrives.
    * Omitted when the daemon manager couldn't reach e2b for a live read
-   * (sibling-pod owner, transient API blip); UI renders absence as "未知". */
+   * (sibling-pod owner, transient API blip); UI renders absence as "unknown". */
   expires_at?: string
   metadata: Record<string, unknown>
 }

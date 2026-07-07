@@ -82,9 +82,9 @@ if something goes wrong mid-way.
   ┌─ A. Mint a pairing token (browser) ─────────────────────────────
   │   1. Open  $SERVER_URL/admin?admin=runtime
   │   2. Click the "Agent Daemon" tab.
-  │   3. Click "接入新设备" / "Pair new device".
+  │   3. Click "Pair new device".
   │   4. Enter a device name (e.g. "$(hostname -s 2>/dev/null || echo dev-mac)").
-  │   5. Click "生成配对命令" — copy the command shown.
+  │   5. Click "Generate pairing command" — copy the command shown.
   └─────────────────────────────────────────────────────────────────
 
   ┌─ B. Connect this machine ───────────────────────────────────────
@@ -94,7 +94,7 @@ if something goes wrong mid-way.
   │       --device-name $(hostname -s 2>/dev/null || echo dev-mac)
   │
   │   Expected log line: "ws connected" — the runtime row in the
-  │   web tab should flip "在线" within ~5s.
+  │   web tab should flip to "online" within ~5s.
   │
   │   If you want a backgrounded process instead, add -b to the same
   │   command and then watch logs:
@@ -121,7 +121,7 @@ if something goes wrong mid-way.
   │     run to settle with error "cancelled" then done.
   │   Reconnect: pkill -STOP -f parsar-daemon; wait 60s for the runtime
   │     row to flag offline; pkill -CONT -f parsar-daemon; row should
-  │     return to "在线" within ~15s.
+  │     return to "online" within ~15s.
   └─────────────────────────────────────────────────────────────────
 
 EOF

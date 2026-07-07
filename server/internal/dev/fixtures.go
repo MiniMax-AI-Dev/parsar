@@ -46,9 +46,9 @@ func DefaultSeed() SeedData {
 			{ID: "dev_admin", Email: DevAdminEmail, Name: "Dev Admin", Role: "owner"},
 		},
 		Agents: []Agent{
-			{ID: "agent_product", Name: "产品Agent", Slug: "product-agent", Description: "产品视角评估需求和范围", Skills: []string{"prd-review", "scope"}},
-			{ID: "agent_backend", Name: "后端Agent", Slug: "backend-agent", Description: "后端视角评估架构和数据模型", Skills: []string{"go", "postgres", "api"}},
-			{ID: "agent_test", Name: "测试Agent", Slug: "test-agent", Description: "测试视角补充验收和反例", Skills: []string{"e2e", "regression"}},
+			{ID: "agent_product", Name: "Product Agent", Slug: "product-agent", Description: "Product-perspective review of requirements and scope", Skills: []string{"prd-review", "scope"}},
+			{ID: "agent_backend", Name: "Backend Agent", Slug: "backend-agent", Description: "Backend-perspective review of architecture and data model", Skills: []string{"go", "postgres", "api"}},
+			{ID: "agent_test", Name: "TestAgent", Slug: "test-agent", Description: "Test-perspective acceptance and counterexamples", Skills: []string{"e2e", "regression"}},
 		},
 		Conversations: []Conversation{
 			{ID: "conv_demo_group", Title: "Demo Group", Visibility: "workspace"},
