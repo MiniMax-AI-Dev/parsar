@@ -1,0 +1,56 @@
+# Guards two invariants on server/migrations/ that used to be enforced
+# only by convention:
+#
+#   1. Migration files that already exist on main are immutable. Once a
+#      file lands on main, prod has run it; editing the SQL only
+#      affects future fresh installs, silently splitting the schema.
+#   2. New migrations must be numbered strictly above the current head
+#      on main. goose orders files by their NNNNNN_ prefix — inserting
+#      a file below the head is a no-op on any DB that has already
+#      migrated past it.
+#
+# The check runs in scripts/verify-migration-order.sh; keeping the
+# logic in a shell script means humans can reproduce a failure
+# locally with `bash scripts/verify-migration-order.sh origin/main`
+# instead of squinting at CI logs.
+
+name: migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/migrations/**'
+      - 'scripts/verify-migration-order.sh'
+      - '.github/workflows/migrations.yml'
+  pull_request:
+    paths:
+      - 'server/migrations/**'
+      - 'scripts/verify-migration-order.sh'
+      - '.github/workflows/migrations.yml'
+
+concurrency:
+  group: migrations-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Need enough history for `git diff origin/main...HEAD` and
+          # `git ls-tree origin/main`. actions/checkout defaults to a
+          # shallow clone of HEAD only, which would leave origin/main
+          # unresolvable.
+          fetch-depth: 0
+
+      - name: Fetch base ref
+        run: git fetch --no-tags --depth=1 origin main
+
+      - name: Verify migration order and immutability
+        run: bash scripts/verify-migration-order.sh origin/main
