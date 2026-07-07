@@ -158,3 +158,6 @@ drift that only shows up on the runner.
 ## Report language
 
 Verification reports and delivery reports default to English.
+
+Except for user-facing internationalized bilingual copy, comments and
+documentation must be written in English.
