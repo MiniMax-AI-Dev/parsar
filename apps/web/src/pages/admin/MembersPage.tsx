@@ -2,13 +2,16 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   Check,
+  Copy,
   Inbox,
+  KeyRound,
   Loader2,
   MoreHorizontal,
   Plus,
   ShieldAlert,
   UserCircle2,
   UserMinus,
+  UserPlus,
   Users,
   WifiOff,
   X,
@@ -51,6 +54,7 @@ import {
   useUpdateWorkspaceMemberRole,
   useWorkspaceMembers,
 } from "../../lib/api-members"
+import { useBootstrapStatus } from "../../lib/api-bootstrap"
 import type {
   AddWorkspaceMemberRequest,
   MemberRole,
@@ -124,6 +128,7 @@ export function MembersPage() {
   const wsId = useWorkspaceId()
   const [tab, setTab] = useState<Tab>("workspace")
   const [addWsOpen, setAddWsOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [removeWsTarget, setRemoveWsTarget] = useState<WorkspaceMember | null>(null)
 
   const wsQ = useWorkspaceMembers(wsId)
@@ -148,15 +153,27 @@ export function MembersPage() {
         title={t("members.page.title")}
         action={
           tab === "workspace" ? (
-            <Button
-              size="sm"
-              onClick={() => setAddWsOpen(true)}
-              disabled={!wsId}
-              title={!wsId ? t("members.add.requiresWorkspace") : undefined}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t("members.add.cta")}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setInviteOpen(true)}
+                disabled={!wsId}
+                title={!wsId ? t("members.add.requiresWorkspace") : undefined}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                {t("members.invite.cta")}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setAddWsOpen(true)}
+                disabled={!wsId}
+                title={!wsId ? t("members.add.requiresWorkspace") : undefined}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {t("members.add.cta")}
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -222,6 +239,16 @@ export function MembersPage() {
             addWsMut.reset()
           }}
           addOne={(body) => addWsMut.mutateAsync(body)}
+        />
+      )}
+
+      {inviteOpen && wsId && (
+        <InviteMemberDialog
+          onClose={() => {
+            setInviteOpen(false)
+            addWsMut.reset()
+          }}
+          invite={(body) => addWsMut.mutateAsync(body)}
         />
       )}
 
@@ -564,6 +591,281 @@ function AddMemberDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Invite member dialog                                               */
+/*                                                                     */
+/*  Two-step: (1) form → POST /members {invite:true} → (2) result      */
+/*  screen shows the plaintext temp password exactly once. The         */
+/*  password is held in local state; if the admin closes the dialog    */
+/*  without copying, it is gone forever (there is no read-back API).   */
+/* ------------------------------------------------------------------ */
+
+interface InviteResult {
+  email: string
+  tempPassword: string
+  userCreated: boolean
+}
+
+function InviteMemberDialog({
+  onClose,
+  invite,
+}: {
+  onClose: () => void
+  invite: (body: AddWorkspaceMemberRequest) => Promise<AddWorkspaceMemberResponseLike>
+}) {
+  const { t } = useTranslation("admin")
+  const bootstrapQ = useBootstrapStatus()
+  const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
+  const [role, setRole] = useState<MemberRole>("member")
+  const [pending, setPending] = useState(false)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
+  const [result, setResult] = useState<InviteResult | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const canSubmit = email.trim() !== "" && !pending
+
+  // Login URL priority: operator-configured PARSAR_PUBLIC_URL (comes
+  // through bootstrap.status.public_url — the same trusted source the
+  // pairing dialog uses), else current window origin. Trailing slash
+  // stripped so we can always append the path with a single "/".
+  const loginURL = (() => {
+    const raw = (bootstrapQ.data?.public_url ?? "").trim()
+    const base = raw !== "" ? raw : window.location.origin
+    return base.replace(/\/+$/, "") + "/login"
+  })()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit) return
+    setErrMsg(null)
+    setPending(true)
+    try {
+      const res = await invite({
+        email: email.trim(),
+        name: name.trim() || undefined,
+        role,
+        invite: true,
+      })
+      setResult({
+        email: res.member.user_email,
+        tempPassword: res.temp_password ?? "",
+        userCreated: res.user_created,
+      })
+    } catch (err) {
+      setErrMsg(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      )
+    } finally {
+      setPending(false)
+    }
+  }
+
+  // The copy payload bundles all three pieces the invitee needs so
+  // the admin can paste it into any IM verbatim. Format is stable and
+  // machine-parseable enough for the invitee to eyeball.
+  const copyPayload = result
+    ? [
+        `Sign in: ${loginURL}`,
+        `Email: ${result.email}`,
+        `Password: ${result.tempPassword}`,
+      ].join("\n")
+    : ""
+
+  const handleCopy = async () => {
+    if (!copyPayload) return
+    try {
+      await navigator.clipboard.writeText(copyPayload)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard write can fail on non-HTTPS or older browsers; the
+      // credentials are still visible in the modal so the admin can
+      // copy them by hand. Silently swallow.
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next && !pending) onClose()
+      }}
+    >
+      <DialogContent className="max-w-md gap-0 p-0">
+        {result === null ? (
+          <form onSubmit={handleSubmit}>
+            <DialogHeader className="space-y-1 border-b border-line-muted px-5 py-3 pr-10">
+              <DialogTitle className="text-sm">
+                {t("members.invite.title")}
+              </DialogTitle>
+              <DialogDescription className="text-xs leading-relaxed">
+                {t("members.invite.description")}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 px-5 py-4">
+              <DialogField label={t("members.invite.emailLabel")} required>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t("members.invite.emailPlaceholder")}
+                  autoComplete="off"
+                  required
+                  disabled={pending}
+                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                />
+              </DialogField>
+
+              <DialogField label={t("members.invite.nameLabel")}>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t("members.invite.namePlaceholder")}
+                  autoComplete="off"
+                  disabled={pending}
+                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                />
+              </DialogField>
+
+              <DialogField label={t("members.invite.roleLabel")} required>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as MemberRole)}
+                  disabled={pending}
+                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {t(`members.role.${r}`)}
+                    </option>
+                  ))}
+                </select>
+              </DialogField>
+
+              {errMsg && (
+                <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger-emphasis">
+                  {errMsg}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+                disabled={pending}
+              >
+                {t("members.invite.cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={!canSubmit}>
+                {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {pending ? t("members.invite.submitting") : t("members.invite.submit")}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div>
+            <DialogHeader className="space-y-1 border-b border-line-muted px-5 py-3 pr-10">
+              <DialogTitle className="flex items-center gap-2 text-sm">
+                <KeyRound className="h-4 w-4 text-success" />
+                {t("members.invite.resultTitle")}
+              </DialogTitle>
+              <DialogDescription className="text-xs leading-relaxed">
+                {t("members.invite.resultBody", { email: result.email })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 px-5 py-4">
+              {result.userCreated && result.tempPassword ? (
+                <>
+                  <div className="space-y-2 rounded-md border border-line bg-surface-subtle/60 p-3">
+                    <InviteCredentialRow
+                      label={t("members.invite.credential.url")}
+                      value={loginURL}
+                    />
+                    <InviteCredentialRow
+                      label={t("members.invite.credential.email")}
+                      value={result.email}
+                    />
+                    <InviteCredentialRow
+                      label={t("members.invite.credential.password")}
+                      value={result.tempPassword}
+                      mono
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopy}
+                    className="w-full"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {copied ? t("members.invite.copied") : t("members.invite.copyAll")}
+                  </Button>
+                </>
+              ) : (
+                <p className="rounded-md border border-warning-border bg-warning-subtle/40 px-3 py-2 text-xs text-warning-emphasis">
+                  {t("members.invite.existingUserNotice")}
+                </p>
+              )}
+            </div>
+            <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
+              <Button type="button" size="sm" onClick={onClose}>
+                {t("members.invite.close")}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function InviteCredentialRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-fg-faint">
+        {label}
+      </span>
+      <span
+        className={`min-w-0 flex-1 select-all break-all text-sm text-fg ${mono ? "font-mono" : ""}`}
+      >
+        {value}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Local structural type used to loosen invite()'s parameter — the
+ * useAddWorkspaceMember mutation returns AddWorkspaceMemberResponse
+ * but its `temp_password` is only populated on the invite path. We
+ * type explicitly so the invite dialog does not accidentally read
+ * fields the store hook does not surface.
+ */
+interface AddWorkspaceMemberResponseLike {
+  member: { user_email: string }
+  user_created: boolean
+  temp_password?: string
 }
 
 function DialogField({

@@ -26,9 +26,8 @@ func (f fakeFiles) read(p string) ([]byte, error) {
 
 func TestLoadDefaultsThenEnvOverride(t *testing.T) {
 	env := envMap{
-		EnvDatabaseURL:    "postgres://postgres@localhost:5432/parsar",
-		EnvBootstrapToken: "token-from-env",
-		EnvDevAuth:        "true",
+		EnvDatabaseURL: "postgres://postgres@localhost:5432/parsar",
+		EnvDevAuth:     "true",
 	}
 	res, err := Load(env.get, nil)
 	if err != nil {
@@ -39,9 +38,6 @@ func TestLoadDefaultsThenEnvOverride(t *testing.T) {
 	}
 	if !res.Config.Auth.DevAuth {
 		t.Fatalf("dev_auth should be true")
-	}
-	if got := res.Config.Auth.Bootstrap.Token; got != "token-from-env" {
-		t.Fatalf("bootstrap token = %q", got)
 	}
 	if got := res.Config.Server.Addr; got != ":8080" {
 		t.Fatalf("default addr lost: %q", got)
@@ -67,8 +63,6 @@ database:
   url: "postgres://file-host/parsar"
 auth:
   dev_auth: false
-  bootstrap:
-    token: "token-from-file"
 secret:
   master_key: "file-master-key"
 gateway:
@@ -80,10 +74,9 @@ sandbox:
 `),
 	}
 	env := envMap{
-		EnvConfigFile:     path,
-		EnvAddr:           ":7070",
-		EnvBootstrapToken: "token-from-env",
-		EnvFeishuMock:     "true",
+		EnvConfigFile: path,
+		EnvAddr:       ":7070",
+		EnvFeishuMock: "true",
 		// secret master key intentionally NOT set — file value
 		// must survive.
 	}
@@ -96,9 +89,6 @@ sandbox:
 	}
 	if got := res.Config.Server.PublicURL; got != "https://from-file.example.com" {
 		t.Fatalf("file public_url lost, got %q", got)
-	}
-	if got := res.Config.Auth.Bootstrap.Token; got != "token-from-env" {
-		t.Fatalf("env should override file token, got %q", got)
 	}
 	if got := res.Config.Secret.MasterKey; got != "file-master-key" {
 		t.Fatalf("file master key lost, got %q", got)
@@ -301,7 +291,6 @@ func TestRedactedHidesSecrets(t *testing.T) {
 	cfg := Default()
 	cfg.Database.URL = "postgres://user:supersecret@host:5432/parsar?sslmode=disable"
 	cfg.Secret.MasterKey = "MASTERKEY-32-chars-long-secret-x"
-	cfg.Auth.Bootstrap.Token = "abc123token"
 	cfg.Gateway.Feishu.AppSecret = "feishu-secret"
 	cfg.Gateway.Feishu.VerificationToken = "verify-token"
 	cfg.Gateway.Feishu.EncryptKey = "encrypt-key"
@@ -309,12 +298,11 @@ func TestRedactedHidesSecrets(t *testing.T) {
 	r := cfg.Redacted()
 	for label, v := range map[string]string{
 		"Secret.MasterKey":                 r.Secret.MasterKey,
-		"Auth.Bootstrap.Token":             r.Auth.Bootstrap.Token,
 		"Gateway.Feishu.AppSecret":         r.Gateway.Feishu.AppSecret,
 		"Gateway.Feishu.VerificationToken": r.Gateway.Feishu.VerificationToken,
 		"Gateway.Feishu.EncryptKey":        r.Gateway.Feishu.EncryptKey,
 	} {
-		if strings.Contains(v, "secret") || strings.Contains(v, "abc123") || strings.Contains(v, "feishu-secret") || strings.Contains(v, "verify-token") || strings.Contains(v, "encrypt-key") {
+		if strings.Contains(v, "secret") || strings.Contains(v, "feishu-secret") || strings.Contains(v, "verify-token") || strings.Contains(v, "encrypt-key") {
 			t.Fatalf("%s leaked secret in redacted form: %q", label, v)
 		}
 	}
@@ -370,14 +358,11 @@ database:
   url: "postgres://localhost/parsar"
 auth:
   dev_auth: true
-  bootstrap:
-    token: "kept-token"
 `),
 	}
 	env := envMap{
-		EnvConfigFile:     path,
-		EnvPublicURL:      "", // explicit empty should NOT override
-		EnvBootstrapToken: "", // explicit empty should NOT override
+		EnvConfigFile: path,
+		EnvPublicURL:  "", // explicit empty should NOT override
 	}
 	res, err := Load(env.get, files.read)
 	if err != nil {
@@ -385,9 +370,6 @@ auth:
 	}
 	if res.Config.Server.PublicURL != "https://kept.example.com" {
 		t.Fatalf("file public_url cleared by empty env: %q", res.Config.Server.PublicURL)
-	}
-	if res.Config.Auth.Bootstrap.Token != "kept-token" {
-		t.Fatalf("file bootstrap token cleared by empty env: %q", res.Config.Auth.Bootstrap.Token)
 	}
 }
 

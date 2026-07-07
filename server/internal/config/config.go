@@ -13,7 +13,7 @@
 // `env func(string) string` so tests stay deterministic without
 // mutating process environment.
 //
-// Secrets (Secret.MasterKey, Auth.Bootstrap.Token, etc.) have no
+// Secrets (Secret.MasterKey, etc.) have no
 // Marshal overrides, so a stray log.Printf("%+v", cfg) leaks them —
 // callers must never log Config. Use Redacted() instead.
 package config
@@ -63,9 +63,8 @@ type DatabaseConfig struct {
 // X-Parsar-Dev-User-ID middleware shim; Load() refuses
 // DevAuth=true under the production profile.
 type AuthConfig struct {
-	DevAuth   bool            `yaml:"dev_auth"`
-	Cookie    CookieConfig    `yaml:"cookie"`
-	Bootstrap BootstrapConfig `yaml:"bootstrap"`
+	DevAuth bool         `yaml:"dev_auth"`
+	Cookie  CookieConfig `yaml:"cookie"`
 
 	// PlatformAdminUserIDs is the comma-separated allowlist of user
 	// UUIDs that bypass workspace membership checks and act
@@ -78,15 +77,6 @@ type CookieConfig struct {
 	// Secure controls the Secure attribute on the session cookie.
 	// MUST be true in production. Env PARSAR_COOKIE_SECURE.
 	Secure bool `yaml:"secure"`
-}
-
-type BootstrapConfig struct {
-	// Token guards POST /api/v1/bootstrap. Empty → HTTP endpoint
-	// returns 503; operators fall back to the CLI subcommand which
-	// only requires DB access. The token is never persisted; once
-	// an active workspace owner exists, bootstrap closes and the
-	// operator should remove it. Env PARSAR_BOOTSTRAP_TOKEN.
-	Token string `yaml:"token"`
 }
 
 // SecretConfig holds the AES-GCM master key used to wrap

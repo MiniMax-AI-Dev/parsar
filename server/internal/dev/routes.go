@@ -20,6 +20,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	authfeishu "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
+	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
@@ -4895,6 +4896,22 @@ type addWorkspaceMemberRequest struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 	Role  string `json:"role"`
+	// Invite, when true, provisions a local email/password identity for
+	// a brand-new user and returns the plaintext temporary password
+	// once in the response body. The admin is expected to relay that
+	// password to the invitee out-of-band. False (default) preserves
+	// the pre-existing behaviour: the member row is created but no
+	// local credential is bound (Feishu / OIDC-only tenants).
+	Invite bool `json:"invite,omitempty"`
+}
+
+// addWorkspaceMemberResponse extends store.AddWorkspaceMemberResult with
+// the plaintext temp password on invite flows. Nil field means no
+// invite happened (either invite=false or the user already existed).
+type addWorkspaceMemberResponse struct {
+	Member       store.WorkspaceMemberRead `json:"member"`
+	UserCreated  bool                      `json:"user_created"`
+	TempPassword string                    `json:"temp_password,omitempty"`
 }
 
 // addWorkspaceMember adds a user to a workspace.
@@ -4943,18 +4960,56 @@ func addWorkspaceMember(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be one of owner|admin|member|viewer"})
 			return
 		}
+
+		// Invite path: mint the plaintext temp password up front so
+		// we can pass its hash into the tx AND hand the plaintext back
+		// to the admin exactly once. On failure below (409, DB error,
+		// etc.) the plaintext never leaks — it lives only in this
+		// function frame.
+		var (
+			tempPassword string
+			passwordHash string
+		)
+		if req.Invite {
+			p, gErr := authpassword.GenerateTemp()
+			if gErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate temp password"})
+				return
+			}
+			h, hErr := authpassword.Hash(p)
+			if hErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash temp password"})
+				return
+			}
+			tempPassword = p
+			passwordHash = h
+		}
+
 		result, err := runtimeStore.AddWorkspaceMember(r.Context(), store.AddWorkspaceMemberInput{
-			WorkspaceID: workspaceID,
-			Email:       req.Email,
-			Name:        req.Name,
-			Role:        req.Role,
-			Now:         time.Now().UTC(),
+			WorkspaceID:  workspaceID,
+			Email:        req.Email,
+			Name:         req.Name,
+			Role:         req.Role,
+			PasswordHash: passwordHash,
+			Now:          time.Now().UTC(),
 		})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to add workspace member"})
 			return
 		}
-		writeJSON(w, http.StatusCreated, result)
+
+		resp := addWorkspaceMemberResponse{
+			Member:      result.Member,
+			UserCreated: result.UserCreated,
+		}
+		// Only surface the plaintext when we actually bound an identity.
+		// Store side won't write the hash if the user already existed;
+		// suppressing here keeps the response body honest ("password?
+		// means new + invited").
+		if req.Invite && result.UserCreated {
+			resp.TempPassword = tempPassword
+		}
+		writeJSON(w, http.StatusCreated, resp)
 	}
 }
 

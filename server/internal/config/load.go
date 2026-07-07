@@ -40,7 +40,6 @@ const (
 	EnvDatabaseURL    = "DATABASE_URL"
 	EnvDevAuth        = "PARSAR_DEV_AUTH"
 	EnvCookieSecure   = "PARSAR_COOKIE_SECURE"
-	EnvBootstrapToken = "PARSAR_BOOTSTRAP_TOKEN" // #nosec G101 -- env var name, not a credential
 	EnvMasterKey      = "PARSAR_MASTER_KEY"
 	EnvOpenCodeBin    = "PARSAR_OPENCODE_BIN"
 	EnvOpenCodeRunner = "PARSAR_OPENCODE_RUNNER"
@@ -167,7 +166,6 @@ func applyEnv(cfg *Config, env EnvFunc) {
 
 	boolSetter(EnvDevAuth, &cfg.Auth.DevAuth)
 	boolSetter(EnvCookieSecure, &cfg.Auth.Cookie.Secure)
-	stringSetter(EnvBootstrapToken, &cfg.Auth.Bootstrap.Token)
 	csvSetter(EnvPlatformAdminUserIDs, &cfg.Auth.PlatformAdminUserIDs)
 
 	stringSetter(EnvMasterKey, &cfg.Secret.MasterKey)

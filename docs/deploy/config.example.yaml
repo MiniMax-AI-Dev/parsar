@@ -47,12 +47,6 @@ auth:
   cookie:
     # 反向代理终止 TLS 后必须 true，否则 session cookie 走 HTTP 会泄。
     secure: true
-  bootstrap:
-    # 一次性 token，用于首次创建 owner + workspace。
-    # 推荐生成：openssl rand -hex 32
-    # **创建完第一个 owner 后立刻从 env / 部署平台移除！**
-    # 留空 = HTTP bootstrap 接口关闭，只能用 cmd/parsar-bootstrap CLI。
-    token: ""
 
 secret:
   # Secret vault 主密钥（AES-GCM 包裹 workspace secret）。

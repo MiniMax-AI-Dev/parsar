@@ -114,10 +114,6 @@ services:
       # ---------- Auth (production posture) ----------
       PARSAR_DEV_AUTH: "false"
       PARSAR_COOKIE_SECURE: ${PARSAR_COOKIE_SECURE:-true}
-      # Bootstrap token is REQUIRED only for the very first owner
-      # creation (see deploy-runbook.md §3). Remove from .env and
-      # `docker compose up -d --force-recreate` once bootstrap is done.
-      PARSAR_BOOTSTRAP_TOKEN: ${PARSAR_BOOTSTRAP_TOKEN}
 
       # ---------- Feishu OIDC + event subscription ----------
       # PARSAR_FEISHU_MOCK=true is the quickstart default in

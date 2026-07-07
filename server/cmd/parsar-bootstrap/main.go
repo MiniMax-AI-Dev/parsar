@@ -1,7 +1,7 @@
 // Command parsar-bootstrap provisions the first workspace owner on a
 // freshly-installed Parsar without going through HTTP. Operators who can
 // run the binary against the database directly prefer this path because
-// there is no shared-secret token to leak.
+// there is no HTTP surface to expose during the setup window.
 //
 // Usage:
 //
@@ -9,7 +9,14 @@
 //	go run ./cmd/parsar-bootstrap \
 //	    --email=admin@example.com \
 //	    --name="First Admin" \
-//	    --workspace="Acme Corp"
+//	    --workspace="Acme Corp" \
+//	    --password="correct horse battery staple"
+//
+// --password is optional. If supplied, the CLI hashes it with the same
+// bcrypt policy the HTTP handler uses and binds an email/password
+// identity to the owner so they can subsequently POST /api/v1/auth/login.
+// Leaving it empty is the "feishu-only deployment" path: the owner is
+// created but has no local password.
 //
 // Refuses to run when any active workspace owner already exists
 // (store.ErrBootstrapClosed → exit 2). Reset is a manual DB-level
@@ -28,6 +35,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -47,22 +55,25 @@ func main() {
 		userName    string
 		workspace   string
 		databaseURL string
+		pw          string
 	)
 	flag.StringVar(&email, "email", "", "owner email address (required)")
 	flag.StringVar(&userName, "name", "", "owner display name (defaults to local-part of email)")
 	flag.StringVar(&workspace, "workspace", "", "workspace display name (required)")
 	flag.StringVar(&databaseURL, "database-url", "",
 		"Postgres connection string (defaults to $DATABASE_URL)")
+	flag.StringVar(&pw, "password", "",
+		"optional local password; when set, the owner can log in via POST /api/v1/auth/login")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `parsar-bootstrap — provision the first workspace owner.
 
-Usage: parsar-bootstrap --email=... --workspace=... [--name=...] [--database-url=...]
+Usage: parsar-bootstrap --email=... --workspace=... [--name=...] [--password=...] [--database-url=...]
 
 Exit codes:
   0  success (printed JSON describes the created user + workspace)
   1  usage error (bad flags)
   2  bootstrap already complete (an active workspace owner exists)
-  3  invalid operator input (rejected by the store)
+  3  invalid operator input (rejected by the store or password policy)
   4  database connection / commit failure
   5  unknown error
 
@@ -89,6 +100,20 @@ a lost owner is a manual DB operation; there is no --force flag.
 		os.Exit(exitUsage)
 	}
 
+	var passwordHash string
+	if pw != "" {
+		if err := password.Validate(pw); err != nil {
+			fmt.Fprintln(os.Stderr, "parsar-bootstrap: --password rejected:", err)
+			os.Exit(exitInvalid)
+		}
+		h, err := password.Hash(pw)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "parsar-bootstrap: --password hash failed:", err)
+			os.Exit(exitUnknown)
+		}
+		passwordHash = h
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -104,6 +129,7 @@ a lost owner is a manual DB operation; there is no --force flag.
 		Email:         email,
 		Name:          userName,
 		WorkspaceName: workspace,
+		PasswordHash:  passwordHash,
 	})
 	if err != nil {
 		switch {
@@ -120,13 +146,14 @@ a lost owner is a manual DB operation; there is no --force flag.
 	}
 
 	out := map[string]any{
-		"user_id":        res.UserID,
-		"user_created":   res.UserCreated,
-		"workspace_id":   res.WorkspaceID,
-		"workspace_slug": res.WorkspaceSlug,
-		"workspace_name": res.WorkspaceName,
-		"member_id":      res.MemberID,
-		"setup_complete": true,
+		"user_id":         res.UserID,
+		"user_created":    res.UserCreated,
+		"workspace_id":    res.WorkspaceID,
+		"workspace_slug":  res.WorkspaceSlug,
+		"workspace_name":  res.WorkspaceName,
+		"member_id":       res.MemberID,
+		"setup_complete":  true,
+		"password_bound":  passwordHash != "",
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 		// stdout encoding only fails on closed stdout — fatal so the

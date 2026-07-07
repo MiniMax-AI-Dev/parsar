@@ -120,6 +120,40 @@ make check
   the build on any drift. See `server/internal/api/health.go:livenessHandler`
   and `server/internal/dev/routes.go:listWorkspaceEnabledAgents` for
   the reference style.
+- Use `internal/obs/log` for all logging — never `slog.Default()`,
+  `log.Println`, `fmt.Println`, or a hand-rolled `*slog.Logger`. The
+  linter (`forbidigo`) rejects direct `slog.Default()` outside
+  `internal/obs/log` itself. Entry points:
+  - `log.Info(ctx, ...)` / `log.Warn(ctx, ...)` / `log.Error(ctx, ...)`
+    for request-scoped logs (routes through ContextHandler → trace_id
+    attribution).
+  - `log.Bg()` for ctx-less startup / shutdown / init code that runs
+    outside a request.
+  - `log.With("component", "foo")` when you need a scoped `*slog.Logger`
+    to hold on to (e.g. inside a handler struct).
+
+## Local CI parity
+
+Before pushing, run these locally so you don't burn a round-trip on
+GitHub Actions:
+
+```
+make check                    # go vet + go test ./...
+make openapi                  # regenerate docs/openapi/openapi.yaml
+make sqlc-generate            # regenerate internal/db/sqlc/*.go
+cd apps/web && pnpm typecheck # TS type-check web
+```
+
+If `make openapi` or `make sqlc-generate` produced a diff, commit it
+alongside the source change. CI reruns both generators and fails on
+any drift.
+
+**sqlc pinned to v1.29.0.** v1.30+ declares `go >= 1.26` in its
+go.mod, which would force `go run` to fetch a newer toolchain than
+this repo builds under (go 1.25.7). If you bump sqlc, update **both**
+`Makefile:sqlc-generate` AND `scripts/check.sh` in the same commit —
+CI runs the latter, dev loops run the former, and mismatch produces
+drift that only shows up on the runner.
 
 ## Report language
 

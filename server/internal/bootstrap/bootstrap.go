@@ -1,21 +1,20 @@
 // Package bootstrap provisions the first workspace owner on a fresh
 // install. Single-use: once an active owner exists, both the HTTP
-// endpoint and store primitive return store.ErrBootstrapClosed.
+// endpoint and the store primitive return store.ErrBootstrapClosed.
 // Recovery of a lost owner requires DB-level operations.
 //
-// HTTP POST /api/v1/bootstrap requires Authorization: Bearer <token>
-// where <token> is config.Auth.Bootstrap.Token; empty token → 503 and
-// operators use the CLI (server/cmd/parsar-bootstrap), which reads
-// DATABASE_URL directly and skips the token check.
+// HTTP POST /api/v1/bootstrap is unauthenticated by design: the gate
+// is `count(active workspace owners) == 0`, enforced under a Postgres
+// advisory lock inside the tx. This mirrors coder's first-user setup
+// flow (coderd/users.go firstUser/postFirstUser) and removes the
+// PARSAR_BOOTSTRAP_TOKEN chicken-and-egg problem for open-source users.
 //
-// GET /api/v1/bootstrap/status is unauthenticated by design — the
-// installer needs to know if setup is required before any token
-// exists. The response returns boolean state only, no identity.
+// GET /api/v1/bootstrap/status returns boolean state only so the
+// installer UI can decide between "show registration" and "show login".
 package bootstrap
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
 	"strings"
 	"time"
@@ -30,7 +29,6 @@ type Repo interface {
 
 type Service struct {
 	repo      Repo
-	token     []byte
 	clock     func() time.Time
 	publicURL string
 }
@@ -45,23 +43,20 @@ func WithClock(now func() time.Time) Option {
 	}
 }
 
-// WithPublicURL records the operator-configured public URL so Status can
-// hand it to the web UI. The UI mints the daemon one-line connect command
-// from this value rather than the request Host / X-Forwarded-Host header,
-// which a client controls and could spoof to point pairing at an attacker.
+// WithPublicURL records the operator-configured public URL so Status
+// can hand it to the web UI. The UI mints the daemon one-line connect
+// command from this value rather than the request Host / X-Forwarded-Host
+// header, which a client controls and could spoof.
 func WithPublicURL(u string) Option {
 	return func(s *Service) {
 		s.publicURL = u
 	}
 }
 
-// NewService constructs a Service. Empty token disables the HTTP
-// surface (Create returns ErrHTTPDisabled); the CLI carrier passes
-// empty and relies on its own access path.
-func NewService(repo Repo, token string, opts ...Option) *Service {
+// NewService constructs a Service.
+func NewService(repo Repo, opts ...Option) *Service {
 	svc := &Service{
 		repo:  repo,
-		token: []byte(token),
 		clock: func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range opts {
@@ -69,10 +64,6 @@ func NewService(repo Repo, token string, opts ...Option) *Service {
 	}
 	return svc
 }
-
-var ErrHTTPDisabled = errors.New("bootstrap: HTTP endpoint disabled (PARSAR_BOOTSTRAP_TOKEN unset)")
-
-var ErrUnauthorized = errors.New("bootstrap: invalid token")
 
 var ErrInvalidInput = errors.New("bootstrap: invalid input")
 
@@ -83,7 +74,6 @@ type StatusResult struct {
 	Needed         bool   `json:"needed"`
 	HasOwners      bool   `json:"has_owners"`
 	OwnerCount     int64  `json:"owner_count"`
-	HTTPEnabled    bool   `json:"http_enabled"`
 	DevAuthEnabled bool   `json:"dev_auth_enabled"`
 	PublicURL      string `json:"public_url"`
 }
@@ -103,31 +93,22 @@ func (s *Service) Status(ctx context.Context, devAuth bool) (StatusResult, error
 		Needed:         count == 0,
 		HasOwners:      count > 0,
 		OwnerCount:     count,
-		HTTPEnabled:    len(s.token) > 0,
 		DevAuthEnabled: devAuth,
 		PublicURL:      s.publicURL,
 	}, nil
 }
 
-// Create runs first-owner provisioning. Token comparison uses
-// crypto/subtle.ConstantTimeCompare. Errors map to HTTP statuses in
-// the handler layer:
+// Create runs first-owner provisioning. The gate lives inside
+// store.ProvisionFirstOwner (advisory lock + owner-count check), so
+// this method only validates surface inputs and delegates. Errors
+// map to HTTP statuses in the handler layer:
 //
-//	ErrHTTPDisabled            -> 503
-//	ErrUnauthorized            -> 401
 //	ErrInvalidInput            -> 400
 //	store.ErrBootstrapClosed   -> 409
 //	(other)                    -> 500
-func (s *Service) Create(ctx context.Context, providedToken string, in store.ProvisionFirstOwnerInput) (store.ProvisionFirstOwnerResult, error) {
+func (s *Service) Create(ctx context.Context, in store.ProvisionFirstOwnerInput) (store.ProvisionFirstOwnerResult, error) {
 	if s == nil || s.repo == nil {
 		return store.ProvisionFirstOwnerResult{}, errors.New("bootstrap: service not configured")
-	}
-	if len(s.token) == 0 {
-		return store.ProvisionFirstOwnerResult{}, ErrHTTPDisabled
-	}
-	provided := []byte(strings.TrimSpace(providedToken))
-	if subtle.ConstantTimeCompare(provided, s.token) != 1 {
-		return store.ProvisionFirstOwnerResult{}, ErrUnauthorized
 	}
 	if strings.TrimSpace(in.Email) == "" {
 		return store.ProvisionFirstOwnerResult{}, errInvalid("email is required")
