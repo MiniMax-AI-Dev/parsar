@@ -3,137 +3,126 @@ package agentdaemon
 import (
 	"context"
 	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 )
 
-// Auto-mounted fetch_chat_history MCP tool.
+// Auto-injected fetch-chat-history capability.
 //
-// Every agent_daemon-backed Claude Code agent gets this stdio MCP server for
-// free — no capability row, no user configuration. The server is a tiny proxy:
-// on tools/call it does an HTTP GET back to our internal history endpoint
-// (IMHistoryEndpoint) carrying a per-conversation HMAC bearer token minted by
-// the connector. Tokens + IM SDK logic stay server-side; the sandbox only ever
-// sees a scoped URL + token.
+// Every agent_daemon-backed agent gets the ability to pull IM group-chat
+// history for the CURRENT conversation for free — no capability row, no user
+// configuration. Delivery is universal across agent kinds (claude_code /
+// codex / opencode / pi): a system_prompt instruction tells the agent to run
+// a single curl command, and three env vars carry the scoped URL + token +
+// conversation id into the sandbox shell.
 //
-// Delivery is a single `sh -c` front door so nothing has to be pre-installed
-// in the sandbox image:
+//   - The instruction references env var NAMES ($PARSAR_IM_HISTORY_TOKEN),
+//     never the literal token, so the token stays out of model context.
+//   - The env vars ride opts["env"], which each daemon adapter forwards to the
+//     agent CLI subprocess; the agent's shell/bash tool inherits them.
+//   - curl is present in every sandbox image, so nothing has to be seeded or
+//     baked at runtime.
 //
-//   - node present → hand the stdio session to an inline JS MCP proxy that
-//     speaks JSON-RPC and performs the HTTP call.
-//   - node absent  → a minimal POSIX-sh MCP responder still initializes and
-//     lists the tool, but every tools/call returns a friendly "install
-//     Node.js" error. This keeps agent startup from ever blocking while still
-//     surfacing the requirement through a normal tool call, exactly when the
-//     agent tries to use it.
+// Tokens + IM SDK logic stay server-side; the sandbox only ever sees a scoped
+// URL + HMAC bearer token minted per conversation by the connector.
 
-// imHistoryServerName is the mcpServers map key; Claude Code exposes the tool
-// as mcp__parsar_chat_history__fetch_chat_history.
+// imHistoryServerName is the built-in capability key used for the per-agent
+// enable/disable flag (agent_builtin_capabilities.enabled).
 const imHistoryServerName = "parsar_chat_history"
 
-// imHistoryMCPScript is the sh front door. It is stored as a raw string, so it
-// MUST NOT contain backtick characters — the inline JS therefore uses only
-// double-quoted strings and + concatenation (no template literals), and no
-// single quotes (it lives inside a single-quoted `node -e '…'`).
-const imHistoryMCPScript = `
-if command -v node >/dev/null 2>&1; then
-  exec node -e '
-var http=require("http"),https=require("https");
-var BASE=process.env.PARSAR_IM_HISTORY_URL||"";
-var TOKEN=process.env.PARSAR_IM_HISTORY_TOKEN||"";
-var CONV=process.env.PARSAR_CONVERSATION_ID||"";
-var TOOL={name:"fetch_chat_history",description:"Fetch recent IM group-chat history for the CURRENT conversation across Feishu/Slack/Discord/Teams. Returns messages oldest-first as JSON. Use limit to request a page size (silently clamped to the platform cap; Feishu 50, Slack 15, Discord 100, Teams 50 per page) and next_cursor from a prior response to page further back. Optional thread_id scopes history to one platform-native thread (Slack thread_ts / Discord thread channel id / Teams reply message id).",inputSchema:{type:"object",properties:{limit:{type:"integer",description:"Max messages to return (clamped to platform cap, e.g. 50 on Feishu/Teams, 15 on Slack, 100 on Discord)."},cursor:{type:"string",description:"Opaque next_cursor from a previous call to fetch older messages."},thread_id:{type:"string",description:"Optional platform-native thread id to scope history. Slack thread_ts, Discord thread channel id, or Teams reply message id. Empty/unset = whole chat."}}}};
-function send(m){process.stdout.write(JSON.stringify(m)+"\n");}
-function doFetch(a,cb){
-  var u;
-  try{u=new URL(BASE);}catch(e){cb(e);return;}
-  u.searchParams.set("conversation_id",CONV);
-  if(a&&a.limit!=null)u.searchParams.set("limit",String(a.limit));
-  if(a&&a.cursor)u.searchParams.set("cursor",String(a.cursor));
-  if(a&&a.thread_id)u.searchParams.set("thread_id",String(a.thread_id));
-  var lib=u.protocol==="https:"?https:http;
-  var rq=lib.request(u,{method:"GET",headers:{Authorization:"Bearer "+TOKEN}},function(res){var b="";res.on("data",function(d){b+=d;});res.on("end",function(){cb(null,b);});});
-  rq.on("error",function(e){cb(e);});
-  rq.end();
-}
-function handle(m){
-  var id=m.id,method=m.method;
-  if(method==="initialize"){var pv=(m.params&&m.params.protocolVersion)||"2024-11-05";send({jsonrpc:"2.0",id:id,result:{protocolVersion:pv,capabilities:{tools:{}},serverInfo:{name:"parsar-chat-history",version:"0.1.0"}}});return;}
-  if(typeof method==="string"&&method.indexOf("notifications/")===0)return;
-  if(method==="ping"){send({jsonrpc:"2.0",id:id,result:{}});return;}
-  if(method==="tools/list"){send({jsonrpc:"2.0",id:id,result:{tools:[TOOL]}});return;}
-  if(method==="tools/call"){
-    var p=m.params||{};
-    if(p.name!=="fetch_chat_history"){send({jsonrpc:"2.0",id:id,error:{code:-32602,message:"unknown tool"}});return;}
-    doFetch(p.arguments||{},function(err,body){
-      if(err){send({jsonrpc:"2.0",id:id,result:{content:[{type:"text",text:"fetch chat history failed: "+String((err&&err.message)||err)}],isError:true}});return;}
-      send({jsonrpc:"2.0",id:id,result:{content:[{type:"text",text:body}]}});
-    });
-    return;
-  }
-  if(id!==undefined&&id!==null){send({jsonrpc:"2.0",id:id,error:{code:-32601,message:"method not found"}});}
-}
-var buf="";
-process.stdin.on("data",function(c){
-  buf+=c;var i;
-  while((i=buf.indexOf("\n"))>=0){
-    var line=buf.slice(0,i);buf=buf.slice(i+1);
-    if(!line.trim())continue;
-    var m;try{m=JSON.parse(line);}catch(e){continue;}
-    handle(m);
-  }
-});
-process.stdin.resume();
-'
-fi
-while IFS= read -r line; do
-  id=${line#*\"id\":}
-  id=${id%%,*}
-  id=${id%%\}*}
-  id=${id# }
-  id=${id# }
-  case "$line" in
-    *'"initialize"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"parsar-chat-history","version":"0.1.0"}}}\n' "${id:-0}"
-      ;;
-    *'"tools/list"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"tools":[{"name":"fetch_chat_history","description":"Fetch recent IM group-chat history for the current conversation.","inputSchema":{"type":"object","properties":{"limit":{"type":"integer"},"cursor":{"type":"string"},"thread_id":{"type":"string","description":"Optional platform-native thread id (Slack thread_ts / Discord thread channel id / Teams reply message id)."}}}}]}}\n' "${id:-0}"
-      ;;
-    *'"tools/call"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"Node.js is not installed on this machine, so chat history cannot be fetched. Please install Node.js and try again."}],"isError":true}}\n' "${id:-0}"
-      ;;
-  esac
-done
-`
+// imHistoryInstruction is the system_prompt block appended when the built-in
+// is enabled. It teaches any agent kind how to fetch group-chat history via a
+// single shell command. Platform caps are informational — the server-side
+// adapter clamps the requested limit to its platform ceiling regardless and
+// returns the effective cap in the "cap" field.
+const imHistoryInstruction = `## Fetching IM group-chat history
 
-// imHistoryMCPServer builds the auto-mounted fetch_chat_history MCP entry for a
-// conversation, or (,"",false) when the tool is disabled (no endpoint/signer
-// configured, or no conversation to scope the token to). The returned value is
-// the same map shape resolveMCPCapability produces, so it merges into
-// result.MCPServers uniformly.
-func (c *Connector) imHistoryMCPServer(conversationID string) (name string, entry map[string]any, ok bool) {
+You can read recent IM group-chat history for the CURRENT conversation
+(Feishu / Slack / Discord / Teams) by running a single shell command. The
+following environment variables are already set in your shell — reference them
+directly, and never ask the user for a token:
+
+  PARSAR_IM_HISTORY_URL, PARSAR_IM_HISTORY_TOKEN, PARSAR_CONVERSATION_ID
+
+Command:
+
+  curl -s "$PARSAR_IM_HISTORY_URL?conversation_id=$PARSAR_CONVERSATION_ID&limit=50" \
+    -H "Authorization: Bearer $PARSAR_IM_HISTORY_TOKEN"
+
+The response is JSON: a "messages" array (oldest-first) where each item has
+id, sender, sender_id, text, thread_id, created_at (RFC3339), and from_bot;
+plus "next_cursor", "cap" (the platform's effective per-page ceiling), and
+"platform".
+
+- limit is your requested page size. It is silently clamped to the platform
+  cap (Feishu 50, Slack 15, Discord 100, Teams 50); check the returned "cap"
+  for the effective ceiling.
+- To page further back, pass the previous response's "next_cursor" as
+  "&cursor=<value>".
+- To scope history to one platform-native thread, add "&thread_id=<id>"
+  (Slack thread_ts / Discord thread channel id / Teams reply message id).
+  Omit it to read the whole chat.`
+
+// imHistoryEnv returns the three env vars carrying the scoped history endpoint,
+// bearer token, and conversation id for a conversation — or (nil,false) when
+// the tool is disabled (no endpoint/signer configured, or no conversation to
+// scope the token to).
+func (c *Connector) imHistoryEnv(conversationID string) (map[string]string, bool) {
+	conversationID = strings.TrimSpace(conversationID)
 	if c.imHistoryEndpoint == "" || c.imHistoryToken == nil || conversationID == "" {
-		return "", nil, false
+		return nil, false
 	}
 	token := c.imHistoryToken(conversationID)
 	if token == "" {
-		return "", nil, false
+		return nil, false
 	}
-	entry = map[string]any{
-		"command": "sh",
-		"args":    []string{"-c", imHistoryMCPScript},
-		"env": map[string]string{
-			"PARSAR_IM_HISTORY_URL":   c.imHistoryEndpoint,
-			"PARSAR_IM_HISTORY_TOKEN": token,
-			"PARSAR_CONVERSATION_ID":  conversationID,
-		},
-	}
-	return imHistoryServerName, entry, true
+	return map[string]string{
+		"PARSAR_IM_HISTORY_URL":   c.imHistoryEndpoint,
+		"PARSAR_IM_HISTORY_TOKEN": token,
+		"PARSAR_CONVERSATION_ID":  conversationID,
+	}, true
 }
 
-// imHistoryEnabledForAgent reports whether the built-in fetch_chat_history tool
-// should be injected for this agent. Built-ins default to ON, so a nil store,
-// an empty agent id, or a lookup error all resolve to enabled — a bookkeeping
-// failure must never silently strip the tool. Only an explicit disabled flag
-// (agent_builtin_capabilities.enabled = false) suppresses injection.
+// applyIMHistoryPromptInjection folds the fetch-chat-history capability into
+// opts: it merges the three env vars into opts["env"] and appends the
+// instruction to opts["system_prompt"]. It is a no-op when:
+//
+//   - an override_system_prompt is set (an explicit override fully replaces the
+//     system prompt, mirroring applySpecMemoryInjection's override guard);
+//   - the built-in is disabled for this agent;
+//   - the endpoint/signer/conversation is not configured (imHistoryEnv miss).
+func (c *Connector) applyIMHistoryPromptInjection(ctx context.Context, opts map[string]any, in connector.PromptInput) {
+	if stringFromMap(opts, "override_system_prompt") != "" {
+		return
+	}
+	if !c.imHistoryEnabledForAgent(ctx, in.AgentID) {
+		return
+	}
+	histEnv, ok := c.imHistoryEnv(in.ConversationID)
+	if !ok {
+		return
+	}
+
+	env := copyStringAnyMap(opts["env"])
+	for k, v := range histEnv {
+		env[k] = v
+	}
+	opts["env"] = env
+
+	base := stringFromMap(opts, "system_prompt")
+	if base == "" {
+		opts["system_prompt"] = imHistoryInstruction
+		return
+	}
+	opts["system_prompt"] = base + "\n\n" + imHistoryInstruction
+}
+
+// imHistoryEnabledForAgent reports whether the built-in fetch-chat-history
+// capability should be injected for this agent. Built-ins default to ON, so a
+// nil store, an empty agent id, or a lookup error all resolve to enabled — a
+// bookkeeping failure must never silently strip the capability. Only an
+// explicit disabled flag (agent_builtin_capabilities.enabled = false)
+// suppresses injection.
 func (c *Connector) imHistoryEnabledForAgent(ctx context.Context, agentID string) bool {
 	if c.capabilities == nil || strings.TrimSpace(agentID) == "" {
 		return true
