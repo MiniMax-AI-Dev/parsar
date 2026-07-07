@@ -5053,7 +5053,7 @@ func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMember
 	if !IsValidMemberRole(input.Role) {
 		return AddWorkspaceMemberResult{}, fmt.Errorf("%w: %s", ErrInvalidMemberRole, input.Role)
 	}
-	email := strings.TrimSpace(input.Email)
+	email := normalizeEmail(input.Email)
 	name := strings.TrimSpace(input.Name)
 	if email == "" {
 		return AddWorkspaceMemberResult{}, fmt.Errorf("email is required")

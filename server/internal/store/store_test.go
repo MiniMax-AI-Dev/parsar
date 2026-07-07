@@ -3415,6 +3415,69 @@ func TestAddWorkspaceMemberWritesAuditLog(t *testing.T) {
 	assertWorkspaceAuditMetadata(t, db, ids.WorkspaceID, "workspace_member.added", "role", "member")
 }
 
+// TestAddWorkspaceMemberLowercasesInviteEmail proves the invite path
+// stores the email in the same canonical form the login handler
+// queries with. Symmetry between the two sides is what lets a caller
+// invited as "Bob@Company.com" then POST /auth/login {email:"bob@company.com"}
+// and hit their own row instead of a 401.
+//
+// Also asserts the auth_identities.subject bound to the temp password
+// is the folded email, since /auth/login joins users.email against
+// auth_identities.subject.
+func TestAddWorkspaceMemberLowercasesInviteEmail(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	store := New(db)
+	ids := DefaultDevFixtureIDs()
+	if _, err := store.SeedDevFixture(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Precomputed bcrypt hash stand-in — this test does not exercise
+	// bcrypt (that's covered in auth/password). We only need a
+	// non-empty PasswordHash to trigger the email-identity write.
+	const fakeHash = "$2a$10$fakehashthisisnotarealbcryptoutputbutlongenoughforstorage"
+
+	if _, err := store.AddWorkspaceMember(ctx, AddWorkspaceMemberInput{
+		WorkspaceID:  ids.WorkspaceID,
+		Email:        "  Bob@Company.COM  ",
+		Name:         "Bob",
+		Role:         "member",
+		PasswordHash: fakeHash,
+		Now:          time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("AddWorkspaceMember: %v", err)
+	}
+
+	q := sqlc.New(db)
+	uid, err := q.GetActiveUserIDByEmail(ctx, "bob@company.com")
+	if err != nil {
+		t.Fatalf("stored user email should be lowercase; GetActiveUserIDByEmail: %v", err)
+	}
+	if uid == "" {
+		t.Fatalf("expected a user id for lowercased email, got empty")
+	}
+	// The mixed-case form must miss — proves normalization is
+	// applied and reads should also fold.
+	if _, err := q.GetActiveUserIDByEmail(ctx, "Bob@Company.COM"); err == nil {
+		t.Fatalf("mixed-case lookup should miss the folded row")
+	}
+
+	// auth_identities.subject must be the folded email too so the
+	// LEFT JOIN in GetPasswordHashByEmail (users.email = ai.subject)
+	// still lines up.
+	row, err := q.GetPasswordHashByEmail(ctx, "bob@company.com")
+	if err != nil {
+		t.Fatalf("GetPasswordHashByEmail: %v", err)
+	}
+	if row.PasswordHash == "" {
+		t.Fatalf("expected password_hash bound to folded email, got empty")
+	}
+	if row.PasswordHash != fakeHash {
+		t.Fatalf("password_hash mismatch: got %q", row.PasswordHash)
+	}
+}
+
 // TestMarkAgentRunRunningStateTransitionsAndConversationGuard pins the
 // boundary cases: only queued → running succeeds; running/completed →
 // running is rejected; a wrong conversationID on a real runID is

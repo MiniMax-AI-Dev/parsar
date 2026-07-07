@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 // ProvisionFirstOwner tests use the real Postgres harness because the
@@ -240,5 +242,39 @@ func TestProvisionFirstOwnerConcurrent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected 1 active owner after concurrent bootstrap, got %d", count)
+	}
+}
+
+// TestProvisionFirstOwnerLowercasesEmail asserts that a mixed-case
+// input is stored in the canonical folded form, so a subsequent
+// POST /auth/login (which lowercases the query key) hits the row.
+// Without normalization the login handler's ToLower would produce a
+// query miss and lock the owner out.
+func TestProvisionFirstOwnerLowercasesEmail(t *testing.T) {
+	db := openTestDB(t)
+	st := New(db)
+	ctx := context.Background()
+
+	now := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	if _, err := st.ProvisionFirstOwner(ctx, ProvisionFirstOwnerInput{
+		Email:         "  Admin@Example.COM  ",
+		WorkspaceName: "Acme Corp",
+		Now:           now,
+	}); err != nil {
+		t.Fatalf("ProvisionFirstOwner: %v", err)
+	}
+
+	q := sqlc.New(db)
+	got, err := q.GetActiveUserIDByEmail(ctx, "admin@example.com")
+	if err != nil {
+		t.Fatalf("stored email should be lowercase; GetActiveUserIDByEmail: %v", err)
+	}
+	if got == "" {
+		t.Fatalf("expected a user id for lowercased email, got empty")
+	}
+	// The mixed-case form must NOT match — proves normalization is
+	// one-sided (write folded, read must fold too).
+	if _, err := q.GetActiveUserIDByEmail(ctx, "Admin@Example.COM"); err == nil {
+		t.Fatalf("mixed-case lookup should miss the folded row")
 	}
 }

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
@@ -42,9 +44,20 @@ type ErrorResponse struct {
 // package does not import config.
 type DevAuthLookup func() bool
 
+// bootstrapPostLimitPerMin caps unauthenticated POST /api/v1/bootstrap
+// per client IP. Legitimate use fires this endpoint exactly once per
+// install, so the ceiling can be tight; attackers spraying while
+// owner_count==0 would otherwise trigger a bcrypt cost=12 burn per
+// request (~250 ms of CPU). 20/min is a comfortable margin above
+// hand-retry noise (double-click, back button) while capping the
+// worst-case CPU spend during the setup window at ~5 s/min/IP.
+const bootstrapPostLimitPerMin = 20
+
 // RegisterRoutes mounts /api/v1/bootstrap{,/status} on r. Both routes
 // are unauthenticated: status is safe by construction; create gates
-// itself on owner_count == 0.
+// itself on owner_count == 0 in the store layer under a Postgres
+// advisory lock, and is additionally rate-limited by IP to bound the
+// setup-window DoS surface (bcrypt cost=12 per attempt).
 //
 // sessions and secure control the auto-login side effect: when the
 // caller supplies a password, a fresh session is issued and set as
@@ -55,7 +68,13 @@ func RegisterRoutes(r chi.Router, svc *Service, devAuth DevAuthLookup, sessions 
 		devAuth = func() bool { return false }
 	}
 	r.Get("/api/v1/bootstrap/status", statusHandler(svc, devAuth))
-	r.Post("/api/v1/bootstrap", createHandler(svc, sessions, secure))
+	// Status is deliberately outside the rate-limit group: the SPA
+	// polls it on every mount before deciding whether to render
+	// SetupPage, and blocking that would break the setup UI itself.
+	r.Group(func(r chi.Router) {
+		r.Use(httprate.LimitBy(bootstrapPostLimitPerMin, time.Minute, httprate.KeyByIP))
+		r.Post("/api/v1/bootstrap", createHandler(svc, sessions, secure))
+	})
 }
 
 // statusHandler reports whether the bootstrap door is still open.

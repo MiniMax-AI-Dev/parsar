@@ -73,7 +73,9 @@ type ProvisionFirstOwnerResult struct {
 // Audit: emits "bootstrap.first_owner_created" with workspace_id +
 // user_email + slug.
 func (s *Store) ProvisionFirstOwner(ctx context.Context, input ProvisionFirstOwnerInput) (ProvisionFirstOwnerResult, error) {
-	email := strings.TrimSpace(input.Email)
+	// Normalize BEFORE the "@" check so a mixed-case email is accepted
+	// and stored in the canonical form the login path queries with.
+	email := normalizeEmail(input.Email)
 	if email == "" {
 		return ProvisionFirstOwnerResult{}, fmt.Errorf("%w: email is required", ErrInvalidWorkspaceInput)
 	}
