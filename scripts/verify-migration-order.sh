@@ -13,6 +13,13 @@
 # Default base ref: origin/main.
 set -euo pipefail
 
+# Pre-launch escape hatch: set PARSAR_ALLOW_MIGRATION_EDIT=1 to skip
+# the immutability check when prod has not run these migrations yet.
+if [[ "${PARSAR_ALLOW_MIGRATION_EDIT:-}" == "1" ]]; then
+  echo "PARSAR_ALLOW_MIGRATION_EDIT=1 — skipping migration immutability check."
+  exit 0
+fi
+
 BASE_REF="${1:-origin/main}"
 MIG_DIR="server/migrations"
 
