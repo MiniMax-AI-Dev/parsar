@@ -35,10 +35,12 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any, resumeSession
 		return result, err
 	}
 
-	// --no-approve forces project trust = false: a headless run must never
-	// block on the interactive trust prompt, and Parsar injects its own
-	// managed model/skills rather than loading untrusted project config.
-	args := []string{"--mode", "json", "--no-approve"}
+	// --mode json: machine-readable NDJSON output for the translator.
+	// (Non-interactive mode is switched on by the trailing `-p` flag
+	// below, which pi consumes together with the prompt argument —
+	// that flag must be last for pi's arg parser to bind the prompt
+	// correctly, so we can't add it here.)
+	args := []string{"--mode", "json"}
 
 	if model := stringOpt(opts, "model"); model != "" {
 		args = append(args, "--model", model)

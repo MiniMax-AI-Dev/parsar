@@ -48,10 +48,12 @@ func writePiModelsJSON(agentDir string, cfg piProviderConfig) error {
 	provider := map[string]any{
 		"baseUrl": cfg.BaseURL,
 		"api":     cfg.API,
-		// pi reads a bare apiKey string as a LITERAL key; only "$NAME" is an
-		// env reference (resolve-config-value.ts:138-143). The secret rides
-		// the subprocess env as APIKeyEnv, so we emit the reference form.
-		"apiKey": "$" + cfg.APIKeyEnv,
+		// pi reads a bare apiKey string and runs it through resolveConfigValue
+		// (resolve-config-value.ts): it checks process.env[value] first, falling
+		// back to the literal. So "PARSAR_PI_API_KEY" (no $) looks up the env
+		// var correctly. A "$" prefix is NOT stripped — "$FOO" would look up
+		// process.env["$FOO"] which never matches.
+		"apiKey": cfg.APIKeyEnv,
 		"models": []map[string]any{{"id": cfg.Model}},
 	}
 	if cfg.Name != "" {

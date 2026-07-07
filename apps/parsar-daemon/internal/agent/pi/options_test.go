@@ -10,7 +10,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/pi"
 )
 
-func TestBuildArgsUsesModeJsonNoApproveAndPromptLast(t *testing.T) {
+func TestBuildArgsUsesModeJsonAndPromptLast(t *testing.T) {
 	res, err := pi.BuildArgs("run-1", "hello", os.TempDir(), map[string]any{
 		"model":    "anthropic/claude-opus-4-7",
 		"api_key":  "sk-test",
@@ -23,9 +23,6 @@ func TestBuildArgsUsesModeJsonNoApproveAndPromptLast(t *testing.T) {
 
 	if !containsPair(res.Args, "--mode", "json") {
 		t.Fatalf("args missing --mode json: %v", res.Args)
-	}
-	if !slices.Contains(res.Args, "--no-approve") {
-		t.Fatalf("args missing --no-approve: %v", res.Args)
 	}
 	if !containsPair(res.Args, "--model", "anthropic/claude-opus-4-7") {
 		t.Fatalf("args missing --model: %v", res.Args)

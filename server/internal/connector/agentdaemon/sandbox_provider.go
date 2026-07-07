@@ -681,7 +681,11 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	//     these files the moment it spawns. Failing here aborts the
 	//     acquire so we never hand back a sandbox missing spec/memory
 	//     injection.
-	if err := seedPlatformConfig(bootCtx, p.cfg.Client, sandbox, p.cfg.Connector, envdURL); err != nil {
+	//
+	//     Connector is resolved dynamically from the agent's agent_kind
+	//     config so one provider instance serves all runtime types.
+	resolvedConnector := ConnectorForAgentKind(resolveAgentKind(in))
+	if err := seedPlatformConfig(bootCtx, p.cfg.Client, sandbox, resolvedConnector, envdURL); err != nil {
 		p.cfg.Log.Warn("sandbox seed failed — killing sandbox",
 			"sandbox_id", sandbox.SandboxID,
 			"domain", sandbox.Domain,
@@ -716,7 +720,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		"PARSAR_RUNTIME_ID":   deviceID,
 		"PARSAR_WORKSPACE_ID": in.WorkspaceID,
 		"PARSAR_AGENT_ID":     in.AgentID,
-		"PARSAR_CONNECTOR":    connectorTagFor(p.cfg.Connector),
+		"PARSAR_CONNECTOR":    connectorTagFor(resolvedConnector),
 	}
 	if in.ConversationInitiatorID != "" {
 		connectEnv["PARSAR_USER_ID"] = in.ConversationInitiatorID
