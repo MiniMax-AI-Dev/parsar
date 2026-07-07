@@ -7,13 +7,14 @@
  * search box doubles as the free-text value: whatever is typed becomes the
  * model key on Enter / "Use …", even if it matches no preset.
  */
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronsUpDown, CornerDownLeft } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Input } from "../../components/ui/input"
 import { cn } from "../../lib/utils"
+import { useWheelScroll } from "../../lib/use-wheel-scroll"
 import { modelCaption, type ModelPreset } from "../../lib/model-presets"
 
 interface Props {
@@ -28,6 +29,8 @@ interface Props {
 export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: Props) {
   const { t } = useTranslation("admin")
   const [search, setSearch] = useState("")
+  const listRef = useRef<HTMLDivElement>(null)
+  useWheelScroll(listRef)
 
   const selected = useMemo(() => models.find((m) => m.id === value), [models, value])
 
@@ -67,68 +70,62 @@ export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: P
         </button>
       </DropdownMenu.Trigger>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align="start"
-          sideOffset={4}
-          className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
-        >
-          <div className="border-b border-line-muted p-1">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("models.createModel.fields.modelKeySearch", "Search or type a model id…")}
-              onKeyDown={(e) => {
-                e.stopPropagation()
-                if (e.key === "Enter" && typed !== "") {
-                  e.preventDefault()
-                  commit(typed)
-                }
-              }}
-              className="h-8 font-mono text-sm"
-              autoFocus
-            />
-          </div>
-
-          {/* Radix DropdownMenu.Content owns wheel/arrow navigation and swallows
-              the wheel event, so a nested overflow-auto list scrolls only via
-              its scrollbar thumb. Re-drive the scroll here and stop the event
-              from reaching the menu so the wheel works over the 70+ presets. */}
-          <div
-            className="max-h-[220px] overflow-auto py-1"
-            onWheel={(e) => {
-              e.currentTarget.scrollTop += e.deltaY
+      {/* No Portal: when rendered inside a Radix Dialog (modal), portaling
+          to <body> lands outside the Dialog's pointer-events scope and the
+          menu never opens. Keep the content inside the DialogContent subtree. */}
+      <DropdownMenu.Content
+        align="start"
+        sideOffset={4}
+        className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
+      >
+        <div className="border-b border-line-muted p-1">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("models.createModel.fields.modelKeySearch", "Search or type a model id…")}
+            onKeyDown={(e) => {
               e.stopPropagation()
+              if (e.key === "Enter" && typed !== "") {
+                e.preventDefault()
+                commit(typed)
+              }
             }}
-          >
-            {showFreeText && (
-              <DropdownMenu.Item
-                onSelect={() => commit(typed)}
-                className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
-              >
-                <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
-                <span className="text-fg-subtle">{t("models.createModel.fields.modelKeyUse", "Use")}</span>
-                <code className="truncate font-mono text-xs text-fg">{typed}</code>
-              </DropdownMenu.Item>
-            )}
+            className="h-8 font-mono text-sm"
+            autoFocus
+          />
+        </div>
 
-            {filtered.length === 0 && !showFreeText ? (
-              <p className="px-3 py-2 text-sm text-fg-subtle">
-                {t("models.createModel.fields.modelKeyEmpty", "No matching models — type any id")}
-              </p>
-            ) : (
-              filtered.map((m) => (
-                <ModelRow
-                  key={m.id}
-                  model={m}
-                  selected={m.id === value}
-                  onSelect={() => commit(m.id)}
-                />
-              ))
-            )}
-          </div>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
+        {/* Wheel scroll driven by a non-passive listener (see useWheelScroll) —
+            an inline React onWheel is passive in a Dialog and gets eaten by
+            react-remove-scroll, so the wheel wouldn't reach the list at all. */}
+        <div ref={listRef} className="max-h-[220px] overflow-auto py-1">
+          {showFreeText && (
+            <DropdownMenu.Item
+              onSelect={() => commit(typed)}
+              className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
+            >
+              <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+              <span className="text-fg-subtle">{t("models.createModel.fields.modelKeyUse", "Use")}</span>
+              <code className="truncate font-mono text-xs text-fg">{typed}</code>
+            </DropdownMenu.Item>
+          )}
+
+          {filtered.length === 0 && !showFreeText ? (
+            <p className="px-3 py-2 text-sm text-fg-subtle">
+              {t("models.createModel.fields.modelKeyEmpty", "No matching models — type any id")}
+            </p>
+          ) : (
+            filtered.map((m) => (
+              <ModelRow
+                key={m.id}
+                model={m}
+                selected={m.id === value}
+                onSelect={() => commit(m.id)}
+              />
+            ))
+          )}
+        </div>
+      </DropdownMenu.Content>
     </DropdownMenu.Root>
   )
 }

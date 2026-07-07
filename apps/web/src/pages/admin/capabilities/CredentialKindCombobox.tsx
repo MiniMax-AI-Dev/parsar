@@ -3,7 +3,7 @@
  * Invoked by EnvCredentialPicker when an env row switches to
  * mode=credential_ref. Selection is by `code`.
  */
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -12,6 +12,7 @@ import { ApiError } from "../../../lib/api-client"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { cn } from "../../../lib/utils"
+import { useWheelScroll } from "../../../lib/use-wheel-scroll"
 
 import { useCredentialKindsQuery } from "./api"
 import { NewCredentialKindInlineDialog } from "./NewCredentialKindInlineDialog"
@@ -39,6 +40,8 @@ export function CredentialKindCombobox({
   const kindsQ = useCredentialKindsQuery(workspaceID)
   const [search, setSearch] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+  useWheelScroll(listRef)
 
   const items = kindsQ.data?.items ?? []
   const selected = useMemo(() => items.find((k) => k.code === value), [items, value])
@@ -90,69 +93,65 @@ export function CredentialKindCombobox({
           </Button>
         </DropdownMenu.Trigger>
 
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            align="start"
-            sideOffset={4}
-            className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
+        {/* No Portal: when rendered inside a Radix Dialog (modal), portaling
+            to <body> lands outside the Dialog's pointer-events scope and the
+            menu never opens. Keep the content inside the DialogContent subtree. */}
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={4}
+          className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
+        >
+          <div className="border-b border-line-muted p-1">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("capabilities.import.kindPicker.search", "Search…")}
+              onKeyDown={(e) => e.stopPropagation() /* keep arrow keys in input */}
+              className="h-8 text-sm"
+              autoFocus
+            />
+          </div>
+
+          {/* Wheel scroll driven by a non-passive listener (see useWheelScroll) —
+              an inline React onWheel is passive in a Dialog and gets eaten by
+              react-remove-scroll, so the wheel wouldn't reach the list at all. */}
+          <div ref={listRef} className="max-h-[200px] overflow-auto py-1">
+            {kindsQ.isLoading ? (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t("capabilities.import.kindPicker.loading", "Loading…")}
+              </div>
+            ) : errMsg ? (
+              <p className="px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
+            ) : filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-fg-subtle">
+                {t("capabilities.import.kindPicker.empty", "No matching credential kinds")}
+              </p>
+            ) : (
+              filtered.map((kind) => (
+                <KindRow
+                  key={kind.id}
+                  kind={kind}
+                  selected={kind.code === value}
+                  onSelect={() => onChange(kind.code)}
+                />
+              ))
+            )}
+          </div>
+
+          <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
+
+          <DropdownMenu.Item
+            onSelect={(e) => {
+              e.preventDefault()
+              setCreateOpen(true)
+            }}
+            className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm font-medium text-fg outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
           >
-            <div className="border-b border-line-muted p-1">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("capabilities.import.kindPicker.search", "Search…")}
-                onKeyDown={(e) => e.stopPropagation() /* keep arrow keys in input */}
-                className="h-8 text-sm"
-                autoFocus
-              />
-            </div>
-
-            {/* Radix DropdownMenu swallows wheel events; re-drive scroll so the
-                nested list responds to the wheel, not only the scrollbar thumb. */}
-            <div
-              className="max-h-[200px] overflow-auto py-1"
-              onWheel={(e) => {
-                e.currentTarget.scrollTop += e.deltaY
-                e.stopPropagation()
-              }}
-            >
-              {kindsQ.isLoading ? (
-                <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t("capabilities.import.kindPicker.loading", "Loading…")}
-                </div>
-              ) : errMsg ? (
-                <p className="px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
-              ) : filtered.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-fg-subtle">
-                  {t("capabilities.import.kindPicker.empty", "No matching credential kinds")}
-                </p>
-              ) : (
-                filtered.map((kind) => (
-                  <KindRow
-                    key={kind.id}
-                    kind={kind}
-                    selected={kind.code === value}
-                    onSelect={() => onChange(kind.code)}
-                  />
-                ))
-              )}
-            </div>
-
-            <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
-
-            <DropdownMenu.Item
-              onSelect={(e) => {
-                e.preventDefault()
-                setCreateOpen(true)
-              }}
-              className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm font-medium text-fg outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t("capabilities.import.kindPicker.createNew", "Create credential kind…")}
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
+            <Plus className="h-3.5 w-3.5" />
+            {t("capabilities.import.kindPicker.createNew", "Create credential kind…")}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
       </DropdownMenu.Root>
 
       <NewCredentialKindInlineDialog
