@@ -64,6 +64,8 @@ definitions:
         type: string
       name:
         type: string
+      password:
+        type: string
       workspace_name:
         type: string
     type: object
@@ -89,6 +91,19 @@ definitions:
       code:
         type: string
       message:
+        type: string
+    type: object
+  bootstrap.StatusResult:
+    properties:
+      dev_auth_enabled:
+        type: boolean
+      has_owners:
+        type: boolean
+      needed:
+        type: boolean
+      owner_count:
+        type: integer
+      public_url:
         type: string
     type: object
   connector.PermissionDecision:
@@ -172,6 +187,15 @@ definitions:
     properties:
       email:
         type: string
+      invite:
+        description: |-
+          Invite, when true, provisions a local email/password identity for
+          a brand-new user and returns the plaintext temporary password
+          once in the response body. The admin is expected to relay that
+          password to the invitee out-of-band. False (default) preserves
+          the pre-existing behaviour: the member row is created but no
+          local credential is bound (Feishu / OIDC-only tenants).
+        type: boolean
       name:
         type: string
       role:
@@ -882,6 +906,29 @@ definitions:
       last_used_at:
         type: string
       updated_at:
+        type: string
+    type: object
+  password.errorResponse:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  password.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  password.loginResponse:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      user_id:
         type: string
     type: object
   runtime.createPairingRequest:
@@ -2519,6 +2566,34 @@ paths:
       summary: Start Feishu OIDC login
       tags:
       - auth
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      operationId: login-email-password
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/password.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/password.loginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/password.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/password.errorResponse'
+      summary: Log in with email and password
   /api/v1/auth/logout:
     post:
       description: Revokes the current session cookie server-side and clears it on
@@ -2542,16 +2617,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates the first user and workspace, closing the bootstrap door
-        on success. Gated by the bootstrap bearer token.
+      description: Creates the first user, their workspace, and (if password provided)
+        an email/password identity. Auto-issues a session cookie on success.
       operationId: provisionBootstrap
       parameters:
-      - description: Bearer <bootstrap token>
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: owner email/name and workspace name
+      - description: owner email, password, workspace name
         in: body
         name: body
         required: true
@@ -2566,10 +2636,6 @@ paths:
             $ref: '#/definitions/bootstrap.CreateResponse'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/bootstrap.ErrorResponse'
-        "401":
-          description: Unauthorized
           schema:
             $ref: '#/definitions/bootstrap.ErrorResponse'
         "409":
@@ -2590,7 +2656,7 @@ paths:
   /api/v1/bootstrap/status:
     get:
       description: Reports whether the bootstrap door is still open (no owner exists
-        yet) so installers can decide whether to prompt for provisioning.
+        yet).
       operationId: getBootstrapStatus
       produces:
       - application/json
@@ -2598,8 +2664,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/bootstrap.StatusResult'
         "500":
           description: Internal Server Error
           schema:
