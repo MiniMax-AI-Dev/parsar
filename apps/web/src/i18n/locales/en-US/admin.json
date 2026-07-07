@@ -1714,6 +1714,30 @@
         "title": "Failed to add member"
       }
     },
+    "invite": {
+      "cta": "Invite",
+      "title": "Invite a new teammate",
+      "description": "Creates a user with a one-time password. The password appears once — copy it and share out-of-band. Anyone with the password can sign in as this user.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "teammate@company.com",
+      "nameLabel": "Name",
+      "namePlaceholder": "Optional — defaults to the email prefix",
+      "roleLabel": "Role",
+      "submit": "Create & generate password",
+      "submitting": "Creating…",
+      "cancel": "Cancel",
+      "close": "Close",
+      "resultTitle": "Invitation ready",
+      "resultBody": "Send this to {{email}}. Parsar does not store the plaintext — you will not see it again.",
+      "existingUserNotice": "That user already exists. No temporary password was generated; they can sign in with their current credentials.",
+      "copyAll": "Copy sign-in URL + email + password",
+      "copied": "Copied!",
+      "credential": {
+        "url": "URL",
+        "email": "Email",
+        "password": "Password"
+      }
+    },
     "remove": {
       "cta": "Remove",
       "title": "Remove \"{{name}}\"?",

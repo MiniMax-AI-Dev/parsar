@@ -1924,12 +1924,19 @@ func (s *Store) CountActiveFeishuBotAgents(ctx context.Context) (int, error) {
 
 // AddWorkspaceMemberInput drives admin-side member add. The user record is
 // created on the fly when the email is new (or reused if on file).
+//
+// PasswordHash is optional. When supplied AND the user row was newly
+// inserted, the tx also writes auth_identities(provider='email') so
+// the invitee can log in with the temporary password. Reusing an
+// existing user's row never overwrites their password — an admin
+// cannot silently rotate someone else's credentials by re-inviting.
 type AddWorkspaceMemberInput struct {
-	WorkspaceID string
-	Email       string
-	Name        string
-	Role        string
-	Now         time.Time
+	WorkspaceID  string
+	Email        string
+	Name         string
+	Role         string
+	PasswordHash string
+	Now          time.Time
 }
 
 // AddWorkspaceMemberResult is the membership row plus user-side metadata.
@@ -5083,6 +5090,29 @@ func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMember
 	})
 	if err != nil {
 		return AddWorkspaceMemberResult{}, err
+	}
+
+	// Bind local email/password identity ONLY when this is a fresh
+	// user row and the caller supplied a hash. Re-adding a pre-
+	// existing user to a workspace must never rotate their password.
+	if input.PasswordHash != "" && userRow.Created {
+		metaBytes, mErr := json.Marshal(map[string]string{
+			"password_hash": input.PasswordHash,
+			"hashed_at":     input.Now.Format(time.RFC3339),
+			"invited":       "true",
+		})
+		if mErr != nil {
+			return AddWorkspaceMemberResult{}, fmt.Errorf("marshal invite email identity metadata: %w", mErr)
+		}
+		if err := q.UpsertEmailPasswordIdentity(ctx, sqlc.UpsertEmailPasswordIdentityParams{
+			ID:       mustUUID(newID()),
+			UserID:   mustUUID(userRow.ID),
+			Email:    email,
+			Metadata: metaBytes,
+			Now:      timestamptz(input.Now),
+		}); err != nil {
+			return AddWorkspaceMemberResult{}, fmt.Errorf("upsert email identity for invite: %w", err)
+		}
 	}
 
 	memberRow, err := q.AddWorkspaceMember(ctx, sqlc.AddWorkspaceMemberParams{

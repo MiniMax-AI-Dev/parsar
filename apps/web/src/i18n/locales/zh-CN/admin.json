@@ -1714,6 +1714,30 @@
         "title": "添加失败"
       }
     },
+    "invite": {
+      "cta": "邀请新成员",
+      "title": "邀请新成员",
+      "description": "会创建一个用户并生成一次性密码。密码只显示一次 — 请复制并线下发送给对方。任何拿到密码的人都能以该用户身份登录。",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "teammate@company.com",
+      "nameLabel": "姓名",
+      "namePlaceholder": "可选 — 默认取邮箱前缀",
+      "roleLabel": "角色",
+      "submit": "创建并生成密码",
+      "submitting": "创建中…",
+      "cancel": "取消",
+      "close": "关闭",
+      "resultTitle": "邀请已创建",
+      "resultBody": "发送给 {{email}}。Parsar 不保存明文,你不会再看到这个密码。",
+      "existingUserNotice": "该用户已存在,未生成临时密码;对方使用现有账号登录即可。",
+      "copyAll": "复制登录链接 + 邮箱 + 密码",
+      "copied": "已复制!",
+      "credential": {
+        "url": "登录链接",
+        "email": "邮箱",
+        "password": "密码"
+      }
+    },
     "remove": {
       "cta": "移除",
       "title": "移除「{{name}}」？",
