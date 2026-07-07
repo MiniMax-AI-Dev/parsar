@@ -119,16 +119,17 @@ export function useArchiveWorkspace() {
 /* --- Self-service workspace join requests ------------------------- */
 
 /**
- * 当前用户可申请加入的 public 工作区。后端不可达时降级为空响应。
+ * Public workspaces the current user is allowed to request to join. Falls
+ * back to an empty response when the backend is unreachable.
  *
- * 调用约定:切换器下拉用 limit=5;DiscoverWorkspacesDialog 用 limit=20 +
- * offset + q 翻页/搜索。
+ * Convention: switcher dropdown uses limit=5; DiscoverWorkspacesDialog uses
+ * limit=20 + offset + q for paging/search.
  */
 export interface UseDiscoverableWorkspacesArgs {
   q?: string
   limit?: number
   offset?: number
-  /** Modal 关闭时禁用查询。 */
+  /** Disable the query when the modal is closed. */
   enabled?: boolean
 }
 
@@ -166,7 +167,7 @@ export function useDiscoverableWorkspaces(
   })
 }
 
-/** 提交申请加入。成功后失效发现列表和我的工作区列表。 */
+/** Submit a join request. On success, invalidate the discovery list and my-workspaces list. */
 export function useRequestJoinWorkspace() {
   const qc = useQueryClient()
   return useMutation({
@@ -188,8 +189,8 @@ export function useRequestJoinWorkspace() {
   })
 }
 
-/** 申请人自助撤回自己的 pending 申请。409 (已被 owner 处理) 时,发现列表
- *  也得失效让 UI 跟上。 */
+/** Requester self-withdraws their pending request. On 409 (already handled by
+ *  the owner) the discovery list must also be invalidated so the UI catches up. */
 export function useWithdrawJoinRequest() {
   const qc = useQueryClient()
   return useMutation({
@@ -205,7 +206,7 @@ export function useWithdrawJoinRequest() {
   })
 }
 
-/** owner/admin 视角:某工作区的待审批申请列表。 */
+/** owner/admin view: list of pending join requests for a workspace. */
 export function usePendingJoinRequests(wsId: string | null) {
   return useQuery({
     queryKey: KEY_PENDING_JOIN_REQUESTS(wsId ?? "_none"),
@@ -234,7 +235,7 @@ export function usePendingJoinRequests(wsId: string | null) {
   })
 }
 
-/** 同意/拒绝复用同一个 mutation 工厂,只是 action 路径不同。 */
+/** Approve/reject share the same mutation factory; only the action path differs. */
 function useReviewJoinRequest(action: "approve" | "reject") {
   const qc = useQueryClient()
   return useMutation({

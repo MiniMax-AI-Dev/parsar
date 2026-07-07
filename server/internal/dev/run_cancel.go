@@ -151,12 +151,12 @@ func emitCancelAudit(cfg *routerConfig, r *http.Request, run store.AgentRunDetai
 // cancelConversationRuns handles POST /conversations/{conversationID}/cancel-all.
 // One-shot bulk cancel for the conversation: every queued / running
 // run is marked cancelled and the connector is told to Abort each one.
-// Used by the "取消全部" button on the web conversation header and by
+// Used by the "Cancel all" button on the web conversation header and by
 // the Feishu /cancel all command.
 // cancelConversationRuns handles POST /conversations/{conversationID}/cancel-all.
 // One-shot bulk cancel for the conversation: every queued / running
 // run is marked cancelled and the connector is told to Abort each one.
-// Used by the "取消全部" button on the web conversation header and by
+// Used by the "Cancel all" button on the web conversation header and by
 // the Feishu /cancel all command.
 //
 //	@Summary		Cancel every inflight run for a conversation

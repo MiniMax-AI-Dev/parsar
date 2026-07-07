@@ -86,8 +86,8 @@ type builtinCapability struct {
 var builtinCapabilities = []builtinCapability{
 	{
 		Key:         "parsar_chat_history",
-		Name:        "聊天记录查询 (fetch_chat_history)",
-		Description: "让 Agent 按需拉取当前群聊的历史消息。默认开启;关闭后本 Agent 将无法调用该工具。",
+		Name:        "Chat history query (fetch_chat_history)",
+		Description: "Let the Agent pull historical messages from the current group chat on demand. Enabled by default; when disabled, this Agent will not be able to invoke this tool.",
 		Type:        "mcp",
 	},
 }
@@ -747,17 +747,18 @@ func deleteWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		// 原子写:SoftDeleteCapability 的 SQL 里带 NOT EXISTS(agent_capabilities)
-		// 守卫,所以"查空 binding → 别人插一条 → 我们删"这种 TOCTOU 窗口被关掉。
-		// store 在 UPDATE 0 行时把"是否被引用"的判别也做了——有引用 → 返回
-		// CapabilityHasBindingsError(带 Count),没有 → ErrUnknownCapability。
+		// Atomic write: SoftDeleteCapability's SQL carries a NOT EXISTS(agent_capabilities)
+		// guard, so the "check binding empty → someone inserts one → we delete" TOCTOU
+		// window is closed. When UPDATE affects 0 rows, the store also determines
+		// "is it referenced?" — referenced → returns CapabilityHasBindingsError (with Count),
+		// unreferenced → ErrUnknownCapability.
 		deleted, err := runtimeStore.SoftDeleteCapability(r.Context(), workspaceID, capabilityID)
 		if err != nil {
 			var bound *store.CapabilityHasBindingsError
 			if errors.As(err, &bound) {
 				writeJSON(w, http.StatusConflict, map[string]any{
 					"error":         "capability_in_use",
-					"message":       fmt.Sprintf("该能力仍被 %d 个 agent 使用,请先在使用方解绑后再删除。", bound.Count),
+					"message":       fmt.Sprintf("This capability is still used by %d agents; please unbind on the consumer side before deleting.", bound.Count),
 					"binding_count": bound.Count,
 				})
 				return

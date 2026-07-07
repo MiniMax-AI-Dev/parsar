@@ -58,7 +58,7 @@ type ClaimPendingCredentialFormSlotByQkeyRow struct {
 
 // Atomic "I won this submit" primitive for the credential-form callback.
 // A single statement returns the slot to exactly one caller; siblings
-// racing on the same qkey see zero rows and short-circuit to a "已处理"
+// racing on the same qkey see zero rows and short-circuit to an "already handled"
 // toast without writing credentials.
 //
 // WHY a CTE: a naive UPDATE … RETURNING reads the post-UPDATE state, so
@@ -70,7 +70,7 @@ type ClaimPendingCredentialFormSlotByQkeyRow struct {
 //
 // The `expires_at > now()` predicate in the pre-image SELECT keeps the
 // claim consistent with the sweep job: a "morally expired" slot whose
-// sweep hasn't yet arrived returns no row, surfacing a stable "已过期"
+// sweep hasn't yet arrived returns no row, surfacing a stable "expired"
 // toast to the user instead of behaviour that depends on cron timing.
 //
 // The reverse-lookup uses the partial expression index from migration

@@ -18,7 +18,7 @@
 // for a block_actions click), while the envelope itself is bare-acked.
 // Slash-command routing is still deferred. Thread continuation is enabled:
 // a follow-up in a thread the bot was already activated in routes without a
-// fresh @mention (history-backed, mirroring the Feishu 话题 path).
+// fresh @mention (history-backed, mirroring the Feishu thread path).
 package slackrunner
 
 import (
@@ -222,7 +222,7 @@ func (r *Runner) dispatch(ctx context.Context, evt socketmode.Event) {
 }
 
 // slackThreadHist binds the runner's store to the slack platform so the
-// neutral gate's platform-agnostic ThreadHistoryLookup resolves 话题续聊
+// neutral gate's platform-agnostic ThreadHistoryLookup resolves thread-continuation
 // history against slack conversations only.
 type slackThreadHist struct{ store router.Store }
 
@@ -249,7 +249,7 @@ func (r *Runner) handleEvent(ctx context.Context, payload []byte) error {
 		return nil
 	}
 	// Group/channel messages must @mention the bot, unless the message lands
-	// in a thread the bot was already activated in — then it's a 话题续聊 and
+	// in a thread the bot was already activated in — then it's a thread continuation and
 	// no fresh @mention is required (mirrors the Feishu path).
 	if gateway.ShouldSkipGroupWithoutMention(ctx, slackThreadHist{r.store}, event, r.botUserID) {
 		return nil

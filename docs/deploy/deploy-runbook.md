@@ -1,100 +1,113 @@
-# Parsar 部署 runbook
+# Parsar deploy runbook
 
-本文面向把 Parsar 部署到生产环境的运维。目标：从空数据库 + 配置文件出发，让 Parsar 完成真实初始化，
-**不依赖** `seed-dev` 假数据、固定 fixture UUID、`X-Parsar-Dev-User-ID` dev shim 这些开发期捷径。
+For operators deploying Parsar to production. The goal: starting from an empty
+database and a config file, complete a real initialization **without** relying
+on the development shortcuts of `seed-dev` fixtures, hard-coded fixture UUIDs,
+or the `X-Parsar-Dev-User-ID` dev shim.
 
-适用对象：自托管开源版本 —— 任何 deployment profile（单机 docker、K8s、裸金属）都按本文档走。
+Audience: any self-hosted open-source deployment — every deployment profile
+(single-node docker, K8s, bare metal) follows this document.
 
-> **相关文档**
-> - [feishu-prod.md](./feishu-prod.md) — Feishu OIDC + 事件订阅生产配置。
-> - [feishu-bot-per-agent.md](./feishu-bot-per-agent.md) — 把单个 Agent 暴露成飞书机器人（每个挂飞书的 Agent 一份）。
-> - [health-and-smoke.md](./health-and-smoke.md) — `/healthz`、`/readyz`、`smoke.sh` 检查器。
-> - [config.example.yaml](./config.example.yaml) — 注释齐全的 YAML 模板。
-> - [`deploy/compose/compose.selfhost.yml`](../../deploy/compose/compose.selfhost.yml) — 单机部署 compose 起点。
-> - [`deploy/compose/.env.example`](../../deploy/compose/.env.example) — env 注入模板。
+> **Related documents**
+> - [feishu-prod.md](./feishu-prod.md) — Feishu OIDC + event-subscription production config.
+> - [feishu-bot-per-agent.md](./feishu-bot-per-agent.md) — expose a single Agent as a Feishu bot (one per Feishu-connected Agent).
+> - [health-and-smoke.md](./health-and-smoke.md) — `/healthz`, `/readyz`, `smoke.sh` checks.
+> - [config.example.yaml](./config.example.yaml) — the fully-commented YAML template.
+> - [`deploy/compose/compose.selfhost.yml`](../../deploy/compose/compose.selfhost.yml) — single-node compose starting point.
+> - [`deploy/compose/.env.example`](../../deploy/compose/.env.example) — env injection template.
 
 ---
 
-## 1. 整体启动顺序
+## 1. Overall startup order
 
 ```text
-1. 准备 Postgres：空库可用 + 凭证就绪
-2. 准备 config / env：见 §2
-3. 跑数据库 migration            (parsar-migrate 或 docker run parsar:<tag> parsar-migrate 或 make migrate-dev)
-4. 启动 server                  (parsar-server  或 docker run parsar:<tag>)
-5. 健康检查通过                  (/healthz + /readyz 均返回 200)
-6. 创建第一个 owner + workspace  (HTTP API 或 CLI，二选一)
-7. 关闭 bootstrap token         (从 env 移除 PARSAR_BOOTSTRAP_TOKEN 并重启 server)
-8. 跑 smoke-core 验证最小闭环   (scripts/smoke.sh --core)
-9. 正常运行
+1. Prepare Postgres:   empty DB reachable + credentials in place
+2. Prepare config / env: see §2
+3. Run DB migrations             (parsar-migrate or docker run parsar:<tag> parsar-migrate or make migrate-dev)
+4. Start the server              (parsar-server  or docker run parsar:<tag>)
+5. Health checks pass            (/healthz + /readyz both return 200)
+6. Create the first owner + workspace (HTTP API or CLI, pick one)
+7. Turn bootstrap off            (remove PARSAR_BOOTSTRAP_TOKEN from env and restart)
+8. Run smoke-core to validate the minimum closed loop (scripts/smoke.sh --core)
+9. Normal operation
 ```
 
-> migration 必须先于 server 第一次承接业务请求。`/healthz` 是 liveness，
-> 不查 schema；`/readyz` 只校验 DB 可连通。任何 conversation/agent 调用
-> 在未 migrate 的空库上都会 500。
+> Migrations must complete before the server takes its first business request.
+> `/healthz` is liveness and does not touch the schema; `/readyz` only checks
+> DB connectivity. Any conversation / agent call on an empty un-migrated DB
+> will 500.
 
-> `parsar-server` 和 `parsar-migrate` 是 production image 里装在 `$PATH`
-> 上(`/usr/local/bin`)的 binary,所以按**裸名**调用,而不是 `./parsar-...`
-> —— image 的 `WORKDIR` 是 `/var/lib/parsar`,那里并没有这些文件(由仓库根
-> `Dockerfile` + `make docker-build` 构建)。本地 dev 不需要这两个 binary
-> —— 用 `make server` / `make migrate-dev` 走 `go run ./cmd/...` 即可。
+> `parsar-server` and `parsar-migrate` are the production-image binaries on
+> `$PATH` (`/usr/local/bin`), so you invoke them by **bare name**, not
+> `./parsar-...` — the image's `WORKDIR` is `/var/lib/parsar`, and those files
+> are not there (they are built from the repo-root `Dockerfile` + `make
+> docker-build`). Local dev does not need these two binaries — use `make
+> server` / `make migrate-dev`, which go through `go run ./cmd/...`.
 
-> step 8 的 smoke-core 不是装饰：它复跑 step 5 的三条探活，并额外确认
-> `/api/v1/bootstrap/status` 已对外开放、`dev_auth_enabled=false`（生产硬约束）、
-> bootstrap 状态已收敛到「已经有 owner」、第二次 POST `/api/v1/bootstrap`
-> 必须返回 409（门已闩死）。完整规则见
-> [health-and-smoke.md](./health-and-smoke.md#smoke-script)。
+> The smoke-core in step 8 is not decoration: it re-runs the three step-5
+> probes and additionally confirms that `/api/v1/bootstrap/status` is
+> exposed, that `dev_auth_enabled=false` (a hard production invariant), that
+> the bootstrap state has converged to "an owner exists", and that a second
+> POST to `/api/v1/bootstrap` must return 409 (the door is bolted shut). Full
+> rules in [health-and-smoke.md](./health-and-smoke.md#smoke-script).
 
-Docker Compose / K8s 部署模板见 §7。
+Docker Compose / K8s deploy templates are in §7.
 
 ---
 
-## 2. 配置载入顺序
+## 2. Configuration load order
 
-`server/internal/config` 是配置 source of truth。加载优先级（后者覆盖前者）：
+`server/internal/config` is the source of truth for configuration. Load
+precedence (later wins):
 
-1. 内置默认值（`Default()`）。
-2. 可选 YAML 文件：通过 `PARSAR_CONFIG_FILE=<绝对路径>` 指定。
-   - 路径必须是绝对路径或 `~/` 开头；**相对路径会被拒绝**（避免 CWD 误读）。
-   - 不设置该 env 时，server 完全不读任何文件。**不存在「自动读 `./config.yaml`」的回退行为**。
-3. 环境变量（始终最高优先级，便于注入 secret）。
+1. Built-in defaults (`Default()`).
+2. Optional YAML file, specified via `PARSAR_CONFIG_FILE=<absolute path>`.
+   - The path must be absolute or start with `~/`; **relative paths are
+     rejected** (to prevent accidental CWD misreads).
+   - When the env var is unset, the server reads no file at all. **There is
+     no "auto-read `./config.yaml`" fallback.**
+3. Environment variables (always the highest precedence, so secrets can be
+   injected cleanly).
 
-启动时会校验：
+Startup validation:
 
-- `database.url` 在生产 profile 必须非空。
-- `secret.master_key` 在生产 profile 必须非空。
-- `auth.dev_auth=true` 仅允许在 dev profile。
-- `auth.cookie.secure=true` 在生产 profile 必须为 true。
+- `database.url` must be non-empty in the production profile.
+- `secret.master_key` must be non-empty in the production profile.
+- `auth.dev_auth=true` is only permitted in the dev profile.
+- `auth.cookie.secure=true` is required in the production profile.
 
-Profile 推断规则：只要 `auth.dev_auth=true` 或 `gateway.feishu.mock=true` 任一为真，整个进程切到 dev profile；
-否则按生产 profile 校验。
+Profile inference: if either `auth.dev_auth=true` or
+`gateway.feishu.mock=true` is true, the whole process runs in dev profile;
+otherwise it validates as production.
 
-### 示例 YAML
+### Example YAML
 
-参考 `docs/deploy/config.example.yaml`（带注释的部署模板）。
-示例文件只放 placeholder，**任何真实凭证都不进 repo**。
+See `docs/deploy/config.example.yaml` (a fully-commented deploy template).
+The example file only holds placeholders — **no real credential ever enters
+the repo**.
 
-### 关键 env 变量速查
+### Key env variables at a glance
 
-| 用途 | env 名 | 默认 |
+| Purpose | Env name | Default |
 |---|---|---|
-| 监听地址 | `PARSAR_ADDR` | `:8080` |
-| 对外 URL（构 callback 用） | `PARSAR_PUBLIC_URL` | 空 |
-| Runtime 数据目录 | `PARSAR_DATA_DIR` | `~/.parsar` |
-| Postgres 连接 | `DATABASE_URL` | （必填） |
-| Secret 主密钥 | `PARSAR_MASTER_KEY` | （生产必填） |
-| Bootstrap token | `PARSAR_BOOTSTRAP_TOKEN` | 空（HTTP bootstrap 关闭） |
-| Dev auth 开关 | `PARSAR_DEV_AUTH` | `false`（生产必为 false） |
-| HTTPS cookie | `PARSAR_COOKIE_SECURE` | `false`（生产必为 true） |
+| Listen address | `PARSAR_ADDR` | `:8080` |
+| External URL (for building callbacks) | `PARSAR_PUBLIC_URL` | empty |
+| Runtime data directory | `PARSAR_DATA_DIR` | `~/.parsar` |
+| Postgres connection | `DATABASE_URL` | (required) |
+| Secret master key | `PARSAR_MASTER_KEY` | (required in production) |
+| Bootstrap token | `PARSAR_BOOTSTRAP_TOKEN` | empty (HTTP bootstrap off) |
+| Dev auth toggle | `PARSAR_DEV_AUTH` | `false` (must be false in production) |
+| HTTPS cookie | `PARSAR_COOKIE_SECURE` | `false` (must be true in production) |
 | Runtime profile | `PARSAR_RUNTIME_PROFILE` | `managed` for managed deployments where the platform manages cloud sandboxes |
 
-Feishu OAuth / event 相关 env 见 [feishu-prod.md](./feishu-prod.md)。
+Feishu OAuth / event-related env vars are documented in
+[feishu-prod.md](./feishu-prod.md).
 
 ---
 
-## 3. Bootstrap：第一个 owner + workspace
+## 3. Bootstrap: first owner + workspace
 
-空库启动后 `GET /api/v1/bootstrap/status` 会返回：
+On a fresh empty DB, `GET /api/v1/bootstrap/status` returns:
 
 ```json
 {
@@ -106,22 +119,25 @@ Feishu OAuth / event 相关 env 见 [feishu-prod.md](./feishu-prod.md)。
 }
 ```
 
-`needed=true` 表示设置尚未完成。安装阶段的 installer UI 可以根据这个状态决定下一步。
+`needed=true` means setup has not completed. Installer UIs can key off this
+status to decide the next step.
 
-可选**两条路径**完成第一个 owner + workspace 的创建：
+There are **two paths** to create the first owner + workspace:
 
-### 3.1 路径 A：HTTP API（远程部署）
+### 3.1 Path A: HTTP API (remote deployments)
 
-适合无法直接登录目标机的场景（K8s、托管平台）。
+Best when you cannot log directly onto the target machine (K8s, hosted
+platforms).
 
 ```bash
-# 1. 生成一个一次性强 token（32 字节随机）
+# 1. Generate a one-shot strong token (32 random bytes)
 export PARSAR_BOOTSTRAP_TOKEN="$(openssl rand -hex 32)"
 
-# 2. 在 server 启动 env 中导出该 token，然后启动 server
-#    （生产中通常通过 K8s secret / systemd EnvironmentFile 注入）
+# 2. Export the token in the server's startup env, then start the server
+#    (In production this is typically injected via a K8s secret / systemd
+#    EnvironmentFile.)
 
-# 3. 调用 bootstrap 接口
+# 3. Call the bootstrap endpoint
 curl -sf -X POST https://parsar.example.com/api/v1/bootstrap \
   -H "Authorization: Bearer ${PARSAR_BOOTSTRAP_TOKEN}" \
   -H "Content-Type: application/json" \
@@ -132,7 +148,7 @@ curl -sf -X POST https://parsar.example.com/api/v1/bootstrap \
   }'
 ```
 
-成功返回 201：
+Success returns 201:
 
 ```json
 {
@@ -146,16 +162,19 @@ curl -sf -X POST https://parsar.example.com/api/v1/bootstrap \
 }
 ```
 
-完成后：
+Afterwards:
 
-- `GET /api/v1/bootstrap/status` 返回 `needed=false`、`has_owners=true`。
-- 再次 POST 返回 409 + `bootstrap_closed`。
-- **必须立刻把 `PARSAR_BOOTSTRAP_TOKEN` 从 env 移除**，并重启进程让其生效。
-  （token 留在 env 即便已经无法触发 bootstrap，也是一份长期可被窃取的凭证。）
+- `GET /api/v1/bootstrap/status` returns `needed=false`, `has_owners=true`.
+- A second POST returns 409 + `bootstrap_closed`.
+- **Remove `PARSAR_BOOTSTRAP_TOKEN` from env immediately** and restart the
+  process for it to take effect. (A leftover token in env is a long-lived
+  credential that could be stolen, even though it can no longer trigger
+  bootstrap.)
 
-### 3.2 路径 B：CLI（本地 / 容器内）
+### 3.2 Path B: CLI (local / inside the container)
 
-适合可以直接 `kubectl exec` / `docker exec` 到目标机的场景。**不需要** token。
+Best when you can `kubectl exec` / `docker exec` into the target machine.
+**Requires no token.**
 
 ```bash
 export DATABASE_URL="postgres://parsar:parsar@127.0.0.1:5432/parsar?sslmode=disable"
@@ -166,7 +185,7 @@ go run ./server/cmd/parsar-bootstrap \
   --name="First Admin"
 ```
 
-或通过 Makefile：
+Or via the Makefile:
 
 ```bash
 DATABASE_URL=postgres://... \
@@ -176,152 +195,163 @@ PARSAR_BOOTSTRAP_NAME="First Admin" \
 make bootstrap
 ```
 
-退出码：
+Exit codes:
 
-| code | 含义 |
+| Code | Meaning |
 |---|---|
-| 0 | 成功 |
-| 1 | 参数错误（缺 --email / --workspace / DATABASE_URL） |
-| 2 | 已有 owner，bootstrap 已关闭 |
-| 3 | 输入校验失败 |
-| 4 | 数据库连接 / 提交失败 |
-| 5 | 其它错误 |
+| 0 | Success |
+| 1 | Argument error (missing --email / --workspace / DATABASE_URL) |
+| 2 | Owner already exists, bootstrap is closed |
+| 3 | Input validation failed |
+| 4 | DB connect / commit failed |
+| 5 | Other error |
 
-### 3.3 Bootstrap 一致性
+### 3.3 Bootstrap consistency
 
-无论走哪条路径，最终都通过 `store.ProvisionFirstOwner` 在**单个事务**内：
+Regardless of the path, both funnel into `store.ProvisionFirstOwner` inside a
+**single transaction**:
 
-1. 校验「没有任何 active workspace owner」（gate）。
-2. UpsertUserByEmail。
-3. CreateWorkspace（auto slug + operator 指定 name）。
-4. 插入 workspace_members(owner)。
-5. 写一条 `bootstrap.first_owner_created` audit 记录。
+1. Verify "no active workspace owner exists" (gate).
+2. UpsertUserByEmail.
+3. CreateWorkspace (auto slug + operator-supplied name).
+4. Insert into workspace_members(owner).
+5. Write a `bootstrap.first_owner_created` audit record.
 
-并发同时调用两次也只会成功一次，第二次返回 `ErrBootstrapClosed`。
+Two concurrent calls both succeed only once; the second returns
+`ErrBootstrapClosed`.
 
 ---
 
-## 4. 与 seed-dev / dev_auth 的关系
+## 4. Relationship with seed-dev / dev_auth
 
-| | 用于 | 状态 |
+| | For | Status |
 |---|---|---|
-| `make seed-dev-db` | 本地开发 fixture，写入固定 UUID 的 demo workspace | **不要在生产部署路径用** |
-| `PARSAR_DEV_AUTH=true` + `X-Parsar-Dev-User-ID` header | 本地开发跳过 cookie 登录 | 生产必关，启动时 Validate() 会拒绝 |
-| `PARSAR_FEISHU_MOCK=true` | 本地开发跳过真实飞书 | 同上 |
-| `PARSAR_BOOTSTRAP_TOKEN` + HTTP bootstrap | **生产合法的初始化入口** | 单次使用，用完移除 |
-| `parsar-bootstrap` CLI | **生产合法的初始化入口** | 仅本地访问 |
-| `scripts/smoke.sh` (lite) | 部署后探活：`/healthz` `/readyz` `/api/v1/health` | 适用任意 deployment profile |
-| `scripts/smoke.sh --core` | lite 探活 + bootstrap 链路验证：bootstrap 状态可读 + `dev_auth_enabled=false` + （可选）provision + idempotency 闭门 | 适用任意 deployment profile；带 `--bootstrap-token` 时额外验 POST 路径 |
+| `make seed-dev-db` | Local-development fixture — writes a demo workspace with fixed UUIDs | **Do not use on any deploy path** |
+| `PARSAR_DEV_AUTH=true` + `X-Parsar-Dev-User-ID` header | Local dev shim that skips cookie login | Must be off in production; Validate() rejects it at startup |
+| `PARSAR_FEISHU_MOCK=true` | Local dev shim that skips real Feishu | Same as above |
+| `PARSAR_BOOTSTRAP_TOKEN` + HTTP bootstrap | **Legitimate production init path** | Single-use, remove after use |
+| `parsar-bootstrap` CLI | **Legitimate production init path** | Local access only |
+| `scripts/smoke.sh` (lite) | Post-deploy liveness: `/healthz`, `/readyz`, `/api/v1/health` | Works for any deploy profile |
+| `scripts/smoke.sh --core` | lite + bootstrap-path validation: readable bootstrap status + `dev_auth_enabled=false` + (optional) provision + closed-door idempotency | Works for any deploy profile; also validates the POST path when `--bootstrap-token` is set |
 
 ---
 
-## 5. 部署 ready 还剩下的依赖
+## 5. What's still missing before "deployment ready"
 
-本轨道（Bootstrap + Config）只覆盖**冷启动数据 + 配置层**。要让一套部署真正进入生产 ready，还缺：
+This track (Bootstrap + Config) only covers the **cold-start data + config
+layer**. To make a deployment truly production-ready you still need:
 
-| 项 | 当前状态 | 谁负责 |
+| Item | Current status | Owner |
 |---|---|---|
-| **Production artifact / OCI 镜像** | **已落地,见仓库根 `Dockerfile` + `make docker-build`** | — |
-| Sandbox runner（E2B） | Phase 4 实现中 | 另一个 session |
-| Admin UI（installer 第一步指引） | Phase 4 follow-up | 另一个 session |
-| 真实 auth（Feishu OIDC 生产配置） | 已落地，见 `feishu-prod.md` | — |
-| 真实 auth（其它 OAuth provider，如 GitHub / Google / email magic link） | 未实现 | 后续 phase |
-| Smoke — 部署后探活（/healthz、/readyz、/api/v1/health） | 已落地，见 `health-and-smoke.md` 的 lite 模式 | — |
-| Smoke — bootstrap 链路（status / dev_auth shim / provision / idempotency） | 已落地，见 `health-and-smoke.md` 的 core 模式 | — |
-| Smoke — AgentRun / audit / usage 端到端 | 缺 `/api/v1/workspaces/{wid}/{agent-runs,audit-records,usage}` 等 cookie-session 入口；smoke-core 把这一项标 SKIP/TODO | 后续 phase |
-| Audit sink 真实化（Kafka / 自托管存储） | 当前 in-memory + Postgres sink；接口已抽象 | 后续 phase |
-| Memory L0-L3 | 未实现 | 后续 phase |
-| Capability marketplace | 未实现 | 后续 phase |
+| **Production artifact / OCI image** | **Landed; see repo-root `Dockerfile` + `make docker-build`** | — |
+| Sandbox runner (E2B) | Phase 4 in progress | Another session |
+| Admin UI (installer step-by-step) | Phase 4 follow-up | Another session |
+| Real auth (Feishu OIDC production config) | Landed; see `feishu-prod.md` | — |
+| Real auth (other OAuth providers: GitHub / Google / email magic link) | Not implemented | Later phase |
+| Smoke — post-deploy liveness (/healthz, /readyz, /api/v1/health) | Landed; see the lite mode in `health-and-smoke.md` | — |
+| Smoke — bootstrap path (status / dev_auth shim / provision / idempotency) | Landed; see the core mode in `health-and-smoke.md` | — |
+| Smoke — end-to-end AgentRun / audit / usage | Missing `/api/v1/workspaces/{wid}/{agent-runs,audit-records,usage}` and other cookie-session entry points; smoke-core marks this SKIP/TODO | Later phase |
+| Real audit sink (Kafka / self-hosted storage) | In-memory + Postgres sink for now; the interface is already abstracted | Later phase |
+| Memory L0-L3 | Not implemented | Later phase |
+| Capability marketplace | Not implemented | Later phase |
 
-**本轨道交付的不变量**：
+**Invariants delivered by this track:**
 
-- 不再依赖 seeddev fixture UUID。
-- 不再依赖 `X-Parsar-Dev-User-ID` shim。
-- 配置不会从 CWD 自动读 / 写。
-- `make check` 仍然通过。
-- 生产 profile 启动若缺关键 secret（master key / DATABASE_URL）会失败而不是降级。
-
----
-
-## 6. 安全注意事项
-
-- `PARSAR_BOOTSTRAP_TOKEN`、`PARSAR_MASTER_KEY`、`PARSAR_FEISHU_APP_SECRET` 等**永远不要进 repo**，也不要写进
-  示例 YAML 的默认值 —— 示例文件里全是 `<placeholder>`。
-- HTTP bootstrap 接口的 token 用 `crypto/subtle.ConstantTimeCompare` 比对，避免时序攻击。
-- `bootstrap.first_owner_created` audit 事件会带 `user_email`、`workspace_slug`，可以在 audit log 中追溯安装时刻。
-- `GET /api/v1/bootstrap/status` 是公开的（按设计），只暴露布尔状态 + owner 数量，不暴露任何身份。
+- No longer depends on seed-dev fixture UUIDs.
+- No longer depends on the `X-Parsar-Dev-User-ID` shim.
+- Config is neither auto-read from nor written to CWD.
+- `make check` still passes.
+- The production profile fails to start (rather than silently degrading) when
+  a critical secret (master key / DATABASE_URL) is missing.
 
 ---
 
-## 7. Docker Compose 部署模板
+## 6. Security notes
 
-仓库自带一份起点 compose，覆盖 §1 的 1–4 + 7 步：
+- `PARSAR_BOOTSTRAP_TOKEN`, `PARSAR_MASTER_KEY`, `PARSAR_FEISHU_APP_SECRET`,
+  etc., must **never enter the repo** — nor be baked as defaults into example
+  YAML files. Example files hold only `<placeholder>`.
+- The HTTP bootstrap token is compared with
+  `crypto/subtle.ConstantTimeCompare` to avoid timing attacks.
+- The `bootstrap.first_owner_created` audit event carries `user_email` and
+  `workspace_slug` so the audit log records exactly when install happened.
+- `GET /api/v1/bootstrap/status` is public by design; it exposes only the
+  boolean state + owner count, no identity information.
+
+---
+
+## 7. Docker Compose deploy template
+
+The repo ships a starter compose that covers steps 1–4 and 7 of §1:
 
 ```text
 deploy/compose/
-├── README.md                  目录说明 + 三种部署形态
-├── compose.selfhost.yml       parsar-server + postgres 两 service
-└── .env.example               env 模板（全是 placeholder）
+├── README.md                  directory overview + three deploy shapes
+├── compose.selfhost.yml       parsar-server + postgres, two services
+└── .env.example               env template (all placeholders)
 ```
 
-### 7.1 端到端跑一次（单机 + 内置 Postgres）
+### 7.1 End-to-end run (single node + bundled Postgres)
 
 ```bash
-# 1. 准备 env
+# 1. Prepare env
 cp deploy/compose/.env.example deploy/compose/.env
-# 编辑 deploy/compose/.env：
-#   - PARSAR_SERVER_IMAGE   你的镜像 path
-#   - PARSAR_PUBLIC_URL     反向代理对外 URL
+# Edit deploy/compose/.env:
+#   - PARSAR_SERVER_IMAGE   path to your image
+#   - PARSAR_PUBLIC_URL     external URL behind the reverse proxy
 #   - PARSAR_PG_PASSWORD    openssl rand -hex 24
 #   - PARSAR_MASTER_KEY     openssl rand -hex 32
-#   - PARSAR_BOOTSTRAP_TOKEN openssl rand -hex 32（用完移除）
+#   - PARSAR_BOOTSTRAP_TOKEN openssl rand -hex 32 (remove after use)
 
-# 2. （可选）准备 YAML config
+# 2. (Optional) Prepare YAML config
 sudo install -d /etc/parsar
 sudo cp docs/deploy/config.example.yaml /etc/parsar/config.yaml
-# 把每一个 <placeholder> 换成真值 —— 真凭证仍然走 env，不写文件。
+# Replace each <placeholder> with a real value — real credentials still flow
+# through env, not the file.
 
-# 3. 拉起 postgres + server
+# 3. Bring up postgres + server
 docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env up -d
 
-# 4. 跑 migration（容器内执行，连同一份 DATABASE_URL）
+# 4. Run migrations (executed inside the container, sharing DATABASE_URL)
 docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env \
   exec parsar-server parsar-migrate
 
 # 5. Smoke check
 scripts/smoke.sh --api-url http://127.0.0.1:8080
 
-# 6. Bootstrap 第一个 owner（§3.1 走 HTTP 或 §3.2 走 CLI）
+# 6. Bootstrap the first owner (§3.1 via HTTP or §3.2 via CLI)
 curl -sf -X POST http://127.0.0.1:8080/api/v1/bootstrap \
   -H "Authorization: Bearer ${PARSAR_BOOTSTRAP_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","name":"First Admin","workspace_name":"Acme"}'
 
-# 7. 关闭 bootstrap：把 .env 里 PARSAR_BOOTSTRAP_TOKEN 删掉，然后
+# 7. Close bootstrap: remove PARSAR_BOOTSTRAP_TOKEN from .env, then
 docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env \
   up -d --force-recreate parsar-server
 ```
 
-### 7.2 校验 compose 文件语法
+### 7.2 Validate compose file syntax
 
-每次改完 `compose.selfhost.yml` 或 `.env.example`，跑一次：
+After each edit of `compose.selfhost.yml` or `.env.example`, run:
 
 ```bash
 docker compose -f deploy/compose/compose.selfhost.yml --env-file deploy/compose/.env config >/dev/null
 ```
 
-`docker compose config` 会展开所有 `${VAR}` 并校验 YAML / schema，
-返回 0 = 文件可被 docker 引擎解析。CI 应该把这条命令加进 lint 阶段。
+`docker compose config` expands every `${VAR}` and validates the YAML /
+schema; a zero exit code means the file parses cleanly for the docker
+engine. CI should include this in the lint stage.
 
-### 7.3 K8s / 其它 orchestrator
+### 7.3 K8s / other orchestrators
 
-`compose.selfhost.yml` 不是 K8s manifest，但可以照搬：
+`compose.selfhost.yml` is not a K8s manifest, but it maps directly:
 
 - env block → Deployment.spec.template.spec.containers[].env
-- healthcheck → `livenessProbe` 用 `/healthz`、`readinessProbe` 用 `/readyz`
-  （详见 [health-and-smoke.md §3](./health-and-smoke.md#kubernetes-probe-configuration)）
+- healthcheck → `livenessProbe` on `/healthz`, `readinessProbe` on `/readyz`
+  (see [health-and-smoke.md §3](./health-and-smoke.md#kubernetes-probe-configuration))
 - volumes → ConfigMap (config.yaml) + PersistentVolumeClaim (runtime data)
-- `.env` → Secret 资源；env 通过 `envFrom: secretRef:` 注入
+- `.env` → Secret resource; env injected via `envFrom: secretRef:`
 
-K8s manifest / Helm chart / kustomize overlay 由各部署方按自己环境维护，
-不进开源仓库。
+K8s manifests / Helm charts / kustomize overlays are maintained by each
+deployer against their own environment; they do not live in the open-source
+repo.

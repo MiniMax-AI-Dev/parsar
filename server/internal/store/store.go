@@ -859,8 +859,9 @@ var ErrImmutable = errors.New("immutable capability version")
 var ErrMarketplaceCapabilityUnavailable = errors.New("marketplace capability unavailable")
 var ErrMarketplaceDependents = errors.New("workspace has marketplace dependents")
 
-// CapabilityHasBindingsError 表示删除 capability 时被 agent_capabilities 引用阻塞。
-// Count 是阻塞时的引用数;HTTP 层用它构造 409 响应里的 binding_count。
+// CapabilityHasBindingsError indicates that a capability delete is blocked by
+// agent_capabilities references. Count is the reference count at time of block;
+// the HTTP layer uses it to build the 409 response's binding_count.
 type CapabilityHasBindingsError struct {
 	CapabilityID string
 	Count        int64
@@ -891,10 +892,11 @@ var ErrUnknownWorkspaceMember = errors.New("unknown active workspace member")
 var ErrInvalidMemberRole = errors.New("invalid member role")
 var ErrNotMember = errors.New("not an active member")
 
-// 工作区主动申请加入(self-service join request)相关错误:
+// Self-service workspace join request errors:
 //
-//	ErrJoinRequestAlreadyHandled — Approve/Reject 时目标行已被其他 admin 处理,
-//	  WHERE status='pending' 守卫导致 0 行受影响。handler 返回 409。
+//	ErrJoinRequestAlreadyHandled — Approve/Reject found the target row already
+//	  handled by another admin; the WHERE status='pending' guard resulted in 0
+//	  rows affected. The handler returns 409.
 var ErrJoinRequestAlreadyHandled = errors.New("join request already handled")
 
 // validMemberRoles mirrors the workspace_members.role CHECK constraint
@@ -911,17 +913,18 @@ var validMemberRoles = map[string]struct{}{
 const (
 	memberRoleOwner = "owner"
 
-	// Membership status (workspace_members.status CHECK 约束):
-	//   - active:正式成员,所有 RBAC / 列表查询都基于这个状态
-	//   - pending:用户自助申请,等待 owner/admin 审批
-	//   - rejected:申请被拒;保留行做审计,UNIQUE 索引排除它以便用户再申请
+	// Membership status (workspace_members.status CHECK constraint):
+	//   - active: full member; all RBAC / list queries are based on this status
+	//   - pending: user self-service application, awaiting owner/admin approval
+	//   - rejected: application rejected; row is kept for audit, the UNIQUE index
+	//     excludes it so the user can re-apply
 	memberStatusActive   = "active"
 	memberStatusPending  = "pending"
 	memberStatusRejected = "rejected"
 
 	// Workspace visibility:
-	//   - private:仅邀请,不出现在发现列表(默认)
-	//   - public:任何登录用户可发现并申请加入
+	//   - private: invite-only, does not appear in the discovery list (default)
+	//   - public: any signed-in user can discover and apply to join
 	workspaceVisibilityPrivate = "private"
 	workspaceVisibilityPublic  = "public"
 )
@@ -2694,7 +2697,7 @@ func (s *Store) CreateWorkspaceConversation(ctx context.Context, input CreateWor
 	}
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
-		title = "未命名会话"
+		title = "Untitled conversation"
 	}
 	surface := strings.TrimSpace(input.Surface)
 	if surface == "" {
@@ -3374,7 +3377,7 @@ func (s *Store) GetConversationTimeline(ctx context.Context, conversationID stri
 	}
 	for i := range runs {
 		runs[i].Steps = stepsByRun[runs[i].ID]
-		// Position-lookup failure is non-fatal — UI falls back to a bare "排队中".
+		// Position-lookup failure is non-fatal — UI falls back to a bare "Queued".
 		if runs[i].Status == "queued" {
 			if pos, posErr := s.QueuePositionForRun(ctx, runs[i].ID); posErr == nil {
 				runs[i].QueuePosition = pos
@@ -4163,8 +4166,9 @@ func (s *Store) ListAllActiveWorkspaces(ctx context.Context, limit int32) ([]Use
 	return out, nil
 }
 
-// 工作区主动申请加入(self-service join request):申请、批准、拒绝都是
-// workspace_members 行的 status 状态机过渡,不另建独立表。RBAC 在 handler 层做。
+// Self-service workspace join request: application, approval, and rejection are
+// all status state-machine transitions on workspace_members rows; no separate
+// table is used. RBAC is enforced at the handler layer.
 
 type DiscoverableWorkspaceRead struct {
 	ID                string    `json:"id"`
@@ -4196,7 +4200,7 @@ type RequestJoinWorkspaceInput struct {
 
 type RequestJoinWorkspaceResult struct {
 	Request PendingJoinRequestRead
-	Already bool // true: 用户在此工作区已有 active/pending 行, Request 字段携带 user_id + workspace_id 但不是新提交
+	Already bool // true: the user already has an active/pending row in this workspace; the Request field carries user_id + workspace_id but is not a new submission
 }
 
 type ReviewJoinRequestInput struct {
@@ -4207,7 +4211,7 @@ type ReviewJoinRequestInput struct {
 }
 
 // ListDiscoverableWorkspacesInput drives the paginated discover endpoint.
-// Search 为空字符串时跳过模糊匹配。
+// When Search is the empty string, fuzzy matching is skipped.
 type ListDiscoverableWorkspacesInput struct {
 	UserID string
 	Search string
@@ -4310,10 +4314,12 @@ func (s *Store) CountPendingJoinRequests(ctx context.Context, workspaceID string
 	return q.CountPendingJoinRequests(ctx, wsUUID)
 }
 
-// RequestJoinWorkspace 提交申请。Already=true 表示用户在此 workspace 已经
-// 有 active 或 pending 行 —— handler 据此返回 409。Rejected 行允许再申请,
-// 先清掉旧 rejected 再插新 pending。
-// 失败:workspace 不存在或非 public → ErrUnknownWorkspace (404 防枚举)。
+// RequestJoinWorkspace submits an application. Already=true means the user
+// already has an active or pending row in this workspace — the handler uses this
+// to return 409. Rejected rows allow re-application: the old rejected row is
+// cleared before inserting the new pending row.
+// Failure: workspace does not exist or is not public -> ErrUnknownWorkspace
+// (404 to prevent enumeration).
 func (s *Store) RequestJoinWorkspace(ctx context.Context, input RequestJoinWorkspaceInput) (RequestJoinWorkspaceResult, error) {
 	wsUUID, err := uuid(input.WorkspaceID)
 	if err != nil {
@@ -4336,7 +4342,8 @@ func (s *Store) RequestJoinWorkspace(ctx context.Context, input RequestJoinWorks
 	defer tx.Rollback(ctx) //nolint:errcheck
 	q := sqlc.New(tx)
 
-	// 私有 workspace 不暴露存在性 —— 不存在 / 非 public 一律 ErrNoRows。
+	// Private workspaces do not expose their existence — both non-existent and
+	// non-public workspaces uniformly return ErrNoRows.
 	wsRow, err := q.GetDiscoverableWorkspaceForJoin(ctx, wsUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -4345,7 +4352,7 @@ func (s *Store) RequestJoinWorkspace(ctx context.Context, input RequestJoinWorks
 		return RequestJoinWorkspaceResult{}, err
 	}
 
-	// rejected 不算 —— 允许被拒后再申请。
+	// rejected does not count — allow re-application after rejection.
 	current, err := q.GetWorkspaceMembershipForUser(ctx, sqlc.GetWorkspaceMembershipForUserParams{
 		WorkspaceID: wsUUID,
 		UserID:      userUUID,
@@ -4378,7 +4385,7 @@ func (s *Store) RequestJoinWorkspace(ctx context.Context, input RequestJoinWorks
 		}, nil
 	}
 
-	// 清掉旧 rejected 行让 AddWorkspaceMember 走 insert 分支。
+	// Clear old rejected rows so AddWorkspaceMember takes the insert branch.
 	if _, err := q.SoftDeleteRejectedJoinRequest(ctx, sqlc.SoftDeleteRejectedJoinRequestParams{
 		WorkspaceID: wsUUID,
 		UserID:      userUUID,
@@ -4391,7 +4398,7 @@ func (s *Store) RequestJoinWorkspace(ctx context.Context, input RequestJoinWorks
 		ID:            mustUUID(newID()),
 		WorkspaceID:   wsUUID,
 		UserID:        userUUID,
-		Role:          "member", // 通过后默认 member 角色;owner 可后续调整
+		Role:          "member", // default member role after approval; owner can adjust later
 		Status:        memberStatusPending,
 		RequestReason: reason,
 		Now:           timestamptz(input.Now),
@@ -4432,20 +4439,23 @@ func (s *Store) RequestJoinWorkspace(ctx context.Context, input RequestJoinWorks
 	}, nil
 }
 
-// ApproveJoinRequest 同意。WHERE status='pending' 保证双 admin 并发只有一个
-// 生效;0 affected rows 时返回 ErrJoinRequestAlreadyHandled,handler 返回 409。
+// ApproveJoinRequest approves the request. WHERE status='pending' guarantees
+// that in a concurrent double-admin race, only one succeeds; when 0 rows are
+// affected, ErrJoinRequestAlreadyHandled is returned and the handler returns 409.
 func (s *Store) ApproveJoinRequest(ctx context.Context, input ReviewJoinRequestInput) (WorkspaceMemberRead, error) {
 	return s.reviewJoinRequest(ctx, input, true)
 }
 
-// RejectJoinRequest 拒绝。row 保留(status=rejected),申请人可再次发起。
+// RejectJoinRequest rejects the request. The row is kept (status=rejected)
+// so the applicant can re-submit.
 func (s *Store) RejectJoinRequest(ctx context.Context, input ReviewJoinRequestInput) (WorkspaceMemberRead, error) {
 	return s.reviewJoinRequest(ctx, input, false)
 }
 
-// WithdrawOwnJoinRequest 申请人自助撤回自己的 pending 申请。
-// 双锁 (workspace_id, user_id) + status='pending';0 affected rows 表示
-// row 已被 admin 处理或不存在 —— 返回 ErrJoinRequestAlreadyHandled。
+// WithdrawOwnJoinRequest lets the applicant self-service withdraw their own
+// pending request. Guarded by (workspace_id, user_id) + status='pending';
+// 0 affected rows means the row has already been handled by an admin or does
+// not exist — returns ErrJoinRequestAlreadyHandled.
 func (s *Store) WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID string, now time.Time) error {
 	wsUUID, err := uuid(workspaceID)
 	if err != nil {
@@ -4474,7 +4484,7 @@ func (s *Store) WithdrawOwnJoinRequest(ctx context.Context, workspaceID, userID 
 		ActorType:   audit.ActorTypeUser,
 		ActorID:     userID,
 		TargetType:  "workspace_member",
-		TargetID:    "", // sqlc UPDATE 不返回 id; 申请人 + workspace 一对即可定位审计
+		TargetID:    "", // sqlc UPDATE does not return an id; (applicant, workspace) pair is enough to locate the audit target
 		WorkspaceID: workspaceID,
 		Payload: map[string]any{
 			"user_id": userID,
@@ -4580,7 +4590,7 @@ func (s *Store) reviewJoinRequest(ctx context.Context, input ReviewJoinRequestIn
 		UserEmail:   userRow.Email,
 		UserName:    userRow.Name,
 		UserStatus:  userRow.Status,
-		CreatedAt:   input.Now, // approved/rejected 时间也是更新的 updated_at,直接给现在足够
+		CreatedAt:   input.Now, // approved/rejected time is also the updated updated_at; using now is sufficient
 		UpdatedAt:   input.Now,
 	}, nil
 }
@@ -4742,7 +4752,7 @@ func escapeLikePattern(s string) string {
 
 type CreateWorkspaceInput struct {
 	Name       string
-	Visibility string // "public" | "private"; 空字符串 → "private"
+	Visibility string // "public" | "private"; empty string -> "private"
 	CreatedBy  string
 	Now        time.Time
 }
@@ -4842,7 +4852,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, input CreateWorkspaceInput)
 		WorkspaceID:   mustUUID(wsRow.ID),
 		UserID:        createdBy,
 		Role:          memberRoleOwner,
-		Status:        memberStatusActive, // owner 永远直接 active,不走审批
+		Status:        memberStatusActive, // owner is always directly active, no approval flow
 		RequestReason: "",
 		Now:           timestamptz(input.Now),
 	})
@@ -5120,7 +5130,7 @@ func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMember
 		WorkspaceID:   wsUUID,
 		UserID:        mustUUID(userRow.ID),
 		Role:          input.Role,
-		Status:        memberStatusActive, // owner/admin 显式添加成员永远 active
+		Status:        memberStatusActive, // members added explicitly by owner/admin are always active
 		RequestReason: "",
 		Now:           timestamptz(input.Now),
 	})
@@ -5975,10 +5985,11 @@ func (s *Store) ResolveModelRuntimeForUser(ctx context.Context, modelID, userID 
 		return ModelRuntime{}, err
 	}
 	mr := modelRuntimeFromRow(row)
-	// inline_secret 模式: row.SecretEncryptedPayload 已经 join 进来,直接返回
-	// credential_ref 模式: 按 caller user_id + kind 拿 user_credentials;
-	// 错误路径仍返回已 resolve 的 mr (CredentialMode + CredentialKindCode 已填充),
-	// 让 connector 能据 kind emit credential-form 引导卡片。
+	// inline_secret mode: row.SecretEncryptedPayload is already joined in; return directly.
+	// credential_ref mode: fetch user_credentials by caller user_id + kind.
+	// On the error path we still return the already-resolved mr (CredentialMode and
+	// CredentialKindCode are filled in) so the connector can emit a credential-form
+	// prompt card based on the kind.
 	if mr.CredentialMode == "credential_ref" {
 		if strings.TrimSpace(userID) == "" {
 			return mr, fmt.Errorf("%w: model %s requires user-scoped credential but no caller user_id provided", ErrModelDisabled, modelID)
@@ -7173,23 +7184,23 @@ func (s *Store) InsertDevFixture(ctx context.Context, ids DevFixtureIDs) (DevSee
 	}{
 		{
 			id:          ids.ProductAgentID,
-			name:        "产品Agent",
+			name:        "Product Agent",
 			slug:        "product-agent",
-			description: "产品视角评估需求和范围",
+			description: "Product-perspective review of requirements and scope",
 			config:      `{"profile":{"skills":["prd-review","scope"]}}`,
 		},
 		{
 			id:          ids.BackendAgentID,
-			name:        "后端Agent",
+			name:        "Backend Agent",
 			slug:        "backend-agent",
-			description: "后端视角评估架构和数据模型",
+			description: "Backend-perspective review of architecture and data model",
 			config:      `{"profile":{"skills":["go","postgres","api"]}}`,
 		},
 		{
 			id:          ids.TestAgentID,
-			name:        "测试Agent",
+			name:        "Test Agent",
 			slug:        "test-agent",
-			description: "测试视角补充验收和反例",
+			description: "Test-perspective acceptance and counterexamples",
 			config:      `{"profile":{"skills":["e2e","regression"]}}`,
 		},
 	}
@@ -7772,38 +7783,39 @@ func userFacingReasonFromMetadata(meta map[string]any) string {
 }
 
 // mapUserFacingReason translates raw runner / connector errors into a short
-// Chinese sentence that a non-engineer can act on. The match list is greedy
+// English sentence that a non-engineer can act on. The match list is greedy
 // and case-insensitive; unmatched reasons fall back to a generic message
 // rather than leaking stack traces or HTTP bodies into the user surface.
 func mapUserFacingReason(raw string) string {
 	reason := strings.TrimSpace(raw)
 	if reason == "" || strings.EqualFold(reason, "unknown") {
-		return "Agent 执行失败，请稍后重试或联系管理员。"
+		return "Agent run failed. Please retry later or contact an administrator."
 	}
 	lower := strings.ToLower(reason)
 	switch {
 	case strings.Contains(lower, "capability_credential_missing"):
-		return "Agent 需要的能力凭据还没设置，请先到我的凭据补齐后重试。"
+		return "The credential required by the Agent's capability is not configured. Please fill it in under My Credentials and retry."
 	case strings.Contains(lower, "capability_credential_decrypt_failed"):
-		return "Agent 需要的能力凭据无法读取，请重新设置凭据或联系管理员。"
+		return "The credential required by the Agent's capability cannot be read. Please reset the credential or contact an administrator."
 	case strings.Contains(lower, "capability_credential_kind_mismatch"):
-		return "Agent 需要的能力凭据类型不匹配，请重新设置对应类型的凭据。"
+		return "The credential kind required by the Agent's capability does not match. Please reset a credential of the matching kind."
 	case strings.Contains(lower, "capability_version_unavailable"):
-		// 老 oss_key 空的 binding 或者 latest 模式下 capability 还没传过 zip,
-		// 都不会自爆出引擎错误,大多数情况下 agent 仍能继续跑(只是少装了
-		// 一个 skill)。但当 capability 是 agent 跑通必需的(比如只挂了
-		// 这一个 skill),失败原因会经此回流,告诉用户去管理页处理。
-		return "Agent 绑定的能力还没有可用的上传版本，请到能力管理页重新上传或切换为 latest 模式。"
+		// Legacy bindings with empty oss_key, or capabilities in latest mode that have
+		// not yet had a zip uploaded, do not trigger engine errors on their own — in
+		// most cases the agent can still run (just without one skill). But when the
+		// capability is required for the agent to work (e.g. only this one skill is
+		// mounted), the failure surfaces here so the user knows to visit the manage page.
+		return "The capability bound to the Agent has no uploaded version available. Please re-upload from the capability manage page or switch to latest mode."
 	case strings.Contains(lower, "secret") && (strings.Contains(lower, "disabled") || strings.Contains(lower, "unavailable") || strings.Contains(lower, "not found") || strings.Contains(lower, "missing")):
-		return "依赖的 Secret 已停用或缺失，请到 Secrets 页确认。"
+		return "The required Secret is disabled or missing. Please verify it on the Secrets page."
 	case strings.Contains(lower, "model") && (strings.Contains(lower, "disabled") || strings.Contains(lower, "missing") || strings.Contains(lower, "not found")):
-		return "Agent 绑定的模型已停用或不存在，请到 Agents 页重新选择。"
+		return "The model bound to the Agent is disabled or does not exist. Please reselect it on the Agents page."
 	case strings.Contains(lower, "provider") && (strings.Contains(lower, "disabled") || strings.Contains(lower, "missing")):
-		return "Agent 依赖的模型服务商已停用，请到 Models 页恢复或重新选择。"
+		return "The model provider the Agent depends on is disabled. Please restore it or reselect on the Models page."
 	case strings.Contains(lower, "context length") || strings.Contains(lower, "context_length") || strings.Contains(lower, "maximum context"):
-		return "对话内容超过模型上下文长度上限，请新开会话或精简问题后重试。"
+		return "The conversation exceeds the model's context length limit. Please start a new conversation or shorten the question and retry."
 	case strings.Contains(lower, "rate limit") || strings.Contains(lower, "429"):
-		return "模型服务被限流，请稍后重试。"
+		return "The model service is rate-limited. Please retry later."
 	// Must precede the generic 401 / timeout branches: daemon/sandbox dial-in errors
 	// embed "401 Unauthorized" or "context deadline exceeded" and would be misclassified.
 	case strings.Contains(lower, "ws upgrade rejected") ||
@@ -7811,25 +7823,25 @@ func mapUserFacingReason(raw string) string {
 		strings.Contains(lower, "daemon dial-in") ||
 		strings.Contains(lower, "acquiresandboxbinding") ||
 		strings.Contains(lower, "sandbox acquire"):
-		return "Agent 容器配对失效，请重试。"
+		return "Agent container pairing expired. Please retry."
 	// "deleted by admin" included for backward-compat with historical rows.
 	case strings.Contains(lower, "runtime retired") ||
 		strings.Contains(lower, "runtime deleted"):
-		return "Agent 容器已被回收，请重试。"
+		return "Agent container has been recycled. Please retry."
 	case strings.Contains(lower, "401") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "auth failed"):
-		return "模型服务身份验证失败，请确认 Secret 配置。"
+		return "Model service authentication failed. Please verify the Secret configuration."
 	case strings.Contains(lower, "403") || strings.Contains(lower, "forbidden"):
-		return "模型服务拒绝了请求，请确认账号权限。"
+		return "The model service refused the request. Please verify account permissions."
 	case strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded") || strings.Contains(lower, "i/o timeout"):
-		return "调用模型超时，请稍后重试。"
+		return "The model call timed out. Please retry later."
 	case strings.Contains(lower, "connection refused") || strings.Contains(lower, "no such host") || strings.Contains(lower, "dial tcp"):
-		return "无法连接到模型服务，请确认网络或服务地址。"
+		return "Unable to connect to the model service. Please verify network and service address."
 	case strings.Contains(lower, "interrupted") || strings.Contains(lower, "cancel"):
-		return "Agent 任务被取消或中断。"
+		return "Agent task was cancelled or interrupted."
 	case strings.Contains(lower, "opencode") || strings.Contains(lower, "exit status") || strings.Contains(lower, "exec"):
-		return "Agent 本地执行失败，请展开本轮错误详情查看原因。"
+		return "Agent local execution failed. Please expand this run's error details for the cause."
 	default:
-		return "Agent 执行失败，请展开本轮错误详情查看具体原因。"
+		return "Agent run failed. Please expand this run's error details for the specific cause."
 	}
 }
 

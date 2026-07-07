@@ -1509,7 +1509,7 @@ function VisibilityCard({
 }
 
 /* ------------------------------------------------------------------ */
-/*  AgentDynamicsTab — "动态" tab.                                     */
+/*  AgentDynamicsTab — "Activity" tab.                                 */
 /* ------------------------------------------------------------------ */
 
 const RECENT_RUNS_LIMIT = 10
@@ -1727,7 +1727,7 @@ function formatDurationMs(ms: number): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*  AgentConfigTab — "配置" tab.                                       */
+/*  AgentConfigTab — "Config" tab.                                     */
 /* ------------------------------------------------------------------ */
 
 function AgentConfigTab({

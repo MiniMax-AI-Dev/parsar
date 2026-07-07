@@ -304,7 +304,7 @@ func TestScheduledTaskFireCreatesFreshConversation(t *testing.T) {
 	}
 
 	// Each conversation holds exactly its own single trigger message and carries
-	// primary_agent_id so it surfaces in the agent's 对话 list.
+	// primary_agent_id so it surfaces in the agent's conversation list.
 	for runID, convID := range convByRun {
 		timeline, err := s.GetConversationTimeline(ctx, convID, 100)
 		if err != nil {

@@ -202,7 +202,7 @@ type inboundFakeStore struct {
 	secrets         map[string]store.SecretPayload
 	created         []store.CreateInboundIMMessageInput
 	// threadHistory controls HasFeishuThreadInboundHistory's return.
-	// Default false (no prior history). Tests covering 话题续聊 set this
+	// Default false (no prior history). Tests covering thread continuation set this
 	// to true to assert the mention gate lets follow-ups through without
 	// an explicit @mention.
 	threadHistory bool
@@ -255,7 +255,7 @@ type inboundFakeStore struct {
 	// replaceUserCredentialsReplaced lets tests pre-seed which kinds the
 	// store reports as having replaced an existing credential. The fake
 	// matches on Kind and stamps Replaced=true in the result so the
-	// submit handler's "已替换 N 项" branch can be exercised.
+	// submit handler's "Replaced N" branch can be exercised.
 	replaceUserCredentialsReplaced map[string]bool
 	conversations                  map[string]store.ConversationRead
 
@@ -554,7 +554,7 @@ func (f *inboundFakeStore) CancelAllInflightForConversation(_ context.Context, _
 }
 
 // HasFeishuThreadInboundHistory returns the value programmed by the test
-// (default false). Tests that exercise the "话题续聊不必再 @" rule
+// (default false). Tests that exercise the "thread continuation skips @-mention" rule
 // flip this field via the same mutex used elsewhere.
 func (f *inboundFakeStore) HasFeishuThreadInboundHistory(_ context.Context, _, _ string) (bool, error) {
 	f.mu.Lock()
@@ -1575,8 +1575,8 @@ func TestQuotedChainText_MergeForwardInlineSubItems(t *testing.T) {
 	}
 
 	got := manager.quotedChainText(context.Background(), agent, &inbound)
-	if !strings.Contains(got, "[会话记录]") || !strings.Contains(got, "[/会话记录]") {
-		t.Errorf("expected 会话记录 envelope, got %q", got)
+	if !strings.Contains(got, "[Conversation history]") || !strings.Contains(got, "[/Conversation history]") {
+		t.Errorf("expected Conversation history envelope, got %q", got)
 	}
 	if !strings.Contains(got, "first line") || !strings.Contains(got, "second line") {
 		t.Errorf("expected both children in transcript, got %q", got)
@@ -1648,7 +1648,7 @@ func TestQuotedChainText_MergeForwardNoChildrenPlaceholder(t *testing.T) {
 	}
 
 	got := manager.quotedChainText(context.Background(), agent, &inbound)
-	if !strings.Contains(got, "[会话记录]") {
+	if !strings.Contains(got, "[Conversation history]") {
 		t.Errorf("expected placeholder when children unresolvable, got %q", got)
 	}
 	// Placeholder body has no transcript lines, so the inner separators
@@ -1679,7 +1679,7 @@ func TestQuotedChainText_MergeForwardNoChatIDDegrades(t *testing.T) {
 	}
 
 	got := manager.quotedChainText(context.Background(), agent, &inbound)
-	if !strings.Contains(got, "[会话记录]") {
+	if !strings.Contains(got, "[Conversation history]") {
 		t.Errorf("expected placeholder, got %q", got)
 	}
 	if atomic.LoadInt32(listCalls) != 0 {
@@ -1690,7 +1690,7 @@ func TestQuotedChainText_MergeForwardNoChatIDDegrades(t *testing.T) {
 // TestQuotedChainText_MergeForwardImageSubMessages is the regression
 // for the topic-card screenshot case: parent is a merge_forward whose
 // children are pure-image messages. Before this fix, expandMergeForward
-// dropped image children entirely and the LLM saw only "[会话记录]"
+// dropped image children entirely and the LLM saw only "[Conversation history]"
 // (or worse, the upstream "Merged and Forwarded Message" placeholder).
 // Now each child's image_key must be downloaded against its OWN
 // message_id and surface as an attachment, with an [image:N] placeholder
@@ -1723,7 +1723,7 @@ func TestQuotedChainText_MergeForwardImageSubMessages(t *testing.T) {
 	if !strings.Contains(got, "[Quoted message]") {
 		t.Errorf("missing quote wrapper: %q", got)
 	}
-	if !strings.Contains(got, "[会话记录]") {
+	if !strings.Contains(got, "[Conversation history]") {
 		t.Errorf("missing merge_forward wrapper: %q", got)
 	}
 	if !strings.Contains(got, "[image:1]") || !strings.Contains(got, "[image:2]") {

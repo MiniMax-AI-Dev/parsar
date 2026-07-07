@@ -1,99 +1,106 @@
-# 共享测试用 Feishu App(内部分发版)
+# Shared test Feishu App (internal distribution)
 
-> **谁该读这篇:** 拿到 parsar 仓库的内部同事,跟着 `INSTALL.md` 已经
-> 用 mock auth 跑起来了,现在想体验真实的飞书登录 / 群机器人交互,但
-> 又不想自己去飞书开放平台注册一个 App。
+> **Who this is for:** internal colleagues who cloned the parsar repo, got it
+> running with mock auth via `INSTALL.md`, and now want to experience real
+> Feishu login / group bot interaction without registering their own app on
+> the Feishu Open Platform.
 >
-> **谁不该读这篇:** 准备把 parsar 部署给真实团队 / 客户用的同学,
-> 请走 [`feishu-prod.md`](feishu-prod.md) 注册你自己的 App。共享 App
-> 只给内部试用,不要对外公开它的回调域名,也不要把它发到群里。
+> **Who this is NOT for:** anyone about to deploy Parsar for a real team /
+> customer — go through [`feishu-prod.md`](feishu-prod.md) and register your
+> own app. The shared app is for internal trial only; do not expose its
+> callback domain publicly and do not post it into groups.
 
 ---
 
-## 为什么不直接把 App ID/Secret 写进仓库
+## Why we do not commit the App ID/Secret into the repo
 
-`PARSAR_FEISHU_APP_SECRET` 是一段长期凭证。任何拿到它的人都可以:
+`PARSAR_FEISHU_APP_SECRET` is a long-lived credential. Anyone who has it can:
 
-- 冒充这个 App 调飞书 API(查通讯录、发消息);
-- 解密这个 App 收到的事件回调;
-- 在飞书开放平台后台看到的所有日志里"被署名为这个 App"。
+- Impersonate this app against the Feishu API (query contacts, send messages);
+- Decrypt event callbacks this app receives;
+- Show up "signed as this app" in every log the Feishu console keeps.
 
-仓库是开源的 / 分发给多人的,**任何 secret 入了 git 历史就视同泄露**
-(即便后面 commit 删掉,reflog / fork / 已 clone 的同事本地还在),
-必须走飞书后台 reset secret 流程。所以这份 App 的真实凭证只在飞书内
-部渠道(下面 §1)分发,**永远不进 git**。
+The repo is open-source / widely distributed. **Any secret that lands in git
+history is considered leaked** (even a follow-up commit that deletes it —
+reflog / forks / already-cloned checkouts still hold it), and would require
+a Feishu-console secret-reset. So this app's real credentials are only
+distributed through internal Feishu channels (§1 below) and **never enter
+git**.
 
 ---
 
-## 1. 从哪里拿到共享 App 的凭证
+## 1. Where to get the shared app credentials
 
-> **状态:** App ID 已填(下方表格);Secret / Verification Token /
-> Encrypt Key **不进 git**,在 1Password 团队保险库的 `parsar-oss
-> shared Feishu app` 条目里(owner 已分发,没看到条目请私聊 owner
-> 加你访问权)。
+> **Status:** the App ID is filled in below; the Secret / Verification Token /
+> Encrypt Key **do not enter git** and live in the 1Password team vault under
+> `parsar-oss shared Feishu app` (the owner has already distributed it — DM
+> the owner if you cannot see the entry).
 
-| 字段 | 值 |
+| Field | Value |
 |---|---|
 | `PARSAR_FEISHU_APP_ID` | `cli_a9488c841e79dcee` |
-| `PARSAR_FEISHU_APP_SECRET` | 1Password → `parsar-oss shared Feishu app` → `app_secret` 字段 |
-| `PARSAR_FEISHU_VERIFICATION_TOKEN` | 1Password → 同上条目 → `verification_token` 字段 |
-| `PARSAR_FEISHU_ENCRYPT_KEY` | 1Password → 同上条目 → `encrypt_key` 字段(留空表示该 App 未启用事件加密) |
-| `PARSAR_FEISHU_REDIRECT_URI` | 见下方 §2 |
-| 共享 App 后台链接(给 owner 用) | `<待 owner 填写:open.feishu.cn 上的 App 后台 URL>` |
-| 共享 App 所属租户 | `<待 owner 填写:e.g. xxx.feishu.cn>` |
+| `PARSAR_FEISHU_APP_SECRET` | 1Password → `parsar-oss shared Feishu app` → `app_secret` field |
+| `PARSAR_FEISHU_VERIFICATION_TOKEN` | 1Password → same entry → `verification_token` field |
+| `PARSAR_FEISHU_ENCRYPT_KEY` | 1Password → same entry → `encrypt_key` field (empty means event encryption is disabled on this app) |
+| `PARSAR_FEISHU_REDIRECT_URI` | See §2 below |
+| Shared-app admin URL (for the owner) | `<TODO owner: the app admin URL on open.feishu.cn>` |
+| Tenant that owns the shared app | `<TODO owner: e.g. xxx.feishu.cn>` |
 
-**分发渠道建议(给 owner):**
+**Distribution guidelines (for the owner):**
 
-- 优先用 1Password / 飞书企业密码本 / Bitwarden 共享条目,授权给特定
-  成员;
-- 兜底用飞书私聊点对点发,**不要发群**,**不要发邮件附件**;
-- 不要写进任何会被截图 / 录屏 / 共享出去的文档(包括本文档本身)。
+- Prefer 1Password / Feishu enterprise password vault / Bitwarden shared entries with per-member authorization.
+- As a fallback, DM in Feishu, **not** groups, **not** email attachments.
+- Do not write it into any document that can be screenshot / screen-recorded / shared (including this document itself).
 
-如果你打不开上面的 1Password 条目:私聊 owner 加访问权,**不要**让
-其他同事截屏 / 复制 secret 给你 — 走密码管理器是唯一安全路径。
+If you cannot open the 1Password entry: DM the owner to add you — **do not**
+have another colleague screenshot / copy the secret; the password manager
+is the only safe path.
 
 ---
 
-## 2. 回调地址(`REDIRECT_URI`)
+## 2. Callback URL (`REDIRECT_URI`)
 
-共享 App 的回调白名单已经预先配置了几条本地常用地址。**你的
-`PARSAR_PUBLIC_URL` 必须匹配其中一条**,否则飞书会拒绝回调。
+The shared app's callback allowlist is pre-populated with a few common
+local addresses. **Your `PARSAR_PUBLIC_URL` must match one of them**;
+otherwise Feishu rejects the callback.
 
-预配置白名单:
+Pre-configured allowlist:
 
-| 场景 | `PARSAR_PUBLIC_URL` | `PARSAR_FEISHU_REDIRECT_URI` |
+| Scenario | `PARSAR_PUBLIC_URL` | `PARSAR_FEISHU_REDIRECT_URI` |
 |---|---|---|
-| 本机 docker compose 默认 | `http://localhost:8080` | `http://localhost:8080/api/v1/auth/feishu/callback` |
-| 本机改了端口 | `http://localhost:<port>` | `http://localhost:<port>/api/v1/auth/feishu/callback` |
-| 内网穿透 / 临时公网 | `<待 owner 填写:例如 https://parsar-test.example.com>` | 同上加 `/api/v1/auth/feishu/callback` |
+| Local docker compose default | `http://localhost:8080` | `http://localhost:8080/api/v1/auth/feishu/callback` |
+| Local, custom port | `http://localhost:<port>` | `http://localhost:<port>/api/v1/auth/feishu/callback` |
+| Tunneled / temporary public URL | `<TODO owner: e.g. https://parsar-test.example.com>` | Same + `/api/v1/auth/feishu/callback` |
 
-**用 localhost 走的同事不需要内网穿透** — 飞书 OAuth 的浏览器重定向
-回调走的是用户浏览器,不是飞书服务器主动回调你,所以 `localhost` 是
-合法的(只要白名单里有)。
+**Colleagues on localhost do not need a tunnel** — Feishu OAuth's browser
+redirect callback goes through the user's browser, not a Feishu-server
+callback into your box, so `localhost` is valid (as long as it is in the
+allowlist).
 
-如果你需要的地址不在白名单里:私聊 owner 加,**不要自己改 App 后台
-配置**(会影响所有用这个 App 的同事)。
+If you need an address that is not in the allowlist: DM the owner to add
+it. **Do not modify the app-admin config yourself** (it would affect every
+colleague using this app).
 
 ---
 
-## 3. 从 mock 切到共享 App
+## 3. Switching from mock to the shared app
 
-前置:已经按 [`../../INSTALL.md`](../../INSTALL.md) 把 parsar 用
-mock 模式跑起来了,`deploy/compose/.env` 已存在并能正常 `docker
-compose up`。
+Precondition: parsar is already running in mock mode per
+[`../../INSTALL.md`](../../INSTALL.md), `deploy/compose/.env` exists and
+`docker compose up` works.
 
-### 3.1 关掉 mock,填四个 Feishu 变量
+### 3.1 Turn mock off; set the four Feishu variables
 
 ```bash
 cd deploy/compose
 
-# 关掉 mock
+# Turn mock off
 sed -i.bak 's/^PARSAR_FEISHU_MOCK=.*/PARSAR_FEISHU_MOCK=false/' .env
 
-# 填四个 Feishu 变量(把 <…> 替换成从 owner 拿到的值)
+# Fill the four Feishu variables (replace <…> with the values from the owner)
 cat >> .env <<'EOF'
 
-# --- 共享测试 App(来自 docs/deploy/shared-feishu-app.md) ---
+# --- Shared test app (from docs/deploy/shared-feishu-app.md) ---
 PARSAR_FEISHU_APP_ID=<cli_xxxxx>
 PARSAR_FEISHU_APP_SECRET=<xxx>
 PARSAR_FEISHU_VERIFICATION_TOKEN=<xxx>
@@ -104,11 +111,12 @@ EOF
 rm -f .env.bak
 ```
 
-如果 `.env` 里这四个 `PARSAR_FEISHU_*` 行已经存在(比如之前填过),
-**编辑覆盖,不要追加新的同名行** — docker compose 取的是最后一次出
-现的值,但 `grep` 排错会一眼看到两份,容易误判。
+If the four `PARSAR_FEISHU_*` lines already exist in `.env` (e.g. from a
+prior run), **overwrite them rather than appending duplicates** — docker
+compose uses the last-seen value, but `grep` during triage sees both and
+that is easy to misread.
 
-### 3.2 重启 server,让新 env 生效
+### 3.2 Restart the server so the new env takes effect
 
 ```bash
 docker compose -f deploy/compose/compose.example.yml --env-file deploy/compose/.env \
@@ -117,40 +125,38 @@ sleep 6
 docker logs parsar-server 2>&1 | tail -20
 ```
 
-**期望:** 日志里没有 `PARSAR_FEISHU_*_required` 之类的报错,server
-状态 `Up X seconds (healthy)`。
+**Expected:** no `PARSAR_FEISHU_*_required` or similar errors in the logs;
+server status `Up X seconds (healthy)`.
 
-### 3.3 浏览器验证
+### 3.3 Verify in the browser
 
-打开 `http://localhost:8080`,点「飞书登录」。期望:
+Open `http://localhost:8080` and click "Feishu login". Expected:
 
-1. 跳转到飞书 OAuth 授权页(域名是 `passport.feishu.cn` 或
-   `accounts.feishu.cn`);
-2. 同意授权后跳回 `http://localhost:8080/api/v1/auth/feishu/callback`;
-3. 最终落到 parsar 首页,右上角显示的是**你真实的飞书姓名 / 头像**,
-   不是 mock 模式的 `admin@example.com`。
+1. Redirect to the Feishu OAuth consent page (domain `passport.feishu.cn` or `accounts.feishu.cn`).
+2. After consenting, redirect back to `http://localhost:8080/api/v1/auth/feishu/callback`.
+3. Land on the parsar home page. The top-right shows **your real Feishu name / avatar**, not the mock `admin@example.com`.
 
 ---
 
-## 4. 常见问题排查
+## 4. Common troubleshooting
 
-| 现象 | 原因 | 处理 |
+| Symptom | Cause | Fix |
 |---|---|---|
-| 飞书授权页报 `redirect_uri 不在白名单` | 你的 `PARSAR_PUBLIC_URL` 或 `PARSAR_FEISHU_REDIRECT_URI` 不在 §2 的白名单 | 改回 `http://localhost:8080`,或私聊 owner 加白名单 |
-| 回调成功但落回页面报 `email scope required` | 共享 App 没申请 / 没审批 `contact:user.email:readonly` 权限 | 找 owner,这是 App 级别的配置,不是你 `.env` 能修的 |
-| 日志反复出现 `verification token mismatch` | `.env` 里 `PARSAR_FEISHU_VERIFICATION_TOKEN` 填错了 | 找 owner 重新核对一次,飞书后台值是权威 |
-| 登录成功,但群里 @ 机器人没反应 | 事件订阅没把你这台 parsar 当回调地址(共享 App 只能配一个回调地址) | 这是预期 — 共享 App 默认只把事件转到 owner 的 staging,不转你本机。要本机收事件请走 [`feishu-prod.md`](feishu-prod.md) 自己注册 App |
-| 想切回 mock | `sed -i.bak 's/^PARSAR_FEISHU_MOCK=.*/PARSAR_FEISHU_MOCK=true/' .env` + 重启 server | 共享 App 凭证留在 `.env` 里没关系,`MOCK=true` 时 server 会忽略它们 |
+| Feishu consent page reports `redirect_uri not in allowlist` | Your `PARSAR_PUBLIC_URL` / `PARSAR_FEISHU_REDIRECT_URI` is not in the §2 allowlist | Switch back to `http://localhost:8080`, or DM the owner to add yours |
+| Callback succeeds but the page reports `email scope required` | The shared app has not requested / been approved for `contact:user.email:readonly` | Ask the owner — that is an app-level setting, not one you can fix in `.env` |
+| Logs repeatedly show `verification token mismatch` | Wrong `PARSAR_FEISHU_VERIFICATION_TOKEN` in `.env` | Re-check with the owner; the Feishu console value is authoritative |
+| Login works but @Bot gets no response in a group | The event subscription does not point at your parsar instance (the shared app can only have one callback URL) | Expected — the shared app routes events only to the owner's staging box, not yours. To receive events yourself, go through [`feishu-prod.md`](feishu-prod.md) and register your own app |
+| Want to switch back to mock | `sed -i.bak 's/^PARSAR_FEISHU_MOCK=.*/PARSAR_FEISHU_MOCK=true/' .env` and restart server | Leaving the shared-app credentials in `.env` is fine — `MOCK=true` makes the server ignore them |
 
 ---
 
-## 5. 退出 / 清理
+## 5. Tear down / clean up
 
-试用完不想再连共享 App 时:
+Once you no longer need the shared app:
 
 ```bash
 cd deploy/compose
-# 把四个 Feishu 变量行删掉(或留着但把 MOCK 切回 true)
+# Delete the four Feishu variable lines (or keep them and switch MOCK back to true)
 sed -i.bak '/^PARSAR_FEISHU_APP_ID=/d;
             /^PARSAR_FEISHU_APP_SECRET=/d;
             /^PARSAR_FEISHU_VERIFICATION_TOKEN=/d;
@@ -158,28 +164,29 @@ sed -i.bak '/^PARSAR_FEISHU_APP_ID=/d;
             /^PARSAR_FEISHU_REDIRECT_URI=/d' .env
 rm -f .env.bak
 
-# 切回 mock(可选)
+# Switch back to mock (optional)
 sed -i.bak 's/^PARSAR_FEISHU_MOCK=.*/PARSAR_FEISHU_MOCK=true/' .env
 rm -f .env.bak
 
-# 重启
+# Restart
 docker compose -f deploy/compose/compose.example.yml --env-file .env \
   up -d --force-recreate parsar-server
 ```
 
-`.env` 本身 `.gitignore` 已经覆盖(根目录 `.gitignore` 第 7-9 行的
-`.env` / `.env.*` 规则),不会进 git;但如果你把 secrets 复制到了别
-处(临时记事本、聊天记录),记得也清掉。
+`.env` is already covered by `.gitignore` (the root `.gitignore` lines 7–9
+`.env` / `.env.*`) so it will not enter git, but if you copied the secrets
+elsewhere (scratch notes, chat logs), clear those too.
 
 ---
 
-## 6. 真要做正式部署?
+## 6. Going to a real deployment?
 
-不要继续用共享 App。共享 App 是"内部多人试用"用途,**它的回调地址、
-权限范围、租户都是 owner 的**,真实团队部署必然需要:
+Do not keep using the shared app. The shared app is "internal trial for
+several people" — **its callback URL, permission scope, and tenant belong
+to the owner**. A real team deployment requires:
 
-- 你自己租户下的 App(不然给团队用的人都得加入 owner 的飞书租户);
-- 你自己拥有的回调域名 + HTTPS;
-- 你自己的 secret manager,不再依赖私聊分发。
+- Your own app in your own tenant (otherwise every user has to join the owner's Feishu tenant);
+- Your own callback domain + HTTPS;
+- Your own secret manager, rather than DM-based distribution.
 
-完整流程见 [`feishu-prod.md`](feishu-prod.md)。
+Full flow: [`feishu-prod.md`](feishu-prod.md).

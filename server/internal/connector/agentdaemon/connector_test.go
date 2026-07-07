@@ -804,7 +804,7 @@ func (s *stubSandboxProvider) Reap(_ context.Context) (int, error) { return 0, n
 
 // TestStreamPrompt_LocalModeNoBindingFallsThroughToErrorChannel: when
 // the agent has no binding and no configured device, the
-// connector returns the "请绑定 Runtime" hint and the sandbox provider
+// connector returns the "Please bind a Runtime" hint and the sandbox provider
 // is never asked.
 func TestStreamPrompt_LocalModeNoBindingFallsThroughToErrorChannel(t *testing.T) {
 	reg := gateway.NewRegistry()
@@ -1448,8 +1448,8 @@ func TestSubmitPromptForUserChoice_ForwardsToRemoteOwnerPod(t *testing.T) {
 // TestSubmitPermission_SlotLookupErrorFallsBackToLocal covers the
 // "slot already cleared" race: feishu webhook arrives but the
 // inflight slot has just been swept. We must not error early — let
-// the local lookup speak so the toast remains "已处理或已过期" rather
-// than "更新失败".
+// the local lookup speak so the toast remains "already processed or expired" rather
+// than "update failed".
 func TestSubmitPermission_SlotLookupErrorFallsBackToLocal(t *testing.T) {
 	remote := &fakeRemoteSubmitter{}
 	c := New(Config{
@@ -1503,7 +1503,7 @@ func TestSubmitPermission_EmptyDeviceIDFallsBackToLocal(t *testing.T) {
 
 // TestSubmitPermission_RemoteFailurePropagates ensures HTTP errors
 // from the owner pod surface to the caller. The feishu handler shows
-// "更新失败,请稍后再试" toast based on this error; swallowing it would
+// "Update failed, please try again later" toast based on this error; swallowing it would
 // leave the user thinking the verdict landed when it did not.
 func TestSubmitPermission_RemoteFailurePropagates(t *testing.T) {
 	remote := &fakeRemoteSubmitter{permErr: errors.New("network unreachable")}

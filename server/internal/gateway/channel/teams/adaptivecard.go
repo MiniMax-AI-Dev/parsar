@@ -43,7 +43,7 @@ const defaultCardTitle = "Agent"
 
 // errCardFallbackMessage mirrors the shared failed-run copy so a TerminalResult
 // with an empty ErrorMessage renders the same user-facing failure text.
-const errCardFallbackMessage = "Agent 运行失败，请稍后重试。"
+const errCardFallbackMessage = "Agent run failed. Please retry later."
 
 // --- Adaptive Card wire structs (typed for deterministic JSON key order) -----
 
@@ -138,18 +138,18 @@ func (c *Channel) RenderProgress(_ context.Context, _ channel.ReplyTarget, state
 	body = append(body, stepBlocks(state.Steps, now)...)
 	body = append(body, c.streamingBlocks(state.StreamingText)...)
 
-	status := "运行中"
+	status := "Running"
 	if state.Done {
-		status = "已完成"
+		status = "Completed"
 	}
 	if state.Elapsed > 0 {
 		status += " · " + formatDuration(state.Elapsed)
 	}
 	body = append(body, subtleBlock(status))
 
-	fallback := title + " 运行中"
+	fallback := title + " Running"
 	if state.Done {
-		fallback = title + " 已完成"
+		fallback = title + " Completed"
 	}
 	return wireCard(fallback, newCard(body, nil))
 }
@@ -166,7 +166,7 @@ func (c *Channel) RenderTerminal(_ context.Context, _ channel.ReplyTarget, resul
 	body := []acNode{titleBlock(title)}
 	body = append(body, stepBlocks(result.Steps, time.Time{})...)
 	if think := strings.TrimSpace(result.Thinking); think != "" {
-		body = append(body, acNode{Type: "TextBlock", Text: "**思考**", Wrap: true})
+		body = append(body, acNode{Type: "TextBlock", Text: "**Thinking**", Wrap: true})
 		body = append(body, acNode{Type: "TextBlock", Text: c.Format(think), Wrap: true, IsSubtle: true})
 	}
 	body = append(body, c.streamingBlocks(result.StreamingText)...)
@@ -176,7 +176,7 @@ func (c *Channel) RenderTerminal(_ context.Context, _ channel.ReplyTarget, resul
 
 	fallback := firstLine(strings.TrimSpace(result.StreamingText))
 	if fallback == "" {
-		fallback = title + " 已完成"
+		fallback = title + " Completed"
 	}
 	return wireCard(fallback, newCard(body, nil))
 }
@@ -196,7 +196,7 @@ func (c *Channel) renderError(title string, result channel.TerminalResult) (chan
 		body = append(body, acNode{Type: "TextBlock", Text: raw, Wrap: true, FontType: "Monospace", IsSubtle: true})
 	}
 	if url := strings.TrimSpace(result.RunDetailURL); url != "" {
-		body = append(body, acNode{Type: "TextBlock", Text: "[查看运行详情](" + url + ")", Wrap: true})
+		body = append(body, acNode{Type: "TextBlock", Text: "[View run details](" + url + ")", Wrap: true})
 	}
 	if hint := strings.TrimSpace(result.GuestHint); hint != "" {
 		body = append(body, acNode{Type: "TextBlock", Text: c.Format(hint), Wrap: true})
@@ -213,11 +213,11 @@ func (c *Channel) RenderPermission(_ context.Context, _ channel.ReplyTarget, req
 	title := resolveTitle(req.Title)
 	tool := strings.TrimSpace(req.ToolName)
 	if tool == "" {
-		tool = "某工具"
+		tool = "a tool"
 	}
 	body := []acNode{
 		titleBlock(title),
-		{Type: "TextBlock", Text: "**" + tool + "** 需要你的批准才能运行。", Wrap: true, Color: "Warning"},
+		{Type: "TextBlock", Text: "**" + tool + "** needs your approval to run.", Wrap: true, Color: "Warning"},
 	}
 	if input := strings.TrimSpace(req.ToolInput); input != "" {
 		body = append(body, acNode{Type: "TextBlock", Text: input, Wrap: true, FontType: "Monospace", IsSubtle: true})
@@ -225,18 +225,18 @@ func (c *Channel) RenderPermission(_ context.Context, _ channel.ReplyTarget, req
 	actions := []acAction{
 		{
 			Type:  "Action.Submit",
-			Title: "允许",
+			Title: "Allow",
 			Style: "positive",
 			Data:  map[string]any{"action": "permission_allow", "permission_request_id": req.RequestID},
 		},
 		{
 			Type:  "Action.Submit",
-			Title: "拒绝",
+			Title: "Reject",
 			Style: "destructive",
 			Data:  map[string]any{"action": "permission_deny", "permission_request_id": req.RequestID},
 		},
 	}
-	return wireCard(title+" — 是否允许 "+tool+"?", newCard(body, actions))
+	return wireCard(title+" — Allow "+tool+"?", newCard(body, actions))
 }
 
 // RenderChoiceForm renders the prompt_for_user_choice card: one Input.ChoiceSet
@@ -269,11 +269,11 @@ func (c *Channel) RenderChoiceForm(_ context.Context, _ channel.ReplyTarget, for
 
 	actions := []acAction{{
 		Type:  "Action.Submit",
-		Title: "提交",
+		Title: "Submit",
 		Style: "positive",
 		Data:  map[string]any{"action": "ask_user_choice_submit", "request_id": form.RequestID},
 	}}
-	return wireCard(title+" 需要你的选择", newCard(body, actions))
+	return wireCard(title+" needs your input", newCard(body, actions))
 }
 
 // RenderCredentialForm renders the missing-credential form: one Input.Text per
@@ -283,7 +283,7 @@ func (c *Channel) RenderCredentialForm(_ context.Context, _ channel.ReplyTarget,
 	title := resolveTitle(form.Title)
 	body := []acNode{
 		titleBlock(title),
-		{Type: "TextBlock", Text: "本次运行需要先填写凭据。", Wrap: true},
+		{Type: "TextBlock", Text: "This run needs credentials before it can continue.", Wrap: true},
 	}
 
 	for i, f := range form.Fields {
@@ -292,7 +292,7 @@ func (c *Channel) RenderCredentialForm(_ context.Context, _ channel.ReplyTarget,
 			label = strings.TrimSpace(f.CapabilityName)
 		}
 		if label == "" {
-			label = fmt.Sprintf("字段 %d", i+1)
+			label = fmt.Sprintf("Field %d", i+1)
 		}
 		kind := strings.TrimSpace(f.Kind)
 		if kind == "" {
@@ -308,11 +308,11 @@ func (c *Channel) RenderCredentialForm(_ context.Context, _ channel.ReplyTarget,
 
 	actions := []acAction{{
 		Type:  "Action.Submit",
-		Title: "提交",
+		Title: "Submit",
 		Style: "positive",
 		Data:  map[string]any{"action": "credential_form_submit", "qkey": form.Qkey},
 	}}
-	return wireCard(title+" 需要凭据", newCard(body, actions))
+	return wireCard(title+" needs credentials", newCard(body, actions))
 }
 
 // renderActionResultCard renders the neutral post-click ActionResultCard into a
@@ -326,24 +326,24 @@ func renderActionResultCard(result *channel.ActionResultCard) (string, adaptiveC
 	switch result.Kind {
 	case channel.CardActionPermissionAllow, channel.CardActionPermissionDeny:
 		if result.Approved {
-			body = append(body, acNode{Type: "TextBlock", Text: "**已允许**", Wrap: true, Color: "Good"})
-			fallback = title + " — 已允许"
+			body = append(body, acNode{Type: "TextBlock", Text: "**Allowed**", Wrap: true, Color: "Good"})
+			fallback = title + " — Allowed"
 		} else {
-			body = append(body, acNode{Type: "TextBlock", Text: "**已拒绝**", Wrap: true, Color: "Attention"})
-			fallback = title + " — 已拒绝"
+			body = append(body, acNode{Type: "TextBlock", Text: "**Rejected**", Wrap: true, Color: "Attention"})
+			fallback = title + " — Rejected"
 		}
 	case channel.CardActionCredentialSubmit:
 		if result.Rejected {
 			reason := strings.TrimSpace(result.RejectReason)
 			if reason == "" {
-				reason = "提交被拒绝。"
+				reason = "Submission rejected."
 			}
 			body = append(body, acNode{Type: "TextBlock", Text: "**" + reason + "**", Wrap: true, Color: "Attention"})
 			fallback = title + " — " + reason
 		} else {
 			summary := strings.TrimSpace(result.Summary)
 			if summary == "" {
-				summary = "凭据已保存。"
+				summary = "Credentials saved."
 			}
 			body = append(body, acNode{Type: "TextBlock", Text: summary, Wrap: true, Color: "Good"})
 			fallback = title + " — " + summary
@@ -430,7 +430,7 @@ func usageLine(u *gateway.UsageStats) string {
 		parts = append(parts, m)
 	}
 	if len(parts) == 0 {
-		return "用量不可用"
+		return "usage unavailable"
 	}
 	return strings.Join(parts, " · ")
 }

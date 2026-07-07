@@ -189,7 +189,7 @@ export function MembersPage() {
               </span>
             )}
           </TabsTrigger>
-          {/* 待审批申请 — visible even when count is 0 so admins know
+          {/* Pending approval — visible even when count is 0 so admins know
               the surface exists. Inner empty state guides workspace
               picking rather than disabling the tab. */}
           <TabsTrigger value="pending">
@@ -1000,15 +1000,17 @@ function MockBanner({
 /* ------------------------------------------------------------------ */
 /*  Pending join requests tab                                          */
 /*                                                                     */
-/*  这里专门处理"用户主动申请加入工作区"的审批 UI。后端不在乎              */
-/*  workspace_join_requests 是不是独立表 —— 它就是 workspace_members      */
-/*  里 status='pending' 的行(详见 server SQL 注释)。前端把这一组         */
-/*  抽到独立 Tab,跟"已成成员"的列表分开,降低管理员的认知负担。           */
+/*  Approval UI for user-initiated "join workspace" requests. The server       */
+/*  does not treat workspace_join_requests as a separate table — they are      */
+/*  just rows in workspace_members with status='pending' (see server SQL       */
+/*  notes). The frontend splits them into their own tab, distinct from the     */
+/*  active-members list, to keep the admin surface simple.                     */
 /* ------------------------------------------------------------------ */
 
 function PendingBadge({ wsId }: { wsId: string | null }) {
-  // 我们用 query 拿数,然后用 length 当作 badge。Tab 是父级常驻的,
-  // 所以 query 一直会跑;但 staleTime 60s 让网络成本可控。
+  // Fetch via query, use length as the badge count. The tab is always mounted
+  // on the parent so this query stays alive; a 60s staleTime keeps the
+  // network cost in check.
   const q = usePendingJoinRequests(wsId)
   const count = q.data?.requests.length ?? 0
   if (count === 0) return null
@@ -1078,9 +1080,10 @@ function PendingJoinRequestsTab({ wsId }: { wsId: string | null }) {
       </Table>
 
       {/*
-        拒绝二次确认。我们没有用 ConfirmArchiveDialog(那是 destructive
-        红色样式,语义上 reject 不是 destructive — 申请人之后还能再申请),
-        直接用一个轻量 Dialog 走简单 confirm 流程。
+        Reject confirmation. Not using ConfirmArchiveDialog (that uses the
+        destructive red styling; rejecting isn't destructive — the applicant
+        can re-apply later). A lightweight Dialog with a simple confirm flow
+        is enough.
       */}
       <Dialog
         open={confirmReject !== null}

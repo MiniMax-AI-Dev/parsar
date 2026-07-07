@@ -510,10 +510,11 @@ func (s *Store) updateCapabilityMarketplaceState(ctx context.Context, workspaceI
 	return capabilityFromMarketplaceStateRow(row), nil
 }
 
-// SoftDeleteCapability writes capability.deleted_at atomically: the UPDATE 自带
-// `NOT EXISTS (... agent_capabilities ...)` 守卫,无需调用方先 count——并发场景
-// 下"查空 → 别人插入 → 删除"的窗口被关掉。UPDATE 返 0 行时再 fetch 一次 count
-// 区分两种情形:有引用 → CapabilityHasBindingsError;否则 → ErrUnknownCapability。
+// SoftDeleteCapability writes capability.deleted_at atomically: the UPDATE carries
+// its own `NOT EXISTS (... agent_capabilities ...)` guard, so the caller does not
+// need to count first — the "check empty -> someone inserts -> delete" race window
+// is closed. When UPDATE returns 0 rows, fetch the count again to distinguish the
+// two cases: has references -> CapabilityHasBindingsError; otherwise -> ErrUnknownCapability.
 func (s *Store) SoftDeleteCapability(ctx context.Context, workspaceID, capabilityID string) (CapabilityRead, error) {
 	capabilityUUID, err := uuid(capabilityID)
 	if err != nil {

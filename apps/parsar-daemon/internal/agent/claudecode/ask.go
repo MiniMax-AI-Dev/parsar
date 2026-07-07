@@ -387,11 +387,11 @@ func formatAskUserResultText(entry pendingAskEntry, decision proto.PromptForUser
 		reason := strings.TrimSpace(decision.Reason)
 		switch reason {
 		case "timeout":
-			return "用户在 10 分钟内未作选择。请停止当前操作,向用户报告超时并询问后续意图,不要重试本工具。"
+			return "The user did not make a selection within 10 minutes. Stop the current operation, report the timeout to the user and ask about follow-up intent; do not retry this tool."
 		case "cancelled":
-			return "用户取消了本次操作。请停止后续动作。"
+			return "The user cancelled this operation. Stop follow-up actions."
 		default:
-			return "用户未给出选择(" + reason + ")。请停止后续动作,等待用户进一步指示。"
+			return "The user did not give a selection (" + reason + "). Stop follow-up actions and wait for further instructions from the user."
 		}
 	}
 
@@ -436,7 +436,7 @@ func formatAskUserResultText(entry pendingAskEntry, decision proto.PromptForUser
 		}
 		if !anyAnswer {
 			// Treat as cancel; the operator effectively chose nothing.
-			return "用户未选择任何选项。请停止后续动作,等待用户进一步指示。"
+			return "The user did not choose any option. Stop follow-up actions and wait for further instructions from the user."
 		}
 		return mustMarshalAskQuestions(out)
 	}
@@ -447,7 +447,7 @@ func formatAskUserResultText(entry pendingAskEntry, decision proto.PromptForUser
 	// receives a parseable result.
 	answers := decision.Answers
 	if len(answers) == 0 {
-		return "用户未选择任何选项。请停止后续动作,等待用户进一步指示。"
+		return "The user did not choose any option. Stop follow-up actions and wait for further instructions from the user."
 	}
 	answer := answers[0]
 	if len(answers) > 1 {

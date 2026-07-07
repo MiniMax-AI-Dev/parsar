@@ -465,7 +465,7 @@ func main() {
 			// and the credential-form recovery loop never fires.
 			SystemMessages: dbStore,
 			// Sandbox binding reader lets the connector turn the
-			// generic "Agent 未绑定 Runtime" hint into a precise
+			// generic "Agent not bound to Runtime" hint into a precise
 			// spawning / failed / never-attempted message.
 			SandboxBindingReader: dbStore,
 			Log:                  log.Bg(),
@@ -681,9 +681,9 @@ func main() {
 	if dbStore != nil {
 		runtimeStore = dbStore
 	}
-	// Wire the visibility=workspace rejection card's "申请加入" URL
+	// Wire the visibility=workspace rejection card's "Join request" URL
 	// builder. Only when PublicURL is configured — nil builder leaves
-	// the rejection card link-free (falls back to "请联系上述管理员加入").
+	// the rejection card link-free (falls back to "Please contact the administrator above to join").
 	if strings.TrimSpace(cfg.Server.PublicURL) != "" {
 		opts = append(opts, dev.WithFeishuJoinURLBuilder(func(workspaceID string) string {
 			return cfg.BuildPublicURL("/join-workspace?id=" + workspaceID + "&from=feishu")

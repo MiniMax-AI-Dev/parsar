@@ -20,13 +20,13 @@ interface Props {
   file: File | null
   /** Truthy = busy spinner inside the file card. */
   busy?: boolean
-  /** Text under the spinner (e.g. "上传中", "解析中"). */
+  /** Text under the spinner (e.g. "Uploading", "Parsing"). */
   busyLabel?: string
   /** Called with the picked file. Caller runs the upload chain. */
   onPick: (file: File) => void
   /** Clear the current selection. */
   onClear: () => void
-  /** Local-validation error to show beneath the picker (e.g. "请选择 .zip"). */
+  /** Local-validation error to show beneath the picker (e.g. "Please select a .zip"). */
   localError?: string | null
 }
 

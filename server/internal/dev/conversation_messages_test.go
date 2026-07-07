@@ -27,7 +27,7 @@ func TestConversationUserMessageRouteWithRealStore(t *testing.T) {
 	RegisterRoutesWithStore(r, s)
 
 	sendPath := "/api/v1/conversations/" + ids.ConversationID + "/messages"
-	res := serveDevRoute(t, r, http.MethodPost, sendPath, `{"content":"请 @产品Agent 帮忙"}`)
+	res := serveDevRoute(t, r, http.MethodPost, sendPath, `{"content":"please help me out @Product Agent"}`)
 	if res.Code != http.StatusCreated || !strings.Contains(res.Body.String(), `"dispatched_agent_count":1`) || !strings.Contains(res.Body.String(), `"agent_run_id"`) {
 		t.Fatalf("admin send expected 201 with one run, got %d: %s", res.Code, res.Body.String())
 	}

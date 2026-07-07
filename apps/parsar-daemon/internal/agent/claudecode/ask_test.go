@@ -42,12 +42,12 @@ func TestTranslateAskUserQuestionToolUsePathFallsThrough(t *testing.T) {
 	line := []byte(`{"type":"assistant","message":{"content":[
 		{"type":"tool_use","id":"toolu_abc","name":"AskUserQuestion","input":{
 			"questions":[{
-				"header":"确认删除",
-				"question":"确定要删除 /tmp 目录吗?",
+				"header":"Confirm delete",
+				"question":"Delete /tmp directory?",
 				"multiSelect":false,
 				"options":[
-					{"label":"确认删除","description":"执行 rm -rf /tmp"},
-					{"label":"取消","description":"不执行"}
+					{"label":"Confirm delete","description":"Run rm -rf /tmp"},
+					{"label":"Cancel","description":"Do not run"}
 				]
 			}]
 		}}
@@ -258,8 +258,8 @@ func decodeAskResult(t *testing.T, raw []byte) askUserResult {
 // tool_result with the JSON {"questions":[{header, answer}]} body.
 func TestBuildAskUserToolResultSingleSelect(t *testing.T) {
 	body, err := claudecode.BuildAskUserToolResultForTest(
-		claudecode.PendingAskEntry{ToolUseID: "toolu_abc", Questions: []proto.PromptForUserChoiceQuestion{{Header: "确认删除"}}},
-		proto.PromptForUserChoiceDecisionPayload{Answers: []string{"确认删除"}},
+		claudecode.PendingAskEntry{ToolUseID: "toolu_abc", Questions: []proto.PromptForUserChoiceQuestion{{Header: "Confirm delete"}}},
+		proto.PromptForUserChoiceDecisionPayload{Answers: []string{"Confirm delete"}},
 	)
 	if err != nil {
 		t.Fatalf("buildAskUserToolResult: %v", err)
@@ -271,10 +271,10 @@ func TestBuildAskUserToolResultSingleSelect(t *testing.T) {
 	if v.Message.Content[0].IsError {
 		t.Errorf("IsError = true; success answer must use is_error=false")
 	}
-	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"answer":"确认删除"`) {
+	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"answer":"Confirm delete"`) {
 		t.Errorf("answer not encoded: %s", v.Message.Content[0].Content[0].Text)
 	}
-	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"header":"确认删除"`) {
+	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"header":"Confirm delete"`) {
 		t.Errorf("header not echoed: %s", v.Message.Content[0].Content[0].Text)
 	}
 }
@@ -283,14 +283,14 @@ func TestBuildAskUserToolResultSingleSelect(t *testing.T) {
 // into a single human-friendly answer string.
 func TestBuildAskUserToolResultMultiSelect(t *testing.T) {
 	body, err := claudecode.BuildAskUserToolResultForTest(
-		claudecode.PendingAskEntry{ToolUseID: "toolu_m", Questions: []proto.PromptForUserChoiceQuestion{{Header: "选 lens"}}},
-		proto.PromptForUserChoiceDecisionPayload{Answers: []string{"安全", "性能"}},
+		claudecode.PendingAskEntry{ToolUseID: "toolu_m", Questions: []proto.PromptForUserChoiceQuestion{{Header: "Pick lens"}}},
+		proto.PromptForUserChoiceDecisionPayload{Answers: []string{"Safety", "Performance"}},
 	)
 	if err != nil {
 		t.Fatalf("buildAskUserToolResult: %v", err)
 	}
 	v := decodeAskResult(t, body)
-	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"answer":"安全、性能"`) {
+	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"answer":"Safety, Performance"`) {
 		t.Errorf("multi-select join failed: %s", v.Message.Content[0].Content[0].Text)
 	}
 }
@@ -353,7 +353,7 @@ func TestBuildAskUserToolResultTimeoutKeepsSuccessShape(t *testing.T) {
 		t.Errorf("IsError = true on timeout; want false to avoid retry loop")
 	}
 	text := v.Message.Content[0].Content[0].Text
-	if !strings.Contains(text, "10 分钟") {
+	if !strings.Contains(text, "10 minutes") {
 		t.Errorf("timeout text doesn't mention the window: %s", text)
 	}
 }
@@ -404,10 +404,10 @@ func TestTranslateControlRequestAskUserQuestionIntercepted(t *testing.T) {
 	line := []byte(`{"type":"control_request","request_id":"cc_req_xyz","request":{
 		"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{
 			"questions":[{
-				"header":"确认删除",
-				"question":"确定要删除 /tmp 吗?",
+				"header":"Confirm delete",
+				"question":"Delete /tmp directory?",
 				"multiSelect":false,
-				"options":[{"label":"确认"},{"label":"取消"}]
+				"options":[{"label":"Confirm"},{"label":"Cancel"}]
 			}]
 		}
 	}}`)
@@ -468,8 +468,8 @@ func TestTranslateControlRequestAskUserQuestionIntercepted(t *testing.T) {
 // message is what the SDK surfaces to the model as the tool_result.
 func TestBuildAskUserControlResponseSingleSelect(t *testing.T) {
 	body, err := claudecode.BuildAskUserControlResponseForTest(
-		claudecode.PendingAskEntry{CCRequestID: "cc_req_xyz", Questions: []proto.PromptForUserChoiceQuestion{{Header: "确认删除"}}},
-		proto.PromptForUserChoiceDecisionPayload{Answers: []string{"确认"}},
+		claudecode.PendingAskEntry{CCRequestID: "cc_req_xyz", Questions: []proto.PromptForUserChoiceQuestion{{Header: "Confirm delete"}}},
+		proto.PromptForUserChoiceDecisionPayload{Answers: []string{"Confirm"}},
 	)
 	if err != nil {
 		t.Fatalf("buildAskUserControlResponse: %v", err)
@@ -481,7 +481,7 @@ func TestBuildAskUserControlResponseSingleSelect(t *testing.T) {
 	if v.Response.Response.Behavior != "deny" {
 		t.Errorf("Behavior = %q, want deny", v.Response.Response.Behavior)
 	}
-	if !strings.Contains(v.Response.Response.Message, `"answer":"确认"`) {
+	if !strings.Contains(v.Response.Response.Message, `"answer":"Confirm"`) {
 		t.Errorf("answer not encoded in message: %s", v.Response.Response.Message)
 	}
 }
@@ -500,7 +500,7 @@ func TestBuildAskUserControlResponseTimeout(t *testing.T) {
 	if v.Response.Response.Behavior != "deny" {
 		t.Errorf("Behavior = %q, want deny", v.Response.Response.Behavior)
 	}
-	if !strings.Contains(v.Response.Response.Message, "10 分钟") {
+	if !strings.Contains(v.Response.Response.Message, "10 minutes") {
 		t.Errorf("timeout text missing window: %s", v.Response.Response.Message)
 	}
 }

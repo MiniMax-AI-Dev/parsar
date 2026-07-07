@@ -20,7 +20,7 @@ interface WorkspaceFormDialogProps {
   onOpenChange: (open: boolean) => void
   mode: FormMode
   initialName?: string
-  /** Rename 模式下用于回填(create 时默认 "private")。 */
+  /** Used to prefill in Rename mode (defaults to "private" on create). */
   initialVisibility?: WorkspaceVisibility
   pending: boolean
   error: unknown

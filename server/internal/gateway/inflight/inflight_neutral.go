@@ -18,7 +18,7 @@
 // What it deliberately does NOT do (explicitly deferred to a later slice):
 //   - typing-reaction emoji, <at> user-ping follow-ups;
 //   - permission auto-expire re-render (the verdict path still clears the slot);
-//   - the "排队中" queued-run placeholder.
+//   - the "Queued" queued-run placeholder.
 //
 // It reuses 95% of the Feishu machinery — foldEventsIntoCardState, the working
 // slot helpers, slotPayload/latestSeq/zeroRetryWorking, and the same store
@@ -369,7 +369,7 @@ func (w *Worker) buildNeutralTerminalCard(
 	if c.RunStatus == "failed" {
 		msg := strings.TrimSpace(errorMessage)
 		if msg == "" {
-			msg = "Agent 运行失败，请稍后重试。"
+			msg = "Agent run failed. Please retry later."
 		}
 		// Guest register hint is best-effort; a read failure degrades to the
 		// generic error card rather than aborting delivery.
@@ -648,7 +648,7 @@ func (w *Worker) resolveCredentialFormFields(ctx context.Context, c store.Feishu
 	// Loop guard: if the inbound was itself re-enqueued from a form submit AND
 	// the resolver STILL emits a missing-credential notice, the user bound the
 	// wrong / typo'd credential — a second form would re-enter the same
-	// dead-end. Bail out so the user fixes it via the web UI ("我的凭据").
+	// dead-end. Bail out so the user fixes it via the web UI ("My credentials").
 	if strings.TrimSpace(inbound.ReenqueuedFrom) == "credential_form_submit" {
 		w.logger.Info("inflight: skip form card — turn already retried via form submit",
 			"conversation_id", c.ConversationID,

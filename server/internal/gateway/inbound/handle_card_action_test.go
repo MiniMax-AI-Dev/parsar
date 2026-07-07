@@ -698,7 +698,7 @@ func TestHandleCardAction_CredentialFormSubmitReplacesExistingToast(t *testing.T
 	if resp.Toast.Type != "success" {
 		t.Errorf("toast type = %q, want success (replace is success too)", resp.Toast.Type)
 	}
-	if !strings.Contains(resp.Toast.Content, "替换 1 项") {
+	if !strings.Contains(resp.Toast.Content, "Replaced 1") {
 		t.Errorf("toast content = %q, want it to mention the replacement count", resp.Toast.Content)
 	}
 }
@@ -782,8 +782,8 @@ func TestHandleCardAction_CredentialFormSubmitMissingAgentID(t *testing.T) {
 	if resp.Toast.Type != "error" {
 		t.Errorf("toast type = %q, want error (missing agent_id)", resp.Toast.Type)
 	}
-	if !strings.Contains(resp.Toast.Content, "会话路由丢失") {
-		t.Errorf("toast content = %q, want it to mention 会话路由丢失", resp.Toast.Content)
+	if !strings.Contains(resp.Toast.Content, "conversation routing was lost") {
+		t.Errorf("toast content = %q, want it to mention conversation routing was lost", resp.Toast.Content)
 	}
 	if len(fs.userCredentialsCreated) == 0 {
 		t.Errorf("credentials must STILL be persisted even when agent_id is missing")
@@ -843,8 +843,8 @@ func seedUserChoiceSlot(fs *inboundFakeStore, requestID, conversationID, agentRu
 				Header:   "Pick",
 				Question: "choose one",
 				Options: []store.PromptForUserChoiceOption{
-					{Label: "选项A"},
-					{Label: "选项B"},
+					{Label: "Option A"},
+					{Label: "Option B"},
 				},
 			}},
 		},
@@ -870,7 +870,7 @@ func TestHandleCardAction_UserChoiceSubmitFullFlow(t *testing.T) {
 	}
 
 	resp := mgr.handleCardAction(context.Background(), "cli_app",
-		buildUserChoiceEvent("req-1", "ou_picker", map[string]any{"q0": "选项A"}))
+		buildUserChoiceEvent("req-1", "ou_picker", map[string]any{"q0": "Option A"}))
 
 	if resp == nil || resp.Toast == nil {
 		t.Fatal("nil toast response")
@@ -878,12 +878,12 @@ func TestHandleCardAction_UserChoiceSubmitFullFlow(t *testing.T) {
 	if resp.Toast.Type != "success" {
 		t.Errorf("toast type = %q, want success", resp.Toast.Type)
 	}
-	if !strings.Contains(resp.Toast.Content, "已记录") {
-		t.Errorf("toast content = %q, want it to mention 已记录", resp.Toast.Content)
+	if !strings.Contains(resp.Toast.Content, "Recorded") {
+		t.Errorf("toast content = %q, want it to mention Recorded", resp.Toast.Content)
 	}
 	// The done card must ride the callback response itself (response.card),
 	// the same byte-identical ReplaceCard round-trip the legacy inline path
-	// used — a PATCH-only flow snaps the client back to "待回答".
+	// used — a PATCH-only flow snaps the client back to "Awaiting reply".
 	if resp.Card == nil {
 		t.Fatal("resp.Card = nil, want the done-card payload on the callback response")
 	}
@@ -906,8 +906,8 @@ func TestHandleCardAction_UserChoiceSubmitFullFlow(t *testing.T) {
 	if dec.Cancelled {
 		t.Errorf("decision Cancelled = true, want false (an answer was supplied)")
 	}
-	if len(dec.QuestionAnswers) != 1 || dec.QuestionAnswers[0].Answer != "选项A" || dec.QuestionAnswers[0].Header != "Pick" {
-		t.Errorf("decision QuestionAnswers = %+v, want one {Header:Pick, Answer:选项A}", dec.QuestionAnswers)
+	if len(dec.QuestionAnswers) != 1 || dec.QuestionAnswers[0].Answer != "Option A" || dec.QuestionAnswers[0].Header != "Pick" {
+		t.Errorf("decision QuestionAnswers = %+v, want one {Header:Pick, Answer:Option A}", dec.QuestionAnswers)
 	}
 	// The slot must be cleared as a prompt_for_user_choice clear keyed to
 	// the slot's agent_run_id (the optimistic-clear guard).
@@ -924,7 +924,7 @@ func TestHandleCardAction_UserChoiceSubmitFullFlow(t *testing.T) {
 
 // TestHandleCardAction_UserChoiceSubmitAllBlankCancels confirms an
 // all-blank submit is forwarded as a Cancelled decision (stop-signal) and
-// surfaces an info "已取消" toast — not a half-answered tool_result.
+// surfaces an info "Cancelled" toast — not a half-answered tool_result.
 func TestHandleCardAction_UserChoiceSubmitAllBlankCancels(t *testing.T) {
 	t.Parallel()
 	fs := newInboundFakeStore()
@@ -942,8 +942,8 @@ func TestHandleCardAction_UserChoiceSubmitAllBlankCancels(t *testing.T) {
 	if resp.Toast.Type != "info" {
 		t.Errorf("toast type = %q, want info", resp.Toast.Type)
 	}
-	if resp.Toast.Content != "已取消" {
-		t.Errorf("toast content = %q, want 已取消", resp.Toast.Content)
+	if resp.Toast.Content != "Cancelled" {
+		t.Errorf("toast content = %q, want Cancelled", resp.Toast.Content)
 	}
 	if len(router.calls) != 1 {
 		t.Fatalf("router calls = %d, want 1", len(router.calls))
@@ -970,7 +970,7 @@ func TestHandleCardAction_UserChoiceSubmitSlotAlreadyCleared(t *testing.T) {
 	})
 
 	resp := mgr.handleCardAction(context.Background(), "cli_app",
-		buildUserChoiceEvent("req-missing", "ou_picker", map[string]any{"q0": "选项A"}))
+		buildUserChoiceEvent("req-missing", "ou_picker", map[string]any{"q0": "Option A"}))
 
 	if resp.Toast.Type != "info" {
 		t.Errorf("toast type = %q, want info", resp.Toast.Type)
@@ -997,7 +997,7 @@ func TestHandleCardAction_UserChoiceSubmitMissingRequestID(t *testing.T) {
 	})
 
 	resp := mgr.handleCardAction(context.Background(), "cli_app",
-		buildUserChoiceEvent("", "ou_picker", map[string]any{"q0": "选项A"}))
+		buildUserChoiceEvent("", "ou_picker", map[string]any{"q0": "Option A"}))
 
 	if resp.Toast.Type != "info" {
 		t.Errorf("toast type = %q, want info", resp.Toast.Type)

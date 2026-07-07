@@ -73,12 +73,12 @@ function relativeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime()
   if (ms < 0 || Number.isNaN(ms)) return iso
   const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}秒前`
+  if (sec < 60) return `${sec}s ago`
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}分钟前`
+  if (min < 60) return `${min}m ago`
   const hr = Math.floor(min / 60)
-  if (hr < 48) return `${hr}小时前`
-  return `${Math.floor(hr / 24)}天前`
+  if (hr < 48) return `${hr}h ago`
+  return `${Math.floor(hr / 24)}d ago`
 }
 
 function sortBindings(bindings: SandboxBinding[], sortKey: SortKey): SandboxBinding[] {

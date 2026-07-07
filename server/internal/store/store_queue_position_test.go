@@ -62,8 +62,8 @@ func TestQueuePositionForRun_RunningSiblingNotCountedAsAhead(t *testing.T) {
 		want int
 	}{
 		{"running lane-holder reports 1 (head of lane)", 0, 1},
-		{"first queued: alone in queue → 第 1 位", 1, 1},
-		{"second queued: one queued ahead → 第 2 位", 2, 2},
+		{"first queued: alone in queue -> position 1", 1, 1},
+		{"second queued: one queued ahead -> position 2", 2, 2},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -189,7 +189,7 @@ func isMCPTool(tool string) bool {
 
 // FormatElapsed renders a duration as `Ns` / `NmMs`. Sub-second runs
 // collapse to `0s`. Exported so the feishuoutbound ping helper can
-// produce the same "耗时 17s" suffix the DoneCard footer uses.
+// produce the same "took 17s" suffix the DoneCard footer uses.
 func FormatElapsed(d time.Duration) string {
 	seconds := int(d.Seconds())
 	if seconds < 60 {
@@ -332,7 +332,7 @@ func toFeishuMarkdown(md string) string {
 
 // markdownBodyCap bounds the body markdown so a runaway Agent reply
 // doesn't push the card over Feishu's element limits. Beyond this the
-// body is middle-truncated with a "…(中间省略)…" marker so both the
+// body is middle-truncated with a "…(content truncated)…" marker so both the
 // head (gives the user a quick read-in) and the tail (where streaming
 // runs always have their latest cue) survive.
 const markdownBodyCap = 20000
@@ -340,7 +340,7 @@ const markdownBodyCap = 20000
 // truncateMarkdownMarker is the visible cue inserted between the
 // preserved head and tail when truncation kicks in. Both Feishu
 // markdown and plain rendering treat the bytes verbatim.
-const truncateMarkdownMarker = "\n\n…(中间省略部分内容)…\n\n"
+const truncateMarkdownMarker = "\n\n…(content truncated)…\n\n"
 
 // truncateMarkdown keeps the head + tail of the input when it exceeds
 // markdownBodyCap. The marker takes up a slice of the cap so the
@@ -420,11 +420,11 @@ func safeRuneSliceSuffix(s string, n int) string {
 //	streamingText (markdown, omitted when empty)
 //	── hr ── (only when BOTH streamingText AND steps are present)
 //	[current step div]    (current tool, live duration)
-//	▾ collapsible "执行记录 - N steps"
+//	▾ collapsible "Run log — N steps"
 //
-// Header tag is "执行中" until the model emits any message.delta —
+// Header tag is "Running" until the model emits any message.delta —
 // after that the run is functionally "generating" and we flip to
-// "生成中…". The single-card shape stays identical so PATCHing
+// "Generating…". The single-card shape stays identical so PATCHing
 // in-place is just a content swap, not a layout reshape.
 //
 // `now` is used to compute live duration on the still-running step
@@ -441,9 +441,9 @@ func BuildRunningCard(title string, steps []StepInfo, streamingText string, elap
 		subtitle = subtitle + " · " + FormatElapsed(elapsed)
 	}
 
-	statusTag := "执行中"
+	statusTag := "Running"
 	if body != "" {
-		statusTag = "生成中…"
+		statusTag = "Generating…"
 	}
 
 	elements := make([]map[string]any, 0, 4)
@@ -458,10 +458,10 @@ func BuildRunningCard(title string, steps []StepInfo, streamingText string, elap
 		past := steps[:len(steps)-1]
 		if len(past) > 0 {
 			displayed := past
-			label := fmt.Sprintf("执行记录 - %d steps", len(past))
+			label := fmt.Sprintf("Run log — %d steps", len(past))
 			if len(past) > stepsHistoryCap {
 				displayed = past[len(past)-stepsHistoryCap:]
-				label = fmt.Sprintf("执行记录 - %d steps (showing recent %d)", len(past), stepsHistoryCap)
+				label = fmt.Sprintf("Run log — %d steps (showing recent %d)", len(past), stepsHistoryCap)
 			}
 			elements = append(elements, makeCollapsibleHistory(displayed, label, now))
 		}
@@ -516,10 +516,10 @@ func BuildDoneCard(title, content string, steps []StepInfo, thinkingText string,
 			elements = append(elements, map[string]any{"tag": "hr"})
 		}
 		displayed := steps
-		label := fmt.Sprintf("执行记录 - %d steps", len(steps))
+		label := fmt.Sprintf("Run log — %d steps", len(steps))
 		if len(steps) > stepsHistoryCap {
 			displayed = steps[len(steps)-stepsHistoryCap:]
-			label = fmt.Sprintf("执行记录 - %d steps (showing recent %d)", len(steps), stepsHistoryCap)
+			label = fmt.Sprintf("Run log — %d steps (showing recent %d)", len(steps), stepsHistoryCap)
 		}
 		// DoneCard: every step is already ended, so the "now" argument
 		// is unused by stepDiv. Zero time silences the live-clock
@@ -541,7 +541,7 @@ func BuildDoneCard(title, content string, steps []StepInfo, thinkingText string,
 			"template": "green",
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "已完成"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Completed"},
 				"color": "green",
 			}},
 		},
@@ -643,7 +643,7 @@ func formatTokensK(n int) string {
 func BuildPermissionCard(title, toolName, toolInput, permissionRequestID string) map[string]any {
 	elements := []map[string]any{{
 		"tag":     "markdown",
-		"content": fmt.Sprintf("**待审批**\n\nAgent 申请使用工具：**%s**", toolName),
+		"content": fmt.Sprintf("**Pending**\n\nAgent is requesting to use tool: **%s**", toolName),
 	}}
 	if trimmed := strings.TrimSpace(toolInput); trimmed != "" {
 		preview := trimmed
@@ -665,7 +665,7 @@ func BuildPermissionCard(title, toolName, toolInput, permissionRequestID string)
 				"width": "auto",
 				"elements": []map[string]any{{
 					"tag":  "button",
-					"text": map[string]any{"tag": "plain_text", "content": "允许"},
+					"text": map[string]any{"tag": "plain_text", "content": "Allow"},
 					"type": "primary",
 					"value": map[string]any{
 						"action":                "permission_allow",
@@ -685,7 +685,7 @@ func BuildPermissionCard(title, toolName, toolInput, permissionRequestID string)
 				"width": "auto",
 				"elements": []map[string]any{{
 					"tag":  "button",
-					"text": map[string]any{"tag": "plain_text", "content": "拒绝"},
+					"text": map[string]any{"tag": "plain_text", "content": "Reject"},
 					"type": "danger",
 					"value": map[string]any{
 						"action":                "permission_deny",
@@ -711,7 +711,7 @@ func BuildPermissionCard(title, toolName, toolInput, permissionRequestID string)
 			"icon":     map[string]any{"tag": "standard_icon", "token": "safe_outlined"},
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "待审批"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Pending"},
 				"color": "orange",
 			}},
 		},
@@ -723,14 +723,14 @@ func BuildPermissionCard(title, toolName, toolInput, permissionRequestID string)
 // PermissionCard after the user clicks Allow / Deny. Green when
 // allowed, red when denied.
 func BuildPermissionResultCard(title string, allowed bool) map[string]any {
-	label := "**已拒绝**"
+	label := "**Rejected**"
 	template := "red"
-	statusText := "已拒绝"
+	statusText := "Rejected"
 	statusColor := "red"
 	if allowed {
-		label = "**已允许**，继续执行…"
+		label = "**Allowed**, continuing…"
 		template = "green"
-		statusText = "已允许"
+		statusText = "Allowed"
 		statusColor = "green"
 	}
 	return map[string]any{
@@ -786,18 +786,18 @@ func BuildNoticeCard(title, body string, color NoticeColor) map[string]any {
 	}
 }
 
-// BuildQueueCard renders a one-shot "排队中（第 N 位）" placeholder
+// BuildQueueCard renders a one-shot "Queued (position N)" placeholder
 // sent when a freshly created agent_run is blocked behind an inflight
 // sibling. Never PATCHed; the inflight driver sends a fresh working
 // card once the run is dequeued.
 //
 // Position counts QUEUED siblings only (1-indexed) — the running
 // sibling holding the lane is NOT counted. Position ≤ 1 omits the
-// suffix; passing 0 degrades to a bare "排队中".
+// suffix; passing 0 degrades to a bare "Queued".
 func BuildQueueCard(title string, position int) map[string]any {
-	label := "排队中"
+	label := "Queued"
 	if position > 1 {
-		label = fmt.Sprintf("排队中（第 %d 位）", position)
+		label = fmt.Sprintf("Queued (position %d)", position)
 	}
 	return map[string]any{
 		"schema": FeishuCardSchema,
@@ -808,14 +808,14 @@ func BuildQueueCard(title string, position int) map[string]any {
 			"icon":     map[string]any{"tag": "standard_icon", "token": "time_outlined"},
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "排队"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Queue"},
 				"color": "neutral",
 			}},
 		},
 		"body": map[string]any{
 			"elements": []map[string]any{
 				{"tag": "markdown", "content": label},
-				{"tag": "markdown", "content": "_前一个任务完成后会自动开始处理这条消息。_"},
+				{"tag": "markdown", "content": "_This message will start processing automatically once the previous task completes._"},
 			},
 		},
 	}
@@ -829,11 +829,11 @@ const errorCardRawDetailLimit = 160
 // BuildErrorCard renders the red "failed" card. Routed when the
 // outbound worker detects metadata.message_type=run_failure. Shows
 // only the FIRST LINE of `message` (stack traces leak internal paths
-// and are unreadable in a card). detailURL appends a "查看本轮详情"
+// and are unreadable in a card). detailURL appends a "View this round"
 // link when non-empty; "" degrades to just the first-line body.
 //
 // rawError is the un-mapped error string from the run.failed event;
-// when message is one of the generic "请展开本轮错误详情..." copies
+// when message is one of the generic "Expand this round for error details" copies
 // (which by themselves tell the user nothing actionable), the first
 // line of rawError is appended as a dimmed italic excerpt so the
 // reader can see the real failure without opening the run detail.
@@ -850,16 +850,16 @@ const errorCardRawDetailLimit = 160
 func BuildErrorCard(title, message, rawError, detailURL, guestHint string) map[string]any {
 	body := firstLine(strings.TrimSpace(message))
 	if body == "" {
-		body = "Agent 运行失败，请稍后重试。"
+		body = "Agent run failed. Please retry later."
 	}
 	if excerpt := rawErrorExcerpt(body, rawError); excerpt != "" {
-		body = body + "\n*错误详情: " + excerpt + "*"
+		body = body + "\n*Error details: " + excerpt + "*"
 	}
 	if hint := strings.TrimSpace(guestHint); hint != "" {
 		body = body + "\n\n" + hint
 	}
 	if url := strings.TrimSpace(detailURL); url != "" {
-		body = body + "\n\n[查看本轮详情](" + url + ")"
+		body = body + "\n\n[View this round](" + url + ")"
 	}
 	return map[string]any{
 		"schema": FeishuCardSchema,
@@ -870,7 +870,7 @@ func BuildErrorCard(title, message, rawError, detailURL, guestHint string) map[s
 			"icon":     map[string]any{"tag": "standard_icon", "token": "warning_outlined"},
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "失败"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Failed"},
 				"color": "red",
 			}},
 		},
@@ -882,7 +882,7 @@ func BuildErrorCard(title, message, rawError, detailURL, guestHint string) map[s
 
 // rawErrorExcerpt returns the trimmed first line of raw (capped at
 // errorCardRawDetailLimit runes, marked with "…" on truncation) only
-// when body matches a generic "请展开本轮错误详情..." copy. Returns
+// when body matches a generic "Expand this round for error details" copy. Returns
 // "" when raw is empty, equal to body, or body already carries a
 // specific hint — in those cases the excerpt would be noise.
 func rawErrorExcerpt(body, raw string) string {
@@ -890,7 +890,7 @@ func rawErrorExcerpt(body, raw string) string {
 	if first == "" || first == body {
 		return ""
 	}
-	if !strings.Contains(body, "请展开本轮错误详情") {
+	if !strings.Contains(body, "Expand this round for error details") {
 		return ""
 	}
 	runes := []rune(first)
@@ -943,12 +943,12 @@ type CredentialFormField struct {
 func BuildCredentialFormCard(title string, fields []CredentialFormField, qkey string) map[string]any {
 	formElements := []map[string]any{{
 		"tag":     "markdown",
-		"content": "**需要绑定凭据**\n\n本次会话需要密钥才能运行（模型 API Key 或 MCP 凭据）。填写后会话会自动继续。",
+		"content": "**Credentials required**\n\nThis conversation needs a secret to run (model API key or MCP credentials). It will resume automatically after you submit.",
 	}}
 	if len(fields) == 0 {
 		formElements = append(formElements, map[string]any{
 			"tag":     "markdown",
-			"content": "（无凭据字段）",
+			"content": "(no credential fields)",
 		})
 	}
 	seenCaps := map[string]struct{}{}
@@ -965,7 +965,7 @@ func BuildCredentialFormCard(title string, fields []CredentialFormField, qkey st
 		}
 		placeholder := strings.TrimSpace(f.Placeholder)
 		if placeholder == "" {
-			placeholder = "请粘贴" + defaultIfEmpty(f.Label, f.Kind)
+			placeholder = "Paste " + defaultIfEmpty(f.Label, f.Kind)
 		}
 		formElements = append(formElements, map[string]any{
 			"tag":            "input",
@@ -983,7 +983,7 @@ func BuildCredentialFormCard(title string, fields []CredentialFormField, qkey st
 			"name": "credential_form_submit",
 			"text": map[string]any{
 				"tag":     "plain_text",
-				"content": "提交并继续",
+				"content": "Submit and continue",
 			},
 			"type":             "primary",
 			"action_type":      "form_submit",
@@ -1011,7 +1011,7 @@ func BuildCredentialFormCard(title string, fields []CredentialFormField, qkey st
 			"icon":     map[string]any{"tag": "standard_icon", "token": "lock_outlined"},
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "需要凭据"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Credentials required"},
 				"color": "orange",
 			}},
 		},
@@ -1029,7 +1029,7 @@ func BuildCredentialFormCard(title string, fields []CredentialFormField, qkey st
 }
 
 // BuildCredentialFormSubmittedCard replaces BuildCredentialFormCard
-// after the user submits. Green = "已收到，正在继续会话".
+// after the user submits. Green = "Received, resuming the conversation".
 //
 // Feishu's PATCH /im/v1/messages has THREE runtime constraints when
 // patching FROM a form-container card:
@@ -1059,7 +1059,7 @@ func BuildCredentialFormSubmittedCard(title string) map[string]any {
 			"icon":     map[string]any{"tag": "standard_icon", "token": "done_outlined"},
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "已保存"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Saved"},
 				"color": "green",
 			}},
 		},
@@ -1070,7 +1070,7 @@ func BuildCredentialFormSubmittedCard(title string) map[string]any {
 				"elements": []any{
 					map[string]any{
 						"tag":     "markdown",
-						"content": "**凭据已保存**\n\n会话会用新绑定的凭据继续，无需再次发送消息。",
+						"content": "**Credentials saved**\n\nThe conversation will resume with the newly bound credentials; no need to resend the message.",
 					},
 					// Placeholder submit button required by Feishu's
 					// form schema (code 230099 / ErrCode 300123).
@@ -1082,7 +1082,7 @@ func BuildCredentialFormSubmittedCard(title string) map[string]any {
 						"name": "credential_form_acknowledged",
 						"text": map[string]any{
 							"tag":     "plain_text",
-							"content": "已保存",
+							"content": "Saved",
 						},
 						"type":             "default",
 						"action_type":      "form_submit",
@@ -1132,11 +1132,11 @@ func BuildCredentialFormRejectedCard(title string, reason CredentialFormRejectRe
 	var body string
 	switch reason {
 	case CredentialFormRejectOperatorMismatch:
-		body = "**该卡片只能由发起人本人提交**\n\n其他成员的点击已被忽略。本卡片对应的会话窗口已失效；请重新 @机器人 发起新一轮提交。"
+		body = "**This card can only be submitted by the original requester**\n\nClicks from other members were ignored. The conversation window for this card has expired; please @-mention the bot again to start a new round."
 	case CredentialFormRejectChatMismatch:
-		body = "**该卡片只能在原会话中提交**\n\n本卡片对应的窗口已失效；请回到原会话重新 @机器人 发起新一轮提交。"
+		body = "**This card can only be submitted in the original conversation**\n\nThe window for this card has expired; return to the original conversation and @-mention the bot again to start a new round."
 	default:
-		body = "**凭据提交被拒绝**\n\n本卡片对应的窗口已失效；请重新 @机器人 发起新一轮提交。"
+		body = "**Credential submission rejected**\n\nThe window for this card has expired; please @-mention the bot again to start a new round."
 	}
 	return map[string]any{
 		"schema": FeishuCardSchema,
@@ -1147,7 +1147,7 @@ func BuildCredentialFormRejectedCard(title string, reason CredentialFormRejectRe
 			"icon":     map[string]any{"tag": "standard_icon", "token": "error_outlined"},
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "已拒绝"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Rejected"},
 				"color": "red",
 			}},
 		},
@@ -1171,7 +1171,7 @@ func BuildCredentialFormRejectedCard(title string, reason CredentialFormRejectRe
 						"name": "credential_form_acknowledged",
 						"text": map[string]any{
 							"tag":     "plain_text",
-							"content": "已结束",
+							"content": "Ended",
 						},
 						"type":             "default",
 						"action_type":      "form_submit",
@@ -1242,7 +1242,7 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 		header := strings.TrimSpace(q.Header)
 		question := strings.TrimSpace(q.Question)
 		if header == "" {
-			header = fmt.Sprintf("问题 %d", idx+1)
+			header = fmt.Sprintf("Question %d", idx+1)
 		}
 		// Question prompt. Use lark_md (not markdown) so headers
 		// inside the form container render — Feishu's form elements
@@ -1262,8 +1262,8 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 			formElements = append(formElements, map[string]any{
 				"tag":            "input",
 				"name":           fieldName,
-				"placeholder":    map[string]any{"tag": "plain_text", "content": "请输入答案"},
-				"label":          map[string]any{"tag": "plain_text", "content": "回答"},
+				"placeholder":    map[string]any{"tag": "plain_text", "content": "Enter your answer"},
+				"label":          map[string]any{"tag": "plain_text", "content": "Answer"},
 				"label_position": "top",
 			})
 		} else {
@@ -1279,10 +1279,10 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 				})
 			}
 			selectTag := "select_static"
-			placeholder := "请选择一个选项"
+			placeholder := "Select an option"
 			if q.MultiSelect {
 				selectTag = "multi_select_static"
-				placeholder = "可多选"
+				placeholder = "Multi-select"
 			}
 			formElements = append(formElements, map[string]any{
 				"tag":         selectTag,
@@ -1323,7 +1323,7 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 	formElements = append(formElements, map[string]any{
 		"tag":              "button",
 		"name":             "ask_user_choice_submit",
-		"text":             map[string]any{"tag": "plain_text", "content": "提交"},
+		"text":             map[string]any{"tag": "plain_text", "content": "Submit"},
 		"type":             "primary",
 		"action_type":      "form_submit",
 		"form_action_type": "submit",
@@ -1354,7 +1354,7 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 			"template": "blue",
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "待回答"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Awaiting reply"},
 				"color": "blue",
 			}},
 		},
@@ -1378,16 +1378,16 @@ func BuildPromptForUserChoiceDoneCard(title string, answers []PromptForUserChoic
 	for idx, a := range answers {
 		header := strings.TrimSpace(a.Header)
 		if header == "" {
-			header = fmt.Sprintf("问题 %d", idx+1)
+			header = fmt.Sprintf("Question %d", idx+1)
 		}
 		answer := strings.TrimSpace(a.Answer)
 		if answer == "" {
-			answer = "(未选择)"
+			answer = "(no selection)"
 		}
 		parts = append(parts, fmt.Sprintf("**%s**: %s", header, answer))
 	}
 	if len(parts) == 0 {
-		parts = []string{"(未选择)"}
+		parts = []string{"(no selection)"}
 	}
 	body := strings.Join(parts, "\n\n")
 	return map[string]any{
@@ -1398,7 +1398,7 @@ func BuildPromptForUserChoiceDoneCard(title string, answers []PromptForUserChoic
 			"template": "green",
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "已回答"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Answered"},
 				"color": "green",
 			}},
 		},
@@ -1418,15 +1418,15 @@ func BuildPromptForUserChoiceTimeoutCard(title string, questions []PromptForUser
 	for idx, q := range questions {
 		header := strings.TrimSpace(q.Header)
 		if header == "" {
-			header = fmt.Sprintf("问题 %d", idx+1)
+			header = fmt.Sprintf("Question %d", idx+1)
 		}
 		question := strings.TrimSpace(q.Question)
 		parts = append(parts, fmt.Sprintf("**%s**\n\n%s", header, question))
 	}
 	if len(parts) == 0 {
-		parts = []string{"需要你确认"}
+		parts = []string{"Your confirmation is required"}
 	}
-	body := strings.Join(parts, "\n\n---\n\n") + "\n\n**已超时** (10 分钟未选择)"
+	body := strings.Join(parts, "\n\n---\n\n") + "\n\n**Timed out** (no selection within 10 minutes)"
 	return map[string]any{
 		"schema": FeishuCardSchema,
 		"config": map[string]any{"wide_screen_mode": FeishuCardWideScreen},
@@ -1435,7 +1435,7 @@ func BuildPromptForUserChoiceTimeoutCard(title string, questions []PromptForUser
 			"template": "grey",
 			"text_tag_list": []map[string]any{{
 				"tag":   "text_tag",
-				"text":  map[string]any{"tag": "plain_text", "content": "已超时"},
+				"text":  map[string]any{"tag": "plain_text", "content": "Timed out"},
 				"color": "grey",
 			}},
 		},

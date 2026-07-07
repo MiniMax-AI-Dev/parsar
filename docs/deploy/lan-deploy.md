@@ -1,113 +1,121 @@
-# Parsar 局域网部署指南 — 多人可用的完整服务
+# Parsar LAN deployment guide — full service for multiple users
 
-> **面向:** 想在一台开发机 / 内网服务器上部署 Parsar，让局域网内**多人**通过浏览器访问、在飞书群里 @Bot 对话、接入设备的团队。
-> **与 INSTALL.md 的区别:** INSTALL.md 是 127.0.0.1 单机自用 + mock 登录；本文档是 0.0.0.0 绑定 + 真实飞书 OAuth + 飞书 Bot + 云端沙箱 + 局域网可达。
-> **前提假设:** 一台 Linux 机器（也适用于 macOS），有 Docker + Docker Compose v2，能出网。
-
----
-
-## ⚠️  信任边界与安全前提
-
-本文档假设**部署机所在的网络是可信的**（家庭 / 小团队办公室 LAN、单人开发机 VPN 内网）。走这套 compose **不适合**多租户 LAN（学校/公司大网、公用 Wi-Fi）或直接暴露到公网。
-
-原因：
-
-- **Docker socket 挂进 server 容器**（`/var/run/docker.sock`）用于按需拉起沙箱容器。这等价于给 server 容器 root 级别的宿主机访问；server 里的任何 RCE 都会变成宿主机沦陷。
-- **默认 HTTP 无 TLS**：`PARSAR_COOKIE_SECURE=false` + 0.0.0.0 绑定，同网段的抓包者可以截获 session cookie。
-- **PARSAR_MASTER_KEY 是所有 workspace 凭证（飞书/Slack/Discord bot）的加密根密钥**：泄露它 = 数据库里所有 bot secret 明文暴露。
-
-生产 / 多租户 / 公网部署应改用 K8s + envd 的 e2b sandbox 路径（不在本文档范围）；本文的目标是「在受信内网跑起来验证功能」。
+> **Audience:** teams that want to deploy Parsar on a developer machine / internal server so that **multiple people** on the LAN can access it through the browser, chat with @Bot in Feishu groups, and pair devices.
+> **How this differs from INSTALL.md:** INSTALL.md targets 127.0.0.1 single-user + mock login; this document targets 0.0.0.0 binding + real Feishu OAuth + Feishu Bot + cloud sandbox + LAN reachability.
+> **Assumptions:** one Linux machine (also works on macOS), Docker + Docker Compose v2, internet access.
 
 ---
 
-## 总览
+## ⚠️  Trust boundary and security assumptions
+
+This document assumes **the network the deploy machine sits on is trusted**
+(family / small-team office LAN, single-user dev machine behind VPN). This
+compose is **not suitable** for multi-tenant LANs (school / big-corp networks,
+public Wi-Fi) or for direct public-internet exposure.
+
+Reasons:
+
+- **The Docker socket is mounted into the server container** (`/var/run/docker.sock`) so it can spin up sandbox containers on demand. This is equivalent to giving the server root-level access to the host; any RCE inside the server becomes host compromise.
+- **HTTP without TLS by default**: `PARSAR_COOKIE_SECURE=false` + 0.0.0.0 binding means anyone sniffing the same subnet can capture session cookies.
+- **PARSAR_MASTER_KEY is the encryption root for every workspace credential** (Feishu / Slack / Discord bots): leaking it exposes every bot secret in the database in plaintext.
+
+For production / multi-tenant / public-internet deployments, switch to the
+K8s + envd e2b-sandbox path (out of scope for this document). This
+document's target is "get it running on a trusted LAN to validate
+functionality".
+
+---
+
+## Overview
 
 ```
-克隆仓库 → 飞书开放平台建应用 → 准备 .env → 构建镜像(server + sandbox)
-→ docker compose up → 首人飞书登录(TOFU Owner) → 创建 Agent
-→ 接入设备 / 飞书群 @Bot 对话
+clone the repo → create a Feishu app → prepare .env → build images (server + sandbox)
+→ docker compose up → first user logs in via Feishu (TOFU Owner) → create Agent
+→ pair device / @Bot in Feishu groups
 ```
 
-部署完成后的能力矩阵：
+After deployment, the capability matrix:
 
-| 能力 | 说明 |
+| Capability | Description |
 |---|---|
-| Web 管理后台 | 多人飞书登录，管理 Agent / 设备 / Workspace |
-| 设备接入 | 局域网内用户一行命令把本机 Claude Code / Codex 接入 |
-| 云端沙箱 (Docker) | Agent 自动在 Docker 容器中运行，内置 Claude Code + Codex |
-| 飞书 Bot | 群聊 @Bot / 私聊 Bot 触发 Agent 执行，结果回复到飞书 |
+| Web admin | Multiple users log in with Feishu, manage Agents / Devices / Workspaces |
+| Device pairing | LAN users pair their local Claude Code / Codex with a single command |
+| Cloud sandbox (Docker) | Agents auto-run in Docker containers with Claude Code + Codex built in |
+| Feishu Bot | Group @Bot / DM Bot triggers Agent runs; results reply into Feishu |
 
 ---
 
-## 1. 前置条件
+## 1. Prerequisites
 
 ```bash
 docker compose version   # v2.x+
-docker info              # 确认 daemon 在运行
+docker info              # confirm daemon is running
 ```
 
-- 确认部署机器的**内网 IP**（后续以 `YOUR_IP` 代称）：
+- Confirm the machine's **LAN IP** (referred to as `YOUR_IP` below):
   ```bash
   hostname -I | awk '{print $1}'
   ```
-- 确认端口 `18080`（或你选的端口）未被占用且防火墙放行。
-- 如果机器需要通过 HTTP 代理访问外网，记下代理地址（后续以 `YOUR_PROXY` 代称）。
-- 确认 Docker socket 的 GID（Linux 才需要，macOS Docker Desktop 无 host-side dockerd）：
+- Confirm port `18080` (or whichever port you pick) is free and open on the firewall.
+- If this machine needs an HTTP proxy for internet access, note the proxy address (referred to as `YOUR_PROXY` below).
+- Confirm the Docker socket GID (Linux only; macOS Docker Desktop has no host-side dockerd):
   ```bash
   # Linux
-  stat -c '%g' /var/run/docker.sock   # 通常是 999 或 docker 用户组
-  # macOS: 跳过此步，保留 DOCKER_GID=999 默认值即可
+  stat -c '%g' /var/run/docker.sock   # usually 999 or the docker group
+  # macOS: skip this step, keep DOCKER_GID=999 default
   ```
 
 ---
 
-## 2. 飞书开放平台配置
+## 2. Feishu Open Platform configuration
 
-> 一个飞书应用同时承担 OAuth 登录和 Bot 对话两个角色。如果你的团队使用 Lark（海外版），流程相同，域名换成 `open.larksuite.com`。
+> One Feishu app plays two roles: OAuth login and Bot chat. If your team uses Lark (overseas), the process is identical — swap the domain to `open.larksuite.com`.
 
-### 2.1 创建应用
+### 2.1 Create the app
 
-1. 登录 [飞书开放平台](https://open.feishu.cn) → 创建**企业自建应用**。
-2. **凭证与基本信息**页面，记下：
-   - `App ID`（形如 `cli_xxxxxxxxxx`）
+1. Log in to the [Feishu Open Platform](https://open.feishu.cn) → create a **custom app**.
+2. On the **Credentials & Basic Info** page, note:
+   - `App ID` (looks like `cli_xxxxxxxxxx`)
    - `App Secret`
    - `Verification Token`
-   - Bot 的 `Open ID`（形如 `ou_xxxxxxxx`，开启机器人能力后可见）
+   - The Bot `Open ID` (looks like `ou_xxxxxxxx`; visible after enabling the Bot capability)
 
-### 2.2 配置重定向 URL
+### 2.2 Configure the redirect URL
 
-**安全设置** → **重定向 URL**，添加：
+**Security Settings** → **Redirect URL**, add:
 ```
 http://YOUR_IP:18080/api/v1/auth/feishu/callback
 ```
 
-### 2.3 申请权限 (scope)
+### 2.3 Request permissions (scopes)
 
-**权限管理** → 申请以下 scope 并由管理员审批：
+**Permission Management** → request the following scopes and get admin
+approval:
 
-| Scope | 用途 |
+| Scope | Purpose |
 |---|---|
-| `contact:user.base:readonly` | 读取用户基本信息（登录） |
-| `contact:user.email:readonly` | 读取用户邮箱（登录） |
-| `im:message` | 接收 IM 消息事件（Bot） |
-| `im:message.group_at_msg:readonly` | 接收群 @Bot 消息（Bot） |
-| `im:message.p2p_msg:readonly` | 接收私聊消息（Bot） |
-| `im:message:send_as_bot` | 以 Bot 身份发消息（Bot） |
-| `im:chat:readonly` | 读群信息（Bot 出站需要） |
+| `contact:user.base:readonly` | Read basic user info (login) |
+| `contact:user.email:readonly` | Read user email (login) |
+| `im:message` | Receive IM message events (Bot) |
+| `im:message.group_at_msg:readonly` | Receive group @Bot messages (Bot) |
+| `im:message.p2p_msg:readonly` | Receive DM messages (Bot) |
+| `im:message:send_as_bot` | Send messages as the Bot (Bot) |
+| `im:chat:readonly` | Read chat info (Bot outbound needs it) |
 
-### 2.4 开启机器人能力
+### 2.4 Enable the Bot capability
 
-**应用能力 → 机器人** → 点击**开启**。
+**App Capabilities → Bot** → click **Enable**.
 
-> 不开机器人能力的话 Bot 没法被加进群、也收不到 @Bot 消息。这是最常被漏的一步。
+> Without the Bot capability enabled, the Bot cannot be added to a group and no @Bot messages reach you. This is the most commonly missed step.
 
-### 2.5 发布版本
+### 2.5 Publish a version
 
-**版本管理与发布** → 创建版本并发布 → 让管理员审批。**scope 不审批就不生效。**
+**Version Management & Release** → create and publish a version → get admin
+approval. **Scopes do not take effect until approved.**
 
 ---
 
-## 3. 克隆代码
+## 3. Clone the repo
 
 ```bash
 git clone <your-repo-url> parsar
@@ -116,64 +124,68 @@ cd parsar
 
 ---
 
-## 4. 准备 `.env` 文件
+## 4. Prepare the `.env` file
 
-在项目根目录创建 `.env`（已在 `.gitignore` 中，不会被提交）：
+Create `.env` in the project root (it is in `.gitignore` and will not be
+committed):
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env`，填入以下内容：
+Edit `.env` and fill in:
 
 ```bash
-# ---- 飞书 OAuth + Bot ----
+# ---- Feishu OAuth + Bot ----
 PARSAR_FEISHU_MOCK=false
-PARSAR_FEISHU_APP_ID=cli_xxxxxxxxxx          # 2.1 节记下的 App ID
-PARSAR_FEISHU_APP_SECRET=xxxxxxxx            # 2.1 节记下的 App Secret
+PARSAR_FEISHU_APP_ID=cli_xxxxxxxxxx          # App ID from §2.1
+PARSAR_FEISHU_APP_SECRET=xxxxxxxx            # App Secret from §2.1
 PARSAR_FEISHU_REDIRECT_URI=http://YOUR_IP:18080/api/v1/auth/feishu/callback
-PARSAR_FEISHU_VERIFICATION_TOKEN=xxxxxxxx    # 2.1 节记下的 Verification Token
-PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID=ou_xxxxxx  # 2.1 节记下的 Bot Open ID
+PARSAR_FEISHU_VERIFICATION_TOKEN=xxxxxxxx    # Verification Token from §2.1
+PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID=ou_xxxxxx  # Bot Open ID from §2.1
 
-# ---- 安全 ----
-# PARSAR_MASTER_KEY 加密数据库里所有 Bot 凭证。首次留空即可 ——
-# parsar-init 在 6 节 `up` 时会自动生成并打印到日志，然后 fatal 停机，
-# 你把它复制回 .env 再启动一次即可。也可以手动预生成：
+# ---- Security ----
+# PARSAR_MASTER_KEY encrypts every Bot credential in the DB. Leave blank on
+# first run — parsar-init in step 6 will auto-generate one on `up`, print it
+# to the logs, and then fatal-exit; copy the printed key back into .env and
+# run `up` again. You can also pre-generate:
 #   echo "PARSAR_MASTER_KEY=$(openssl rand -hex 32)" >> .env
-# 一旦设定，切勿更改：改了以后已存的 Bot 凭证会全部解不开，Bot 全部要重绑。
+# Once set, DO NOT change it: any Bot credentials already stored become
+# undecryptable and every Bot must be re-bound.
 PARSAR_MASTER_KEY=
-PARSAR_COOKIE_SECURE=false                   # HTTP 部署必须 false；HTTPS 反代时改 true
+PARSAR_COOKIE_SECURE=false                   # must be false on HTTP; true when behind an HTTPS reverse proxy
 
-# ---- 网络 ----
-PARSAR_HOST_IP=YOUR_IP                       # 你的内网 IP，不填则默认 127.0.0.1（单机）
+# ---- Network ----
+PARSAR_HOST_IP=YOUR_IP                       # your LAN IP; empty defaults to 127.0.0.1 (single machine)
 PARSAR_LOCAL_PORT=18080
 PARSAR_PG_PORT=15432
 
-# ---- 镜像 ----
+# ---- Image ----
 PARSAR_SERVER_IMAGE=parsar:local
 
 # ---- Docker sandbox ----
-# Linux: stat -c '%g' /var/run/docker.sock       (通常是 999 或 docker)
-# macOS Docker Desktop: 无宿主机 dockerd，socket 走 vsock proxy —— 保留 999 即可（group_add 是 no-op）
+# Linux: stat -c '%g' /var/run/docker.sock       (usually 999 or docker)
+# macOS Docker Desktop: no host-side dockerd; the socket goes through a vsock proxy — leave 999 (group_add is a no-op)
 DOCKER_GID=999
 
-# ---- 代理（可选，仅需要代理才能出网的机器） ----
+# ---- Proxy (optional; only if this machine needs a proxy to reach the internet) ----
 # HTTP_PROXY=http://your-proxy:port
 # HTTPS_PROXY=http://your-proxy:port
 ```
 
-> **PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID** 必须填。不填的话群聊 @Bot 会被静默跳过——server 无法识别 mention 列表里哪个是 Bot 自己，会丢弃所有群消息。私聊不受影响。
+> **PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID is required.** Without it, group @Bot messages are silently skipped — the server has no way to identify which entry in the mention list is the Bot itself and drops every group message. DMs are not affected.
 
 ---
 
-## 5. 构建镜像
+## 5. Build the images
 
-需要构建两个镜像：**server 镜像**（服务本体）和 **sandbox 镜像**（Agent 运行的沙箱容器）。
+You need two images: the **server image** (the service itself) and the
+**sandbox image** (the container Agents run in).
 
-### 5.1 构建 server 镜像
+### 5.1 Build the server image
 
 ```bash
-# 需要代理时（从 .env 读取）：
+# With proxy (read from .env):
 source .env
 sudo docker build \
   -t parsar:local \
@@ -181,24 +193,25 @@ sudo docker build \
   --build-arg https_proxy="$HTTPS_PROXY" \
   .
 
-# 无需代理时：
+# Without proxy:
 sudo docker build -t parsar:local .
 ```
 
-构建约 5–10 分钟。验证：
+Build takes ~5–10 minutes. Verify:
 
 ```bash
 sudo docker run --rm --entrypoint ls parsar:local /usr/local/share/parsar/daemon
-# 预期：parsar-daemon-darwin-amd64  parsar-daemon-darwin-arm64
-#       parsar-daemon-linux-amd64   parsar-daemon-linux-arm64
+# Expected: parsar-daemon-darwin-amd64  parsar-daemon-darwin-arm64
+#           parsar-daemon-linux-amd64   parsar-daemon-linux-arm64
 ```
 
-### 5.2 构建 sandbox 镜像
+### 5.2 Build the sandbox image
 
-sandbox 镜像是 Agent 以 Docker 沙箱模式运行时启动的容器，内含 Claude Code + Codex + parsar-daemon。
+The sandbox image is the container Agents start when running in
+Docker-sandbox mode; it contains Claude Code + Codex + parsar-daemon.
 
 ```bash
-# 需要代理时（从 .env 读取）：
+# With proxy (read from .env):
 source .env
 sudo docker build \
   -f infra/sandbox/Dockerfile.local \
@@ -207,118 +220,121 @@ sudo docker build \
   --build-arg https_proxy="$HTTPS_PROXY" \
   .
 
-# 无需代理时：
+# Without proxy:
 sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
 ```
 
-> `Dockerfile.local` 从 server 镜像中拷贝 daemon 二进制，从 CDN 下载 Claude Code CLI，无需 GitHub Release。**必须先完成 5.1 再跑 5.2**。
+> `Dockerfile.local` copies the daemon binary from the server image and
+> downloads the Claude Code CLI from a CDN — no GitHub Release required.
+> **You must complete 5.1 before running 5.2.**
 
-验证：
+Verify:
 
 ```bash
 sudo docker run --rm --entrypoint /bin/sh parsar-sandbox:local \
   -c "claude --version && parsar-daemon version && codex --version"
-# 预期：三个版本号都正常输出
+# Expected: all three version strings print cleanly
 ```
 
 ---
 
-## 6. 启动服务栈
+## 6. Bring up the service stack
 
 ```bash
 sudo docker compose -f docker-compose.local.yml up -d
 ```
 
-**启动顺序（自动）：**
-1. `postgres` — PostgreSQL 16，等待 healthcheck 通过
-2. `parsar-init` — Master key 校验 + 数据库迁移 + 首次引导（TOFU 模式，跳过 bootstrap）
-3. `parsar-server` — 绑定 `0.0.0.0:18080`，飞书 WebSocket 入站 + 出站 worker 自动启动
+**Startup order (automatic):**
+1. `postgres` — PostgreSQL 16, wait for healthcheck.
+2. `parsar-init` — master-key validation + database migration + first-run onboarding (TOFU mode; bootstrap skipped).
+3. `parsar-server` — binds `0.0.0.0:18080`; Feishu WebSocket inbound + outbound worker start automatically.
 
-> **首次启动会 fatal 停机——这是预期行为。**
-> 如果你在 4 节没有预先手动填 `PARSAR_MASTER_KEY`，`parsar-init` 会自动生成一个并打印到日志里（`sudo docker logs parsar-local-init`），然后 `parsar-server` 因为 env 里仍然没有 key 而拒绝启动。**从 init 日志复制打印出来的 `PARSAR_MASTER_KEY=...` 那一行到 `.env`**，再 `up -d` 一次就正常了。
-> 第二次启动开始，如果 key 没变，parsar-init 只跑迁移不改 key。
+> **First run will fatal-exit — that is intentional.**
+> If you did not manually pre-fill `PARSAR_MASTER_KEY` in step 4, `parsar-init` generates one, prints it to its logs (`sudo docker logs parsar-local-init`), and then `parsar-server` refuses to start because env still has no key. **Copy the printed `PARSAR_MASTER_KEY=...` line from the init log into `.env`** and run `up -d` again to complete startup.
+> On subsequent starts, if the key does not change, parsar-init only runs migrations and leaves the key alone.
 
-**验证：**
+**Verify:**
 
 ```bash
-# 容器状态
+# Container status
 sudo docker compose -f docker-compose.local.yml ps
 
-# 健康检查
+# Health checks
 curl -s http://YOUR_IP:18080/healthz    # 200
 curl -s http://YOUR_IP:18080/readyz     # 200
 
-# Bootstrap 状态
+# Bootstrap status
 curl -s http://YOUR_IP:18080/api/v1/bootstrap/status
-# 首次：{"needed":true,"has_owners":false,...}
+# First run: {"needed":true,"has_owners":false,...}
 
-# 飞书 Bot 连接确认
+# Feishu Bot connection confirmation
 sudo docker logs parsar-local-server 2>&1 | grep "feishu.*inbound.*ready"
-# 预期：feishu websocket inbound client ready
+# Expected: feishu websocket inbound client ready
 ```
 
 ---
 
-## 7. 首次登录 — Owner 认领 (TOFU)
+## 7. First login — Owner claim (TOFU)
 
-1. 浏览器打开 `http://YOUR_IP:18080`。
-2. 点击**飞书登录** → 飞书授权页 → 用你的飞书账号登录。
-3. 首次登录的用户**自动成为 Workspace Owner**。
+1. Open `http://YOUR_IP:18080` in your browser.
+2. Click **Feishu login** → Feishu authorization page → log in with your Feishu account.
+3. The first user to log in **automatically becomes the Workspace Owner**.
 
-> **确保你本人是第一个登录的人。** TOFU 不可逆——首个登录者即 Owner。
-
----
-
-## 8. 创建 Agent 并验证
-
-### 8.1 Web 界面创建 Agent
-
-1. 登录后进入管理界面 → **Agents** → **新建 Agent**。
-2. 选择 connector 类型 `agent_daemon`，daemon mode 选 `sandbox`。
-3. 保存后 server 自动为该 Agent 启动一个 Docker 沙箱容器（约 10 秒）。
-
-### 8.2 飞书 Bot 绑定
-
-1. 进入 Agent 详情页 → **Connector** tab → **飞书 Bot 绑定**卡片。
-2. 选择**「默认 Bot」** → 保存。
-
-### 8.3 群聊验证
-
-1. 在飞书中把 Bot 加进一个群 → 群里 **@Bot** 发消息。
-2. Parsar 收到消息 → 触发 Agent run → Bot 在群里回复。
-
-### 8.4 私聊验证
-
-1. 飞书中直接搜 Bot 名 → 发私聊消息。
-2. Bot 回复。
-
-### 8.5 设备接入验证
-
-1. Web 界面 → **设备管理** → **接入新设备** → 填设备名 → **生成连接命令**。
-2. 在你的机器终端粘贴执行。几秒后设备状态变为**在线**。
-
-> 接入设备的机器上必须已安装并登录至少一个 Agent CLI（`claude` / `opencode` / `codex`）。
+> **Make sure you personally log in first.** TOFU is irreversible — the first
+> user through the door is the Owner.
 
 ---
 
-## 9. 运维
+## 8. Create an Agent and verify
 
-### 查看日志
+### 8.1 Create the Agent in the web UI
+
+1. After login, go to the admin UI → **Agents** → **New Agent**.
+2. Pick connector type `agent_daemon`; daemon mode `sandbox`.
+3. On save the server auto-starts a Docker sandbox container for the Agent (~10 seconds).
+
+### 8.2 Bind the Feishu Bot
+
+1. Go to the Agent detail page → **Connector** tab → **Feishu Bot binding** card.
+2. Pick **"Default Bot"** → Save.
+
+### 8.3 Group-chat verification
+
+1. In Feishu, add the Bot to a group → **@Bot** with a message.
+2. Parsar receives the message → triggers an Agent run → Bot replies in the group.
+
+### 8.4 DM verification
+
+1. In Feishu, search the Bot name directly → send a DM.
+2. Bot replies.
+
+### 8.5 Device-pairing verification
+
+1. Web UI → **Device management** → **Pair new device** → enter a device name → **Generate connect command**.
+2. Paste and run it in a terminal on your machine. After a few seconds the device status becomes **online**.
+
+> The machine you are pairing must have at least one Agent CLI (`claude` / `opencode` / `codex`) installed and logged in.
+
+---
+
+## 9. Operations
+
+### View logs
 
 ```bash
-sudo docker logs -f parsar-local-server    # server 日志
-sudo docker logs parsar-local-init         # 迁移日志
-sudo docker logs parsar-local-postgres     # 数据库日志
+sudo docker logs -f parsar-local-server    # server logs
+sudo docker logs parsar-local-init         # migration logs
+sudo docker logs parsar-local-postgres     # DB logs
 ```
 
-### 停止 / 清理
+### Stop / clean up
 
 ```bash
-sudo docker compose -f docker-compose.local.yml down       # 停止，保留数据
-sudo docker compose -f docker-compose.local.yml down -v    # 连数据卷一起删
+sudo docker compose -f docker-compose.local.yml down       # stop, keep data
+sudo docker compose -f docker-compose.local.yml down -v    # also delete data volumes
 ```
 
-### 更新版本
+### Upgrade
 
 ```bash
 git pull
@@ -327,75 +343,80 @@ sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
 sudo docker compose -f docker-compose.local.yml up -d --force-recreate
 ```
 
-### 修改端口
+### Change port
 
-编辑 `.env` 中的 `PARSAR_LOCAL_PORT`，**同时更新**：
-- `PARSAR_FEISHU_REDIRECT_URI` 中的端口
-- 飞书开放平台上配置的重定向 URL
+Edit `PARSAR_LOCAL_PORT` in `.env` and **also update**:
+- the port in `PARSAR_FEISHU_REDIRECT_URI`
+- the redirect URL configured on the Feishu Open Platform
 
-然后 `sudo docker compose -f docker-compose.local.yml up -d --force-recreate`。
+Then `sudo docker compose -f docker-compose.local.yml up -d --force-recreate`.
 
 ---
 
-## 网络代理
+## Network proxy
 
-如果部署机需要通过 HTTP 代理才能访问外网（飞书 API、下载依赖），在 `.env` 中取消注释并填入代理地址：
+If the deploy machine needs an HTTP proxy to reach the internet (Feishu API,
+dependency downloads), uncomment and fill the proxy address in `.env`:
 
 ```bash
 HTTP_PROXY=http://your-proxy:port
 HTTPS_PROXY=http://your-proxy:port
 ```
 
-`docker-compose.local.yml` 会自动读取这些变量并传给容器。不需要代理的机器留空即可。
+`docker-compose.local.yml` reads these variables and passes them to the
+container. Leave them blank on machines that do not need a proxy.
 
-构建镜像时也要传代理参数（见第 5 节的 `--build-arg`），因为 `docker build` 不会读取 `.env`。
+You must also pass the proxy args at image-build time (see the `--build-arg`
+snippets in §5) because `docker build` does not read `.env`.
 
 ---
 
-## 排错
+## Troubleshooting
 
-| 现象 | 原因 | 处理 |
+| Symptom | Cause | Fix |
 |---|---|---|
-| Server 启动即 fatal，抱怨 `secret.master_key is required in production` | `.env` 里 `PARSAR_MASTER_KEY` 空 | 让 `parsar-init` 跑一次 → 从日志复制它生成的 key 到 `.env` → `up -d` 再启动 |
-| 飞书登录报 `redirect_uri mismatch` | `.env` 的 `REDIRECT_URI` 与飞书开放平台配置不一致 | 两边保持完全一致（协议、IP、端口、路径） |
-| 其他机器无法访问 18080 | 防火墙未放行 | `sudo ufw allow 18080/tcp` 或对应防火墙规则 |
-| 接入设备下载 daemon 报 **404** | 用的 GHCR 镜像不含 daemon | 本地构建 server 镜像（5.1 节） |
-| Agent 报 **"no runtime yet — ask an admin to rebuild it"** | sandbox 镜像缺少 Agent CLI | 用 `Dockerfile.local` 重新构建 sandbox 镜像（5.2 节），然后 UI 里点 Rebuild |
-| Sandbox 起来了但 daemon 连不到 server | Compose 项目名不是 `parsar`，网络名对不上 | 用仓库自带的 `docker-compose.local.yml`（顶部 `name: parsar` 已固定）；不要用 `-p <其他名>` 覆盖 |
-| 群聊 @Bot **没反应**，私聊正常 | `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID` 没填 | `.env` 加上 Bot 的 open_id 后重启 server |
-| Bot 收到消息但不回复 | 出站 worker 没起来 | 检查 server 日志中 `feishu outbound` 字样；确认 `PARSAR_FEISHU_OUTBOUND=true`（compose 中已设） |
-| Server 循环重启 `owner URL not resolvable` | `PARSAR_AGENT_DAEMON_OWNER_URL` 缺失 | 确认 compose 中有 `PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"` |
-| Docker build 时 `go mod download` 超时 | 机器无法直接出网 | 构建时加 `--build-arg http_proxy=...` `--build-arg https_proxy=...` |
-| Server unhealthy 但实际可访问 | 内置 HEALTHCHECK 用 HEAD，`/healthz` 只接受 GET | 确认 compose 中 healthcheck 已覆盖为 GET 探针（已默认） |
+| Server fatal-exits with `secret.master_key is required in production` | `.env` has an empty `PARSAR_MASTER_KEY` | Let `parsar-init` run once → copy the generated key from its logs into `.env` → `up -d` again |
+| Feishu login reports `redirect_uri mismatch` | `.env`'s `REDIRECT_URI` does not match the Feishu console | Keep both sides completely identical (scheme, IP, port, path) |
+| Other machines cannot reach 18080 | Firewall blocking it | `sudo ufw allow 18080/tcp` or the equivalent firewall rule |
+| Device pairing downloads daemon and hits **404** | The GHCR image has no embedded daemon | Build the server image locally (§5.1) |
+| Agent reports **"no runtime yet — ask an admin to rebuild it"** | The sandbox image lacks the Agent CLI | Rebuild the sandbox image via `Dockerfile.local` (§5.2), then click Rebuild in the UI |
+| Sandbox comes up but the daemon cannot reach the server | Compose project name is not `parsar`, so network names do not match | Use the repo's `docker-compose.local.yml` (has `name: parsar` pinned at the top); do not override with `-p <other name>` |
+| Group @Bot **no response**, DM works fine | `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID` not set | Add the Bot's open_id to `.env` and restart the server |
+| Bot receives messages but does not reply | Outbound worker is not up | Grep server logs for `feishu outbound`; confirm `PARSAR_FEISHU_OUTBOUND=true` (compose already sets it) |
+| Server crash-loops with `owner URL not resolvable` | `PARSAR_AGENT_DAEMON_OWNER_URL` missing | Confirm compose has `PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"` |
+| Docker build times out on `go mod download` | Machine cannot reach the internet | Add `--build-arg http_proxy=...` `--build-arg https_proxy=...` at build time |
+| Server unhealthy but actually reachable | The built-in HEALTHCHECK uses HEAD; `/healthz` only accepts GET | Confirm compose overrides the healthcheck to GET (defaulted) |
 
 ---
 
-## 架构概览
+## Architecture overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        部署机 (YOUR_IP)                          │
+│                       Deploy machine (YOUR_IP)                  │
 │                                                                 │
 │  ┌────────────┐  ┌────────────┐  ┌─────────────────────────┐   │
-│  │ PostgreSQL  │  │ parsar-init│  │     parsar-server       │   │
-│  │ :5432       │  │ (一次性)   │  │  SPA + API + WS          │   │
-│  │ 数据持久卷  │  │ 迁移+引导  │  │  飞书 WS 入站 + 出站      │   │
-│  └────────────┘  └────────────┘  │  Docker sandbox 管理      │   │
+│  │ PostgreSQL │  │ parsar-init│  │     parsar-server        │   │
+│  │ :5432      │  │ (one-shot) │  │  SPA + API + WS          │   │
+│  │ data vol   │  │ migrate+   │  │  Feishu WS inbound +     │   │
+│  │            │  │ onboard    │  │  outbound worker         │   │
+│  └────────────┘  └────────────┘  │  Docker sandbox mgr      │   │
 │                                  └─────────┬───────────────┘   │
 │                                            │                   │
 │  ┌──────────────────────┐        0.0.0.0:18080                 │
-│  │  sandbox 容器 (按需)   │                 │                   │
-│  │  Claude Code + Codex  │                 │                   │
-│  │  parsar-daemon        │                 │                   │
+│  │  sandbox container   │                 │                   │
+│  │  (on demand)         │                 │                   │
+│  │  Claude Code + Codex │                 │                   │
+│  │  parsar-daemon       │                 │                   │
 │  └──────────────────────┘                  │                   │
 └────────────────────────────────────────────┼───────────────────┘
                                              │
           ┌──────────────────────────────────┼─────────────┐
-          │              局域网 / 飞书         │             │
+          │              LAN / Feishu        │             │
           │                                  │             │
-          │   用户浏览器 ────── HTTP ─────────┘             │
-          │   用户设备 ──────── WebSocket ────┘             │
-          │   飞书群/私聊 ───── 飞书 WS ──────┘             │
+          │   User browser ──── HTTP ────────┘             │
+          │   User device ────── WebSocket ──┘             │
+          │   Feishu group/DM ── Feishu WS ──┘             │
           └────────────────────────────────────────────────┘
 ```
 
@@ -406,22 +427,22 @@ HTTPS_PROXY=http://your-proxy:port
 ```bash
 git clone <repo> parsar && cd parsar
 
-# 1. 配置 .env
+# 1. Configure .env
 cp .env.example .env
-vim .env   # 填入飞书凭证 + master key + PARSAR_HOST_IP + Bot Open ID
+vim .env   # fill in Feishu credentials + master key + PARSAR_HOST_IP + Bot Open ID
 
-# 2. 构建镜像
+# 2. Build images
 sudo docker build -t parsar:local .
 sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
 
-# 3. 启动
+# 3. Bring it up
 sudo docker compose -f docker-compose.local.yml up -d
 
-# 4. 验证
+# 4. Verify
 curl http://YOUR_IP:18080/healthz   # 200
 curl http://YOUR_IP:18080/readyz    # 200
 
-# 5. 浏览器 http://YOUR_IP:18080 → 飞书登录(首人=Owner)
-#    → 创建 Agent(sandbox 模式) → 绑定默认 Bot
-#    → 飞书群 @Bot 对话 / 接入设备 → 跑通
+# 5. Browser http://YOUR_IP:18080 → Feishu login (first user = Owner)
+#    → create Agent (sandbox mode) → bind default Bot
+#    → @Bot in a Feishu group / pair a device → verified
 ```

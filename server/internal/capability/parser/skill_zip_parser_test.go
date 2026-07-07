@@ -151,7 +151,7 @@ func TestParseSkillZip_DirEntriesNotReportedAsIgnored(t *testing.T) {
 	// Exactly one ignored-files warning, listing only the genuine stray.
 	var ignoredWarning string
 	for _, w := range res.Warnings {
-		if strings.HasPrefix(w, "忽略了 ") {
+		if strings.HasPrefix(w, "ignored ") {
 			ignoredWarning = w
 			break
 		}
@@ -169,7 +169,7 @@ func TestParseSkillZip_DirEntriesNotReportedAsIgnored(t *testing.T) {
 	if !strings.Contains(ignoredWarning, ".claude-plugin/plugin.json") {
 		t.Fatalf("expected .claude-plugin/plugin.json in ignored list, got %q", ignoredWarning)
 	}
-	if !strings.Contains(ignoredWarning, "忽略了 1 个文件") {
+	if !strings.Contains(ignoredWarning, "ignored 1 files") {
 		t.Fatalf("expected exactly 1 ignored file, got %q", ignoredWarning)
 	}
 }
@@ -253,7 +253,7 @@ func TestParseSkillZip_IgnoresUnknownDirs_WithWarning(t *testing.T) {
 	}
 	hasIgnoreWarn := false
 	for _, w := range res.Warnings {
-		if strings.Contains(w, "忽略了") && strings.Contains(w, "assets/screenshot.png") {
+		if strings.Contains(w, "ignored") && strings.Contains(w, "assets/screenshot.png") {
 			hasIgnoreWarn = true
 		}
 	}

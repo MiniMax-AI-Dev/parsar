@@ -103,12 +103,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.end_headers()
             return
-        if "@后端Agent" not in payload.get("trigger_message_content", ""):
+        if "@backend-agent" not in payload.get("trigger_message_content", ""):
             self.send_response(400)
             self.end_headers()
             return
         response = {
-            "content": "HTTP Agent 完成了 Feishu Gateway 验证，准备回发飞书。",
+            "content": "HTTP Agent completed the Feishu Gateway validation, ready to send back to Feishu.",
             "usage": {
                 "provider": "mock-http-agent",
                 "model": "http-agent-v1",
@@ -225,7 +225,7 @@ cat > "$feishu_event_payload" <<'JSON'
       "chat_id": "oc_feishu_e2e",
       "chat_type": "group",
       "thread_id": "om_feishu_thread",
-      "content": "{\"text\":\"@后端Agent 通过 Feishu Gateway 跑一次 HTTP connector\"}"
+      "content": "{\"text\":\"@backend-agent run one HTTP connector via Feishu Gateway\"}"
     },
     "sender": {
       "sender_id": {"open_id": "ou_feishu_admin"},
@@ -317,7 +317,7 @@ assert outbound_message["metadata"].get("source") == "http_agent", outbound_mess
 delivery = next(delivery for delivery in outbound["deliveries"] if delivery["message_id"] == output_message_id)
 assert delivery["gateway"] == "feishu", delivery
 assert delivery["external_chat_id"] == "oc_feishu_e2e", delivery
-assert "HTTP Agent 完成了 Feishu Gateway 验证" in delivery["text"], delivery
+assert "HTTP Agent completed the Feishu Gateway validation" in delivery["text"], delivery
 
 print("Feishu Gateway inbound + HTTP runner + outbound evidence passed")
 PY
@@ -347,7 +347,7 @@ assert payload["receive_id_type"] == "chat_id", payload
 assert payload["receive_id"] == "oc_feishu_e2e", payload
 assert payload["msg_type"] == "text", payload
 content = json.loads(payload["content"])
-assert "HTTP Agent 完成了 Feishu Gateway 验证" in content["text"], payload
+assert "HTTP Agent completed the Feishu Gateway validation" in content["text"], payload
 
 output_message_id = run["output_message_id"]
 assert any(delivery["message_id"] == output_message_id for delivery in drain["deliveries"]), drain

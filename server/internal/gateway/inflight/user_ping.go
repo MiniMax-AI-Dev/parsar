@@ -29,20 +29,20 @@ import (
 
 // Per-scenario ping messages. Exported so tests can reference them.
 const (
-	UserPingPermission          = "有操作需要你审批 ↑"
-	UserPingCredentialForm      = "有信息需要你补充 ↑"
-	UserPingRunFailed           = "任务失败,点击卡片查看详情"
-	UserPingPromptForUserChoice = "有问题需要你确认 ↑"
+	UserPingPermission          = "There's an action for you to approve ↑"
+	UserPingCredentialForm      = "Some info is needed from you ↑"
+	UserPingRunFailed           = "Task failed. Tap the card for details."
+	UserPingPromptForUserChoice = "There's a question for you to confirm ↑"
 )
 
 // terminalPingMessage matches DoneCard footer wording so the user
-// sees the same "耗时 17s" both inside and outside the card.
+// sees the same "took 17s" both inside and outside the card.
 func terminalPingMessage(elapsed time.Duration) string {
-	return fmt.Sprintf("任务已完成 ✓ 耗时 %s", gateway.FormatElapsed(elapsed))
+	return fmt.Sprintf("Task complete ✓ took %s", gateway.FormatElapsed(elapsed))
 }
 
 // buildPingText assembles the at-mention text body. Empty openID
-// degrades to message verbatim. "用户" is the readable fallback when
+// degrades to message verbatim. "user" is the readable fallback when
 // the bot can't resolve a display name (cross-tenant chats).
 func buildPingText(openID, message string) string {
 	openID = strings.TrimSpace(openID)
@@ -50,7 +50,7 @@ func buildPingText(openID, message string) string {
 	if openID == "" {
 		return message
 	}
-	return fmt.Sprintf(`<at user_id="%s">用户</at> %s`, openID, message)
+	return fmt.Sprintf(`<at user_id="%s">user</at> %s`, openID, message)
 }
 
 // sendUserPingText fires the at-mention follow-up after a card was

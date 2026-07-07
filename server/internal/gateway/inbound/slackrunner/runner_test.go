@@ -396,7 +396,7 @@ func newRunnerWithStore(t *testing.T, st router.Store) *Runner {
 
 // TestHandleEvent_ContinuesActivatedThread: a non-@ reply in a thread the bot was
 // already activated in (history present) skips the mention gate and enters
-// routing — aligning Slack with the Feishu 话题续聊 rule.
+// routing — aligning Slack with the Feishu thread-continuation rule.
 func TestHandleEvent_ContinuesActivatedThread(t *testing.T) {
 	st := &threadHistoryStore{hasHistory: true}
 	r := newRunnerWithStore(t, st)

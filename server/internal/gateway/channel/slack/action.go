@@ -29,7 +29,7 @@ import (
 
 // ackReceived mirrors Feishu's default toast so an unrouted click looks the
 // same to the user across platforms.
-const ackReceived = "操作已收到"
+const ackReceived = "Received"
 
 // slackActionKinds maps a Slack block action_id to the neutral CardActionKind.
 // Keys are identical to feishu/action.go's feishuActionKinds so both platforms

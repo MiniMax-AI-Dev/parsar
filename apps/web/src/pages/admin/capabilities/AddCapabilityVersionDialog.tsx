@@ -132,7 +132,7 @@ export function AddCapabilityVersionDialog({
   const trimmedName = name.trim()
   const trimmedVersion = version.trim()
   // Version-uniqueness guard: the user is always required to bump the version
-  // even when only name/description changed (see plan: "永远要求填新版本号").
+  // even when only name/description changed (see plan: "always require a new version").
   const versionConflict =
     !!trimmedVersion && !!latestVersion && trimmedVersion === latestVersion.version
   const nameError =

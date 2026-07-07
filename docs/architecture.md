@@ -1,68 +1,79 @@
-# Parsar 架构基线
+# Parsar architecture baseline
 
-Parsar 是面向团队的开源 Agent 协作控制面。
+Parsar is an open-source Agent collaboration control plane for teams.
 
 ```text
-Parsar = 团队协作控制面 + Agent Connector 层
+Parsar = team collaboration control plane + Agent Connector layer
 ```
 
-> 工程规则(worktree、强制检查、目录污染等)见 [`AGENTS.md`](../AGENTS.md);
-> 这里只记录**架构边界**:协议、连接器、工具链选择。
+> Engineering rules (worktrees, mandatory checks, directory hygiene, etc.) live
+> in [`AGENTS.md`](../AGENTS.md); this document only records the **architectural
+> boundaries**: protocols, connectors, and toolchain choices.
 
-## 技术栈
+## Tech stack
 
-- Server: Go + Chi。
-- Database: 只用 PostgreSQL。
-- Web: Vite + React SPA。
-- Agent runtime: `parsar-daemon`(Go),与用户设备或平台托管沙盒配对。
-- API: OpenAPI-first(契约见 [`openapi/openapi.yaml`](openapi/openapi.yaml))。
-- 部署:self-host 优先,默认 Docker Compose = Parsar + Postgres。
-- DB 工具链:goose 管 migration,sqlc 从 checked-in SQL 生成 typed query,
-  pgx / pgxpool 做运行时连接和执行。
+- Server: Go + Chi.
+- Database: PostgreSQL only.
+- Web: Vite + React SPA.
+- Agent runtime: `parsar-daemon` (Go), paired with a user device or with a
+  platform-hosted sandbox.
+- API: OpenAPI-first (contract in [`openapi/openapi.yaml`](openapi/openapi.yaml)).
+- Deployment: self-host first; the default Docker Compose = Parsar + Postgres.
+- DB toolchain: goose manages migrations, sqlc generates typed queries from
+  checked-in SQL, pgx / pgxpool are the runtime connection and execution layer.
 
-Parsar 不在 core server 路径上使用 GORM 或其它 ORM。SQL 是 review 契约的一部分:
-migrations 定义 schema、query 文件定义数据访问面、生成的 Go 代码让 call site 保持 typed。
+Parsar does not use GORM or any other ORM on the core server path. SQL is part
+of the review contract: migrations define the schema, query files define the
+data-access surface, and generated Go keeps call sites typed.
 
-成熟的外部能力能用就用 —— Parsar 拥有协作控制面、权限模型、Agent 编排记录、
-连接器边界;不重造 migration engine、ORM、浏览器测试框架、运行时工具。
+Reuse mature external capabilities where possible. Parsar owns the
+collaboration control plane, permission model, Agent orchestration records,
+and connector boundary; we do not reinvent migration engines, ORMs, browser
+test frameworks, or runtime tooling.
 
-## Agent 执行接入路径
+## Agent execution entry paths
 
-- **Agent Daemon Connector**(`connector_type=agent_daemon`)—— 当前 CLI Agent 的统一路径。
-  `parsar-daemon` 内部 adapter 由 `project_agents.config.agent_kind` 选择
-  (`opencode`、`claude_code`、未来的其它 kind)。
-- **HTTP Agent Connector** —— 给自带 HTTP 接口、由 HTTP runner 认领的 Agent。
+- **Agent Daemon Connector** (`connector_type=agent_daemon`) — the unified path
+  for CLI Agents today. The adapter inside `parsar-daemon` is chosen by
+  `project_agents.config.agent_kind` (`opencode`, `claude_code`, and any future
+  kinds).
+- **HTTP Agent Connector** — for Agents that expose their own HTTP interface
+  and are claimed by the HTTP runner.
 
-Agent Daemon 的 run 通过 streaming WebSocket 投递到**显式绑定**的 runtime
-(`project_agents.runtime_id`);默认路径**不再**自动 Acquire sandbox 兜底。
+Runs on the Agent Daemon path are dispatched over a streaming WebSocket to the
+**explicitly bound** runtime (`project_agents.runtime_id`); the default path
+**no longer** falls back to acquiring a sandbox on demand.
 
-## 协议边界
+## Protocol boundaries
 
 ```text
 Server ↔ parsar-daemon:
-  Agent Daemon WebSocket(pairing → heartbeat → run dispatch)
+  Agent Daemon WebSocket (pairing → heartbeat → run dispatch)
 
-Agent Connector 层:
-  Agent Daemon Connector  (opencode / claude_code / 未来 adapter)
+Agent Connector layer:
+  Agent Daemon Connector  (opencode / claude_code / future adapters)
   HTTP Agent Connector
-  ACP Connector(后续)
-  A2A Connector(后续)
+  ACP Connector (planned)
+  A2A Connector (planned)
 
-Agent Runtime ↔ 工具:
+Agent runtime ↔ tools:
   MCP
 ```
 
-## DB 工具链边界
+## DB toolchain boundaries
 
-- `goose` 管 migration 顺序和 schema 版本号。`server/cmd/migrate` 只是 goose 的薄包装,
-  让脚本保持一条稳定命令。
-- `sqlc` 把 `server/internal/db/queries/` 下 checked-in SQL 编译成
-  `server/internal/db/sqlc/` 下的 typed Go 方法。
-- `pgx` / `pgxpool` 是应用的连接和执行边界。`database/sql` 只在 goose 包装边界出现,
-  因为 goose 走 `*sql.DB`。
+- `goose` owns migration ordering and schema versioning. `server/cmd/migrate`
+  is a thin wrapper around goose that keeps scripts on one stable command.
+- `sqlc` compiles the checked-in SQL under `server/internal/db/queries/` into
+  typed Go methods under `server/internal/db/sqlc/`.
+- `pgx` / `pgxpool` are the application's connection and execution boundary.
+  `database/sql` appears only at the goose wrapper boundary, because goose
+  operates on a `*sql.DB`.
 
-## 产品验证边界
+## Product verification boundary
 
-产品 E2E 用 **Playwright** 作为核心质量门 —— 它从用户视角验证 Parsar 自己的
-web / API 行为。Agent runtime 内的浏览器自动化是另一回事:`browser-use` 之类的工具
-可以后续评估作为 Agent 的浏览器能力,但**不**属于当前核心质量门。
+Product E2E uses **Playwright** as the core quality gate — it validates
+Parsar's own web / API behaviour from the user's point of view. Browser
+automation *inside* an Agent runtime is a separate concern: tools like
+`browser-use` may later be evaluated as a browser capability for Agents, but
+they are **not** part of the current core quality gate.

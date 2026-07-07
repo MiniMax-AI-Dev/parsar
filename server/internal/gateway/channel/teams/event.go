@@ -5,7 +5,7 @@
 // self-echo and mention gates are the runner's policy (mirroring Slack/Discord).
 //
 // The two facts the mention gate (gateway.ShouldSkipGroupWithoutMention) needs
-// are filled here so the "每次都要@" pitfall is handled centrally rather than
+// are filled here so the "must @-mention every time" pitfall is handled centrally rather than
 // re-implemented per platform:
 //
 //   - ChatType: a Teams "personal" conversation maps to "dm" (no @mention

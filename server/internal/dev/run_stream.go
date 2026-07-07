@@ -308,7 +308,7 @@ func streamConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) ht
 // reason.
 //
 // The "run was cancelled..." reason carries a stable "run_cancelled:"
-// prefix that the web UI matches to suppress the red "流式输出中断"
+// prefix that the web UI matches to suppress the red "Stream output interrupted"
 // banner. See useAgentRunStream.onError in apps/web/src/lib/api-conversations.ts —
 // don't reword without updating the frontend matcher.
 func writeStreamHangError(w http.ResponseWriter, flusher http.Flusher, ctx context.Context, runtimeStore RuntimeStore, runID string) {

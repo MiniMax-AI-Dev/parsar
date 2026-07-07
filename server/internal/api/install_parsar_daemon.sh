@@ -121,7 +121,7 @@ ERR
 fi
 
 # --- One-line connect mode (north star) -------------------------------
-# When the Parsar web "接入新设备 / copy one command" button mints a
+# When the Parsar web "Pair new device / copy one command" button mints a
 # command, it pipes this script with the pairing env vars set:
 #
 #   curl -fsSL .../install.sh \

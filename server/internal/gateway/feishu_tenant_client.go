@@ -835,7 +835,7 @@ func BuildFeishuNoticeCardContent(title, body string, color NoticeColor) (string
 }
 
 // BuildFeishuErrorCardContent wraps BuildErrorCard. detailURL=""
-// suppresses the "查看本轮详情" link when no public URL is configured.
+// suppresses the "View this round" link when no public URL is configured.
 // rawError is the un-mapped error from the run.failed event; guestHint
 // is the unregistered-sender register prompt — see BuildErrorCard for
 // when they surface.
@@ -871,7 +871,7 @@ func BuildFeishuPromptForUserChoiceDoneCardContent(title string, answers []Promp
 }
 
 // BuildFeishuPromptForUserChoiceTimeoutCardContent wraps the
-// grey "已超时" card the outbound driver patches the original message
+// grey "Timed out" card the outbound driver patches the original message
 // into when the daemon-side watchdog (or the server tick belt) fires.
 func BuildFeishuPromptForUserChoiceTimeoutCardContent(title string, questions []PromptForUserChoiceCardQuestion) (string, error) {
 	return MarshalCard(BuildPromptForUserChoiceTimeoutCard(title, questions))

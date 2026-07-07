@@ -161,7 +161,7 @@ func TestDecodeAction_FoldsChoiceStateValues(t *testing.T) {
     {"action_id":"ask_user_choice_submit","block_id":"choice_submit","type":"button","value":"req-7"}
   ],
   "state":{"values":{
-    "choice_0":{"ask_user_choice_pick":{"type":"static_select","selected_option":{"value":"继续之前的工作"}}},
+    "choice_0":{"ask_user_choice_pick":{"type":"static_select","selected_option":{"value":"continue previous work"}}},
     "choice_1":{"ask_user_choice_pick":{"type":"multi_static_select","selected_options":[{"value":"A"},{"value":"B"}]}}
   }}
 }`
@@ -175,8 +175,8 @@ func TestDecodeAction_FoldsChoiceStateValues(t *testing.T) {
 	if action.Values["request_id"] != "req-7" {
 		t.Errorf("Values[request_id] = %q, want req-7", action.Values["request_id"])
 	}
-	if got, ok := action.FormValues["q0"].(string); !ok || got != "继续之前的工作" {
-		t.Errorf("FormValues[q0] = %v, want \"继续之前的工作\"", action.FormValues["q0"])
+	if got, ok := action.FormValues["q0"].(string); !ok || got != "continue previous work" {
+		t.Errorf("FormValues[q0] = %v, want \"continue previous work\"", action.FormValues["q0"])
 	}
 	multi, ok := action.FormValues["q1"].([]any)
 	if !ok || len(multi) != 2 || multi[0] != "A" || multi[1] != "B" {
@@ -282,7 +282,7 @@ func TestHandleAction_PickIsSilentNoOp(t *testing.T) {
 }
 
 func TestHandleAction_RoutesThroughRouter(t *testing.T) {
-	router := &fakeRouter{ack: channel.ActionAck{ToastKind: "success", ToastContent: "已允许"}}
+	router := &fakeRouter{ack: channel.ActionAck{ToastKind: "success", ToastContent: "Allowed"}}
 	res, err := channelWithRouter(router).HandleAction(context.Background(), []byte(blockActionsPayload))
 	if err != nil {
 		t.Fatalf("HandleAction: %v", err)
@@ -302,7 +302,7 @@ func TestHandleAction_RoutesThroughRouter(t *testing.T) {
 	if err := json.Unmarshal(res.Ack, &resp); err != nil {
 		t.Fatalf("ack not JSON: %v", err)
 	}
-	if resp.Text != "已允许" {
+	if resp.Text != "Allowed" {
 		t.Errorf("ack text = %q, want the router toast", resp.Text)
 	}
 }
@@ -382,7 +382,7 @@ func TestRenderSlackAck_RejectsMalformedReplaceCard(t *testing.T) {
 // blocks — so the source card is swapped for the verdict/summary card in place.
 func TestRenderSlackAck_ResultRendersReplacement(t *testing.T) {
 	out, err := renderSlackAck(channel.ActionAck{
-		ToastContent: "已允许", // ignored once Result is set
+		ToastContent: "Allowed", // ignored once Result is set
 		Result: &channel.ActionResultCard{
 			Kind:     channel.CardActionPermissionAllow,
 			Title:    "Demo Agent",
@@ -431,20 +431,20 @@ func TestRenderActionResultCard_Variants(t *testing.T) {
 		},
 		{
 			name:     "credential rejected",
-			in:       channel.ActionResultCard{Kind: channel.CardActionCredentialSubmit, Title: "A", Rejected: true, RejectReason: "凭据只能由发起人本人填写"},
-			wantText: "凭据只能由发起人本人填写",
+			in:       channel.ActionResultCard{Kind: channel.CardActionCredentialSubmit, Title: "A", Rejected: true, RejectReason: "Credentials can only be submitted by the requester"},
+			wantText: "Credentials can only be submitted by the requester",
 			blockMin: 2,
 		},
 		{
 			name:     "credential success",
-			in:       channel.ActionResultCard{Kind: channel.CardActionCredentialSubmit, Title: "A", Summary: "已收到，正在继续会话"},
-			wantText: "已收到",
+			in:       channel.ActionResultCard{Kind: channel.CardActionCredentialSubmit, Title: "A", Summary: "Received, resuming the conversation"},
+			wantText: "Received",
 			blockMin: 2,
 		},
 		{
 			name:     "user choice summary",
-			in:       channel.ActionResultCard{Kind: channel.CardActionUserChoiceSubmit, Title: "A", Summary: "已记录: 选项A"},
-			wantText: "已记录",
+			in:       channel.ActionResultCard{Kind: channel.CardActionUserChoiceSubmit, Title: "A", Summary: "Recorded: Option A"},
+			wantText: "Recorded",
 			blockMin: 2,
 		},
 	}

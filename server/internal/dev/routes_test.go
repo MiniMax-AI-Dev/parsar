@@ -503,7 +503,7 @@ type feishuSecretRouteStore struct {
 	userID  string
 	member  bool
 	// threadHistory drives HasFeishuThreadInboundHistory. Default false;
-	// tests covering 话题续聊 set true to assert the gate lets follow-ups
+	// tests covering thread follow-up set true to assert the gate lets follow-ups
 	// through without an explicit @mention.
 	threadHistory bool
 }
@@ -860,7 +860,7 @@ func TestGatewayInboundReturnsScheduledRuns(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
-	body := bytes.NewBufferString(`{"gateway":"feishu","conversation":"demo-group","sender":"admin@example.com","text":"@产品Agent @后端Agent 看一下"}`)
+	body := bytes.NewBufferString(`{"gateway":"feishu","conversation":"demo-group","sender":"admin@example.com","text":"@product-agent @backend-agent take a look"}`)
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -878,7 +878,7 @@ func TestGatewayInboundPassesSourceAndGateway(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, capturing)
 
-	body := bytes.NewBufferString(`{"gateway":"feishu","conversation":"demo-group","sender":"admin@example.com","text":"@后端Agent 看一下"}`)
+	body := bytes.NewBufferString(`{"gateway":"feishu","conversation":"demo-group","sender":"admin@example.com","text":"@backend-agent take a look"}`)
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -895,7 +895,7 @@ func TestGatewayInboundPassesExternalIDs(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, capturing)
 
-	body := bytes.NewBufferString(`{"gateway":"feishu","external_chat_id":"oc_demo","external_user_id":"ou_demo","external_thread_id":"om_thread","external_message_id":"om_message","sender":"admin@example.com","text":"@后端Agent 看一下"}`)
+	body := bytes.NewBufferString(`{"gateway":"feishu","external_chat_id":"oc_demo","external_user_id":"ou_demo","external_thread_id":"om_thread","external_message_id":"om_message","sender":"admin@example.com","text":"@backend-agent take a look"}`)
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -912,14 +912,14 @@ func TestGatewayInboundNormalizesAdapterPayload(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, capturing)
 
-	body := bytes.NewBufferString(`{"gateway":"feishu","message":{"id":"om_message","text":"@后端Agent 看一下"},"actor":{"id":"ou_demo","email":"admin@example.com"},"conversation_ref":{"id":"oc_demo","title":"demo-group","thread_id":"om_thread"}}`)
+	body := bytes.NewBufferString(`{"gateway":"feishu","message":{"id":"om_message","text":"@backend-agent take a look"},"actor":{"id":"ou_demo","email":"admin@example.com"},"conversation_ref":{"id":"oc_demo","title":"demo-group","thread_id":"om_thread"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
 	}
-	if capturing.lastInput.Text != "@后端Agent 看一下" || capturing.lastInput.ExternalMessageID != "om_message" || capturing.lastInput.ExternalChatID != "oc_demo" || capturing.lastInput.ExternalUserID != "ou_demo" {
+	if capturing.lastInput.Text != "@backend-agent take a look" || capturing.lastInput.ExternalMessageID != "om_message" || capturing.lastInput.ExternalChatID != "oc_demo" || capturing.lastInput.ExternalUserID != "ou_demo" {
 		t.Fatalf("expected normalized adapter payload, got %+v", capturing.lastInput)
 	}
 }
@@ -936,7 +936,7 @@ func TestFeishuMessageEventNormalizesToGatewayInbound(t *testing.T) {
 				"chat_id": "oc_demo",
 				"chat_type": "group",
 				"thread_id": "om_thread",
-				"content": "{\"text\":\"@后端Agent 看一下 API\"}"
+				"content": "{\"text\":\"@backend-agent take a look at the API\"}"
 			},
 			"sender": {
 				"sender_id": {"open_id": "ou_demo"},
@@ -960,7 +960,7 @@ func TestFeishuMessageEventNormalizesToGatewayInbound(t *testing.T) {
 	if input.ExternalChatID != "oc_demo" || input.ExternalThreadID != "om_thread" || input.ExternalMessageID != "om_message" || input.ExternalUserID != "ou_demo" {
 		t.Fatalf("expected Feishu external ids, got %+v", input)
 	}
-	if input.Text != "@后端Agent 看一下 API" || len(input.Mentions) != 1 || input.Mentions[0] != "@后端Agent" {
+	if input.Text != "@backend-agent take a look at the API" || len(input.Mentions) != 1 || input.Mentions[0] != "@backend-agent" {
 		t.Fatalf("expected content text JSON to become mention text, got %+v", input)
 	}
 }
@@ -972,7 +972,7 @@ func TestFeishuMessageEventUsesUserIDFallback(t *testing.T) {
 
 	body := bytes.NewBufferString(`{
 		"event": {
-			"message": {"message_id": "om_message", "chat_id": "oc_demo", "chat_type": "group", "content": "{\"text\":\"@后端Agent 看一下\"}"},
+			"message": {"message_id": "om_message", "chat_id": "oc_demo", "chat_type": "group", "content": "{\"text\":\"@backend-agent take a look\"}"},
 			"sender": {"sender_id": {"user_id": "user_demo"}}
 		}
 	}`)
@@ -999,7 +999,7 @@ func TestFeishuWebhookRoutesByAppIDToTargetAgent(t *testing.T) {
 				"message_id": "om_feishu_once",
 				"chat_id": "oc_feishu_chat",
 				"chat_type": "p2p",
-				"content": "{\"text\":\"不用显式 @Parsar 内部 Agent 也应路由\"}"
+				"content": "{\"text\":\"internal Agent should be routed even without an explicit @Parsar mention\"}"
 			},
 			"sender": {
 				"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"},
@@ -1019,7 +1019,7 @@ func TestFeishuWebhookRoutesByAppIDToTargetAgent(t *testing.T) {
 	if capturing.lastInput.ExternalChatID != "oc_feishu_chat" || capturing.lastInput.ExternalMessageID != "om_feishu_once" || capturing.lastInput.ExternalUserID != "on_test_user" {
 		t.Fatalf("expected feishu external ids, got %+v", capturing.lastInput)
 	}
-	if capturing.lastInput.Text != "不用显式 @Parsar 内部 Agent 也应路由" {
+	if capturing.lastInput.Text != "internal Agent should be routed even without an explicit @Parsar mention" {
 		t.Fatalf("expected normalized text, got %q", capturing.lastInput.Text)
 	}
 }
@@ -1049,7 +1049,7 @@ func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDKnown(t *testing
 				"message_id": "om_no_mention",
 				"chat_id": "oc_group",
 				"chat_type": "group",
-				"content": "{\"text\":\"群里普通消息不该触发\"}"
+				"content": "{\"text\":\"a normal group message should not trigger\"}"
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
 		}
@@ -1093,7 +1093,7 @@ func TestFeishuWebhookGroupMentioningBotTriggersWhenBotOpenIDKnown(t *testing.T)
 				"message_id": "om_with_mention",
 				"chat_id": "oc_group",
 				"chat_type": "group",
-				"content": "{\"text\":\"@Bot 请处理\"}",
+				"content": "{\"text\":\"@Bot please handle this\"}",
 				"mentions": [{"id": {"open_id": "ou_bot_self"}}]
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
@@ -1112,7 +1112,7 @@ func TestFeishuWebhookGroupMentioningBotTriggersWhenBotOpenIDKnown(t *testing.T)
 
 // Group chat without bot_open_id configured: the gate cannot prove the
 // bot was @mentioned, so it errs on the side of silence — matches the
-// "在群聊里，只有单独 @ 这个机器人的消息，机器人才会进行回复" UX.
+// "In a group chat, the bot only replies to messages that specifically @-mention it" UX.
 // Without this guard, the bot would respond to every group message and
 // spam the channel.
 func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDMissing(t *testing.T) {
@@ -1141,7 +1141,7 @@ func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDMissing(t *testi
 				"message_id": "om_no_bot_open_id",
 				"chat_id": "oc_group",
 				"chat_type": "group",
-				"content": "{\"text\":\"群里普通消息\"}"
+				"content": "{\"text\":\"a normal group message\"}"
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
 		}
@@ -1187,7 +1187,7 @@ func TestFeishuWebhookGroupMentioningOtherUserIgnored(t *testing.T) {
 				"message_id": "om_mention_other",
 				"chat_id": "oc_group",
 				"chat_type": "group",
-				"content": "{\"text\":\"@Alice 一起看下\"}",
+				"content": "{\"text\":\"@Alice let's check this together\"}",
 				"mentions": [{"id": {"open_id": "ou_alice"}}]
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
@@ -1207,10 +1207,10 @@ func TestFeishuWebhookGroupMentioningOtherUserIgnored(t *testing.T) {
 	}
 }
 
-// Thread follow-up: a group message inside a 话题 where the bot has
+// Thread follow-up: a group message inside a thread where the bot has
 // previously stored an inbound flows through without requiring an
-// explicit @mention. Matches the "如果已经开启一个飞书话题,在同一个
-// 话题下,用户不进行艾特,也能够进行回复" UX.
+// explicit @mention. Matches the "If a Feishu thread is already open,
+// the user can reply within the same thread without @-mentioning to get a response" UX.
 func TestFeishuWebhookGroupThreadFollowupPassesWithoutMention(t *testing.T) {
 	fs := &feishuSecretRouteStore{
 		appID:         "cli_group_bot",
@@ -1238,7 +1238,7 @@ func TestFeishuWebhookGroupThreadFollowupPassesWithoutMention(t *testing.T) {
 				"chat_id": "oc_group",
 				"chat_type": "group",
 				"thread_id": "omt_thread_1",
-				"content": "{\"text\":\"你还在吗\"}"
+				"content": "{\"text\":\"are you still there\"}"
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
 		}
@@ -1254,7 +1254,7 @@ func TestFeishuWebhookGroupThreadFollowupPassesWithoutMention(t *testing.T) {
 	}
 }
 
-// First message in a 话题 with no prior bot participation and no
+// First message in a thread with no prior bot participation and no
 // @mention: dropped. The thread continuation rule only kicks in once
 // the bot has actually responded once.
 func TestFeishuWebhookGroupThreadWithoutHistoryAndMentionIgnored(t *testing.T) {
@@ -1284,7 +1284,7 @@ func TestFeishuWebhookGroupThreadWithoutHistoryAndMentionIgnored(t *testing.T) {
 				"chat_id": "oc_group",
 				"chat_type": "group",
 				"thread_id": "omt_thread_new",
-				"content": "{\"text\":\"新话题首条不带 @\"}"
+				"content": "{\"text\":\"first message of a new thread without @\"}"
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
 		}
@@ -1301,7 +1301,7 @@ func TestFeishuWebhookGroupThreadWithoutHistoryAndMentionIgnored(t *testing.T) {
 }
 
 // P2P direct message: always flows through regardless of mention or
-// bot_open_id configuration — matches the "1 对 1 私聊时,无需艾特" UX.
+// bot_open_id configuration — matches the "In 1-on-1 chats, @-mention is not required" UX.
 func TestFeishuWebhookP2PAlwaysPassesWithoutMention(t *testing.T) {
 	fs := &feishuSecretRouteStore{
 		appID:  "cli_group_bot",
@@ -1328,7 +1328,7 @@ func TestFeishuWebhookP2PAlwaysPassesWithoutMention(t *testing.T) {
 				"message_id": "om_dm",
 				"chat_id": "oc_p2p",
 				"chat_type": "p2p",
-				"content": "{\"text\":\"帮我查询上海天气\"}"
+				"content": "{\"text\":\"help me check the Shanghai weather\"}"
 			},
 			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
 		}
@@ -1613,7 +1613,7 @@ func TestFeishuMessageEventMapsUnknownStoreErrors(t *testing.T) {
 			r := chi.NewRouter()
 			RegisterRoutesWithStore(r, errorCreateMessageStore{err: tc.err})
 
-			body := bytes.NewBufferString(`{"event":{"message":{"message_id":"om_message","chat_id":"oc_demo","chat_type":"group","content":"{\"text\":\"@后端Agent 看一下\"}"},"sender":{"sender_id":{"open_id":"ou_demo"}}}}`)
+			body := bytes.NewBufferString(`{"event":{"message":{"message_id":"om_message","chat_id":"oc_demo","chat_type":"group","content":"{\"text\":\"@backend-agent take a look\"}"},"sender":{"sender_id":{"open_id":"ou_demo"}}}}`)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 			res := httptest.NewRecorder()
 			r.ServeHTTP(res, req)
@@ -1628,7 +1628,7 @@ func TestFeishuMessageEventMapsInternalStoreError(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, errorCreateMessageStore{err: context.Canceled})
 
-	body := bytes.NewBufferString(`{"event":{"message":{"message_id":"om_message","chat_id":"oc_demo","chat_type":"group","content":"{\"text\":\"@后端Agent 看一下\"}"},"sender":{"sender_id":{"open_id":"ou_demo"}}}}`)
+	body := bytes.NewBufferString(`{"event":{"message":{"message_id":"om_message","chat_id":"oc_demo","chat_type":"group","content":"{\"text\":\"@backend-agent take a look\"}"},"sender":{"sender_id":{"open_id":"ou_demo"}}}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -1642,7 +1642,7 @@ func TestFeishuMessageEventVerifiesToken(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, capturing, WithFeishuWebhookSecurity(false, "test-token", ""))
 
-	body := bytes.NewBufferString(`{"token":"test-token","event":{"message":{"message_id":"om_message","chat_id":"oc_demo","chat_type":"group","content":"{\"text\":\"@后端Agent 看一下\"}"},"sender":{"sender_id":{"open_id":"ou_demo"}}}}`)
+	body := bytes.NewBufferString(`{"token":"test-token","event":{"message":{"message_id":"om_message","chat_id":"oc_demo","chat_type":"group","content":"{\"text\":\"@backend-agent take a look\"}"},"sender":{"sender_id":{"open_id":"ou_demo"}}}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -1733,7 +1733,7 @@ func TestWorkspaceAgentsRouteReturnsEnabledAgents(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), "产品Agent") || !strings.Contains(res.Body.String(), "后端Agent") || !strings.Contains(res.Body.String(), "测试Agent") {
+	if !strings.Contains(res.Body.String(), "Product Agent") || !strings.Contains(res.Body.String(), "Backend Agent") || !strings.Contains(res.Body.String(), "Test Agent") {
 		t.Fatalf("expected three enabled agents, got %s", res.Body.String())
 	}
 }
@@ -1862,7 +1862,7 @@ func TestWorkspaceAgentRunsRoutePassesStatusFilter(t *testing.T) {
 	}
 }
 
-// The admin "进行中" tab unions running+queued in one round-trip via
+// The admin "In progress" tab unions running+queued in one round-trip via
 // comma-separated status.
 func TestWorkspaceAgentRunsRouteAcceptsMultipleStatuses(t *testing.T) {
 	r := chi.NewRouter()
@@ -1911,7 +1911,7 @@ func TestWorkspaceAgentRunsRouteReturnsPaginationEnvelope(t *testing.T) {
 	}
 }
 
-// Agent-detail "近 N 天表现" panel: handler should return the metrics
+// Agent-detail "Last N days performance" panel: handler should return the metrics
 // snapshot as-is and accept a `?days=` override. Stub returns a fixed
 // shape so the route test pins the wire contract.
 func TestWorkspaceAgentMetricsRouteReturnsSnapshot(t *testing.T) {
@@ -2553,7 +2553,7 @@ func (stubRuntimeStore) CompleteAgentRun(ctx context.Context, input store.Comple
 		MessageID:       "output-message-1",
 		Status:          "completed",
 		ChildRunIDs:     []string{"child-run-1"},
-		SkippedMentions: []store.SkippedAgentMention{{Mention: "@后端Agent", AgentID: "agent-2", Reason: "self_trigger"}},
+		SkippedMentions: []store.SkippedAgentMention{{Mention: "@backend-agent", AgentID: "agent-2", Reason: "self_trigger"}},
 		StartedAt:       time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC),
 		FinishedAt:      time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC),
 		Usage:           usage,
@@ -2576,11 +2576,11 @@ func (s stubRuntimeStore) GetHTTPAgentRunInvocation(ctx context.Context, runID s
 		WorkspaceID:           "00000000-0000-0000-0000-000000000002",
 		ConversationID:        testConversationID,
 		AgentID:               "00000000-0000-0000-0000-000000000007",
-		AgentName:             "后端Agent",
+		AgentName:             "Backend Agent",
 		AgentSlug:             "backend-agent",
 		ConnectorType:         "http",
 		Status:                "queued",
-		TriggerMessageContent: "@后端Agent 看一下 API",
+		TriggerMessageContent: "@backend-agent take a look at the API",
 		AgentConfig:           map[string]any{"profile": map[string]any{"skills": []any{"go"}}, "endpoint": s.httpEndpoint},
 	}, nil
 }
@@ -2646,7 +2646,7 @@ func (stubRuntimeStore) ConfigureDevAgentConnector(ctx context.Context, input st
 	}
 	return store.ConfigureDevAgentConnectorResult{
 		AgentID:       input.AgentID,
-		Name:          "后端Agent",
+		Name:          "Backend Agent",
 		Slug:          "backend-agent",
 		ConnectorType: input.ConnectorType,
 		AgentConfig:   config,
@@ -2665,7 +2665,7 @@ func (stubRuntimeStore) ConfigureAgentProfile(ctx context.Context, input store.C
 	}
 	return store.ConfigureDevAgentConnectorResult{
 		AgentID:       input.AgentID,
-		Name:          "后端Agent",
+		Name:          "Backend Agent",
 		Slug:          "backend-agent",
 		ConnectorType: "agent_daemon",
 		AgentConfig:   map[string]any{"model_id": input.ModelID},
@@ -2679,7 +2679,7 @@ func (stubRuntimeStore) GetAgentDetail(ctx context.Context, agentID string) (sto
 	return store.AgentStatusRead{
 		AgentID:       agentID,
 		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		AgentName:     "后端Agent",
+		AgentName:     "Backend Agent",
 		AgentSlug:     "backend-agent",
 		ConnectorType: "agent_daemon",
 		Status:        "active",
@@ -2715,7 +2715,7 @@ func (s stubRuntimeStore) ListWorkspaceAgentsForAdmin(ctx context.Context, works
 	if err != nil {
 		return nil, err
 	}
-	return append(enabled, store.AgentRead{AgentID: "agent-99", Name: "停用Agent", Slug: "disabled-agent", ConnectorType: "agent_daemon", Status: "disabled"}), nil
+	return append(enabled, store.AgentRead{AgentID: "agent-99", Name: "Disabled Agent", Slug: "disabled-agent", ConnectorType: "agent_daemon", Status: "disabled"}), nil
 }
 
 func (stubRuntimeStore) DisableAgent(ctx context.Context, agentID string) (store.AgentStatusRead, error) {
@@ -2725,7 +2725,7 @@ func (stubRuntimeStore) DisableAgent(ctx context.Context, agentID string) (store
 	return store.AgentStatusRead{
 		AgentID:       agentID,
 		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		AgentName:     "后端Agent",
+		AgentName:     "Backend Agent",
 		AgentSlug:     "backend-agent",
 		ConnectorType: "agent_daemon",
 		Status:        "disabled",
@@ -2740,7 +2740,7 @@ func (stubRuntimeStore) EnableAgent(ctx context.Context, agentID string) (store.
 	return store.AgentStatusRead{
 		AgentID:       agentID,
 		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		AgentName:     "后端Agent",
+		AgentName:     "Backend Agent",
 		AgentSlug:     "backend-agent",
 		ConnectorType: "agent_daemon",
 		Status:        "active",
@@ -2831,9 +2831,9 @@ func (stubRuntimeStore) UpdateModel(ctx context.Context, input store.UpdateModel
 
 func (stubRuntimeStore) ListWorkspaceEnabledAgents(ctx context.Context, workspaceID string) ([]store.AgentRead, error) {
 	return []store.AgentRead{
-		{AgentID: "agent-1", Name: "产品Agent", Slug: "product-agent", ConnectorType: "agent_daemon", Status: "active"},
-		{AgentID: "agent-2", Name: "后端Agent", Slug: "backend-agent", ConnectorType: "agent_daemon", Status: "active"},
-		{AgentID: "agent-3", Name: "测试Agent", Slug: "test-agent", ConnectorType: "agent_daemon", Status: "active"},
+		{AgentID: "agent-1", Name: "Product Agent", Slug: "product-agent", ConnectorType: "agent_daemon", Status: "active"},
+		{AgentID: "agent-2", Name: "Backend Agent", Slug: "backend-agent", ConnectorType: "agent_daemon", Status: "active"},
+		{AgentID: "agent-3", Name: "Test Agent", Slug: "test-agent", ConnectorType: "agent_daemon", Status: "active"},
 	}, nil
 }
 
@@ -2846,7 +2846,7 @@ func (stubRuntimeStore) CreateWorkspaceConversation(ctx context.Context, input s
 	}
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
-		title = "未命名会话"
+		title = "Untitled conversation"
 	}
 	surface := strings.TrimSpace(input.Surface)
 	if surface == "" {
@@ -2922,7 +2922,7 @@ func (stubRuntimeStore) GetConversationTimeline(ctx context.Context, conversatio
 		TriggerMessageID: "00000000-0000-0000-0000-000000000201",
 		OutputMessageID:  "00000000-0000-0000-0000-000000000202",
 		AgentID:          "00000000-0000-0000-0000-000000000007",
-		AgentName:        "后端Agent",
+		AgentName:        "Backend Agent",
 		AgentSlug:        "backend-agent",
 		ConnectorType:    "agent_daemon",
 		Status:           "completed",
@@ -2934,7 +2934,7 @@ func (stubRuntimeStore) GetConversationTimeline(ctx context.Context, conversatio
 	childRun.TriggerMessageID = "00000000-0000-0000-0000-000000000202"
 	childRun.OutputMessageID = ""
 	childRun.AgentID = "00000000-0000-0000-0000-000000000008"
-	childRun.AgentName = "测试Agent"
+	childRun.AgentName = "Test Agent"
 	childRun.AgentSlug = "test-agent"
 	childRun.Status = "queued"
 	childRun.FinishedAt = nil
@@ -2962,7 +2962,7 @@ func (stubRuntimeStore) GetAgentRun(ctx context.Context, runID string) (store.Ag
 			TriggerMessageID: "00000000-0000-0000-0000-000000000201",
 			OutputMessageID:  "00000000-0000-0000-0000-000000000202",
 			AgentID:          "00000000-0000-0000-0000-000000000007",
-			AgentName:        "后端Agent",
+			AgentName:        "Backend Agent",
 			AgentSlug:        "backend-agent",
 			ConnectorType:    "agent_daemon",
 			Status:           "completed",
@@ -3029,8 +3029,8 @@ func (stubRuntimeStore) ListWorkspaceAgentRuns(ctx context.Context, workspaceID 
 	// Stub mirrors the real SQL ordering (created_at DESC, id DESC)
 	// so route tests pin "newest first" pagination semantics.
 	runs := []store.AgentRunBriefRead{
-		{ID: "00000000-0000-0000-0000-000000000102", WorkspaceID: workspaceID, ConversationID: testConversationID, AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "后端Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "completed", CreatedAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC)},
-		{ID: testRunID, WorkspaceID: workspaceID, ConversationID: testConversationID, AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "后端Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "queued", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
+		{ID: "00000000-0000-0000-0000-000000000102", WorkspaceID: workspaceID, ConversationID: testConversationID, AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "Backend Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "completed", CreatedAt: time.Date(2026, 5, 22, 0, 1, 0, 0, time.UTC)},
+		{ID: testRunID, WorkspaceID: workspaceID, ConversationID: testConversationID, AgentID: "00000000-0000-0000-0000-000000000007", AgentName: "Backend Agent", AgentSlug: "backend-agent", ConnectorType: "agent_daemon", Status: "queued", CreatedAt: time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)},
 	}
 	filtered := runs
 	if len(statuses) > 0 {
@@ -3054,7 +3054,7 @@ func (stubRuntimeStore) ListWorkspaceAgentRuns(ctx context.Context, workspaceID 
 }
 
 // GetAgentMetrics returns a fixed metrics snapshot so the
-// agent-detail "近 N 天表现" route test can assert the JSON shape
+// agent-detail "Last N days performance" route test can assert the JSON shape
 // without spinning up a real DB.
 func (stubRuntimeStore) GetAgentMetrics(ctx context.Context, agentID string, windowDays int32) (store.AgentMetricsRead, error) {
 	if windowDays <= 0 {
@@ -3806,7 +3806,7 @@ func TestCreateConversationAPI(t *testing.T) {
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/conversations",
-		strings.NewReader(`{"title":"排查 API","surface":"web","form":"thread","metadata":{"source":"dev"}}`))
+		strings.NewReader(`{"title":"Troubleshoot API","surface":"web","form":"thread","metadata":{"source":"dev"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -3814,7 +3814,7 @@ func TestCreateConversationAPI(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
 	}
 	body := res.Body.String()
-	if !strings.Contains(body, `"title":"排查 API"`) || !strings.Contains(body, `"surface":"web"`) || !strings.Contains(body, `"form":"thread"`) {
+	if !strings.Contains(body, `"title":"Troubleshoot API"`) || !strings.Contains(body, `"surface":"web"`) || !strings.Contains(body, `"form":"thread"`) {
 		t.Fatalf("expected created conversation echoed, got %s", body)
 	}
 }
@@ -3829,7 +3829,7 @@ func TestCreateConversationAPIDefaults(t *testing.T) {
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected 201 with default body, got %d: %s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), `"title":"未命名会话"`) {
+	if !strings.Contains(res.Body.String(), `"title":"Untitled conversation"`) {
 		t.Fatalf("expected default title, got %s", res.Body.String())
 	}
 }

@@ -41,7 +41,7 @@ func TestListActiveFeishuInflightConversations_NullOutputMessageIDDoesNotPanic(t
 	sendRes, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
-		Content:           "@产品Agent nullscan-test",
+		Content:           "@product-agent nullscan-test",
 		MentionedAgentIDs: []string{ids.ProductAgentID},
 	})
 	if err != nil {

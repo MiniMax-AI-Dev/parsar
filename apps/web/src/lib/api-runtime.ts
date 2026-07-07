@@ -62,7 +62,7 @@ export function useRuntimeStatus(workspaceID: string | null) {
 
 /* --- Per-binding connectivity test types --------------------------------
  *
- * Used by the detail-page 「🔬 连通性测试」 button. Probes an EXISTING
+ * Used by the detail-page "🔬 Connectivity test" button. Probes an EXISTING
  * agent_daemon sandbox (paired + heartbeat freshness).
  *
  * `category` enums: credInvalid | quotaExceeded | unreachable | runtimeDown

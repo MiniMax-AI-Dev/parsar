@@ -21,7 +21,7 @@ func handleList(ctx context.Context, st Store, host gateway.FeishuRouteAgent, ev
 
 func handleSelect(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.InboundEvent, reply ReplyFunc, senderUserID string, args []string) (Outcome, error) {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return replyAndStop(ctx, reply, host, event, "用法：/select <agent-slug>", "select_usage")
+		return replyAndStop(ctx, reply, host, event, "Usage: /select <agent-slug>", "select_usage")
 	}
 	agents, err := st.ListFeishuSharedBotAgents(ctx, senderUserID, host.AgentID, 50)
 	if err != nil {
@@ -43,7 +43,7 @@ func handleSelect(ctx context.Context, st Store, host gateway.FeishuRouteAgent, 
 	}); err != nil {
 		return Outcome{}, err
 	}
-	text := fmt.Sprintf("已选择 Agent「%s」（%s / %s）。", selected.AgentName, selected.WorkspaceName, selected.WorkspaceSlug)
+	text := fmt.Sprintf("Selected Agent \"%s\" (%s / %s).", selected.AgentName, selected.WorkspaceName, selected.WorkspaceSlug)
 	return replyAndStop(ctx, reply, host, event, text, "selected")
 }
 
@@ -61,7 +61,7 @@ func handleCancel(ctx context.Context, st Store, host gateway.FeishuRouteAgent, 
 	if err != nil {
 		if errors.Is(err, store.ErrUnknownConversation) {
 			return replyAndStop(ctx, reply, host, event,
-				"当前会话还没有进行中的任务，无法取消。", "cancel_no_conversation")
+				"This conversation has no in-progress tasks to cancel.", "cancel_no_conversation")
 		}
 		return Outcome{}, err
 	}
@@ -74,9 +74,9 @@ func handleCancel(ctx context.Context, st Store, host gateway.FeishuRouteAgent, 
 		return Outcome{}, err
 	}
 	if len(cancelled) == 0 {
-		return replyAndStop(ctx, reply, host, event, "当前没有进行中的任务。", "cancel_none")
+		return replyAndStop(ctx, reply, host, event, "No in-progress tasks.", "cancel_none")
 	}
-	msg := fmt.Sprintf("已取消 %d 个任务。", len(cancelled))
+	msg := fmt.Sprintf("Cancelled %d task(s).", len(cancelled))
 	return replyAndStop(ctx, reply, host, event, msg, "cancelled")
 }
 
@@ -122,7 +122,7 @@ func ParseCancelCommand(text string) (CancelCommand, bool) {
 // people in the same chat.
 func formatAgentList(agents []store.FeishuSharedBotAgent, currentAgentID string) string {
 	if len(agents) == 0 {
-		return "暂无可用 Agent。"
+		return "No agents available."
 	}
 	groups := make(map[string][]store.FeishuSharedBotAgent)
 	var groupOrder []string
@@ -133,7 +133,7 @@ func formatAgentList(agents []store.FeishuSharedBotAgent, currentAgentID string)
 		}
 		groups[key] = append(groups[key], agent)
 	}
-	lines := []string{"可用 Agent："}
+	lines := []string{"Available Agents:"}
 	for _, name := range groupOrder {
 		lines = append(lines, "", fmt.Sprintf("---- %s ----", name))
 		for _, agent := range groups[name] {
@@ -141,10 +141,10 @@ func formatAgentList(agents []store.FeishuSharedBotAgent, currentAgentID string)
 			if agent.AgentID == currentAgentID {
 				marker = " ✓"
 			}
-			lines = append(lines, fmt.Sprintf("%s（%s — %s）%s", agent.AgentSlug, agent.AgentName, agent.WorkspaceSlug, marker))
+			lines = append(lines, fmt.Sprintf("%s (%s — %s)%s", agent.AgentSlug, agent.AgentName, agent.WorkspaceSlug, marker))
 		}
 	}
-	lines = append(lines, "", "发送 /select <agent-slug> 选择。")
+	lines = append(lines, "", "Send /select <agent-slug> to choose.")
 	return strings.Join(lines, "\n")
 }
 
@@ -155,9 +155,9 @@ func selectAgent(agents []store.FeishuSharedBotAgent, token string) (store.Feish
 			return agent, nil
 		}
 	}
-	return store.FeishuSharedBotAgent{}, fmt.Errorf("未找到 Agent %q，请发送 /list 查看可用 Agent。", token)
+	return store.FeishuSharedBotAgent{}, fmt.Errorf("Agent %q not found; send /list to see available Agents.", token)
 }
 
 func helpText() string {
-	return "可用命令：\n/list — 查看可用 Agent\n/select <agent-slug> — 切换当前 Agent\n/cancel — 取消当前会话进行中的任务\n/help — 显示帮助"
+	return "Available commands:\n/list — list available Agents\n/select <agent-slug> — switch the current Agent\n/cancel — cancel in-progress tasks in this conversation\n/help — show help"
 }

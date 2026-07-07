@@ -219,10 +219,10 @@ func TestHandleInboundListRepliesWithSelectableAgents(t *testing.T) {
 	if !strings.Contains(reply, "---- Demo Workspace ----") {
 		t.Fatalf("/list reply missing workspace header: %q", reply)
 	}
-	if !strings.Contains(reply, "product-agent（Product Agent — demo）") {
+	if !strings.Contains(reply, "product-agent (Product Agent — demo)") {
 		t.Fatalf("/list reply missing product-agent row: %q", reply)
 	}
-	if !strings.Contains(reply, "backend-agent（Backend Agent — demo）") {
+	if !strings.Contains(reply, "backend-agent (Backend Agent — demo)") {
 		t.Fatalf("/list reply missing backend-agent row: %q", reply)
 	}
 	if !strings.Contains(reply, "/select <agent-slug>") {
@@ -251,7 +251,7 @@ func TestHandleInboundSelectStoresSession(t *testing.T) {
 	if got != "agent-backend" {
 		t.Fatalf("selected agent = %q, want agent-backend", got)
 	}
-	if !strings.Contains(reply, "已选择 Agent") || !strings.Contains(reply, "Backend Agent") {
+	if !strings.Contains(reply, "Selected Agent") || !strings.Contains(reply, "Backend Agent") {
 		t.Fatalf("unexpected select reply: %q", reply)
 	}
 }
@@ -271,7 +271,7 @@ func TestHandleInboundSelectionIsChatScopedAcrossSenders(t *testing.T) {
 	}
 
 	st.userByUnion["ou_peer"] = "user-1"
-	event := sharedEvent("帮我看一下")
+	event := sharedEvent("please take a look")
 	event.Sender.PlatformUserID = "ou_peer"
 	event.Sender.LocalUserID = "ou_peer_open"
 	outcome, err := HandleInbound(ctx, st, hostAgent(), event, func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
@@ -290,7 +290,7 @@ func TestHandleInboundWithoutSelectionAsksUserToSelect(t *testing.T) {
 	ctx := context.Background()
 	st := newFakeSharedStore()
 	var reply string
-	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("帮我看一下"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
+	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("please take a look"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
 		reply = text
 		return nil
 	}, nil, gateway.GateConfig{})
@@ -313,7 +313,7 @@ func TestHandleInboundSelectedAgentCreatesTargetedMessageWithHostAppID(t *testin
 	st := newFakeSharedStore()
 	st.selections[selectionKey("feishu", "oc_chat", "")] = "agent-backend"
 	var replies []string
-	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("帮我评估数据库迁移"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
+	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("please evaluate the database migration"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
 		replies = append(replies, text)
 		return nil
 	}, nil, gateway.GateConfig{})
@@ -336,7 +336,7 @@ func TestHandleInboundSelectedAgentCreatesTargetedMessageWithHostAppID(t *testin
 	if created.ExternalUserID != "ou_user" || created.ExternalChatID != "oc_chat" || created.ExternalMessageID != "om_message" {
 		t.Fatalf("external refs mismatch: %+v", created)
 	}
-	if created.Text != "帮我评估数据库迁移" || created.Gateway != "feishu" || created.ConversationForm != "group" {
+	if created.Text != "please evaluate the database migration" || created.Gateway != "feishu" || created.ConversationForm != "group" {
 		t.Fatalf("unexpected message fields: %+v", created)
 	}
 	if len(created.Mentions) != 1 || created.Mentions[0] != "@Backend Agent" {
@@ -351,8 +351,8 @@ func TestHandleInboundStampsQuotedChainPrefixIntoMetadata(t *testing.T) {
 	ctx := context.Background()
 	st := newFakeSharedStore()
 	st.selections[selectionKey("feishu", "oc_chat", "")] = "agent-backend"
-	chainPrefix := "[Quoted message]\n上面这条讲的事\n[/Quoted message]\n"
-	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("怎么处理?"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
+	chainPrefix := "[Quoted message]\nthe topic above\n[/Quoted message]\n"
+	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("how to handle this?"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
 		return nil
 	}, func(ctx context.Context, host gateway.FeishuRouteAgent, event *gateway.InboundEvent) string {
 		return chainPrefix
@@ -369,7 +369,7 @@ func TestHandleInboundStampsQuotedChainPrefixIntoMetadata(t *testing.T) {
 	created := st.created[0]
 	// Text must remain the user's verbatim input — the prefix lives in
 	// metadata so audit/list/preview/raw_query stay clean.
-	if created.Text != "怎么处理?" {
+	if created.Text != "how to handle this?" {
 		t.Errorf("Text = %q, must stay verbatim", created.Text)
 	}
 	if got, _ := created.Metadata[QuotedChainPrefixMetadataKey].(string); got != chainPrefix {
@@ -411,7 +411,7 @@ func TestHandleInboundClearsStaleSelectionOnBindingLoss(t *testing.T) {
 	st.selections[selectionKey("feishu", "oc_chat", "")] = "agent-backend"
 	st.createErr = store.ErrUnknownMention
 	var replies []string
-	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("帮我评估数据库迁移"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
+	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("please evaluate the database migration"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
 		replies = append(replies, text)
 		return nil
 	}, nil, gateway.GateConfig{})
@@ -421,7 +421,7 @@ func TestHandleInboundClearsStaleSelectionOnBindingLoss(t *testing.T) {
 	if !outcome.Handled || outcome.Accepted || !outcome.Replied || outcome.Reason != "selected_agent_binding_lost" {
 		t.Fatalf("unexpected outcome on binding loss: %+v", outcome)
 	}
-	if len(replies) != 1 || !strings.Contains(replies[0], "已不可用") || !strings.Contains(replies[0], "/list") {
+	if len(replies) != 1 || !strings.Contains(replies[0], "unavailable") || !strings.Contains(replies[0], "/list") {
 		t.Fatalf("expected re-/select prompt reply, got %#v", replies)
 	}
 	// Selection cleared so the next /select starts from a clean slate.
@@ -439,7 +439,7 @@ func TestHandleInboundSelectedAgentRechecksVisibility(t *testing.T) {
 	st.selections[selectionKey("feishu", "oc_chat", "")] = "agent-backend"
 	st.memberships["workspace-1:user-1"] = false
 	var reply string
-	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("帮我看一下"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
+	outcome, err := HandleInbound(ctx, st, hostAgent(), sharedEvent("please take a look"), func(ctx context.Context, host gateway.FeishuRouteAgent, event gateway.InboundEvent, text string) error {
 		reply = text
 		return nil
 	}, nil, gateway.GateConfig{})
@@ -496,7 +496,7 @@ func TestHandleInboundCancelBulkCancelsInflight(t *testing.T) {
 	if !outcome.Handled || outcome.Accepted || !outcome.Replied || outcome.Reason != "cancelled" {
 		t.Fatalf("unexpected outcome: %+v", outcome)
 	}
-	if !strings.Contains(reply, "已取消 2 个任务") {
+	if !strings.Contains(reply, "Cancelled 2 task") {
 		t.Fatalf("unexpected reply: %q", reply)
 	}
 	if len(st.cancelCalls) != 1 || st.cancelCalls[0].ConversationID != "conv-1" || st.cancelCalls[0].Reason != "feishu_user_cancel" {
@@ -549,7 +549,7 @@ func TestHandleInboundCancelWithoutConversation(t *testing.T) {
 	if outcome.Reason != "cancel_no_conversation" {
 		t.Fatalf("unexpected outcome.Reason: %q", outcome.Reason)
 	}
-	if !strings.Contains(reply, "无法取消") {
+	if !strings.Contains(reply, "no in-progress tasks to cancel") {
 		t.Fatalf("unexpected reply: %q", reply)
 	}
 	if len(st.cancelCalls) != 0 {
@@ -578,7 +578,7 @@ func TestHandleInboundCancelWithoutInflight(t *testing.T) {
 	if outcome.Reason != "cancel_none" {
 		t.Fatalf("unexpected outcome.Reason: %q", outcome.Reason)
 	}
-	if !strings.Contains(reply, "当前没有进行中的任务") {
+	if !strings.Contains(reply, "No in-progress tasks") {
 		t.Fatalf("unexpected reply: %q", reply)
 	}
 }

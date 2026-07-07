@@ -84,9 +84,9 @@ function describeRemaining(iso: string | undefined, now: number): RemainingDescr
   const hours = Math.floor((totalMinutes - days * 60 * 24) / 60)
   const minutes = totalMinutes - days * 60 * 24 - hours * 60
   let value: string
-  if (days >= 1) value = hours > 0 ? `${days} 天 ${hours} 小时` : `${days} 天`
-  else if (hours >= 1) value = minutes > 0 ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
-  else value = `${Math.max(minutes, 1)} 分钟`
+  if (days >= 1) value = hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  else if (hours >= 1) value = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+  else value = `${Math.max(minutes, 1)}m`
   const tone: RemainingDescriptor["tone"] = days < 1 ? "red" : days < 7 ? "amber" : "green"
   return { value, tone, state: "remaining" }
 }

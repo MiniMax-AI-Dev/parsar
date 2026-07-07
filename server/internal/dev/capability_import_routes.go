@@ -933,7 +933,7 @@ func writeImportCommitError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 	case errors.Is(err, store.ErrCapabilityNameTaken):
 		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "当前工作空间已有同名能力。请修改源文件里的 name 字段后重新打包上传,或先在能力列表中删除已有的同名能力。",
+			"error": "A capability with the same name already exists in this workspace. Please change the `name` field in the source file and re-upload, or delete the existing capability with the same name from the capability list first.",
 		})
 	default:
 		// Spec validation errors come back without a sentinel; surface

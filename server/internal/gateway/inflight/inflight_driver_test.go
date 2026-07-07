@@ -564,7 +564,7 @@ func TestInflightTickOnce_RunFailedPatchesErrorCard(t *testing.T) {
 // Phase 3 contract: a run.failed agent_run_event carries a
 // user_visible_message in its payload, the driver folds it into the
 // slot, and the terminal ErrorCard body shows that exact text rather
-// than the generic "Agent 运行失败" fallback. Before Phase 3 this
+// than the generic "Agent run failed" fallback. Before Phase 3 this
 // payload field didn't exist and the (now-removed) P1 outbound worker
 // rendered the message from a messages-table row instead.
 func TestInflightTickOnce_RunFailedRendersUserVisibleMessage(t *testing.T) {
@@ -587,7 +587,7 @@ func TestInflightTickOnce_RunFailedRendersUserVisibleMessage(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 
-	wantMessage := "Agent 需要的能力凭据还没设置，请先到我的凭据补齐后重试。"
+	wantMessage := "Agent needs required capability credentials that aren't set yet. Please add them under My credentials and retry."
 	fs.inflightConvs = []store.FeishuInflightConversation{{
 		ConversationID: "conv-vis",
 		WorkspaceID:    "ws-1",
@@ -921,7 +921,7 @@ func TestSlotPayload_RoundTripsStepTimestamps(t *testing.T) {
 // message.delta events into streamingText and then transitions to
 // completed, the terminal card content MUST contain the streamed
 // reply, not the empty string. Without this the user sees only the
-// green "已完成" header + footer and loses the assistant's answer —
+// green "Completed" header + footer and loses the assistant's answer —
 // the symptom that reached production (Feishu thread reply showed
 // stats-only card, sandboxTest web showed the real reply).
 //
@@ -945,7 +945,7 @@ func TestBuildFinalCardForRun_PreservesStreamingBody(t *testing.T) {
 		RunStartedAt:  start,
 		RunFinishedAt: start.Add(2 * time.Second),
 	}
-	const body = "你好！有什么我可以帮你的吗?"
+	const body = "Hello! How can I help you today?"
 	content, err := buildFinalCardForRun(
 		context.Background(), feishuchannel.New(feishuchannel.Config{}), fs, c,
 		nil,  // steps
@@ -990,7 +990,7 @@ func TestBuildFinalCardForRun_SurfacesGuestHintOnFailure(t *testing.T) {
 	fs := newFakeStore()
 	const conv = "conv-guest"
 	const runID = "run-guest"
-	const hint = "您还未绑定账号，请前往 Parsar 网页端完成绑定后再使用机器人。"
+	const hint = "You haven't linked an account yet. Please go to the Parsar web UI to finish binding before using the bot."
 	fs.guestReplyHint = map[string]string{conv: hint}
 
 	c := store.FeishuInflightConversation{
@@ -1001,7 +1001,7 @@ func TestBuildFinalCardForRun_SurfacesGuestHintOnFailure(t *testing.T) {
 	}
 	content, err := buildFinalCardForRun(
 		context.Background(), feishuchannel.New(feishuchannel.Config{}), fs, c, nil, "", "",
-		"Agent 执行失败，请展开本轮错误详情查看具体原因。", "empty final output", "",
+		"Agent run failed. Expand this round for error details to see the specific cause.", "empty final output", "",
 	)
 	if err != nil {
 		t.Fatalf("buildFinalCardForRun err = %v", err)
@@ -1757,7 +1757,7 @@ func TestInflightTickOnce_CredentialFormFingerprintStampedWhenSendFails(t *testi
 }
 
 // TestInflightTickOnce_FailedRunNoOutputMessageStampsTerminalFingerprint
-// is the regression guard for the "Agent 执行失败 card spam" bug. A run
+// is the regression guard for the "Agent run failed card spam" bug. A run
 // that failed before producing an output_message_id (the FailAgentRun
 // path, which never sets agent_runs.output_message_id) used to drive
 // the driver into a permanent re-claim loop:
@@ -1801,7 +1801,7 @@ func TestInflightTickOnce_FailedRunNoOutputMessageStampsTerminalFingerprint(t *t
 		Payload: map[string]any{
 			"source":               "agent_run",
 			"error":                "capability_credential_missing",
-			"user_visible_message": "Agent 需要的能力凭据还没设置",
+			"user_visible_message": "Agent needs required capability credentials that aren't set yet",
 		},
 	}}
 
@@ -1902,14 +1902,14 @@ func (s *failingFingerprintStore) MarkConversationInflightTerminalDelivered(_ co
 // ---------- at-mention ping (post-card text message) ----------
 //
 // The terminal / permission card paths each follow up with a
-// msg_type=text message that embeds `<at user_id="...">用户</at>`. The
+// msg_type=text message that embeds `<at user_id="...">user</at>`. The
 // tests below pin one assertion per scenario: the right body lands, in
 // the right order, with the right idempotency.
 
 // TestInflightTickOnce_RunCompletedSendsPingAfterCard locks in the
 // happy path: a completed run with a known sender_open_id produces
 // one card patch AND one text ping carrying the at-mention escape +
-// the standard "任务已完成 ✓ 耗时 Ns" body.
+// the standard "Task complete ✓ took Ns" body.
 func TestInflightTickOnce_RunCompletedSendsPingAfterCard(t *testing.T) {
 	t.Parallel()
 	fs := newFakeStore()
@@ -1983,10 +1983,10 @@ func TestInflightTickOnce_RunCompletedSendsPingAfterCard(t *testing.T) {
 	if err := json.Unmarshal([]byte(outer.Content), &inner); err != nil {
 		t.Fatalf("ping content unmarshal: %v", err)
 	}
-	if !strings.Contains(inner.Text, `<at user_id="ou_alice">用户</at>`) {
+	if !strings.Contains(inner.Text, `<at user_id="ou_alice">user</at>`) {
 		t.Errorf("ping text missing at-mention escape: %q", inner.Text)
 	}
-	if !strings.HasPrefix(inner.Text, `<at user_id="ou_alice">用户</at> 任务已完成 ✓ 耗时 `) {
+	if !strings.HasPrefix(inner.Text, `<at user_id="ou_alice">user</at> Task complete ✓ took `) {
 		t.Errorf("ping prefix wrong: %q", inner.Text)
 	}
 }
@@ -2052,7 +2052,7 @@ func TestInflightTickOnce_RunCompletedPingDegradesWithoutSender(t *testing.T) {
 	if strings.Contains(inner.Text, "<at ") {
 		t.Errorf("degraded ping leaked <at> tag: %q", inner.Text)
 	}
-	if !strings.HasPrefix(inner.Text, "任务已完成 ✓ 耗时 ") {
+	if !strings.HasPrefix(inner.Text, "Task complete ✓ took ") {
 		t.Errorf("degraded ping prefix wrong: %q", inner.Text)
 	}
 }
@@ -2121,7 +2121,7 @@ func TestInflightTickOnce_PermissionCardSendsPing(t *testing.T) {
 		Text string `json:"text"`
 	}
 	_ = json.Unmarshal([]byte(outer.Content), &inner)
-	if !strings.Contains(inner.Text, `<at user_id="ou_carol">用户</at>`) {
+	if !strings.Contains(inner.Text, `<at user_id="ou_carol">user</at>`) {
 		t.Errorf("permission ping missing at-mention: %q", inner.Text)
 	}
 	if !strings.HasSuffix(inner.Text, UserPingPermission) {

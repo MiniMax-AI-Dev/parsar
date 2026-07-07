@@ -237,7 +237,7 @@ func TestRouteFeishuInbound_WorkspaceRejectionFetchesOwnersAndJoinURL(t *testing
 		userID:       "user-1",
 		isMember:     false,
 		wsVisibility: "public",
-		ownerNames:   []string{"张三", "李四"},
+		ownerNames:   []string{"Alice", "Bob"},
 	}
 	decision, err := RouteFeishuInbound(context.Background(), r, FeishuInboundEvent{
 		AppID:         "cli_x",
@@ -266,7 +266,7 @@ func TestRouteFeishuInbound_WorkspaceRejectionFetchesOwnersAndJoinURL(t *testing
 	if builderCalls != 1 {
 		t.Errorf("JoinURLBuilder calls = %d, want 1", builderCalls)
 	}
-	for _, want := range []string{"Eng", "管理员: 张三、李四", "[申请加入 workspace](https://parsar.example/join-workspace?id=ws-1&from=feishu)"} {
+	for _, want := range []string{"Eng", "Admins: Alice, Bob", "[Request to join workspace](https://parsar.example/join-workspace?id=ws-1&from=feishu)"} {
 		if !strings.Contains(decision.Decision.ReplyHint, want) {
 			t.Errorf("ReplyHint missing %q\nfull:\n%s", want, decision.Decision.ReplyHint)
 		}
@@ -276,7 +276,7 @@ func TestRouteFeishuInbound_WorkspaceRejectionFetchesOwnersAndJoinURL(t *testing
 // TestRouteFeishuInbound_WorkspaceRejectionPrivateWorkspaceOmitsJoinURL
 // covers the "workspace.visibility=private" branch: API forbids self-
 // service join (createJoinRequest 404s by design), so the rejection card
-// must NOT surface a link — fall back to "请联系上述管理员加入".
+// must NOT surface a link — fall back to "Contact one of the admins above to join".
 func TestRouteFeishuInbound_WorkspaceRejectionPrivateWorkspaceOmitsJoinURL(t *testing.T) {
 	t.Parallel()
 	r := &fakeFeishuRouter{
@@ -287,7 +287,7 @@ func TestRouteFeishuInbound_WorkspaceRejectionPrivateWorkspaceOmitsJoinURL(t *te
 		userID:       "user-1",
 		isMember:     false,
 		wsVisibility: "private",
-		ownerNames:   []string{"张三"},
+		ownerNames:   []string{"Alice"},
 	}
 	builderCalls := 0
 	decision, err := RouteFeishuInbound(context.Background(), r, FeishuInboundEvent{
@@ -305,10 +305,10 @@ func TestRouteFeishuInbound_WorkspaceRejectionPrivateWorkspaceOmitsJoinURL(t *te
 	if builderCalls != 0 {
 		t.Errorf("JoinURLBuilder must NOT be called for private workspace; got %d calls", builderCalls)
 	}
-	if strings.Contains(decision.Decision.ReplyHint, "申请加入") {
+	if strings.Contains(decision.Decision.ReplyHint, "Request to join") {
 		t.Errorf("ReplyHint must not contain join link for private workspace; got %q", decision.Decision.ReplyHint)
 	}
-	if !strings.Contains(decision.Decision.ReplyHint, "请联系上述管理员加入") {
+	if !strings.Contains(decision.Decision.ReplyHint, "Contact one of the admins above to join") {
 		t.Errorf("ReplyHint should fall back to contact-admin hint; got %q", decision.Decision.ReplyHint)
 	}
 }
@@ -326,7 +326,7 @@ func TestRouteFeishuInbound_WorkspaceRejectionNoBuilderOmitsJoinURL(t *testing.T
 		userID:       "user-1",
 		isMember:     false,
 		wsVisibility: "public",
-		ownerNames:   []string{"张三"},
+		ownerNames:   []string{"Alice"},
 	}
 	decision, err := RouteFeishuInbound(context.Background(), r, FeishuInboundEvent{
 		AppID:         "cli_x",
@@ -341,7 +341,7 @@ func TestRouteFeishuInbound_WorkspaceRejectionNoBuilderOmitsJoinURL(t *testing.T
 	if r.gotWsVisibilityWS != "" {
 		t.Errorf("GetWorkspaceVisibility should be skipped when builder nil; got call with %q", r.gotWsVisibilityWS)
 	}
-	if strings.Contains(decision.Decision.ReplyHint, "申请加入") {
+	if strings.Contains(decision.Decision.ReplyHint, "Request to join") {
 		t.Errorf("ReplyHint must not contain join link when builder is nil; got %q", decision.Decision.ReplyHint)
 	}
 }
@@ -407,11 +407,11 @@ func TestRouteFeishuInbound_WorkspaceRejectionSwallowsAuxiliaryErrors(t *testing
 	if decision.Decision.Allowed {
 		t.Fatal("expected rejection")
 	}
-	// No owner line, no join link — the fallback "请联系管理员开通" must surface.
-	if strings.Contains(decision.Decision.ReplyHint, "管理员: ") {
+	// No owner line, no join link — the fallback "Contact an admin to request access" must surface.
+	if strings.Contains(decision.Decision.ReplyHint, "Admins: ") {
 		t.Errorf("ReplyHint should NOT have owner line when owner lookup failed: %q", decision.Decision.ReplyHint)
 	}
-	if strings.Contains(decision.Decision.ReplyHint, "申请加入") {
+	if strings.Contains(decision.Decision.ReplyHint, "Request to join") {
 		t.Errorf("ReplyHint should NOT have join link when visibility lookup failed: %q", decision.Decision.ReplyHint)
 	}
 }

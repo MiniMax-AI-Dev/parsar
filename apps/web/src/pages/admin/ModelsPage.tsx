@@ -366,7 +366,7 @@ function ModelsTable({
                 </TableCell>
                 <TableCell className="pr-3 text-right">
                   {/* Inline icon-only action row — replaces the v1 mix of
-                      a labeled "测试连接" button and a ⋯ dropdown. Trash
+                      a labeled "Test connection" button and a ⋯ dropdown. Trash
                       icon means "disable" here (we don't hard-delete),
                       hence the title attribute spelling that out. */}
                   <div className="inline-flex items-center gap-0.5">
@@ -538,7 +538,7 @@ export function ModelsPage() {
    * re-paste); credential_ref reuses the kind code.
    */
   function performDuplicate(m: Model) {
-    // Avoid stacking suffixes like "Foo (副本) (副本)".
+    // Avoid stacking suffixes like "Foo (copy) (copy)".
     const suffix = t("models.copy.nameSuffix")
     const seedName = m.name.endsWith(suffix) ? m.name : `${m.name}${suffix}`
     const seed: InlineCreateModelInput = {
@@ -682,7 +682,7 @@ export function ModelsPage() {
           if (!v) {
             createMut.reset()
             // Drop the duplicate seed on close so the next plain
-            // "+ 新建模型" click starts from an empty dialog.
+            // "+ New model" click starts from an empty dialog.
             setDuplicateInitial(null)
           }
         }}

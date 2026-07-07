@@ -21,7 +21,7 @@ import (
 
 // ackReceived mirrors the production default toast (manager.handleCardAction's
 // fall-through ack) so an unrouted click looks the same to the user.
-const ackReceived = "操作已收到"
+const ackReceived = "Received"
 
 // rawCardAction is the minimal projection of a Feishu card.action.trigger
 // callback the adapter decodes — a subset of the SDK's

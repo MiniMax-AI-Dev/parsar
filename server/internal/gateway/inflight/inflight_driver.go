@@ -71,7 +71,7 @@ func (w *Worker) InflightTickOnce(ctx context.Context) (int, error) {
 		}
 	}
 
-	// Stale permission cards get a forced Deny + "已超时" patch so the
+	// Stale permission cards get a forced Deny + "Timed out" patch so the
 	// agent run resumes. Runs even with no active conversations above
 	// — a stale permission has no driving events.
 	expired := w.expireStalePermissionCards(ctx)
@@ -80,7 +80,7 @@ func (w *Worker) InflightTickOnce(ctx context.Context) (int, error) {
 
 // expireStalePermissionCards walks any permission inflight slot past
 // the stale window, forces a Deny via PermissionRouter, patches the
-// card into a red "已超时" shape, and clears the slot. Returns count.
+// card into a red "Timed out" shape, and clears the slot. Returns count.
 //
 // Per-slot failures log + skip. A SubmitPermission failure keeps the
 // slot so the next tick retries; without that guardrail a transient
@@ -149,7 +149,7 @@ func (w *Worker) expireOnePermissionSlot(ctx context.Context, conv store.Convers
 		title = ""
 	}
 	content, err := gateway.MarshalCard(gateway.BuildNoticeCard(
-		title, "**已超时**\n\n等待响应超过 5 分钟,已自动拒绝。",
+		title, "**Timed out**\n\nNo response after 5 minutes, auto-denied.",
 		gateway.NoticeColorWarning,
 	))
 	if err != nil {
@@ -681,7 +681,7 @@ func (w *Worker) maybeSendPromptForUserChoiceCard(
 		}
 		return fmt.Errorf("persist prompt_for_user_choice slot: %w", err)
 	}
-	// Same "请你确认 ↑" follow-up shape as the permission card.
+	// Same "please confirm ↑" follow-up shape as the permission card.
 	w.sendUserPingText(ctx, c, creds, client, UserPingPromptForUserChoice)
 	return nil
 }
@@ -1158,7 +1158,7 @@ func pendingPermissionFromPayload(payload map[string]any) (*pendingPermission, b
 		}
 	}
 	if out.ToolName == "" {
-		out.ToolName = "未命名工具"
+		out.ToolName = "unnamed tool"
 	}
 	if v, ok := payload["detail"].(string); ok {
 		out.ToolInput = strings.TrimSpace(v)
@@ -1373,7 +1373,7 @@ func buildFinalCardForRun(ctx context.Context, ch *feishuchannel.Channel, s done
 	if c.RunStatus == "failed" {
 		msg := strings.TrimSpace(errorMessage)
 		if msg == "" {
-			msg = "Agent 运行失败，请稍后重试。"
+			msg = "Agent run failed. Please retry later."
 		}
 		// Guests (visibility=public + unregistered) crash on missing
 		// capability credentials with no credential-form recovery path;

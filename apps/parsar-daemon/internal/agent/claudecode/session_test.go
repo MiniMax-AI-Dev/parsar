@@ -130,12 +130,12 @@ func runFakeClaude(role string) {
 				"tool_name": "AskUserQuestion",
 				"input": map[string]any{
 					"questions": []map[string]any{{
-						"header":      "确认删除",
-						"question":    "确定要删除 /tmp 吗?",
+						"header":      "Confirm delete",
+						"question":    "Delete /tmp directory?",
 						"multiSelect": false,
 						"options": []map[string]any{
-							{"label": "确认删除", "description": "执行 rm -rf"},
-							{"label": "取消", "description": "不执行"},
+							{"label": "Confirm delete", "description": "Run rm -rf"},
+							{"label": "Cancel", "description": "Do not run"},
 						},
 					}},
 				},
@@ -472,7 +472,7 @@ func TestSessionAskUserQuestionRoundTrip(t *testing.T) {
 	}
 
 	if err := sess.SubmitPromptForUserChoiceForTest(askID, proto.PromptForUserChoiceDecisionPayload{
-		Answers: []string{"确认删除"},
+		Answers: []string{"Confirm delete"},
 	}); err != nil {
 		t.Fatalf("SubmitPromptForUserChoice: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestSessionAskUserQuestionRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(final.Payload, &done); err != nil {
 		t.Fatalf("decode done: %v", err)
 	}
-	if !strings.Contains(done.Content, "确认删除") {
+	if !strings.Contains(done.Content, "Confirm delete") {
 		t.Errorf("answer not echoed back through the fake claude loop: %q", done.Content)
 	}
 
@@ -533,7 +533,7 @@ func TestSessionAskUserQuestionTimeoutSubmitsCancelled(t *testing.T) {
 	if err := json.Unmarshal(final.Payload, &done); err != nil {
 		t.Fatalf("decode done: %v", err)
 	}
-	if !strings.Contains(done.Content, "10 分钟") {
+	if !strings.Contains(done.Content, "10 minutes") {
 		t.Errorf("timeout sentence not echoed: %q", done.Content)
 	}
 }

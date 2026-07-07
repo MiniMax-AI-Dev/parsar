@@ -33,7 +33,7 @@ type Store interface {
 	// queued/running run on that conversation.
 	FindConversationByExternalRef(ctx context.Context, gateway, externalChatID, externalThreadID string) (string, error)
 	CancelAllInflightForConversation(ctx context.Context, conversationID, reason string) ([]store.SupersededRun, error)
-	// Backs the "已激活话题续聊不必再 @" rule: reports whether the bot has
+	// Backs the "already-activated thread continuation skips @-mention" rule: reports whether the bot has
 	// previously accepted an inbound message in this (platform, chat, thread).
 	HasThreadInboundHistory(ctx context.Context, platform, externalChatID, threadKey string) (bool, error)
 }
@@ -107,7 +107,7 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 	}
 	senderSubject := SenderSubject(event)
 	if strings.TrimSpace(senderSubject) == "" {
-		return replyAndStop(ctx, reply, host, event, "无法识别飞书发送者，请稍后重试。", "missing_sender")
+		return replyAndStop(ctx, reply, host, event, "Unable to identify Feishu sender; please retry later.", "missing_sender")
 	}
 	botSender := event.SenderIsBot
 
@@ -141,7 +141,7 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 			if botSender {
 				return Outcome{Handled: true, Reason: "bot_sender_no_selection"}, nil
 			}
-			return replyAndStop(ctx, reply, host, event, "请先发送 /list 查看可用 Agent，再发送 /select <agent-slug> 选择。", "selection_required")
+			return replyAndStop(ctx, reply, host, event, "Send /list to see available Agents, then /select <agent-slug> to choose.", "selection_required")
 		}
 		return Outcome{}, err
 	}
@@ -151,7 +151,7 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 			if botSender {
 				return Outcome{Handled: true, Reason: "bot_sender_selected_agent_unavailable"}, nil
 			}
-			return replyAndStop(ctx, reply, host, event, "当前选择的 Agent 已不可用，请重新发送 /list 后 /select。", "selected_agent_unavailable")
+			return replyAndStop(ctx, reply, host, event, "The currently selected Agent is unavailable; send /list and /select again.", "selected_agent_unavailable")
 		}
 		return Outcome{}, err
 	}
@@ -237,7 +237,7 @@ func HandleInbound(ctx context.Context, st Store, host gateway.FeishuRouteAgent,
 				return Outcome{Handled: true, Reason: "bot_sender_selected_agent_binding_lost", AgentID: target.AgentID}, nil
 			}
 			return replyAndStop(ctx, reply, host, event,
-				"当前选择的 Agent 已不可用(项目绑定已失效),请重新发送 /list 查看可用 Agent 后 /select 选择。",
+				"The currently selected Agent is unavailable (project binding lost); send /list to see available Agents and /select to choose again.",
 				"selected_agent_binding_lost")
 		}
 		return Outcome{}, err
@@ -391,11 +391,11 @@ func routeFromStore(route store.FeishuAgentRoute) gateway.FeishuRouteAgent {
 // dev/routes.go — all three must agree since they create the same
 // conversation rows.
 func ConversationTitle(text string) string {
-	const prefix = "[飞书] "
+	const prefix = "[Feishu] "
 	const maxRunes = 30
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
-		return prefix + "未命名"
+		return prefix + "Untitled"
 	}
 	runes := []rune(trimmed)
 	if len(runes) > maxRunes {

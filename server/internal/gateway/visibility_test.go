@@ -223,7 +223,7 @@ func TestVisibilityIsValid(t *testing.T) {
 // TestWorkspaceOnlyReply_RendersOwnersAndJoinURL pins the rejection-card
 // text shape for visibility=workspace denials. The card is the only
 // outward signal the Feishu sender has — small wording drifts (missing
-// owner names, broken link, leftover "管理员: " with empty list) are not
+// owner names, broken link, leftover "Admins: " with empty list) are not
 // caught elsewhere, so we lock the matrix here.
 func TestWorkspaceOnlyReply_RendersOwnersAndJoinURL(t *testing.T) {
 	t.Parallel()
@@ -243,44 +243,44 @@ func TestWorkspaceOnlyReply_RendersOwnersAndJoinURL(t *testing.T) {
 			name: "owners_and_join_url",
 			ws: WorkspaceInfo{
 				Name:       wsName,
-				OwnerNames: []string{"张三"},
+				OwnerNames: []string{"Alice"},
 				JoinURL:    url,
 			},
 			mustHave: []string{
-				wsName, "管理员: 张三", "[申请加入 workspace](" + url + ")",
+				wsName, "Admins: Alice", "[Request to join workspace](" + url + ")",
 			},
-			mustNotHas: []string{"请联系", "等 ", " 人"},
+			mustNotHas: []string{"Contact", "and ", " others"},
 		},
 		{
 			name: "many_owners_truncate_to_two_plus_count",
 			ws: WorkspaceInfo{
 				Name:       wsName,
-				OwnerNames: []string{"张三", "李四", "王五", "赵六"},
+				OwnerNames: []string{"Alice", "Bob", "Carol", "Dave"},
 				JoinURL:    url,
 			},
-			mustHave: []string{"管理员: 张三、李四 等 4 人", url},
+			mustHave: []string{"Admins: Alice, Bob and 4 others", url},
 			// must not list the truncated owners after the first 2
-			mustNotHas: []string{"王五", "赵六"},
+			mustNotHas: []string{"Carol", "Dave"},
 		},
 		{
 			name: "two_owners_no_count_suffix",
 			ws: WorkspaceInfo{
 				Name:       wsName,
-				OwnerNames: []string{"张三", "李四"},
+				OwnerNames: []string{"Alice", "Bob"},
 				JoinURL:    url,
 			},
-			mustHave:   []string{"管理员: 张三、李四", url},
-			mustNotHas: []string{"等 ", " 人"},
+			mustHave:   []string{"Admins: Alice, Bob", url},
+			mustNotHas: []string{"and ", " others"},
 		},
 		{
 			name: "no_join_url_with_owners_falls_back_to_contact_admin",
 			ws: WorkspaceInfo{
 				Name:       wsName,
-				OwnerNames: []string{"张三"},
+				OwnerNames: []string{"Alice"},
 				JoinURL:    "",
 			},
-			mustHave:   []string{"管理员: 张三", "请联系上述管理员加入"},
-			mustNotHas: []string{"[申请加入", "https://", "请联系管理员开通"},
+			mustHave:   []string{"Admins: Alice", "Contact one of the admins above to join"},
+			mustNotHas: []string{"[Request to join", "https://", "Contact an admin to request access"},
 		},
 		{
 			name: "no_join_url_no_owners_falls_back_to_contact_admin_open",
@@ -289,8 +289,8 @@ func TestWorkspaceOnlyReply_RendersOwnersAndJoinURL(t *testing.T) {
 				OwnerNames: nil,
 				JoinURL:    "",
 			},
-			mustHave:   []string{wsName, "请联系管理员开通"},
-			mustNotHas: []string{"管理员: ", "[申请加入"},
+			mustHave:   []string{wsName, "Contact an admin to request access"},
+			mustNotHas: []string{"Admins: ", "[Request to join"},
 		},
 		{
 			name: "empty_owner_strings_dropped_silently",
@@ -299,19 +299,19 @@ func TestWorkspaceOnlyReply_RendersOwnersAndJoinURL(t *testing.T) {
 				OwnerNames: []string{"", "  ", ""},
 				JoinURL:    url,
 			},
-			// all owner entries are whitespace → no "管理员:" line at all,
+			// all owner entries are whitespace → no "Admins:" line at all,
 			// but the link still renders
 			mustHave:   []string{wsName, url},
-			mustNotHas: []string{"管理员:"},
+			mustNotHas: []string{"Admins:"},
 		},
 		{
 			name: "empty_workspace_name_falls_back_to_generic_lead",
 			ws: WorkspaceInfo{
 				Name:       "",
-				OwnerNames: []string{"张三"},
+				OwnerNames: []string{"Alice"},
 				JoinURL:    url,
 			},
-			mustHave: []string{"其所在 workspace 成员可用", "管理员: 张三", url},
+			mustHave: []string{"members of its workspace", "Admins: Alice", url},
 		},
 	}
 

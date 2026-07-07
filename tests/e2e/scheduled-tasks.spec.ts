@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test"
 
 // Opt-in: needs a running `make dev` stack (web + server + Postgres), an
 // authenticated session, and PARSAR_E2E_SCHEDULED_URL pointing at the
-// standalone 定时任务 page (协作现场 → 定时任务) for a workspace that already has
+// standalone Scheduled Tasks page (Collaboration → Scheduled tasks) for a workspace that already has
 // at least one enabled agent. Run with:
 //   PARSAR_E2E_SCHEDULED=1 PARSAR_E2E_SCHEDULED_URL='/admin?admin=scheduled' \
 //     pnpm --dir tests/e2e exec playwright test scheduled-tasks.spec.ts
@@ -31,5 +31,5 @@ test("create a scheduled task with an agent, run it now, see it in the list", as
 
   // Run-now returns 202; the click should not surface an error banner.
   await row.getByTestId("scheduled-run-now").click()
-  await expect(page.getByText(/Triggered a run|已触发一次运行/)).toBeVisible()
+  await expect(page.getByText(/Triggered a run/)).toBeVisible()
 })

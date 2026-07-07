@@ -228,10 +228,11 @@ export function useUndeprecate(workspaceID: string | null) {
   return useWorkspaceAction(workspaceID, "undeprecate")
 }
 
-// useDelete 不是 marketplace 动作,但走同一条 capabilities 路由,所以挂这里。
-// 后端返回 200 即代表已写 deleted_at;失败有两类:409(还有 agent 在用,带
-// binding_count) / 500(其他)。组件层用 ApiError 自带的 status + message
-// 直接展示,无需在这里特殊处理。
+// useDelete isn't a marketplace action, but shares the capabilities route so
+// it lives here. A 200 response means deleted_at was written; failures come in
+// two flavours: 409 (still bound to agents, with binding_count) / 500 (other).
+// Components render ApiError's built-in status + message directly, so no
+// special handling is needed here.
 export function useDelete(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({

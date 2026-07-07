@@ -33,11 +33,11 @@ type FeishuRouter interface {
 
 	// GetWorkspaceVisibility returns "public" or "private". Used only
 	// in the visibility=workspace rejection path to decide whether to
-	// surface a "申请加入" link. Errors are swallowed by the caller.
+	// surface a "Request to join" link. Errors are swallowed by the caller.
 	GetWorkspaceVisibility(ctx context.Context, workspaceID string) (string, error)
 
 	// ListWorkspaceOwnerNames returns up to `limit` active-owner names
-	// (earliest-joined first), used to render "管理员: A、B" inside
+	// (earliest-joined first), used to render "Admins: A, B" inside
 	// the rejection card. Errors are swallowed by the caller.
 	ListWorkspaceOwnerNames(ctx context.Context, workspaceID string, limit int32) ([]string, error)
 }
@@ -142,10 +142,10 @@ func (e FeishuInboundEvent) ReplyAnchorMessageID() string {
 }
 
 // ThreadKey returns the identifier that groups every inbound from the
-// same Feishu 话题 (thread) into one Parsar conversation. Picked
+// same Feishu thread into one Parsar conversation. Picked
 // from RootID then MessageID — NOT ThreadID.
 //
-// Why not ThreadID: Feishu's 话题 panel populates ThreadID with a
+// Why not ThreadID: Feishu's thread panel populates ThreadID with a
 // separate identifier (e.g. omt_…) that has no overlap with the root's
 // MessageID. Using it would split root and replies into two
 // conversations. RootID is consistent: replies stamp the root's
@@ -297,7 +297,7 @@ func RouteInboundToAgent(ctx context.Context, router FeishuRouter, event Inbound
 	// Only fetch owner names + visibility when the gate is about to
 	// deny on visibility=workspace. Errors are swallowed: the
 	// rejection must still go out; the card degrades to the
-	// "请联系管理员开通" fallback.
+	// "Contact an admin to request access" fallback.
 	if agent.Visibility == VisibilityWorkspace && !workspaceMember {
 		if cfg.JoinURLBuilder != nil {
 			if vis, err := router.GetWorkspaceVisibility(ctx, agent.WorkspaceID); err == nil && vis == workspaceVisibilityPublic {
@@ -325,8 +325,8 @@ func RouteInboundToAgent(ctx context.Context, router FeishuRouter, event Inbound
 // cycle.
 const workspaceVisibilityPublic = "public"
 
-// workspaceOwnerHintLimit caps owner-name reads for the "管理员: A、B
-// 等 N 人" line. Capped at 5 to avoid unbounded reads on workspaces
+// workspaceOwnerHintLimit caps owner-name reads for the "Admins: A, B
+// and N others" line. Capped at 5 to avoid unbounded reads on workspaces
 // with hundreds of co-owners.
 const workspaceOwnerHintLimit = 5
 
