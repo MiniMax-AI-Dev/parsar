@@ -31,6 +31,20 @@ func (d GitHubConnectionDeps) redirectURL() string {
 	return adminRedirectURL(d.RedirectURL, "connections", "github")
 }
 
+// githubConnectionStartHandler is GET /api/v1/connections/github/start.
+// Mints a CSRF state cookie and 302-redirects the browser to GitHub's OAuth
+// authorize URL so the current user can grant access to their account.
+//
+//	@Summary		Start GitHub personal OAuth connection
+//	@Description	Mints a CSRF state cookie and 302-redirects to GitHub's authorize URL. The resulting access token is later stored as the caller's github_pat credential.
+//	@Tags			connections
+//	@ID				startDevGitHubConnection
+//	@Produce		json
+//	@Success		302	"Redirect to GitHub authorize URL"
+//	@Failure		401	{object}	map[string]string	"Not authenticated"
+//	@Failure		500	{object}	map[string]string	"CSRF state minting failed"
+//	@Failure		503	{object}	map[string]string	"GitHub OAuth not configured"
+//	@Router			/api/v1/connections/github/start [get]
 func githubConnectionStartHandler(runtimeStore RuntimeStore, deps GitHubConnectionDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireAuthenticatedUser(w, r, runtimeStore); !ok {
@@ -60,6 +74,24 @@ func githubConnectionStartHandler(runtimeStore RuntimeStore, deps GitHubConnecti
 	}
 }
 
+// githubConnectionCallbackHandler is GET /api/v1/connections/github/callback.
+// Verifies CSRF state, exchanges the code for an access token, persists it
+// as the current user's github_pat credential, then redirects back to the
+// admin Connections view.
+//
+//	@Summary		Handle GitHub OAuth callback
+//	@Description	Verifies CSRF state, exchanges the code for a GitHub access token, persists it as the caller's github_pat credential, and 302-redirects to the admin Connections view.
+//	@Tags			connections
+//	@ID				callbackDevGitHubConnection
+//	@Produce		json
+//	@Param			state	query		string	true	"CSRF state minted at /start"
+//	@Param			code	query		string	true	"OAuth authorization code returned by GitHub"
+//	@Success		302		"Redirect to admin Connections view"
+//	@Failure		400		{object}	map[string]string	"Missing state/code or CSRF mismatch"
+//	@Failure		401		{object}	map[string]string	"Not authenticated"
+//	@Failure		502		{object}	map[string]string	"GitHub OAuth exchange failed"
+//	@Failure		503		{object}	map[string]string	"GitHub OAuth not configured"
+//	@Router			/api/v1/connections/github/callback [get]
 func githubConnectionCallbackHandler(runtimeStore RuntimeStore, deps GitHubConnectionDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := requireAuthenticatedUser(w, r, runtimeStore)

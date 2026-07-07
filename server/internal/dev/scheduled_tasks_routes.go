@@ -27,6 +27,19 @@ func scheduledTaskScope(w http.ResponseWriter, ctx context.Context, rs RuntimeSt
 	return scope, true
 }
 
+// listScheduledTasks returns every scheduled task defined for one agent.
+//
+//	@Summary		List an agent's scheduled tasks
+//	@Description	Returns all scheduled tasks defined on the given agent. Caller must be a workspace member.
+//	@Tags			scheduled-tasks
+//	@ID				listDevAgentScheduledTasks
+//	@Produce		json
+//	@Param			agentID	path		string					true	"Agent UUID"
+//	@Success		200		{array}		map[string]interface{}	"Scheduled tasks for the agent"
+//	@Failure		400		{object}	map[string]string		"agent_id must be a valid uuid"
+//	@Failure		403		{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		503		{object}	map[string]string		"Database-backed APIs are disabled"
+//	@Router			/api/v1/agents/{agentID}/scheduled-tasks [get]
 func listScheduledTasks(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -55,6 +68,21 @@ func listScheduledTasks(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listScheduledTasksByWorkspace returns every scheduled task in the workspace.
+//
+//	@Summary		List scheduled tasks for a workspace
+//	@Description	Paginated list of every scheduled task in the workspace across all agents. Caller must be a workspace member.
+//	@Tags			scheduled-tasks
+//	@ID				listDevWorkspaceScheduledTasks
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			limit		query		int						false	"Max rows to return (default 50)"
+//	@Param			offset		query		int						false	"Row offset for pagination"
+//	@Success		200			{object}	map[string]interface{}	"Paged scheduled task list"
+//	@Failure		400			{object}	map[string]string		"workspace_id must be a valid uuid"
+//	@Failure		403			{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		503			{object}	map[string]string		"Database-backed APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/scheduled-tasks [get]
 func listScheduledTasksByWorkspace(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -86,6 +114,20 @@ func listScheduledTasksByWorkspace(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// getScheduledTask returns a single scheduled task by id.
+//
+//	@Summary		Get a scheduled task
+//	@Description	Returns the scheduled task detail. Caller must be a member of the workspace owning the task.
+//	@Tags			scheduled-tasks
+//	@ID				getDevScheduledTask
+//	@Produce		json
+//	@Param			taskID	path		string					true	"Scheduled task UUID"
+//	@Success		200		{object}	map[string]interface{}	"Scheduled task"
+//	@Failure		400		{object}	map[string]string		"task_id must be a valid uuid"
+//	@Failure		403		{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		404		{object}	map[string]string		"Scheduled task not found"
+//	@Failure		503		{object}	map[string]string		"Database-backed APIs are disabled"
+//	@Router			/api/v1/scheduled-tasks/{taskID} [get]
 func getScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -118,6 +160,20 @@ func getScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listScheduledTaskRuns returns the run history for one scheduled task.
+//
+//	@Summary		List runs for a scheduled task
+//	@Description	Returns up to 50 most recent agent_run rows spawned by this scheduled task. Caller must be a workspace member.
+//	@Tags			scheduled-tasks
+//	@ID				listDevScheduledTaskRuns
+//	@Produce		json
+//	@Param			taskID	path		string					true	"Scheduled task UUID"
+//	@Success		200		{array}		map[string]interface{}	"Recent runs for the scheduled task"
+//	@Failure		400		{object}	map[string]string		"task_id must be a valid uuid"
+//	@Failure		403		{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		404		{object}	map[string]string		"Scheduled task not found"
+//	@Failure		503		{object}	map[string]string		"Database-backed APIs are disabled"
+//	@Router			/api/v1/scheduled-tasks/{taskID}/runs [get]
 func listScheduledTaskRuns(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -155,6 +211,21 @@ type scheduledTaskCreateBody struct {
 	FeishuChatID string `json:"feishu_chat_id"`
 }
 
+// createScheduledTask creates a scheduled task for one agent.
+//
+//	@Summary		Create a scheduled task
+//	@Description	Registers a new scheduled task on the given agent. cron_expr + timezone are validated and next_run_at is precomputed. Caller must be a workspace member with edit rights (not viewer).
+//	@Tags			scheduled-tasks
+//	@ID				createDevAgentScheduledTask
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path		string					true	"Agent UUID"
+//	@Param			body	body		scheduledTaskCreateBody	true	"Scheduled task payload"
+//	@Success		201		{object}	map[string]interface{}	"Created scheduled task"
+//	@Failure		400		{object}	map[string]string		"agent_id invalid, body invalid, or cron_expr/timezone bad"
+//	@Failure		403		{object}	map[string]string		"Caller is a viewer or not a workspace member"
+//	@Failure		503		{object}	map[string]string		"Database-backed APIs are disabled"
+//	@Router			/api/v1/agents/{agentID}/scheduled-tasks [post]
 func createScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -223,6 +294,22 @@ type scheduledTaskUpdateBody struct {
 	Enabled  bool   `json:"enabled"`
 }
 
+// updateScheduledTask patches a scheduled task's schedule and prompt.
+//
+//	@Summary		Update a scheduled task
+//	@Description	Overwrites the scheduled task's name/prompt/cron/timezone/enabled fields; next_run_at is recomputed from cron_expr + timezone. Caller must be a workspace member with edit rights.
+//	@Tags			scheduled-tasks
+//	@ID				updateDevScheduledTask
+//	@Accept			json
+//	@Produce		json
+//	@Param			taskID	path		string					true	"Scheduled task UUID"
+//	@Param			body	body		scheduledTaskUpdateBody	true	"Scheduled task update payload"
+//	@Success		200		{object}	map[string]interface{}	"Updated scheduled task"
+//	@Failure		400		{object}	map[string]string		"task_id invalid, body invalid, or cron_expr/timezone bad"
+//	@Failure		403		{object}	map[string]string		"Caller is a viewer or not a workspace member"
+//	@Failure		404		{object}	map[string]string		"Scheduled task not found"
+//	@Failure		503		{object}	map[string]string		"Database-backed APIs are disabled"
+//	@Router			/api/v1/scheduled-tasks/{taskID} [patch]
 func updateScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -271,6 +358,19 @@ func updateScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// deleteScheduledTask soft-deletes a scheduled task.
+//
+//	@Summary		Delete a scheduled task
+//	@Description	Soft-deletes the scheduled task. Idempotent; caller must be a workspace member with edit rights.
+//	@Tags			scheduled-tasks
+//	@ID				deleteDevScheduledTask
+//	@Param			taskID	path	string	true	"Scheduled task UUID"
+//	@Success		204		"Scheduled task deleted"
+//	@Failure		400		{object}	map[string]string	"task_id must be a valid uuid"
+//	@Failure		403		{object}	map[string]string	"Caller is a viewer or not a workspace member"
+//	@Failure		404		{object}	map[string]string	"Scheduled task not found"
+//	@Failure		503		{object}	map[string]string	"Database-backed APIs are disabled"
+//	@Router			/api/v1/scheduled-tasks/{taskID} [delete]
 func deleteScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {
@@ -298,6 +398,21 @@ func deleteScheduledTask(rs RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// runScheduledTaskNow triggers an out-of-band execution of the task.
+//
+//	@Summary		Trigger a scheduled task immediately
+//	@Description	Enqueues an out-of-band execution of the task, independent of cron cadence. 409 if another run is already active for the same task.
+//	@Tags			scheduled-tasks
+//	@ID				runDevScheduledTaskNow
+//	@Produce		json
+//	@Param			taskID	path		string				true	"Scheduled task UUID"
+//	@Success		202		{object}	map[string]string	"Run enqueued; response carries run_id"
+//	@Failure		400		{object}	map[string]string	"task_id must be a valid uuid"
+//	@Failure		403		{object}	map[string]string	"Caller is a viewer or not a workspace member"
+//	@Failure		404		{object}	map[string]string	"Scheduled task not found"
+//	@Failure		409		{object}	map[string]string	"A run is already active for this task"
+//	@Failure		503		{object}	map[string]string	"Database-backed APIs are disabled"
+//	@Router			/api/v1/scheduled-tasks/{taskID}/run-now [post]
 func runScheduledTaskNow(rs RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if rs == nil {

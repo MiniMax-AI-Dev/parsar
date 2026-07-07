@@ -22,6 +22,25 @@ type cancelAgentRunBody struct {
 	Reason string `json:"reason"`
 }
 
+// cancelAgentRun is POST /api/v1/agent-runs/{runID}/cancel. Flips the run
+// to cancelled, aborts the underlying connector session, and emits a
+// run.cancelled lifecycle event.
+//
+//	@Summary		Cancel a single agent run
+//	@Description	Marks the run cancelled, tells the connector to abort its session, and records a run.cancelled lifecycle event. Idempotent — completed / failed / cancelled runs return 422.
+//	@Tags			agent-runs
+//	@ID				cancelDevAgentRun
+//	@Accept			json
+//	@Produce		json
+//	@Param			runID	path		string					true	"Agent run UUID"
+//	@Param			body	body		cancelAgentRunBody		false	"Optional cancel reason"
+//	@Success		200		{object}	map[string]string		"Run cancelled or already cancelling"
+//	@Failure		400		{object}	map[string]string		"run_id is not a valid uuid or invalid json body"
+//	@Failure		403		{object}	map[string]string		"Caller is not a workspace member or is viewer-only"
+//	@Failure		404		{object}	map[string]string		"Run not found"
+//	@Failure		422		{object}	map[string]interface{}	"Run already in a terminal status"
+//	@Failure		503		{object}	map[string]string		"Database-backed run cancel is disabled"
+//	@Router			/api/v1/agent-runs/{runID}/cancel [post]
 func cancelAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -134,6 +153,26 @@ func emitCancelAudit(cfg *routerConfig, r *http.Request, run store.AgentRunDetai
 // run is marked cancelled and the connector is told to Abort each one.
 // Used by the "取消全部" button on the web conversation header and by
 // the Feishu /cancel all command.
+// cancelConversationRuns handles POST /conversations/{conversationID}/cancel-all.
+// One-shot bulk cancel for the conversation: every queued / running
+// run is marked cancelled and the connector is told to Abort each one.
+// Used by the "取消全部" button on the web conversation header and by
+// the Feishu /cancel all command.
+//
+//	@Summary		Cancel every inflight run for a conversation
+//	@Description	Bulk cancel: every queued / running run in the conversation is marked cancelled and the connector is told to abort each one. Returns the count of cancelled runs.
+//	@Tags			agent-runs
+//	@ID				cancelDevConversationRuns
+//	@Accept			json
+//	@Produce		json
+//	@Param			conversationID	path		string					true	"Conversation UUID"
+//	@Param			body			body		cancelAgentRunBody		false	"Optional cancel reason"
+//	@Success		200				{object}	map[string]interface{}	"{status, conversation_id, cancelled_count}"
+//	@Failure		400				{object}	map[string]string		"conversation_id is not a valid uuid or invalid json body"
+//	@Failure		403				{object}	map[string]string		"Caller is not a workspace member or is viewer-only"
+//	@Failure		404				{object}	map[string]string		"Conversation not found"
+//	@Failure		503				{object}	map[string]string		"Bulk cancel not supported by current store"
+//	@Router			/api/v1/conversations/{conversationID}/cancel-all [post]
 func cancelConversationRuns(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {

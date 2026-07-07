@@ -208,6 +208,24 @@ type createPairingResponse struct {
 	PairingToken string     `json:"pairing_token"`
 }
 
+// createPairing mints a new agent-daemon runtime plus a short-lived
+// pairing token that the daemon exchanges for a long-lived credential
+// via pairRuntime.
+//
+//	@Summary		Create runtime pairing
+//	@Description	Owner/admin only. Registers a new agent-daemon runtime for the workspace and returns a short-lived pairing token. The daemon calls POST /api/v1/runtimes/pair with this token to complete pairing.
+//	@Tags			runtimes
+//	@ID				createWorkspaceRuntimePairing
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			body		body		createPairingRequest	true	"Pairing request"
+//	@Success		201			{object}	createPairingResponse	"Runtime created and pairing token issued"
+//	@Failure		400			{object}	map[string]string		"Bad request"
+//	@Failure		401			{object}	map[string]string		"Session required"
+//	@Failure		403			{object}	map[string]string		"Owner or admin required"
+//	@Failure		409			{object}	map[string]string		"Runtime name already taken"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtimes [post]
 func (h *handler) createPairing(w http.ResponseWriter, r *http.Request) {
 	wid := chi.URLParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceAdmin(w, r, wid)
@@ -259,6 +277,25 @@ func (h *handler) createPairing(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// listRuntimes returns runtimes visible to the caller within the
+// workspace. Any workspace role may read.
+//
+//	@Summary		List workspace runtimes
+//	@Description	Returns runtimes registered in the workspace. Any workspace role may read. Supports filtering by type / placement / liveness / agent_kind and paging via limit.
+//	@Tags			runtimes
+//	@ID				listWorkspaceRuntimes
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			type		query		string					false	"Filter by runtime type"	Enums(agent_daemon, sandbox, external)
+//	@Param			placement	query		string					false	"Filter by placement"		Enums(local_device, cloud_sandbox, external_agent)
+//	@Param			liveness	query		string					false	"Filter by liveness"		Enums(pending_pairing, offline, online, error)
+//	@Param			agent_kind	query		string					false	"Filter by supported agent kind (e.g. claude_code)"
+//	@Param			limit		query		int						false	"Page size (default 100, max 500)"
+//	@Success		200			{object}	map[string]interface{}	"{ runtimes: [Runtime] }"
+//	@Failure		400			{object}	map[string]string		"Bad filter"
+//	@Failure		401			{object}	map[string]string		"Session required"
+//	@Failure		403			{object}	map[string]string		"Not a workspace member"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtimes [get]
 func (h *handler) listRuntimes(w http.ResponseWriter, r *http.Request) {
 	wid := chi.URLParam(r, "workspaceID")
 	if _, ok := h.requireWorkspaceMember(w, r, wid); !ok {
@@ -484,6 +521,21 @@ func configStringList(raw any) []string {
 	}
 }
 
+// getRuntime returns a single runtime row scoped to the workspace.
+// Any workspace role may read.
+//
+//	@Summary		Get workspace runtime
+//	@Description	Returns a single runtime by id, scoped to the workspace. Any workspace role may read.
+//	@Tags			runtimes
+//	@ID				getWorkspaceRuntime
+//	@Produce		json
+//	@Param			workspaceID	path		string				true	"Workspace UUID"
+//	@Param			runtimeID	path		string				true	"Runtime UUID"
+//	@Success		200			{object}	runtimeDTO			"Runtime"
+//	@Failure		401			{object}	map[string]string	"Session required"
+//	@Failure		403			{object}	map[string]string	"Not a workspace member"
+//	@Failure		404			{object}	map[string]string	"Runtime not found in workspace"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtimes/{runtimeID} [get]
 func (h *handler) getRuntime(w http.ResponseWriter, r *http.Request) {
 	wid := chi.URLParam(r, "workspaceID")
 	if _, ok := h.requireWorkspaceMember(w, r, wid); !ok {
@@ -506,6 +558,24 @@ type patchRequest struct {
 	Name string `json:"name"`
 }
 
+// patchRuntime updates mutable fields on a runtime. Owner/admin only.
+//
+//	@Summary		Patch workspace runtime
+//	@Description	Owner/admin only. Updates mutable fields on a runtime (currently: name).
+//	@Tags			runtimes
+//	@ID				patchWorkspaceRuntime
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path		string				true	"Workspace UUID"
+//	@Param			runtimeID	path		string				true	"Runtime UUID"
+//	@Param			body		body		patchRequest		true	"Fields to update"
+//	@Success		200			{object}	runtimeDTO			"Updated runtime"
+//	@Failure		400			{object}	map[string]string	"Bad request"
+//	@Failure		401			{object}	map[string]string	"Session required"
+//	@Failure		403			{object}	map[string]string	"Owner or admin required"
+//	@Failure		404			{object}	map[string]string	"Runtime not found in workspace"
+//	@Failure		409			{object}	map[string]string	"Runtime name already taken"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtimes/{runtimeID} [patch]
 func (h *handler) patchRuntime(w http.ResponseWriter, r *http.Request) {
 	wid := chi.URLParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceAdmin(w, r, wid)
@@ -540,6 +610,20 @@ func (h *handler) patchRuntime(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newRuntimeDTO(rt))
 }
 
+// deleteRuntime soft-deletes a runtime. Owner/admin only.
+//
+//	@Summary		Delete workspace runtime
+//	@Description	Owner/admin only. Soft-deletes the runtime; heartbeat and admin lookups will no longer see the row.
+//	@Tags			runtimes
+//	@ID				deleteWorkspaceRuntime
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			runtimeID	path	string	true	"Runtime UUID"
+//	@Success		204			"Deleted"
+//	@Failure		401			{object}	map[string]string	"Session required"
+//	@Failure		403			{object}	map[string]string	"Owner or admin required"
+//	@Failure		404			{object}	map[string]string	"Runtime not found in workspace"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtimes/{runtimeID} [delete]
 func (h *handler) deleteRuntime(w http.ResponseWriter, r *http.Request) {
 	wid := chi.URLParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceAdmin(w, r, wid)
@@ -575,6 +659,22 @@ type pairResponse struct {
 	RunnerCredential string     `json:"runner_credential"`
 }
 
+// pairRuntime consumes a pairing token issued by createPairing and
+// mints a long-lived runner credential in exchange. OPEN endpoint —
+// the daemon has no credential yet.
+//
+//	@Summary		Complete runtime pairing
+//	@Description	Consumes a pairing token minted by POST /api/v1/workspaces/{workspaceID}/runtimes and returns the runner credential used to authenticate subsequent heartbeats. Open endpoint — the daemon has no credential yet.
+//	@Tags			runtimes
+//	@ID				pairRuntime
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		pairRequest			true	"Pairing token exchange"
+//	@Success		200		{object}	pairResponse		"Runtime promoted and runner credential minted"
+//	@Failure		400		{object}	map[string]string	"Bad request"
+//	@Failure		401		{object}	map[string]string	"Pairing token invalid or expired"
+//	@Failure		500		{object}	map[string]string	"Credential mint or persist failed"
+//	@Router			/api/v1/runtimes/pair [post]
 func (h *handler) pairRuntime(w http.ResponseWriter, r *http.Request) {
 	var body pairRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -625,6 +725,22 @@ type heartbeatResponse struct {
 	Liveness string `json:"liveness"`
 }
 
+// runnerHeartbeat refreshes the runtime's last-seen timestamp and
+// flips its liveness state. Requires a bearer credential minted by
+// pairRuntime.
+//
+//	@Summary		Runtime heartbeat
+//	@Description	Called by the runner daemon to refresh last_heartbeat_at and flip liveness to online. Requires the bearer credential minted by POST /api/v1/runtimes/pair.
+//	@Tags			runtimes
+//	@ID				runnerHeartbeat
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			runtimeID	path		string				true	"Runtime UUID"
+//	@Success		200			{object}	heartbeatResponse	"Heartbeat accepted, current liveness"
+//	@Failure		400			{object}	map[string]string	"Missing runtime id"
+//	@Failure		401			{object}	map[string]string	"Missing / invalid bearer credential"
+//	@Failure		500			{object}	map[string]string	"Store error"
+//	@Router			/api/v1/runtimes/{runtimeID}/heartbeat [post]
 func (h *handler) runnerHeartbeat(w http.ResponseWriter, r *http.Request) {
 	rt, _ := runtimeFromContext(r.Context())
 	hb, err := h.deps.Store.TouchRuntimeHeartbeat(r.Context(), rt.ID)

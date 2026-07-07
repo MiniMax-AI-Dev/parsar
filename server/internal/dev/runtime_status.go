@@ -70,6 +70,19 @@ type runtimeStatusResponse struct {
 // runtimeStatus returns the workspace runtime status. 503 when no
 // SettingsStore is wired so the StatusBanner can render an explicit
 // "not configured" rather than guess.
+//
+//	@Summary		Get workspace runtime status
+//	@Description	Backs the RuntimeStatusBanner. Reports whether the workspace has a runtime credential registered, whether the sandbox provider is reachable, how many agents are configured for sandbox runtime, and the deployment profile (oss/selfhost/managed).
+//	@Tags			runtimes
+//	@ID				getDevWorkspaceRuntimeStatus
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Success		200			{object}	runtimeStatusResponse	"Runtime status snapshot"
+//	@Failure		403			{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		404			{object}	map[string]string		"Workspace not found"
+//	@Failure		500			{object}	map[string]string		"Runtime settings unavailable"
+//	@Failure		503			{object}	map[string]string		"Runtime status not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtime/status [get]
 func runtimeStatus(deps RuntimeStatusDeps) http.HandlerFunc {
 	timeout := deps.PingTimeout
 	if timeout <= 0 {

@@ -32,9 +32,23 @@ func RegisterParsarDaemonInstallRoute(r chi.Router, cfg ParsarDaemonInstallConfi
 			fmt.Sprintf(`DEFAULT_REPO=%q`, repo),
 			1)
 	}
-	r.Get("/api/v1/parsar-daemon/install.sh", func(w http.ResponseWriter, _ *http.Request) {
+	r.Get("/api/v1/parsar-daemon/install.sh", parsarDaemonInstallHandler(script))
+}
+
+// parsarDaemonInstallHandler serves the rendered install script body.
+// Extracted so swag can attach annotations to a named function.
+//
+//	@Summary	Serve parsar-daemon install script
+//	@Description	Returns the shell script that fetches and installs the parsar-daemon binary. Unauthenticated — the script itself has no secrets.
+//	@Tags		runtimes
+//	@ID			installParsarDaemonScript
+//	@Produce	plain
+//	@Success	200 {string} string "install script body"
+//	@Router		/api/v1/parsar-daemon/install.sh [get]
+func parsarDaemonInstallHandler(script string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write([]byte(script))
-	})
+	}
 }

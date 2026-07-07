@@ -67,6 +67,20 @@ type listSandboxesResponse struct {
 	Sandboxes []sandboxStatusResponse `json:"sandboxes"`
 }
 
+// listSandboxes returns every active sandbox binding in the workspace.
+//
+//	@Summary		List active sandboxes in a workspace
+//	@Description	Returns every active sandbox binding for the workspace, newest-first. Powers the admin Sandboxes page. 503 in local mode when sandbox lifecycle store is not wired.
+//	@Tags			sandboxes
+//	@ID				listDevWorkspaceSandboxes
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			limit		query		int						false	"Max bindings to return"
+//	@Success		200			{object}	listSandboxesResponse	"Active sandbox bindings"
+//	@Failure		400			{object}	map[string]string		"workspace_id must be a UUID"
+//	@Failure		403			{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/sandboxes [get]
 func listSandboxes(deps sandboxAdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.store == nil {
@@ -113,6 +127,19 @@ func parseInt32(s string) (int32, error) {
 // agent) tuple. Returns 200 + JSON `null` when no active binding
 // exists — the frontend treats `null` as the empty state. Operation
 // endpoints (kill/rebuild/test-connection) still 404 in this case.
+//
+//	@Summary		Get an agent's sandbox status
+//	@Description	Returns the current sandbox binding for the (workspace, agent) tuple, folding in the live e2b TTL when the manager is wired. Returns 200 with JSON null when no active binding exists.
+//	@Tags			sandboxes
+//	@ID				getDevAgentSandboxStatus
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			agentID		path		string					true	"Agent UUID"
+//	@Success		200			{object}	sandboxStatusResponse	"Active sandbox binding, or null when unbound"
+//	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
+//	@Failure		403			{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox [get]
 func getSandboxStatus(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.store == nil {
@@ -162,6 +189,20 @@ func getSandboxStatus(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager
 // killSandbox tears down the agent's sandbox: Release evicts cache + kills
 // E2B + marks DB, then clears agents.runtime_id so dispatch stops
 // routing to the dead device.
+//
+//	@Summary		Kill an agent's sandbox
+//	@Description	Tears down the agent's sandbox: Release evicts the in-memory cache, kills the E2B instance, marks the DB row killed, then clears agents.runtime_id so future dispatches spawn fresh. Owner/admin only.
+//	@Tags			sandboxes
+//	@ID				killDevAgentSandbox
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			agentID		path		string					true	"Agent UUID"
+//	@Success		200			{object}	map[string]interface{}	"Sandbox killed"
+//	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
+//	@Failure		403			{object}	map[string]string		"Caller is not workspace owner/admin"
+//	@Failure		404			{object}	map[string]string		"No active sandbox binding to act on"
+//	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill [post]
 func killSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr AgentDaemonSandboxManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		performLifecycleAction(w, r, deps, runtimeStore, daemonMgr, "killed")
@@ -169,6 +210,20 @@ func killSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr Age
 }
 
 // rebuildSandbox kills the current sandbox and re-provisions a new one.
+//
+//	@Summary		Rebuild an agent's sandbox
+//	@Description	Kills the current sandbox and re-provisions a new one in the background using the agent's current config (sandbox_size, template). Returns immediately; the re-Acquire runs async and persists the new runtime_id when it completes. Owner/admin only.
+//	@Tags			sandboxes
+//	@ID				rebuildDevAgentSandbox
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			agentID		path		string					true	"Agent UUID"
+//	@Success		200			{object}	map[string]interface{}	"Sandbox killed and re-provisioning in background"
+//	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
+//	@Failure		403			{object}	map[string]string		"Caller is not workspace owner/admin"
+//	@Failure		404			{object}	map[string]string		"No active sandbox binding to rebuild"
+//	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild [post]
 func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr AgentDaemonSandboxManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.store == nil {
@@ -268,6 +323,22 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 // renewSandbox bumps the e2b TTL on the live sandbox. 503 if daemonMgr
 // isn't wired. 409 when this pod's cache doesn't own the binding (sibling
 // pod cold-started it).
+//
+//	@Summary		Renew an agent's sandbox TTL
+//	@Description	Bumps the e2b TTL on the live sandbox. 409 when this pod's cache doesn't own the binding (a sibling pod cold-started it); 502 on renew failure. Owner/admin only.
+//	@Tags			sandboxes
+//	@ID				renewDevAgentSandbox
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			agentID		path		string					true	"Agent UUID"
+//	@Success		200			{object}	map[string]interface{}	"Sandbox TTL extended"
+//	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
+//	@Failure		403			{object}	map[string]string		"Caller is not workspace owner/admin"
+//	@Failure		404			{object}	map[string]string		"No active sandbox binding to renew"
+//	@Failure		409			{object}	map[string]string		"Sandbox not owned by this pod"
+//	@Failure		502			{object}	map[string]string		"Renew failed at provider"
+//	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store or manager not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/renew [post]
 func renewSandbox(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.store == nil {
@@ -332,6 +403,20 @@ func renewSandbox(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager) ht
 // acquireSandbox provisions a sandbox for a agent that
 // currently has no active binding. Returns 202 immediately;
 // the front-end polls to pick up the result.
+//
+//	@Summary		Acquire a sandbox for an agent
+//	@Description	Fire-and-forget provisioning of a sandbox for an agent with no active binding. Returns 202 immediately; the front-end polls status to pick up the new runtime_id. Owner/admin only.
+//	@Tags			sandboxes
+//	@ID				createDevSandboxAcquire
+//	@Produce		json
+//	@Param			workspaceID	path		string				true	"Workspace UUID"
+//	@Param			agentID		path		string				true	"Agent UUID"
+//	@Success		200			{object}	map[string]string	"Agent is already bound to an active sandbox"
+//	@Success		202			{object}	map[string]string	"Provisioning started in background"
+//	@Failure		400			{object}	map[string]string	"workspace_id and agent_id must be UUIDs"
+//	@Failure		403			{object}	map[string]string	"Caller is not workspace owner/admin"
+//	@Failure		503			{object}	map[string]string	"agent_daemon sandbox provider not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/acquire [post]
 func acquireSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, provider AgentDaemonSandboxAcquirer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if provider == nil {

@@ -207,7 +207,31 @@ func RegisterInternalRoutes(r chi.Router, c *Connector, token string) {
 		panic("agent_daemon internal routes: connector required")
 	}
 	trimmedToken := strings.TrimSpace(token)
-	r.Post(internalStreamPromptPath, func(w http.ResponseWriter, req *http.Request) {
+	r.Post(internalStreamPromptPath, streamPromptInternalHandler(c, trimmedToken))
+	r.Post(internalSubmitPermissionPath, submitPermissionInternalHandler(c, trimmedToken))
+	r.Post(internalSubmitPromptForUserChoicePath, submitPromptForUserChoiceInternalHandler(c, trimmedToken))
+}
+
+// streamPromptInternalHandler is the owner-pod side of StreamPromptRemote:
+// verifies the shared bearer, asserts local ownership at the given
+// generation, then streams NDJSON PromptEvents back to the caller.
+//
+//	@Summary	Owner-pod stream-prompt (internal)
+//	@Description	Forwarded StreamPrompt entry point on the owner pod. Token-gated by the cluster-shared PARSAR_MASTER_KEY bearer.
+//	@Tags		internal
+//	@ID			streamPromptInternal
+//	@Accept		json
+//	@Produce	plain
+//	@Param		Authorization header string true "Bearer <cluster shared token>"
+//	@Param		body body remoteStreamPromptRequest true "generation + PromptInput"
+//	@Success	200 {string} string "NDJSON stream of PromptEvent (application/x-ndjson)"
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	409 {object} map[string]string "stale owner"
+//	@Failure	500 {object} map[string]string
+//	@Router		/internal/agent-daemon/stream-prompt [post]
+func streamPromptInternalHandler(c *Connector, trimmedToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 		if trimmedToken != "" && bearerFromAuth(req) != trimmedToken {
 			writeRemoteError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -238,9 +262,27 @@ func RegisterInternalRoutes(r chi.Router, c *Connector, token string) {
 				flush.Flush()
 			}
 		}
-	})
+	}
+}
 
-	r.Post(internalSubmitPermissionPath, func(w http.ResponseWriter, req *http.Request) {
+// submitPermissionInternalHandler is the owner-pod side of
+// SubmitPermissionRemote.
+//
+//	@Summary	Owner-pod submit-permission (internal)
+//	@Description	Forwarded SubmitPermission entry point on the owner pod. Token-gated by the cluster-shared bearer.
+//	@Tags		internal
+//	@ID			submitPermissionInternal
+//	@Accept		json
+//	@Produce	json
+//	@Param		Authorization header string true "Bearer <cluster shared token>"
+//	@Param		body body remoteSubmitPermissionRequest true "generation + PermissionDecision"
+//	@Success	200 {object} map[string]interface{} "{\"ok\":true}"
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	409 {object} map[string]string "stale owner"
+//	@Router		/internal/agent-daemon/submit-permission [post]
+func submitPermissionInternalHandler(c *Connector, trimmedToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 		if trimmedToken != "" && bearerFromAuth(req) != trimmedToken {
 			writeRemoteError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -261,9 +303,27 @@ func RegisterInternalRoutes(r chi.Router, c *Connector, token string) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true}`))
-	})
+	}
+}
 
-	r.Post(internalSubmitPromptForUserChoicePath, func(w http.ResponseWriter, req *http.Request) {
+// submitPromptForUserChoiceInternalHandler is the owner-pod side of
+// SubmitPromptForUserChoiceRemote.
+//
+//	@Summary	Owner-pod submit-prompt-for-user-choice (internal)
+//	@Description	Forwarded SubmitPromptForUserChoice entry point on the owner pod. Token-gated by the cluster-shared bearer.
+//	@Tags		internal
+//	@ID			submitPromptForUserChoiceInternal
+//	@Accept		json
+//	@Produce	json
+//	@Param		Authorization header string true "Bearer <cluster shared token>"
+//	@Param		body body remoteSubmitPromptForUserChoiceRequest true "generation + PromptForUserChoiceDecision"
+//	@Success	200 {object} map[string]interface{} "{\"ok\":true}"
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	409 {object} map[string]string "stale owner"
+//	@Router		/internal/agent-daemon/submit-prompt-for-user-choice [post]
+func submitPromptForUserChoiceInternalHandler(c *Connector, trimmedToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 		if trimmedToken != "" && bearerFromAuth(req) != trimmedToken {
 			writeRemoteError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -284,7 +344,7 @@ func RegisterInternalRoutes(r chi.Router, c *Connector, token string) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true}`))
-	})
+	}
 }
 
 func (c *Connector) assertLocalOwner(ctx context.Context, in connector.PromptInput, generation int64) error {

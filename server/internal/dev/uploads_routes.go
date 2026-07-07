@@ -60,6 +60,21 @@ var allowedKinds = map[string]struct{}{
 // presignUpload returns where/how the browser PUTs the zip bytes. The ref
 // is minted by the backend (OSS key or pg:<uuid>) with workspaceID bound
 // in so later downloads can verify ownership.
+//
+//	@Summary		Presign a plugin/skill upload
+//	@Description	Returns a presigned URL the browser PUTs the plugin/skill zip to. The blob backend (OSS or PG) mints a workspace-scoped ref that later downloads verify against. Caller must be workspace capability admin.
+//	@Tags			uploads
+//	@ID				createDevWorkspaceUploadPresign
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path		string					true	"Workspace UUID"
+//	@Param			body		body		presignUploadRequest	true	"Presign upload payload"
+//	@Success		200			{object}	presignUploadResponse	"Presigned upload spec"
+//	@Failure		400			{object}	map[string]string		"Body invalid, filename empty, or prefix not in {plugin,skill}"
+//	@Failure		403			{object}	map[string]string		"Caller lacks capability admin permission"
+//	@Failure		500			{object}	map[string]string		"Blob backend error"
+//	@Failure		503			{object}	map[string]string		"Object storage not configured"
+//	@Router			/api/v1/workspaces/{workspaceID}/uploads/presign-upload [post]
 func presignUpload(runtimeStore RuntimeStore, store blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
@@ -115,6 +130,21 @@ func presignUpload(runtimeStore RuntimeStore, store blob.Store) http.HandlerFunc
 
 // presignDownload returns where/how a client GETs the bytes. Validates the
 // ref belongs to the calling workspace to close the cross-tenant read hole.
+//
+//	@Summary		Presign a plugin/skill download
+//	@Description	Returns a presigned URL for downloading a previously-uploaded plugin/skill zip. Validates the ref belongs to the calling workspace (403 on mismatch) to close the cross-tenant read hole. Caller must be workspace capability admin.
+//	@Tags			uploads
+//	@ID				createDevWorkspaceDownloadPresign
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path		string						true	"Workspace UUID"
+//	@Param			body		body		presignDownloadRequest		true	"Presign download payload"
+//	@Success		200			{object}	presignDownloadResponse		"Presigned download spec"
+//	@Failure		400			{object}	map[string]string			"Body invalid or ossKey empty"
+//	@Failure		403			{object}	map[string]string			"Ref does not belong to this workspace"
+//	@Failure		500			{object}	map[string]string			"Blob backend error"
+//	@Failure		503			{object}	map[string]string			"Object storage not configured"
+//	@Router			/api/v1/workspaces/{workspaceID}/uploads/presign-download [post]
 func presignDownload(runtimeStore RuntimeStore, store blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)

@@ -19,6 +19,19 @@ type createFragmentRequest struct {
 	Tags  []string `json:"tags"`
 }
 
+//	@Summary	Create a workspace spec fragment
+//	@Description	Persists a manual (UI-authored) spec fragment for the workspace. Caller must be a workspace member.
+//	@Tags		memories
+//	@ID			createWorkspaceSpecFragment
+//	@Accept		json
+//	@Produce	json
+//	@Param		workspaceID path string true "workspace id"
+//	@Param		body body createFragmentRequest true "fragment content"
+//	@Success	201 {object} fragmentDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	403 {object} map[string]string
+//	@Router		/api/v1/workspaces/{workspaceID}/spec/fragments [post]
 func (h *handler) createFragment(w http.ResponseWriter, r *http.Request) {
 	wid := chiParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceMember(w, r, wid)
@@ -45,6 +58,20 @@ func (h *handler) createFragment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, newFragmentDTO(frag))
 }
 
+//	@Summary	List workspace spec fragments
+//	@Description	Returns spec fragments visible to the workspace. Optional source/tag filters narrow the list.
+//	@Tags		memories
+//	@ID			listWorkspaceSpecFragments
+//	@Produce	json
+//	@Param		workspaceID path string true "workspace id"
+//	@Param		source query string false "filter by source" Enums(manual, agent, import, user, auto-review)
+//	@Param		tag query string false "comma-separated tags"
+//	@Param		limit query int false "page size (1-500, default 100)"
+//	@Success	200 {object} map[string]interface{}
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	403 {object} map[string]string
+//	@Router		/api/v1/workspaces/{workspaceID}/spec/fragments [get]
 func (h *handler) listFragments(w http.ResponseWriter, r *http.Request) {
 	wid := chiParam(r, "workspaceID")
 	if _, ok := h.requireWorkspaceMember(w, r, wid); !ok {
@@ -75,6 +102,19 @@ type updateFragmentRequest struct {
 	Tags  []string `json:"tags"`
 }
 
+//	@Summary	Update a workspace spec fragment
+//	@Description	Mutates a fragment's content. Cross-workspace access is masked as 404 so ids aren't enumerable.
+//	@Tags		memories
+//	@ID			updateWorkspaceSpecFragment
+//	@Accept		json
+//	@Produce	json
+//	@Param		workspaceID path string true "workspace id"
+//	@Param		fragmentID path string true "fragment id"
+//	@Param		body body updateFragmentRequest true "new content"
+//	@Success	200 {object} fragmentDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/workspaces/{workspaceID}/spec/fragments/{fragmentID} [patch]
 func (h *handler) updateFragment(w http.ResponseWriter, r *http.Request) {
 	wid := chiParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceMember(w, r, wid)
@@ -118,6 +158,15 @@ func (h *handler) updateFragment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newFragmentDTO(frag))
 }
 
+//	@Summary	Delete a workspace spec fragment
+//	@Description	Deletes a spec fragment. Cross-workspace deletes are masked as 404.
+//	@Tags		memories
+//	@ID			deleteWorkspaceSpecFragment
+//	@Param		workspaceID path string true "workspace id"
+//	@Param		fragmentID path string true "fragment id"
+//	@Success	204
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/workspaces/{workspaceID}/spec/fragments/{fragmentID} [delete]
 func (h *handler) deleteFragment(w http.ResponseWriter, r *http.Request) {
 	wid := chiParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceMember(w, r, wid)
@@ -161,6 +210,19 @@ type importSpecResponse struct {
 	Pieces []importedFragmentDTO `json:"pieces"`
 }
 
+//	@Summary	Import a spec document
+//	@Description	Slices a spec document into fragments. confirm=false previews; confirm=true persists every piece with SourceImport.
+//	@Tags		memories
+//	@ID			importWorkspaceSpec
+//	@Accept		json
+//	@Produce	json
+//	@Param		workspaceID path string true "workspace id"
+//	@Param		body body importSpecRequest true "spec text and confirm flag"
+//	@Success	200 {object} importSpecResponse "preview (confirm=false)"
+//	@Success	201 {object} importSpecResponse "persisted (confirm=true)"
+//	@Failure	400 {object} map[string]string
+//	@Failure	500 {object} map[string]interface{} "partial import (rows persisted before failure)"
+//	@Router		/api/v1/workspaces/{workspaceID}/spec/import [post]
 func (h *handler) importSpec(w http.ResponseWriter, r *http.Request) {
 	wid := chiParam(r, "workspaceID")
 	userID, ok := h.requireWorkspaceMember(w, r, wid)
@@ -216,6 +278,18 @@ type createMemoryRequest struct {
 	ConversationID string   `json:"conversation_id"`
 }
 
+//	@Summary	Create a memory
+//	@Description	Persists a user- or workspace-scope memory. scope=user requires only a session; scope=workspace requires non-viewer workspace membership.
+//	@Tags		memories
+//	@ID			createMemory
+//	@Accept		json
+//	@Produce	json
+//	@Param		body body createMemoryRequest true "memory payload"
+//	@Success	201 {object} memoryDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	403 {object} map[string]string
+//	@Router		/api/v1/memories [post]
 func (h *handler) createMemory(w http.ResponseWriter, r *http.Request) {
 	var body createMemoryRequest
 	if err := decodeJSON(r, &body); err != nil {
@@ -257,6 +331,21 @@ func (h *handler) createMemory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, newMemoryDTO(mem))
 }
 
+//	@Summary	List memories
+//	@Description	Returns memories in the requested scope. scope=user returns the caller's private bucket; scope=workspace requires membership and a workspace_id query param.
+//	@Tags		memories
+//	@ID			listMemories
+//	@Produce	json
+//	@Param		scope query string true "memory scope" Enums(user, workspace)
+//	@Param		workspace_id query string false "workspace id (required when scope=workspace)"
+//	@Param		memory_type query string false "memory type filter" Enums(user, feedback, workspace, reference)
+//	@Param		tag query string false "comma-separated tag filter"
+//	@Param		limit query int false "page size (1-500, default 100)"
+//	@Success	200 {object} map[string]interface{}
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	403 {object} map[string]string
+//	@Router		/api/v1/memories [get]
 func (h *handler) listMemories(w http.ResponseWriter, r *http.Request) {
 	scope := specmemory.Scope(urlQuery(r, "scope"))
 	if !scope.Valid() {
@@ -319,6 +408,18 @@ type updateMemoryRequest struct {
 	Tags  []string `json:"tags"`
 }
 
+//	@Summary	Update a memory
+//	@Description	Mutates a memory's content. Cross-owner or cross-workspace access is masked as 404.
+//	@Tags		memories
+//	@ID			updateMemory
+//	@Accept		json
+//	@Produce	json
+//	@Param		memoryID path string true "memory id"
+//	@Param		body body updateMemoryRequest true "new content"
+//	@Success	200 {object} memoryDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/memories/{memoryID} [patch]
 func (h *handler) updateMemory(w http.ResponseWriter, r *http.Request) {
 	memID := chiParam(r, "memoryID")
 	existing, found, err := h.deps.Service.GetMemory(r.Context(), memID)
@@ -358,6 +459,14 @@ func (h *handler) updateMemory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newMemoryDTO(mem))
 }
 
+//	@Summary	Delete a memory
+//	@Description	Deletes a memory. Cross-owner or cross-workspace deletes are masked as 404.
+//	@Tags		memories
+//	@ID			deleteMemory
+//	@Param		memoryID path string true "memory id"
+//	@Success	204
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/memories/{memoryID} [delete]
 func (h *handler) deleteMemory(w http.ResponseWriter, r *http.Request) {
 	memID := chiParam(r, "memoryID")
 	existing, found, err := h.deps.Service.GetMemory(r.Context(), memID)

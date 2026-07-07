@@ -712,6 +712,22 @@ type verifyRequest struct {
 	Code  string `json:"code"`
 }
 
+// verifyDevAuth is POST /dev/auth/verify. Dev-only fake login: accepts a
+// {email, code} body where code must equal DevVerificationCode, then hands
+// back a dev bearer token + user shape mirroring the real auth flow so
+// smoke tests can bypass Feishu OIDC entirely.
+//
+//	@Summary		Dev-only email + code login
+//	@Description	Development-only login. Verifies the fixed dev code and returns a bearer token plus the default seed workspace + user. Never enable in production.
+//	@Tags			dev
+//	@ID				verifyDevAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		map[string]string		true	"{email, code}"
+//	@Success		200		{object}	map[string]interface{}	"Bearer token + user + workspace"
+//	@Failure		400		{object}	map[string]string		"Invalid json"
+//	@Failure		401		{object}	map[string]string		"Invalid dev credentials"
+//	@Router			/dev/auth/verify [post]
 func verifyDevAuth(w http.ResponseWriter, r *http.Request) {
 	var req verifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -774,6 +790,18 @@ type configureConversationExternalRefBody struct {
 	ExternalThreadID string `json:"external_thread_id"`
 }
 
+// createGatewayInbound writes an inbound gateway envelope to storage.
+//
+//	@Summary		Create an inbound gateway envelope
+//	@Description	Writes an inbound gateway envelope from the connector daemon into storage for dispatch. Development helper.
+//	@Tags			gateway
+//	@ID				createDevGatewayInbound
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	gatewayInboundRequest	true	"Gateway inbound payload"
+//	@Success		201 {object} map[string]interface{} "Created row"
+//	@Failure		400 {object} map[string]string "Invalid body"
+//	@Router			/dev/gateway/inbound [post]
 func createGatewayInbound(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req gatewayInboundRequest
@@ -785,6 +813,18 @@ func createGatewayInbound(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// createFeishuMessageEvent receives Feishu event webhooks.
+//
+//	@Summary		Receive a Feishu event webhook
+//	@Description	Receives inbound Feishu message-event webhooks. Handles URL verification challenge and event dispatch to the runtime.
+//	@Tags			feishu
+//	@ID				receiveFeishuMessageEvent
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	map[string]interface{}	true	"Feishu event envelope"
+//	@Success		200 {object} map[string]interface{} "Acknowledged event"
+//	@Failure		400 {object} map[string]string "Invalid event body or signature"
+//	@Router			/api/v1/feishu/events/message [post]
 func createFeishuMessageEvent(runtimeStore RuntimeStore, webhook feishuWebhookConfig, joinURLBuilder func(workspaceID string) string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -1394,6 +1434,20 @@ type markGatewayOutboundDeliveredBody struct {
 	DeliveryID string `json:"delivery_id"`
 }
 
+// invokeHTTPAgentRun invokes a pending HTTP-agent run row.
+//
+//	@Summary		Invoke an HTTP agent run
+//	@Description	Executes the HTTP-agent invocation associated with the given run row. Development helper.
+//	@Tags			dev
+//	@ID				invokeDevHTTPAgentRun
+//	@Accept			json
+//	@Produce		json
+//	@Param			runID	path	string				true	"Run UUID"
+//	@Param			body	body	httpAgentInvokeBody	true	"Invocation payload"
+//	@Success		200 {object} map[string]interface{} "Run result"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		404 {object} map[string]string "Run not found"
+//	@Router			/dev/http-agent/runs/{runID}/invoke [post]
 func invokeHTTPAgentRun(runtimeStore RuntimeStore, client *http.Client, deps *httprunner.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -1419,6 +1473,18 @@ func invokeHTTPAgentRun(runtimeStore RuntimeStore, client *http.Client, deps *ht
 	}
 }
 
+// runHTTPAgentOnce runs an HTTP-agent workload once, synchronously.
+//
+//	@Summary		Run an HTTP agent once
+//	@Description	Executes a single HTTP-agent invocation synchronously and returns the result. Development helper.
+//	@Tags			dev
+//	@ID				runDevHTTPAgentOnce
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	map[string]interface{}	true	"Run payload"
+//	@Success		200 {object} map[string]interface{} "Run result"
+//	@Failure		400 {object} map[string]string "Invalid body"
+//	@Router			/dev/http-agent/runner/run-once [post]
 func runHTTPAgentOnce(runtimeStore RuntimeStore, client *http.Client, deps *httprunner.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -1466,6 +1532,21 @@ func runHTTPAgentInvocation(w http.ResponseWriter, r *http.Request, runtimeStore
 	writeJSON(w, http.StatusOK, result)
 }
 
+// configureAgentConnector wires an agent to a channel connector.
+//
+//	@Summary		Configure an agent's connector
+//	@Description	Attaches or updates an agent's outbound channel connector configuration. Owner/admin only.
+//	@Tags			agents
+//	@ID				configureDevAgentConnector
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path	string							true	"Agent UUID"
+//	@Param			body	body	configureAgentConnectorBody		true	"Connector config payload"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Invalid request"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Unknown agent"
+//	@Router			/api/v1/agents/{agentID}/connector [post]
 func configureAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -1525,6 +1606,21 @@ func configureAgentConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// configureAgentProfile updates the agent's public profile.
+//
+//	@Summary		Configure an agent's profile
+//	@Description	Updates the agent's public profile fields (display name, avatar, description). Owner/admin only.
+//	@Tags			agents
+//	@ID				configureDevAgentProfile
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path	string						true	"Agent UUID"
+//	@Param			body	body	configureAgentProfileBody	true	"Profile payload"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/agents/{agentID}/profile [post]
 func configureAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -1592,10 +1688,36 @@ func configureAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// disableAgent disables an active agent.
+//
+//	@Summary		Disable an agent
+//	@Description	Marks the agent as disabled so it is no longer scheduled. Owner/admin only.
+//	@Tags			agents
+//	@ID				disableDevAgent
+//	@Produce		json
+//	@Param			agentID	path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/agents/{agentID}/disable [post]
 func disableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return agentStatusHandler(runtimeStore, "disable")
 }
 
+// enableAgent enables a disabled agent.
+//
+//	@Summary		Enable an agent
+//	@Description	Marks a disabled agent as enabled so it can be scheduled again. Owner/admin only.
+//	@Tags			agents
+//	@ID				enableDevAgent
+//	@Produce		json
+//	@Param			agentID	path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/agents/{agentID}/enable [post]
 func enableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return agentStatusHandler(runtimeStore, "enable")
 }
@@ -1603,6 +1725,19 @@ func enableAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 // getAgentRuntimeBinding returns the runtime currently bound to
 // this agent. Empty runtime_id means the user hasn't picked one
 // yet — the dispatcher surfaces "请绑定 Runtime" when a run starts.
+// getAgentRuntimeBinding returns the agent's current runtime binding.
+//
+//	@Summary		Get an agent's runtime binding
+//	@Description	Returns the runtime/device currently bound to the agent.
+//	@Tags			runtimes
+//	@ID				getDevAgentRuntimeBinding
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			agentID		path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Runtime binding"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/runtime [get]
 func getAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -1640,6 +1775,22 @@ func getAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 // agent runs on. RuntimeID="" is a valid clear request that
 // turns the agent back into an unbound state. Tenant guard: only
 // workspace owners / admins can change the binding.
+// setAgentRuntimeBinding binds an agent to a runtime/device.
+//
+//	@Summary		Bind an agent to a runtime
+//	@Description	Binds the agent to a runtime/device. Empty runtime_id clears the binding. Owner/admin only.
+//	@Tags			runtimes
+//	@ID				setDevAgentRuntimeBinding
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string					true	"Workspace UUID"
+//	@Param			agentID		path	string					true	"Agent UUID"
+//	@Param			body		body	map[string]interface{}	true	"Runtime binding payload"
+//	@Success		200 {object} map[string]interface{} "Runtime binding"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/runtime [post]
 func setAgentRuntimeBinding(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -1737,6 +1888,18 @@ type updateAgentBody struct {
 	WorkspaceID      *string                       `json:"workspace_id"`
 }
 
+// getWorkspaceSettings returns workspace-level settings.
+//
+//	@Summary		Get workspace settings
+//	@Description	Returns workspace-level settings. Caller must be a workspace member.
+//	@Tags			workspaces
+//	@ID				getDevWorkspaceSettings
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Workspace settings"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not a workspace member"
+//	@Router			/api/v1/workspaces/{workspaceID}/settings [get]
 func getWorkspaceSettings(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -1757,6 +1920,20 @@ func getWorkspaceSettings(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// patchWorkspaceSettings applies a partial update to workspace settings.
+//
+//	@Summary		Update workspace settings
+//	@Description	Partially updates workspace-level settings. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				patchDevWorkspaceSettings
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string					true	"Workspace UUID"
+//	@Param			body		body	map[string]interface{}	true	"Settings patch"
+//	@Success		200 {object} map[string]interface{} "Updated settings"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/settings [patch]
 func patchWorkspaceSettings(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -1781,6 +1958,21 @@ func patchWorkspaceSettings(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// createAgent creates a new agent in a workspace. Owner/admin only.
+//
+//	@Summary		Create an agent in a workspace
+//	@Description	Creates an agent under the given workspace. Owner/admin only. inline_new_secrets are materialised into the shared secret vault before the agent is persisted; any binding entries in config are patched with the resolved ids.
+//	@Tags			agents
+//	@ID				createDevAgent
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string				true	"Workspace UUID"
+//	@Param			body		body	createAgentBody		true	"Agent create payload"
+//	@Success		201 {object} map[string]interface{} "Created agent"
+//	@Failure		400 {object} map[string]string "workspace_id must be a valid uuid, or body invalid"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		422 {object} map[string]string "Immutable field or unknown capability"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents [post]
 func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandboxAcquirer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -1917,6 +2109,21 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 	}
 }
 
+// updateAgent applies a partial update to an existing agent.
+//
+//	@Summary		Update mutable agent fields
+//	@Description	Applies a partial update. All fields are optional; nil pointers mean "leave as-is". Slug and runtime are immutable and rejected with 422.
+//	@Tags			agents
+//	@ID				updateDevAgent
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path	string			true	"Agent UUID"
+//	@Param			body	body	updateAgentBody	true	"Partial agent update"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Malformed request body or invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		422 {object} map[string]string "Immutable field (slug/runtime), or unknown capability"
+//	@Router			/api/v1/agents/{agentID} [patch]
 func updateAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
@@ -2131,6 +2338,21 @@ type updateAgentVisibilityBody struct {
 // updateAgentVisibility flips an Agent's visibility between
 // workspace / tenant / public. Owner/admin only. Identical visibility
 // is treated as a 200 noop so idempotent replays don't pollute audit.
+// updateAgentVisibility updates an agent's visibility setting.
+//
+//	@Summary		Update an agent's visibility
+//	@Description	Updates an agent's visibility (public / tenant / private). Owner/admin only. Rejected if bindings are inconsistent with the requested visibility.
+//	@Tags			agents
+//	@ID				updateDevAgentVisibility
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path	string						true	"Agent UUID"
+//	@Param			body	body	updateAgentVisibilityBody	true	"Visibility payload"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		422 {object} map[string]string "Visibility conflicts with agent bindings"
+//	@Router			/api/v1/agents/{agentID}/visibility [patch]
 func updateAgentVisibility(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
@@ -2200,6 +2422,19 @@ type feishuProvisioningResponse struct {
 // getAgentFeishuConnectorDiagnostics returns a read-only Feishu Bot
 // observation snapshot for admins and workspace members. Unlike the
 // write path, this is a read/debug surface and never exposes secret refs.
+// getAgentFeishuConnectorDiagnostics returns Feishu connector health.
+//
+//	@Summary		Get an agent's Feishu connector diagnostics
+//	@Description	Returns diagnostic snapshots for the agent's Feishu connector (webhook subscription, event verify, bot token).
+//	@Tags			feishu
+//	@ID				getDevAgentFeishuDiagnostics
+//	@Produce		json
+//	@Param			agentID	path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Diagnostics snapshot"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/agents/{agentID}/connector/feishu/diagnostics [get]
 func getAgentFeishuConnectorDiagnostics(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
@@ -2230,6 +2465,21 @@ func getAgentFeishuConnectorDiagnostics(runtimeStore RuntimeStore) http.HandlerF
 // inbound router and outbound worker can resolve this Agent.
 // RBAC: workspace owner / admin (a misconfigured Bot can leak the
 // workspace to the internet).
+// updateAgentFeishuConnector updates the agent's Feishu connector config.
+//
+//	@Summary		Update an agent's Feishu connector
+//	@Description	Updates the agent's Feishu connector credentials/config. Owner/admin only.
+//	@Tags			feishu
+//	@ID				updateDevAgentFeishuConnector
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path	string							true	"Agent UUID"
+//	@Param			body	body	updateAgentFeishuConnectorBody	true	"Connector payload"
+//	@Success		200 {object} map[string]interface{} "Updated agent"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/agents/{agentID}/connector/feishu [patch]
 func updateAgentFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
@@ -2342,6 +2592,18 @@ type updateWorkspaceFeishuConnectorBody struct {
 // listWorkspaceConnectors returns all platforms' connector rows for the
 // workspace, decoded (config jsonb → map). Backs the admin panel's
 // initial state. Never exposes secret plaintext (only *_ref UUIDs).
+// listWorkspaceConnectors lists the workspace's configured connectors.
+//
+//	@Summary		List workspace connectors
+//	@Description	Returns the workspace's configured connectors. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				listDevWorkspaceConnectors
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Connector list"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/connectors [get]
 func listWorkspaceConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -2354,6 +2616,20 @@ func listWorkspaceConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// updateWorkspaceSlackConnector updates the workspace-level Slack connector.
+//
+//	@Summary		Update the workspace's Slack connector
+//	@Description	Updates the workspace-level Slack connector credentials/config. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				updateDevWorkspaceSlackConnector
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string								true	"Workspace UUID"
+//	@Param			body		body	updateWorkspaceSlackConnectorBody	true	"Connector config"
+//	@Success		200 {object} map[string]interface{} "Updated connector"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/connector/slack [patch]
 func updateWorkspaceSlackConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -2387,6 +2663,20 @@ func updateWorkspaceSlackConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// updateWorkspaceDiscordConnector updates the workspace-level Discord connector.
+//
+//	@Summary		Update the workspace's Discord connector
+//	@Description	Updates the workspace-level Discord connector credentials/config. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				updateDevWorkspaceDiscordConnector
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string								true	"Workspace UUID"
+//	@Param			body		body	updateWorkspaceDiscordConnectorBody	true	"Connector config"
+//	@Success		200 {object} map[string]interface{} "Updated connector"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/connector/discord [patch]
 func updateWorkspaceDiscordConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -2419,6 +2709,20 @@ func updateWorkspaceDiscordConnector(runtimeStore RuntimeStore) http.HandlerFunc
 	}
 }
 
+// updateWorkspaceTeamsConnector updates the workspace-level Teams connector.
+//
+//	@Summary		Update the workspace's Microsoft Teams connector
+//	@Description	Updates the workspace-level Teams connector credentials/config. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				updateDevWorkspaceTeamsConnector
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string								true	"Workspace UUID"
+//	@Param			body		body	updateWorkspaceTeamsConnectorBody	true	"Connector config"
+//	@Success		200 {object} map[string]interface{} "Updated connector"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/connector/teams [patch]
 func updateWorkspaceTeamsConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -2450,6 +2754,20 @@ func updateWorkspaceTeamsConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// updateWorkspaceFeishuConnector updates the workspace-level Feishu connector.
+//
+//	@Summary		Update the workspace's Feishu connector
+//	@Description	Updates the workspace-level Feishu connector credentials/config. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				updateDevWorkspaceFeishuConnector
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string								true	"Workspace UUID"
+//	@Param			body		body	updateWorkspaceFeishuConnectorBody	true	"Connector config"
+//	@Success		200 {object} map[string]interface{} "Updated connector"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/connector/feishu [patch]
 func updateWorkspaceFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
@@ -2490,6 +2808,19 @@ func updateWorkspaceFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc 
 	}
 }
 
+// beginAgentFeishuProvisioning starts the async Feishu app provisioning.
+//
+//	@Summary		Begin Feishu provisioning
+//	@Description	Starts the async Feishu app provisioning flow for the agent's connector. Returns a session handle to poll.
+//	@Tags			feishu
+//	@ID				beginDevAgentFeishuProvisioning
+//	@Produce		json
+//	@Param			agentID	path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Provisioning session"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/agents/{agentID}/connector/feishu/provision/begin [post]
 func beginAgentFeishuProvisioning(runtimeStore RuntimeStore, cfg feishuRegistrationConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg.Client == nil {
@@ -2509,6 +2840,20 @@ func beginAgentFeishuProvisioning(runtimeStore RuntimeStore, cfg feishuRegistrat
 	}
 }
 
+// pollAgentFeishuProvisioning polls the async Feishu provisioning flow.
+//
+//	@Summary		Poll Feishu provisioning status
+//	@Description	Polls the async Feishu provisioning flow. Returns the current step and any completion payload.
+//	@Tags			feishu
+//	@ID				pollDevAgentFeishuProvisioning
+//	@Accept			json
+//	@Produce		json
+//	@Param			agentID	path	string							true	"Agent UUID"
+//	@Param			body	body	pollAgentFeishuProvisioningBody	true	"Poll payload"
+//	@Success		200 {object} map[string]interface{} "Provisioning status"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		404 {object} map[string]string "Provisioning session not found"
+//	@Router			/api/v1/agents/{agentID}/connector/feishu/provision/poll [post]
 func pollAgentFeishuProvisioning(runtimeStore RuntimeStore, cfg feishuRegistrationConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg.Client == nil {
@@ -2719,6 +3064,19 @@ func feishuOpenAPIBaseURL(configured string) string {
 	return strings.TrimSpace(os.Getenv(authfeishu.EnvAPIBase))
 }
 
+// deleteAgent soft-deletes an agent. Owner/admin only.
+//
+//	@Summary		Soft-delete an agent
+//	@Description	Marks the agent as deleted; existing conversations are retained. Owner/admin only.
+//	@Tags			agents
+//	@ID				deleteDevAgent
+//	@Produce		json
+//	@Param			agentID	path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Deleted agent"
+//	@Failure		400 {object} map[string]string "agent_id must be a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Unknown agent"
+//	@Router			/api/v1/agents/{agentID} [delete]
 func deleteAgent(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
@@ -2792,6 +3150,20 @@ func agentStatusHandler(runtimeStore RuntimeStore, action string) http.HandlerFu
 	}
 }
 
+// createSecret adds a secret entry to a workspace's vault.
+//
+//	@Summary		Create a workspace secret
+//	@Description	Adds a secret entry to the workspace vault. Owner/admin only.
+//	@Tags			secrets
+//	@ID				createDevSecret
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string			true	"Workspace UUID"
+//	@Param			body		body	createSecretBody	true	"Secret create payload"
+//	@Success		201 {object} map[string]interface{} "Created secret"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/secrets [post]
 func createSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -2848,6 +3220,18 @@ func createSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listSecrets lists secret rows for a workspace.
+//
+//	@Summary		List workspace secrets
+//	@Description	Returns secret rows for the workspace. Values are redacted. Owner/admin only.
+//	@Tags			secrets
+//	@ID				listDevSecrets
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Secret list"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/secrets [get]
 func listSecrets(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -2873,6 +3257,20 @@ func listSecrets(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// disableSecret marks a secret row as disabled.
+//
+//	@Summary		Disable a secret
+//	@Description	Marks the secret as disabled so agents can no longer bind to it. Owner/admin only.
+//	@Tags			secrets
+//	@ID				disableDevSecret
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			secretID	path	string	true	"Secret UUID"
+//	@Success		200 {object} map[string]interface{} "Disabled secret"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Secret not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/secrets/{secretID}/disable [post]
 func disableSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -2907,6 +3305,20 @@ func disableSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 // ============================================================
+// createModel creates a model row in a workspace.
+//
+//	@Summary		Create a model in a workspace
+//	@Description	Creates a new model row bound to a provider and credential. Owner/admin only.
+//	@Tags			models
+//	@ID				createDevModel
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string			true	"Workspace UUID"
+//	@Param			body		body	createModelBody	true	"Model create payload"
+//	@Success		201 {object} map[string]interface{} "Created model"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/models [post]
 func createModel(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -2953,6 +3365,20 @@ func createModel(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// disableModel marks a model row as disabled.
+//
+//	@Summary		Disable a model
+//	@Description	Marks the model as disabled. Owner/admin only. Disabled models are hidden from selectors.
+//	@Tags			models
+//	@ID				disableDevModel
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			modelID		path	string	true	"Model UUID"
+//	@Success		200 {object} map[string]interface{} "Disabled model"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Model not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/models/{modelID}/disable [post]
 func disableModel(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -2986,6 +3412,22 @@ func disableModel(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// updateModel applies a partial update to a model row.
+//
+//	@Summary		Update a model
+//	@Description	Partially updates a model's mutable fields. Owner/admin only.
+//	@Tags			models
+//	@ID				updateDevModel
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string			true	"Workspace UUID"
+//	@Param			modelID		path	string			true	"Model UUID"
+//	@Param			body		body	updateModelBody	true	"Model update payload"
+//	@Success		200 {object} map[string]interface{} "Updated model"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Model not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/models/{modelID} [patch]
 func updateModel(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3089,6 +3531,20 @@ type connectivityTestResponse struct {
 // + model_key without driving a full Agent Run. OpenAI-shaped adapters
 // use chat-completions; Anthropic-shaped use Messages. Other protocols
 // return supported=false.
+// testModelConnectivity issues a live probe against a model row's credentials.
+//
+//	@Summary		Test a model's connectivity
+//	@Description	Runs a live probe against the model's configured provider and credentials. Owner/admin only.
+//	@Tags			models
+//	@ID				testDevModelConnectivity
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			modelID		path	string	true	"Model UUID"
+//	@Success		200 {object} map[string]interface{} "Probe result"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Model not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/models/{modelID}/test [post]
 func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3328,6 +3784,18 @@ func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listModels lists model rows for a workspace.
+//
+//	@Summary		List workspace models
+//	@Description	Returns model rows for the workspace. Caller must be a workspace member.
+//	@Tags			models
+//	@ID				listDevModels
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Model list"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not a workspace member"
+//	@Router			/api/v1/workspaces/{workspaceID}/models [get]
 func listModels(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3352,6 +3820,21 @@ func listModels(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// requeueAgentRun re-schedules a failed or stalled agent run.
+//
+//	@Summary		Re-queue an agent run
+//	@Description	Re-schedules a failed or stalled agent run. Owner/admin only.
+//	@Tags			agent-runs
+//	@ID				requeueDevAgentRun
+//	@Accept			json
+//	@Produce		json
+//	@Param			runID	path	string				true	"Agent run UUID"
+//	@Param			body	body	requeueAgentRunBody	true	"Requeue payload"
+//	@Success		200 {object} map[string]interface{} "Requeued run"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Run not found"
+//	@Router			/api/v1/agent-runs/{runID}/requeue [post]
 func requeueAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3407,6 +3890,20 @@ func requeueAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// configureConversationExternalRef binds a conversation to an external reference.
+//
+//	@Summary		Configure a conversation's external reference
+//	@Description	Binds a conversation to an external system reference (e.g. Feishu thread key) for dedupe / re-attach.
+//	@Tags			conversations
+//	@ID				configureDevConversationExternalRef
+//	@Accept			json
+//	@Produce		json
+//	@Param			conversationID	path	string								true	"Conversation UUID"
+//	@Param			body			body	configureConversationExternalRefBody	true	"External reference payload"
+//	@Success		200 {object} map[string]interface{} "Updated conversation"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		404 {object} map[string]string "Conversation not found"
+//	@Router			/api/v1/conversations/{conversationID}/external-ref [post]
 func configureConversationExternalRef(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3465,6 +3962,22 @@ func isSafeHTTPAgentEndpoint(endpoint string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
+// listWorkspaceEnabledAgents lists the agents visible to the caller in
+// a workspace. By default only enabled/active agents are returned;
+// `?include_disabled=true` widens the query to the admin view.
+//
+//	@Summary		List active agents in a workspace
+//	@Description	Returns agents the caller can address in the given workspace. By default only enabled/active agents; pass include_disabled=true for the admin view.
+//	@Tags			agents
+//	@ID				listDevAgents
+//	@Produce		json
+//	@Param			workspaceID			path	string	true	"Workspace UUID"
+//	@Param			include_disabled	query	bool	false	"Include disabled/archived agents in the response"
+//	@Success		200 {object} map[string]interface{} "Active workspace agents with profile basics"
+//	@Failure		400 {object} map[string]string "workspace_id must be a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		503 {object} map[string]string "Database-backed read APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents [get]
 func listWorkspaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3499,6 +4012,19 @@ func listWorkspaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// getConversationTimeline returns the ordered timeline for a conversation.
+//
+//	@Summary		Get a conversation's timeline
+//	@Description	Returns the ordered timeline (messages, tool calls, events) for a conversation.
+//	@Tags			conversations
+//	@ID				getDevConversationTimeline
+//	@Produce		json
+//	@Param			conversationID	path	string	true	"Conversation UUID"
+//	@Success		200 {object} map[string]interface{} "Timeline entries"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller lacks permission"
+//	@Failure		404 {object} map[string]string "Conversation not found"
+//	@Router			/api/v1/conversations/{conversationID}/timeline [get]
 func getConversationTimeline(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3531,6 +4057,19 @@ func getConversationTimeline(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// getAgentRun returns details for a single agent run.
+//
+//	@Summary		Get an agent run
+//	@Description	Returns the full record for a single agent run. Caller must belong to the run's workspace.
+//	@Tags			agent-runs
+//	@ID				getDevAgentRun
+//	@Produce		json
+//	@Param			runID	path	string	true	"Agent run UUID"
+//	@Success		200 {object} map[string]interface{} "Agent run"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller lacks permission"
+//	@Failure		404 {object} map[string]string "Run not found"
+//	@Router			/api/v1/agent-runs/{runID} [get]
 func getAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3560,6 +4099,15 @@ func getAgentRun(runtimeStore RuntimeStore) http.HandlerFunc {
 // listGatewayOutbound dumps a slice of the inflight-card driver state
 // for ops / smoke tests. Each row carries conversation_id / agent_run_id
 // so ops can correlate against agent_runs + conversations.
+// listGatewayOutbound lists pending outbound gateway messages.
+//
+//	@Summary		List outbound gateway messages
+//	@Description	Returns outbound gateway messages, optionally filtered by connector or delivery status.
+//	@Tags			gateway
+//	@ID				listDevGatewayOutbound
+//	@Produce		json
+//	@Success		200 {object} map[string]interface{} "Outbound message rows"
+//	@Router			/dev/gateway/outbound [get]
 func listGatewayOutbound(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3617,6 +4165,20 @@ func inflightDeliveries(convs []store.FeishuInflightConversation) []map[string]a
 	return deliveries
 }
 
+// markGatewayOutboundDelivered marks an outbound message as delivered.
+//
+//	@Summary		Mark an outbound gateway message delivered
+//	@Description	Marks a gateway outbound message row as delivered. Used by the connector daemon to close the loop.
+//	@Tags			gateway
+//	@ID				markDevGatewayOutboundDelivered
+//	@Accept			json
+//	@Produce		json
+//	@Param			messageID	path	string							true	"Message ID"
+//	@Param			body		body	markGatewayOutboundDeliveredBody	true	"Delivery payload"
+//	@Success		200 {object} map[string]interface{} "Updated row"
+//	@Failure		400 {object} map[string]string "Invalid body or ID"
+//	@Failure		404 {object} map[string]string "Message not found"
+//	@Router			/dev/gateway/outbound/{messageID}/delivered [post]
 func markGatewayOutboundDelivered(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3648,6 +4210,18 @@ func markGatewayOutboundDelivered(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listWorkspaceAgentRuns lists agent runs within a workspace.
+//
+//	@Summary		List workspace agent runs
+//	@Description	Returns agent-run rows for the workspace. Caller must be a workspace member.
+//	@Tags			agent-runs
+//	@ID				listDevWorkspaceAgentRuns
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Agent run rows"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not a workspace member"
+//	@Router			/api/v1/workspaces/{workspaceID}/agent-runs [get]
 func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3692,6 +4266,20 @@ func listWorkspaceAgentRuns(runtimeStore RuntimeStore) http.HandlerFunc {
 // a single agent over a sliding window. Powers the agent-detail
 // "近 N 天表现" panel: completion count, success rate, average duration.
 // `?days=` is optional and clamps to [1, 365]; default 30.
+// getAgentMetrics returns runtime/usage metrics for an agent.
+//
+//	@Summary		Get agent metrics
+//	@Description	Returns runtime/usage metrics for the agent within the workspace. Caller must be a workspace member.
+//	@Tags			agents
+//	@ID				getDevAgentMetrics
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			agentID		path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "Agent metrics"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not a workspace member"
+//	@Failure		404 {object} map[string]string "Agent not found"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/metrics [get]
 func getAgentMetrics(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3761,6 +4349,18 @@ func parseStatusList(raw string) []string {
 // It reads the unified audit_records table (5-category source taxonomy,
 // jsonb payload). Optional query filters: source, event_type,
 // target_type, target_id, actor_id.
+// listWorkspaceAuditRecords lists audit-log entries for a workspace.
+//
+//	@Summary		List workspace audit records
+//	@Description	Returns audit-log entries for the workspace. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				listDevWorkspaceAuditRecords
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Audit records"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/audit-records [get]
 func listWorkspaceAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3804,6 +4404,18 @@ func listWorkspaceAuditRecords(runtimeStore RuntimeStore) http.HandlerFunc {
 // listWorkspaceConnectorUsage aggregates connector types in use by
 // agents in a workspace. There is no `connectors` table — the
 // connector identity lives on each agent's `connector_type` field.
+// listWorkspaceConnectorUsage returns connector usage rows.
+//
+//	@Summary		List workspace connector usage
+//	@Description	Returns per-connector usage rows for the workspace. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				listDevWorkspaceConnectorUsage
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Connector usage rows"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/connector-usage [get]
 func listWorkspaceConnectorUsage(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3897,6 +4509,18 @@ func connectorStatus(t string) string {
 
 // listWorkspaceGateways returns a static registry of known gateway types.
 // No DB schema — connectors don't have one either.
+// listWorkspaceGateways lists inbound/outbound gateway rows.
+//
+//	@Summary		List workspace gateways
+//	@Description	Returns gateway inbound/outbound rows for the workspace. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				listDevWorkspaceGateways
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Gateway rows"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/gateways [get]
 func listWorkspaceGateways() http.HandlerFunc {
 	type gatewayRow struct {
 		Type        string `json:"type"`
@@ -3949,6 +4573,18 @@ func listWorkspaceGateways() http.HandlerFunc {
 	}
 }
 
+// listWorkspaceMembers lists members of a workspace.
+//
+//	@Summary		List workspace members
+//	@Description	Returns members of the workspace. Caller must be a workspace member.
+//	@Tags			workspace-members
+//	@ID				listDevWorkspaceMembers
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Member list"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not a workspace member"
+//	@Router			/api/v1/workspaces/{workspaceID}/members [get]
 func listWorkspaceMembers(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -3980,6 +4616,17 @@ func listWorkspaceMembers(runtimeStore RuntimeStore) http.HandlerFunc {
 // users matching q substring, optionally hiding users already in a
 // workspace. RBAC: any authenticated user (add-member action still
 // goes through workspace owner/admin gate).
+// searchUsers looks up users by keyword.
+//
+//	@Summary		Search users
+//	@Description	Searches directory users by name, email, or handle. Used for member invite pickers.
+//	@Tags			me
+//	@ID				searchDevUsers
+//	@Produce		json
+//	@Param			q	query	string	false	"Search keyword"
+//	@Success		200 {object} map[string]interface{} "User list"
+//	@Failure		401 {object} map[string]string "Caller is not authenticated"
+//	@Router			/api/v1/users/search [get]
 func searchUsers(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -4031,6 +4678,16 @@ func searchUsers(runtimeStore RuntimeStore) http.HandlerFunc {
 // listMyWorkspaces returns the workspaces the authenticated caller belongs to.
 // Platform admins (auth.IsPlatformAdmin) get the full list of active
 // workspaces with role=owner so they can drop into any tenant.
+// listMyWorkspaces returns workspaces the caller belongs to.
+//
+//	@Summary		List my workspaces
+//	@Description	Returns workspaces the caller is a member of.
+//	@Tags			me
+//	@ID				listDevMyWorkspaces
+//	@Produce		json
+//	@Success		200 {object} map[string]interface{} "Workspace list"
+//	@Failure		401 {object} map[string]string "Caller is not authenticated"
+//	@Router			/api/v1/me/workspaces [get]
 func listMyWorkspaces(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -4087,6 +4744,19 @@ type createWorkspaceRequest struct {
 	Visibility string `json:"visibility,omitempty"` // "public" / "private";空 → 服务端默认 "private"
 }
 
+// createWorkspace creates a new workspace with the caller as owner.
+//
+//	@Summary		Create a workspace
+//	@Description	Creates a new workspace and adds the caller as the initial owner.
+//	@Tags			workspaces
+//	@ID				createDevWorkspace
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	createWorkspaceRequest	true	"Workspace payload"
+//	@Success		201 {object} map[string]interface{} "Created workspace"
+//	@Failure		400 {object} map[string]string "Invalid body"
+//	@Failure		401 {object} map[string]string "Caller is not authenticated"
+//	@Router			/api/v1/workspaces [post]
 func createWorkspace(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -4124,6 +4794,20 @@ type updateWorkspaceRequest struct {
 	Visibility *string `json:"visibility,omitempty"` // "public" / "private";nil → 不变
 }
 
+// updateWorkspace applies a partial update to a workspace.
+//
+//	@Summary		Update a workspace
+//	@Description	Partially updates a workspace's mutable fields. Owner/admin only.
+//	@Tags			workspaces
+//	@ID				updateDevWorkspace
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string					true	"Workspace UUID"
+//	@Param			body		body	updateWorkspaceRequest	true	"Workspace update payload"
+//	@Success		200 {object} map[string]interface{} "Updated workspace"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID} [patch]
 func updateWorkspace(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -4163,6 +4847,18 @@ func updateWorkspace(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// archiveWorkspace marks a workspace as archived.
+//
+//	@Summary		Archive a workspace
+//	@Description	Marks the workspace as archived. Owner only.
+//	@Tags			workspaces
+//	@ID				archiveDevWorkspace
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Archived workspace"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner"
+//	@Router			/api/v1/workspaces/{workspaceID}/archive [post]
 func archiveWorkspace(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -4201,6 +4897,21 @@ type addWorkspaceMemberRequest struct {
 	Role  string `json:"role"`
 }
 
+// addWorkspaceMember adds a user to a workspace.
+//
+//	@Summary		Add a workspace member
+//	@Description	Adds a user to the workspace with the given role. Owner/admin only.
+//	@Tags			workspace-members
+//	@ID				addDevWorkspaceMember
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string						true	"Workspace UUID"
+//	@Param			body		body	addWorkspaceMemberRequest	true	"Member payload"
+//	@Success		201 {object} map[string]interface{} "Added member"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		409 {object} map[string]string "User is already a member"
+//	@Router			/api/v1/workspaces/{workspaceID}/members [post]
 func addWorkspaceMember(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -4251,6 +4962,21 @@ type updateWorkspaceMemberRoleRequest struct {
 	Role string `json:"role"`
 }
 
+// updateWorkspaceMemberRole changes a member's role.
+//
+//	@Summary		Update a workspace member's role
+//	@Description	Changes a member's role within the workspace. Owner/admin only.
+//	@Tags			workspace-members
+//	@ID				updateDevWorkspaceMemberRole
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string							true	"Workspace UUID"
+//	@Param			userID		path	string							true	"User UUID"
+//	@Param			body		body	updateWorkspaceMemberRoleRequest	true	"Role update payload"
+//	@Success		200 {object} map[string]interface{} "Updated member"
+//	@Failure		400 {object} map[string]string "Invalid body or UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/members/{userID} [patch]
 func updateWorkspaceMemberRole(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {

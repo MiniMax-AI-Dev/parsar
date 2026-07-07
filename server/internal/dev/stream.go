@@ -37,6 +37,20 @@ import (
 //   - 200 + Content-Type: text/event-stream once streaming starts.
 //     Errors AFTER the stream is open are surfaced as an SSE EventError +
 //     EventDone pair before the connection closes.
+//
+//	@Summary		Stream a raw connector prompt (dev SSE)
+//	@Description	Dev-only Server-Sent Events endpoint that forwards the OpenCode connector's StreamPrompt output. Does NOT manage agent_run state — callers drive lifecycle via the regular dev endpoints.
+//	@Tags			gateway
+//	@ID				streamDevConnectorPrompt
+//	@Accept			json
+//	@Produce		json-stream
+//	@Param			body	body		connector.PromptInput	true	"Prompt input (workspace_id, conversation_id, run_id, agent_config required)"
+//	@Success		200		"SSE stream opened"
+//	@Failure		400		{object}	map[string]string	"Body decode or validation error"
+//	@Failure		500		{object}	map[string]string	"ResponseWriter does not support flushing or connector failure"
+//	@Failure		501		{object}	map[string]string	"Connector does not support streaming"
+//	@Failure		503		{object}	map[string]string	"OpenCode AgentConnector is not registered"
+//	@Router			/dev/connectors/opencode/stream [post]
 func streamConnectorPrompt(cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil || cfg.openCodeConnector == nil {

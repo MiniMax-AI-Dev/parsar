@@ -131,6 +131,26 @@ func StartConversationRun(
 	return started.Status, nil
 }
 
+// startConversationAgentRun is POST
+// /api/v1/conversations/{conversationID}/runs/{runID}/start. Flips a queued
+// run to running and spawns the connector dispatcher goroutine.
+//
+//	@Summary		Start a queued agent run
+//	@Description	Marks the run as running (or reports "queued" if a sibling run for the same conversation+agent is already inflight) and dispatches it to the connector. Callers should then subscribe to /stream for events.
+//	@Tags			agent-runs
+//	@ID				startDevConversationAgentRun
+//	@Produce		json
+//	@Param			conversationID	path		string					true	"Conversation UUID"
+//	@Param			runID			path		string					true	"Agent run UUID"
+//	@Success		200				{object}	map[string]interface{}	"Run already running — idempotent no-op"
+//	@Success		202				{object}	map[string]interface{}	"Run dispatched (running) or held (queued)"
+//	@Failure		400				{object}	map[string]string		"conversation_id or run_id is not a valid uuid"
+//	@Failure		403				{object}	map[string]string		"Caller is not a workspace member or is viewer-only"
+//	@Failure		404				{object}	map[string]string		"Run not found or not part of conversation"
+//	@Failure		422				{object}	map[string]string		"Run status must be queued before start"
+//	@Failure		500				{object}	map[string]string		"Failed to mark agent run running"
+//	@Failure		503				{object}	map[string]string		"Database-backed conversation run streaming is disabled"
+//	@Router			/api/v1/conversations/{conversationID}/runs/{runID}/start [post]
 func startConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -182,6 +202,25 @@ func startConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) htt
 	}
 }
 
+// streamConversationAgentRun is GET
+// /api/v1/conversations/{conversationID}/runs/{runID}/stream. Server-Sent
+// Events endpoint that forwards the connector's PromptEvents to the
+// browser.
+//
+//	@Summary		Stream agent run events (SSE)
+//	@Description	Server-Sent Events stream that forwards the connector's PromptEvents (deltas, tool calls, permission requests, final message) for the run. Content-Type is text/event-stream; each event's data field is a JSON-encoded PromptEvent.
+//	@Tags			agent-runs
+//	@ID				streamDevConversationAgentRun
+//	@Produce		text/event-stream
+//	@Param			conversationID	path	string	true	"Conversation UUID"
+//	@Param			runID			path	string	true	"Agent run UUID"
+//	@Success		200				"SSE stream opened"
+//	@Failure		400				{object}	map[string]string	"conversation_id or run_id is not a valid uuid"
+//	@Failure		403				{object}	map[string]string	"Caller is not a workspace member or is viewer-only"
+//	@Failure		404				{object}	map[string]string	"Run not found or not part of conversation"
+//	@Failure		500				{object}	map[string]string	"ResponseWriter does not support flushing"
+//	@Failure		503				{object}	map[string]string	"Database-backed conversation run streaming is disabled"
+//	@Router			/api/v1/conversations/{conversationID}/runs/{runID}/stream [get]
 func streamConversationAgentRun(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
