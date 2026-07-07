@@ -6,13 +6,14 @@
  * Same Radix dropdown + Input filter shape as ModelKeyCombobox /
  * CredentialKindCombobox.
  */
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Input } from "../../components/ui/input"
 import { cn } from "../../lib/utils"
+import { useWheelScroll } from "../../lib/use-wheel-scroll"
 
 export interface ProviderTypeChoice {
   key: string
@@ -31,6 +32,8 @@ interface Props {
 export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
   const { t } = useTranslation("admin")
   const [search, setSearch] = useState("")
+  const listRef = useRef<HTMLDivElement>(null)
+  useWheelScroll(listRef)
 
   const selected = useMemo(() => options.find((o) => o.key === value), [options, value])
 
@@ -68,67 +71,65 @@ export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
         </button>
       </DropdownMenu.Trigger>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align="start"
-          sideOffset={4}
-          className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
-        >
-          <div className="border-b border-line-muted p-1">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("models.createProvider.fields.providerSearch", "Search providers…")}
-              onKeyDown={(e) => {
-                e.stopPropagation()
-                if (e.key === "Enter" && filtered.length > 0) {
-                  e.preventDefault()
-                  commit(filtered[0].key)
-                }
-              }}
-              className="h-8 text-sm"
-              autoFocus
-            />
-          </div>
-
-          {/* Radix DropdownMenu swallows wheel events; re-drive scroll so the
-              nested list responds to the wheel, not only the scrollbar thumb. */}
-          <div
-            className="max-h-[240px] overflow-auto py-1"
-            onWheel={(e) => {
-              e.currentTarget.scrollTop += e.deltaY
+      {/* No Portal: when this combobox lives inside a Radix Dialog (modal),
+          portaling to <body> lands outside the Dialog's pointer-events
+          scope and the trigger click reaches a locked layer, so the menu
+          never opens. Rendering in-place keeps the menu inside the
+          DialogContent subtree. */}
+      <DropdownMenu.Content
+        align="start"
+        sideOffset={4}
+        className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
+      >
+        <div className="border-b border-line-muted p-1">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("models.createProvider.fields.providerSearch", "Search providers…")}
+            onKeyDown={(e) => {
               e.stopPropagation()
+              if (e.key === "Enter" && filtered.length > 0) {
+                e.preventDefault()
+                commit(filtered[0].key)
+              }
             }}
-          >
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-fg-subtle">
-                {t("models.createProvider.fields.providerEmpty", "No matching providers")}
-              </p>
-            ) : (
-              filtered.map((o) => (
-                <DropdownMenu.Item
-                  key={o.key}
-                  onSelect={() => commit(o.key)}
-                  className={cn(
-                    "flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-2 outline-none",
-                    o.key === value
-                      ? "bg-surface-muted"
-                      : "hover:bg-surface-subtle focus:bg-surface-subtle",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <span className="truncate text-sm font-medium text-fg">{o.label}</span>
-                    <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
-                      {o.adapter}
-                    </code>
-                  </div>
-                  {o.key === value && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
-                </DropdownMenu.Item>
-              ))
-            )}
-          </div>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
+            className="h-8 text-sm"
+            autoFocus
+          />
+        </div>
+
+        {/* Wheel scroll driven by a non-passive listener (see useWheelScroll) —
+            an inline React onWheel is passive in a Dialog and gets eaten by
+            react-remove-scroll, so the wheel wouldn't reach the list at all. */}
+        <div ref={listRef} className="max-h-[240px] overflow-auto py-1">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-fg-subtle">
+              {t("models.createProvider.fields.providerEmpty", "No matching providers")}
+            </p>
+          ) : (
+            filtered.map((o) => (
+              <DropdownMenu.Item
+                key={o.key}
+                onSelect={() => commit(o.key)}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-2 outline-none",
+                  o.key === value
+                    ? "bg-surface-muted"
+                    : "hover:bg-surface-subtle focus:bg-surface-subtle",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-medium text-fg">{o.label}</span>
+                  <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
+                    {o.adapter}
+                  </code>
+                </div>
+                {o.key === value && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
+              </DropdownMenu.Item>
+            ))
+          )}
+        </div>
+      </DropdownMenu.Content>
     </DropdownMenu.Root>
   )
 }

@@ -441,12 +441,6 @@ export function RunsPage() {
           }
           onRetry={() => void query.refetch()}
         />
-      ) : total === 0 ? (
-        <EmptyState
-          icon={Play}
-          title={t("runs.empty.title")}
-          description={t("runs.empty.description")}
-        />
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -468,7 +462,16 @@ export function RunsPage() {
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {total === 0 ? (
+            // Empty state must live INSIDE the tabs container so an empty
+            // 进行中 / 失败 tab doesn't take the tab bar with it — the user
+            // has to be able to click 全部 to get back.
+            <EmptyState
+              icon={Play}
+              title={t("runs.empty.title")}
+              description={t("runs.empty.description")}
+            />
+          ) : filtered.length === 0 ? (
             <EmptyState
               icon={Play}
               title={t("runs.emptyFiltered.title")}
