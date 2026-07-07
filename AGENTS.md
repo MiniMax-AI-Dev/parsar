@@ -92,3 +92,13 @@ Once the server is running (`make dev-server-up`):
 
 The Go server re-reads the YAML on every request, so a local
 `make openapi` regeneration is visible without restarting the server.
+
+### Frontend TS types
+
+`apps/web/src/lib/api-types.generated.ts` is the mirror of
+`docs/openapi/openapi.yaml` in TypeScript, produced by `make ts-types`
+(swaggo → swagger2openapi → openapi-typescript). After any backend
+API change, run `make openapi && make ts-types` and commit both
+artifacts — CI (`.github/workflows/ts-types.yml`) fails the PR on
+drift. Do not hand-edit the generated file; the legacy hand-written
+`api-types.ts` will be migrated over incrementally.

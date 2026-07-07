@@ -1,6 +1,12 @@
 /**
  * Server-side type contracts for Parsar admin API.
  * Source of truth: docs/openapi/openapi.yaml + server/internal/store/store.go.
+ *
+ * NOTE: New code should prefer `./api-types.generated` — that file is
+ * auto-generated from docs/openapi/openapi.yaml by `make ts-types` and
+ * cannot drift from the server contract. Types below are hand-written
+ * (some carry fields sourced from store.go, not the OpenAPI spec) and
+ * will be migrated over incrementally.
  */
 
 /* --- Models -------------------------------------------------------------

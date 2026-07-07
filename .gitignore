@@ -44,6 +44,12 @@ docs/superpowers/specs/
 # committed; the .sum gets rebuilt from go.work + module sums).
 go.work.sum
 
+# Transient OpenAPI 3.0 conversion produced by `make ts-types`
+# (swaggo emits Swagger 2.0, openapi-typescript needs 3.x). The
+# generated TS lives at apps/web/src/lib/api-types.generated.ts;
+# this intermediate is deleted by the recipe on success.
+/docs/openapi/openapi.v3.yaml
+
 # OpenCode runtime cache — auto-created when starting `opencode serve`
 # in this repo (plugins, package-lock, tmp). Project-level OpenCode
 # state must never enter Parsar history.

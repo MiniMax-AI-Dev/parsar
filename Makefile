@@ -8,7 +8,7 @@ SHELL := /bin/bash
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: setup dev check reset-dev clean-dev paths seed-dev seed-dev-db migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info openapi
+.PHONY: setup dev check reset-dev clean-dev paths seed-dev seed-dev-db migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info openapi ts-types
 
 setup:
 	./scripts/setup.sh
@@ -168,3 +168,50 @@ openapi:
 	@rmdir docs/openapi/gen 2>/dev/null || true
 	@echo "openapi: wrote docs/openapi/openapi.yaml"
 	@echo "openapi: paths=$$(grep -c '^  /' docs/openapi/openapi.yaml)"
+
+# --- Frontend TS types (generated from docs/openapi/openapi.yaml) ------
+#
+# `apps/web/src/lib/api-types.generated.ts` is a build artifact — the
+# mirror of `docs/openapi/openapi.yaml` in TypeScript. Regenerate with
+# `make ts-types` after every `make openapi`. CI (`.github/workflows/
+# ts-types.yml`) fails the PR on drift.
+#
+# swaggo v1 emits Swagger 2.0, but openapi-typescript 7.x only accepts
+# OpenAPI 3.x — so the recipe converts on-the-fly via swagger2openapi.
+# The temp file lives under docs/openapi/ and is ignored by git.
+#
+# Both tools run via `pnpm dlx` on-demand so they do NOT pollute
+# apps/web/package.json — they are only used by this recipe and CI.
+OPENAPI_TS_VERSION       ?= 7.13.0
+SWAGGER2OPENAPI_VERSION  ?= 7.0.8
+
+ts-types:
+	@command -v pnpm >/dev/null 2>&1 || { \
+	    echo "make ts-types: pnpm is required (https://pnpm.io/installation)"; \
+	    exit 1; \
+	}
+	@command -v node >/dev/null 2>&1 || { \
+	    echo "make ts-types: node is required (see .nvmrc / package.json engines)"; \
+	    exit 1; \
+	}
+	@pnpm dlx swagger2openapi@$(SWAGGER2OPENAPI_VERSION) \
+	    --yaml \
+	    --outfile docs/openapi/openapi.v3.yaml \
+	    docs/openapi/openapi.yaml >/dev/null
+	pnpm dlx openapi-typescript@$(OPENAPI_TS_VERSION) \
+	    docs/openapi/openapi.v3.yaml \
+	    --output apps/web/src/lib/api-types.generated.ts
+	@rm -f docs/openapi/openapi.v3.yaml
+	@printf '%s\n' \
+	    '/**' \
+	    ' * AUTO-GENERATED, DO NOT EDIT.' \
+	    ' *' \
+	    ' * Regenerate with `make ts-types` after `make openapi`.' \
+	    ' * Source of truth: docs/openapi/openapi.yaml (built from swaggo' \
+	    ' * annotations on Go handlers). CI enforces drift via' \
+	    ' * .github/workflows/ts-types.yml.' \
+	    ' */' \
+	    > apps/web/src/lib/api-types.generated.ts.tmp
+	@cat apps/web/src/lib/api-types.generated.ts >> apps/web/src/lib/api-types.generated.ts.tmp
+	@mv apps/web/src/lib/api-types.generated.ts.tmp apps/web/src/lib/api-types.generated.ts
+	@echo "ts-types: wrote apps/web/src/lib/api-types.generated.ts"
