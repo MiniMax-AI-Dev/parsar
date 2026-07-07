@@ -1572,7 +1572,7 @@ func TestCompleteAgentRunDuplicateTargetSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@test-agent @test-agent both take a look"})
+	completed, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: created.RunIDs[0], Content: "@TestAgent @test-agent both take a look"})
 	if err != nil {
 		t.Fatal(err)
 	}

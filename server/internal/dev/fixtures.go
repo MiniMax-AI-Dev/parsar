@@ -48,7 +48,7 @@ func DefaultSeed() SeedData {
 		Agents: []Agent{
 			{ID: "agent_product", Name: "Product Agent", Slug: "product-agent", Description: "Product-perspective review of requirements and scope", Skills: []string{"prd-review", "scope"}},
 			{ID: "agent_backend", Name: "Backend Agent", Slug: "backend-agent", Description: "Backend-perspective review of architecture and data model", Skills: []string{"go", "postgres", "api"}},
-			{ID: "agent_test", Name: "Test Agent", Slug: "test-agent", Description: "Test-perspective acceptance and counterexamples", Skills: []string{"e2e", "regression"}},
+			{ID: "agent_test", Name: "TestAgent", Slug: "test-agent", Description: "Test-perspective acceptance and counterexamples", Skills: []string{"e2e", "regression"}},
 		},
 		Conversations: []Conversation{
 			{ID: "conv_demo_group", Title: "Demo Group", Visibility: "workspace"},

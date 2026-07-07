@@ -79,7 +79,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         response = {
-            "content": "HTTP Agent completed the backend assessment, @test-agent please verify.",
+            "content": "HTTP Agent completed the backend assessment, @TestAgent please verify.",
             "usage": {
                 "provider": "fake-http-agent",
                 "model": "http-agent-v1",
@@ -319,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         response = {
-            "content": "HTTP Agent recovered and succeeded on retry, @test-agent please verify.",
+            "content": "HTTP Agent recovered and succeeded on retry, @TestAgent please verify.",
             "usage": {"provider": "fake-http-agent", "model": "http-agent-v1", "input_tokens": 11, "output_tokens": 7, "cost_usd": 0.00011},
         }
         body = json.dumps(response).encode()

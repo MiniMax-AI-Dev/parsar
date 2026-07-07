@@ -7198,7 +7198,7 @@ func (s *Store) InsertDevFixture(ctx context.Context, ids DevFixtureIDs) (DevSee
 		},
 		{
 			id:          ids.TestAgentID,
-			name:        "Test Agent",
+			name:        "TestAgent",
 			slug:        "test-agent",
 			description: "Test-perspective acceptance and counterexamples",
 			config:      `{"profile":{"skills":["e2e","regression"]}}`,

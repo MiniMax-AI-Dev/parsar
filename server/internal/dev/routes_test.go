@@ -1733,7 +1733,7 @@ func TestWorkspaceAgentsRouteReturnsEnabledAgents(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), "Product Agent") || !strings.Contains(res.Body.String(), "Backend Agent") || !strings.Contains(res.Body.String(), "Test Agent") {
+	if !strings.Contains(res.Body.String(), "Product Agent") || !strings.Contains(res.Body.String(), "Backend Agent") || !strings.Contains(res.Body.String(), "TestAgent") {
 		t.Fatalf("expected three enabled agents, got %s", res.Body.String())
 	}
 }
@@ -2833,7 +2833,7 @@ func (stubRuntimeStore) ListWorkspaceEnabledAgents(ctx context.Context, workspac
 	return []store.AgentRead{
 		{AgentID: "agent-1", Name: "Product Agent", Slug: "product-agent", ConnectorType: "agent_daemon", Status: "active"},
 		{AgentID: "agent-2", Name: "Backend Agent", Slug: "backend-agent", ConnectorType: "agent_daemon", Status: "active"},
-		{AgentID: "agent-3", Name: "Test Agent", Slug: "test-agent", ConnectorType: "agent_daemon", Status: "active"},
+		{AgentID: "agent-3", Name: "TestAgent", Slug: "test-agent", ConnectorType: "agent_daemon", Status: "active"},
 	}, nil
 }
 
@@ -2934,7 +2934,7 @@ func (stubRuntimeStore) GetConversationTimeline(ctx context.Context, conversatio
 	childRun.TriggerMessageID = "00000000-0000-0000-0000-000000000202"
 	childRun.OutputMessageID = ""
 	childRun.AgentID = "00000000-0000-0000-0000-000000000008"
-	childRun.AgentName = "Test Agent"
+	childRun.AgentName = "TestAgent"
 	childRun.AgentSlug = "test-agent"
 	childRun.Status = "queued"
 	childRun.FinishedAt = nil
