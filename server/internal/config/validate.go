@@ -95,7 +95,6 @@ func (c Config) Redacted() Config {
 	out := c
 	out.Database.URL = redactConnString(c.Database.URL)
 	out.Secret.MasterKey = redact(c.Secret.MasterKey)
-	out.Auth.Bootstrap.Token = redact(c.Auth.Bootstrap.Token)
 	out.Gateway.Feishu.AppSecret = redact(c.Gateway.Feishu.AppSecret)
 	out.Gateway.Feishu.VerificationToken = redact(c.Gateway.Feishu.VerificationToken)
 	out.Gateway.Feishu.EncryptKey = redact(c.Gateway.Feishu.EncryptKey)

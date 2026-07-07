@@ -50,7 +50,6 @@ func (c Config) envSnapshot() map[string]string {
 
 	putBool(EnvDevAuth, c.Auth.DevAuth)
 	putBool(EnvCookieSecure, c.Auth.Cookie.Secure)
-	put(EnvBootstrapToken, c.Auth.Bootstrap.Token)
 
 	put(EnvMasterKey, c.Secret.MasterKey)
 

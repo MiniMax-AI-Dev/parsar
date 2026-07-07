@@ -47,6 +47,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
+	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
@@ -76,6 +77,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -306,19 +308,36 @@ func main() {
 		BinaryDir: strings.TrimSpace(os.Getenv("PARSAR_DAEMON_BINARY_DIR")),
 	})
 
-	// Bootstrap (first-owner provisioning) mounts OUTSIDE the auth
-	// middleware because no user exists yet to log in. Token-gated
-	// via PARSAR_BOOTSTRAP_TOKEN; empty = HTTP endpoint OFF
-	// (fall back to cmd/parsar-bootstrap CLI). Status route is
-	// always exposed — it only leaks boolean state.
-	if dbStore != nil {
-		bootstrapSvc := bootstrap.NewService(dbStore, cfg.Auth.Bootstrap.Token,
+	// Bootstrap (first-owner provisioning) and email/password login both
+	// mount OUTSIDE the auth middleware because no user exists yet to
+	// authenticate. The bootstrap gate is `count(active owners) == 0`
+	// enforced under a Postgres advisory lock in the tx; the login
+	// endpoint is public but rate-limited.
+	if pool != nil && dbStore != nil {
+		bootstrapSessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
+		cookieSecure := cfg.Auth.Cookie.Secure
+
+		bootstrapSvc := bootstrap.NewService(dbStore,
 			bootstrap.WithPublicURL(cfg.Server.PublicURL))
-		bootstrap.RegisterRoutes(r, bootstrapSvc, func() bool { return cfg.Auth.DevAuth })
-		log.Bg().Info("bootstrap endpoint mode",
-			"http_enabled", cfg.Auth.Bootstrap.Token != "",
+		bootstrap.RegisterRoutes(r, bootstrapSvc,
+			func() bool { return cfg.Auth.DevAuth },
+			bootstrapSessionStore, cookieSecure)
+		log.Bg().Info("bootstrap endpoint",
 			"dev_auth", cfg.Auth.DevAuth,
+			"cookie_secure", cookieSecure,
 		)
+
+		loginH := authpassword.NewLoginHandler(sqlc.New(pool), bootstrapSessionStore, cookieSecure, nil)
+		r.Group(func(r chi.Router) {
+			// 10 login attempts/minute/IP is generous for humans and
+			// still throttles credential-stuffing. KeyByIP keys off
+			// r.RemoteAddr; behind a reverse proxy, operators should
+			// install chi's ClientIPFrom* middleware ahead of the
+			// router so RemoteAddr is the real client.
+			r.Use(httprate.LimitBy(10, time.Minute, httprate.KeyByIP))
+			r.Post("/api/v1/auth/login", loginH.Login)
+		})
+		r.Post("/api/v1/auth/logout", loginH.Logout)
 	}
 
 	// Hoist these so downstream route registration can see them; nil

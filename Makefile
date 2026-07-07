@@ -42,7 +42,7 @@ bootstrap:
 		--name=$${PARSAR_BOOTSTRAP_NAME:-}
 
 sqlc-generate:
-	cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+	cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
 
 dev:
 	./scripts/dev-stack.sh

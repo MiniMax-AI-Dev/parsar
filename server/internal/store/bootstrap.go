@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -36,10 +37,17 @@ func init() {
 // ProvisionFirstOwnerInput is the payload for the very first
 // owner+workspace provisioning. The HTTP handler validates fields
 // before reaching here.
+//
+// PasswordHash is optional: when non-empty, the tx also writes an
+// auth_identities(provider='email') row so the owner can log in via
+// POST /api/v1/auth/login afterwards. Leaving it empty preserves the
+// pre-existing "bootstrap without local password" path (feishu-only
+// deployments and the parsar-bootstrap CLI when password is omitted).
 type ProvisionFirstOwnerInput struct {
 	Email         string
 	Name          string // defaults to local part of email
 	WorkspaceName string // slug auto-generated
+	PasswordHash  string // bcrypt output; empty = no email identity written
 	Now           time.Time
 }
 
@@ -119,6 +127,28 @@ func (s *Store) ProvisionFirstOwner(ctx context.Context, input ProvisionFirstOwn
 	})
 	if err != nil {
 		return ProvisionFirstOwnerResult{}, fmt.Errorf("upsert user: %w", err)
+	}
+
+	// Bind local email/password identity when the caller supplied a
+	// pre-hashed password. Stays inside the tx so a failure here
+	// rolls back the fresh user row too.
+	if input.PasswordHash != "" {
+		metaBytes, mErr := json.Marshal(map[string]string{
+			"password_hash": input.PasswordHash,
+			"hashed_at":     now.Format(time.RFC3339),
+		})
+		if mErr != nil {
+			return ProvisionFirstOwnerResult{}, fmt.Errorf("marshal email identity metadata: %w", mErr)
+		}
+		if err := q.UpsertEmailPasswordIdentity(ctx, sqlc.UpsertEmailPasswordIdentityParams{
+			ID:       mustUUID(newID()),
+			UserID:   mustUUID(userRow.ID),
+			Email:    email,
+			Metadata: metaBytes,
+			Now:      timestamptz(now),
+		}); err != nil {
+			return ProvisionFirstOwnerResult{}, fmt.Errorf("upsert email identity: %w", err)
+		}
 	}
 
 	var (

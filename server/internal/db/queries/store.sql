@@ -4403,3 +4403,56 @@ values (@agent_id::uuid, @capability_key::text, @enabled::boolean, now(), now())
 on conflict (agent_id, capability_key) do update set
   enabled    = excluded.enabled,
   updated_at = now();
+
+
+-- ============================================================
+-- Email/password identity (local email+password login)
+-- ============================================================
+--
+-- provider='email' is the canonical local password identity. subject
+-- stores the email (mirrors users.email); metadata stores the bcrypt
+-- hash. Uniqueness on (provider, subject) is already enforced by
+-- uk_auth_identities_provider_subject in 000001.
+--
+-- Password strength validation lives in the password package at the
+-- handler layer. SQL only persists and reads.
+
+-- name: UpsertEmailPasswordIdentity :exec
+-- Called on first-time registration or password change. Caller
+-- assembles the metadata blob { "password_hash": ..., "hashed_at": ... }
+-- so this file needs no jsonb_build_object gymnastics.
+insert into auth_identities(id, user_id, provider, subject, metadata, created_at, updated_at)
+values (@id::uuid, @user_id::uuid, 'email', @email, @metadata::jsonb, @now, @now)
+on conflict (provider, subject) do update
+set user_id    = excluded.user_id,
+    metadata   = excluded.metadata,
+    updated_at = excluded.updated_at;
+
+-- name: GetPasswordHashByEmail :one
+-- Login-only projection. Never selects the full metadata blob so a
+-- caller cannot accidentally dump the hash. Missing user -> ErrNoRows.
+-- User exists but has no email identity -> password_hash is '', which
+-- lets password.Compare("", ...) burn dummy bcrypt to preserve
+-- constant-time timing.
+select
+  u.id::text                                          as user_id,
+  u.email                                             as email,
+  u.name                                              as name,
+  u.status                                            as status,
+  coalesce(ai.metadata ->> 'password_hash', '')::text as password_hash
+from users u
+left join auth_identities ai
+  on ai.user_id = u.id
+ and ai.provider = 'email'
+ and ai.subject  = u.email
+where u.email = @email
+  and u.deleted_at is null
+limit 1;
+
+-- name: TouchEmailIdentityLastUsed :exec
+-- Best-effort last_used_at bump after successful login. Merges into
+-- the existing metadata blob; no new columns. Failure only logs.
+update auth_identities
+set metadata   = metadata || jsonb_build_object('last_used_at', @now_str::text),
+    updated_at = @now
+where provider = 'email' and subject = @email;
