@@ -25,6 +25,16 @@
 #   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
 #   PARSAR_PG_PORT        host port for Postgres (default: 15432)
 
+# Explicit project name so the auto-created network is always parsar_default
+# regardless of the clone directory name. The sandbox provider hard-codes this
+# network below (AGENT_DAEMON_SANDBOX_DOCKER_NETWORK); mismatched names would
+# leave every acquired sandbox unable to reach parsar-server.
+name: parsar
+
+networks:
+  default:
+    name: parsar_default
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -65,10 +75,51 @@ services:
     environment:
       DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
       PARSAR_OWNER_EMAIL: "${PARSAR_OWNER_EMAIL:-}"
+      # Passed through so parsar-init can validate it before migrations run.
+      # Empty / dev-default triggers the auto-generate + guidance path below.
+      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-}"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
+        # ---- Master key gate ----
+        # PARSAR_MASTER_KEY encrypts every workspace-scoped secret in the
+        # database (Feishu App Secret, Slack/Discord bot tokens, ...). A
+        # public dev-default key or an empty value on a 0.0.0.0-bound LAN
+        # deploy would leak that vault to anyone who can read the DB. Fail
+        # loud on the well-known dev default; auto-generate + print
+        # guidance for empty so first-time `up` still works.
+        DEV_DEFAULT_KEY="parsar-dev-master-key-2026"
+        if [ "$${PARSAR_MASTER_KEY}" = "$${DEV_DEFAULT_KEY}" ]; then
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "  ERROR: PARSAR_MASTER_KEY is the public dev default."
+          echo ""
+          echo "  This key encrypts Feishu / Slack / Discord bot credentials"
+          echo "  in the database. Using the repo-visible default on a LAN"
+          echo "  deploy leaks the entire secret vault."
+          echo ""
+          echo "  Fix: remove PARSAR_MASTER_KEY from .env, then re-run"
+          echo "  docker compose up — a fresh key is auto-generated and"
+          echo "  printed below."
+          echo "═══════════════════════════════════════════════════════════════"
+          exit 1
+        fi
+        if [ -z "$${PARSAR_MASTER_KEY}" ]; then
+          GENERATED_KEY=$$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "  PARSAR_MASTER_KEY was unset — auto-generated a fresh key."
+          echo ""
+          echo "  ⚠️  COPY THIS INTO .env NOW, otherwise the next restart will"
+          echo "     generate a different key and every bot credential you"
+          echo "     store today will become undecryptable."
+          echo ""
+          echo "     PARSAR_MASTER_KEY=$${GENERATED_KEY}"
+          echo ""
+          echo "  (Sleeping 5s so this stays on screen. Ctrl+C to abort.)"
+          echo "═══════════════════════════════════════════════════════════════"
+          sleep 5
+          export PARSAR_MASTER_KEY="$${GENERATED_KEY}"
+        fi
         parsar-migrate
         if [ -n "$${PARSAR_OWNER_EMAIL}" ]; then
           parsar-bootstrap \
@@ -129,9 +180,10 @@ services:
       # real-Feishu mode); must match the Feishu console only when you actually
       # exercise event subscription. Empty in mock mode — ignored there.
       PARSAR_FEISHU_VERIFICATION_TOKEN: "${PARSAR_FEISHU_VERIFICATION_TOKEN:-}"
-      # Secure cookie can't ride plain http://127.0.0.1, so real-Feishu mode on
-      # localhost needs this false (server prints a harmless 'cookies will leak'
-      # warning). Mock/ProfileDev ignores it. Override to true behind https.
+      # Secure cookie can't ride plain HTTP — set false when the browser
+      # dials the raw compose port (127.0.0.1 or PARSAR_HOST_IP over LAN).
+      # Set true when a reverse proxy terminates HTTPS in front of this
+      # stack. Mock/ProfileDev ignores it entirely.
       PARSAR_COOKIE_SECURE: "${PARSAR_COOKIE_SECURE:-false}"
       # Public URL must match the host port the browser hits so OAuth
       # callbacks AND the minted one-line connect command line up. Kept in
@@ -163,7 +215,13 @@ services:
       # (apps/web/src/lib/api-models.ts DEV_MASTER_KEY) so the secret vault
       # stays in sync. Bot App ID/Secret are NOT here — they go through the
       # Web UI bind card into the encrypted vault.
-      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
+      # PARSAR_MASTER_KEY must be set explicitly. Empty falls through here
+      # so parsar-init can auto-generate + print the key on first `up`;
+      # parsar-server then refuses to start via config.Validate in
+      # production mode (see server/internal/config/validate.go). No dev
+      # fallback: leaking the public dev key on a 0.0.0.0-bound LAN
+      # deploy would expose the entire secret vault.
+      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-}"
       PARSAR_FEISHU_WEBSOCKET: "true"
       PARSAR_FEISHU_OUTBOUND: "true"
       # Workspace-dimension IM connector reconcilers (workspace_im_connectors
@@ -196,9 +254,14 @@ services:
       PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
       PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
       # Docker sandbox — Agent runs inside a sandboxed container with
-      # Claude Code + Codex + parsar-daemon. Server uses `docker exec` to
-      # dispatch commands. Build the sandbox image first:
+      # Claude Code + OpenCode + Codex + Pi + parsar-daemon. The server
+      # calls docker to start / exec / stop sandbox containers via the
+      # mounted /var/run/docker.sock below. Build the sandbox image
+      # first (README's 5.2 section):
       #   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+      # The network below is pinned to `parsar_default` — the top-level
+      # `name: parsar` + `networks:` block at the head of this file
+      # guarantees that alias regardless of the clone directory.
       AGENT_DAEMON_SANDBOX_BACKEND: "docker"
       AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${AGENT_DAEMON_SANDBOX_DOCKER_IMAGE:-parsar-sandbox:local}"
       AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "parsar_default"

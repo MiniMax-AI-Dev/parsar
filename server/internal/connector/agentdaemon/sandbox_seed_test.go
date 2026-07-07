@@ -83,6 +83,7 @@ func TestConnectorTagFor(t *testing.T) {
 		SandboxConnectorClaude:   "claude",
 		SandboxConnectorOpenCode: "opencode",
 		SandboxConnectorCodex:    "codex",
+		SandboxConnectorPi:       "pi",
 	}
 	for in, want := range cases {
 		if got := connectorTagFor(in); got != want {
@@ -91,9 +92,32 @@ func TestConnectorTagFor(t *testing.T) {
 	}
 }
 
+// TestConnectorForAgentKind: dispatch table from the free-form agent_kind
+// string stamped in AgentConfig to the typed SandboxConnector. An
+// unknown/empty kind defaults to Claude — daemon heartbeat validation is
+// the real gate for unsupported kinds, so this function is a normaliser
+// rather than a validator. Locking in the mapping here means a rename
+// (e.g. "opencode" → "open_code") would have to touch this test too.
+func TestConnectorForAgentKind(t *testing.T) {
+	cases := map[string]SandboxConnector{
+		"":            SandboxConnectorClaude,
+		"claude_code": SandboxConnectorClaude,
+		"codex":       SandboxConnectorCodex,
+		"opencode":    SandboxConnectorOpenCode,
+		"pi":          SandboxConnectorPi,
+		"  pi  ":      SandboxConnectorPi, // TrimSpace applied
+		"bogus":       SandboxConnectorClaude,
+	}
+	for in, want := range cases {
+		if got := ConnectorForAgentKind(in); got != want {
+			t.Errorf("ConnectorForAgentKind(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // TestSeedPlatformConfig_DispatchTable: per-connector branching in the
 // switch. Claude (and empty default) writes a file via the fake client;
-// OpenCode/Codex are explicit no-ops until their templates land; an
+// OpenCode/Codex/Pi are explicit no-ops until their templates land; an
 // unknown connector fails loudly to avoid shipping a sandbox without
 // spec/memory wiring.
 func TestSeedPlatformConfig_DispatchTable(t *testing.T) {
@@ -108,6 +132,7 @@ func TestSeedPlatformConfig_DispatchTable(t *testing.T) {
 		{"claude writes settings", SandboxConnectorClaude, 1, false},
 		{"opencode noop until template exists", SandboxConnectorOpenCode, 0, false},
 		{"codex noop until template exists", SandboxConnectorCodex, 0, false},
+		{"pi noop until template exists", SandboxConnectorPi, 0, false},
 		{"unknown connector errors", SandboxConnector("totally-bogus"), 0, true},
 	}
 	for _, tc := range cases {

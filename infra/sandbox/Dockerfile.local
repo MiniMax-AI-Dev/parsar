@@ -4,8 +4,12 @@
 #   - No envd (local docker sandbox uses `docker exec`, not envd API)
 #   - parsar-daemon copied from the parsar:local server image (no GitHub Release)
 #   - parsar CLI compiled in a Go builder stage (hooks need `parsar inject`)
-#   - OpenCode installed via npm (Node already available)
-#   - Codex installed via npm (Node already available)
+#   - Claude Code from downloads.claude.ai; OpenCode / Codex / Pi via npm
+#
+# All Agent CLI installs are FAIL-LOUD: if any of them fails, the build
+# aborts. A silently missing CLI would only surface at run time when a
+# user creates an Agent with the corresponding agent_kind and the sandbox
+# reports "command not found".
 #
 # Build (from repo root):
 #   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
@@ -68,9 +72,10 @@ RUN set -e; \
     /usr/local/bin/claude --version
 
 # --- OpenCode CLI (via npm, Node already installed above) ---
-RUN npm install -g opencode-ai \
- && opencode --version \
- || echo "opencode install skipped (npm install failed)"
+# Fail the build if the install breaks — a silently missing CLI would
+# only surface when a user creates an agent_kind=opencode Agent and the
+# sandbox reports "command not found" at runtime.
+RUN npm install -g opencode-ai && opencode --version
 
 # --- parsar-daemon from the server image ---
 COPY --from=parsar:local /usr/local/share/parsar/daemon/parsar-daemon-linux-amd64 /usr/local/bin/parsar-daemon
@@ -81,14 +86,10 @@ COPY --from=parsar-builder /out/parsar /usr/local/bin/parsar
 RUN chmod +x /usr/local/bin/parsar && /usr/local/bin/parsar --version
 
 # --- Codex CLI (via npm, Node already installed above) ---
-RUN npm install -g @openai/codex \
- && codex --version \
- || echo "codex install skipped (npm install failed)"
+RUN npm install -g @openai/codex && codex --version
 
 # --- Pi CLI (via npm) ---
-RUN npm install -g @earendil-works/pi-coding-agent \
- && pi --version \
- || echo "pi install skipped (npm install failed)"
+RUN npm install -g @earendil-works/pi-coding-agent && pi --version
 
 # --- Hook scripts (Claude Code + OpenCode) ---
 # Pre-baked under /opt/parsar/hooks/. Claude hooks are Python, OpenCode

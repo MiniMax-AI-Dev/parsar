@@ -6,6 +6,20 @@
 
 ---
 
+## ⚠️  信任边界与安全前提
+
+本文档假设**部署机所在的网络是可信的**（家庭 / 小团队办公室 LAN、单人开发机 VPN 内网）。走这套 compose **不适合**多租户 LAN（学校/公司大网、公用 Wi-Fi）或直接暴露到公网。
+
+原因：
+
+- **Docker socket 挂进 server 容器**（`/var/run/docker.sock`）用于按需拉起沙箱容器。这等价于给 server 容器 root 级别的宿主机访问；server 里的任何 RCE 都会变成宿主机沦陷。
+- **默认 HTTP 无 TLS**：`PARSAR_COOKIE_SECURE=false` + 0.0.0.0 绑定，同网段的抓包者可以截获 session cookie。
+- **PARSAR_MASTER_KEY 是所有 workspace 凭证（飞书/Slack/Discord bot）的加密根密钥**：泄露它 = 数据库里所有 bot secret 明文暴露。
+
+生产 / 多租户 / 公网部署应改用 K8s + envd 的 e2b sandbox 路径（不在本文档范围）；本文的目标是「在受信内网跑起来验证功能」。
+
+---
+
 ## 总览
 
 ```
@@ -38,9 +52,11 @@ docker info              # 确认 daemon 在运行
   ```
 - 确认端口 `18080`（或你选的端口）未被占用且防火墙放行。
 - 如果机器需要通过 HTTP 代理访问外网，记下代理地址（后续以 `YOUR_PROXY` 代称）。
-- 确认 Docker socket 的 GID：
+- 确认 Docker socket 的 GID（Linux 才需要，macOS Docker Desktop 无 host-side dockerd）：
   ```bash
-  stat -c '%g' /var/run/docker.sock   # 通常是 999 或 docker
+  # Linux
+  stat -c '%g' /var/run/docker.sock   # 通常是 999 或 docker 用户组
+  # macOS: 跳过此步，保留 DOCKER_GID=999 默认值即可
   ```
 
 ---
@@ -120,7 +136,12 @@ PARSAR_FEISHU_VERIFICATION_TOKEN=xxxxxxxx    # 2.1 节记下的 Verification Tok
 PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID=ou_xxxxxx  # 2.1 节记下的 Bot Open ID
 
 # ---- 安全 ----
-PARSAR_MASTER_KEY=<openssl rand -hex 32 生成>
+# PARSAR_MASTER_KEY 加密数据库里所有 Bot 凭证。首次留空即可 ——
+# parsar-init 在 6 节 `up` 时会自动生成并打印到日志，然后 fatal 停机，
+# 你把它复制回 .env 再启动一次即可。也可以手动预生成：
+#   echo "PARSAR_MASTER_KEY=$(openssl rand -hex 32)" >> .env
+# 一旦设定，切勿更改：改了以后已存的 Bot 凭证会全部解不开，Bot 全部要重绑。
+PARSAR_MASTER_KEY=
 PARSAR_COOKIE_SECURE=false                   # HTTP 部署必须 false；HTTPS 反代时改 true
 
 # ---- 网络 ----
@@ -132,7 +153,9 @@ PARSAR_PG_PORT=15432
 PARSAR_SERVER_IMAGE=parsar:local
 
 # ---- Docker sandbox ----
-DOCKER_GID=999                               # stat -c '%g' /var/run/docker.sock 的值
+# Linux: stat -c '%g' /var/run/docker.sock       (通常是 999 或 docker)
+# macOS Docker Desktop: 无宿主机 dockerd，socket 走 vsock proxy —— 保留 999 即可（group_add 是 no-op）
+DOCKER_GID=999
 
 # ---- 代理（可选，仅需要代理才能出网的机器） ----
 # HTTP_PROXY=http://your-proxy:port
@@ -208,8 +231,12 @@ sudo docker compose -f docker-compose.local.yml up -d
 
 **启动顺序（自动）：**
 1. `postgres` — PostgreSQL 16，等待 healthcheck 通过
-2. `parsar-init` — 数据库迁移 + 首次引导（TOFU 模式，跳过 bootstrap）
+2. `parsar-init` — Master key 校验 + 数据库迁移 + 首次引导（TOFU 模式，跳过 bootstrap）
 3. `parsar-server` — 绑定 `0.0.0.0:18080`，飞书 WebSocket 入站 + 出站 worker 自动启动
+
+> **首次启动会 fatal 停机——这是预期行为。**
+> 如果你在 4 节没有预先手动填 `PARSAR_MASTER_KEY`，`parsar-init` 会自动生成一个并打印到日志里（`sudo docker logs parsar-local-init`），然后 `parsar-server` 因为 env 里仍然没有 key 而拒绝启动。**从 init 日志复制打印出来的 `PARSAR_MASTER_KEY=...` 那一行到 `.env`**，再 `up -d` 一次就正常了。
+> 第二次启动开始，如果 key 没变，parsar-init 只跑迁移不改 key。
 
 **验证：**
 
@@ -329,10 +356,12 @@ HTTPS_PROXY=http://your-proxy:port
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| Server 启动即 fatal，抱怨 `secret.master_key is required in production` | `.env` 里 `PARSAR_MASTER_KEY` 空 | 让 `parsar-init` 跑一次 → 从日志复制它生成的 key 到 `.env` → `up -d` 再启动 |
 | 飞书登录报 `redirect_uri mismatch` | `.env` 的 `REDIRECT_URI` 与飞书开放平台配置不一致 | 两边保持完全一致（协议、IP、端口、路径） |
 | 其他机器无法访问 18080 | 防火墙未放行 | `sudo ufw allow 18080/tcp` 或对应防火墙规则 |
 | 接入设备下载 daemon 报 **404** | 用的 GHCR 镜像不含 daemon | 本地构建 server 镜像（5.1 节） |
 | Agent 报 **"no runtime yet — ask an admin to rebuild it"** | sandbox 镜像缺少 Agent CLI | 用 `Dockerfile.local` 重新构建 sandbox 镜像（5.2 节），然后 UI 里点 Rebuild |
+| Sandbox 起来了但 daemon 连不到 server | Compose 项目名不是 `parsar`，网络名对不上 | 用仓库自带的 `docker-compose.local.yml`（顶部 `name: parsar` 已固定）；不要用 `-p <其他名>` 覆盖 |
 | 群聊 @Bot **没反应**，私聊正常 | `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID` 没填 | `.env` 加上 Bot 的 open_id 后重启 server |
 | Bot 收到消息但不回复 | 出站 worker 没起来 | 检查 server 日志中 `feishu outbound` 字样；确认 `PARSAR_FEISHU_OUTBOUND=true`（compose 中已设） |
 | Server 循环重启 `owner URL not resolvable` | `PARSAR_AGENT_DAEMON_OWNER_URL` 缺失 | 确认 compose 中有 `PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"` |

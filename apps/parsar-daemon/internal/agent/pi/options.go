@@ -36,8 +36,10 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any, resumeSession
 	}
 
 	// --mode json: machine-readable NDJSON output for the translator.
-	// -p: non-interactive (print) mode — process prompt and exit, no
-	// interactive trust prompt or TUI.
+	// (Non-interactive mode is switched on by the trailing `-p` flag
+	// below, which pi consumes together with the prompt argument —
+	// that flag must be last for pi's arg parser to bind the prompt
+	// correctly, so we can't add it here.)
 	args := []string{"--mode", "json"}
 
 	if model := stringOpt(opts, "model"); model != "" {
