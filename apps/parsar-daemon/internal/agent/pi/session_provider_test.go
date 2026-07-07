@@ -65,7 +65,7 @@ func TestNewSessionMaterialisesPiProviderModelsJSON(t *testing.T) {
 	if p.BaseURL != "https://platform-api.example.com" {
 		t.Fatalf("models.json baseUrl wrong: %+v", p)
 	}
-	if p.APIKey != "PARSAR_PI_API_KEY" {
-		t.Fatalf("models.json apiKey = %q, want PARSAR_PI_API_KEY", p.APIKey)
+	if p.APIKey != "$PARSAR_PI_API_KEY" {
+		t.Fatalf("models.json apiKey = %q, want $PARSAR_PI_API_KEY", p.APIKey)
 	}
 }
