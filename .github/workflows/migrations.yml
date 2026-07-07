@@ -53,4 +53,4 @@ jobs:
         run: git fetch --no-tags --depth=1 origin main
 
       - name: Verify migration order and immutability
-        run: PARSAR_ALLOW_MIGRATION_EDIT=1 bash scripts/verify-migration-order.sh origin/main
+        run: bash scripts/verify-migration-order.sh origin/main
