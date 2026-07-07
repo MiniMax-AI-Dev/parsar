@@ -78,12 +78,36 @@ func RegisterHealthRoutes(r chi.Router, deps HealthDeps) {
 	r.Get("/api/v1/health", livenessHandler())
 }
 
+// livenessHandler answers the liveness / legacy-health probe.
+// Never touches any dependency — liveness failures restart the pod, so
+// amplifying pressure on a struggling dep would be self-defeating.
+//
+//	@Summary	Health check
+//	@Description	Liveness probe. Returns 200 as long as the process can serve HTTP; does not touch any dependency.
+//	@Tags		health
+//	@ID			getHealth
+//	@Produce	json
+//	@Success	200 {object} HealthResponse "Server is healthy"
+//	@Router		/api/v1/health [get]
 func livenessHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, HealthResponse{Status: "ok", Name: "parsar"})
 	}
 }
 
+// readinessHandler answers the readiness probe. Unlike liveness, it
+// pings each configured dependency; the pod is drained (not restarted)
+// when any check reports non-ok, so a late-starting database flips
+// the verdict back to 200 on the next poll without a restart.
+//
+//	@Summary		Readiness probe
+//	@Description	Readiness probe. Pings each wired dependency (currently the database). Returns 200 with status "ok" iff every check reports ok; otherwise 503 with status "degraded".
+//	@Tags			health
+//	@ID				getReadyz
+//	@Produce		json
+//	@Success		200	{object}	ReadyResponse	"All dependencies healthy"
+//	@Failure		503	{object}	ReadyResponse	"One or more dependencies unhealthy or not configured"
+//	@Router			/readyz [get]
 func readinessHandler(deps HealthDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Per-probe timeout (not per-check) so total latency stays

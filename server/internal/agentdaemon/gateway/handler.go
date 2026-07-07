@@ -99,6 +99,20 @@ func NewHandler(cfg HandlerConfig) *Handler {
 // WS is the websocket upgrade entry point. Errors before the upgrade
 // return JSON 4xx; errors during the WS read loop fall to Session.Close
 // which fans synthetic error/done to every active subscriber.
+//
+//	@Summary	Agent-daemon WebSocket upgrade
+//	@Description	Long-lived duplex channel for daemon runtimes. Authenticated by the runner bearer passed as a query param since websockets have no header stage before upgrade.
+//	@Tags		agent-daemon
+//	@ID			agentDaemonWebsocket
+//	@Param		device_id query string true "device id"
+//	@Param		token query string true "runner bearer credential"
+//	@Param		version query string true "daemon protocol version"
+//	@Success	101 {string} string "protocol switched"
+//	@Failure	400 {object} map[string]interface{}
+//	@Failure	401 {object} map[string]interface{}
+//	@Failure	403 {object} map[string]interface{}
+//	@Failure	426 {object} map[string]interface{} "incompatible protocol version"
+//	@Router		/agent-daemon/ws [get]
 func (h *Handler) WS(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	deviceID := q.Get("device_id")
@@ -178,6 +192,20 @@ func (h *Handler) WS(w http.ResponseWriter, r *http.Request) {
 // the bearer in a separate HTTP step (rather than folded into the WS
 // upgrade) lets the daemon fail fast on credential problems with a
 // real HTTP status rather than the opaque WS close code.
+//
+//	@Summary	Bootstrap agent-daemon
+//	@Description	Verifies the runner credential and returns the WebSocket URL, heartbeat interval, and protocol version the daemon should use.
+//	@Tags		agent-daemon
+//	@ID			bootstrapAgentDaemon
+//	@Accept		json
+//	@Produce	json
+//	@Param		Authorization header string true "Bearer <runner credential>"
+//	@Param		body body object{device_id=string} true "device_id"
+//	@Success	200 {object} map[string]interface{} "device_id, workspace_id, ws_url, heartbeat_seconds, protocol_version"
+//	@Failure	400 {object} map[string]interface{}
+//	@Failure	401 {object} map[string]interface{}
+//	@Failure	405 {object} map[string]interface{}
+//	@Router		/agent-daemon/bootstrap [post]
 func (h *Handler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeAuthError(w, http.StatusMethodNotAllowed, "method_not_allowed", "")
@@ -221,6 +249,18 @@ func (h *Handler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 
 // DeviceStatus is a lightweight liveness probe the daemon hits before
 // the WS dial.
+//
+//	@Summary	Agent-daemon device status
+//	@Description	Reports whether the caller's device has a live WebSocket registration and, when configured, the current owner-pod lease.
+//	@Tags		agent-daemon
+//	@ID			getAgentDaemonDeviceStatus
+//	@Produce	json
+//	@Param		Authorization header string true "Bearer <runner credential>"
+//	@Param		device_id query string true "device id"
+//	@Success	200 {object} map[string]interface{} "device_id, online, owner"
+//	@Failure	400 {object} map[string]interface{}
+//	@Failure	401 {object} map[string]interface{}
+//	@Router		/agent-daemon/device-status [get]
 func (h *Handler) DeviceStatus(w http.ResponseWriter, r *http.Request) {
 	bearer := bearerFromAuthHeader(r)
 	if bearer == "" {

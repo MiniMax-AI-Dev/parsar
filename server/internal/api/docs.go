@@ -1,12 +1,15 @@
 // OpenAPI spec + human-readable docs UI.
 //
-// docs/openapi/openapi.yaml is the contract source of truth (hand-maintained,
-// reviewed in PRs). This file mounts two always-on routes so the contract
-// stops being a hidden artefact:
+// docs/openapi/openapi.yaml is auto-generated from swaggo annotations
+// on Go handlers by `make openapi`. It is the single source of truth
+// for the HTTP contract — do not edit by hand; the CI drift check
+// regenerates it and fails the build if the committed file drifts.
+// This file mounts two always-on routes so the contract stops being a
+// hidden artefact:
 //
 //   GET /api/v1/openapi.yaml — raw spec, primary source for tooling
 //                              (openapi-typescript, oapi-codegen, curl).
-//   GET /docs                — Stoplight Elements single-page viewer that
+//   GET /docs                — Swagger UI single-page viewer that
 //                              fetches the spec above. Zero build step,
 //                              no node_modules in the Go image.
 //
@@ -27,10 +30,10 @@ import (
 
 // DocsOptions configures OpenAPI exposure.
 type DocsOptions struct {
-	// SpecPath is the absolute path to openapi.yaml. Empty disables both
-	// routes. Resolved at RegisterDocsRoutes time; the file is read on
-	// every request so an in-place edit during `make dev` is visible
-	// without restarting the server.
+	// SpecPath is the absolute path to the OpenAPI spec file. Empty
+	// disables both routes. Resolved at RegisterDocsRoutes time; the
+	// file is read on every request so `make openapi` regenerations
+	// during `make dev` are visible without restarting the server.
 	SpecPath string
 
 	// Title overrides the docs page <title>. Empty falls back to
@@ -43,18 +46,16 @@ type DocsOptions struct {
 }
 
 // ResolveOpenAPISpecPath finds the spec file using the same precedence
-// the rest of the dev tooling follows: explicit env var, then the
-// repo-relative default. Returns "" when nothing exists so callers can
-// disable the routes cleanly.
+// the rest of the dev tooling follows: PARSAR_OPENAPI_SPEC env var if
+// set, otherwise walk up from CWD looking for docs/openapi/openapi.yaml.
+// Returns "" when nothing exists so callers can disable the routes
+// cleanly.
 func ResolveOpenAPISpecPath() string {
 	if p := strings.TrimSpace(os.Getenv("PARSAR_OPENAPI_SPEC")); p != "" {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	// Walk upward from CWD looking for docs/openapi/openapi.yaml. This
-	// makes `make server` (CWD=server/) and a binary launched from the
-	// repo root both work without per-environment config.
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ""

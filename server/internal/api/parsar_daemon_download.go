@@ -37,7 +37,26 @@ func RegisterParsarDaemonDownloadRoute(r chi.Router, cfg ParsarDaemonDownloadCon
 	if dir == "" {
 		dir = defaultDaemonBinaryDir
 	}
-	r.Get("/api/v1/parsar-daemon/download", func(w http.ResponseWriter, req *http.Request) {
+	r.Get("/api/v1/parsar-daemon/download", parsarDaemonDownloadHandler(dir))
+}
+
+// parsarDaemonDownloadHandler streams the parsar-daemon binary matching the
+// caller's os/arch pair. Extracted so swag can attach annotations to a named
+// function.
+//
+//	@Summary	Download parsar-daemon binary
+//	@Description	Serves the parsar-daemon binary for the requested os/arch pair from the image's baked-in binary directory. Unauthenticated — the pairing token is what gates the actual connect.
+//	@Tags		runtimes
+//	@ID			downloadParsarDaemon
+//	@Produce	octet-stream
+//	@Param		os query string true "target GOOS" Enums(darwin, linux)
+//	@Param		arch query string true "target GOARCH" Enums(amd64, arm64)
+//	@Success	200 {file} binary "parsar-daemon binary stream"
+//	@Failure	400 {string} string "os/arch not in the accepted allowlist"
+//	@Failure	404 {string} string "no binary for that os/arch in this image"
+//	@Router		/api/v1/parsar-daemon/download [get]
+func parsarDaemonDownloadHandler(dir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 		goos := req.URL.Query().Get("os")
 		goarch := req.URL.Query().Get("arch")
 		if !daemonBinaryOS[goos] || !daemonBinaryArch[goarch] {
@@ -63,5 +82,5 @@ func RegisterParsarDaemonDownloadRoute(r chi.Router, cfg ParsarDaemonDownloadCon
 		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 		w.Header().Set("Cache-Control", "no-store")
 		http.ServeContent(w, req, name, stat.ModTime(), f)
-	})
+	}
 }

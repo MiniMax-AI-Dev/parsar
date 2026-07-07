@@ -8,7 +8,7 @@ SHELL := /bin/bash
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: setup dev check reset-dev clean-dev paths seed-dev seed-dev-db migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info
+.PHONY: setup dev check reset-dev clean-dev paths seed-dev seed-dev-db migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info openapi
 
 setup:
 	./scripts/setup.sh
@@ -135,3 +135,36 @@ docker-image-info:
 	@docker image inspect \
 	    --format 'image={{.RepoTags}} id={{.Id}} created={{.Created}} size={{.Size}}' \
 	    $(PARSAR_IMAGE):$(PARSAR_IMAGE_TAG)
+
+# --- OpenAPI spec (generated from swaggo annotations) ------------------
+#
+# Runs `swag init` over server/**/*.go. Every handler carrying a
+#   //  @Router  /path  [verb]
+# annotation block contributes an operation; the general @title/@version
+# come from the swag block above `package main` in cmd/server/main.go.
+#
+# The spec is a build artifact — do NOT edit docs/openapi/openapi.yaml
+# by hand. The CI check regenerates it and fails the build on any diff
+# from the committed version, so drift is always caught at PR time.
+#
+# Requires the swag CLI:
+#     go install github.com/swaggo/swag/cmd/swag@v1.16.4
+# The recipe auto-installs on first use.
+SWAG_VERSION ?= v1.16.4
+
+openapi:
+	@command -v swag >/dev/null 2>&1 || \
+	    go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
+	@mkdir -p docs/openapi
+	swag init \
+	    -g server/cmd/server/main.go \
+	    --dir . \
+	    --output docs/openapi/gen \
+	    --outputTypes yaml \
+	    --parseInternal \
+	    --parseDepth 100 \
+	    --exclude ./apps,./packages,./node_modules,./tests,./infra
+	@mv docs/openapi/gen/swagger.yaml docs/openapi/openapi.yaml
+	@rmdir docs/openapi/gen 2>/dev/null || true
+	@echo "openapi: wrote docs/openapi/openapi.yaml"
+	@echo "openapi: paths=$$(grep -c '^  /' docs/openapi/openapi.yaml)"

@@ -79,6 +79,18 @@ func parseRuntimeLimit(r *http.Request, key string) int32 {
 // MemoryBlock + MemoryWriteGuide, and stitch them into the system
 // prompt. WorkspaceID comes from identity and scopes both the spec
 // fragments and the workspace memory bucket.
+//
+//	@Summary	Snapshot injection bundle
+//	@Description	Returns the SessionStart injection bundle (spec + memory blocks + write guide) for the caller's runtime identity.
+//	@Tags		runtimes
+//	@ID			getAgentRuntimeSnapshot
+//	@Produce	json
+//	@Param		spec_limit query int false "max spec fragments"
+//	@Param		user_memory_limit query int false "max user memories"
+//	@Param		workspace_memory_limit query int false "max workspace memories"
+//	@Success	200 {object} injectionDTO
+//	@Failure	500 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/injection/snapshot [get]
 func (h *handler) runtimeSnapshot(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -111,6 +123,18 @@ func (h *handler) runtimeSnapshot(w http.ResponseWriter, r *http.Request) {
 // the cursor (timestamp of last seen row) and pass it as ?since=
 // next time. Empty delta is normal — the hook treats empty
 // IncrementalMemory as "skip injection this turn".
+//
+//	@Summary	Incremental injection delta
+//	@Description	Returns memory rows created since the caller's cursor. Empty delta is normal.
+//	@Tags		runtimes
+//	@ID			getAgentRuntimeIncremental
+//	@Produce	json
+//	@Param		since query string true "RFC3339 cursor timestamp"
+//	@Param		limit query int false "max rows"
+//	@Success	200 {object} injectionDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	500 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/injection/incremental [get]
 func (h *handler) runtimeIncremental(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -160,6 +184,17 @@ type runtimeCreateFragmentRequest struct {
 // runtimeCreateFragment handles `parsar spec add` from inside a sandbox.
 // Source is fixed to SourceAgent so the UI can badge agent rows; the
 // agent_actor column captures connector + agent_id.
+//
+//	@Summary	Create a spec fragment (agent-runtime)
+//	@Description	Persists a fragment attributed to the caller's runtime identity. Source is fixed to SourceAgent.
+//	@Tags		runtimes
+//	@ID			createAgentRuntimeSpecFragment
+//	@Accept		json
+//	@Produce	json
+//	@Param		body body runtimeCreateFragmentRequest true "fragment content"
+//	@Success	201 {object} fragmentDTO
+//	@Failure	400 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/spec/fragments [post]
 func (h *handler) runtimeCreateFragment(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -206,6 +241,17 @@ type runtimeCreateMemoryRequest struct {
 //
 // scope=workspace requires a workspace binding; a runtime without one
 // gets 400 (not 500) so the CLI surfaces a clear message.
+//
+//	@Summary	Create a memory (agent-runtime)
+//	@Description	Persists a memory attributed to the caller's runtime identity. scope=workspace requires a workspace binding on the runtime.
+//	@Tags		runtimes
+//	@ID			createAgentRuntimeMemory
+//	@Accept		json
+//	@Produce	json
+//	@Param		body body runtimeCreateMemoryRequest true "memory payload"
+//	@Success	201 {object} memoryDTO
+//	@Failure	400 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/memories [post]
 func (h *handler) runtimeCreateMemory(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -271,6 +317,19 @@ func (h *handler) runtimeCreateMemory(w http.ResponseWriter, r *http.Request) {
 // from identity — agents cannot enumerate other workspaces' fragments
 // by guessing query params. Hooks usually consume the snapshot endpoint
 // instead.
+//
+//	@Summary	List spec fragments (agent-runtime)
+//	@Description	Lists fragments in the workspace bound to the caller's runtime identity.
+//	@Tags		runtimes
+//	@ID			listAgentRuntimeSpecFragments
+//	@Produce	json
+//	@Param		source query string false "filter by source" Enums(manual, agent, import, user, auto-review)
+//	@Param		tag query string false "comma-separated tag filter"
+//	@Param		limit query int false "max fragments"
+//	@Success	200 {object} map[string]interface{}
+//	@Failure	400 {object} map[string]string
+//	@Failure	500 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/spec/fragments [get]
 func (h *handler) runtimeListFragments(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -308,6 +367,19 @@ type runtimeUpdateFragmentRequest struct {
 // WorkspaceID check is the only thing standing between a leaked agent
 // token and a cross-workspace write. 404 (not 403) so workspace
 // boundaries aren't enumerable.
+//
+//	@Summary	Update a spec fragment (agent-runtime)
+//	@Description	Mutates a fragment owned by the caller's workspace. Cross-workspace access is masked as 404.
+//	@Tags		runtimes
+//	@ID			updateAgentRuntimeSpecFragment
+//	@Accept		json
+//	@Produce	json
+//	@Param		fragmentID path string true "fragment id"
+//	@Param		body body runtimeUpdateFragmentRequest true "new content"
+//	@Success	200 {object} fragmentDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/spec/fragments/{fragmentID} [patch]
 func (h *handler) runtimeUpdateFragment(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -348,6 +420,15 @@ func (h *handler) runtimeUpdateFragment(w http.ResponseWriter, r *http.Request) 
 
 // runtimeDeleteFragment handles `parsar spec rm <id>` with the same
 // cross-workspace check the update path uses.
+//
+//	@Summary	Delete a spec fragment (agent-runtime)
+//	@Description	Deletes a fragment owned by the caller's workspace. Cross-workspace deletes are masked as 404.
+//	@Tags		runtimes
+//	@ID			deleteAgentRuntimeSpecFragment
+//	@Param		fragmentID path string true "fragment id"
+//	@Success	204
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/spec/fragments/{fragmentID} [delete]
 func (h *handler) runtimeDeleteFragment(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -378,6 +459,20 @@ func (h *handler) runtimeDeleteFragment(w http.ResponseWriter, r *http.Request) 
 // runtimeListMemories serves `parsar memory list`. Scope is required so
 // user / workspace lists never silently mix. Identity supplies user_id
 // (always) and workspace_id (when scope=workspace).
+//
+//	@Summary	List memories (agent-runtime)
+//	@Description	Lists memories in the requested scope, bound to the caller's runtime identity.
+//	@Tags		runtimes
+//	@ID			listAgentRuntimeMemories
+//	@Produce	json
+//	@Param		scope query string true "memory scope" Enums(user, workspace)
+//	@Param		memory_type query string false "memory type filter" Enums(user, feedback, workspace, reference)
+//	@Param		tag query string false "comma-separated tag filter"
+//	@Param		limit query int false "max rows"
+//	@Success	200 {object} map[string]interface{}
+//	@Failure	400 {object} map[string]string
+//	@Failure	500 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/memories [get]
 func (h *handler) runtimeListMemories(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -449,6 +544,19 @@ type runtimeUpdateMemoryRequest struct {
 // runtimeUpdateMemory handles `parsar memory edit <id>`. Mirrors
 // authorizeMemoryRowAccess but uses runtime identity and never falls
 // back to membership lookups.
+//
+//	@Summary	Update a memory (agent-runtime)
+//	@Description	Mutates a memory owned by the caller's runtime identity. Cross-owner or cross-workspace access is masked as 404.
+//	@Tags		runtimes
+//	@ID			updateAgentRuntimeMemory
+//	@Accept		json
+//	@Produce	json
+//	@Param		memoryID path string true "memory id"
+//	@Param		body body runtimeUpdateMemoryRequest true "new content"
+//	@Success	200 {object} memoryDTO
+//	@Failure	400 {object} map[string]string
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/memories/{memoryID} [patch]
 func (h *handler) runtimeUpdateMemory(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {
@@ -495,6 +603,15 @@ func (h *handler) runtimeUpdateMemory(w http.ResponseWriter, r *http.Request) {
 
 // runtimeDeleteMemory handles `parsar memory rm <id>` with the same
 // ownership gate as update.
+//
+//	@Summary	Delete a memory (agent-runtime)
+//	@Description	Deletes a memory owned by the caller's runtime identity. Cross-owner or cross-workspace deletes are masked as 404.
+//	@Tags		runtimes
+//	@ID			deleteAgentRuntimeMemory
+//	@Param		memoryID path string true "memory id"
+//	@Success	204
+//	@Failure	404 {object} map[string]string
+//	@Router		/api/v1/agent-runtime/memories/{memoryID} [delete]
 func (h *handler) runtimeDeleteMemory(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.runtimeIdentity(w, r)
 	if !ok {

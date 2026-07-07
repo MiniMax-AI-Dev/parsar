@@ -101,8 +101,15 @@ make check
 ```
 
 - Any DB change must ship with a migration.
-- Any API change must update `docs/openapi/openapi.yaml` *before* the
-  implementation.
+- API contracts live on the handler: every `http.HandlerFunc` factory
+  must carry a swaggo annotation block (`@Summary`, `@Tags`, `@Param`,
+  `@Success/@Failure`, `@Router`) directly above the `func`. After
+  changing a handler or its annotations, run `make openapi` to
+  regenerate `docs/openapi/openapi.yaml` and commit the diff alongside
+  the code. Do NOT edit the YAML by hand — CI regenerates it and fails
+  the build on any drift. See `server/internal/api/health.go:livenessHandler`
+  and `server/internal/dev/routes.go:listWorkspaceEnabledAgents` for
+  the reference style.
 
 ## Report language
 

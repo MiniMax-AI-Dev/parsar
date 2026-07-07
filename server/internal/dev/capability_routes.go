@@ -141,6 +141,26 @@ var plaintextSecretPatterns = []struct {
 	{name: "generic api key", pattern: regexp.MustCompile(`(?i)(api[_-]?key|access[_-]?token|secret)["'\s:=]+[A-Za-z0-9_./+=-]{32,}`)},
 }
 
+// listWorkspaceCapabilities returns own capabilities plus marketplace installs
+// and available marketplace items for the workspace.
+//
+//	@Summary		List workspace capabilities
+//	@Description	Returns the workspace's own capabilities plus its marketplace installs and available marketplace items. Optional pagination via page + page_size opts into a paged shape.
+//	@Tags			capabilities
+//	@ID				listDevWorkspaceCapabilities
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			visibility	query	string	false	"Filter by capability visibility (private/public)"
+//	@Param			scope		query	string	false	"Alias of visibility (legacy)"
+//	@Param			type		query	string	false	"Filter by capability type (mcp/skill/plugin/system_prompt)"
+//	@Param			name		query	string	false	"Case-insensitive substring match on name/description"
+//	@Param			page		query	int		false	"1-based page number (opts into paged shape)"
+//	@Param			page_size	query	int		false	"Page size, 1..100 (defaults to 20)"
+//	@Success		200 {object} map[string]interface{} "Workspace capabilities and marketplace listings"
+//	@Failure		400 {object} map[string]string "workspace_id must be a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities [get]
 func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityRead(w, r, runtimeStore)
@@ -280,6 +300,20 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listMarketplaceCapabilities lists all public capabilities offered on the
+// marketplace, filtered to items the caller's workspace can install.
+//
+//	@Summary		List marketplace capabilities
+//	@Description	Lists public capabilities offered on the marketplace, filtered to items visible to the caller's workspace. Workspace is taken from ?workspace_id or the X-Parsar-Workspace-ID header.
+//	@Tags			capabilities
+//	@ID				listDevMarketplaceCapabilities
+//	@Produce		json
+//	@Param			workspace_id	query	string	false	"Workspace UUID (falls back to X-Parsar-Workspace-ID header)"
+//	@Success		200 {object} map[string]interface{} "Marketplace capabilities visible to the workspace"
+//	@Failure		400 {object} map[string]string "workspace_id must be a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/capabilities/marketplace [get]
 func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
@@ -307,6 +341,20 @@ func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listWorkspaceMarketplaceInstalls returns the marketplace capabilities the
+// workspace has installed (as opposed to authored).
+//
+//	@Summary		List workspace marketplace installs
+//	@Description	Returns the marketplace capabilities the workspace has installed (as opposed to authored).
+//	@Tags			capabilities
+//	@ID				listDevWorkspaceMarketplaceInstalls
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Success		200 {object} map[string]interface{} "Marketplace installs for the workspace"
+//	@Failure		400 {object} map[string]string "workspace_id must be a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/marketplace-installs [get]
 func listWorkspaceMarketplaceInstalls(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityRead(w, r, runtimeStore)
@@ -322,6 +370,22 @@ func listWorkspaceMarketplaceInstalls(runtimeStore RuntimeStore) http.HandlerFun
 	}
 }
 
+// getCapabilityInstallCount returns the marketplace install count for a
+// capability the workspace authored.
+//
+//	@Summary		Get marketplace install count
+//	@Description	Returns the marketplace install count for a capability the workspace has published.
+//	@Tags			capabilities
+//	@ID				getDevCapabilityInstallCount
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "capability_id and install_count"
+//	@Failure		400 {object} map[string]string "workspace_id or capability_id is not a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/install-count [get]
 func getCapabilityInstallCount(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, false)
@@ -337,6 +401,21 @@ func getCapabilityInstallCount(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listMarketplaceEnabledAgents lists agents in the target workspace that have
+// this marketplace capability enabled.
+//
+//	@Summary		List agents using a marketplace capability
+//	@Description	Lists agents in the workspace that have this marketplace capability enabled.
+//	@Tags			capabilities
+//	@ID				listDevMarketplaceEnabledAgents
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Source marketplace capability UUID"
+//	@Success		200 {object} map[string]interface{} "capability_id and enabled agents"
+//	@Failure		400 {object} map[string]string "workspace_id or capability_id is not a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/enabled-agents [get]
 func listMarketplaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityRead(w, r, runtimeStore)
@@ -357,6 +436,22 @@ func listMarketplaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// createWorkspaceCapability creates a capability (optionally with an initial
+// version) in the given workspace. Owner/admin only.
+//
+//	@Summary		Create a workspace capability
+//	@Description	Creates a capability in the workspace. Owner/admin only. When body.version is set, an initial capability_version is created in the same call.
+//	@Tags			capabilities
+//	@ID				createDevWorkspaceCapability
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string			true	"Workspace UUID"
+//	@Param			body		body	capabilityBody	true	"Capability create payload"
+//	@Success		201 {object} map[string]interface{} "Created capability"
+//	@Failure		400 {object} map[string]string "Malformed body, missing name/type, or bad canonical_spec"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities [post]
 func createWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
@@ -394,6 +489,23 @@ func createWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// getWorkspaceCapability returns a single capability. Public+active
+// capabilities are visible cross-workspace; otherwise the row must live in
+// the caller's workspace.
+//
+//	@Summary		Get a workspace capability
+//	@Description	Returns a single capability. Public + active capabilities are visible cross-workspace; otherwise the row must belong to the caller's workspace.
+//	@Tags			capabilities
+//	@ID				getDevWorkspaceCapability
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "Capability row"
+//	@Failure		400 {object} map[string]string "workspace_id or capability_id is not a valid uuid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		404 {object} map[string]string "Capability not visible to this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID} [get]
 func getWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, false)
@@ -413,6 +525,24 @@ func getWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// patchWorkspaceCapability applies a partial update to a capability. Owner
+// or admin of the owning workspace only.
+//
+//	@Summary		Patch a workspace capability
+//	@Description	Applies a partial update to a capability (name/description/visibility). Owner/admin of the owning workspace only.
+//	@Tags			capabilities
+//	@ID				patchDevWorkspaceCapability
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID		path	string					true	"Workspace UUID"
+//	@Param			capabilityID	path	string					true	"Capability UUID"
+//	@Param			body			body	patchCapabilityBody		true	"Partial capability update"
+//	@Success		200 {object} map[string]interface{} "Updated capability"
+//	@Failure		400 {object} map[string]string "Malformed body or invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID} [patch]
 func patchWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, true)
@@ -437,18 +567,79 @@ func patchWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// publishWorkspaceCapability promotes a capability to the marketplace.
+//
+//	@Summary		Publish a capability to the marketplace
+//	@Description	Promotes an active capability to the marketplace. Owner/admin only. Rejects with 400 if any capability version contains a plaintext-looking secret.
+//	@Tags			capabilities
+//	@ID				publishDevWorkspaceCapability
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "Updated capability"
+//	@Failure		400 {object} map[string]string "Plaintext secret detected or invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/publish [post]
 func publishWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return marketplaceStateCapability(runtimeStore, "publish")
 }
 
+// unpublishWorkspaceCapability retracts a capability from the marketplace.
+//
+//	@Summary		Unpublish a capability from the marketplace
+//	@Description	Retracts a previously published capability from the marketplace. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				unpublishDevWorkspaceCapability
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "Updated capability"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/unpublish [post]
 func unpublishWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return marketplaceStateCapability(runtimeStore, "unpublish")
 }
 
+// deprecateWorkspaceCapability marks a marketplace capability as deprecated.
+//
+//	@Summary		Deprecate a marketplace capability
+//	@Description	Marks a published capability as deprecated so it stays reachable for existing installs but is hidden from new installs. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				deprecateDevWorkspaceCapability
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "Updated capability"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/deprecate [post]
 func deprecateWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return marketplaceStateCapability(runtimeStore, "deprecate")
 }
 
+// undeprecateWorkspaceCapability clears the deprecated flag on a marketplace
+// capability.
+//
+//	@Summary		Undeprecate a marketplace capability
+//	@Description	Clears the deprecated flag on a previously deprecated marketplace capability. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				undeprecateDevWorkspaceCapability
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "Updated capability"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/undeprecate [post]
 func undeprecateWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return marketplaceStateCapability(runtimeStore, "undeprecate")
 }
@@ -493,6 +684,22 @@ func marketplaceStateCapability(runtimeStore RuntimeStore, action string) http.H
 	}
 }
 
+// uninstallWorkspaceMarketplaceCapability removes a marketplace install from
+// the workspace, detaching any agents that had it enabled.
+//
+//	@Summary		Uninstall a marketplace capability
+//	@Description	Removes a marketplace install from the workspace and detaches any agents that had it enabled. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				uninstallDevWorkspaceMarketplaceCapability
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string						true	"Workspace UUID"
+//	@Param			body		body	uninstallMarketplaceBody	true	"source_capability_id to uninstall"
+//	@Success		200 {object} map[string]interface{} "source_capability_id and removed_agent_count"
+//	@Failure		400 {object} map[string]string "Malformed body or invalid source_capability_id"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/uninstall [post]
 func uninstallWorkspaceMarketplaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
@@ -517,6 +724,23 @@ func uninstallWorkspaceMarketplaceCapability(runtimeStore RuntimeStore) http.Han
 	}
 }
 
+// deleteWorkspaceCapability soft-deletes a capability. Refuses with 409 when
+// any agent still has the capability bound.
+//
+//	@Summary		Soft-delete a capability
+//	@Description	Soft-deletes a workspace capability. Refuses with 409 when any agent still has the capability bound. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				deleteDevWorkspaceCapability
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "Deleted capability"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		409 {object} map[string]interface{} "Capability still bound to one or more agents"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID} [delete]
 func deleteWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, true)
@@ -549,6 +773,21 @@ func deleteWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listWorkspaceCapabilityVersions returns every version row for a capability.
+//
+//	@Summary		List capability versions
+//	@Description	Returns every version row for a capability (store-side ordering).
+//	@Tags			capabilities
+//	@ID				listDevWorkspaceCapabilityVersions
+//	@Produce		json
+//	@Param			workspaceID		path	string	true	"Workspace UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Success		200 {object} map[string]interface{} "capability_id and versions array"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/versions [get]
 func listWorkspaceCapabilityVersions(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, false)
@@ -564,6 +803,24 @@ func listWorkspaceCapabilityVersions(runtimeStore RuntimeStore) http.HandlerFunc
 	}
 }
 
+// createWorkspaceCapabilityVersion adds a new version row to an existing
+// capability. Owner/admin only. Prefer /versions/import/commit for real edits.
+//
+//	@Summary		Create a capability version
+//	@Description	Adds a new version row to an existing capability. Owner/admin only. Prefer POST .../versions/import/commit for the parsed import path.
+//	@Tags			capabilities
+//	@ID				createDevWorkspaceCapabilityVersion
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID		path	string					true	"Workspace UUID"
+//	@Param			capabilityID	path	string					true	"Capability UUID"
+//	@Param			body			body	capabilityVersionBody	true	"Version payload"
+//	@Success		201 {object} map[string]interface{} "Created capability version"
+//	@Failure		400 {object} map[string]string "Missing version or bad canonical_spec"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/versions [post]
 func createWorkspaceCapabilityVersion(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, true)
@@ -596,6 +853,17 @@ func createWorkspaceCapabilityVersion(runtimeStore RuntimeStore) http.HandlerFun
 	}
 }
 
+// listMyCredentials returns the authenticated user's stored credentials.
+//
+//	@Summary		List my credentials
+//	@Description	Returns the authenticated user's stored personal credentials. Only metadata is exposed; the encrypted value stays server-side.
+//	@Tags			me
+//	@ID				listDevMyCredentials
+//	@Produce		json
+//	@Success		200 {object} map[string]interface{} "credentials array"
+//	@Failure		401 {object} map[string]string "unauthenticated"
+//	@Failure		503 {object} map[string]string "Database-backed credential APIs are disabled"
+//	@Router			/api/v1/me/credentials [get]
 func listMyCredentials(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := requireAuthenticatedUser(w, r, runtimeStore)
@@ -611,6 +879,22 @@ func listMyCredentials(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// createMyCredential stores a new personal credential for the authenticated
+// user. Plaintext is encrypted with the master key before it hits the DB.
+//
+//	@Summary		Create a personal credential
+//	@Description	Stores a new personal credential for the authenticated user. Plaintext is encrypted server-side before persisting.
+//	@Tags			me
+//	@ID				createDevMyCredential
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	credentialBody	true	"Credential payload"
+//	@Success		201 {object} userCredentialResponse "Created credential (metadata only)"
+//	@Failure		400 {object} map[string]string "Missing kind or plaintext_value"
+//	@Failure		401 {object} map[string]string "unauthenticated"
+//	@Failure		500 {object} map[string]string "Secrets service unavailable"
+//	@Failure		503 {object} map[string]string "Database-backed credential APIs are disabled"
+//	@Router			/api/v1/me/credentials [post]
 func createMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := requireAuthenticatedUser(w, r, runtimeStore)
@@ -639,6 +923,23 @@ func createMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// patchMyCredential updates the display name and/or plaintext value of an
+// owned credential. Empty plaintext leaves the encrypted value unchanged.
+//
+//	@Summary		Patch a personal credential
+//	@Description	Updates the display name and/or plaintext value of a credential owned by the caller. Empty plaintext leaves the encrypted value unchanged.
+//	@Tags			me
+//	@ID				patchDevMyCredential
+//	@Accept			json
+//	@Produce		json
+//	@Param			credentialID	path	string			true	"Credential UUID"
+//	@Param			body			body	credentialBody	true	"Partial credential update"
+//	@Success		200 {object} userCredentialResponse "Updated credential"
+//	@Failure		400 {object} map[string]string "Malformed body or invalid credential_id"
+//	@Failure		401 {object} map[string]string "unauthenticated"
+//	@Failure		403 {object} map[string]string "Credential belongs to another user"
+//	@Failure		503 {object} map[string]string "Database-backed credential APIs are disabled"
+//	@Router			/api/v1/me/credentials/{credentialID} [patch]
 func patchMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := requireAuthenticatedUser(w, r, runtimeStore)
@@ -680,6 +981,20 @@ func patchMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// deleteMyCredential soft-deletes a credential owned by the caller.
+//
+//	@Summary		Delete a personal credential
+//	@Description	Soft-deletes a credential owned by the caller.
+//	@Tags			me
+//	@ID				deleteDevMyCredential
+//	@Produce		json
+//	@Param			credentialID	path	string	true	"Credential UUID"
+//	@Success		200 {object} userCredentialResponse "Deleted credential"
+//	@Failure		400 {object} map[string]string "Invalid credential_id"
+//	@Failure		401 {object} map[string]string "unauthenticated"
+//	@Failure		403 {object} map[string]string "Credential belongs to another user"
+//	@Failure		503 {object} map[string]string "Database-backed credential APIs are disabled"
+//	@Router			/api/v1/me/credentials/{credentialID} [delete]
 func deleteMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := requireAuthenticatedUser(w, r, runtimeStore)
@@ -708,6 +1023,22 @@ func deleteMyCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// listAgentCapabilities returns the capabilities installed on the agent
+// (including built-ins) plus what else is available to install.
+//
+//	@Summary		List agent capabilities
+//	@Description	Returns the capabilities installed on the agent (own + marketplace + built-ins) and what else is available to install from the workspace and the marketplace.
+//	@Tags			capabilities
+//	@ID				listDevAgentCapabilities
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			agentID		path	string	true	"Agent UUID"
+//	@Success		200 {object} map[string]interface{} "workspace_id, agent_id, installed, available, marketplace_available"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		404 {object} map[string]string "Agent not found in this workspace"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities [get]
 func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, agentID, agent, ok := requireAgentMember(w, r, runtimeStore)
@@ -819,6 +1150,25 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// enableAgentCapability enables (installs) a capability version on the agent.
+// Cross-workspace requires the source capability to be public + non-deprecated.
+//
+//	@Summary		Enable a capability on an agent
+//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Agent creator only.
+//	@Tags			capabilities
+//	@ID				enableDevAgentCapability
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID			path	string					true	"Workspace UUID"
+//	@Param			agentID				path	string					true	"Agent UUID"
+//	@Param			capabilityVersionID	path	string					true	"Capability version UUID"
+//	@Param			body				body	agentCapabilityBody		true	"Configuration + pinning mode"
+//	@Success		200 {object} map[string]interface{} "Enabled agent_capability row"
+//	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
+//	@Failure		403 {object} map[string]string "Not agent creator, or marketplace capability unavailable"
+//	@Failure		404 {object} map[string]string "Agent, capability, or version not found"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable [post]
 func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, agentID, agent, ok := requireAgentOwnerMember(w, r, runtimeStore)
@@ -861,6 +1211,22 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// deleteAgentCapability uninstalls a capability version from the agent.
+//
+//	@Summary		Uninstall a capability from an agent
+//	@Description	Removes the given capability version from the agent. Agent creator only.
+//	@Tags			capabilities
+//	@ID				deleteDevAgentCapability
+//	@Produce		json
+//	@Param			workspaceID			path	string	true	"Workspace UUID"
+//	@Param			agentID				path	string	true	"Agent UUID"
+//	@Param			capabilityVersionID	path	string	true	"Capability version UUID"
+//	@Success		204 "Uninstalled"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Not agent creator"
+//	@Failure		404 {object} map[string]string "Agent capability not found"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID} [delete]
 func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
@@ -883,6 +1249,26 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 // setBuiltinCapability toggles a runtime-injected built-in on/off for one agent.
 // Only the agent owner may change it; the key is validated against the built-in
 // registry so callers can't create arbitrary rows.
+// setBuiltinCapability toggles a runtime-injected built-in on/off for one agent.
+// Only the agent owner may change it; the key is validated against the built-in
+// registry so callers can't create arbitrary rows.
+//
+//	@Summary		Toggle a built-in capability on an agent
+//	@Description	Toggles a runtime-injected built-in on/off for one agent. Only the agent creator may change it. The key must be a known built-in.
+//	@Tags			capabilities
+//	@ID				setDevAgentBuiltinCapability
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string					true	"Workspace UUID"
+//	@Param			agentID		path	string					true	"Agent UUID"
+//	@Param			key			path	string					true	"Built-in capability key (e.g. parsar_chat_history)"
+//	@Param			body		body	builtinCapabilityBody	true	"Enabled flag"
+//	@Success		200 {object} map[string]interface{} "agent_id, builtin_key, enabled"
+//	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
+//	@Failure		403 {object} map[string]string "Not agent creator"
+//	@Failure		404 {object} map[string]string "Unknown builtin key or agent not found"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/builtin-capabilities/{key} [put]
 func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
@@ -907,6 +1293,25 @@ func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// upgradeAgentCapability swaps the agent's binding to a new version of the
+// same capability, optionally flipping the pinning mode at the same time.
+//
+//	@Summary		Upgrade an agent's capability version
+//	@Description	Swaps the agent's binding to a new version of the same capability, optionally flipping the pinning mode at the same time. Agent creator only.
+//	@Tags			capabilities
+//	@ID				upgradeDevAgentCapability
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID		path	string							true	"Workspace UUID"
+//	@Param			agentID			path	string							true	"Agent UUID"
+//	@Param			capabilityID	path	string							true	"Capability UUID"
+//	@Param			body			body	upgradeAgentCapabilityBody		true	"new_version_id and optional pinning_mode"
+//	@Success		200 {object} map[string]interface{} "Updated agent_capability row"
+//	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
+//	@Failure		403 {object} map[string]string "Not agent creator"
+//	@Failure		404 {object} map[string]string "Agent, capability, or version not found"
+//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade [post]
 func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)

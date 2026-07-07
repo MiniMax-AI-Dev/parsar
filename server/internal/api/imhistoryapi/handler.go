@@ -60,6 +60,23 @@ type response struct {
 // built to satisfy the tool's never-fail contract: an unsupported platform or a
 // resolver miss yields an empty 200 page, not an error — only a bad request or
 // an authentication failure is a non-200.
+//
+//	@Summary	Fetch internal IM history
+//	@Description	Returns a bounded, live page of IM messages for the given conversation. Authenticated by the per-conversation bearer token issued to the sandbox subprocess; unsupported platforms yield an empty 200 page.
+//	@Tags		internal
+//	@ID			getInternalIMHistory
+//	@Produce	json
+//	@Param		conversation_id query string true "conversation id"
+//	@Param		thread_id query string false "optional platform-native thread scope"
+//	@Param		limit query int false "max messages (adapter default when 0)"
+//	@Param		cursor query string false "opaque page cursor from a prior response"
+//	@Param		token query string false "bearer token override (falls back to Authorization header)"
+//	@Success	200 {object} map[string]interface{} "message page"
+//	@Failure	400 {object} map[string]string "missing conversation_id"
+//	@Failure	401 {object} map[string]string "invalid token"
+//	@Failure	404 {object} map[string]string "unknown conversation"
+//	@Failure	502 {object} map[string]string "fetch history failed"
+//	@Router		/internal/im/history [get]
 func (h *handler) fetchHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	conversationID := strings.TrimSpace(q.Get("conversation_id"))

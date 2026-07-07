@@ -88,6 +88,16 @@ func (d OAuthHandlerDeps) loginRedirectURL() string {
 // drops a short-lived state cookie, and 302-redirects to Feishu's
 // authorize URL. In mock mode the redirect lands on the callback URL with
 // code=mock-code so dev can drive the flow without real credentials.
+//
+//	@Summary		Start Feishu OIDC login
+//	@Description	Mints a CSRF state cookie and 302-redirects the browser to Feishu's authorize URL. Returns 503 when Feishu OIDC is not configured.
+//	@Tags			auth
+//	@ID				startDevFeishuOAuth
+//	@Produce		json
+//	@Success		302	"Redirect to Feishu authorize URL"
+//	@Failure		500	{object}	map[string]string	"CSRF state minting failed"
+//	@Failure		503	{object}	map[string]string	"Feishu OIDC not configured"
+//	@Router			/api/v1/auth/feishu/start [get]
 func feishuStartHandler(deps OAuthHandlerDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.Feishu == nil {
@@ -117,6 +127,20 @@ func feishuStartHandler(deps OAuthHandlerDeps) http.HandlerFunc {
 // feishuCallbackHandler is GET /api/v1/auth/feishu/callback. Verifies the
 // CSRF state, exchanges the code for a profile, upserts user + identity,
 // creates a session, sets the cookie, then redirects to the admin shell.
+//
+//	@Summary		Handle Feishu OIDC callback
+//	@Description	Verifies CSRF state, exchanges the code for a Feishu profile, upserts the user, creates a session cookie, and 302-redirects to the configured login-success URL.
+//	@Tags			auth
+//	@ID				callbackDevFeishuOAuth
+//	@Produce		json
+//	@Param			state	query		string	true	"CSRF state minted at /start"
+//	@Param			code	query		string	true	"OAuth authorization code returned by Feishu"
+//	@Success		302		"Redirect to login-success URL"
+//	@Failure		400		{object}	map[string]string	"Missing state/code or CSRF mismatch"
+//	@Failure		500		{object}	map[string]string	"User upsert or session creation failed"
+//	@Failure		502		{object}	map[string]string	"Feishu OIDC exchange failed"
+//	@Failure		503		{object}	map[string]string	"Feishu OIDC not configured"
+//	@Router			/api/v1/auth/feishu/callback [get]
 func feishuCallbackHandler(deps OAuthHandlerDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.Feishu == nil || deps.Sessions == nil || deps.Store == nil {
@@ -247,6 +271,15 @@ func maybeProvisionFirstOwner(ctx context.Context, deps OAuthHandlerDeps, profil
 
 // authLogoutHandler is POST /api/v1/auth/logout. Revokes the session and
 // clears the cookie. Always 204 — logout is idempotent.
+//
+//	@Summary		Log out the current session
+//	@Description	Revokes the current session cookie server-side and clears it on the client. Idempotent — returns 204 whether or not a session was present.
+//	@Tags			auth
+//	@ID				logoutDevSession
+//	@Produce		json
+//	@Success		204	"Session cleared"
+//	@Failure		503	{object}	map[string]string	"Session store not wired"
+//	@Router			/api/v1/auth/logout [post]
 func authLogoutHandler(deps OAuthHandlerDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.Sessions == nil {

@@ -52,6 +52,22 @@ type runtimeCredentialResponse struct {
 //
 // 400 invalid json / empty api_key; 503 master key missing;
 // 403 not workspace owner/admin; 500 encrypt/store error.
+//
+//	@Summary		Register or replace the workspace runtime credential
+//	@Description	Atomic upsert of the workspace's sandbox (E2B) runtime credential. Soft-deletes any prior row, encrypts the api_key with PARSAR_MASTER_KEY, then flips workspaces.config.runtime_credential_secret_id. Owner/admin only.
+//	@Tags			runtimes
+//	@ID				putDevWorkspaceRuntimeCredential
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path		string						true	"Workspace UUID"
+//	@Param			body		body		runtimeCredentialBody		true	"Credential payload"
+//	@Success		200			{object}	runtimeCredentialResponse	"Credential registered"
+//	@Failure		400			{object}	map[string]string			"workspace_id invalid, body invalid, or api_key empty"
+//	@Failure		403			{object}	map[string]string			"Caller is not workspace owner/admin"
+//	@Failure		404			{object}	map[string]string			"Workspace not found"
+//	@Failure		500			{object}	map[string]string			"Failed to encrypt or persist credential"
+//	@Failure		503			{object}	map[string]string			"Database or PARSAR_MASTER_KEY not configured"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtime/credential [put]
 func putRuntimeCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
@@ -131,6 +147,19 @@ func putRuntimeCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 // deleteRuntimeCredential clears the workspace's runtime credential
 // pointer. Idempotent. The referenced secret row stays as orphan audit
 // trail; v0.1 does not GC.
+//
+//	@Summary		Clear the workspace runtime credential
+//	@Description	Soft-deletes the active runtime credential row and clears the workspaces.config pointer. Idempotent; the underlying secret row is retained as an audit trail. Owner/admin only.
+//	@Tags			runtimes
+//	@ID				deleteDevWorkspaceRuntimeCredential
+//	@Produce		json
+//	@Param			workspaceID	path		string						true	"Workspace UUID"
+//	@Success		200			{object}	runtimeCredentialResponse	"Credential cleared"
+//	@Failure		400			{object}	map[string]string			"workspace_id must be a valid uuid"
+//	@Failure		403			{object}	map[string]string			"Caller is not workspace owner/admin"
+//	@Failure		404			{object}	map[string]string			"Workspace not found"
+//	@Failure		503			{object}	map[string]string			"Database-backed runtime credential is disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/runtime/credential [delete]
 func deleteRuntimeCredential(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {

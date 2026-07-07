@@ -8,6 +8,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// listAgentRunEvents is GET
+// /api/v1/workspaces/{workspaceID}/agent-runs/{runID}/events. Returns the
+// persisted lifecycle events for a run, optionally filtered to sequences
+// greater than after_sequence so the UI can incrementally catch up.
+//
+//	@Summary		List agent run lifecycle events
+//	@Description	Returns the persisted lifecycle events (message deltas, tool calls, permissions, run.* markers) for the run. Supports after_sequence for incremental polling.
+//	@Tags			agent-runs
+//	@ID				listDevAgentRunEvents
+//	@Produce		json
+//	@Param			workspaceID		path		string					true	"Workspace UUID"
+//	@Param			runID			path		string					true	"Agent run UUID"
+//	@Param			after_sequence	query		integer					false	"Only return events with sequence > this value"
+//	@Success		200				{object}	map[string]interface{}	"{events: [...] }"
+//	@Failure		400				{object}	map[string]string		"workspace_id or run_id is not a valid uuid, or after_sequence is negative"
+//	@Failure		403				{object}	map[string]string		"Caller is not a workspace member"
+//	@Failure		404				{object}	map[string]string		"Run not found or not part of workspace"
+//	@Failure		503				{object}	map[string]string		"Database-backed read APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agent-runs/{runID}/events [get]
 func listAgentRunEvents(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {

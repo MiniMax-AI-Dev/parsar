@@ -74,6 +74,21 @@ type sandboxConnectivityResponse struct {
 	Checks     []sandboxConnectivityCheck `json:"checks"`
 }
 
+// sandboxConnectivityTest probes the daemon behind an agent's sandbox.
+//
+//	@Summary		Test an agent's sandbox connectivity
+//	@Description	Runs a two-step probe (daemon_paired then daemon_online) against the runtime backing the agent's active sandbox binding. Emits an audit event with the outcome. Owner/admin only.
+//	@Tags			sandboxes
+//	@ID				testDevAgentSandboxConnection
+//	@Produce		json
+//	@Param			workspaceID	path		string							true	"Workspace UUID"
+//	@Param			agentID		path		string							true	"Agent UUID"
+//	@Success		200			{object}	sandboxConnectivityResponse		"Connectivity check result"
+//	@Failure		400			{object}	map[string]string				"workspace_id and agent_id must be UUIDs"
+//	@Failure		403			{object}	map[string]string				"Caller is not workspace owner/admin"
+//	@Failure		404			{object}	map[string]string				"No active sandbox binding"
+//	@Failure		503			{object}	map[string]string				"Sandbox lifecycle store not wired"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/test-connection [post]
 func sandboxConnectivityTest(deps sandboxAdminDeps, ingester AuditIngester) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if deps.store == nil {

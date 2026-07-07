@@ -31,6 +31,17 @@ type listCredentialKindsResponse struct {
 
 // listCredentialKinds returns every active credential_kinds row.
 // Workspace-scoped auth keeps RBAC consistent with the import endpoints.
+//
+//	@Summary		List credential kinds
+//	@Description	Returns every active credential_kinds row. Caller must be a workspace capability admin.
+//	@Tags			workspaces
+//	@ID				listDevCredentialKinds
+//	@Produce		json
+//	@Param			workspaceID	path		string							true	"Workspace UUID"
+//	@Success		200			{object}	listCredentialKindsResponse		"Credential kinds"
+//	@Failure		403			{object}	map[string]string				"Caller is not a workspace capability admin"
+//	@Failure		500			{object}	map[string]string				"Failed to list credential kinds"
+//	@Router			/api/v1/workspaces/{workspaceID}/credential-kinds [get]
 func listCredentialKinds(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore); !ok {
@@ -49,6 +60,22 @@ func listCredentialKinds(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 // createCredentialKind inserts a new (non-built-in) credential_kinds row.
+//
+//	@Summary		Create a workspace credential kind
+//	@Description	Inserts a new (non-built-in) credential_kinds row. Code is normalized and must be unique among active kinds.
+//	@Tags			workspaces
+//	@ID				createDevCredentialKind
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path		string						true	"Workspace UUID"
+//	@Param			body		body		createCredentialKindBody	true	"Credential kind definition"
+//	@Success		201			{object}	map[string]interface{}		"Created credential kind"
+//	@Failure		400			{object}	map[string]string			"Invalid json or missing required fields"
+//	@Failure		403			{object}	map[string]string			"Caller is not a workspace capability admin"
+//	@Failure		409			{object}	map[string]string			"Credential kind code already exists"
+//	@Failure		422			{object}	map[string]string			"Validation error"
+//	@Failure		500			{object}	map[string]string			"Failed to create credential kind"
+//	@Router			/api/v1/workspaces/{workspaceID}/credential-kinds [post]
 func createCredentialKind(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore); !ok {

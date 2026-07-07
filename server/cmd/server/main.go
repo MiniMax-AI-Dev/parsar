@@ -1,3 +1,22 @@
+// Package main hosts the Parsar HTTP server binary.
+//
+// The block below is a swaggo/swag general-info annotation. `make openapi`
+// invokes `swag init -g cmd/server/main.go` which reads it to synthesize
+// the top of docs/openapi/openapi.gen.yaml; each operation's body comes
+// from the @Router-annotated handler blocks elsewhere in the tree.
+//
+//	@title            Parsar API
+//	@version          0.1.0
+//	@description      Parsar harness API. Feishu production auth/event deployments require
+//	@description      PARSAR_FEISHU_APP_ID, PARSAR_FEISHU_APP_SECRET, PARSAR_FEISHU_REDIRECT_URI
+//	@description      and PARSAR_FEISHU_VERIFICATION_TOKEN when PARSAR_FEISHU_MOCK is not true.
+//	@license.name     Apache 2.0
+//	@license.url      https://www.apache.org/licenses/LICENSE-2.0.html
+//	@BasePath         /
+//	@schemes          http https
+//	@securityDefinitions.apikey  CookieAuth
+//	@in                          cookie
+//	@name                        parsar_session
 package main
 
 import (

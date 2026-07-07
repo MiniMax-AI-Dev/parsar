@@ -52,6 +52,18 @@ func RegisterRoutes(r chi.Router, svc *Service, devAuth DevAuthLookup) {
 	r.Post("/api/v1/bootstrap", createHandler(svc))
 }
 
+// statusHandler reports whether the bootstrap door is still open. Safe to
+// call without any credential — the response never leaks token material.
+//
+//	@Summary	Bootstrap status
+//	@Description	Reports whether the bootstrap door is still open (no owner exists yet) so installers can decide whether to prompt for provisioning.
+//	@Tags		bootstrap
+//	@ID			getBootstrapStatus
+//	@Produce	json
+//	@Success	200 {object} map[string]interface{}
+//	@Failure	500 {object} ErrorResponse
+//	@Failure	503 {object} ErrorResponse
+//	@Router		/api/v1/bootstrap/status [get]
 func statusHandler(svc *Service, devAuth DevAuthLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -67,6 +79,24 @@ func statusHandler(svc *Service, devAuth DevAuthLookup) http.HandlerFunc {
 	}
 }
 
+// createHandler provisions the first owner user and their workspace, gated
+// by PARSAR_BOOTSTRAP_TOKEN. Runs exactly once per installation.
+//
+//	@Summary	Provision first owner
+//	@Description	Creates the first user and workspace, closing the bootstrap door on success. Gated by the bootstrap bearer token.
+//	@Tags		bootstrap
+//	@ID			provisionBootstrap
+//	@Accept		json
+//	@Produce	json
+//	@Param		Authorization header string true "Bearer <bootstrap token>"
+//	@Param		body body CreateRequest true "owner email/name and workspace name"
+//	@Success	201 {object} CreateResponse
+//	@Failure	400 {object} ErrorResponse
+//	@Failure	401 {object} ErrorResponse
+//	@Failure	409 {object} ErrorResponse "bootstrap already closed"
+//	@Failure	500 {object} ErrorResponse
+//	@Failure	503 {object} ErrorResponse
+//	@Router		/api/v1/bootstrap [post]
 func createHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {

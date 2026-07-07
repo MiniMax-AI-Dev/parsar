@@ -99,6 +99,21 @@ type commitCapabilityImportResponse struct {
 // Pure parse for mcp/skill (no DB writes). The plugin branch downloads
 // the just-uploaded zip from OSS so ValidatePluginZip can run against
 // the actual bytes.
+//
+//	@Summary		Preview a capability import
+//	@Description	Pure parse for mcp/skill (no DB writes). For plugin (and skill zip) the just-uploaded zip is downloaded from OSS and validated. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				previewDevCapabilityImport
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string							true	"Workspace UUID"
+//	@Param			body		body	previewCapabilityImportBody		true	"Import preview payload (kind, raw_text or oss_key)"
+//	@Success		200 {object} map[string]interface{} "Parsed canonical spec, warnings, suggested name"
+//	@Failure		400 {object} map[string]string "Missing kind, unknown source_format, or parse error"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
+//	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
+//	@Failure		503 {object} map[string]string "Object storage or database not configured"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/import/preview [post]
 func previewCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
@@ -311,6 +326,22 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 // Encrypts inline_secrets, then hands the spec to store.ImportCapability
 // which runs the whole import in a single tx. For kind=plugin the spec
 // is rebuilt from OSS bytes (the on-disk zip is authoritative).
+//
+//	@Summary		Commit a capability import
+//	@Description	Encrypts inline_secrets then runs the whole import (capability + capability_version + secrets) in a single transaction. For kind=plugin (and skill zip) the canonical_spec is rebuilt from OSS bytes; the client-supplied spec is discarded. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				commitDevCapabilityImport
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string							true	"Workspace UUID"
+//	@Param			body		body	commitCapabilityImportBody		true	"Import commit payload"
+//	@Success		201 {object} map[string]interface{} "Created capability, version, and secret ids"
+//	@Failure		400 {object} map[string]string "Missing name/kind, unknown kind, or spec rebuild failed"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
+//	@Failure		500 {object} map[string]string "Secrets service unavailable"
+//	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
+//	@Failure		503 {object} map[string]string "Object storage or database not configured"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/import/commit [post]
 func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
@@ -558,6 +589,24 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, bl
 // Wire shape mirrors commitCapabilityImportBody but Name/Description/Visibility/
 // Type are ignored (they live on the capability row). Spec.Kind must match
 // capability.type or the store returns ErrCapabilityKindMismatch.
+//
+//	@Summary		Commit a new version of an existing capability
+//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
+//	@Tags			capabilities
+//	@ID				commitDevCapabilityVersionImport
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID		path	string							true	"Workspace UUID"
+//	@Param			capabilityID	path	string							true	"Capability UUID"
+//	@Param			body			body	commitCapabilityImportBody		true	"Version import payload"
+//	@Success		201 {object} map[string]interface{} "Created capability version and secret ids"
+//	@Failure		400 {object} map[string]string "Invalid capability_id, missing kind, or spec rebuild failed"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
+//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
+//	@Failure		500 {object} map[string]string "Secrets service unavailable"
+//	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
+//	@Failure		503 {object} map[string]string "Object storage or database not configured"
+//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/versions/import/commit [post]
 func commitCapabilityVersionImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)

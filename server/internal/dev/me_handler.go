@@ -16,6 +16,20 @@ type meResponse struct {
 	AvatarURL string `json:"avatar_url"`
 }
 
+// meHandler is GET /api/v1/me. Returns the profile of the caller resolved
+// from the session cookie.
+//
+//	@Summary		Get the current user
+//	@Description	Returns the profile of the caller resolved from the session cookie.
+//	@Tags			me
+//	@ID				getDevMe
+//	@Produce		json
+//	@Success		200	{object}	meResponse			"Current user profile"
+//	@Failure		400	{object}	map[string]string	"user_id must be a valid uuid"
+//	@Failure		401	{object}	map[string]string	"Not authenticated"
+//	@Failure		500	{object}	map[string]string	"Failed to resolve current user"
+//	@Failure		503	{object}	map[string]string	"Database-backed read APIs are disabled"
+//	@Router			/api/v1/me [get]
 func meHandler(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runtimeStore == nil {
