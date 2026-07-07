@@ -100,7 +100,12 @@ Before reporting completion, you must run:
 make check
 ```
 
-- Any DB change must ship with a migration.
+- Any DB change must ship with a migration. Migrations are immutable
+  the moment they land on `main` — prod has already applied them, so
+  editing an existing file only mutates fresh installs. To change
+  schema, add a **new** migration numbered strictly above the current
+  head; CI (`.github/workflows/migrations.yml`) rejects edits to
+  landed files and numeric regressions.
 - API contracts live on the handler: every `http.HandlerFunc` factory
   must carry a swaggo annotation block (`@Summary`, `@Tags`, `@Param`,
   `@Success/@Failure`, `@Router`) directly above the `func`. After
