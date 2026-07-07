@@ -32,4 +32,4 @@ COMMENT ON COLUMN auth_identities.metadata IS
   'Identity-provider profile. provider=email uses {"password_hash":"<bcrypt>","hashed_at":"<RFC3339>","last_used_at":"<RFC3339>"}; OIDC providers stash the userinfo response.';
 
 -- +goose Down
-COMMENT ON COLUMN auth_identities.metadata IS 'Identity provider extra info';
+COMMENT ON COLUMN auth_identities.metadata IS '身份附加信息';
