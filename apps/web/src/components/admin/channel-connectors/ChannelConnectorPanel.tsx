@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -43,6 +43,13 @@ export function ChannelConnectorPanel({
   const teamsConfig = useMemo(() => readTeamsConnector(connectors), [connectors])
 
   const [platform, setPlatform] = useState<ConnectorPlatform>("feishu")
+  const userPicked = useRef(false)
+  useEffect(() => {
+    if (userPicked.current) return
+    const configs = { feishu: feishuConfig, slack: slackConfig, discord: discordConfig, teams: teamsConfig }
+    const found = PLATFORMS.find((p) => configs[p]?.app_id.trim())
+    if (found) setPlatform(found)
+  }, [feishuConfig, slackConfig, discordConfig, teamsConfig])
 
   const platformSummaries = useMemo(
     () =>
@@ -82,7 +89,7 @@ export function ChannelConnectorPanel({
               <button
                 key={summary.platform}
                 type="button"
-                onClick={() => setPlatform(summary.platform)}
+                onClick={() => { userPicked.current = true; setPlatform(summary.platform) }}
                 className={`min-w-0 rounded-md border px-3 py-3 text-left transition ${
                   active
                     ? "border-line-strong bg-surface text-fg shadow-sm"
