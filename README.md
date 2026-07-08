@@ -7,22 +7,36 @@
 <p align="center">
   <b>Your team's intent, parsed into action.</b>
   <br />
+  The open-source agent collaboration control plane for engineering teams.
+  <br />
   <br />
   ⚠️ <strong>Alpha — under active development, not production-ready.</strong>
+  <br />
+  APIs, schemas, and configs may change without notice between commits.
 </p>
 
 ## What is Parsar
 
-Parsar is a team-first AI agent collaboration platform. It lets engineering teams dispatch, manage, and audit coding tasks across multiple agent runtimes from one control plane.
+Parsar is a team-first platform for dispatching, managing, and auditing AI coding agents. Send tasks from the tools your team already uses — chat, web UI, API — and get results back where they started: a thread, a PR, a webhook.
 
-Supported runtimes:
+Supported agent runtimes:
 
 - **Claude Code**
 - **Piagent**
 - **Codex**
 - More to come — the runtime layer is pluggable.
 
+### Why Parsar
+
+- **Team-first.** Shared queues, run history, and permissions — not single-player agent loops.
+- **Pluggable runtimes.** Claude Code today, Codex tomorrow, your in-house agent next week.
+- **Pluggable surfaces.** Feishu / Lark ships today; Slack, Discord, and webhooks on the roadmap.
+- **Auditable.** Every run is persisted: prompt, diff, logs, exit code.
+- **Self-hosted.** Your code, your secrets, your machine. No telemetry.
+
 ## Quick Start
+
+Requires only `git` and `docker`.
 
 ```bash
 git clone https://github.com/MiniMax-AI-Dev/parsar.git
@@ -31,12 +45,16 @@ docker build -t parsar:local .
 PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
 ```
 
-Open <http://127.0.0.1:18080>.
+Open <http://127.0.0.1:18080>. Mock auth signs you in as `admin@example.com` — no secrets, no `.env`, no config.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture, tech stack, development setup, and coding conventions.
+Architecture, tech stack, development setup, and coding conventions are all in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+Found a vulnerability? Please file a private report via [GitHub Security Advisories](https://github.com/MiniMax-AI-Dev/parsar/security/advisories/new) — see [`SECURITY.md`](SECURITY.md) for the full policy.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — 100% open source, no "open core" split.
