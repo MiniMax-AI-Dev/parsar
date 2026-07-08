@@ -1,5 +1,3 @@
-
-
 <p align="center">
   <img src=".github/assets/parsar-banner.png" alt="Parsar" width="520" />
 </p>
@@ -7,65 +5,51 @@
 <p align="center">
   <b>Your team's intent, parsed into action.</b>
   <br />
-  The open-source agent collaboration control plane for engineering teams.
-  <br />
-  <a href="docs/"><strong>Docs »</strong></a>
-  <br />
-  <br />
-  <a href="#quick-start"><strong>Quick Start</strong></a> ·
-  <a href="#tech-stack"><strong>Tech Stack</strong></a> ·
-  <a href="#self-hosting"><strong>Self-Hosting</strong></a> ·
-  <a href="#contributing"><strong>Contributing</strong></a>
+  An open-source control plane for running AI coding agents with team context.
 </p>
 
+> [!IMPORTANT]
+> Parsar is in active alpha development. The local Docker path is intended for
+> evaluation and development. Production self-hosting, additional providers,
+> and several workflow surfaces are still being hardened.
 
-## Introduction
+## What Parsar Is
 
-**Parsar** is where engineering teams collaborate with AI coding agents.
+Parsar connects team workflows to background AI coding agents. The goal is to
+let a team dispatch work from chat, the web UI, or an API; run the agent in a
+controlled environment; and keep the run history, logs, permissions, and
+results in one place.
 
-Dispatch tasks to background agents — **Claude Code**, **Codex**, and others — from the tools your team already lives in. Every run is sandboxed, tracked end-to-end, and the result flows back to where it started: a chat thread, a ticket, a PR, a webhook.
+Today, Parsar is best treated as a working alpha: useful for local evaluation,
+development, and integration work, but not yet a finished production product.
 
-It is the connective tissue between **where work is discussed** and **where work gets done** — without anyone leaving their workflow.
+## What Works Today
 
+- Local Docker startup with mock auth and a bootstrapped workspace.
+- Go server, React web UI, PostgreSQL storage, and OpenAPI generation.
+- Workspace, agent, conversation, run, audit, model, secret, and runtime
+  foundations.
+- Agent daemon connector work for local agent CLIs such as Claude Code, Codex,
+  and opencode.
+- Feishu / Lark integration paths under active development.
+- Postgres-backed queue and run state; no Redis or external message queue is
+  required for the core server.
 
+## Current Limitations
 
-### Why Parsar
-
-- **Team-first.** Built around shared queues, run history, and permissions — not single-player agent loops.
-- **Pluggable agents.** Claude Code today, Codex tomorrow, your in-house agent next week. Workers are subprocesses behind a contract.
-- **Pluggable surfaces.** Feishu / Lark ships in-box today; Slack, Discord, web UI, and a raw HTTP API are first-class extension points.
-- **Auditable.** Every run is persisted: prompt, diff, logs, exit code. PostgreSQL is the only source of truth.
-- **Self-hosted by design.** Your code, your secrets, your machine. No telemetry, no phone-home.
-- **OpenAPI-first.** Schema lives in [`docs/openapi/openapi.yaml`](docs/openapi/openapi.yaml); server handlers and TS client are both generated from it.
-
-## Architecture
-
-```
-   Team surface   ──▶   Parsar server   ──▶   Agent worker (sandboxed)
-   (chat / web /         │                          │
-    API / webhook)       │                          │
-        ▲                │                          │
-        └──── results ───┴──── PostgreSQL ◀─────────┘
-```
-
-A single Go binary, a single Postgres database, and one worker process per agent type. No Redis, no message queue, no Kafka — Postgres carries the queue, the state, and the audit log. Surfaces (chat providers, web UI, raw API) all talk to the same server through OpenAPI. See [`docs/architecture.md`](docs/architecture.md) for the long version.
-
-## Tech Stack
-
-|              | Choice                                                                                                       |
-|--------------|--------------------------------------------------------------------------------------------------------------|
-| **Server**   | [Go 1.25](https://go.dev) + [Chi](https://github.com/go-chi/chi)                                             |
-| **Database** | [PostgreSQL 16](https://www.postgresql.org) — single source of truth                                         |
-| **DB layer** | [goose](https://github.com/pressly/goose) migrations · [sqlc](https://sqlc.dev) queries · [pgx](https://github.com/jackc/pgx) pool |
-| **Web**      | [Vite](https://vitejs.dev) + [React 18](https://react.dev) SPA                                               |
-| **API**      | [OpenAPI 3](https://www.openapis.org) — server & client generated                                            |
-| **Agents**   | [Claude Code](https://claude.ai/code) · [Codex](https://openai.com/codex) (pluggable)                        |
-| **Surfaces** | Feishu / Lark · web UI · HTTP API · webhooks (Slack & Discord on the roadmap)                                |
-| **Monorepo** | [Turborepo](https://turbo.build) + [pnpm](https://pnpm.io) workspaces                                        |
+- Production self-hosting is still being hardened. Use the deploy docs as an
+  operator runbook, not as a guarantee that every production concern is solved.
+- Some end-to-end smoke coverage still skips the full runtime / audit / usage
+  chain while business APIs are promoted from development routes.
+- Slack, Discord, GitHub OAuth, Google OAuth, email magic-link auth, memory
+  workflows, and the capability marketplace are roadmap items.
+- The public container image flow is not the primary quick-start path yet; the
+  local Docker path builds the image from source.
 
 ## Quick Start
 
-Requires only `git` and `docker` (with the `docker compose` subcommand). Go, Node, and pnpm are **not** needed on the host — the full toolchain lives inside the build image.
+Requires `git` and Docker with the `docker compose` subcommand. Go, Node, and
+pnpm are not required on the host for this path.
 
 ```bash
 git clone https://github.com/MiniMax-AI-Dev/parsar.git
@@ -74,65 +58,78 @@ docker build -t parsar:local .
 PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
 ```
 
-Open <http://127.0.0.1:18080>. Mock auth signs you in as `admin@example.com` in a freshly bootstrapped workspace — no secrets, no `.env`, no config.
+Open <http://127.0.0.1:18080>. Mock auth signs you in as
+`admin@example.com` in a freshly bootstrapped workspace.
 
-> First build is ~3–5 min (Go modules + pnpm install + Vite build). Subsequent builds are seconds thanks to layer cache. Once the GHCR image is public, the `docker build` step drops and it becomes a true one-liner.
-
-### Other paths
-
-| Goal | Read | Time |
-|------|------|------|
-| **Hack on the code** (hot-reload server + web) | [Development](#development) below | ~10 min |
-| **Self-host for a real team** (real auth, persistent host, your chat provider) | [`docs/deploy/deploy-runbook.md`](docs/deploy/deploy-runbook.md) | 30–60 min |
-| **Have an AI agent install it** (fresh clone → running) | [`INSTALL.md`](INSTALL.md) | ~5 min |
-
-> [!TIP]
-> `INSTALL.md` is written for an **AI coding agent** to follow from a fresh clone. Open Cursor / Claude Code in the repo and say *"read INSTALL.md and get this running"* — it will.
+The first build can take several minutes because it downloads Go modules,
+installs pnpm dependencies, and builds the web app. Later builds should reuse
+Docker cache.
 
 ## Development
 
-**Prerequisites:** Go ≥ 1.25 · Node ≥ 20 · pnpm ≥ 9 · Docker (for Postgres)
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before implementation work. It is the
+canonical contributor guide for worktree usage, architecture rules, generation
+steps, and required checks.
+
+Prerequisites for the local development path:
+
+- Go 1.25 or newer
+- Node 20 or newer
+- pnpm 9 or newer
+- Docker, used for PostgreSQL
 
 ```bash
-make setup        # bootstrap deps and start a Postgres container
-make dev          # run server + web + Postgres with hot reload
-make check        # lint, generate, test — required before any PR
+make setup
+make dev
+make check
 ```
 
-Open <http://localhost:5173> for the web UI, <http://localhost:8080> for the server.
+Open <http://localhost:5173> for the web UI and <http://localhost:8080> for
+the server.
 
-### Runtime paths
+## Architecture
 
-Parsar **never** writes to the current working directory. All runtime state — config, logs, sqlite cache, worker scratch space — lives under `~/.parsar/`.
-
-### Project layout
-
-```
-apps/       Go server, React web, agent workers
-packages/   shared TS types (generated from OpenAPI)
-internal/   private Go packages
-docs/       architecture, runbooks, OpenAPI spec
-deploy/     Helm chart, systemd units, sample Compose files
+```text
+Team surface  ->  Parsar server  ->  Agent worker
+chat / web / API       |              sandbox / daemon
+        ^              |
+        |              v
+        +--------- PostgreSQL
 ```
 
-## Self-Hosting
+Parsar is built around a Go server, a PostgreSQL database, a React web UI, and
+worker processes for agent execution. PostgreSQL carries the queue, state, and
+audit trail for the core server.
 
-Production deploy is a single Docker Compose file plus credentials for whichever surface(s) your team uses. Start from [`deploy/compose/compose.example.yml`](deploy/compose/compose.example.yml) and follow [`docs/deploy/deploy-runbook.md`](docs/deploy/deploy-runbook.md) end-to-end — it covers reverse proxy, TLS, secrets, backup, and upgrade.
+For the longer design notes, see [docs/architecture.md](docs/architecture.md).
 
-For a one-host evaluation deploy with real (non-mock) auth, copy the env template and edit the values your surface needs:
+## Project Layout
 
-```bash
-cp .env.example .env
-# edit .env — set agent credentials, surface credentials, POSTGRES_PASSWORD
-docker compose -f deploy/compose/compose.example.yml --env-file .env up -d
+```text
+apps/       Go binaries, daemon, and React web app
+packages/   shared TypeScript packages and generated client code
+server/     server packages, migrations, and API handlers
+internal/   shared private Go packages
+docs/       architecture notes, deploy runbooks, and OpenAPI output
+deploy/     compose examples and deployment assets
 ```
 
-If you just want to try Parsar on your laptop with mock auth, use the [Quick Start](#quick-start) above instead — no `.env` needed.
+## Docs
+
+- [INSTALL.md](INSTALL.md): agent-friendly local install instructions.
+- [CONTRIBUTING.md](CONTRIBUTING.md): development protocol and required checks.
+- [docs/architecture.md](docs/architecture.md): architecture overview.
+- [docs/deploy/deploy-runbook.md](docs/deploy/deploy-runbook.md): deployment
+  runbook and current production-readiness status.
+- [docs/openapi/openapi.yaml](docs/openapi/openapi.yaml): generated OpenAPI
+  artifact. Do not edit it by hand.
 
 ## Security
 
-Found a vulnerability? Please file a private report via [GitHub Security Advisories](https://github.com/MiniMax-AI-Dev/parsar/security/advisories/new) — see [`SECURITY.md`](SECURITY.md) for the full policy. Do not open a public issue.
+Found a vulnerability? Please file a private report via
+[GitHub Security Advisories](https://github.com/MiniMax-AI-Dev/parsar/security/advisories/new).
+See [SECURITY.md](SECURITY.md) for the full policy. Do not open a public issue.
 
 ## License
 
-Parsar is released under the [MIT License](LICENSE). 100% open source, no "open core" split, no enterprise-only features.
+Parsar is released under the [MIT License](LICENSE).
