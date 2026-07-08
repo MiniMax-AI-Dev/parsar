@@ -11,15 +11,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ApiError } from "../../lib/api-client"
-import type {
-  Model,
-  ModelCredentialMode,
-  Secret,
-} from "../../lib/api-types"
-import type {
-  InlineCreateModelInput,
-  InlineUpdateModelInput,
-} from "../../lib/api-models"
+import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
+import type { InlineCreateModelInput, InlineUpdateModelInput } from "../../lib/api-models"
 import { Button } from "../../components/ui/button"
 import {
   Dialog,
@@ -34,7 +27,10 @@ import { ModelKeyCombobox } from "./ModelKeyCombobox"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
 import {
   PROVIDER_CATALOG,
+  getProviderCatalogSnapshot,
+  loadProviderCatalog,
   type ModelPreset,
+  type ProviderPreset,
 } from "../../lib/model-presets"
 
 function extractErrorMessage(err: unknown): string | null {
@@ -58,9 +54,10 @@ function extractErrorMessage(err: unknown): string | null {
  * Use `@ai-sdk/openai-compatible` for those. Same rule lives in
  * server/internal/seed/models.go::modelSpecs.
  *
- * Branded providers come from the models.dev snapshot (see
- * lib/model-catalog.ts); the two generic "custom gateway" entries are kept as
- * fallbacks for endpoints not in the catalog (internal gateways, self-hosted).
+ * Branded providers come from lib/model-presets.ts, backed by a small
+ * whitelisted JSON catalog. The two generic "custom gateway" entries are kept
+ * as fallbacks for endpoints not in the catalog (internal gateways,
+ * self-hosted).
  */
 interface ProviderTypeOption {
   key: string
@@ -75,16 +72,6 @@ interface ProviderTypeOption {
   /** Model id suggestions for the model_key datalist (catalog only). */
   models?: ModelPreset[]
 }
-
-const CATALOG_PROVIDER_TYPES: ProviderTypeOption[] = PROVIDER_CATALOG.map((p) => ({
-  key: p.key,
-  adapter: p.adapter,
-  defaultBaseURL: p.defaultBaseURL,
-  customHeaders: p.customHeaders,
-  authSchemeSelector: p.authSchemeSelector,
-  label: p.name,
-  models: p.models,
-}))
 
 const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
   {
@@ -105,10 +92,22 @@ const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
   },
 ]
 
-const PROVIDER_TYPES: ProviderTypeOption[] = [
-  ...CATALOG_PROVIDER_TYPES,
-  ...GATEWAY_PROVIDER_TYPES,
-]
+function providerTypesFromCatalog(catalog: ProviderPreset[]): ProviderTypeOption[] {
+  return [
+    ...catalog.map((p) => ({
+      key: p.key,
+      adapter: p.adapter,
+      defaultBaseURL: p.defaultBaseURL,
+      customHeaders: p.customHeaders,
+      authSchemeSelector: p.authSchemeSelector,
+      label: p.name,
+      models: p.models,
+    })),
+    ...GATEWAY_PROVIDER_TYPES,
+  ]
+}
+
+const FALLBACK_PROVIDER_TYPES = providerTypesFromCatalog(PROVIDER_CATALOG)
 
 /* --- HeadersEditor ------------------------------------------------------
  *
@@ -194,12 +193,7 @@ function HeadersEditor({
             placeholder="value"
             className="flex-1 font-mono text-sm"
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => removeRow(row.id)}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={() => removeRow(row.id)}>
             {removeLabel}
           </Button>
         </div>
@@ -295,12 +289,25 @@ export function CreateModelDialog({
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
 
+  const [providerCatalog, setProviderCatalog] = useState(getProviderCatalogSnapshot)
+  useEffect(() => {
+    let cancelled = false
+    loadProviderCatalog().then((catalog) => {
+      if (!cancelled) setProviderCatalog(catalog)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const providerTypes = useMemo(() => providerTypesFromCatalog(providerCatalog), [providerCatalog])
+  const defaultProviderType = providerTypes[0] ?? FALLBACK_PROVIDER_TYPES[0]
+
   const [name, setName] = useState("")
-  const [providerType, setProviderType] = useState<string>(PROVIDER_TYPES[0].key)
-  const [baseURL, setBaseURL] = useState<string>(PROVIDER_TYPES[0].defaultBaseURL)
+  const [providerType, setProviderType] = useState<string>(() => defaultProviderType.key)
+  const [baseURL, setBaseURL] = useState<string>(() => defaultProviderType.defaultBaseURL)
   const [modelKey, setModelKey] = useState("")
-  const [credentialMode, setCredentialMode] =
-    useState<ModelCredentialMode>("inline_secret")
+  const [credentialMode, setCredentialMode] = useState<ModelCredentialMode>("inline_secret")
   const [apiKey, setApiKey] = useState("")
   const [existingSecretID, setExistingSecretID] = useState<string>("")
   const [credentialKindCode, setCredentialKindCode] = useState<string>("")
@@ -324,7 +331,7 @@ export function CreateModelDialog({
       // effect tick so HeadersEditor reseeds atomically with the parent.
       const seed = initialValues
       if (seed) {
-        const providerCfg = PROVIDER_TYPES.find((p) => p.key === seed.provider_type)
+        const providerCfg = providerTypes.find((p) => p.key === seed.provider_type)
         setName(seed.name)
         setProviderType(seed.provider_type)
         setBaseURL(seed.base_url)
@@ -340,26 +347,25 @@ export function CreateModelDialog({
           headers?: Record<string, string>
           auth_scheme?: "api-key" | "bearer"
         }
-        setHeaders(providerCfg?.customHeaders ? cfg.headers ?? {} : {})
-        setAuthScheme(
-          providerCfg?.authSchemeSelector ? cfg.auth_scheme ?? "api-key" : "api-key"
-        )
+        setHeaders(providerCfg?.customHeaders ? (cfg.headers ?? {}) : {})
+        setAuthScheme(providerCfg?.authSchemeSelector ? (cfg.auth_scheme ?? "api-key") : "api-key")
         // Stash every config key the form does NOT have a dedicated field
         // for — capabilities / limits / modalities / etc. — so submit can
         // merge them back in and the duplicate behaves identically to its
         // source. The form-owned keys (headers / auth_scheme) are managed
         // by their own state and re-applied at submit time.
-        const { headers: _h, auth_scheme: _a, ...rest } = (seed.config ?? {}) as Record<
-          string,
-          unknown
-        >
+        const {
+          headers: _h,
+          auth_scheme: _a,
+          ...rest
+        } = (seed.config ?? {}) as Record<string, unknown>
         void _h
         void _a
         setBaseConfig(rest)
       } else {
         setName("")
-        setProviderType(PROVIDER_TYPES[0].key)
-        setBaseURL(PROVIDER_TYPES[0].defaultBaseURL)
+        setProviderType(defaultProviderType.key)
+        setBaseURL(defaultProviderType.defaultBaseURL)
         setModelKey("")
         setCredentialMode("inline_secret")
         setApiKey("")
@@ -372,20 +378,19 @@ export function CreateModelDialog({
       setHeadersSeed((n) => n + 1)
     }
     wasOpenRef.current = open
-  }, [open, initialValues])
+  }, [open, initialValues, providerTypes, defaultProviderType])
 
   function handleProviderTypeChange(next: string) {
-    const cfg = PROVIDER_TYPES.find((p) => p.key === next)
+    const cfg = providerTypes.find((p) => p.key === next)
     if (!cfg) return
-    const previousDefault =
-      PROVIDER_TYPES.find((p) => p.key === providerType)?.defaultBaseURL ?? ""
+    const previousDefault = providerTypes.find((p) => p.key === providerType)?.defaultBaseURL ?? ""
     if (baseURL === "" || baseURL === previousDefault) {
       setBaseURL(cfg.defaultBaseURL)
     }
     setProviderType(next)
   }
 
-  const cfg = PROVIDER_TYPES.find((p) => p.key === providerType)
+  const cfg = providerTypes.find((p) => p.key === providerType)
   const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
   const showHeadersEditor = !!cfg?.customHeaders
   const showAuthSchemeSelector = !!cfg?.authSchemeSelector
@@ -396,12 +401,13 @@ export function CreateModelDialog({
   // translated key for the generic gateways) for the searchable picker.
   const providerChoices = useMemo(
     () =>
-      PROVIDER_TYPES.map((p) => ({
+      providerTypes.map((p) => ({
         key: p.key,
         label: p.label ?? (p.labelKey ? t(p.labelKey as never) : p.key),
         adapter: p.adapter,
+        modelCount: p.models?.length ?? 0,
       })),
-    [t],
+    [providerTypes, t],
   )
 
   // Picking a catalog model id fills the key; if Display name is still empty,
@@ -414,9 +420,7 @@ export function CreateModelDialog({
     }
   }
 
-  const activeSecrets = secrets.filter(
-    (s) => s.status === "active" && s.kind === "model_provider"
-  )
+  const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
 
   // Duplicate flow seeds existingSecretID from the source model's
   // secret_id. If the caller can't read that Secret (cross-workspace
@@ -629,7 +633,10 @@ export function CreateModelDialog({
               />
               {(activeSecrets.length > 0 || sourceSecretMissing) && (
                 <div className="grid gap-1.5">
-                  <label className="text-sm font-medium text-fg-muted" htmlFor="model-existing-secret">
+                  <label
+                    className="text-sm font-medium text-fg-muted"
+                    htmlFor="model-existing-secret"
+                  >
                     {t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
                   </label>
                   <select
@@ -674,7 +681,10 @@ export function CreateModelDialog({
           {credentialMode === "credential_ref" && (
             <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="model-credential-kind">
+                <label
+                  className="text-sm font-medium text-fg-muted"
+                  htmlFor="model-credential-kind"
+                >
                   {t("models.createModel.credentialMode.credentialRef.kindLabel")}
                   <span className="ml-0.5 text-danger">*</span>
                 </label>
@@ -753,7 +763,7 @@ export function EditModelDialog({
 
   const providerTypeMeta = useMemo(() => {
     if (!model) return undefined
-    return PROVIDER_TYPES.find((p) => p.key === model.provider_type)
+    return FALLBACK_PROVIDER_TYPES.find((p) => p.key === model.provider_type)
   }, [model])
   const supportsCustomHeaders = providerTypeMeta?.customHeaders ?? false
 
@@ -770,9 +780,7 @@ export function EditModelDialog({
     setName(model.name)
     setModelKey(model.model_key)
     setBaseURL(model.base_url)
-    setHeaders(
-      (model.config as { headers?: Record<string, string> })?.headers ?? {}
-    )
+    setHeaders((model.config as { headers?: Record<string, string> })?.headers ?? {})
     setNewAPIKey("")
     setSecretID(model.secret_id ?? "")
     setCredentialKindCode(model.credential_kind_code ?? "")
@@ -780,9 +788,7 @@ export function EditModelDialog({
 
   if (!model) return null
   const errMsg = extractErrorMessage(error)
-  const activeSecrets = secrets.filter(
-    (s) => s.status === "active" && s.kind === "model_provider"
-  )
+  const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
   const isInline = model.credential_mode === "inline_secret"
   const isCredentialRef = model.credential_mode === "credential_ref"
 
@@ -803,12 +809,8 @@ export function EditModelDialog({
     // so we don't persist `{headers: {}}`.
     let config: Record<string, unknown>
     if (supportsCustomHeaders) {
-      const rest = Object.fromEntries(
-        Object.entries(model.config).filter(([k]) => k !== "headers")
-      )
-      config = Object.keys(headers).length > 0
-        ? { ...rest, headers }
-        : rest
+      const rest = Object.fromEntries(Object.entries(model.config).filter(([k]) => k !== "headers"))
+      config = Object.keys(headers).length > 0 ? { ...rest, headers } : rest
     } else {
       config = model.config as Record<string, unknown>
     }
@@ -941,7 +943,10 @@ export function EditModelDialog({
           {isCredentialRef && (
             <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="edit-model-credential-kind">
+                <label
+                  className="text-sm font-medium text-fg-muted"
+                  htmlFor="edit-model-credential-kind"
+                >
                   {t("models.editModel.credentialBinding.kindCode")}
                   <span className="ml-0.5 text-danger">*</span>
                 </label>

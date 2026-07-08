@@ -20,6 +20,7 @@ export interface ProviderTypeChoice {
   /** Display label (already resolved — literal brand name or translated). */
   label: string
   adapter: string
+  modelCount?: number
 }
 
 interface Props {
@@ -119,7 +120,14 @@ export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-fg">{o.label}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium text-fg">{o.label}</span>
+                    {o.modelCount != null && o.modelCount > 0 && (
+                      <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
+                        {o.modelCount.toLocaleString()} models
+                      </span>
+                    )}
+                  </div>
                   <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
                     {o.adapter}
                   </code>
