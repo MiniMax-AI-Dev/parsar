@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import { useAdminView, type AdminView } from "../../lib/admin-router"
@@ -8,7 +7,6 @@ import {
   CalendarClock,
   Bot, Wrench, Database, Plug,
   Users, Settings,
-  ChevronDown,
   type LucideIcon,
 } from "lucide-react"
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
@@ -73,9 +71,6 @@ export function AdminLayout({
 }: AdminLayoutProps) {
   const { t } = useTranslation("common")
   const { navigate } = useAdminView()
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const toggle = (key: string) =>
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-subtle/60 text-fg antialiased">
@@ -96,48 +91,29 @@ export function AdminLayout({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {!hideSidebar && <aside className="flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line/70 bg-surface px-3 py-4">
-          {menuGroups.map((group, idx) => {
-            const isCollapsed = !!collapsed[group.groupKey]
-            return (
-              <nav
-                key={group.groupKey}
-                className={cn(
-                  "flex flex-col gap-px",
-                  idx === 0 ? "mt-0" : "mt-1.5"
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggle(group.groupKey)}
-                  className="group/header mb-0.5 flex h-5 w-full items-center gap-1 rounded px-2 text-sm font-normal text-fg-subtle transition-colors hover:text-fg-muted"
-                >
-                  <span>
-                    {t(`nav.${group.groupKey}` as never)}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "h-3 w-3 text-fg-faint transition-transform group-hover/header:text-fg-subtle",
-                      isCollapsed && "-rotate-90"
-                    )}
-                    strokeWidth={2}
-                  />
-                </button>
-                {!isCollapsed &&
-                  group.items.map((item) => {
-                    const Icon = item.icon
-                    const isActive = activeMenu === item.id
-                    return (
+        {!hideSidebar && <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-line/70 bg-surface px-3 py-3">
+          {menuGroups.map((group, idx) => (
+            <nav
+              key={group.groupKey}
+              className={cn("flex flex-col", idx > 0 && "mt-4")}
+            >
+              <span className="mb-1 px-2 text-xs font-medium text-fg-faint">
+                {t(`nav.${group.groupKey}` as never)}
+              </span>
+              <ul className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeMenu === item.id
+                  return (
+                    <li key={item.id}>
                       <button
-                        key={item.id}
                         type="button"
                         onClick={() => navigate(item.id)}
                         className={cn(
-                          "group relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
-                          "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-fg before:transition-opacity",
+                          "group relative flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors",
                           isActive
-                            ? "bg-surface-muted font-medium text-fg before:opacity-100"
-                            : "font-normal text-fg-muted before:opacity-0 hover:bg-surface-muted/60 hover:text-fg"
+                            ? "bg-surface-muted font-medium text-fg"
+                            : "font-normal text-fg-muted hover:bg-surface-muted/60 hover:text-fg"
                         )}
                       >
                         <Icon
@@ -163,11 +139,12 @@ export function AdminLayout({
                           </span>
                         )}
                       </button>
-                    )
-                  })}
-              </nav>
-            )
-          })}
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
+          ))}
         </aside>}
 
         <main className="relative flex-1 overflow-y-auto">
