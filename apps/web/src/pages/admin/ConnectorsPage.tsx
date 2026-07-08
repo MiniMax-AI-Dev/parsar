@@ -229,7 +229,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
       </div>
 
       <section className="mt-6 rounded-lg border border-line bg-surface p-4">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">
+        <h3 className="mb-3 text-base font-semibold text-fg">
           {t("connectors.detail.agents")}
         </h3>
         {connector.agent_count === 0 ? (
@@ -254,7 +254,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
-      <div className="text-xs uppercase tracking-wider text-fg-faint">{label}</div>
+      <div className="text-xs font-medium text-fg-faint">{label}</div>
       <div className={`mt-1 text-2xl font-semibold tabular-nums text-fg ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   )

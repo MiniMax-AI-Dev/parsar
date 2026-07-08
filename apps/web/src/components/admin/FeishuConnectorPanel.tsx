@@ -26,9 +26,9 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <header className="mb-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
+    <section className={`rounded-lg border border-line bg-surface px-5 py-4 ${className ?? ""}`}>
+      <header className="mb-4">
+        <h3 className="text-lg font-semibold text-fg">{title}</h3>
         {description && <p className="mt-1 text-sm text-fg-subtle">{description}</p>}
       </header>
       {children}
@@ -49,12 +49,12 @@ function Field({
 }) {
   return (
     <div className="mb-3 last:mb-0">
-      <label className="mb-1 block text-xs uppercase tracking-wider text-fg-faint">
+      <label className="mb-1 block text-xs font-medium text-fg-faint">
         {label}
         {required && <span className="ml-1 text-danger">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-fg-subtle">{hint}</p>}
+      {hint && <p className="mt-0.5 text-xs leading-tight text-fg-subtle">{hint}</p>}
     </div>
   )
 }
@@ -447,7 +447,7 @@ export function FeishuConnectorPanel({
               placeholder="cli_xxxxxxxxxxxxxxxx"
               onChange={(e) => setDraft({ ...draft, app_id: e.target.value })}
               disabled={!canEdit || saving}
-              className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"
+              className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
               data-testid="feishu-app-id-input"
             />
           </Field>
@@ -498,7 +498,7 @@ export function FeishuConnectorPanel({
               placeholder="ou_xxxxxxxxxxxxxxxx"
               onChange={(e) => setDraft({ ...draft, bot_open_id: e.target.value })}
               disabled={!canEdit || saving}
-              className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"
+              className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
               data-testid="feishu-bot-open-id-input"
             />
           </Field>
@@ -515,7 +515,7 @@ export function FeishuConnectorPanel({
         </p>
       )}
 
-      <div className="mt-4 flex items-center justify-end gap-2">
+      <div className="mt-5 flex items-center justify-end gap-2 border-t border-line/40 pt-4">
         {dirty && (
           <button
             type="button"
@@ -599,7 +599,7 @@ function FeishuDiagnosticsStrip({
       <div className="mt-3 grid grid-cols-1 gap-2 min-[520px]:grid-cols-3 sm:grid-cols-6">
         {counts.map(([key, value]) => (
           <div key={key} className="min-w-0 rounded-md bg-surface px-2 py-2 ring-1 ring-slate-200">
-            <p className="truncate text-xs uppercase tracking-wider text-fg-faint">
+            <p className="truncate text-xs font-medium text-fg-faint">
               {t(`agents.feishuConnector.diagnostics.stats.${key}`)}
             </p>
             <p className="mt-0.5 truncate font-mono text-sm font-semibold tabular-nums text-fg-emphasis">
@@ -665,7 +665,7 @@ function FeishuDiagnosticsBadge({ status }: { status: FeishuDiagnosticsStatus })
 function FeishuDiagnosticTime({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs uppercase tracking-wider text-fg-faint">{label}</p>
+      <p className="text-xs font-medium text-fg-faint">{label}</p>
       <p className="mt-0.5 truncate text-sm text-fg-muted" title={value}>
         {value}
       </p>
@@ -718,7 +718,7 @@ function SecretInput({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         autoComplete="new-password"
-        className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"
+        className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
         data-testid={testId}
       />
     </Field>

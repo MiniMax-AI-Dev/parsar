@@ -554,7 +554,7 @@ function CloudInstancesPanel({
                     }}
                     role="link"
                     aria-label={t("runtime.list.table.rowLabel", { agent: b.agent_id ?? b.sandbox_id })}
-                    className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                     data-testid={`runtime-row-${b.binding_id}`}
                   >
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -818,7 +818,7 @@ function RuntimeTabButton({
       onClick={onClick}
       data-testid={testId}
       className={
-        "mb-[-1px] inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 " +
+        "mb-[-1px] inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong " +
         (active
           ? "border-line-strong text-fg"
           : "border-transparent text-fg-subtle hover:text-fg-emphasis")

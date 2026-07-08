@@ -77,12 +77,12 @@ function SignInView() {
       <section className="relative w-full max-w-[460px] rounded-2xl border border-line/80 bg-surface p-9 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_20px_48px_-16px_rgb(0_0_0/0.16)]">
         <div className="mb-8 flex flex-col items-center text-center">
           <img src="/parsar-banner.png" alt="Parsar" className="h-auto w-[320px] max-w-full" />
-          <p className="mt-4 text-[14px] leading-relaxed text-fg-subtle">{t("login.subtitle")}</p>
+          <p className="mt-4 text-base leading-relaxed text-fg-subtle">{t("login.subtitle")}</p>
         </div>
 
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-fg-muted">{t("login.emailLabel")}</span>
+            <span className="text-sm font-medium text-fg-muted">{t("login.emailLabel")}</span>
             <input
               type="email"
               value={email}
@@ -90,11 +90,11 @@ function SignInView() {
               placeholder={t("login.emailPlaceholder")}
               autoComplete="email"
               required
-              className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
+              className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-fg-muted">{t("login.passwordLabel")}</span>
+            <span className="text-sm font-medium text-fg-muted">{t("login.passwordLabel")}</span>
             <input
               type="password"
               value={password}
@@ -102,14 +102,14 @@ function SignInView() {
               placeholder={t("login.passwordPlaceholder")}
               autoComplete="current-password"
               required
-              className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
+              className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
             />
           </label>
 
           {errorMsg && (
             <div
               role="alert"
-              className="rounded-md border border-danger/40 bg-danger/8 px-3 py-2 text-[13px] text-danger"
+              className="rounded-md border border-danger/40 bg-danger/8 px-3 py-2 text-sm text-danger"
             >
               {errorMsg}
             </div>
@@ -118,13 +118,13 @@ function SignInView() {
           <button
             type="submit"
             disabled={invalid || submitting}
-            className="mt-1 flex h-11 w-full items-center justify-center rounded-full bg-surface-emphasis px-5 text-[15px] font-medium text-white shadow-sm transition-all hover:bg-surface-inverse hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 flex h-11 w-full items-center justify-center rounded-full bg-surface-emphasis px-5 text-lg font-medium text-white shadow-sm transition-all hover:bg-surface-inverse hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? t("login.submitting") : t("login.submitButton")}
           </button>
         </form>
 
-        <div className="my-6 flex items-center gap-3 text-[12px] uppercase tracking-wide text-fg-faint">
+        <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wide text-fg-faint">
           <span className="h-px flex-1 bg-line" />
           <span>{t("login.orDivider")}</span>
           <span className="h-px flex-1 bg-line" />
@@ -132,12 +132,12 @@ function SignInView() {
 
         <a
           href={feishuLoginUrl()}
-          className="mx-auto flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="mx-auto flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-base font-medium text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           {t("login.feishuButton")}
         </a>
 
-        <p className="mt-6 text-center text-[13px] leading-5 text-fg-faint">
+        <p className="mt-6 text-center text-sm leading-5 text-fg-faint">
           {t("login.noAccountHint")}
         </p>
       </section>

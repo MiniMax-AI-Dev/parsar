@@ -123,7 +123,7 @@ export function WorkspaceSwitcher() {
             sideOffset={6}
             className="z-50 min-w-[300px] overflow-hidden rounded-md border border-line bg-surface p-1 text-sm text-fg-muted shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           >
-            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
+            <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-fg-subtle">
               <Layers className="h-3 w-3" strokeWidth={1.75} />
               {t("workspaceSwitcher.workspaceLabel")}
             </DropdownMenu.Label>
@@ -159,7 +159,7 @@ export function WorkspaceSwitcher() {
                         {ws.slug}
                       </span>
                     </div>
-                    <span className="text-xs uppercase tracking-wider text-fg-faint">
+                    <span className="text-xs font-medium text-fg-faint">
                       {ws.role}
                     </span>
                     {isActive && (
@@ -195,7 +195,7 @@ export function WorkspaceSwitcher() {
             {discoverable.length > 0 && (
               <>
                 <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
-                <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
+                <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-fg-subtle">
                   <Globe className="h-3 w-3" strokeWidth={1.75} />
                   {t("workspaceSwitcher.discoverLabel")}
                 </DropdownMenu.Label>

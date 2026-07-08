@@ -67,7 +67,7 @@ export function SetupPage() {
         <div className="mb-7 flex flex-col items-center text-center">
           <img src="/parsar-banner.png" alt="Parsar" className="h-auto w-[280px] max-w-full" />
           <h1 className="mt-4 text-lg font-semibold text-fg">{t("setup.title")}</h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-fg-subtle">{t("setup.subtitle")}</p>
+          <p className="mt-2 text-base leading-relaxed text-fg-subtle">{t("setup.subtitle")}</p>
         </div>
 
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
@@ -110,7 +110,7 @@ export function SetupPage() {
           {errorMsg && (
             <div
               role="alert"
-              className="rounded-md border border-danger/40 bg-danger/8 px-3 py-2 text-[13px] text-danger"
+              className="rounded-md border border-danger/40 bg-danger/8 px-3 py-2 text-sm text-danger"
             >
               {errorMsg}
             </div>
@@ -119,7 +119,7 @@ export function SetupPage() {
           <button
             type="submit"
             disabled={invalid || submitting}
-            className="mt-1 flex h-11 w-full items-center justify-center rounded-full bg-surface-emphasis px-5 text-[15px] font-medium text-white shadow-sm transition-all hover:bg-surface-inverse hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 flex h-11 w-full items-center justify-center rounded-full bg-surface-emphasis px-5 text-lg font-medium text-white shadow-sm transition-all hover:bg-surface-inverse hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? t("setup.submitting") : t("setup.submitButton")}
           </button>
@@ -152,7 +152,7 @@ function Field({
 }: FieldProps) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[13px] font-medium text-fg-muted">
+      <span className="text-sm font-medium text-fg-muted">
         {label}
         {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
@@ -163,9 +163,9 @@ function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}
-        className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
+        className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
       />
-      {hint && <span className="text-[12px] leading-4 text-fg-faint">{hint}</span>}
+      {hint && <span className="text-xs leading-4 text-fg-faint">{hint}</span>}
     </label>
   )
 }

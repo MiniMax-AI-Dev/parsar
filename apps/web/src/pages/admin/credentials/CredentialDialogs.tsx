@@ -117,7 +117,7 @@ export function CredentialDialog({
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
                 disabled={kindLocked}
-                className="h-9 w-full rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle disabled:text-fg-subtle"
+                className="h-9 w-full rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle disabled:text-fg-subtle"
               >
                 {/* A locked kind may not be in the live options list
                     (legacy data, admin-added kind, in-flight prefill);

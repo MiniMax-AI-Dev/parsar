@@ -954,7 +954,7 @@ function Card({ title, actions, className, children }: { title: string; actions?
   return (
     <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
+        <h3 className="text-base font-semibold text-fg">{title}</h3>
         {actions}
       </div>
       {children}

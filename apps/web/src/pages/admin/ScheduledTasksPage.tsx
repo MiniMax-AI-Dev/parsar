@@ -237,8 +237,8 @@ export function ScheduledTasksPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold text-slate-900">{t("scheduledTasks.title")}</h2>
-            <p className="mt-0.5 text-[12px] text-slate-500">{t("scheduledTasks.subtitle")}</p>
+            <h2 className="text-base font-semibold text-fg">{t("scheduledTasks.title")}</h2>
+            <p className="mt-0.5 text-xs text-fg-faint">{t("scheduledTasks.subtitle")}</p>
           </div>
           <Button size="sm" onClick={openCreate} disabled={noAgents} data-testid="scheduled-new">
             <Plus className="mr-1 h-4 w-4" />
@@ -247,29 +247,29 @@ export function ScheduledTasksPage() {
         </div>
 
         {noAgents && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 break-all">
+          <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs text-warning break-all">
             {t("scheduledTasks.noAgents")}
           </div>
         )}
 
         {notice && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 break-all">
+          <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-xs text-success break-all">
             {notice}
           </div>
         )}
 
         {tasksQ.isLoading ? (
-          <p className="text-[13px] text-slate-500">…</p>
+          <p className="text-sm text-fg-faint">…</p>
         ) : tasksQ.error ? (
-          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 break-all">
+          <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger break-all">
             {t("scheduledTasks.loadError")}
           </p>
         ) : tasks.length === 0 ? (
-          <p className="rounded-md bg-slate-50 px-3 py-6 text-center text-[13px] text-slate-500">
+          <p className="rounded-md bg-surface-muted px-3 py-6 text-center text-sm text-fg-faint">
             {t("scheduledTasks.empty")}
           </p>
         ) : (
-          <div className="overflow-hidden rounded-md border border-slate-200">
+          <div className="overflow-hidden rounded-md border border-line">
             {tasks.map((task, i) => (
               <div
                 key={task.id}
@@ -277,20 +277,20 @@ export function ScheduledTasksPage() {
                 data-task-name={task.name}
                 className={
                   "flex flex-wrap items-center gap-3 px-3 py-2.5 " +
-                  (i > 0 ? "border-t border-slate-100 " : "")
+                  (i > 0 ? "border-t border-line-muted" : "")
                 }
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-slate-900">{task.name}</div>
-                  <div className="mt-0.5 text-[12px] text-slate-500 break-all">
+                  <div className="truncate text-xs font-medium text-fg">{task.name}</div>
+                  <div className="mt-0.5 text-xs text-fg-faint break-all">
                     {t("scheduledTasks.desc.withTz", {
                       desc: describeCron(task.cron_expr, t, weekdays),
                       tz: task.timezone,
                     })}
                   </div>
                 </div>
-                <div className="flex w-32 shrink-0 items-center gap-1.5 text-[12px] text-slate-600" title={agentName.get(task.agent_id) ?? task.agent_id}>
-                  <Bot className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={1.75} />
+                <div className="flex w-32 shrink-0 items-center gap-1.5 text-xs text-fg-subtle" title={agentName.get(task.agent_id) ?? task.agent_id}>
+                  <Bot className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
                   <span className="truncate">{agentName.get(task.agent_id) ?? task.agent_id}</span>
                 </div>
                 <div className="shrink-0">
@@ -298,10 +298,10 @@ export function ScheduledTasksPage() {
                     {t(`scheduledTasks.status.${task.last_status || "none"}` as never)}
                   </Badge>
                 </div>
-                <div className="w-32 shrink-0 text-[12px] text-slate-600">
+                <div className="w-32 shrink-0 text-xs text-fg-subtle">
                   {task.next_run_at ? fmtWhen(task.next_run_at) : t("scheduledTasks.never")}
                 </div>
-                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] text-slate-600">
+                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-fg-subtle">
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5"
@@ -397,7 +397,7 @@ function SchedPager({
   const onFirstPage = offset === 0
   const onLastPage = offset + limit >= total
   return (
-    <div className="flex items-center justify-between gap-3 px-1 text-[12px] text-slate-600">
+    <div className="flex items-center justify-between gap-3 px-1 text-xs text-fg-subtle">
       <span className="tabular-nums">
         {t("scheduledTasks.pagination.range", { from, to, total })}
       </span>
@@ -482,12 +482,12 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
         <div className="grid gap-3">
           <div className="grid min-w-0 gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.name")}</label>
+            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.name")}</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("scheduledTasks.dialog.namePlaceholder")} data-testid="scheduled-name" />
           </div>
 
           <div className="grid min-w-0 gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.agent")}</label>
+            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.agent")}</label>
             {task ? (
               <Input value={agentName.get(task.agent_id) ?? task.agent_id} disabled readOnly />
             ) : (
@@ -495,7 +495,7 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
                 value={agentID}
                 onChange={(e) => setAgentID(e.target.value)}
                 data-testid="scheduled-agent"
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
               >
                 {agents.length === 0 && <option value="">—</option>}
                 {agents.map((a) => (
@@ -506,24 +506,24 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
           </div>
 
           <div className="grid min-w-0 gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.prompt")}</label>
+            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.prompt")}</label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
               rows={4}
               data-testid="scheduled-prompt"
-              className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 whitespace-pre-wrap break-all"
+              className="w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong whitespace-pre-wrap break-all"
             />
           </div>
 
           <div className="grid min-w-0 gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.frequency")}</label>
+            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.frequency")}</label>
             <select
               value={freq}
               onChange={(e) => setFreq(e.target.value as FreqType)}
               data-testid="scheduled-freq"
-              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
             >
               <option value="daily">{t("scheduledTasks.freq.daily")}</option>
               <option value="weekday">{t("scheduledTasks.freq.weekday")}</option>
@@ -536,18 +536,18 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
           {freq !== "custom" && freq !== "hourly" && (
             <div className="grid min-w-0 gap-1.5">
-              <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.time")}</label>
+              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.time")}</label>
               <Input type="time" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} />
             </div>
           )}
 
           {freq === "weekly" && (
             <div className="grid min-w-0 gap-1.5">
-              <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.dayOfWeek")}</label>
+              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.dayOfWeek")}</label>
               <select
                 value={dow}
                 onChange={(e) => setDow(Number(e.target.value))}
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
               >
                 {weekdays.map((d, idx) => (
                   <option key={idx} value={idx}>{d}</option>
@@ -558,11 +558,11 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
           {freq === "monthly" && (
             <div className="grid min-w-0 gap-1.5">
-              <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.dayOfMonth")}</label>
+              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.dayOfMonth")}</label>
               <select
                 value={dom}
                 onChange={(e) => setDom(Number(e.target.value))}
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
               >
                 {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>{d}</option>
@@ -573,7 +573,7 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
           {freq === "hourly" && (
             <div className="grid min-w-0 gap-1.5">
-              <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.minute")}</label>
+              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.minute")}</label>
               <Input
                 type="number"
                 min={0}
@@ -586,7 +586,7 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
 
           {freq === "custom" && (
             <div className="grid min-w-0 gap-1.5">
-              <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.cronLabel")}</label>
+              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.cronLabel")}</label>
               <Input
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
@@ -600,12 +600,12 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
           )}
 
           <div className="grid min-w-0 gap-1.5">
-            <label className="text-[12px] font-medium text-slate-700">{t("scheduledTasks.dialog.timezone")}</label>
+            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.timezone")}</label>
             <select
               value={tz}
               onChange={(e) => setTz(e.target.value)}
               data-testid="scheduled-tz"
-              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
             >
               {tzOptions.map((z) => (
                 <option key={z} value={z}>{z}</option>
@@ -613,20 +613,20 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
             </select>
           </div>
 
-          <p className="rounded-md bg-slate-50 px-3 py-2 text-[12px] text-slate-600 whitespace-pre-wrap break-all">
+          <p className="rounded-md bg-surface-muted px-3 py-2 text-xs text-fg-subtle whitespace-pre-wrap break-all">
             {t("scheduledTasks.dialog.preview")}: {preview}
           </p>
 
           <div className="grid min-w-0 gap-0.5 opacity-60">
-            <label className="flex items-center gap-2 text-[12px] text-slate-600">
+            <label className="flex items-center gap-2 text-xs text-fg-subtle">
               <input type="checkbox" disabled className="h-3.5 w-3.5" />
               {t("scheduledTasks.dialog.feishu")}
             </label>
-            <span className="pl-5 text-[11px] text-slate-400">{t("scheduledTasks.dialog.feishuDisabledHint")}</span>
+            <span className="pl-5 text-xs text-fg-faint">{t("scheduledTasks.dialog.feishuDisabledHint")}</span>
           </div>
 
           {errMsg && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[12px] text-red-700 break-all">{errMsg}</p>
+            <p className="rounded-md bg-danger-subtle px-3 py-2 text-xs text-danger break-all">{errMsg}</p>
           )}
         </div>
 

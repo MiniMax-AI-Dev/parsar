@@ -24,9 +24,9 @@ export function Card({
   children: ReactNode
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <header className="mb-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
+    <section className={`rounded-lg border border-line bg-surface px-5 py-4 ${className ?? ""}`}>
+      <header className="mb-4">
+        <h3 className="text-lg font-semibold text-fg">{title}</h3>
         {description && <p className="mt-1 text-sm text-fg-subtle">{description}</p>}
         {docHref && docLabel && (
           <a
@@ -60,7 +60,7 @@ export function Field({
 }) {
   return (
     <div className="mb-3 last:mb-0">
-      <label className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wider text-fg-faint">
+      <label className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-faint">
         <span>
           {label}
           {required && <span className="ml-1 text-danger">*</span>}
@@ -68,7 +68,7 @@ export function Field({
         {badge}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-fg-subtle">{hint}</p>}
+      {hint && <p className="mt-0.5 text-xs leading-tight text-fg-subtle">{hint}</p>}
     </div>
   )
 }
@@ -104,7 +104,7 @@ export function SecretInput({
       badge={
         hasSavedValue ? (
           <span
-            className="inline-flex items-center gap-1 rounded-full bg-success-subtle px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-success-emphasis"
+            className="inline-flex items-center gap-1 rounded-full bg-success-subtle px-1.5 py-0.5 text-xs font-medium normal-case tracking-normal text-success-emphasis"
             data-testid={`${testId}-saved-badge`}
           >
             <CheckCircle2 className="h-3 w-3" />
@@ -120,7 +120,7 @@ export function SecretInput({
         disabled={disabled}
         autoComplete="new-password"
         placeholder={hasSavedValue ? "••••••••" : undefined}
-        className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"
+        className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
         data-testid={testId}
       />
     </Field>
