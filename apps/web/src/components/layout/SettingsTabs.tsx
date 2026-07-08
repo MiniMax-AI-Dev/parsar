@@ -7,8 +7,6 @@ export type SettingsTab =
   | "credentials"
   | "runtime"
   | "connectors"
-  | "specs"
-  | "memory"
   | "usage"
   | "audit"
 
@@ -18,8 +16,6 @@ const TAB_TO_VIEW: Record<SettingsTab, AdminView> = {
   credentials: "secrets",
   runtime: "runtime",
   connectors: "connectors",
-  specs: "specs",
-  memory: "memory",
   usage: "usage",
   audit: "audit",
 }
@@ -29,8 +25,6 @@ const TABS: SettingsTab[] = [
   "credentials",
   "runtime",
   "connectors",
-  "specs",
-  "memory",
   "usage",
   "audit",
 ]
