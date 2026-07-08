@@ -570,7 +570,7 @@ export function CreateModelDialog({
                 id="model-auth-scheme"
                 value={authScheme}
                 onChange={(e) => setAuthScheme(e.target.value as "api-key" | "bearer")}
-                className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
               >
                 <option value="api-key">x-api-key</option>
                 <option value="bearer">Authorization: Bearer</option>
@@ -639,7 +639,7 @@ export function CreateModelDialog({
                       setExistingSecretID(e.target.value)
                       if (e.target.value !== "") setApiKey("")
                     }}
-                    className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                   >
                     <option value="">
                       {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
@@ -913,7 +913,7 @@ export function EditModelDialog({
                   id="edit-model-secret"
                   value={secretID}
                   onChange={(e) => setSecretID(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                  className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                   disabled={newAPIKey.trim() !== ""}
                 >
                   <option value="">

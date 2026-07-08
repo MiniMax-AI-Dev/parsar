@@ -991,7 +991,7 @@ export function CreateAgentDialog({
                         value={sandboxSize}
                         onChange={(e) => setSandboxSize(e.target.value === "xl" ? "xl" : "standard")}
                         disabled={pending}
-                        className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-surface-subtle"
+                        className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
                       >
                         <option value="standard">{t("agents.form.sandboxSize.standard")}</option>
                         <option value="xl">{t("agents.form.sandboxSize.xl")}</option>
@@ -1382,7 +1382,7 @@ export function CreateAgentDialog({
 
               {aggregatedRequiredKinds.length > 0 && (
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">{t("agents.form.sections.credentials")}</h3>
+                  <h3 className="text-base font-semibold text-fg">{t("agents.form.sections.credentials")}</h3>
                   <CredentialCheckPanel
                     requiredKinds={aggregatedRequiredKinds}
                     workspaceID={workspaceID}
@@ -1623,7 +1623,7 @@ function CapabilityVersionPicker({
       // suffix) reminds the user that breaking changes can land
       // without warning. We don't disable "latest" outright — opting
       // into it is a deliberate user choice we surface explicitly.
-      className="ml-1 h-7 shrink-0 rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-slate-300"
+      className="ml-1 h-7 shrink-0 rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
       title={fromMarketplace ? t("agents.form.versionPicker.marketplaceHint") : t("agents.form.versionPicker.localHint")}
     >
       <option value="__latest__">

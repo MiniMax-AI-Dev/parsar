@@ -133,7 +133,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         data-testid="agent-daemon-device-picker"
-        className="h-9 min-w-0 flex-1 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-surface-subtle"
+        className="h-9 min-w-0 flex-1 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
       >
         <option value="">
           {t("agents.form.devicePicker.placeholder", {

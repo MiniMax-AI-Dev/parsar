@@ -1363,7 +1363,7 @@ function DetailField({ label, value, mono }: { label: string; value: React.React
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-line bg-surface p-4"><h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>{children}</section>
+  return <section className="rounded-lg border border-line bg-surface p-4"><h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>{children}</section>
 }
 
 function ErrorBanner({ message }: { message: string }) {

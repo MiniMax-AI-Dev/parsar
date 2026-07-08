@@ -67,7 +67,7 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
 
       <Field label={t("capabilities.import.systemPrompt.promptLabel", "Prompt content")} required>
         <textarea
-          className="min-h-[260px] w-full rounded-md border border-line bg-surface p-3 font-mono text-sm leading-relaxed text-fg-emphasis focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="min-h-[260px] w-full rounded-md border border-line bg-surface p-3 font-mono text-sm leading-relaxed text-fg-emphasis focus:outline-none focus:ring-2 focus:ring-line-strong"
           value={value.prompt}
           onChange={(e) => set({ prompt: e.target.value })}
           placeholder={t(

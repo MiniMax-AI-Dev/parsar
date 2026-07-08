@@ -179,7 +179,7 @@ function TeamsConnectorFieldsInner({
           placeholder="00000000-0000-0000-0000-000000000000"
           onChange={(e) => setDraft({ ...draft, app_id: e.target.value })}
           disabled={!canEdit || saving}
-          className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"
+          className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
           data-testid="teams-app-id-input"
         />
       </Field>
@@ -207,7 +207,7 @@ function TeamsConnectorFieldsInner({
           placeholder="common"
           onChange={(e) => setDraft({ ...draft, tenant_id: e.target.value })}
           disabled={!canEdit || saving}
-          className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-surface-subtle"
+          className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
           data-testid="teams-tenant-id-input"
         />
       </Field>
@@ -222,7 +222,7 @@ function TeamsConnectorFieldsInner({
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+      <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-line/40 pt-4">
         {dirty && (
           <button
             type="button"

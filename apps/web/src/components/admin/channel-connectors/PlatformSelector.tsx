@@ -28,7 +28,7 @@ export function PlatformSelector({
     <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2">
       <label
         htmlFor={testId ?? "channel-connector-platform"}
-        className="text-xs uppercase tracking-wider text-fg-subtle"
+        className="text-xs font-medium text-fg-subtle"
       >
         {t("connections.connector.platformSelect.label")}
       </label>
@@ -37,7 +37,7 @@ export function PlatformSelector({
         value={value}
         onChange={(e) => onChange(e.target.value as ConnectorPlatform)}
         disabled={disabled}
-        className="h-8 rounded-md border border-line bg-surface px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-surface-subtle"
+        className="h-8 rounded-md border border-line bg-surface px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
         data-testid={testId ?? "channel-connector-platform-select"}
       >
         {options.map((opt) => (

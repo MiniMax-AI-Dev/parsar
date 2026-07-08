@@ -61,7 +61,7 @@ export function ConnectivityResultPanel({
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className={`flex min-w-0 flex-1 items-center gap-1 text-left text-sm font-medium ${styles.title} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
+          className={`flex min-w-0 flex-1 items-center gap-1 text-left text-sm font-medium ${styles.title} focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong`}
           aria-expanded={expanded}
           data-testid="connectivity-result-toggle"
         >
@@ -75,7 +75,7 @@ export function ConnectivityResultPanel({
         <button
           type="button"
           onClick={onDismiss}
-          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300`}
+          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong`}
           data-testid="connectivity-result-dismiss"
         >
           <X className="h-3 w-3" />

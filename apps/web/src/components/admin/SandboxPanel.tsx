@@ -21,7 +21,7 @@ import { useNow } from "../../lib/use-now"
 function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
     <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
+      <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
       {children}
     </section>
   )

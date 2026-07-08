@@ -75,7 +75,7 @@ export function ChannelConnectorPanel({
     >
       <section className="min-w-0">
         <div className="mb-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">
+          <h2 className="text-base font-semibold text-fg">
             {t("connections.connector.platformList.title")}
           </h2>
           <p className="mt-1 text-sm text-fg-faint">

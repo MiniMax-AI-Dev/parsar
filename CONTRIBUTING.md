@@ -77,6 +77,58 @@ Three concrete rules:
 When a dialog uses a multi-column grid, give every column `min-w-0` —
 otherwise long children push the grid track wider instead of wrapping.
 
+## Typography contract
+
+The type scale has 7 defined steps. Arbitrary pixel sizes (`text-[Npx]`) are
+banned by ESLint and will fail `make check`.
+
+| Utility     | Size   | Usage                                    |
+|-------------|--------|------------------------------------------|
+| `text-xs`   | 12 px  | Badges, micro-meta, table footnotes      |
+| `text-sm`   | 13 px  | Default body in dense admin UI           |
+| `text-base` | 14 px  | Form labels, buttons, inputs             |
+| `text-lg`   | 16 px  | Card titles, dialog headings             |
+| `text-xl`   | 20 px  | Section headings, sub-page titles        |
+| `text-2xl`  | 22 px  | Secondary page headings, feature names   |
+| `text-3xl`  | 28 px  | Page titles (display, with font-display) |
+
+### Heading hierarchy
+
+- **h1** — Page title only. `font-display text-3xl font-semibold leading-tight
+  tracking-tight text-fg`. Rendered in Space Grotesk. One per page, always
+  inside `<PageHeader>`.
+- **h2** — Section heading. `text-xl font-semibold text-fg`. Groups related
+  cards or panels. Dialog titles use `text-lg font-semibold leading-none text-fg`.
+- **h3** — Card/subsection title. `text-base font-semibold text-fg`.
+- **h4** — Field group label. `text-sm font-medium text-fg`.
+
+Do not use `font-display` on anything other than h1.
+
+### Uppercase rule
+
+`uppercase` is allowed ONLY on:
+
+- Table column headers (`<th>`) — via the shared `TableHead` component.
+- Standalone definition-term labels (`<dt>`) that label a single key-value pair.
+- Single-word dividers (e.g. "OR" between auth methods).
+
+`uppercase` is BANNED on:
+
+- Any heading element (h1–h4).
+- Form field labels.
+- Section group labels.
+- Navigation items.
+
+If in doubt, do not uppercase. The monochrome palette + font-weight alone
+provides sufficient hierarchy without case transformation.
+
+### Raw palette ban
+
+Never use Tailwind's built-in color palette directly (e.g. `text-slate-500`,
+`bg-red-50`). All colors must go through semantic tokens defined in
+`src/style.css` `@theme` block (`text-fg`, `text-fg-muted`, `bg-surface`,
+`border-line`, `text-danger`, etc.). ESLint enforces this.
+
 ## Code comments
 
 Write no comments by default. Leave a single line in the source only when

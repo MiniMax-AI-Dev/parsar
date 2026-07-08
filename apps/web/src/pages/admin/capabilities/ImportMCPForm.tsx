@@ -156,7 +156,7 @@ export function ImportMCPForm({
                   `{\n  "mcpServers": {\n    "github": {\n      "command": "docker",\n      "args": ["run", "-i", "ghcr.io/github/github-mcp-server"],\n      "env": {\n        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxx"\n      }\n    }\n  }\n}`,
                 )
           }
-          className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"

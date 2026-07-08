@@ -59,7 +59,7 @@ export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: P
           id={id}
           type="button"
           className={cn(
-            "flex h-9 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
+            "flex h-9 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong",
             !value && "text-fg-faint",
           )}
         >
@@ -152,12 +152,12 @@ function ModelRow({
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium text-fg">{model.name}</span>
           {model.reasoning && (
-            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] text-fg-muted">
+            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
               reasoning
             </span>
           )}
           {model.vision && (
-            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] text-fg-muted">
+            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
               vision
             </span>
           )}

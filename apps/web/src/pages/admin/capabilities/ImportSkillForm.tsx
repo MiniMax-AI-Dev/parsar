@@ -276,7 +276,7 @@ export function ImportSkillForm({
                   "capabilities.import.skill.placeholder",
                   `---\nname: code-reviewer\ndescription: Review a diff and call out risky changes\n---\n\nYou are a careful code reviewer. When the user pastes a diff, walk through:\n\n1. Correctness — does the change do what it claims?\n2. Risk — what could break in production?\n3. Style — does it match the surrounding conventions?\n\nKeep responses concise.`,
                 )}
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"

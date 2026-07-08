@@ -8,22 +8,26 @@
   --animate-fade-out: fade-out 2s ease-out forwards;
 
   /* ------------------------------------------------------------
-   * Type scale — 5 ticks, deliberately spartan. Every value below
-   * maps to a Tailwind utility (`text-xs`, …, `text-2xl`).
-   * Arbitrary sizes (`text-[13px]`) are forbidden by lint.
+   * Type scale — 7 ticks. Every value maps to a Tailwind utility
+   * (`text-xs` … `text-3xl`). Arbitrary sizes (`text-[13px]`)
+   * are forbidden by ESLint and will fail `make check`.
    * ---------------------------------------------------------- */
-  --text-xs:   0.75rem;    /* 12px — meta, table footnotes, badges */
-  --text-sm:   0.8125rem;  /* 13px — default body in a dense admin UI */
-  --text-base: 0.875rem;   /* 14px — form labels, buttons */
-  --text-lg:   1rem;       /* 16px — card / section titles */
-  --text-2xl:  1.375rem;   /* 22px — page titles (used sparingly) */
+  --text-xs:   0.75rem;    /* 12px — badges, micro-meta, table footnotes */
+  --text-sm:   0.8125rem;  /* 13px — default body in dense admin UI */
+  --text-base: 0.875rem;   /* 14px — form labels, buttons, inputs */
+  --text-lg:   1rem;       /* 16px — card titles, dialog headings */
+  --text-xl:   1.25rem;    /* 20px — section headings */
+  --text-2xl:  1.375rem;   /* 22px — secondary page headings */
+  --text-3xl:  1.75rem;    /* 28px — page titles (display) */
 
   /* Line heights pinned per step so we don't fight `leading-*`. */
   --text-xs--line-height:   1rem;
   --text-sm--line-height:   1.125rem;
   --text-base--line-height: 1.25rem;
   --text-lg--line-height:   1.5rem;
+  --text-xl--line-height:   1.75rem;
   --text-2xl--line-height:  1.875rem;
+  --text-3xl--line-height:  2.25rem;
 
   /* ------------------------------------------------------------
    * Semantic colors. Every color used in TSX MUST go through one
@@ -152,18 +156,14 @@ samp,
   box-sizing: border-box;
 }
 
-/* Base rem raised from the browser default 16px to 17px. The UI leaned
-   heavily on text-sm(14)/text-xs(12) which read cramped; raising the root
-   scales every rem-based size up ~6% (text-sm→14.9, text-base→17) so body
-   text breathes without editing 100+ callsites. */
 html {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 body {
   margin: 0;
   min-width: 960px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 button,

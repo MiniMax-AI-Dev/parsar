@@ -60,7 +60,7 @@ export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
           id={id}
           type="button"
           className={cn(
-            "flex h-9 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
+            "flex h-9 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong",
             !selected && "text-fg-faint",
           )}
         >

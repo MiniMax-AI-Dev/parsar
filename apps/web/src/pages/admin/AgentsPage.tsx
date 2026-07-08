@@ -1104,7 +1104,7 @@ function VersionSelect({ versions, value, onChange }: { versions: CapabilityVers
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="h-8 w-full rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-slate-300"
+      className="h-8 w-full rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
     >
       {versions.map((version, index) => (
         <option key={version.id} value={version.id}>v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}</option>
@@ -1363,7 +1363,7 @@ function RemoveCapabilityDialog({
 function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
     <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-subtle">{title}</h3>
+      <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
       {children}
     </section>
   )
@@ -1372,7 +1372,7 @@ function Card({ title, className, children }: { title: string; className?: strin
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
-      <div className="text-xs uppercase tracking-wider text-fg-faint">{label}</div>
+      <div className="text-xs font-medium text-fg-faint">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">{value}</div>
     </div>
   )
@@ -1619,7 +1619,7 @@ function MetricsCard({ metrics, loading }: { metrics?: AgentMetrics; loading: bo
 function MetricStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-line bg-surface-subtle/40 px-3 py-2">
-      <div className="text-xs uppercase tracking-wider text-fg-faint">{label}</div>
+      <div className="text-xs font-medium text-fg-faint">{label}</div>
       <div className="mt-0.5 text-2xl font-semibold tabular-nums text-fg">{value}</div>
     </div>
   )
@@ -1869,7 +1869,7 @@ function ConfigCapabilitiesSection({
   return (
     <section className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-subtle">
+        <h3 className="text-base font-semibold text-fg">
           {t("agents.detail.config.capabilities.title")}
         </h3>
         {isAdmin && installable.length > 0 && (

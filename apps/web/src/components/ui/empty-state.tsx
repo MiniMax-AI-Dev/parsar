@@ -24,7 +24,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         </div>
       )}
       <div className="space-y-1.5">
-        <p className="text-[15px] font-medium text-fg">{title}</p>
+        <p className="text-base font-medium text-fg">{title}</p>
         {description && (
           <p className="text-sm text-fg-subtle max-w-sm">{description}</p>
         )}

@@ -36,6 +36,12 @@ fi
 
 pnpm typecheck
 
+if (cd apps/web && npx eslint src/ 2>&1) | grep -q "no-restricted-syntax"; then
+  echo "Design-system lint violations (arbitrary font sizes or raw palette):" >&2
+  (cd apps/web && npx eslint src/ 2>&1) | grep "no-restricted-syntax" >&2
+  exit 1
+fi
+
 for polluted in .parsar logs state cache config; do
   if [[ -e "$polluted" ]]; then
     echo "CWD pollution detected: $polluted" >&2
