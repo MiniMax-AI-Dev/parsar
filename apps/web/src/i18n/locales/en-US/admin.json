@@ -2627,7 +2627,24 @@
       "savedBadge": "Saved",
       "actions": {
         "save": "Save",
+        "saveDraft": "Save draft",
+        "saveAndEnable": "Save and enable",
         "reset": "Reset"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "platformList": {
+        "title": "Messaging platforms",
+        "description": "Pick a platform, fill its credentials, then enable it when the config is complete.",
+        "noAppId": "No App ID",
+        "status": {
+          "enabled": "Enabled",
+          "configured": "Configured",
+          "incomplete": "Incomplete",
+          "notConfigured": "Not configured"
+        }
       },
       "platformSelect": {
         "label": "Platform",

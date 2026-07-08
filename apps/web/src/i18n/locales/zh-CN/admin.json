@@ -2627,7 +2627,24 @@
       "savedBadge": "已保存",
       "actions": {
         "save": "保存",
+        "saveDraft": "保存草稿",
+        "saveAndEnable": "保存并启用",
         "reset": "重置"
+      },
+      "status": {
+        "enabled": "已启用",
+        "disabled": "已停用"
+      },
+      "platformList": {
+        "title": "消息平台",
+        "description": "选择平台后直接填写凭据，配置完整后再启用。",
+        "noAppId": "未填写 App ID",
+        "status": {
+          "enabled": "已启用",
+          "configured": "已配置",
+          "incomplete": "未完整",
+          "notConfigured": "未配置"
+        }
       },
       "platformSelect": {
         "label": "平台",
