@@ -405,7 +405,7 @@ export function CreateAgentDialog({
       setExecutionMode(cloneSource ? executionModeFromAgent(cloneSource) : "sandbox")
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
       setSandboxSize(cloneSource ? sandboxSizeFromAgent(cloneSource) : "standard")
-      setModelID(cloneSource ? modelIDFromAgent(cloneSource) || firstModelID : "")
+      setModelID(cloneSource ? modelIDFromAgent(cloneSource) || firstModelID : firstModelID)
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
