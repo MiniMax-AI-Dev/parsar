@@ -9,6 +9,12 @@
   <br />
   The open-source agent collaboration control plane for engineering teams.
   <br />
+  <br />
+  ⚠️ <strong>Alpha — under active development, not production-ready.</strong>
+  <br />
+  APIs, schemas, and configs may change without notice between commits.
+  <br />
+  <br />
   <a href="docs/"><strong>Docs »</strong></a>
   <br />
   <br />
@@ -18,6 +24,10 @@
   <a href="#contributing"><strong>Contributing</strong></a>
 </p>
 
+
+## Status
+
+**Alpha.** Core dispatch loop works, web UI is functional, Feishu surface is integrated — but many features are incomplete or missing. Expect breaking changes. We welcome contributors who are comfortable building on shifting ground.
 
 ## Introduction
 
