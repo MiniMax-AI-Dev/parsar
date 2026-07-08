@@ -8,7 +8,7 @@ SHELL := /bin/bash
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: setup dev check reset-dev clean-dev paths seed-dev seed-dev-db migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info openapi
+.PHONY: setup dev check reset-dev clean-dev paths seed-dev migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info openapi
 
 setup:
 	./scripts/setup.sh
@@ -18,9 +18,6 @@ paths:
 
 seed-dev:
 	pnpm --filter @parsar/cli parsar -- seed-dev
-
-seed-dev-db:
-	cd server && go run ./cmd/seeddev
 
 migrate-dev:
 	cd server && go run ./cmd/migrate

@@ -58,7 +58,6 @@ export PARSAR_TEST_DATABASE_URL="$PARSAR_CHECK_DATABASE_URL"
 (
   cd server
   DATABASE_URL="$PARSAR_CHECK_DATABASE_URL" PARSAR_MIGRATIONS_DIR="$PWD/migrations" go run ./cmd/migrate
-  DATABASE_URL="$PARSAR_CHECK_DATABASE_URL" go run ./cmd/seeddev
 )
 
 # -p 1 serializes packages: store tests and seed tests both use the same
