@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 
 	"net/http"
@@ -24,22 +23,6 @@ type OAuthRuntimeStore interface {
 	UpsertOAuthUser(ctx context.Context, in store.UpsertOAuthUserInput) (store.UpsertOAuthUserResult, error)
 }
 
-// OAuthBootstrapper is the optional first-owner (TOFU — trust-on-first-use)
-// surface. When wired, the very first successful Feishu OIDC login on a
-// system that has no workspace owner yet auto-provisions that user as the
-// first owner (workspace + owner membership), so operators need NOT pre-seed
-// PARSAR_OWNER_EMAIL before starting. Kept separate from OAuthRuntimeStore so
-// the existing narrow fakes (dev/oauth_handlers_test.go) keep compiling; nil
-// disables the behavior entirely. *store.Store satisfies this.
-type OAuthBootstrapper interface {
-	ActiveWorkspaceOwnerCount(ctx context.Context) (int64, error)
-	ProvisionFirstOwner(ctx context.Context, in store.ProvisionFirstOwnerInput) (store.ProvisionFirstOwnerResult, error)
-}
-
-// defaultBootstrapWorkspaceName is used when OAuthHandlerDeps.BootstrapWorkspaceName
-// is empty. ProvisionFirstOwner requires a non-empty workspace name.
-const defaultBootstrapWorkspaceName = "My Workspace"
-
 // CookieStateName is the short-lived CSRF cookie name.
 const CookieStateName = "parsar_oauth_state"
 
@@ -55,16 +38,6 @@ type OAuthHandlerDeps struct {
 	Feishu   feishu.Client
 	Sessions auth.SessionStore
 	Store    OAuthRuntimeStore
-
-	// Bootstrapper enables first-owner-on-first-login (TOFU). Optional:
-	// nil leaves the callback behaving exactly as before (login creates a
-	// user + session but no workspace). Wired only when
-	// PARSAR_BOOTSTRAP_ON_FIRST_LOGIN is truthy (see main.go).
-	Bootstrapper OAuthBootstrapper
-
-	// BootstrapWorkspaceName names the workspace created for the first
-	// owner. Empty falls back to defaultBootstrapWorkspaceName.
-	BootstrapWorkspaceName string
 
 	// CookieSecure drives the Secure attribute on issued cookies.
 	CookieSecure bool
@@ -200,12 +173,6 @@ func feishuCallbackHandler(deps OAuthHandlerDeps) http.HandlerFunc {
 			return
 		}
 
-		// TOFU: if enabled and the system has no owner yet, the first
-		// successful login claims first-owner. Best-effort — never blocks
-		// the login (a failure here leaves the user logged-in but without a
-		// workspace, exactly the pre-TOFU behavior).
-		maybeProvisionFirstOwner(r.Context(), deps, profile, now)
-
 		sessionID, err := deps.Sessions.Create(r.Context(), auth.CreateSessionInput{
 			UserID:    upsert.UserID,
 			UserAgent: r.UserAgent(),
@@ -223,50 +190,6 @@ func feishuCallbackHandler(deps OAuthHandlerDeps) http.HandlerFunc {
 
 		http.Redirect(w, r, deps.loginRedirectURL(), http.StatusFound)
 	}
-}
-
-// maybeProvisionFirstOwner implements TOFU first-owner-on-first-login. It is
-// a no-op when the feature is disabled (deps.Bootstrapper == nil) or the
-// system already has an owner. Errors are logged, never returned: the login
-// must still succeed even if provisioning fails (the user simply lands
-// without a workspace, the pre-TOFU behavior). ProvisionFirstOwner is itself
-// advisory-locked and re-checks the owner count, so a concurrent race that
-// loses returns store.ErrBootstrapClosed — treated as a benign skip here.
-func maybeProvisionFirstOwner(ctx context.Context, deps OAuthHandlerDeps, profile feishu.UserProfile, now time.Time) {
-	if deps.Bootstrapper == nil {
-		return
-	}
-	count, err := deps.Bootstrapper.ActiveWorkspaceOwnerCount(ctx)
-	if err != nil {
-		log.Bg().Warn("first-login owner: owner count check failed — skipping", "error", err, "email", profile.Email)
-		return
-	}
-	if count > 0 {
-		return // system already has an owner; nothing to claim.
-	}
-	wsName := strings.TrimSpace(deps.BootstrapWorkspaceName)
-	if wsName == "" {
-		wsName = defaultBootstrapWorkspaceName
-	}
-	res, err := deps.Bootstrapper.ProvisionFirstOwner(ctx, store.ProvisionFirstOwnerInput{
-		Email:         profile.Email,
-		Name:          profile.Name,
-		WorkspaceName: wsName,
-		Now:           now,
-	})
-	if err != nil {
-		if errors.Is(err, store.ErrBootstrapClosed) {
-			// Lost the race to another concurrent first login — fine.
-			log.Bg().Info("first-login owner: another login already claimed owner — skipping", "email", profile.Email)
-			return
-		}
-		log.Bg().Warn("first-login owner: provision failed — login proceeds without workspace",
-			"error", err, "email", profile.Email)
-		return
-	}
-	log.Bg().Info("first-login owner provisioned",
-		"user_id", res.UserID, "workspace_id", res.WorkspaceID,
-		"workspace_slug", res.WorkspaceSlug, "email", profile.Email)
 }
 
 // authLogoutHandler is POST /api/v1/auth/logout. Revokes the session and

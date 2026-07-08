@@ -30,7 +30,7 @@ functionality".
 
 ```
 clone the repo → create a Feishu app → prepare .env → build images (server + sandbox)
-→ docker compose up → first user logs in via Feishu (TOFU Owner) → create Agent
+→ docker compose up → first user registers via web form (Owner) → create Agent
 → pair device / @Bot in Feishu groups
 ```
 
@@ -246,7 +246,7 @@ sudo docker compose -f docker-compose.local.yml up -d
 
 **Startup order (automatic):**
 1. `postgres` — PostgreSQL 16, wait for healthcheck.
-2. `parsar-init` — master-key validation + database migration + first-run onboarding (TOFU mode; bootstrap skipped).
+2. `parsar-init` — master-key validation + database migration.
 3. `parsar-server` — binds `0.0.0.0:18080`; Feishu WebSocket inbound + outbound worker start automatically.
 
 > **First run will fatal-exit — that is intentional.**
@@ -274,14 +274,12 @@ sudo docker logs parsar-local-server 2>&1 | grep "feishu.*inbound.*ready"
 
 ---
 
-## 7. First login — Owner claim (TOFU)
+## 7. First login — Register the Owner
 
 1. Open `http://YOUR_IP:18080` in your browser.
-2. Click **Feishu login** → Feishu authorization page → log in with your Feishu account.
-3. The first user to log in **automatically becomes the Workspace Owner**.
-
-> **Make sure you personally log in first.** TOFU is irreversible — the first
-> user through the door is the Owner.
+2. The system detects no owner exists and shows the **registration form**.
+3. Fill in your name, email, password, and workspace name → submit.
+4. You are now the **Workspace Owner**.
 
 ---
 
@@ -442,7 +440,7 @@ sudo docker compose -f docker-compose.local.yml up -d
 curl http://YOUR_IP:18080/healthz   # 200
 curl http://YOUR_IP:18080/readyz    # 200
 
-# 5. Browser http://YOUR_IP:18080 → Feishu login (first user = Owner)
+# 5. Browser http://YOUR_IP:18080 → register first user (Owner)
 #    → create Agent (sandbox mode) → bind default Bot
 #    → @Bot in a Feishu group / pair a device → verified
 ```

@@ -170,16 +170,8 @@ OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-http://127.0.0.1:${PORT}}"
 FEISHU_WEBSOCKET="${PARSAR_FEISHU_WEBSOCKET:-true}"
 FEISHU_OUTBOUND="${PARSAR_FEISHU_OUTBOUND:-true}"
 MASTER_KEY="${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
-# TOFU first-owner: with no owner pre-seeded (this script does NOT run
-# parsar-bootstrap), the first successful Feishu OIDC login auto-claims
-# first-owner (workspace + owner membership) — no PARSAR_OWNER_EMAIL to know
-# in advance. Defaults ON here; no-op once any owner exists. NOTE: to actually
-# exercise a REAL Feishu login you must run with PARSAR_FEISHU_MOCK=false (and
-# usually PARSAR_DEV_AUTH=false, else the web UI takes the X-Parsar-Dev-User-ID
-# header bypass and never goes through the login flow).
-BOOTSTRAP_FIRST_LOGIN="${PARSAR_BOOTSTRAP_ON_FIRST_LOGIN:-true}"
 tmux new-session -d -s "${TMUX_SESSION}" \
-  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_FEISHU_WEBSOCKET=${FEISHU_WEBSOCKET} PARSAR_FEISHU_OUTBOUND=${FEISHU_OUTBOUND} PARSAR_MASTER_KEY='${MASTER_KEY}' PARSAR_BOOTSTRAP_ON_FIRST_LOGIN=${BOOTSTRAP_FIRST_LOGIN} PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}' '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
+  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_FEISHU_WEBSOCKET=${FEISHU_WEBSOCKET} PARSAR_FEISHU_OUTBOUND=${FEISHU_OUTBOUND} PARSAR_MASTER_KEY='${MASTER_KEY}' PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}' '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
 
 # ── readiness probe ──────────────────────────────────────────────────
 echo -n "[dev-server-up] waiting for :${PORT} "

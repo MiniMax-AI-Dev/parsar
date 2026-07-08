@@ -26,7 +26,7 @@ export function SetupPage() {
 
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
-  const [workspace, setWorkspace] = useState("")
+  const [workspace, setWorkspace] = useState("My Workspace")
   const [password, setPassword] = useState("")
 
   const submitting = register.isPending
