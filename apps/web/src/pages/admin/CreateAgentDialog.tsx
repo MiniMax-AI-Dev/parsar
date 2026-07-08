@@ -37,6 +37,7 @@ import type {
 } from "../../lib/api-types"
 
 const DEFAULT_PROMPT = "You are a helpful AI assistant for this team. Be concise and accurate."
+const DEFAULT_WORK_DIR = "/workspace"
 
 type ExecutionMode = "sandbox" | "local_device" | "external"
 type AgentEngine = "claude_code" | "opencode" | "codex" | "pi"
@@ -84,6 +85,7 @@ interface CreateAgentDialogProps {
   open: boolean
   mode: AgentDialogMode
   workspaceID: string | null
+  workspaceName?: string
   workspaceRole?: UserWorkspace["role"]
   models: Model[]
   agent?: Agent | null
@@ -172,6 +174,7 @@ export function CreateAgentDialog({
   open,
   mode,
   workspaceID,
+  workspaceName,
   workspaceRole,
   models,
   agent,
@@ -183,6 +186,9 @@ export function CreateAgentDialog({
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const queryClient = useQueryClient()
+  const workspaceDisplayName = (workspaceName ?? "").trim() || t("agents.form.defaults.workspaceName")
+  const defaultAgentName = t("agents.form.defaults.name", { workspace: workspaceDisplayName })
+  const defaultAgentDescription = t("agents.form.defaults.description", { workspace: workspaceDisplayName })
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("sandbox")
@@ -252,7 +258,9 @@ export function CreateAgentDialog({
     [secretsQ.data?.secrets],
   )
   const activeModels = useMemo(() => models.filter((m) => m.status === "active"), [models])
-  const selectedModel = useMemo(() => activeModels.find((m) => m.id === modelID) ?? null, [activeModels, modelID])
+  const firstModelID = activeModels[0]?.id ?? ""
+  const selectedModelID = modelID || (mode === "create" ? firstModelID : "")
+  const selectedModel = useMemo(() => activeModels.find((m) => m.id === selectedModelID) ?? null, [activeModels, selectedModelID])
   const capabilityOptions = useMemo(() => {
     // `type: ""` is a sentinel for ghost rows (deprecated bindings whose real
     // type is unknown); downstream filters treat it as wildcard.
@@ -379,7 +387,6 @@ export function CreateAgentDialog({
     [capabilities, mode, selectedCapabilityIDs, allCapabilitiesPool]
   )
   const admin = isAdminRole(workspaceRole)
-  const firstModelID = activeModels[0]?.id ?? ""
 
   const modelFieldRef = useRef<HTMLDivElement | null>(null)
   const modelComboboxRef = useRef<HTMLDivElement | null>(null)
@@ -400,16 +407,16 @@ export function CreateAgentDialog({
       // connector-wizard return-to flow relies on them.
       const cloneSource = agent
       const cloneSuffix = cloneSource?.name ? " (Copy)" : ""
-      setName(params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : ""))
-      setDescription(params.get("agent_description") ?? cloneSource?.description ?? "")
+      setName(params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : defaultAgentName))
+      setDescription(params.get("agent_description") ?? cloneSource?.description ?? defaultAgentDescription)
       setExecutionMode(cloneSource ? executionModeFromAgent(cloneSource) : "sandbox")
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
       setSandboxSize(cloneSource ? sandboxSizeFromAgent(cloneSource) : "standard")
-      setModelID(cloneSource ? modelIDFromAgent(cloneSource) || firstModelID : "")
+      setModelID(cloneSource ? modelIDFromAgent(cloneSource) : "")
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
-      setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource) : ""))
+      setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource) : DEFAULT_PROMPT))
       setCapabilities(cloneSource ? capabilitiesFromAgent(cloneSource) : [])
       // Capability IDs aren't prefilled on clone: mapping installed names back
       // to IDs needs an extra round-trip, so users re-pick from the marketplace.
@@ -419,7 +426,7 @@ export function CreateAgentDialog({
       // Creation is locked to public; the visibility selector is hidden.
       setVisibility("public")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
-      setWorkDir(cloneSource ? workDirFromAgent(cloneSource) : "")
+      setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || DEFAULT_WORK_DIR : DEFAULT_WORK_DIR)
       // Clones explicitly drop the source agent's credential bindings: the
       // copy is a fresh agent and the user re-picks. Without these resets a
       // previous clone's bindings would leak across dialog opens.
@@ -483,7 +490,7 @@ export function CreateAgentDialog({
     setPairDialogOpen(false)
     setStep(1)
     setCapabilityTypeFilter("all")
-  }, [open, mode, agent?.id, firstModelID])
+  }, [open, mode, agent?.id, defaultAgentDescription, defaultAgentName, firstModelID])
 
   // Hydrate edit-mode binding choices when the listAgentCapabilities
   // response lands. We only seed entries the user hasn't touched (i.e.
@@ -519,9 +526,9 @@ export function CreateAgentDialog({
     if (!modelDropdownOpen) return
     const nextHighlighted = filteredModels.some((m) => m.id === highlightedModelID)
       ? highlightedModelID
-      : (filteredModels.find((m) => m.id === modelID)?.id ?? filteredModels[0]?.id ?? null)
+      : (filteredModels.find((m) => m.id === selectedModelID)?.id ?? filteredModels[0]?.id ?? null)
     if (nextHighlighted !== highlightedModelID) setHighlightedModelID(nextHighlighted)
-  }, [filteredModels, highlightedModelID, modelDropdownOpen, modelID])
+  }, [filteredModels, highlightedModelID, modelDropdownOpen, selectedModelID])
 
   useEffect(() => {
     if (!modelDropdownOpen) return
@@ -536,7 +543,7 @@ export function CreateAgentDialog({
   function openModelDropdown() {
     setModelSearch("")
     setModelDropdownOpen(true)
-    setHighlightedModelID(modelID || filteredModels[0]?.id || null)
+    setHighlightedModelID(selectedModelID || filteredModels[0]?.id || null)
   }
 
   function selectModel(nextModel: Model) {
@@ -583,7 +590,7 @@ export function CreateAgentDialog({
   const connector = mode === "edit" && agent ? agent.connector_type : connectorForExecutionMode(executionMode)
   const hasModel = activeModels.length > 0
   const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
-  const hasRequiredModel = !requiresModel || (hasModel && modelID !== "")
+  const hasRequiredModel = !requiresModel || (hasModel && selectedModelID !== "")
   // Create opens model binding on a pending "shared" pick because secrets may
   // still be loading; once they land, resolve to the first existing one. Gated
   // on the credential_ref UI so no-credential models stay untouched; with zero
@@ -662,7 +669,7 @@ export function CreateAgentDialog({
 
   async function submit() {
     setSubmitAttempted(true)
-    if (requiresModel && (!hasModel || !modelID)) {
+    if (requiresModel && (!hasModel || !selectedModelID)) {
       modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
       return
     }
@@ -695,7 +702,7 @@ export function CreateAgentDialog({
     const mergedConfig: Record<string, unknown> = {
       ...configBaseForSubmit(agent, connector),
       profile: {
-        ...(requiresModel ? { model_id: modelID } : {}),
+        ...(requiresModel ? { model_id: selectedModelID } : {}),
         capabilities: capabilityNames,
         skills: capabilityNames,
       },
@@ -748,7 +755,7 @@ export function CreateAgentDialog({
       name: name.trim(),
       description: description.trim() || undefined,
       connector_type: connector,
-      ...(requiresModel ? { default_model_id: modelID } : {}),
+      ...(requiresModel ? { default_model_id: selectedModelID } : {}),
       capabilities: capabilityNames,
       ...(mode === "create" ? { initial_capabilities: initialCapabilities, visibility } : {}),
       config: agentBodyConfig,
@@ -756,7 +763,7 @@ export function CreateAgentDialog({
     } satisfies CreateAgentRequest | UpdateAgentRequest
     const agentProfile = mode === "edit" && connector === "agent_daemon"
       ? {
-          ...(requiresModel ? { model_id: modelID } : {}),
+          ...(requiresModel ? { model_id: selectedModelID } : {}),
           system_prompt: systemPrompt.trim() || undefined,
           config: mergedConfig,
         } satisfies UpdateAgentProfileRequest
@@ -863,7 +870,7 @@ export function CreateAgentDialog({
     if (step === 1 && !step1Valid) return
     if (step === 2) {
       if (!step2Valid) {
-        if (requiresModel && !modelID) {
+        if (requiresModel && !selectedModelID) {
           modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
         }
         return
@@ -1035,7 +1042,7 @@ export function CreateAgentDialog({
                 </Field>
               )}
               {requiresModel && (
-                <Field ref={modelFieldRef} label={t("agents.form.fields.model")} required error={submitAttempted && !modelID ? t("agents.form.errors.modelRequired") : undefined}>
+                <Field ref={modelFieldRef} label={t("agents.form.fields.model")} required error={submitAttempted && !selectedModelID ? t("agents.form.errors.modelRequired") : undefined}>
                 {hasModel ? (
                   <div ref={modelComboboxRef} className="relative">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" />
@@ -1068,7 +1075,7 @@ export function CreateAgentDialog({
                         {filteredModels.length === 0 ? (
                           <div className="px-3 py-2 text-sm text-fg-subtle">{t("agents.form.emptyModelSearch")}</div>
                         ) : filteredModels.map((m) => {
-                          const selected = modelID === m.id
+                          const selected = selectedModelID === m.id
                           const highlighted = highlightedModelID === m.id
                           return (
                             <button
