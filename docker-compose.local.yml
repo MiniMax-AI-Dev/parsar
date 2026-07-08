@@ -56,13 +56,8 @@ services:
       start_period: 10s
 
   # One-shot: run migrations, then (optionally) provision the first owner.
-  # Two ways to get an owner:
-  #   1. Set PARSAR_OWNER_EMAIL — bootstrap pre-seeds that owner here. In
-  #      real-Feishu mode set it to the email Feishu returns for YOU.
-  #   2. Leave PARSAR_OWNER_EMAIL unset — bootstrap is SKIPPED and the first
-  #      person to log in (mock or real Feishu) auto-claims first-owner via
-  #      PARSAR_BOOTSTRAP_ON_FIRST_LOGIN (TOFU) on the parsar-server below.
-  #      No email to know in advance, no `down -v` dance.
+  # Set PARSAR_OWNER_EMAIL to pre-seed an owner via CLI bootstrap; leave
+  # unset to use the web registration form (POST /api/v1/bootstrap).
   # Tolerates exit code 2 (store.ErrBootstrapClosed) so re-running `up` is
   # idempotent. Binaries live on $PATH at /usr/local/bin (WORKDIR is
   # /var/lib/parsar), so they are invoked by bare name, NOT ./parsar-migrate.
@@ -128,7 +123,7 @@ services:
             --name="Local Admin" \
           || [ "$$?" -eq 2 ]
         else
-          echo "[parsar-init] PARSAR_OWNER_EMAIL unset — skipping bootstrap; first login will claim owner (TOFU)"
+          echo "[parsar-init] PARSAR_OWNER_EMAIL unset — skipping bootstrap; use the web registration form"
         fi
     restart: "no"
 
@@ -160,10 +155,6 @@ services:
       #   PARSAR_FEISHU_APP_SECRET=xxx
       #   PARSAR_FEISHU_VERIFICATION_TOKEN=xxx      # any non-empty value
       #
-      # You do NOT need PARSAR_OWNER_EMAIL: with PARSAR_BOOTSTRAP_ON_FIRST_LOGIN
-      # (below, default true) the first real Feishu login auto-claims owner, so
-      # no email-to-know-in-advance and no `down -v` dance. (Set OWNER_EMAIL
-      # only if you want a specific pre-seeded owner.)
       #
       # No PARSAR_MASTER_KEY / PARSAR_COOKIE_SECURE needed: a loopback
       # PARSAR_PUBLIC_URL (127.0.0.1) keeps Profile()==ProfileDev even with
@@ -189,14 +180,6 @@ services:
       # callbacks AND the minted one-line connect command line up. Kept in
       # sync with the published port via the same variable.
       PARSAR_PUBLIC_URL: "http://${PARSAR_HOST_IP:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}"
-      # TOFU first-owner: when no PARSAR_OWNER_EMAIL was pre-seeded above, the
-      # first successful login (mock admin@example.com, or the real Feishu
-      # identity) claims first-owner — creating its workspace + owner
-      # membership on the fly. Default true for this local stack; set false to
-      # require the explicit CLI/token bootstrap path instead. No-op once any
-      # owner exists (see maybeProvisionFirstOwner in
-      # server/internal/dev/oauth_handlers.go).
-      PARSAR_BOOTSTRAP_ON_FIRST_LOGIN: "${PARSAR_BOOTSTRAP_ON_FIRST_LOGIN:-true}"
       # Inter-pod owner-routing URL. The server refuses to boot until this
       # resolves (no fallback to PublicURL/127.0.0.1, which are unsafe under
       # multi-replica load balancing — see resolveAgentDaemonOwnerURL in

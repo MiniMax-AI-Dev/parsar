@@ -2,7 +2,6 @@ package dev
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,38 +80,6 @@ func (s *stubOAuthStore) UpsertOAuthUser(_ context.Context, in store.UpsertOAuth
 	}
 	return store.UpsertOAuthUserResult{
 		UserID: uid, Email: in.Email, Name: in.Name, Created: s.created,
-	}, nil
-}
-
-// stubBootstrapper fakes the TOFU first-owner surface. ownerCount seeds
-// ActiveWorkspaceOwnerCount; provisionErr (if set) is returned by
-// ProvisionFirstOwner. provisionCalls + lastProvision record invocations so
-// tests can assert the callback did / did not provision.
-type stubBootstrapper struct {
-	mu             sync.Mutex
-	ownerCount     int64
-	countErr       error
-	provisionErr   error
-	provisionCalls int
-	lastProvision  store.ProvisionFirstOwnerInput
-}
-
-func (s *stubBootstrapper) ActiveWorkspaceOwnerCount(_ context.Context) (int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.ownerCount, s.countErr
-}
-
-func (s *stubBootstrapper) ProvisionFirstOwner(_ context.Context, in store.ProvisionFirstOwnerInput) (store.ProvisionFirstOwnerResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.provisionCalls++
-	s.lastProvision = in
-	if s.provisionErr != nil {
-		return store.ProvisionFirstOwnerResult{}, s.provisionErr
-	}
-	return store.ProvisionFirstOwnerResult{
-		UserID: "00000000-0000-0000-0000-0000deadbeef", WorkspaceID: "ws-1", WorkspaceSlug: "ws-1", WorkspaceName: in.WorkspaceName,
 	}, nil
 }
 
@@ -334,123 +301,4 @@ func TestLogoutIdempotentWithoutCookie(t *testing.T) {
 	}
 }
 
-// newMockFeishu builds a mock Feishu client wired to the callback route.
-func newMockFeishu() feishu.Client {
-	return feishu.NewMockClient(func(k string) string {
-		if k == feishu.EnvRedirectURI {
-			return "/api/v1/auth/feishu/callback"
-		}
-		return ""
-	})
-}
 
-// driveMockCallback runs start (to mint the state cookie) then callback,
-// returning the callback recorder. Mirrors the inline dance the happy-path
-// tests use.
-func driveMockCallback(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
-	t.Helper()
-	rec1 := httptest.NewRecorder()
-	r.ServeHTTP(rec1, httptest.NewRequest(http.MethodGet, "/api/v1/auth/feishu/start", nil))
-	state := strings.SplitN(strings.TrimPrefix(rec1.Header().Get("Set-Cookie"), CookieStateName+"="), ";", 2)[0]
-	if state == "" {
-		t.Fatal("could not extract state cookie")
-	}
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/feishu/callback?code=mock&state="+state, nil)
-	req.AddCookie(&http.Cookie{Name: CookieStateName, Value: state})
-	r.ServeHTTP(rec, req)
-	return rec
-}
-
-// TestFeishuCallbackFirstLoginProvisionsOwner: with a Bootstrapper wired and
-// zero existing owners, the first login must claim first-owner — provisioning
-// a workspace for the just-logged-in identity (TOFU).
-func TestFeishuCallbackFirstLoginProvisionsOwner(t *testing.T) {
-	sessions := newStubSessions()
-	boot := &stubBootstrapper{ownerCount: 0}
-	r := buildOAuthRouter(t, OAuthHandlerDeps{
-		Feishu:                 newMockFeishu(),
-		Sessions:               sessions,
-		Store:                  &stubOAuthStore{userID: "00000000-0000-0000-0000-0000deadbeef"},
-		Bootstrapper:           boot,
-		BootstrapWorkspaceName: "Local Workspace",
-	})
-
-	rec := driveMockCallback(t, r)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302", rec.Code)
-	}
-	if boot.provisionCalls != 1 {
-		t.Fatalf("ProvisionFirstOwner called %d times, want 1", boot.provisionCalls)
-	}
-	if boot.lastProvision.Email != "admin@example.com" {
-		t.Fatalf("provisioned email = %q, want admin@example.com", boot.lastProvision.Email)
-	}
-	if boot.lastProvision.WorkspaceName != "Local Workspace" {
-		t.Fatalf("provisioned workspace name = %q, want Local Workspace", boot.lastProvision.WorkspaceName)
-	}
-	if sessions.calls != 1 {
-		t.Fatalf("session.Create called %d times, want 1 (login must still succeed)", sessions.calls)
-	}
-}
-
-// TestFeishuCallbackDefaultsWorkspaceName: empty BootstrapWorkspaceName falls
-// back to the package default rather than passing an empty name (which
-// ProvisionFirstOwner would reject).
-func TestFeishuCallbackDefaultsWorkspaceName(t *testing.T) {
-	boot := &stubBootstrapper{ownerCount: 0}
-	r := buildOAuthRouter(t, OAuthHandlerDeps{
-		Feishu:       newMockFeishu(),
-		Sessions:     newStubSessions(),
-		Store:        &stubOAuthStore{},
-		Bootstrapper: boot,
-	})
-	if rec := driveMockCallback(t, r); rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302", rec.Code)
-	}
-	if boot.lastProvision.WorkspaceName != defaultBootstrapWorkspaceName {
-		t.Fatalf("workspace name = %q, want default %q", boot.lastProvision.WorkspaceName, defaultBootstrapWorkspaceName)
-	}
-}
-
-// TestFeishuCallbackSkipsProvisionWhenOwnerExists: a system that already has
-// an owner must NOT re-provision — later logins are ordinary users.
-func TestFeishuCallbackSkipsProvisionWhenOwnerExists(t *testing.T) {
-	boot := &stubBootstrapper{ownerCount: 1}
-	r := buildOAuthRouter(t, OAuthHandlerDeps{
-		Feishu:       newMockFeishu(),
-		Sessions:     newStubSessions(),
-		Store:        &stubOAuthStore{},
-		Bootstrapper: boot,
-	})
-	rec := driveMockCallback(t, r)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302", rec.Code)
-	}
-	if boot.provisionCalls != 0 {
-		t.Fatalf("ProvisionFirstOwner called %d times, want 0 (owner already exists)", boot.provisionCalls)
-	}
-}
-
-// TestFeishuCallbackProvisionErrorDoesNotBlockLogin: a provisioning failure is
-// best-effort — the login must still succeed (302 + session), matching the
-// pre-TOFU "logged-in but no workspace" fallback.
-func TestFeishuCallbackProvisionErrorDoesNotBlockLogin(t *testing.T) {
-	sessions := newStubSessions()
-	boot := &stubBootstrapper{ownerCount: 0, provisionErr: errProvisionBoom}
-	r := buildOAuthRouter(t, OAuthHandlerDeps{
-		Feishu:       newMockFeishu(),
-		Sessions:     sessions,
-		Store:        &stubOAuthStore{},
-		Bootstrapper: boot,
-	})
-	rec := driveMockCallback(t, r)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302 despite provision error", rec.Code)
-	}
-	if sessions.calls != 1 {
-		t.Fatalf("session.Create called %d times, want 1 (login must not be blocked)", sessions.calls)
-	}
-}
-
-var errProvisionBoom = errors.New("boom")

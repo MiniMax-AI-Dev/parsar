@@ -651,28 +651,16 @@ func main() {
 				// where the server serves the SPA; `make dev` points
 				// at the Vite origin (e.g. http://127.0.0.1:5173/).
 				loginRedirect := strings.TrimSpace(cfg.Gateway.Feishu.LoginRedirectURL)
-				// TOFU first-owner: wire the bootstrapper only when the
-				// operator opted in. Default off keeps production on the
-				// CLI/token bootstrap path (profile not fork). When on and
-				// the system has no owner yet, the first Feishu OIDC login
-				// claims first-owner — no PARSAR_OWNER_EMAIL pre-seed needed.
-				var oauthBootstrapper dev.OAuthBootstrapper
-				bootstrapOnFirstLogin := dbStore != nil && truthy(envLookup("PARSAR_BOOTSTRAP_ON_FIRST_LOGIN"))
-				if bootstrapOnFirstLogin {
-					oauthBootstrapper = dbStore
-				}
 				opts = append(opts, dev.WithOAuthHandlers(dev.OAuthHandlerDeps{
-					Feishu:                 feishuClient,
-					Sessions:               sessionStore,
-					Store:                  dbStore,
-					Bootstrapper:           oauthBootstrapper,
-					BootstrapWorkspaceName: strings.TrimSpace(envLookup("PARSAR_BOOTSTRAP_WORKSPACE_NAME")),
-					CookieSecure:           cookieSecure,
-					LoginRedirectURL:       loginRedirect,
+					Feishu:           feishuClient,
+					Sessions:         sessionStore,
+					Store:            dbStore,
+					CookieSecure:     cookieSecure,
+					LoginRedirectURL: loginRedirect,
 				}))
 				log.Bg().Info("feishu OIDC handlers registered",
 					"mode", feishuDecision.Mode, "mock", feishuClient.IsMock(), "cookie_secure", cookieSecure,
-					"login_redirect", loginRedirect, "bootstrap_on_first_login", bootstrapOnFirstLogin)
+					"login_redirect", loginRedirect)
 			}
 		}
 	}
