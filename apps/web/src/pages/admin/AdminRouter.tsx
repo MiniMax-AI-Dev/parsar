@@ -26,8 +26,6 @@ import { StubPage } from "./StubPage"
 import { CapabilitiesPage, CapabilityDetailPage } from "./CapabilitiesPage"
 import { ConnectionsPage } from "./ConnectionsPage"
 import { MyCredentialsPage } from "./MyCredentialsPage"
-import { SpecsPage } from "./SpecsPage"
-import { MemoryPage } from "./MemoryPage"
 import { ScheduledTasksPage } from "./ScheduledTasksPage"
 
 /**
@@ -55,8 +53,6 @@ export function AdminRouter() {
   if (v === "capabilities")
     return entityId ? <CapabilityDetailPage id={entityId} /> : <CapabilitiesPage />
   if (v === "connections") return <ConnectionsPage />
-  if (v === "specs") return <SpecsPage />
-  if (v === "memory") return <MemoryPage />
   if (v === "runtime") {
     return entityId ? <RuntimeDetailPage id={entityId} /> : <RuntimePage />
   }

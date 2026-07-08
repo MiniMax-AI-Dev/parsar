@@ -16,8 +16,6 @@ export type AdminView =
   | "secrets"
   | "runtime"
   | "connectors"
-  | "specs"
-  | "memory"
   | "usage"
   | "audit"
 
@@ -38,8 +36,6 @@ const ALL_ADMIN_VIEWS: AdminView[] = [
   "secrets",
   "runtime",
   "connectors",
-  "specs",
-  "memory",
   "usage",
   "audit",
 ]

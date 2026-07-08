@@ -184,8 +184,6 @@
       "credentials": "Credentials",
       "runtime": "Runtime",
       "connectors": "Connectors",
-      "specs": "Specs",
-      "memory": "Memory",
       "usage": "Usage",
       "audit": "Audit"
     },

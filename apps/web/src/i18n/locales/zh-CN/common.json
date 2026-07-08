@@ -184,8 +184,6 @@
       "credentials": "凭据",
       "runtime": "运行环境",
       "connectors": "连接器",
-      "specs": "Spec",
-      "memory": "记忆",
       "usage": "用量",
       "audit": "审计"
     },
