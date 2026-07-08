@@ -19,7 +19,6 @@ Parsar dev stack started.
 
 Postgres: ${PARSAR_POSTGRES_HOST}:${PARSAR_POSTGRES_PORT} (db=${PARSAR_PG_DB} user=${PARSAR_PG_USER} password=${PARSAR_PG_PASSWORD})
 Migrate:  make migrate-dev
-Seed:     make seed-dev-db
 Server:   make server             # http://127.0.0.1:8080/api/v1/health
 Web:      make web                # http://127.0.0.1:${PARSAR_WEB_PORT}
 Runner:   make http-runner-loop   # bounded local HTTP Agent runner

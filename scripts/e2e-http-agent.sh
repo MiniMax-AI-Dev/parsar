@@ -60,7 +60,6 @@ fi
 (
   cd server
   go run ./cmd/migrate
-  go run ./cmd/seeddev
 )
 
 python3 - "$HTTP_AGENT_PORT" >"$PARSAR_E2E_DIR/http-agent.log" 2>&1 <<'PY' &

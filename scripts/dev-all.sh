@@ -53,7 +53,6 @@ fi
 (
   cd server
   go run ./cmd/migrate
-  go run ./cmd/seeddev
 )
 
 server_log="$PARSAR_LOG_DIR/server.log"

@@ -226,7 +226,6 @@ Two concurrent calls both succeed only once; the second returns
 
 | | For | Status |
 |---|---|---|
-| `make seed-dev-db` | Local-development fixture — writes a demo workspace with fixed UUIDs | **Do not use on any deploy path** |
 | `PARSAR_DEV_AUTH=true` + `X-Parsar-Dev-User-ID` header | Local dev shim that skips cookie login | Must be off in production; Validate() rejects it at startup |
 | `PARSAR_FEISHU_MOCK=true` | Local dev shim that skips real Feishu | Same as above |
 | `PARSAR_BOOTSTRAP_TOKEN` + HTTP bootstrap | **Legitimate production init path** | Single-use, remove after use |
