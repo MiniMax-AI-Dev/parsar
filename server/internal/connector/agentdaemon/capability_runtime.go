@@ -265,15 +265,9 @@ func resolveVersionFields(cap store.EnabledCapabilityRead) resolvedVersionFields
 // single DB round-trip.
 func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector.PromptInput, agentKind string) (capabilityAdditions, error) {
 	result := capabilityAdditions{}
-	// Auto-mount the fetch_chat_history tool before any capability lookup so
-	// it reaches the agent even when no other capabilities are enabled (and
-	// regardless of the early returns below). Gated to the Claude Code MCP
-	// schema for the MVP; other agent kinds consume MCP config differently.
-	if agentKindToRenderTarget(agentKind) == render.TargetClaudeCode {
-		if name, entry, ok := c.imHistoryMCPServer(strings.TrimSpace(in.ConversationID)); ok && c.imHistoryEnabledForAgent(ctx, in.AgentID) {
-			result.MCPServers = map[string]any{name: entry}
-		}
-	}
+	// fetch-chat-history is injected universally (all agent kinds) via
+	// system_prompt + env in applyIMHistoryPromptInjection, not as an MCP
+	// server, so nothing is mounted here.
 	if c.capabilities == nil {
 		c.log.Warn("agent_daemon: resolveCapabilityAdditions skipped — capabilities store is nil")
 		return result, nil
