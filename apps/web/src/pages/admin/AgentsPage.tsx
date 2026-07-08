@@ -335,7 +335,9 @@ export function AgentsPage() {
   const workspacesQ = useMyWorkspaces()
   const marketplaceQ = useMarketplaceList(wid)
   const agents = useMemo(() => query.data?.agents ?? [], [query.data])
-  const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
+  const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
+  const workspaceRole = currentWorkspace?.role
+  const workspaceName = currentWorkspace?.name
   const pendingCapabilityID = new URLSearchParams(window.location.search).get("pendingCapability")
   const pendingCapability = (marketplaceQ.data ?? []).find((capability) => capability.id === pendingCapabilityID)
 
@@ -522,6 +524,7 @@ export function AgentsPage() {
         open={createOpen}
         mode="create"
         workspaceID={wid}
+        workspaceName={workspaceName}
         workspaceRole={workspaceRole}
         models={modelsQ.data?.models ?? []}
         pending={createMut.isPending}
@@ -560,6 +563,7 @@ export function AgentsPage() {
         open={editAgent !== null}
         mode="edit"
         workspaceID={wid}
+        workspaceName={workspaceName}
         workspaceRole={workspaceRole}
         models={modelsQ.data?.models ?? []}
         agent={editAgent ?? undefined}
@@ -593,6 +597,7 @@ export function AgentsPage() {
         open={cloneAgent !== null}
         mode="create"
         workspaceID={wid}
+        workspaceName={workspaceName}
         workspaceRole={workspaceRole}
         models={modelsQ.data?.models ?? []}
         agent={cloneAgent ?? undefined}

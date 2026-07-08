@@ -1378,6 +1378,11 @@
         "capabilitySearch": "搜索能力",
         "systemPrompt": "留空时使用默认助手提示词"
       },
+      "defaults": {
+        "workspaceName": "当前 Workspace",
+        "name": "{{workspace}} 的 Agent",
+        "description": "{{workspace}} 的通用助手。"
+      },
       "errors": {
         "nameConflict": "已有同名 Agent，请换一个",
         "slugConflict": "内部标识已被占用，请换一个名称。",

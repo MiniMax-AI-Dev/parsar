@@ -1378,6 +1378,11 @@
         "capabilitySearch": "Search capabilities",
         "systemPrompt": "Leave blank to use the default assistant prompt"
       },
+      "defaults": {
+        "workspaceName": "My Workspace",
+        "name": "{{workspace}}'s agent",
+        "description": "General-purpose assistant for {{workspace}}."
+      },
       "errors": {
         "nameConflict": "An Agent with this name already exists. Pick another name.",
         "slugConflict": "The internal identifier is already taken. Pick another name.",
