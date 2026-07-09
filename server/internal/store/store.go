@@ -890,6 +890,7 @@ var ErrInvalidAgent = errors.New("invalid active agent relation")
 var ErrInvalidHTTPConnector = errors.New("agent run is not configured for http connector")
 var ErrUnknownWorkspaceMember = errors.New("unknown active workspace member")
 var ErrInvalidMemberRole = errors.New("invalid member role")
+var ErrInvitationInvalid = errors.New("invitation is invalid, expired, or already used")
 var ErrNotMember = errors.New("not an active member")
 
 // Self-service workspace join request errors:
@@ -1927,19 +1928,12 @@ func (s *Store) CountActiveFeishuBotAgents(ctx context.Context) (int, error) {
 
 // AddWorkspaceMemberInput drives admin-side member add. The user record is
 // created on the fly when the email is new (or reused if on file).
-//
-// PasswordHash is optional. When supplied AND the user row was newly
-// inserted, the tx also writes auth_identities(provider='email') so
-// the invitee can log in with the temporary password. Reusing an
-// existing user's row never overwrites their password — an admin
-// cannot silently rotate someone else's credentials by re-inviting.
 type AddWorkspaceMemberInput struct {
-	WorkspaceID  string
-	Email        string
-	Name         string
-	Role         string
-	PasswordHash string
-	Now          time.Time
+	WorkspaceID string
+	Email       string
+	Name        string
+	Role        string
+	Now         time.Time
 }
 
 // AddWorkspaceMemberResult is the membership row plus user-side metadata.
@@ -5102,29 +5096,6 @@ func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMember
 		return AddWorkspaceMemberResult{}, err
 	}
 
-	// Bind local email/password identity ONLY when this is a fresh
-	// user row and the caller supplied a hash. Re-adding a pre-
-	// existing user to a workspace must never rotate their password.
-	if input.PasswordHash != "" && userRow.Created {
-		metaBytes, mErr := json.Marshal(map[string]string{
-			"password_hash": input.PasswordHash,
-			"hashed_at":     input.Now.Format(time.RFC3339),
-			"invited":       "true",
-		})
-		if mErr != nil {
-			return AddWorkspaceMemberResult{}, fmt.Errorf("marshal invite email identity metadata: %w", mErr)
-		}
-		if err := q.UpsertEmailPasswordIdentity(ctx, sqlc.UpsertEmailPasswordIdentityParams{
-			ID:       mustUUID(newID()),
-			UserID:   mustUUID(userRow.ID),
-			Email:    email,
-			Metadata: metaBytes,
-			Now:      timestamptz(input.Now),
-		}); err != nil {
-			return AddWorkspaceMemberResult{}, fmt.Errorf("upsert email identity for invite: %w", err)
-		}
-	}
-
 	memberRow, err := q.AddWorkspaceMember(ctx, sqlc.AddWorkspaceMemberParams{
 		ID:            mustUUID(newID()),
 		WorkspaceID:   wsUUID,
@@ -5173,6 +5144,230 @@ func (s *Store) AddWorkspaceMember(ctx context.Context, input AddWorkspaceMember
 		},
 		UserCreated: userRow.Created,
 	}, nil
+}
+
+// AcceptInvitationInput carries the data needed to atomically consume
+// an invite token and provision the user + workspace membership.
+type AcceptInvitationInput struct {
+	TokenHash    []byte
+	Email        string
+	Role         string
+	WorkspaceID  string
+	PasswordHash string
+	Now          time.Time
+}
+
+// AcceptInvitation atomically: marks the invitation consumed, upserts
+// the user, binds email/password identity, and adds workspace membership.
+func (s *Store) AcceptInvitation(ctx context.Context, input AcceptInvitationInput) (AddWorkspaceMemberResult, error) {
+	if !IsValidMemberRole(input.Role) {
+		return AddWorkspaceMemberResult{}, fmt.Errorf("%w: %s", ErrInvalidMemberRole, input.Role)
+	}
+	email := normalizeEmail(input.Email)
+	wsUUID, err := uuid(input.WorkspaceID)
+	if err != nil {
+		return AddWorkspaceMemberResult{}, err
+	}
+
+	beginner, ok := s.db.(txBeginner)
+	if !ok {
+		return AddWorkspaceMemberResult{}, fmt.Errorf("backing pool does not support transactions")
+	}
+	tx, err := beginner.Begin(ctx)
+	if err != nil {
+		return AddWorkspaceMemberResult{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := sqlc.New(tx)
+
+	// CAS: mark invitation consumed. Returns 0 rows if already used/revoked/expired.
+	rows, err := q.AcceptWorkspaceInvitation(ctx, sqlc.AcceptWorkspaceInvitationParams{
+		TokenHash: input.TokenHash,
+		Now:       timestamptz(input.Now),
+	})
+	if err != nil {
+		return AddWorkspaceMemberResult{}, err
+	}
+	if rows == 0 {
+		return AddWorkspaceMemberResult{}, ErrInvitationInvalid
+	}
+
+	// Upsert user by email.
+	name := email
+	if at := strings.Index(email, "@"); at > 0 {
+		name = email[:at]
+	}
+	userRow, err := q.UpsertUserByEmail(ctx, sqlc.UpsertUserByEmailParams{
+		ID:    mustUUID(newID()),
+		Email: email,
+		Name:  name,
+		Now:   timestamptz(input.Now),
+	})
+	if err != nil {
+		return AddWorkspaceMemberResult{}, err
+	}
+
+	// Bind email/password identity (create or update password).
+	metaBytes, err := json.Marshal(map[string]string{
+		"password_hash": input.PasswordHash,
+		"hashed_at":     input.Now.Format(time.RFC3339),
+		"invited":       "true",
+	})
+	if err != nil {
+		return AddWorkspaceMemberResult{}, fmt.Errorf("marshal identity metadata: %w", err)
+	}
+	if err := q.UpsertEmailPasswordIdentity(ctx, sqlc.UpsertEmailPasswordIdentityParams{
+		ID:       mustUUID(newID()),
+		UserID:   mustUUID(userRow.ID),
+		Email:    email,
+		Metadata: metaBytes,
+		Now:      timestamptz(input.Now),
+	}); err != nil {
+		return AddWorkspaceMemberResult{}, fmt.Errorf("upsert email identity: %w", err)
+	}
+
+	// Add workspace membership.
+	memberRow, err := q.AddWorkspaceMember(ctx, sqlc.AddWorkspaceMemberParams{
+		ID:            mustUUID(newID()),
+		WorkspaceID:   wsUUID,
+		UserID:        mustUUID(userRow.ID),
+		Role:          input.Role,
+		Status:        memberStatusActive,
+		RequestReason: "",
+		Now:           timestamptz(input.Now),
+	})
+	if err != nil {
+		return AddWorkspaceMemberResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return AddWorkspaceMemberResult{}, err
+	}
+
+	return AddWorkspaceMemberResult{
+		Member: WorkspaceMemberRead{
+			ID:          memberRow.ID,
+			WorkspaceID: memberRow.WorkspaceID,
+			UserID:      memberRow.UserID,
+			Role:        memberRow.Role,
+			UserEmail:   userRow.Email,
+			UserName:    userRow.Name,
+			UserStatus:  userRow.Status,
+			CreatedAt:   pgTime(memberRow.CreatedAt),
+			UpdatedAt:   pgTime(memberRow.UpdatedAt),
+		},
+		UserCreated: userRow.Created,
+	}, nil
+}
+
+// ── Invitation CRUD ─────────────────────────────────────────────
+
+type CreateInvitationInput struct {
+	ID          string
+	TokenHash   []byte
+	WorkspaceID string
+	Email       string
+	Role        string
+	InvitedBy   string
+	ExpiresAt   time.Time
+	Now         time.Time
+}
+
+type PendingInvitationRead struct {
+	ID            string    `json:"id"`
+	Email         string    `json:"email"`
+	Role          string    `json:"role"`
+	InvitedBy     string    `json:"invited_by"`
+	InvitedByName string    `json:"invited_by_name"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type InvitationRead struct {
+	ID            string     `json:"id"`
+	WorkspaceID   string     `json:"workspace_id"`
+	Email         string     `json:"email"`
+	Role          string     `json:"role"`
+	InvitedBy     string     `json:"invited_by"`
+	ExpiresAt     time.Time  `json:"expires_at"`
+	AcceptedAt    *time.Time `json:"accepted_at"`
+	RevokedAt     *time.Time `json:"revoked_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	WorkspaceName string     `json:"workspace_name"`
+}
+
+func (s *Store) CreateInvitation(ctx context.Context, input CreateInvitationInput) error {
+	q := sqlc.New(s.db)
+	return q.CreateWorkspaceInvitation(ctx, sqlc.CreateWorkspaceInvitationParams{
+		ID:          mustUUID(input.ID),
+		TokenHash:   input.TokenHash,
+		WorkspaceID: mustUUID(input.WorkspaceID),
+		Email:       normalizeEmail(input.Email),
+		Role:        input.Role,
+		InvitedBy:   mustUUID(input.InvitedBy),
+		ExpiresAt:   timestamptz(input.ExpiresAt),
+		CreatedAt:   timestamptz(input.Now),
+	})
+}
+
+func (s *Store) ListPendingInvitations(ctx context.Context, workspaceID string) ([]PendingInvitationRead, error) {
+	q := sqlc.New(s.db)
+	rows, err := q.ListPendingWorkspaceInvitations(ctx, sqlc.ListPendingWorkspaceInvitationsParams{
+		WorkspaceID: mustUUID(workspaceID),
+		Now:         timestamptz(time.Now().UTC()),
+		ItemLimit:   100,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PendingInvitationRead, len(rows))
+	for i, r := range rows {
+		out[i] = PendingInvitationRead{
+			ID:            r.ID,
+			Email:         r.Email,
+			Role:          r.Role,
+			InvitedBy:     r.InvitedBy,
+			InvitedByName: r.InvitedByName,
+			ExpiresAt:     r.ExpiresAt.Time,
+			CreatedAt:     r.CreatedAt.Time,
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) RevokeInvitation(ctx context.Context, workspaceID, invitationID string) (int64, error) {
+	q := sqlc.New(s.db)
+	return q.RevokeWorkspaceInvitation(ctx, sqlc.RevokeWorkspaceInvitationParams{
+		ID:          mustUUID(invitationID),
+		WorkspaceID: mustUUID(workspaceID),
+		Now:         timestamptz(time.Now().UTC()),
+	})
+}
+
+func (s *Store) GetInvitationByTokenHash(ctx context.Context, tokenHash []byte) (InvitationRead, error) {
+	q := sqlc.New(s.db)
+	row, err := q.GetWorkspaceInvitationByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return InvitationRead{}, err
+	}
+	inv := InvitationRead{
+		ID:            row.ID,
+		WorkspaceID:   row.WorkspaceID,
+		Email:         row.Email,
+		Role:          row.Role,
+		InvitedBy:     row.InvitedBy,
+		ExpiresAt:     row.ExpiresAt.Time,
+		CreatedAt:     row.CreatedAt.Time,
+		WorkspaceName: row.WorkspaceName,
+	}
+	if row.AcceptedAt.Valid {
+		inv.AcceptedAt = &row.AcceptedAt.Time
+	}
+	if row.RevokedAt.Valid {
+		inv.RevokedAt = &row.RevokedAt.Time
+	}
+	return inv, nil
 }
 
 // UpdateWorkspaceMemberRole flips an existing member's role. Returns

@@ -860,22 +860,16 @@ export interface ListWorkspaceMembersResponse {
  *  upserted by email. */
 export interface AddWorkspaceMemberRequest {
   email: string
-  /** Defaults server-side to the local-part of email when omitted. */
   name?: string
   role: MemberRole
-  /** When true AND the invitee is a brand-new user, the server mints
-   *  a temporary password and returns it once in `temp_password`. */
-  invite?: boolean
 }
 
 /** Response from POST .../members: the resulting membership row plus
  *  a `user_created` flag telling the UI whether a fresh user was minted
- *  or an existing one reused. `temp_password` is present only on
- *  successful invite flows for brand-new users. */
+ *  or an existing one reused. */
 export interface AddWorkspaceMemberResponse {
   member: WorkspaceMember
   user_created: boolean
-  temp_password?: string
 }
 
 /** Response from DELETE .../members/{userId}: the removed membership row. */

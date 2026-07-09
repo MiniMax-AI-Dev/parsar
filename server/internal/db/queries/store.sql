@@ -4520,3 +4520,61 @@ update auth_identities
 set metadata   = metadata || jsonb_build_object('last_used_at', @now_str::text),
     updated_at = @now
 where provider = 'email' and subject = @email;
+
+-- ================================================================
+-- Workspace invitations
+-- ================================================================
+
+-- name: CreateWorkspaceInvitation :exec
+insert into workspace_invitations(id, token_hash, workspace_id, email, role, invited_by, expires_at, created_at)
+values (@id::uuid, @token_hash::bytea, @workspace_id::uuid, @email, @role, @invited_by::uuid, @expires_at, @created_at);
+
+-- name: GetWorkspaceInvitationByTokenHash :one
+select
+  wi.id::text           as id,
+  wi.workspace_id::text as workspace_id,
+  wi.email,
+  wi.role,
+  wi.invited_by::text   as invited_by,
+  wi.expires_at,
+  wi.accepted_at,
+  wi.revoked_at,
+  wi.created_at,
+  w.name                as workspace_name
+from workspace_invitations wi
+join workspaces w on w.id = wi.workspace_id and w.deleted_at is null
+where wi.token_hash = @token_hash::bytea;
+
+-- name: AcceptWorkspaceInvitation :execrows
+update workspace_invitations
+set accepted_at = @now
+where token_hash = @token_hash::bytea
+  and accepted_at is null
+  and revoked_at is null
+  and expires_at > @now;
+
+-- name: RevokeWorkspaceInvitation :execrows
+update workspace_invitations
+set revoked_at = @now
+where id = @id::uuid
+  and workspace_id = @workspace_id::uuid
+  and accepted_at is null
+  and revoked_at is null;
+
+-- name: ListPendingWorkspaceInvitations :many
+select
+  wi.id::text           as id,
+  wi.email,
+  wi.role,
+  wi.invited_by::text   as invited_by,
+  u.name                as invited_by_name,
+  wi.expires_at,
+  wi.created_at
+from workspace_invitations wi
+join users u on u.id = wi.invited_by
+where wi.workspace_id = @workspace_id::uuid
+  and wi.accepted_at is null
+  and wi.revoked_at is null
+  and wi.expires_at > @now
+order by wi.created_at desc
+limit @item_limit;
