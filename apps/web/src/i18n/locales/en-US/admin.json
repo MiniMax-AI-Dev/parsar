@@ -1461,6 +1461,7 @@
         "edit": "Save"
       },
       "emptyModelSearch": "No matching models",
+      "modelProtocolMismatch": "{{engine}} can't use this model's protocol",
       "selected": "Selected",
       "devicePicker": {
         "hint": "Pick a connected local daemon. Cloud isolation does not need a device; Parsar lazy-starts a sandbox daemon on first run."

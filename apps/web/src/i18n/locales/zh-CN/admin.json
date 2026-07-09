@@ -1461,6 +1461,7 @@
         "edit": "保存修改"
       },
       "emptyModelSearch": "没有匹配的模型",
+      "modelProtocolMismatch": "{{engine}} 无法使用该模型的协议",
       "selected": "已选择",
       "devicePicker": {
         "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。"

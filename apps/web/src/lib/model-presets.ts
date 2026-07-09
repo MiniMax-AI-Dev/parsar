@@ -21,19 +21,38 @@ export interface ModelPreset {
   vision: boolean
 }
 
+/** Wire protocol a provider endpoint speaks. Drives which agent engine
+ * (claude_code=anthropic, codex=openai, pi=any) a model can attach to. */
+export type ProtocolID = "anthropic" | "openai" | "google"
+
+export interface ProtocolPreset {
+  id: ProtocolID
+  /** npm adapter package for this protocol (== Model.adapter). */
+  adapter: string
+  /** Endpoint base URL for this protocol. Empty when the first-party SDK
+   * already knows the default. */
+  baseURL: string
+}
+
 export interface ProviderPreset {
   /** Provider id, used as provider_type. */
   key: string
   name: string
-  /** npm adapter package (== Model.adapter). */
+  /** npm adapter package (== Model.adapter). Mirrors protocols[0].adapter. */
   adapter: string
-  /** Empty when the first-party SDK already knows the default endpoint. */
+  /** Empty when the first-party SDK already knows the default endpoint.
+   * Mirrors protocols[0].baseURL. */
   defaultBaseURL: string
   docUrl: string
   /** Gateway-style adapter -> show the custom-headers editor. */
   customHeaders: boolean
   /** anthropic-compatible gateway -> show the auth-scheme selector. */
   authSchemeSelector: boolean
+  /** One entry per wire protocol the provider serves. A provider with more
+   * than one lets the Add-Model dialog toggle protocol (e.g. MiniMax serves
+   * Anthropic at /anthropic and OpenAI at /v1). Always non-empty; a
+   * single-protocol provider carries exactly one entry. */
+  protocols: ProtocolPreset[]
   models: ModelPreset[]
 }
 
@@ -103,16 +122,65 @@ function normalizeProvider(item: Record<string, unknown>): ProviderPreset | null
   const adapter = stringOrNull(item.adapter)
   if (!key || !name || !adapter) return null
 
+  const defaultBaseURL = stringOrNull(item.defaultBaseURL) ?? ""
+  const protocols = normalizeProtocols(item.protocols, adapter, defaultBaseURL)
+
   return {
     key,
     name,
-    adapter,
-    defaultBaseURL: stringOrNull(item.defaultBaseURL) ?? "",
+    // Keep top-level adapter/defaultBaseURL aligned with the default
+    // (first) protocol so back-compat readers stay correct.
+    adapter: protocols[0].adapter,
+    defaultBaseURL: protocols[0].baseURL,
     docUrl: stringOrNull(item.docUrl) ?? "",
     customHeaders: item.customHeaders === true,
     authSchemeSelector: item.authSchemeSelector === true,
+    protocols,
     models: Array.isArray(item.models) ? normalizeModels(item.models) : [],
   }
+}
+
+/** Normalize the protocols array, falling back to a single synthesized entry
+ * from the legacy adapter + defaultBaseURL fields so a catalog without an
+ * explicit `protocols` block still loads. */
+function normalizeProtocols(
+  payload: unknown,
+  fallbackAdapter: string,
+  fallbackBaseURL: string,
+): ProtocolPreset[] {
+  const out: ProtocolPreset[] = []
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      if (!isRecord(item)) continue
+      const id = protocolIDOrNull(item.id)
+      const adapter = stringOrNull(item.adapter)
+      if (!id || !adapter) continue
+      out.push({ id, adapter, baseURL: stringOrNull(item.baseURL) ?? "" })
+    }
+  }
+  if (out.length > 0) return out
+  return [
+    {
+      id: protocolIDForAdapter(fallbackAdapter),
+      adapter: fallbackAdapter,
+      baseURL: fallbackBaseURL,
+    },
+  ]
+}
+
+function protocolIDOrNull(value: unknown): ProtocolID | null {
+  if (value === "anthropic" || value === "openai" || value === "google") return value
+  return null
+}
+
+/** Derive a wire protocol from an adapter package name. Mirrors the
+ * provider_type/adapter allow-lists in
+ * server/internal/connector/agentdaemon/model_injection.go. */
+function protocolIDForAdapter(adapter: string): ProtocolID {
+  const a = adapter.toLowerCase()
+  if (a.includes("anthropic")) return "anthropic"
+  if (a.includes("google")) return "google"
+  return "openai"
 }
 
 function normalizeModels(items: unknown[]): ModelPreset[] {

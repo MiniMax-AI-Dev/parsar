@@ -7,6 +7,13 @@
     "docUrl": "https://docs.anthropic.com/en/docs/about-claude/models/overview",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.anthropic.com"
+      }
+    ],
     "models": [
       {
         "id": "claude-fable-5",
@@ -88,6 +95,13 @@
     "docUrl": "https://ai.google.dev/gemini-api/docs/models",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "google",
+        "adapter": "@ai-sdk/google",
+        "baseURL": "https://generativelanguage.googleapis.com/v1beta"
+      }
+    ],
     "models": [
       {
         "id": "gemini-3.1-pro-preview",
@@ -149,6 +163,13 @@
     "docUrl": "https://developers.openai.com/api/docs/models",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai",
+        "baseURL": "https://api.openai.com/v1"
+      }
+    ],
     "models": [
       {
         "id": "gpt-5.5",
@@ -220,7 +241,24 @@
     "docUrl": "https://docs.x.ai/docs/models",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/xai",
+        "baseURL": "https://api.x.ai/v1"
+      }
+    ],
     "models": [
+      {
+        "id": "grok-4.5",
+        "name": "Grok 4.5",
+        "context": null,
+        "costIn": null,
+        "costOut": null,
+        "tool": true,
+        "reasoning": true,
+        "vision": true
+      },
       {
         "id": "grok-4.3",
         "name": "Grok 4.3",
@@ -271,6 +309,13 @@
     "docUrl": "https://docs.mistral.ai/getting-started/models/models_overview/",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/mistral",
+        "baseURL": "https://api.mistral.ai/v1"
+      }
+    ],
     "models": [
       {
         "id": "mistral-large-latest",
@@ -342,6 +387,13 @@
     "docUrl": "https://ai.meta.com/blog/introducing-muse-spark-msl/",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.meta.ai/v1"
+      }
+    ],
     "models": [
       {
         "id": "muse-spark",
@@ -363,6 +415,18 @@
     "docUrl": "https://platform.minimaxi.com/document/anthropic-compatible-api",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.minimaxi.com/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.minimaxi.com/v1"
+      }
+    ],
     "models": [
       {
         "id": "MiniMax-M3",
@@ -434,6 +498,18 @@
     "docUrl": "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.minimax.io/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.minimax.io/v1"
+      }
+    ],
     "models": [
       {
         "id": "MiniMax-M3",
@@ -500,12 +576,34 @@
   {
     "key": "zai",
     "name": "Z.AI",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://api.z.ai/api/paas/v4",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://api.z.ai/api/anthropic",
     "docUrl": "https://docs.z.ai/api-reference/introduction",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.z.ai/api/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.z.ai/api/paas/v4"
+      }
+    ],
     "models": [
+      {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "context": null,
+        "costIn": null,
+        "costOut": null,
+        "tool": true,
+        "reasoning": true,
+        "vision": false
+      },
       {
         "id": "glm-5.1",
         "name": "GLM-5.1",
@@ -557,18 +655,8 @@
         "vision": false
       },
       {
-        "id": "glm-4.5",
-        "name": "GLM-4.5",
-        "context": null,
-        "costIn": null,
-        "costOut": null,
-        "tool": true,
-        "reasoning": true,
-        "vision": false
-      },
-      {
-        "id": "glm-4.5-flash",
-        "name": "GLM-4.5-Flash",
+        "id": "glm-4.6",
+        "name": "GLM-4.6",
         "context": null,
         "costIn": null,
         "costOut": null,
@@ -581,12 +669,44 @@
   {
     "key": "kimi",
     "name": "Kimi (Moonshot AI)",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://api.moonshot.cn/v1",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://api.moonshot.cn/anthropic",
     "docUrl": "https://platform.moonshot.cn/docs/api/chat",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.moonshot.cn/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.moonshot.cn/v1"
+      }
+    ],
     "models": [
+      {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "context": null,
+        "costIn": null,
+        "costOut": null,
+        "tool": true,
+        "reasoning": true,
+        "vision": true
+      },
+      {
+        "id": "kimi-k2.7-code-highspeed",
+        "name": "Kimi K2.7 Code HighSpeed",
+        "context": null,
+        "costIn": null,
+        "costOut": null,
+        "tool": true,
+        "reasoning": true,
+        "vision": true
+      },
       {
         "id": "kimi-k2.6",
         "name": "Kimi K2.6",
@@ -626,27 +746,29 @@
         "tool": true,
         "reasoning": false,
         "vision": false
-      },
-      {
-        "id": "kimi-k2-0905-preview",
-        "name": "Kimi K2 0905 Preview",
-        "context": null,
-        "costIn": null,
-        "costOut": null,
-        "tool": true,
-        "reasoning": false,
-        "vision": false
       }
     ]
   },
   {
     "key": "deepseek",
     "name": "DeepSeek",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://api.deepseek.com",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://api.deepseek.com/anthropic",
     "docUrl": "https://api-docs.deepseek.com/quick_start/pricing",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.deepseek.com/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.deepseek.com/v1"
+      }
+    ],
     "models": [
       {
         "id": "deepseek-v4-pro",
@@ -693,11 +815,23 @@
   {
     "key": "qwen",
     "name": "Qwen (Alibaba Cloud)",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://dashscope.aliyuncs.com/apps/anthropic",
     "docUrl": "https://help.aliyun.com/zh/model-studio/getting-started/models",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://dashscope.aliyuncs.com/apps/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      }
+    ],
     "models": [
       {
         "id": "qwen3.7-max",
@@ -764,11 +898,23 @@
   {
     "key": "hunyuan",
     "name": "Tencent Hunyuan",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://api.hunyuan.cloud.tencent.com/v1",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://api.hunyuan.cloud.tencent.com/anthropic",
     "docUrl": "https://cloud.tencent.com/document/product/1729",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.hunyuan.cloud.tencent.com/anthropic"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.hunyuan.cloud.tencent.com/v1"
+      }
+    ],
     "models": [
       {
         "id": "hunyuan-2.0-thinking-20251109",
@@ -795,11 +941,23 @@
   {
     "key": "stepfun",
     "name": "StepFun",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://api.stepfun.com/v1",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://api.stepfun.ai/step_plan",
     "docUrl": "https://platform.stepfun.com/docs/llm/modeloverview",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://api.stepfun.ai/step_plan"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://api.stepfun.com/v1"
+      }
+    ],
     "models": [
       {
         "id": "step-3.7-flash",
@@ -836,11 +994,23 @@
   {
     "key": "seed",
     "name": "ByteDance Seed (Volcengine Ark)",
-    "adapter": "@ai-sdk/openai-compatible",
-    "defaultBaseURL": "https://ark.cn-beijing.volces.com/api/v3",
+    "adapter": "@ai-sdk/anthropic",
+    "defaultBaseURL": "https://ark.cn-beijing.volces.com/api/coding",
     "docUrl": "https://www.volcengine.com/docs/82379/1330626",
     "customHeaders": false,
     "authSchemeSelector": false,
+    "protocols": [
+      {
+        "id": "anthropic",
+        "adapter": "@ai-sdk/anthropic",
+        "baseURL": "https://ark.cn-beijing.volces.com/api/coding"
+      },
+      {
+        "id": "openai",
+        "adapter": "@ai-sdk/openai-compatible",
+        "baseURL": "https://ark.cn-beijing.volces.com/api/v3"
+      }
+    ],
     "models": [
       {
         "id": "doubao-seed-2-1-pro-260628",

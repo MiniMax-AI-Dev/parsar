@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ApiError } from "../../lib/api-client"
+import { cn } from "../../lib/utils"
 import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
 import type { InlineCreateModelInput, InlineUpdateModelInput } from "../../lib/api-models"
 import { Button } from "../../components/ui/button"
@@ -31,6 +32,7 @@ import {
   loadProviderCatalog,
   type ModelPreset,
   type ProviderPreset,
+  type ProtocolPreset,
 } from "../../lib/model-presets"
 
 function extractErrorMessage(err: unknown): string | null {
@@ -71,6 +73,9 @@ interface ProviderTypeOption {
   labelKey?: string
   /** Model id suggestions for the model_key datalist (catalog only). */
   models?: ModelPreset[]
+  /** Wire protocols this provider serves. Length > 1 shows the protocol
+   * toggle; each entry supplies its own adapter + base URL. */
+  protocols: ProtocolPreset[]
 }
 
 const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
@@ -81,6 +86,7 @@ const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
     customHeaders: true,
     authSchemeSelector: true,
     labelKey: "models.createProvider.providerTypeLabel.anthropicCompatible",
+    protocols: [{ id: "anthropic", adapter: "@ai-sdk/anthropic", baseURL: "" }],
   },
   {
     key: "openai-compatible",
@@ -89,6 +95,7 @@ const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
     customHeaders: true,
     authSchemeSelector: false,
     labelKey: "models.createProvider.providerTypeLabel.openaiCompatible",
+    protocols: [{ id: "openai", adapter: "@ai-sdk/openai-compatible", baseURL: "" }],
   },
 ]
 
@@ -102,12 +109,87 @@ function providerTypesFromCatalog(catalog: ProviderPreset[]): ProviderTypeOption
       authSchemeSelector: p.authSchemeSelector,
       label: p.name,
       models: p.models,
+      protocols: p.protocols,
     })),
     ...GATEWAY_PROVIDER_TYPES,
   ]
 }
 
 const FALLBACK_PROVIDER_TYPES = providerTypesFromCatalog(PROVIDER_CATALOG)
+
+function defaultModelFor(provider: ProviderTypeOption | undefined): ModelPreset | undefined {
+  return provider?.models?.[0]
+}
+
+/** Resolve the active protocol entry for a provider, falling back to the
+ * first protocol when the id is unknown (e.g. after switching providers). */
+function resolveProtocol(
+  provider: ProviderTypeOption | undefined,
+  protocolID: string,
+): ProtocolPreset | undefined {
+  if (!provider) return undefined
+  return provider.protocols.find((p) => p.id === protocolID) ?? provider.protocols[0]
+}
+
+/** True when `url` is one of the provider's known protocol base URLs — i.e.
+ * catalog-managed, not a custom endpoint the user hand-typed. Used to decide
+ * whether switching provider / protocol may overwrite the base URL. */
+function isKnownProviderURL(provider: ProviderTypeOption | undefined, url: string): boolean {
+  if (!provider) return false
+  return provider.protocols.some((p) => p.baseURL === url)
+}
+
+/** Recover the protocol a duplicated model used, by matching its base URL
+ * (then adapter) against the provider's protocols. Falls back to the default
+ * protocol so a custom endpoint still lands somewhere sensible. */
+function protocolIDForSeed(
+  provider: ProviderTypeOption | undefined,
+  seed: { base_url: string; adapter: string },
+): string {
+  const protocols = provider?.protocols ?? []
+  if (protocols.length === 0) return "openai"
+  const url = seed.base_url.trim()
+  const byURL = protocols.find((p) => p.baseURL === url)
+  if (byURL) return byURL.id
+  const byAdapter = protocols.find((p) => p.adapter === seed.adapter.trim())
+  if (byAdapter) return byAdapter.id
+  return protocols[0].id
+}
+
+/** Human label for a protocol toggle button. */
+function protocolLabel(id: string): string {
+  switch (id) {
+    case "anthropic":
+      return "Anthropic"
+    case "openai":
+      return "OpenAI"
+    case "google":
+      return "Google"
+    default:
+      return id
+  }
+}
+
+function findProviderModel(
+  provider: ProviderTypeOption | undefined,
+  modelKey: string,
+): ModelPreset | undefined {
+  const key = modelKey.trim()
+  if (!key) return undefined
+  return provider?.models?.find((model) => model.id === key)
+}
+
+function shouldReplaceProviderModelKey(
+  modelKey: string,
+  provider: ProviderTypeOption | undefined,
+): boolean {
+  return modelKey.trim() === "" || !!findProviderModel(provider, modelKey)
+}
+
+function shouldReplaceModelName(name: string, model: ModelPreset | undefined): boolean {
+  const current = name.trim()
+  return current === "" || (!!model && current === model.name)
+}
 
 /* --- HeadersEditor ------------------------------------------------------
  *
@@ -302,11 +384,13 @@ export function CreateModelDialog({
 
   const providerTypes = useMemo(() => providerTypesFromCatalog(providerCatalog), [providerCatalog])
   const defaultProviderType = providerTypes[0] ?? FALLBACK_PROVIDER_TYPES[0]
+  const defaultModel = defaultModelFor(defaultProviderType)
 
-  const [name, setName] = useState("")
+  const [name, setName] = useState(() => defaultModel?.name ?? "")
   const [providerType, setProviderType] = useState<string>(() => defaultProviderType.key)
+  const [protocolID, setProtocolID] = useState<string>(() => defaultProviderType.protocols[0].id)
   const [baseURL, setBaseURL] = useState<string>(() => defaultProviderType.defaultBaseURL)
-  const [modelKey, setModelKey] = useState("")
+  const [modelKey, setModelKey] = useState(() => defaultModel?.id ?? "")
   const [credentialMode, setCredentialMode] = useState<ModelCredentialMode>("inline_secret")
   const [apiKey, setApiKey] = useState("")
   const [existingSecretID, setExistingSecretID] = useState<string>("")
@@ -334,6 +418,10 @@ export function CreateModelDialog({
         const providerCfg = providerTypes.find((p) => p.key === seed.provider_type)
         setName(seed.name)
         setProviderType(seed.provider_type)
+        // Recover which protocol the duplicated model used by matching its
+        // base URL / adapter against the provider's protocols; fall back to
+        // the default protocol when nothing matches (custom endpoint).
+        setProtocolID(protocolIDForSeed(providerCfg, seed))
         setBaseURL(seed.base_url)
         setModelKey(seed.model_key)
         setCredentialMode(seed.credential_mode)
@@ -363,10 +451,12 @@ export function CreateModelDialog({
         void _a
         setBaseConfig(rest)
       } else {
-        setName("")
+        const nextDefaultModel = defaultModelFor(defaultProviderType)
+        setName(nextDefaultModel?.name ?? "")
         setProviderType(defaultProviderType.key)
+        setProtocolID(defaultProviderType.protocols[0].id)
         setBaseURL(defaultProviderType.defaultBaseURL)
-        setModelKey("")
+        setModelKey(nextDefaultModel?.id ?? "")
         setCredentialMode("inline_secret")
         setApiKey("")
         setExistingSecretID("")
@@ -383,15 +473,50 @@ export function CreateModelDialog({
   function handleProviderTypeChange(next: string) {
     const cfg = providerTypes.find((p) => p.key === next)
     if (!cfg) return
-    const previousDefault = providerTypes.find((p) => p.key === providerType)?.defaultBaseURL ?? ""
-    if (baseURL === "" || baseURL === previousDefault) {
-      setBaseURL(cfg.defaultBaseURL)
+    const previousCfg = providerTypes.find((p) => p.key === providerType)
+    const previousModel = findProviderModel(previousCfg, modelKey)
+    const nextDefaultModel = defaultModelFor(cfg)
+    // Switching provider resets to that provider's default (first) protocol.
+    const nextProtocol = cfg.protocols[0]
+    setProtocolID(nextProtocol.id)
+    // Overwrite the base URL unless the user hand-typed a custom endpoint —
+    // i.e. the current value still matches ANY of the previous provider's
+    // protocol URLs (default or the one they toggled to), not just its
+    // default. Checking only the default stranded the URL after a protocol
+    // switch.
+    if (baseURL === "" || isKnownProviderURL(previousCfg, baseURL)) {
+      setBaseURL(nextProtocol.baseURL)
+    }
+    if (shouldReplaceProviderModelKey(modelKey, previousCfg)) {
+      setModelKey(nextDefaultModel?.id ?? "")
+    }
+    if (shouldReplaceModelName(name, previousModel)) {
+      setName(nextDefaultModel?.name ?? "")
     }
     setProviderType(next)
   }
 
+  // Switching protocol swaps the endpoint + adapter. Only overwrite the base
+  // URL when the user hasn't hand-edited it (still equals a known protocol
+  // URL for this provider), mirroring handleProviderTypeChange's guard.
+  function handleProtocolChange(nextID: string) {
+    const currentCfg = providerTypes.find((p) => p.key === providerType)
+    const nextProtocol = resolveProtocol(currentCfg, nextID)
+    if (!nextProtocol) return
+    if (baseURL === "" || isKnownProviderURL(currentCfg, baseURL)) {
+      setBaseURL(nextProtocol.baseURL)
+    }
+    setProtocolID(nextProtocol.id)
+  }
+
   const cfg = providerTypes.find((p) => p.key === providerType)
-  const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
+  const activeProtocol = resolveProtocol(cfg, protocolID)
+  const adapter = activeProtocol?.adapter ?? cfg?.adapter ?? "@ai-sdk/openai-compatible"
+  // Only surface the protocol toggle when the provider actually serves more
+  // than one wire protocol (MiniMax, GLM, DeepSeek, …). Single-protocol
+  // providers and the generic gateways render no toggle.
+  const protocolChoices = cfg?.protocols ?? []
+  const showProtocolToggle = protocolChoices.length > 1
   const showHeadersEditor = !!cfg?.customHeaders
   const showAuthSchemeSelector = !!cfg?.authSchemeSelector
   const providerModels = cfg?.models ?? []
@@ -406,17 +531,20 @@ export function CreateModelDialog({
         label: p.label ?? (p.labelKey ? t(p.labelKey as never) : p.key),
         adapter: p.adapter,
         modelCount: p.models?.length ?? 0,
+        protocols: p.protocols.map((proto) => proto.id),
       })),
     [providerTypes, t],
   )
 
-  // Picking a catalog model id fills the key; if Display name is still empty,
-  // seed it from the model's friendly name (the user can override).
+  // Picking a catalog model id fills the key; if the display name is still
+  // catalog-managed, keep it in sync with the model's friendly name.
   function handleModelKeyChange(next: string) {
+    const previousModel = providerModels.find((m) => m.id === modelKey.trim())
+    const hit = providerModels.find((m) => m.id === next)
+    const shouldReplaceName = shouldReplaceModelName(name, previousModel)
     setModelKey(next)
-    if (name.trim() === "") {
-      const hit = providerModels.find((m) => m.id === next)
-      if (hit) setName(hit.name)
+    if (shouldReplaceName) {
+      setName(hit?.name ?? next.trim())
     }
   }
 
@@ -522,6 +650,43 @@ export function CreateModelDialog({
               {t("models.createProvider.fields.adapterHint", { adapter })}
             </span>
           </div>
+
+          {/* --- Protocol row ---
+              The active protocol drives base URL + adapter, which in turn
+              decides which agent engine (claude_code=Anthropic,
+              codex=OpenAI) the model can attach to. Dual-protocol providers
+              get a clickable toggle; single-protocol ones show a read-only
+              label so "one protocol" is explicit, not a blank gap. */}
+          {protocolChoices.length > 0 && (
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium text-fg-muted">
+                {t("models.createProvider.fields.protocol", "API protocol")}
+              </span>
+              {showProtocolToggle ? (
+                <div className="inline-flex w-fit gap-0.5 rounded-md border border-line bg-surface-subtle p-0.5">
+                  {protocolChoices.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleProtocolChange(p.id)}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                        p.id === protocolID
+                          ? "bg-surface text-fg shadow-sm"
+                          : "text-fg-subtle hover:text-fg",
+                      )}
+                    >
+                      {protocolLabel(p.id)}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="w-fit rounded border border-line-muted px-2 py-0.5 text-xs text-fg-subtle">
+                  {protocolLabel(protocolChoices[0].id)}
+                </span>
+              )}
+            </div>
+          )}
 
           <Field
             id="model-base-url"

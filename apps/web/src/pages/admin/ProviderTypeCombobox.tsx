@@ -21,6 +21,23 @@ export interface ProviderTypeChoice {
   label: string
   adapter: string
   modelCount?: number
+  /** Wire protocols this provider serves, shown as badges so a dual-protocol
+   * provider reads as "Anthropic + OpenAI" instead of a single adapter. */
+  protocols?: string[]
+}
+
+/** Human label for a wire-protocol id. */
+function protocolLabel(id: string): string {
+  switch (id) {
+    case "anthropic":
+      return "Anthropic"
+    case "openai":
+      return "OpenAI"
+    case "google":
+      return "Google"
+    default:
+      return id
+  }
 }
 
 interface Props {
@@ -128,9 +145,22 @@ export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
                       </span>
                     )}
                   </div>
-                  <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
-                    {o.adapter}
-                  </code>
+                  {o.protocols && o.protocols.length > 0 ? (
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      {o.protocols.map((p) => (
+                        <span
+                          key={p}
+                          className="rounded border border-line-muted px-1.5 py-0.5 text-xs text-fg-subtle"
+                        >
+                          {protocolLabel(p)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
+                      {o.adapter}
+                    </code>
+                  )}
                 </div>
                 {o.key === value && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
               </DropdownMenu.Item>
