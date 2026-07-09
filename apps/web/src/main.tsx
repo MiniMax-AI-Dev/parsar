@@ -8,6 +8,7 @@ import {
   JoinWorkspaceLanding,
   popPendingJoinIntent,
 } from './pages/JoinWorkspaceLanding'
+import { InviteAcceptPage } from './pages/InviteAcceptPage'
 import { bootstrapWorkspace } from './lib/bootstrap'
 import { AuthProvider, useAuth } from './lib/auth-context'
 import { useMyWorkspaces } from './lib/api-workspaces'
@@ -66,6 +67,7 @@ function Root() {
   // Matched before the auth-aware admin shell so an unauthenticated user on
   // this URL hits the landing page directly.
   const joinWsId = parseJoinWorkspaceId()
+  const inviteToken = parseInviteToken()
 
   // OAuth callback returns to "/" by design. If we stashed an intent before
   // the OAuth bounce, re-issue it now. Guarded on isAuthenticated to avoid a
@@ -79,6 +81,9 @@ function Root() {
     }
   }, [isLoading, isAuthenticated, joinWsId])
 
+  if (inviteToken !== null) {
+    return <InviteAcceptPage token={inviteToken} />
+  }
   if (joinWsId !== null) {
     return <JoinWorkspaceLanding workspaceId={joinWsId} />
   }
@@ -98,6 +103,14 @@ function parseJoinWorkspaceId(): string | null {
   if (window.location.pathname !== "/join-workspace") return null
   const id = new URLSearchParams(window.location.search).get("id")
   return id && id.length > 0 ? id : null
+}
+
+function parseInviteToken(): string | null {
+  if (typeof window === "undefined") return null
+  const prefix = "/invite/"
+  if (!window.location.pathname.startsWith(prefix)) return null
+  const token = window.location.pathname.slice(prefix.length)
+  return token.length > 0 ? token : null
 }
 
 createRoot(document.getElementById('root')!).render(

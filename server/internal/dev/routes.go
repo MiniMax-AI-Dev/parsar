@@ -20,6 +20,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	authfeishu "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
+	authinvite "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/invite"
 	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
@@ -31,6 +32,8 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
+	"github.com/google/uuid"
 )
 
 var mentionPattern = regexp.MustCompile(`@[\p{Han}A-Za-z0-9_-]+`)
@@ -173,6 +176,11 @@ type RuntimeStore interface {
 	UpdateWorkspace(ctx context.Context, input store.UpdateWorkspaceInput) (store.UserWorkspaceRead, error)
 	ArchiveWorkspace(ctx context.Context, input store.ArchiveWorkspaceInput) (store.UserWorkspaceRead, error)
 	AddWorkspaceMember(ctx context.Context, input store.AddWorkspaceMemberInput) (store.AddWorkspaceMemberResult, error)
+	AcceptInvitation(ctx context.Context, input store.AcceptInvitationInput) (store.AddWorkspaceMemberResult, error)
+	CreateInvitation(ctx context.Context, input store.CreateInvitationInput) error
+	ListPendingInvitations(ctx context.Context, workspaceID string) ([]store.PendingInvitationRead, error)
+	RevokeInvitation(ctx context.Context, workspaceID, invitationID string) (int64, error)
+	GetInvitationByTokenHash(ctx context.Context, tokenHash []byte) (store.InvitationRead, error)
 	UpdateWorkspaceMemberRole(ctx context.Context, workspaceID string, userID string, role string, now time.Time) (store.WorkspaceMemberRead, error)
 	RemoveWorkspaceMember(ctx context.Context, workspaceID string, userID string, now time.Time) (store.RemoveWorkspaceMemberResult, error)
 	SearchUsers(ctx context.Context, input store.SearchUsersInput) ([]store.SearchUsersResultItem, error)
@@ -268,6 +276,15 @@ type routerConfig struct {
 	// "Join workspace" link. Nil keeps the card link-free and
 	// falls back to "Please contact the administrator above to join".
 	feishuJoinURLBuilder func(workspaceID string) string
+
+	// inviteSigner mints and verifies HMAC-signed invite tokens.
+	inviteSigner *authinvite.Signer
+	// inviteSessions creates sessions for newly accepted invitees.
+	inviteSessions auth.SessionStore
+	// inviteCookieSecure mirrors the login handler's secure flag.
+	inviteCookieSecure bool
+	// publicURL is the base URL for invite links (e.g. https://app.example.com).
+	publicURL string
 }
 
 type feishuWebhookConfig struct {
@@ -435,6 +452,15 @@ func WithFeishuJoinURLBuilder(builder func(workspaceID string) string) RouterOpt
 	}
 }
 
+func WithInvite(signer *authinvite.Signer, sessions auth.SessionStore, cookieSecure bool, publicURL string) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.inviteSigner = signer
+		cfg.inviteSessions = sessions
+		cfg.inviteCookieSecure = cookieSecure
+		cfg.publicURL = strings.TrimRight(publicURL, "/")
+	}
+}
+
 // runnerDeps is kept so the dev HTTP-agent endpoints retain their call
 // shape. Step 5 makes httprunner HTTP-only, so no connector deps are
 // passed from the router.
@@ -512,6 +538,13 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// browser session. Keep this public so Feishu can deliver URL
 			// challenges and message events.
 			r.Post("/feishu/events/message", createFeishuMessageEvent(runtimeStore, cfg.feishuWebhook, cfg.feishuJoinURLBuilder))
+			if cfg.inviteSigner != nil {
+				r.Post("/invite/info", getInviteInfo(runtimeStore, cfg))
+				r.Group(func(r chi.Router) {
+					r.Use(httprate.LimitBy(10, time.Minute, httprate.KeyByIP))
+					r.Post("/invite/accept", acceptInvitation(runtimeStore, cfg))
+				})
+			}
 			if cfg.oauthDeps != nil {
 				// Real Feishu OIDC login. start → redirect to Feishu;
 				// callback → upsert user + bind auth_identity + issue
@@ -634,6 +667,11 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/members", addWorkspaceMember(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/members/{userID}", updateWorkspaceMemberRole(runtimeStore))
 			r.Delete("/workspaces/{workspaceID}/members/{userID}", removeWorkspaceMember(runtimeStore))
+			if cfg.inviteSigner != nil {
+				r.Post("/workspaces/{workspaceID}/invitations", createInvitation(runtimeStore, cfg))
+				r.Get("/workspaces/{workspaceID}/invitations", listInvitations(runtimeStore))
+				r.Delete("/workspaces/{workspaceID}/invitations/{invitationID}", revokeInvitation(runtimeStore))
+			}
 			// Workspace self-service join request:
 			//   POST   /workspaces/{wid}/join-requests              User submits request (identity: logged in)
 			//   DELETE /workspaces/{wid}/join-requests/mine          Requester self-withdraws own pending
@@ -4897,22 +4935,11 @@ type addWorkspaceMemberRequest struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 	Role  string `json:"role"`
-	// Invite, when true, provisions a local email/password identity for
-	// a brand-new user and returns the plaintext temporary password
-	// once in the response body. The admin is expected to relay that
-	// password to the invitee out-of-band. False (default) preserves
-	// the pre-existing behaviour: the member row is created but no
-	// local credential is bound (Feishu / OIDC-only tenants).
-	Invite bool `json:"invite,omitempty"`
 }
 
-// addWorkspaceMemberResponse extends store.AddWorkspaceMemberResult with
-// the plaintext temp password on invite flows. Nil field means no
-// invite happened (either invite=false or the user already existed).
 type addWorkspaceMemberResponse struct {
-	Member       store.WorkspaceMemberRead `json:"member"`
-	UserCreated  bool                      `json:"user_created"`
-	TempPassword string                    `json:"temp_password,omitempty"`
+	Member      store.WorkspaceMemberRead `json:"member"`
+	UserCreated bool                      `json:"user_created"`
 }
 
 // addWorkspaceMember adds a user to a workspace.
@@ -4962,55 +4989,282 @@ func addWorkspaceMember(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 
-		// Invite path: mint the plaintext temp password up front so
-		// we can pass its hash into the tx AND hand the plaintext back
-		// to the admin exactly once. On failure below (409, DB error,
-		// etc.) the plaintext never leaks — it lives only in this
-		// function frame.
-		var (
-			tempPassword string
-			passwordHash string
-		)
-		if req.Invite {
-			p, gErr := authpassword.GenerateTemp()
-			if gErr != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate temp password"})
-				return
-			}
-			h, hErr := authpassword.Hash(p)
-			if hErr != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash temp password"})
-				return
-			}
-			tempPassword = p
-			passwordHash = h
-		}
-
 		result, err := runtimeStore.AddWorkspaceMember(r.Context(), store.AddWorkspaceMemberInput{
-			WorkspaceID:  workspaceID,
-			Email:        req.Email,
-			Name:         req.Name,
-			Role:         req.Role,
-			PasswordHash: passwordHash,
-			Now:          time.Now().UTC(),
+			WorkspaceID: workspaceID,
+			Email:       req.Email,
+			Name:        req.Name,
+			Role:        req.Role,
+			Now:         time.Now().UTC(),
 		})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to add workspace member"})
 			return
 		}
 
-		resp := addWorkspaceMemberResponse{
+		writeJSON(w, http.StatusCreated, addWorkspaceMemberResponse{
 			Member:      result.Member,
 			UserCreated: result.UserCreated,
+		})
+	}
+}
+
+// ── Invitation handlers ─────────────────────────────────────────
+
+type createInvitationRequest struct {
+	Email string `json:"email"`
+	Name  string `json:"name,omitempty"`
+	Role  string `json:"role"`
+}
+
+type createInvitationResponse struct {
+	InvitationID string `json:"invitation_id"`
+	InviteLink   string `json:"invite_link"`
+	Email        string `json:"email"`
+	Role         string `json:"role"`
+	ExpiresAt    string `json:"expires_at"`
+}
+
+func createInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
 		}
-		// Only surface the plaintext when we actually bound an identity.
-		// Store side won't write the hash if the user already existed;
-		// suppressing here keeps the response body honest ("password?
-		// means new + invited").
-		if req.Invite && result.UserCreated {
-			resp.TempPassword = tempPassword
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
 		}
-		writeJSON(w, http.StatusCreated, resp)
+		var req createInvitationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+			return
+		}
+		req.Email = strings.TrimSpace(req.Email)
+		req.Role = strings.TrimSpace(req.Role)
+		if req.Email == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
+			return
+		}
+		if !store.IsValidMemberRole(req.Role) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be one of owner|admin|member|viewer"})
+			return
+		}
+
+		token, err := cfg.inviteSigner.Sign(workspaceID, req.Email, req.Role, authinvite.MaxLifetime)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to sign invite token"})
+			return
+		}
+
+		now := time.Now().UTC()
+		expiresAt := now.Add(authinvite.MaxLifetime)
+		invID := uuid.New().String()
+
+		callerID := auth.UserIDFromContext(r.Context())
+		if callerID == "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing caller identity"})
+			return
+		}
+
+		if err := runtimeStore.CreateInvitation(r.Context(), store.CreateInvitationInput{
+			ID:          invID,
+			TokenHash:   authinvite.TokenHash(token),
+			WorkspaceID: workspaceID,
+			Email:       req.Email,
+			Role:        req.Role,
+			InvitedBy:   callerID,
+			ExpiresAt:   expiresAt,
+			Now:         now,
+		}); err != nil {
+			if strings.Contains(err.Error(), "uk_workspace_invitations_pending_email") {
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "an invitation is already pending for this email"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create invitation"})
+			return
+		}
+
+		link := cfg.publicURL + "/invite/" + token
+		writeJSON(w, http.StatusCreated, createInvitationResponse{
+			InvitationID: invID,
+			InviteLink:   link,
+			Email:        store.NormalizeEmail(req.Email),
+			Role:         req.Role,
+			ExpiresAt:    expiresAt.Format(time.RFC3339),
+		})
+	}
+}
+
+func listInvitations(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
+		}
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+
+		rows, err := runtimeStore.ListPendingInvitations(r.Context(), workspaceID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list invitations"})
+			return
+		}
+		writeJSON(w, http.StatusOK, rows)
+	}
+}
+
+func revokeInvitation(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		invitationID := strings.TrimSpace(chi.URLParam(r, "invitationID"))
+		if !isUUID(workspaceID) || !isUUID(invitationID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id and invitation_id must be valid uuids"})
+			return
+		}
+		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+
+		rows, err := runtimeStore.RevokeInvitation(r.Context(), workspaceID, invitationID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to revoke invitation"})
+			return
+		}
+		if rows == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "invitation not found or already consumed"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type inviteInfoRequest struct {
+	Token string `json:"token"`
+}
+
+type inviteInfoResponse struct {
+	WorkspaceName string `json:"workspace_name"`
+	Email         string `json:"email"`
+	Role          string `json:"role"`
+}
+
+func getInviteInfo(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req inviteInfoRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+			return
+		}
+		token := strings.TrimSpace(req.Token)
+		if token == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "token is required"})
+			return
+		}
+
+		claims, err := cfg.inviteSigner.Verify(token)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired token"})
+			return
+		}
+
+		inv, err := runtimeStore.GetInvitationByTokenHash(r.Context(), authinvite.TokenHash(token))
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "invitation not found"})
+			return
+		}
+		if inv.AcceptedAt != nil || inv.RevokedAt != nil || inv.ExpiresAt.Before(time.Now()) {
+			writeJSON(w, http.StatusGone, map[string]string{"error": "invitation has already been used or revoked"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, inviteInfoResponse{
+			WorkspaceName: inv.WorkspaceName,
+			Email:         claims.Email,
+			Role:          claims.Role,
+		})
+	}
+}
+
+type acceptInvitationRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
+type acceptInvitationResponse struct {
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	WorkspaceID string `json:"workspace_id"`
+}
+
+func acceptInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req acceptInvitationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+			return
+		}
+		req.Token = strings.TrimSpace(req.Token)
+		if req.Token == "" || req.Password == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "token and password are required"})
+			return
+		}
+
+		claims, err := cfg.inviteSigner.Verify(req.Token)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired token"})
+			return
+		}
+
+		if err := authpassword.Validate(req.Password); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
+		hash, err := authpassword.Hash(req.Password)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
+			return
+		}
+
+		now := time.Now().UTC()
+		result, err := runtimeStore.AcceptInvitation(r.Context(), store.AcceptInvitationInput{
+			TokenHash:    authinvite.TokenHash(req.Token),
+			Email:        claims.Email,
+			Role:         claims.Role,
+			WorkspaceID:  claims.WorkspaceID,
+			PasswordHash: hash,
+			Now:          now,
+		})
+		if err != nil {
+			if errors.Is(err, store.ErrInvitationInvalid) {
+				writeJSON(w, http.StatusGone, map[string]string{"error": "invitation is invalid, expired, or already used"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to accept invitation"})
+			return
+		}
+
+		sid, err := cfg.inviteSessions.Create(r.Context(), auth.CreateSessionInput{
+			UserID:    result.Member.UserID,
+			UserAgent: r.UserAgent(),
+			IP:        r.RemoteAddr,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+			return
+		}
+		auth.IssueCookie(w, sid, 0, cfg.inviteCookieSecure)
+
+		writeJSON(w, http.StatusOK, acceptInvitationResponse{
+			UserID:      result.Member.UserID,
+			Email:       result.Member.UserEmail,
+			WorkspaceID: result.Member.WorkspaceID,
+		})
 	}
 }
 
@@ -5063,6 +5317,24 @@ func updateWorkspaceMemberRole(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be one of owner|admin|member|viewer"})
 			return
 		}
+		// Prevent changing the owner's role — ownership is transferred, not edited.
+		targetRole, err := runtimeStore.GetWorkspaceMemberRole(r.Context(), workspaceID, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotMember) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace member not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to look up member"})
+			return
+		}
+		if targetRole == "owner" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot change the owner's role; use ownership transfer instead"})
+			return
+		}
+		if req.Role == "owner" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot promote to owner; use ownership transfer instead"})
+			return
+		}
 		member, err := runtimeStore.UpdateWorkspaceMemberRole(r.Context(), workspaceID, userID, req.Role, time.Now().UTC())
 		if err != nil {
 			if errors.Is(err, store.ErrUnknownWorkspaceMember) {
@@ -5094,6 +5366,20 @@ func removeWorkspaceMember(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
 			writeRBACError(w, err)
+			return
+		}
+		// Prevent removing the workspace owner.
+		targetRole, err := runtimeStore.GetWorkspaceMemberRole(r.Context(), workspaceID, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotMember) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace member not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to look up member"})
+			return
+		}
+		if targetRole == "owner" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot remove the workspace owner"})
 			return
 		}
 		result, err := runtimeStore.RemoveWorkspaceMember(r.Context(), workspaceID, userID, time.Now().UTC())

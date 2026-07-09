@@ -4165,3 +4165,19 @@ func (stubRuntimeStore) UpsertWorkspaceFeishuConnector(ctx context.Context, inpu
 func (stubRuntimeStore) UpsertWorkspaceTeamsConnector(ctx context.Context, input store.UpsertWorkspaceTeamsConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
 	return store.WorkspaceConnectorChange{}, nil
 }
+
+func (stubRuntimeStore) AcceptInvitation(ctx context.Context, input store.AcceptInvitationInput) (store.AddWorkspaceMemberResult, error) {
+	return store.AddWorkspaceMemberResult{}, nil
+}
+func (stubRuntimeStore) CreateInvitation(ctx context.Context, input store.CreateInvitationInput) error {
+	return nil
+}
+func (stubRuntimeStore) ListPendingInvitations(ctx context.Context, workspaceID string) ([]store.PendingInvitationRead, error) {
+	return nil, nil
+}
+func (stubRuntimeStore) RevokeInvitation(ctx context.Context, workspaceID, invitationID string) (int64, error) {
+	return 0, nil
+}
+func (stubRuntimeStore) GetInvitationByTokenHash(ctx context.Context, tokenHash []byte) (store.InvitationRead, error) {
+	return store.InvitationRead{}, nil
+}

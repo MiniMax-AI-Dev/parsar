@@ -3434,18 +3434,12 @@ func TestAddWorkspaceMemberLowercasesInviteEmail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Precomputed bcrypt hash stand-in — this test does not exercise
-	// bcrypt (that's covered in auth/password). We only need a
-	// non-empty PasswordHash to trigger the email-identity write.
-	const fakeHash = "$2a$10$fakehashthisisnotarealbcryptoutputbutlongenoughforstorage"
-
 	if _, err := store.AddWorkspaceMember(ctx, AddWorkspaceMemberInput{
-		WorkspaceID:  ids.WorkspaceID,
-		Email:        "  Bob@Company.COM  ",
-		Name:         "Bob",
-		Role:         "member",
-		PasswordHash: fakeHash,
-		Now:          time.Now().UTC(),
+		WorkspaceID: ids.WorkspaceID,
+		Email:       "  Bob@Company.COM  ",
+		Name:        "Bob",
+		Role:        "member",
+		Now:         time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("AddWorkspaceMember: %v", err)
 	}
@@ -3462,20 +3456,6 @@ func TestAddWorkspaceMemberLowercasesInviteEmail(t *testing.T) {
 	// applied and reads should also fold.
 	if _, err := q.GetActiveUserIDByEmail(ctx, "Bob@Company.COM"); err == nil {
 		t.Fatalf("mixed-case lookup should miss the folded row")
-	}
-
-	// auth_identities.subject must be the folded email too so the
-	// LEFT JOIN in GetPasswordHashByEmail (users.email = ai.subject)
-	// still lines up.
-	row, err := q.GetPasswordHashByEmail(ctx, "bob@company.com")
-	if err != nil {
-		t.Fatalf("GetPasswordHashByEmail: %v", err)
-	}
-	if row.PasswordHash == "" {
-		t.Fatalf("expected password_hash bound to folded email, got empty")
-	}
-	if row.PasswordHash != fakeHash {
-		t.Fatalf("password_hash mismatch: got %q", row.PasswordHash)
 	}
 }
 

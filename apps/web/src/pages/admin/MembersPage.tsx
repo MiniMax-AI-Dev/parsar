@@ -4,7 +4,7 @@ import {
   Check,
   Copy,
   Inbox,
-  KeyRound,
+  Link2,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -54,7 +54,7 @@ import {
   useUpdateWorkspaceMemberRole,
   useWorkspaceMembers,
 } from "../../lib/api-members"
-import { useBootstrapStatus } from "../../lib/api-bootstrap"
+import { useCreateInvitation } from "../../lib/api-invitations"
 import type {
   AddWorkspaceMemberRequest,
   MemberRole,
@@ -246,9 +246,8 @@ export function MembersPage() {
         <InviteMemberDialog
           onClose={() => {
             setInviteOpen(false)
-            addWsMut.reset()
           }}
-          invite={(body) => addWsMut.mutateAsync(body)}
+          wsId={wsId}
         />
       )}
 
@@ -376,7 +375,7 @@ function MembersTable({
                 <UserCell name={m.user_name} email={m.user_email} />
               </TableCell>
               <TableCell>
-                {writable && onChangeRole ? (
+                {writable && onChangeRole && m.role !== "owner" ? (
                   <select
                     value={m.role}
                     disabled={roleChangePending}
@@ -385,7 +384,7 @@ function MembersTable({
                     }
                     className="rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
                   >
-                    {ROLES.map((r) => (
+                    {ROLES.filter((r) => r !== "owner").map((r) => (
                       <option key={r} value={r}>
                         {t(`members.role.${r}`)}
                       </option>
@@ -405,7 +404,7 @@ function MembersTable({
               </TableCell>
               {writable && (
                 <TableCell className="text-right">
-                  {onRemove ? (
+                  {onRemove && m.role !== "owner" ? (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -596,27 +595,23 @@ function AddMemberDialog({
 /* ------------------------------------------------------------------ */
 /*  Invite member dialog                                               */
 /*                                                                     */
-/*  Two-step: (1) form → POST /members {invite:true} → (2) result      */
-/*  screen shows the plaintext temp password exactly once. The         */
-/*  password is held in local state; if the admin closes the dialog    */
-/*  without copying, it is gone forever (there is no read-back API).   */
+/*  Two-step: (1) form → POST /invitations → (2) result screen shows  */
+/*  the invite link. Admin copies the link and sends to the invitee.   */
 /* ------------------------------------------------------------------ */
 
 interface InviteResult {
   email: string
-  tempPassword: string
-  userCreated: boolean
+  inviteLink: string
 }
 
 function InviteMemberDialog({
   onClose,
-  invite,
+  wsId,
 }: {
   onClose: () => void
-  invite: (body: AddWorkspaceMemberRequest) => Promise<AddWorkspaceMemberResponseLike>
+  wsId: string
 }) {
   const { t } = useTranslation("admin")
-  const bootstrapQ = useBootstrapStatus()
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
   const [role, setRole] = useState<MemberRole>("member")
@@ -624,18 +619,9 @@ function InviteMemberDialog({
   const [errMsg, setErrMsg] = useState<string | null>(null)
   const [result, setResult] = useState<InviteResult | null>(null)
   const [copied, setCopied] = useState(false)
+  const createInvitation = useCreateInvitation(wsId)
 
   const canSubmit = email.trim() !== "" && !pending
-
-  // Login URL priority: operator-configured PARSAR_PUBLIC_URL (comes
-  // through bootstrap.status.public_url — the same trusted source the
-  // pairing dialog uses), else current window origin. Trailing slash
-  // stripped so we can always append the path with a single "/".
-  const loginURL = (() => {
-    const raw = (bootstrapQ.data?.public_url ?? "").trim()
-    const base = raw !== "" ? raw : window.location.origin
-    return base.replace(/\/+$/, "") + "/login"
-  })()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -643,16 +629,14 @@ function InviteMemberDialog({
     setErrMsg(null)
     setPending(true)
     try {
-      const res = await invite({
+      const res = await createInvitation.mutateAsync({
         email: email.trim(),
         name: name.trim() || undefined,
         role,
-        invite: true,
       })
       setResult({
-        email: res.member.user_email,
-        tempPassword: res.temp_password ?? "",
-        userCreated: res.user_created,
+        email: res.email,
+        inviteLink: res.invite_link,
       })
     } catch (err) {
       setErrMsg(
@@ -667,27 +651,14 @@ function InviteMemberDialog({
     }
   }
 
-  // The copy payload bundles all three pieces the invitee needs so
-  // the admin can paste it into any IM verbatim. Format is stable and
-  // machine-parseable enough for the invitee to eyeball.
-  const copyPayload = result
-    ? [
-        `Sign in: ${loginURL}`,
-        `Email: ${result.email}`,
-        `Password: ${result.tempPassword}`,
-      ].join("\n")
-    : ""
-
   const handleCopy = async () => {
-    if (!copyPayload) return
+    if (!result) return
     try {
-      await navigator.clipboard.writeText(copyPayload)
+      await navigator.clipboard.writeText(result.inviteLink)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Clipboard write can fail on non-HTTPS or older browsers; the
-      // credentials are still visible in the modal so the admin can
-      // copy them by hand. Silently swallow.
+      // Silently swallow — link is visible in the modal for manual copy.
     }
   }
 
@@ -778,7 +749,7 @@ function InviteMemberDialog({
           <div>
             <DialogHeader className="space-y-1 border-b border-line-muted px-5 py-3 pr-10">
               <DialogTitle className="flex items-center gap-2 text-sm">
-                <KeyRound className="h-4 w-4 text-success" />
+                <Link2 className="h-4 w-4 text-success" />
                 {t("members.invite.resultTitle")}
               </DialogTitle>
               <DialogDescription className="text-xs leading-relaxed">
@@ -786,39 +757,23 @@ function InviteMemberDialog({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 px-5 py-4">
-              {result.userCreated && result.tempPassword ? (
-                <>
-                  <div className="space-y-2 rounded-md border border-line bg-surface-subtle/60 p-3">
-                    <InviteCredentialRow
-                      label={t("members.invite.credential.url")}
-                      value={loginURL}
-                    />
-                    <InviteCredentialRow
-                      label={t("members.invite.credential.email")}
-                      value={result.email}
-                    />
-                    <InviteCredentialRow
-                      label={t("members.invite.credential.password")}
-                      value={result.tempPassword}
-                      mono
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCopy}
-                    className="w-full"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copied ? t("members.invite.copied") : t("members.invite.copyAll")}
-                  </Button>
-                </>
-              ) : (
-                <p className="rounded-md border border-warning-border bg-warning-subtle/40 px-3 py-2 text-xs text-warning-emphasis">
-                  {t("members.invite.existingUserNotice")}
-                </p>
-              )}
+              <div className="space-y-2 rounded-md border border-line bg-surface-subtle/60 p-3">
+                <InviteCredentialRow
+                  label="Link"
+                  value={result.inviteLink}
+                  mono
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleCopy}
+                className="w-full"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {copied ? t("members.invite.copied") : t("members.invite.copyAll")}
+              </Button>
             </div>
             <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
               <Button type="button" size="sm" onClick={onClose}>
@@ -853,19 +808,6 @@ function InviteCredentialRow({
       </span>
     </div>
   )
-}
-
-/**
- * Local structural type used to loosen invite()'s parameter — the
- * useAddWorkspaceMember mutation returns AddWorkspaceMemberResponse
- * but its `temp_password` is only populated on the invite path. We
- * type explicitly so the invite dialog does not accidentally read
- * fields the store hook does not surface.
- */
-interface AddWorkspaceMemberResponseLike {
-  member: { user_email: string }
-  user_created: boolean
-  temp_password?: string
 }
 
 function DialogField({

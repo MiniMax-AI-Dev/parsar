@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const acceptWorkspaceInvitation = `-- name: AcceptWorkspaceInvitation :execrows
+update workspace_invitations
+set accepted_at = $1
+where token_hash = $2::bytea
+  and accepted_at is null
+  and revoked_at is null
+  and expires_at > $1
+`
+
+type AcceptWorkspaceInvitationParams struct {
+	Now       pgtype.Timestamptz `json:"now"`
+	TokenHash []byte             `json:"token_hash"`
+}
+
+func (q *Queries) AcceptWorkspaceInvitation(ctx context.Context, arg AcceptWorkspaceInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, acceptWorkspaceInvitation, arg.Now, arg.TokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const activeAgentSlugExists = `-- name: ActiveAgentSlugExists :one
 select exists(
   select 1 from agents
@@ -2831,6 +2853,40 @@ func (q *Queries) CreateWorkspaceConversation(ctx context.Context, arg CreateWor
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const createWorkspaceInvitation = `-- name: CreateWorkspaceInvitation :exec
+
+insert into workspace_invitations(id, token_hash, workspace_id, email, role, invited_by, expires_at, created_at)
+values ($1::uuid, $2::bytea, $3::uuid, $4, $5, $6::uuid, $7, $8)
+`
+
+type CreateWorkspaceInvitationParams struct {
+	ID          pgtype.UUID        `json:"id"`
+	TokenHash   []byte             `json:"token_hash"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Email       string             `json:"email"`
+	Role        string             `json:"role"`
+	InvitedBy   pgtype.UUID        `json:"invited_by"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+// ================================================================
+// Workspace invitations
+// ================================================================
+func (q *Queries) CreateWorkspaceInvitation(ctx context.Context, arg CreateWorkspaceInvitationParams) error {
+	_, err := q.db.Exec(ctx, createWorkspaceInvitation,
+		arg.ID,
+		arg.TokenHash,
+		arg.WorkspaceID,
+		arg.Email,
+		arg.Role,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	return err
 }
 
 const deleteAgentCapability = `-- name: DeleteAgentCapability :exec
@@ -5829,6 +5885,54 @@ func (q *Queries) GetWorkspaceIMConnectors(ctx context.Context, workspaceID pgty
 	return items, nil
 }
 
+const getWorkspaceInvitationByTokenHash = `-- name: GetWorkspaceInvitationByTokenHash :one
+select
+  wi.id::text           as id,
+  wi.workspace_id::text as workspace_id,
+  wi.email,
+  wi.role,
+  wi.invited_by::text   as invited_by,
+  wi.expires_at,
+  wi.accepted_at,
+  wi.revoked_at,
+  wi.created_at,
+  w.name                as workspace_name
+from workspace_invitations wi
+join workspaces w on w.id = wi.workspace_id and w.deleted_at is null
+where wi.token_hash = $1::bytea
+`
+
+type GetWorkspaceInvitationByTokenHashRow struct {
+	ID            string             `json:"id"`
+	WorkspaceID   string             `json:"workspace_id"`
+	Email         string             `json:"email"`
+	Role          string             `json:"role"`
+	InvitedBy     string             `json:"invited_by"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	AcceptedAt    pgtype.Timestamptz `json:"accepted_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	WorkspaceName string             `json:"workspace_name"`
+}
+
+func (q *Queries) GetWorkspaceInvitationByTokenHash(ctx context.Context, tokenHash []byte) (GetWorkspaceInvitationByTokenHashRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceInvitationByTokenHash, tokenHash)
+	var i GetWorkspaceInvitationByTokenHashRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Email,
+		&i.Role,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.WorkspaceName,
+	)
+	return i, err
+}
+
 const getWorkspaceMemberRole = `-- name: GetWorkspaceMemberRole :one
 select role
 from workspace_members
@@ -7808,6 +7912,69 @@ func (q *Queries) ListPendingJoinRequests(ctx context.Context, workspaceID pgtyp
 			&i.RequestedAt,
 			&i.UserEmail,
 			&i.UserName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingWorkspaceInvitations = `-- name: ListPendingWorkspaceInvitations :many
+select
+  wi.id::text           as id,
+  wi.email,
+  wi.role,
+  wi.invited_by::text   as invited_by,
+  u.name                as invited_by_name,
+  wi.expires_at,
+  wi.created_at
+from workspace_invitations wi
+join users u on u.id = wi.invited_by
+where wi.workspace_id = $1::uuid
+  and wi.accepted_at is null
+  and wi.revoked_at is null
+  and wi.expires_at > $2
+order by wi.created_at desc
+limit $3
+`
+
+type ListPendingWorkspaceInvitationsParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Now         pgtype.Timestamptz `json:"now"`
+	ItemLimit   int32              `json:"item_limit"`
+}
+
+type ListPendingWorkspaceInvitationsRow struct {
+	ID            string             `json:"id"`
+	Email         string             `json:"email"`
+	Role          string             `json:"role"`
+	InvitedBy     string             `json:"invited_by"`
+	InvitedByName string             `json:"invited_by_name"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListPendingWorkspaceInvitations(ctx context.Context, arg ListPendingWorkspaceInvitationsParams) ([]ListPendingWorkspaceInvitationsRow, error) {
+	rows, err := q.db.Query(ctx, listPendingWorkspaceInvitations, arg.WorkspaceID, arg.Now, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingWorkspaceInvitationsRow{}
+	for rows.Next() {
+		var i ListPendingWorkspaceInvitationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Role,
+			&i.InvitedBy,
+			&i.InvitedByName,
+			&i.ExpiresAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -9921,6 +10088,29 @@ type RevokeSessionParams struct {
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
 	_, err := q.db.Exec(ctx, revokeSession, arg.Now, arg.ID)
 	return err
+}
+
+const revokeWorkspaceInvitation = `-- name: RevokeWorkspaceInvitation :execrows
+update workspace_invitations
+set revoked_at = $1
+where id = $2::uuid
+  and workspace_id = $3::uuid
+  and accepted_at is null
+  and revoked_at is null
+`
+
+type RevokeWorkspaceInvitationParams struct {
+	Now         pgtype.Timestamptz `json:"now"`
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+}
+
+func (q *Queries) RevokeWorkspaceInvitation(ctx context.Context, arg RevokeWorkspaceInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeWorkspaceInvitation, arg.Now, arg.ID, arg.WorkspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setAgentRunOutputMessageID = `-- name: SetAgentRunOutputMessageID :exec

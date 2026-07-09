@@ -785,6 +785,19 @@ type WorkspaceImConnector struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type WorkspaceInvitation struct {
+	ID          pgtype.UUID        `json:"id"`
+	TokenHash   []byte             `json:"token_hash"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Email       string             `json:"email"`
+	Role        string             `json:"role"`
+	InvitedBy   pgtype.UUID        `json:"invited_by"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	AcceptedAt  pgtype.Timestamptz `json:"accepted_at"`
+	RevokedAt   pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 // Workspace members and roles (with join-request state machine)
 type WorkspaceMember struct {
 	ID pgtype.UUID `json:"id"`

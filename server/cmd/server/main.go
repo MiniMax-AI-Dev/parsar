@@ -47,6 +47,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
+	authinvite "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/invite"
 	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
@@ -676,6 +677,20 @@ func main() {
 		opts = append(opts, dev.WithFeishuJoinURLBuilder(func(workspaceID string) string {
 			return cfg.BuildPublicURL("/join-workspace?id=" + workspaceID + "&from=feishu")
 		}))
+	}
+	if cfg.Secret.MasterKey != "" {
+		invSigner, err := authinvite.NewSigner(cfg.Secret.MasterKey)
+		if err != nil {
+			log.Bg().Warn("invite signer init failed", "error", err)
+		} else {
+			publicURL := strings.TrimSpace(cfg.Server.PublicURL)
+			if publicURL == "" {
+				publicURL = "http://localhost" + cfg.Server.Addr
+			}
+			sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
+			opts = append(opts, dev.WithInvite(invSigner, sessionStore, cfg.Auth.Cookie.Secure, publicURL))
+			log.Bg().Info("invite-link system enabled")
+		}
 	}
 	dev.RegisterRoutesWithStore(r, runtimeStore, opts...)
 
