@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           # Pinned to match go.mod. Bump both together when upgrading.
-          go-version: "1.25"
+          go-version: "1.25.12"
           # Module cache only — golangci-lint-action below brings its
           # own analysis cache that subsumes ~/.cache/go-build for
           # this job.

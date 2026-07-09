@@ -118,38 +118,44 @@ func validateAgentVisibilityBindings(visibility string, cfg map[string]any) erro
 	}
 	// Per-capability credential bindings.
 	if raw, ok := cfg["credential_bindings"]; ok {
-		bindings, ok := raw.(map[string]any)
-		if !ok {
-			return errors.New("credential_bindings must be an object")
-		}
-		for kind, entry := range bindings {
-			obj, ok := entry.(map[string]any)
+		if raw != nil {
+			bindings, ok := raw.(map[string]any)
 			if !ok {
-				return fmt.Errorf("credential_bindings[%s] must be an object", kind)
+				return errors.New("credential_bindings must be an object")
 			}
-			source, _ := obj["source"].(string)
-			if strings.TrimSpace(source) != "shared" {
-				return fmt.Errorf("public agents cannot use personal credentials (credential_bindings[%s].source=%q)", kind, source)
-			}
-			secretID, _ := obj["secret_id"].(string)
-			if strings.TrimSpace(secretID) == "" {
-				return fmt.Errorf("credential_bindings[%s].secret_id is required for shared source", kind)
+			for kind, entry := range bindings {
+				obj, ok := entry.(map[string]any)
+				if !ok {
+					return fmt.Errorf("credential_bindings[%s] must be an object", kind)
+				}
+				source, _ := obj["source"].(string)
+				if strings.TrimSpace(source) != "shared" {
+					return fmt.Errorf("public agents cannot use personal credentials (credential_bindings[%s].source=%q)", kind, source)
+				}
+				secretID, _ := obj["secret_id"].(string)
+				if strings.TrimSpace(secretID) == "" {
+					return fmt.Errorf("credential_bindings[%s].secret_id is required for shared source", kind)
+				}
 			}
 		}
 	}
 	// Optional model-level binding.
 	if raw, ok := cfg["model_credential_binding"]; ok {
-		obj, ok := raw.(map[string]any)
-		if !ok {
-			return errors.New("model_credential_binding must be an object")
-		}
-		source, _ := obj["source"].(string)
-		if strings.TrimSpace(source) != "shared" {
-			return fmt.Errorf("public agents cannot use personal model credentials (model_credential_binding.source=%q)", source)
-		}
-		secretID, _ := obj["secret_id"].(string)
-		if strings.TrimSpace(secretID) == "" {
-			return errors.New("model_credential_binding.secret_id is required for shared source")
+		if raw != nil {
+			obj, ok := raw.(map[string]any)
+			if !ok {
+				return errors.New("model_credential_binding must be an object")
+			}
+			if len(obj) > 0 {
+				source, _ := obj["source"].(string)
+				if strings.TrimSpace(source) != "shared" {
+					return fmt.Errorf("public agents cannot use personal model credentials (model_credential_binding.source=%q)", source)
+				}
+				secretID, _ := obj["secret_id"].(string)
+				if strings.TrimSpace(secretID) == "" {
+					return errors.New("model_credential_binding.secret_id is required for shared source")
+				}
+			}
 		}
 	}
 	return nil

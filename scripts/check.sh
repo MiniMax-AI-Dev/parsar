@@ -8,7 +8,7 @@ set -euo pipefail
   before_sqlc_status="$(git status --short -- internal/db/sqlc)"
   # sqlc pinned to v1.29.0 — v1.31.1 declares `go >= 1.26` in its
   # go.mod, which forces `go run` to fetch a newer toolchain than
-  # this repo builds under (go 1.25.7). Bump both this script AND
+  # this repo builds under (go 1.25.12). Bump both this script AND
   # the Makefile target when moving off v1.29.0.
   go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
   after_sqlc_status="$(git status --short -- internal/db/sqlc)"

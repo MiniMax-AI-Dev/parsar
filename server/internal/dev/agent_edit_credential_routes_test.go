@@ -219,3 +219,25 @@ func TestUpdateAgentClearsBindingsOnEmptyPayload(t *testing.T) {
 		t.Fatalf("expected model_credential_binding to be nil, got %#v", mb)
 	}
 }
+
+func TestUpdatePublicAgentClearsNullModelBinding(t *testing.T) {
+	r := chi.NewRouter()
+	rec := &recordingAgentStore{getAgentVisibility: "public"}
+	RegisterRoutesWithStore(r, rec)
+
+	body := `{"config":{"credential_bindings":{},"model_credential_binding":null}}`
+	req := withTestUser(httptest.NewRequest(http.MethodPatch, "/api/v1/agents/00000000-0000-0000-0000-000000000901", strings.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	if !rec.lastUpdateInput.ConfigSet {
+		t.Fatalf("expected ConfigSet=true on clear payload, got false")
+	}
+	if mb, ok := rec.lastUpdateInput.Config["model_credential_binding"]; !ok || mb != nil {
+		t.Fatalf("expected model_credential_binding nil clear marker, got ok=%v value=%#v", ok, mb)
+	}
+}
