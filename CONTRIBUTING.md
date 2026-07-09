@@ -202,7 +202,7 @@ any drift.
 
 **sqlc pinned to v1.29.0.** v1.30+ declares `go >= 1.26` in its
 go.mod, which would force `go run` to fetch a newer toolchain than
-this repo builds under (go 1.25.7). If you bump sqlc, update **both**
+this repo builds under (go 1.25.12). If you bump sqlc, update **both**
 `Makefile:sqlc-generate` AND `scripts/check.sh` in the same commit —
 CI runs the latter, dev loops run the former, and mismatch produces
 drift that only shows up on the runner.
