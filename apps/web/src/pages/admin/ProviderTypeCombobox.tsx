@@ -20,6 +20,24 @@ export interface ProviderTypeChoice {
   /** Display label (already resolved — literal brand name or translated). */
   label: string
   adapter: string
+  modelCount?: number
+  /** Wire protocols this provider serves, shown as badges so a dual-protocol
+   * provider reads as "Anthropic + OpenAI" instead of a single adapter. */
+  protocols?: string[]
+}
+
+/** Human label for a wire-protocol id. */
+function protocolLabel(id: string): string {
+  switch (id) {
+    case "anthropic":
+      return "Anthropic"
+    case "openai":
+      return "OpenAI"
+    case "google":
+      return "Google"
+    default:
+      return id
+  }
 }
 
 interface Props {
@@ -119,10 +137,30 @@ export function ProviderTypeCombobox({ value, onChange, options, id }: Props) {
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-fg">{o.label}</span>
-                  <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
-                    {o.adapter}
-                  </code>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium text-fg">{o.label}</span>
+                    {o.modelCount != null && o.modelCount > 0 && (
+                      <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
+                        {o.modelCount.toLocaleString()} models
+                      </span>
+                    )}
+                  </div>
+                  {o.protocols && o.protocols.length > 0 ? (
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      {o.protocols.map((p) => (
+                        <span
+                          key={p}
+                          className="rounded border border-line-muted px-1.5 py-0.5 text-xs text-fg-subtle"
+                        >
+                          {protocolLabel(p)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <code className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">
+                      {o.adapter}
+                    </code>
+                  )}
                 </div>
                 {o.key === value && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
               </DropdownMenu.Item>

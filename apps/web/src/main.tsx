@@ -12,6 +12,7 @@ import { InviteAcceptPage } from './pages/InviteAcceptPage'
 import { bootstrapWorkspace } from './lib/bootstrap'
 import { AuthProvider, useAuth } from './lib/auth-context'
 import { useMyWorkspaces } from './lib/api-workspaces'
+import { prefetchProviderCatalog } from './lib/model-presets'
 import { useTranslation } from 'react-i18next'
 import './style.css'
 import './i18n' // bootstrap i18next
@@ -31,6 +32,7 @@ const queryClient = new QueryClient({
 
 // Best-effort; never blocks first render.
 void bootstrapWorkspace()
+prefetchProviderCatalog()
 
 function LoadingScreen({ message }: { message: string }) {
   return (

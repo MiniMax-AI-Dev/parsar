@@ -11,15 +11,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ApiError } from "../../lib/api-client"
-import type {
-  Model,
-  ModelCredentialMode,
-  Secret,
-} from "../../lib/api-types"
-import type {
-  InlineCreateModelInput,
-  InlineUpdateModelInput,
-} from "../../lib/api-models"
+import { cn } from "../../lib/utils"
+import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
+import type { InlineCreateModelInput, InlineUpdateModelInput } from "../../lib/api-models"
 import { Button } from "../../components/ui/button"
 import {
   Dialog,
@@ -34,7 +28,11 @@ import { ModelKeyCombobox } from "./ModelKeyCombobox"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
 import {
   PROVIDER_CATALOG,
+  getProviderCatalogSnapshot,
+  loadProviderCatalog,
   type ModelPreset,
+  type ProviderPreset,
+  type ProtocolPreset,
 } from "../../lib/model-presets"
 
 function extractErrorMessage(err: unknown): string | null {
@@ -58,9 +56,10 @@ function extractErrorMessage(err: unknown): string | null {
  * Use `@ai-sdk/openai-compatible` for those. Same rule lives in
  * server/internal/seed/models.go::modelSpecs.
  *
- * Branded providers come from the models.dev snapshot (see
- * lib/model-catalog.ts); the two generic "custom gateway" entries are kept as
- * fallbacks for endpoints not in the catalog (internal gateways, self-hosted).
+ * Branded providers come from lib/model-presets.ts, backed by a small
+ * whitelisted JSON catalog. The two generic "custom gateway" entries are kept
+ * as fallbacks for endpoints not in the catalog (internal gateways,
+ * self-hosted).
  */
 interface ProviderTypeOption {
   key: string
@@ -74,17 +73,10 @@ interface ProviderTypeOption {
   labelKey?: string
   /** Model id suggestions for the model_key datalist (catalog only). */
   models?: ModelPreset[]
+  /** Wire protocols this provider serves. Length > 1 shows the protocol
+   * toggle; each entry supplies its own adapter + base URL. */
+  protocols: ProtocolPreset[]
 }
-
-const CATALOG_PROVIDER_TYPES: ProviderTypeOption[] = PROVIDER_CATALOG.map((p) => ({
-  key: p.key,
-  adapter: p.adapter,
-  defaultBaseURL: p.defaultBaseURL,
-  customHeaders: p.customHeaders,
-  authSchemeSelector: p.authSchemeSelector,
-  label: p.name,
-  models: p.models,
-}))
 
 const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
   {
@@ -94,6 +86,7 @@ const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
     customHeaders: true,
     authSchemeSelector: true,
     labelKey: "models.createProvider.providerTypeLabel.anthropicCompatible",
+    protocols: [{ id: "anthropic", adapter: "@ai-sdk/anthropic", baseURL: "" }],
   },
   {
     key: "openai-compatible",
@@ -102,13 +95,101 @@ const GATEWAY_PROVIDER_TYPES: ProviderTypeOption[] = [
     customHeaders: true,
     authSchemeSelector: false,
     labelKey: "models.createProvider.providerTypeLabel.openaiCompatible",
+    protocols: [{ id: "openai", adapter: "@ai-sdk/openai-compatible", baseURL: "" }],
   },
 ]
 
-const PROVIDER_TYPES: ProviderTypeOption[] = [
-  ...CATALOG_PROVIDER_TYPES,
-  ...GATEWAY_PROVIDER_TYPES,
-]
+function providerTypesFromCatalog(catalog: ProviderPreset[]): ProviderTypeOption[] {
+  return [
+    ...catalog.map((p) => ({
+      key: p.key,
+      adapter: p.adapter,
+      defaultBaseURL: p.defaultBaseURL,
+      customHeaders: p.customHeaders,
+      authSchemeSelector: p.authSchemeSelector,
+      label: p.name,
+      models: p.models,
+      protocols: p.protocols,
+    })),
+    ...GATEWAY_PROVIDER_TYPES,
+  ]
+}
+
+const FALLBACK_PROVIDER_TYPES = providerTypesFromCatalog(PROVIDER_CATALOG)
+
+function defaultModelFor(provider: ProviderTypeOption | undefined): ModelPreset | undefined {
+  return provider?.models?.[0]
+}
+
+/** Resolve the active protocol entry for a provider, falling back to the
+ * first protocol when the id is unknown (e.g. after switching providers). */
+function resolveProtocol(
+  provider: ProviderTypeOption | undefined,
+  protocolID: string,
+): ProtocolPreset | undefined {
+  if (!provider) return undefined
+  return provider.protocols.find((p) => p.id === protocolID) ?? provider.protocols[0]
+}
+
+/** True when `url` is one of the provider's known protocol base URLs — i.e.
+ * catalog-managed, not a custom endpoint the user hand-typed. Used to decide
+ * whether switching provider / protocol may overwrite the base URL. */
+function isKnownProviderURL(provider: ProviderTypeOption | undefined, url: string): boolean {
+  if (!provider) return false
+  return provider.protocols.some((p) => p.baseURL === url)
+}
+
+/** Recover the protocol a duplicated model used, by matching its base URL
+ * (then adapter) against the provider's protocols. Falls back to the default
+ * protocol so a custom endpoint still lands somewhere sensible. */
+function protocolIDForSeed(
+  provider: ProviderTypeOption | undefined,
+  seed: { base_url: string; adapter: string },
+): string {
+  const protocols = provider?.protocols ?? []
+  if (protocols.length === 0) return "openai"
+  const url = seed.base_url.trim()
+  const byURL = protocols.find((p) => p.baseURL === url)
+  if (byURL) return byURL.id
+  const byAdapter = protocols.find((p) => p.adapter === seed.adapter.trim())
+  if (byAdapter) return byAdapter.id
+  return protocols[0].id
+}
+
+/** Human label for a protocol toggle button. */
+function protocolLabel(id: string): string {
+  switch (id) {
+    case "anthropic":
+      return "Anthropic"
+    case "openai":
+      return "OpenAI"
+    case "google":
+      return "Google"
+    default:
+      return id
+  }
+}
+
+function findProviderModel(
+  provider: ProviderTypeOption | undefined,
+  modelKey: string,
+): ModelPreset | undefined {
+  const key = modelKey.trim()
+  if (!key) return undefined
+  return provider?.models?.find((model) => model.id === key)
+}
+
+function shouldReplaceProviderModelKey(
+  modelKey: string,
+  provider: ProviderTypeOption | undefined,
+): boolean {
+  return modelKey.trim() === "" || !!findProviderModel(provider, modelKey)
+}
+
+function shouldReplaceModelName(name: string, model: ModelPreset | undefined): boolean {
+  const current = name.trim()
+  return current === "" || (!!model && current === model.name)
+}
 
 /* --- HeadersEditor ------------------------------------------------------
  *
@@ -194,12 +275,7 @@ function HeadersEditor({
             placeholder="value"
             className="flex-1 font-mono text-sm"
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => removeRow(row.id)}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={() => removeRow(row.id)}>
             {removeLabel}
           </Button>
         </div>
@@ -295,12 +371,27 @@ export function CreateModelDialog({
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
 
-  const [name, setName] = useState("")
-  const [providerType, setProviderType] = useState<string>(PROVIDER_TYPES[0].key)
-  const [baseURL, setBaseURL] = useState<string>(PROVIDER_TYPES[0].defaultBaseURL)
-  const [modelKey, setModelKey] = useState("")
-  const [credentialMode, setCredentialMode] =
-    useState<ModelCredentialMode>("inline_secret")
+  const [providerCatalog, setProviderCatalog] = useState(getProviderCatalogSnapshot)
+  useEffect(() => {
+    let cancelled = false
+    loadProviderCatalog().then((catalog) => {
+      if (!cancelled) setProviderCatalog(catalog)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const providerTypes = useMemo(() => providerTypesFromCatalog(providerCatalog), [providerCatalog])
+  const defaultProviderType = providerTypes[0] ?? FALLBACK_PROVIDER_TYPES[0]
+  const defaultModel = defaultModelFor(defaultProviderType)
+
+  const [name, setName] = useState(() => defaultModel?.name ?? "")
+  const [providerType, setProviderType] = useState<string>(() => defaultProviderType.key)
+  const [protocolID, setProtocolID] = useState<string>(() => defaultProviderType.protocols[0].id)
+  const [baseURL, setBaseURL] = useState<string>(() => defaultProviderType.defaultBaseURL)
+  const [modelKey, setModelKey] = useState(() => defaultModel?.id ?? "")
+  const [credentialMode, setCredentialMode] = useState<ModelCredentialMode>("inline_secret")
   const [apiKey, setApiKey] = useState("")
   const [existingSecretID, setExistingSecretID] = useState<string>("")
   const [credentialKindCode, setCredentialKindCode] = useState<string>("")
@@ -324,9 +415,13 @@ export function CreateModelDialog({
       // effect tick so HeadersEditor reseeds atomically with the parent.
       const seed = initialValues
       if (seed) {
-        const providerCfg = PROVIDER_TYPES.find((p) => p.key === seed.provider_type)
+        const providerCfg = providerTypes.find((p) => p.key === seed.provider_type)
         setName(seed.name)
         setProviderType(seed.provider_type)
+        // Recover which protocol the duplicated model used by matching its
+        // base URL / adapter against the provider's protocols; fall back to
+        // the default protocol when nothing matches (custom endpoint).
+        setProtocolID(protocolIDForSeed(providerCfg, seed))
         setBaseURL(seed.base_url)
         setModelKey(seed.model_key)
         setCredentialMode(seed.credential_mode)
@@ -340,27 +435,28 @@ export function CreateModelDialog({
           headers?: Record<string, string>
           auth_scheme?: "api-key" | "bearer"
         }
-        setHeaders(providerCfg?.customHeaders ? cfg.headers ?? {} : {})
-        setAuthScheme(
-          providerCfg?.authSchemeSelector ? cfg.auth_scheme ?? "api-key" : "api-key"
-        )
+        setHeaders(providerCfg?.customHeaders ? (cfg.headers ?? {}) : {})
+        setAuthScheme(providerCfg?.authSchemeSelector ? (cfg.auth_scheme ?? "api-key") : "api-key")
         // Stash every config key the form does NOT have a dedicated field
         // for — capabilities / limits / modalities / etc. — so submit can
         // merge them back in and the duplicate behaves identically to its
         // source. The form-owned keys (headers / auth_scheme) are managed
         // by their own state and re-applied at submit time.
-        const { headers: _h, auth_scheme: _a, ...rest } = (seed.config ?? {}) as Record<
-          string,
-          unknown
-        >
+        const {
+          headers: _h,
+          auth_scheme: _a,
+          ...rest
+        } = (seed.config ?? {}) as Record<string, unknown>
         void _h
         void _a
         setBaseConfig(rest)
       } else {
-        setName("")
-        setProviderType(PROVIDER_TYPES[0].key)
-        setBaseURL(PROVIDER_TYPES[0].defaultBaseURL)
-        setModelKey("")
+        const nextDefaultModel = defaultModelFor(defaultProviderType)
+        setName(nextDefaultModel?.name ?? "")
+        setProviderType(defaultProviderType.key)
+        setProtocolID(defaultProviderType.protocols[0].id)
+        setBaseURL(defaultProviderType.defaultBaseURL)
+        setModelKey(nextDefaultModel?.id ?? "")
         setCredentialMode("inline_secret")
         setApiKey("")
         setExistingSecretID("")
@@ -372,21 +468,55 @@ export function CreateModelDialog({
       setHeadersSeed((n) => n + 1)
     }
     wasOpenRef.current = open
-  }, [open, initialValues])
+  }, [open, initialValues, providerTypes, defaultProviderType])
 
   function handleProviderTypeChange(next: string) {
-    const cfg = PROVIDER_TYPES.find((p) => p.key === next)
+    const cfg = providerTypes.find((p) => p.key === next)
     if (!cfg) return
-    const previousDefault =
-      PROVIDER_TYPES.find((p) => p.key === providerType)?.defaultBaseURL ?? ""
-    if (baseURL === "" || baseURL === previousDefault) {
-      setBaseURL(cfg.defaultBaseURL)
+    const previousCfg = providerTypes.find((p) => p.key === providerType)
+    const previousModel = findProviderModel(previousCfg, modelKey)
+    const nextDefaultModel = defaultModelFor(cfg)
+    // Switching provider resets to that provider's default (first) protocol.
+    const nextProtocol = cfg.protocols[0]
+    setProtocolID(nextProtocol.id)
+    // Overwrite the base URL unless the user hand-typed a custom endpoint —
+    // i.e. the current value still matches ANY of the previous provider's
+    // protocol URLs (default or the one they toggled to), not just its
+    // default. Checking only the default stranded the URL after a protocol
+    // switch.
+    if (baseURL === "" || isKnownProviderURL(previousCfg, baseURL)) {
+      setBaseURL(nextProtocol.baseURL)
+    }
+    if (shouldReplaceProviderModelKey(modelKey, previousCfg)) {
+      setModelKey(nextDefaultModel?.id ?? "")
+    }
+    if (shouldReplaceModelName(name, previousModel)) {
+      setName(nextDefaultModel?.name ?? "")
     }
     setProviderType(next)
   }
 
-  const cfg = PROVIDER_TYPES.find((p) => p.key === providerType)
-  const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
+  // Switching protocol swaps the endpoint + adapter. Only overwrite the base
+  // URL when the user hasn't hand-edited it (still equals a known protocol
+  // URL for this provider), mirroring handleProviderTypeChange's guard.
+  function handleProtocolChange(nextID: string) {
+    const currentCfg = providerTypes.find((p) => p.key === providerType)
+    const nextProtocol = resolveProtocol(currentCfg, nextID)
+    if (!nextProtocol) return
+    if (baseURL === "" || isKnownProviderURL(currentCfg, baseURL)) {
+      setBaseURL(nextProtocol.baseURL)
+    }
+    setProtocolID(nextProtocol.id)
+  }
+
+  const cfg = providerTypes.find((p) => p.key === providerType)
+  const activeProtocol = resolveProtocol(cfg, protocolID)
+  const adapter = activeProtocol?.adapter ?? cfg?.adapter ?? "@ai-sdk/openai-compatible"
+  // Only surface the protocol toggle when the provider actually serves more
+  // than one wire protocol (MiniMax, GLM, DeepSeek, …). Single-protocol
+  // providers and the generic gateways render no toggle.
+  const protocolChoices = cfg?.protocols ?? []
+  const showProtocolToggle = protocolChoices.length > 1
   const showHeadersEditor = !!cfg?.customHeaders
   const showAuthSchemeSelector = !!cfg?.authSchemeSelector
   const providerModels = cfg?.models ?? []
@@ -396,27 +526,29 @@ export function CreateModelDialog({
   // translated key for the generic gateways) for the searchable picker.
   const providerChoices = useMemo(
     () =>
-      PROVIDER_TYPES.map((p) => ({
+      providerTypes.map((p) => ({
         key: p.key,
         label: p.label ?? (p.labelKey ? t(p.labelKey as never) : p.key),
         adapter: p.adapter,
+        modelCount: p.models?.length ?? 0,
+        protocols: p.protocols.map((proto) => proto.id),
       })),
-    [t],
+    [providerTypes, t],
   )
 
-  // Picking a catalog model id fills the key; if Display name is still empty,
-  // seed it from the model's friendly name (the user can override).
+  // Picking a catalog model id fills the key; if the display name is still
+  // catalog-managed, keep it in sync with the model's friendly name.
   function handleModelKeyChange(next: string) {
+    const previousModel = providerModels.find((m) => m.id === modelKey.trim())
+    const hit = providerModels.find((m) => m.id === next)
+    const shouldReplaceName = shouldReplaceModelName(name, previousModel)
     setModelKey(next)
-    if (name.trim() === "") {
-      const hit = providerModels.find((m) => m.id === next)
-      if (hit) setName(hit.name)
+    if (shouldReplaceName) {
+      setName(hit?.name ?? next.trim())
     }
   }
 
-  const activeSecrets = secrets.filter(
-    (s) => s.status === "active" && s.kind === "model_provider"
-  )
+  const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
 
   // Duplicate flow seeds existingSecretID from the source model's
   // secret_id. If the caller can't read that Secret (cross-workspace
@@ -518,6 +650,43 @@ export function CreateModelDialog({
               {t("models.createProvider.fields.adapterHint", { adapter })}
             </span>
           </div>
+
+          {/* --- Protocol row ---
+              The active protocol drives base URL + adapter, which in turn
+              decides which agent engine (claude_code=Anthropic,
+              codex=OpenAI) the model can attach to. Dual-protocol providers
+              get a clickable toggle; single-protocol ones show a read-only
+              label so "one protocol" is explicit, not a blank gap. */}
+          {protocolChoices.length > 0 && (
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium text-fg-muted">
+                {t("models.createProvider.fields.protocol", "API protocol")}
+              </span>
+              {showProtocolToggle ? (
+                <div className="inline-flex w-fit gap-0.5 rounded-md border border-line bg-surface-subtle p-0.5">
+                  {protocolChoices.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleProtocolChange(p.id)}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                        p.id === protocolID
+                          ? "bg-surface text-fg shadow-sm"
+                          : "text-fg-subtle hover:text-fg",
+                      )}
+                    >
+                      {protocolLabel(p.id)}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="w-fit rounded border border-line-muted px-2 py-0.5 text-xs text-fg-subtle">
+                  {protocolLabel(protocolChoices[0].id)}
+                </span>
+              )}
+            </div>
+          )}
 
           <Field
             id="model-base-url"
@@ -629,7 +798,10 @@ export function CreateModelDialog({
               />
               {(activeSecrets.length > 0 || sourceSecretMissing) && (
                 <div className="grid gap-1.5">
-                  <label className="text-sm font-medium text-fg-muted" htmlFor="model-existing-secret">
+                  <label
+                    className="text-sm font-medium text-fg-muted"
+                    htmlFor="model-existing-secret"
+                  >
                     {t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
                   </label>
                   <select
@@ -674,7 +846,10 @@ export function CreateModelDialog({
           {credentialMode === "credential_ref" && (
             <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="model-credential-kind">
+                <label
+                  className="text-sm font-medium text-fg-muted"
+                  htmlFor="model-credential-kind"
+                >
                   {t("models.createModel.credentialMode.credentialRef.kindLabel")}
                   <span className="ml-0.5 text-danger">*</span>
                 </label>
@@ -753,7 +928,7 @@ export function EditModelDialog({
 
   const providerTypeMeta = useMemo(() => {
     if (!model) return undefined
-    return PROVIDER_TYPES.find((p) => p.key === model.provider_type)
+    return FALLBACK_PROVIDER_TYPES.find((p) => p.key === model.provider_type)
   }, [model])
   const supportsCustomHeaders = providerTypeMeta?.customHeaders ?? false
 
@@ -770,9 +945,7 @@ export function EditModelDialog({
     setName(model.name)
     setModelKey(model.model_key)
     setBaseURL(model.base_url)
-    setHeaders(
-      (model.config as { headers?: Record<string, string> })?.headers ?? {}
-    )
+    setHeaders((model.config as { headers?: Record<string, string> })?.headers ?? {})
     setNewAPIKey("")
     setSecretID(model.secret_id ?? "")
     setCredentialKindCode(model.credential_kind_code ?? "")
@@ -780,9 +953,7 @@ export function EditModelDialog({
 
   if (!model) return null
   const errMsg = extractErrorMessage(error)
-  const activeSecrets = secrets.filter(
-    (s) => s.status === "active" && s.kind === "model_provider"
-  )
+  const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
   const isInline = model.credential_mode === "inline_secret"
   const isCredentialRef = model.credential_mode === "credential_ref"
 
@@ -803,12 +974,8 @@ export function EditModelDialog({
     // so we don't persist `{headers: {}}`.
     let config: Record<string, unknown>
     if (supportsCustomHeaders) {
-      const rest = Object.fromEntries(
-        Object.entries(model.config).filter(([k]) => k !== "headers")
-      )
-      config = Object.keys(headers).length > 0
-        ? { ...rest, headers }
-        : rest
+      const rest = Object.fromEntries(Object.entries(model.config).filter(([k]) => k !== "headers"))
+      config = Object.keys(headers).length > 0 ? { ...rest, headers } : rest
     } else {
       config = model.config as Record<string, unknown>
     }
@@ -941,7 +1108,10 @@ export function EditModelDialog({
           {isCredentialRef && (
             <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="edit-model-credential-kind">
+                <label
+                  className="text-sm font-medium text-fg-muted"
+                  htmlFor="edit-model-credential-kind"
+                >
                   {t("models.editModel.credentialBinding.kindCode")}
                   <span className="ml-0.5 text-danger">*</span>
                 </label>

@@ -66,6 +66,73 @@ function agentEngineFromAgent(a?: Agent | null): AgentEngine {
   return "claude_code"
 }
 
+type WireProtocol = "anthropic" | "openai" | "google"
+
+/** Classify a model's wire protocol from its provider_type / adapter.
+ * Mirrors the allow-lists in
+ * server/internal/connector/agentdaemon/model_injection.go
+ * (isAnthropicRuntime / isOpenAICompatibleRuntime / piAPIProtocol) — keep the
+ * case values in sync so the UI filter matches what the daemon will accept. */
+function modelProtocol(m: Pick<Model, "provider_type" | "adapter">): WireProtocol | null {
+  for (const v of [m.provider_type, m.adapter]) {
+    switch (v.trim().toLowerCase()) {
+      case "anthropic":
+      case "anthropic-compatible":
+      case "anthropic_compatible":
+      case "@ai-sdk/anthropic":
+        return "anthropic"
+      case "openai":
+      case "openai-compatible":
+      case "openai_compatible":
+      case "azure-openai":
+      case "azure_openai":
+      case "@ai-sdk/openai":
+      case "@ai-sdk/openai-compatible":
+      case "@ai-sdk/azure":
+        return "openai"
+      case "google":
+      case "gemini":
+      case "google-generative-ai":
+      case "google_generative_ai":
+      case "@ai-sdk/google":
+        return "google"
+    }
+  }
+  return null
+}
+
+/** Which wire protocols an agent engine can drive. Mirrors the per-engine
+ * injector gating in model_injection.go: claude_code→Anthropic only,
+ * codex→OpenAI only, pi→any of the three, opencode→any adapter. */
+function engineSupportsProtocol(engine: AgentEngine, protocol: WireProtocol | null): boolean {
+  switch (engine) {
+    case "claude_code":
+      return protocol === "anthropic"
+    case "codex":
+      return protocol === "openai"
+    case "pi":
+      return protocol === "anthropic" || protocol === "openai" || protocol === "google"
+    case "opencode":
+      return true
+  }
+}
+
+/** Display label for a model's own wire protocol, shown on every model row so
+ * the user sees each model's protocol (and, on greyed-out rows, WHY it's
+ * unavailable). null protocol = unknown adapter, shown as a dash. */
+function protocolLabel(protocol: WireProtocol | null): string {
+  switch (protocol) {
+    case "anthropic":
+      return "Anthropic"
+    case "openai":
+      return "OpenAI"
+    case "google":
+      return "Google"
+    default:
+      return "—"
+  }
+}
+
 function sandboxSizeFromAgent(a?: Agent | null): SandboxSize {
   // The server reads sandbox_size from the same merged config map at sandbox
   // cold-start time, so we keep the UI and the runtime view in sync.
@@ -258,7 +325,13 @@ export function CreateAgentDialog({
     [secretsQ.data?.secrets],
   )
   const activeModels = useMemo(() => models.filter((m) => m.status === "active"), [models])
-  const firstModelID = activeModels[0]?.id ?? ""
+  // Default to the first model the chosen engine can actually drive, so a
+  // fresh create (and any engine switch) never lands on a greyed-out model
+  // that the daemon would reject at run time.
+  const firstModelID =
+    activeModels.find((m) => engineSupportsProtocol(agentEngine, modelProtocol(m)))?.id ??
+    activeModels[0]?.id ??
+    ""
   const selectedModelID = modelID || (mode === "create" ? firstModelID : "")
   const selectedModel = useMemo(() => activeModels.find((m) => m.id === selectedModelID) ?? null, [activeModels, selectedModelID])
   const capabilityOptions = useMemo(() => {
@@ -348,11 +421,33 @@ export function CreateAgentDialog({
       : capabilityOptions.filter((cap) => cap.deprecated || cap.type === capabilityTypeFilter),
     [capabilityOptions, capabilityTypeFilter]
   )
+  // Models the current engine can't drive (wrong wire protocol). Kept in the
+  // list but greyed out + unselectable so the user sees the full inventory and
+  // understands why a model is unavailable, rather than it silently vanishing.
+  const incompatibleModelIDs = useMemo(() => {
+    const out = new Set<string>()
+    for (const m of activeModels) {
+      if (!engineSupportsProtocol(agentEngine, modelProtocol(m))) out.add(m.id)
+    }
+    return out
+  }, [activeModels, agentEngine])
   const filteredModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase()
-    if (!q) return activeModels
-    return activeModels.filter((m) => modelLabel(m).toLowerCase().includes(q))
-  }, [activeModels, modelSearch])
+    const matched = q
+      ? activeModels.filter((m) => modelLabel(m).toLowerCase().includes(q))
+      : activeModels
+    // Compatible models first, incompatible (greyed) sink to the bottom;
+    // stable within each group so catalog order is otherwise preserved.
+    return [...matched].sort(
+      (a, b) => Number(incompatibleModelIDs.has(a.id)) - Number(incompatibleModelIDs.has(b.id)),
+    )
+  }, [activeModels, modelSearch, incompatibleModelIDs])
+  // If the user had hand-picked a model and then switched to an engine that
+  // can't drive it, clear the pick so it falls back to firstModelID (a
+  // compatible default) instead of submitting an incompatible model_id.
+  useEffect(() => {
+    if (modelID && incompatibleModelIDs.has(modelID)) setModelID("")
+  }, [modelID, incompatibleModelIDs])
   const allCapabilitiesPool = useMemo<Capability[]>(() => {
     const data = allCapabilitiesQ.data
     const own = data?.capabilities ?? []
@@ -524,11 +619,12 @@ export function CreateAgentDialog({
 
   useEffect(() => {
     if (!modelDropdownOpen) return
+    const firstSelectable = filteredModels.find((m) => !incompatibleModelIDs.has(m.id))
     const nextHighlighted = filteredModels.some((m) => m.id === highlightedModelID)
       ? highlightedModelID
-      : (filteredModels.find((m) => m.id === selectedModelID)?.id ?? filteredModels[0]?.id ?? null)
+      : (filteredModels.find((m) => m.id === selectedModelID)?.id ?? firstSelectable?.id ?? null)
     if (nextHighlighted !== highlightedModelID) setHighlightedModelID(nextHighlighted)
-  }, [filteredModels, highlightedModelID, modelDropdownOpen, selectedModelID])
+  }, [filteredModels, highlightedModelID, incompatibleModelIDs, modelDropdownOpen, selectedModelID])
 
   useEffect(() => {
     if (!modelDropdownOpen) return
@@ -543,10 +639,13 @@ export function CreateAgentDialog({
   function openModelDropdown() {
     setModelSearch("")
     setModelDropdownOpen(true)
-    setHighlightedModelID(selectedModelID || filteredModels[0]?.id || null)
+    const firstSelectable = filteredModels.find((m) => !incompatibleModelIDs.has(m.id))
+    setHighlightedModelID(selectedModelID || firstSelectable?.id || null)
   }
 
   function selectModel(nextModel: Model) {
+    // Incompatible with the current engine — ignore clicks/enter on it.
+    if (incompatibleModelIDs.has(nextModel.id)) return
     setModelID(nextModel.id)
     setModelSearch("")
     setHighlightedModelID(nextModel.id)
@@ -576,14 +675,17 @@ export function CreateAgentDialog({
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault()
-      if (filteredModels.length === 0) return
-      const currentIndex = filteredModels.findIndex((m) => m.id === highlightedModelID)
+      // Only step across selectable (engine-compatible) models so arrow keys
+      // skip greyed-out rows entirely.
+      const selectable = filteredModels.filter((m) => !incompatibleModelIDs.has(m.id))
+      if (selectable.length === 0) return
+      const currentIndex = selectable.findIndex((m) => m.id === highlightedModelID)
       const fallbackIndex = event.key === "ArrowDown" ? -1 : 0
       const baseIndex = currentIndex >= 0 ? currentIndex : fallbackIndex
       const nextIndex = event.key === "ArrowDown"
-        ? (baseIndex + 1) % filteredModels.length
-        : (baseIndex - 1 + filteredModels.length) % filteredModels.length
-      setHighlightedModelID(filteredModels[nextIndex]?.id ?? null)
+        ? (baseIndex + 1) % selectable.length
+        : (baseIndex - 1 + selectable.length) % selectable.length
+      setHighlightedModelID(selectable[nextIndex]?.id ?? null)
     }
   }
   const hasConnector = true
@@ -1077,6 +1179,7 @@ export function CreateAgentDialog({
                         ) : filteredModels.map((m) => {
                           const selected = selectedModelID === m.id
                           const highlighted = highlightedModelID === m.id
+                          const incompatible = incompatibleModelIDs.has(m.id)
                           return (
                             <button
                               id={`model-option-${m.id}`}
@@ -1084,17 +1187,28 @@ export function CreateAgentDialog({
                               type="button"
                               role="option"
                               aria-selected={selected}
-                              onMouseEnter={() => setHighlightedModelID(m.id)}
+                              aria-disabled={incompatible}
+                              disabled={incompatible}
+                              title={incompatible ? t("agents.form.modelProtocolMismatch", { engine: agentEngine }) : undefined}
+                              onMouseEnter={() => { if (!incompatible) setHighlightedModelID(m.id) }}
                               onClick={() => selectModel(m)}
-                              className={"flex w-full items-center justify-between gap-3 px-3 py-2 text-left " + (highlighted ? "bg-surface-muted text-fg" : selected ? "bg-surface-subtle text-fg" : "text-fg-muted hover:bg-surface-subtle")}
+                              className={"flex w-full items-center justify-between gap-3 px-3 py-2 text-left " + (incompatible ? "cursor-not-allowed opacity-40" : highlighted ? "bg-surface-muted text-fg" : selected ? "bg-surface-subtle text-fg" : "text-fg-muted hover:bg-surface-subtle")}
                             >
-                              <span className="min-w-0 truncate">{modelLabel(m)}</span>
-                              {selected && (
-                                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-subtle">
-                                  <Check className="h-3.5 w-3.5" />
-                                  {t("agents.form.selected")}
+                              <span className="min-w-0 flex-1 truncate">{modelLabel(m)}</span>
+                              <span className="flex shrink-0 items-center gap-2">
+                                {/* Protocol badge on every row (compatible or
+                                    not) so the user can see each model's wire
+                                    protocol at a glance. */}
+                                <span className="text-xs text-fg-faint">
+                                  {protocolLabel(modelProtocol(m))}
                                 </span>
-                              )}
+                                {selected && !incompatible && (
+                                  <span className="inline-flex items-center gap-1 text-xs text-fg-subtle">
+                                    <Check className="h-3.5 w-3.5" />
+                                    {t("agents.form.selected")}
+                                  </span>
+                                )}
+                              </span>
                             </button>
                           )
                         })}
