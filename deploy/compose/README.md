@@ -56,8 +56,8 @@ which does not contain them):
   defaults to `/usr/local/bin/parsar-server`).
 - `parsar-migrate` — the goose-driven migration runner used by the
   runbook's `docker compose ... exec parsar-server parsar-migrate` step.
-- `parsar-bootstrap` — the first-owner provisioning CLI (used when the
-  HTTP bootstrap endpoint is disabled).
+- `parsar-bootstrap` — optional headless first-owner provisioning CLI
+  for automated deployments that do not use the web setup flow.
 
 The Dockerfile that builds this image lives at the repo root
 (`Dockerfile`); `make docker-build` produces an image satisfying this

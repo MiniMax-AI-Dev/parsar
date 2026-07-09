@@ -28,7 +28,7 @@
 #   4. Adjust the bind-mount paths below to match where you put
 #      the config file and where you want runtime state to live.
 #   5. docker compose -f deploy/compose/compose.selfhost.yml --env-file .env up -d
-#   6. Follow deploy-runbook.md §3 to bootstrap the first owner.
+#   6. Open the web UI and create the first owner account.
 #
 # Hard rules baked into this file:
 #   - Postgres data lives on a named volume, never inside the repo CWD.
@@ -81,7 +81,7 @@ services:
     # Defaults to the GHCR prebuilt image (same one docker-compose.local.yml
     # uses — profile not fork). Override PARSAR_SERVER_IMAGE in .env to pull
     # from your own registry (e.g. an Aliyun ACR mirror) or a pinned tag.
-    image: ${PARSAR_SERVER_IMAGE:-ghcr.io/MiniMax-ai-dev/parsar-server:latest}
+    image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
     container_name: parsar-server
     restart: unless-stopped
     depends_on:
@@ -115,11 +115,10 @@ services:
       PARSAR_DEV_AUTH: "false"
       PARSAR_COOKIE_SECURE: ${PARSAR_COOKIE_SECURE:-true}
 
-      # ---------- Feishu OIDC + event subscription ----------
-      # PARSAR_FEISHU_MOCK=true is the quickstart default in
-      # .env.example so a fresh clone can `docker compose up` without
-      # registering a Feishu OAuth app first. Set to false (or unset)
-      # before production and supply all four below.
+      # ---------- Optional Feishu SSO + event subscription ----------
+      # Leave empty for the default first-owner setup and email/password
+      # login. Fill these in only when enabling Feishu SSO or Feishu IM
+      # event delivery.
       PARSAR_DAEMON_REPO: ${PARSAR_DAEMON_REPO}
       PARSAR_FEISHU_MOCK: ${PARSAR_FEISHU_MOCK}
       PARSAR_FEISHU_APP_ID: ${PARSAR_FEISHU_APP_ID}
@@ -127,6 +126,7 @@ services:
       PARSAR_FEISHU_REDIRECT_URI: ${PARSAR_FEISHU_REDIRECT_URI}
       PARSAR_FEISHU_VERIFICATION_TOKEN: ${PARSAR_FEISHU_VERIFICATION_TOKEN}
       PARSAR_FEISHU_ENCRYPT_KEY: ${PARSAR_FEISHU_ENCRYPT_KEY}
+      PARSAR_FEISHU_APP_REGISTRATION: ${PARSAR_FEISHU_APP_REGISTRATION}
       PARSAR_LOGIN_REDIRECT_URL: ${PARSAR_LOGIN_REDIRECT_URL}
       # Host overrides — leave blank unless you reverse-proxy Feishu
       # through a private endpoint.

@@ -1,15 +1,16 @@
-# Build + push the parsar-server image to GitHub Container Registry.
+# Build the parsar-server image in CI and push releases to GHCR.
 #
 # This is the Phase 1 deliverable's "one command" enabler: docker-compose.local.yml
 # (and the Phase 2 self-host compose) pull ghcr.io/<owner>/parsar-server by
 # default. Same image, two compose profiles — profile not fork.
 #
 # Triggers:
+#   - Pull request touching server/web/build inputs -> build only, no push
 #   - Push to main touching server/web/build inputs -> :latest + :<sha>
 #   - Tag push matching `parsar-server-v*`          -> :<release-tag>
-#   - Manual workflow_dispatch
+#   - Manual workflow_dispatch                     -> build + push
 #
-# Output: ghcr.io/${{ github.repository_owner }}/parsar-server:<tag>
+# Output: ghcr.io/<owner-lowercase>/parsar-server:<tag>
 #   - latest        on default-branch pushes
 #   - <short-sha>   on every build
 #   - <release-tag> on tag pushes (e.g. parsar-server-v0.1.0)
@@ -18,7 +19,7 @@
 # `images:` field, or just override PARSAR_SERVER_IMAGE in the compose .env
 # and never run this workflow.
 
-name: parsar-server image release
+name: parsar-server image
 
 on:
   push:
@@ -36,11 +37,32 @@ on:
       - "go.mod"
       - "go.sum"
       - "go.work"
+      - "package.json"
+      - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
+      - "docs/openapi/openapi.yaml"
+      - ".dockerignore"
       - "Dockerfile"
       - ".github/workflows/parsar-server-release.yml"
     tags:
       - "parsar-server-v*"
+  pull_request:
+    paths:
+      - "server/**"
+      - "internal/**"
+      - "apps/web/**"
+      - "apps/parsar-daemon/**"
+      - "packages/**"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "docs/openapi/openapi.yaml"
+      - ".dockerignore"
+      - "Dockerfile"
+      - ".github/workflows/parsar-server-release.yml"
   workflow_dispatch:
 
 permissions:
@@ -60,7 +82,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Compute lowercase GHCR image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/parsar-server" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -71,20 +99,21 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/parsar-server
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=ref,event=tag
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push
+      - name: Build image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

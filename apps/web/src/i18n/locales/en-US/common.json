@@ -111,9 +111,6 @@
   "login": {
     "title": "Parsar",
     "subtitle": "Team agent control plane",
-    "feishuButton": "Sign in with Feishu",
-    "firstLoginNote": "First-time sign-in will create your account automatically",
-    "terms": "Signing in means you agree to the Terms",
     "loading": "Loading sign-in status...",
     "emailLabel": "Email",
     "emailPlaceholder": "you@company.com",
@@ -123,7 +120,6 @@
     "submitting": "Signing in...",
     "invalidCredentials": "Invalid email or password",
     "genericError": "Something went wrong. Please try again.",
-    "orDivider": "or",
     "noAccountHint": "First time here? Ask your admin for an invite."
   },
   "setup": {

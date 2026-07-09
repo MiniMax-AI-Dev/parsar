@@ -1265,9 +1265,8 @@ definitions:
 info:
   contact: {}
   description: |-
-    Parsar harness API. Feishu production auth/event deployments require
-    PARSAR_FEISHU_APP_ID, PARSAR_FEISHU_APP_SECRET, PARSAR_FEISHU_REDIRECT_URI
-    and PARSAR_FEISHU_VERIFICATION_TOKEN when PARSAR_FEISHU_MOCK is not true.
+    Parsar harness API. Optional Feishu SSO and event delivery
+    are enabled only when the corresponding PARSAR_FEISHU_* values are configured.
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html

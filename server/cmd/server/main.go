@@ -7,9 +7,8 @@
 //
 //	@title            Parsar API
 //	@version          0.1.0
-//	@description      Parsar harness API. Feishu production auth/event deployments require
-//	@description      PARSAR_FEISHU_APP_ID, PARSAR_FEISHU_APP_SECRET, PARSAR_FEISHU_REDIRECT_URI
-//	@description      and PARSAR_FEISHU_VERIFICATION_TOKEN when PARSAR_FEISHU_MOCK is not true.
+//	@description      Parsar harness API. Optional Feishu SSO and event delivery
+//	@description      are enabled only when the corresponding PARSAR_FEISHU_* values are configured.
 //	@license.name     Apache 2.0
 //	@license.url      https://www.apache.org/licenses/LICENSE-2.0.html
 //	@BasePath         /
@@ -82,20 +81,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const feishuStartupFatalMessage = "PARSAR_FEISHU_APP_ID/APP_SECRET/REDIRECT_URI and PARSAR_FEISHU_VERIFICATION_TOKEN required when not in mock mode; export PARSAR_FEISHU_MOCK=true for local dev"
-
 type feishuStartupMode string
 
 const (
-	feishuStartupModeDev  feishuStartupMode = "dev"
-	feishuStartupModeProd feishuStartupMode = "prod"
+	feishuStartupModeDisabled feishuStartupMode = "disabled"
+	feishuStartupModeMock     feishuStartupMode = "mock"
+	feishuStartupModeProd     feishuStartupMode = "prod"
 )
 
 type feishuStartupDecision struct {
-	Mode                feishuStartupMode
-	RegisterHandlers    bool
-	CookieSecureWarning bool
-	FatalMessage        string
+	Mode                    feishuStartupMode
+	RegisterOAuthHandlers   bool
+	RegisterWebhookSecurity bool
+	CookieSecureWarning     bool
 }
 
 func main() {
@@ -192,21 +190,19 @@ func main() {
 		}
 	}
 
-	// Validate Feishu deployment mode before DB wiring so a
-	// misconfigured production process cannot come up with missing
-	// login/event routes.
 	feishuDecision := decideFeishuStartup(envLookup)
-	if feishuDecision.FatalMessage != "" {
-		log.Bg().Error(feishuDecision.FatalMessage)
-		os.Exit(1)
-	}
-	if feishuDecision.Mode == feishuStartupModeDev {
+	switch feishuDecision.Mode {
+	case feishuStartupModeMock:
 		log.Bg().Warn("DEV MODE: PARSAR_FEISHU_MOCK=true — using mock Feishu auth and skipping webhook verification")
-	} else {
-		log.Bg().Info("feishu prod mode: real Feishu auth/event configuration present")
+	case feishuStartupModeProd:
+		log.Bg().Info("feishu prod mode configured",
+			"oauth_handlers", feishuDecision.RegisterOAuthHandlers,
+			"webhook_security", feishuDecision.RegisterWebhookSecurity)
 		if feishuDecision.CookieSecureWarning {
 			log.Bg().Warn("running prod auth on HTTP — cookies will leak")
 		}
+	default:
+		log.Bg().Info("feishu auth/event routes disabled; email/password setup remains available")
 	}
 
 	pool := openPool(cfg.Database.URL)
@@ -359,18 +355,20 @@ func main() {
 		dev.WithDispatchContext(serverRootCtx),
 		dev.WithRunStreamBroker(runStreamBroker),
 	}
-	if regClient, err := gatewaypkg.NewFeishuAppRegistrationClient(gatewaypkg.FeishuAppRegistrationClientOptions{
-		AccountsBaseURL: strings.TrimSpace(envLookup(feishu.EnvAuthorizeBase)),
-		OpenBaseURL:     strings.TrimSpace(envLookup(feishu.EnvAPIBase)),
-	}); err != nil {
-		log.Bg().Warn("feishu app-registration client not registered", "error", err)
-	} else {
-		opts = append(opts, dev.WithFeishuAppRegistration(regClient, strings.TrimSpace(envLookup(feishu.EnvAPIBase))))
-		log.Bg().Info("feishu app-registration provisioning registered")
+	if truthy(envLookup("PARSAR_FEISHU_APP_REGISTRATION")) {
+		if regClient, err := gatewaypkg.NewFeishuAppRegistrationClient(gatewaypkg.FeishuAppRegistrationClientOptions{
+			AccountsBaseURL: strings.TrimSpace(envLookup(feishu.EnvAuthorizeBase)),
+			OpenBaseURL:     strings.TrimSpace(envLookup(feishu.EnvAPIBase)),
+		}); err != nil {
+			log.Bg().Warn("feishu app-registration client not registered", "error", err)
+		} else {
+			opts = append(opts, dev.WithFeishuAppRegistration(regClient, strings.TrimSpace(envLookup(feishu.EnvAPIBase))))
+			log.Bg().Info("feishu app-registration provisioning registered")
+		}
 	}
-	if feishuDecision.RegisterHandlers {
+	if feishuDecision.RegisterWebhookSecurity {
 		opts = append(opts, dev.WithFeishuWebhookSecurity(
-			feishuDecision.Mode == feishuStartupModeDev,
+			feishuDecision.Mode == feishuStartupModeMock,
 			strings.TrimSpace(envLookup(feishu.EnvVerificationToken)),
 			strings.TrimSpace(envLookup(feishu.EnvEncryptKey)),
 		))
@@ -640,7 +638,7 @@ func main() {
 			CookieSecure: cfg.Auth.Cookie.Secure,
 		}))
 
-		if feishuDecision.RegisterHandlers {
+		if feishuDecision.RegisterOAuthHandlers {
 			feishuClient, err := feishu.NewClientFromEnv(envLookup)
 			if err != nil {
 				log.Bg().Warn("feishu OIDC client not registered", "error", err)
@@ -1047,19 +1045,23 @@ func decideFeishuStartup(env func(string) string) feishuStartupDecision {
 		env = os.Getenv
 	}
 	if feishu.IsMockEnabled(env) {
-		return feishuStartupDecision{Mode: feishuStartupModeDev, RegisterHandlers: true}
+		return feishuStartupDecision{
+			Mode:                    feishuStartupModeMock,
+			RegisterOAuthHandlers:   true,
+			RegisterWebhookSecurity: true,
+		}
 	}
-	decision := feishuStartupDecision{
-		Mode:                feishuStartupModeProd,
-		RegisterHandlers:    true,
-		CookieSecureWarning: !strings.EqualFold(strings.TrimSpace(env("PARSAR_COOKIE_SECURE")), "true"),
+	oauthConfigured := feishu.IsConfigured(env)
+	webhookConfigured := feishu.IsWebhookConfigured(env)
+	if !oauthConfigured && !webhookConfigured {
+		return feishuStartupDecision{Mode: feishuStartupModeDisabled}
 	}
-	if !feishu.IsConfigured(env) || !feishu.IsWebhookConfigured(env) {
-		decision.RegisterHandlers = false
-		decision.CookieSecureWarning = false
-		decision.FatalMessage = feishuStartupFatalMessage
+	return feishuStartupDecision{
+		Mode:                    feishuStartupModeProd,
+		RegisterOAuthHandlers:   oauthConfigured,
+		RegisterWebhookSecurity: webhookConfigured,
+		CookieSecureWarning:     oauthConfigured && !strings.EqualFold(strings.TrimSpace(env("PARSAR_COOKIE_SECURE")), "true"),
 	}
-	return decision
 }
 
 func drainAudit(ing *audit.Ingester) {

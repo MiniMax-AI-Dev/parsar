@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 
 import { ApiError } from "../lib/api-client"
-import { feishuLoginUrl, useLoginWithPassword } from "../lib/api-auth"
+import { useLoginWithPassword } from "../lib/api-auth"
 import { useBootstrapStatus } from "../lib/api-bootstrap"
 import { SetupPage } from "./SetupPage"
 
@@ -11,12 +11,7 @@ import { SetupPage } from "./SetupPage"
  *
  * Behavior branches on `GET /api/v1/bootstrap/status`:
  *   status.needed=true  -> render <SetupPage/> (first-owner registration)
- *   status.needed=false -> render the email/password form + Feishu button
- *
- * We deliberately do NOT hide the Feishu button in the setup path:
- * once the first owner is created they still need Feishu to onboard
- * additional team members in Feishu-first tenants. The two paths are
- * meant to coexist forever.
+ *   status.needed=false -> render the email/password form
  */
 export function LoginPage() {
   const { t } = useTranslation("common")
@@ -123,19 +118,6 @@ function SignInView() {
             {submitting ? t("login.submitting") : t("login.submitButton")}
           </button>
         </form>
-
-        <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wide text-fg-faint">
-          <span className="h-px flex-1 bg-line" />
-          <span>{t("login.orDivider")}</span>
-          <span className="h-px flex-1 bg-line" />
-        </div>
-
-        <a
-          href={feishuLoginUrl()}
-          className="mx-auto flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-base font-medium text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          {t("login.feishuButton")}
-        </a>
 
         <p className="mt-6 text-center text-sm leading-5 text-fg-faint">
           {t("login.noAccountHint")}

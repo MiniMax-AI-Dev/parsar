@@ -13,7 +13,8 @@ func TestDecideFeishuStartup(t *testing.T) {
 		name        string
 		env         map[string]string
 		wantMode    feishuStartupMode
-		wantFatal   bool
+		wantOAuth   bool
+		wantWebhook bool
 		wantWarning bool
 	}{
 		{
@@ -21,35 +22,44 @@ func TestDecideFeishuStartup(t *testing.T) {
 			env: map[string]string{
 				feishu.EnvMock: "true",
 			},
-			wantMode: feishuStartupModeDev,
+			wantMode:    feishuStartupModeMock,
+			wantOAuth:   true,
+			wantWebhook: true,
 		},
 		{
-			name:      "prod missing config",
-			env:       map[string]string{},
-			wantMode:  feishuStartupModeProd,
-			wantFatal: true,
+			name:     "missing config disables optional feishu routes",
+			env:      map[string]string{},
+			wantMode: feishuStartupModeDisabled,
 		},
 		{
-			name: "prod configured warns when cookie not secure",
+			name: "prod oauth configured warns when cookie not secure",
 			env: map[string]string{
-				feishu.EnvAppID:             "cli_x",
-				feishu.EnvAppSecret:         "secret",
-				feishu.EnvRedirectURI:       "https://parsar.example/api/v1/auth/feishu/callback",
-				feishu.EnvVerificationToken: "verify-token",
+				feishu.EnvAppID:       "cli_x",
+				feishu.EnvAppSecret:   "secret",
+				feishu.EnvRedirectURI: "https://parsar.example/api/v1/auth/feishu/callback",
 			},
 			wantMode:    feishuStartupModeProd,
+			wantOAuth:   true,
 			wantWarning: true,
 		},
 		{
-			name: "prod configured secure cookies",
+			name: "prod oauth configured secure cookies",
 			env: map[string]string{
-				feishu.EnvAppID:             "cli_x",
-				feishu.EnvAppSecret:         "secret",
-				feishu.EnvRedirectURI:       "https://parsar.example/api/v1/auth/feishu/callback",
-				feishu.EnvVerificationToken: "verify-token",
-				"PARSAR_COOKIE_SECURE":    "true",
+				feishu.EnvAppID:        "cli_x",
+				feishu.EnvAppSecret:    "secret",
+				feishu.EnvRedirectURI:  "https://parsar.example/api/v1/auth/feishu/callback",
+				"PARSAR_COOKIE_SECURE": "true",
 			},
-			wantMode: feishuStartupModeProd,
+			wantMode:  feishuStartupModeProd,
+			wantOAuth: true,
+		},
+		{
+			name: "prod webhook-only config enables webhook security",
+			env: map[string]string{
+				feishu.EnvVerificationToken: "verify-token",
+			},
+			wantMode:    feishuStartupModeProd,
+			wantWebhook: true,
 		},
 	}
 	for _, tc := range cases {
@@ -58,11 +68,11 @@ func TestDecideFeishuStartup(t *testing.T) {
 			if got.Mode != tc.wantMode {
 				t.Fatalf("Mode = %q, want %q", got.Mode, tc.wantMode)
 			}
-			if (got.FatalMessage != "") != tc.wantFatal {
-				t.Fatalf("FatalMessage = %q, want fatal=%v", got.FatalMessage, tc.wantFatal)
+			if got.RegisterOAuthHandlers != tc.wantOAuth {
+				t.Fatalf("RegisterOAuthHandlers = %v, want %v", got.RegisterOAuthHandlers, tc.wantOAuth)
 			}
-			if got.RegisterHandlers == tc.wantFatal {
-				t.Fatalf("RegisterHandlers = %v, want fatal inverse", got.RegisterHandlers)
+			if got.RegisterWebhookSecurity != tc.wantWebhook {
+				t.Fatalf("RegisterWebhookSecurity = %v, want %v", got.RegisterWebhookSecurity, tc.wantWebhook)
 			}
 			if got.CookieSecureWarning != tc.wantWarning {
 				t.Fatalf("CookieSecureWarning = %v, want %v", got.CookieSecureWarning, tc.wantWarning)
