@@ -187,15 +187,6 @@ definitions:
     properties:
       email:
         type: string
-      invite:
-        description: |-
-          Invite, when true, provisions a local email/password identity for
-          a brand-new user and returns the plaintext temporary password
-          once in the response body. The admin is expected to relay that
-          password to the invitee out-of-band. False (default) preserves
-          the pre-existing behaviour: the member row is created but no
-          local credential is bound (Feishu / OIDC-only tenants).
-        type: boolean
       name:
         type: string
       role:
