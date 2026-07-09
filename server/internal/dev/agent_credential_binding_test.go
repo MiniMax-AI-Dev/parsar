@@ -87,6 +87,28 @@ func TestValidateAgentVisibilityBindings(t *testing.T) {
 		}
 	})
 
+	t.Run("public + null model binding is ok", func(t *testing.T) {
+		err := validateAgentVisibilityBindings("public", map[string]any{
+			"model_credential_binding": nil,
+		})
+		if err != nil {
+			t.Fatalf("public + null model binding should be ok, got %v", err)
+		}
+	})
+
+	t.Run("public + null capability bindings still validates model binding", func(t *testing.T) {
+		err := validateAgentVisibilityBindings("public", map[string]any{
+			"credential_bindings":      nil,
+			"model_credential_binding": map[string]any{"source": "personal"},
+		})
+		if err == nil {
+			t.Fatal("expected model binding rejection")
+		}
+		if !strings.Contains(err.Error(), "model_credential_binding") {
+			t.Fatalf("error should name the model binding, got %q", err)
+		}
+	})
+
 	t.Run("public with no bindings at all is ok", func(t *testing.T) {
 		// Public agent with no credential needs (skill-only) is legal.
 		if err := validateAgentVisibilityBindings("public", map[string]any{}); err != nil {
