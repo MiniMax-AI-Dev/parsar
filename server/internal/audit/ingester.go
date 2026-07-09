@@ -56,6 +56,7 @@ type Ingester struct {
 	closing   atomic.Bool
 
 	emitted      atomic.Int64
+	handled      atomic.Int64
 	dropped      atomic.Int64
 	sinkErrors   atomic.Int64
 	lastLagNanos atomic.Int64
@@ -157,20 +158,12 @@ func (i *Ingester) Flush(ctx context.Context) error {
 	if i.closing.Load() {
 		return ErrClosed
 	}
+	target := i.emitted.Load()
 	tick := time.NewTicker(5 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		// Buffer empty + a short settling window for the worker's
-		// in-flight Write is good enough without exposing more state.
-		if len(i.buffer) == 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(20 * time.Millisecond):
-			}
-			if len(i.buffer) == 0 {
-				return nil
-			}
+		if i.handled.Load() >= target {
+			return nil
 		}
 		select {
 		case <-ctx.Done():
@@ -193,6 +186,7 @@ func (i *Ingester) run(ctx context.Context) {
 				return
 			}
 			i.handle(ctx, ev)
+			i.handled.Add(1)
 		}
 	}
 }
@@ -207,6 +201,7 @@ func (i *Ingester) drain(ctx context.Context) {
 				return
 			}
 			i.handle(ctx, ev)
+			i.handled.Add(1)
 		default:
 			return
 		}
