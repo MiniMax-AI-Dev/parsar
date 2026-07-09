@@ -1803,6 +1803,22 @@
       "runtimeRoot": "Local runtime root",
       "runtimeRootHint": "Config, logs, state, and cache live here instead of the repository root."
     },
+    "authentication": {
+      "title": "Authentication",
+      "description": "Read-only login provider status from deployment configuration. Secrets stay in env or your secret manager.",
+      "loading": "Loading auth provider status...",
+      "error": "Could not load auth provider status.",
+      "callbackUrl": "Callback URL",
+      "requiredEnv": "Required env",
+      "missingEnv": "Missing env",
+      "noneMissing": "No required env is missing.",
+      "docsHint": "Deployment guide:",
+      "status": {
+        "enabled": "Enabled",
+        "configured": "Configured",
+        "missing": "Not configured"
+      }
+    },
     "gatewayDefaults": {
       "title": "Gateway defaults",
       "description": "Defaults applied when a new gateway is wired up. Existing gateways aren't affected.",

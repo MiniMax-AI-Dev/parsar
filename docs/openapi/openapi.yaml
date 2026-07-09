@@ -183,6 +183,33 @@ definitions:
       workspaceID:
         type: string
     type: object
+  dev.AuthProvider:
+    properties:
+      callback_url:
+        type: string
+      configured:
+        type: boolean
+      docs_url:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: string
+      label:
+        type: string
+      login_url:
+        type: string
+      missing_env:
+        items:
+          type: string
+        type: array
+      required_env:
+        items:
+          type: string
+        type: array
+      type:
+        type: string
+    type: object
   dev.addWorkspaceMemberRequest:
     properties:
       email:
@@ -203,6 +230,13 @@ definitions:
           store-side default (pinned), but the create/edit dialogs always
           send a value so the server doesn't have to guess.
         type: string
+    type: object
+  dev.authProvidersResponse:
+    properties:
+      providers:
+        items:
+          $ref: '#/definitions/dev.publicAuthProvider'
+        type: array
     type: object
   dev.builtinCapabilityBody:
     properties:
@@ -575,6 +609,19 @@ definitions:
       upload_source:
         type: string
     type: object
+  dev.publicAuthProvider:
+    properties:
+      enabled:
+        type: boolean
+      id:
+        type: string
+      label:
+        type: string
+      login_url:
+        type: string
+      type:
+        type: string
+    type: object
   dev.requeueAgentRunBody:
     properties:
       reason:
@@ -897,6 +944,15 @@ definitions:
       last_used_at:
         type: string
       updated_at:
+        type: string
+    type: object
+  dev.workspaceAuthProvidersResponse:
+    properties:
+      providers:
+        items:
+          $ref: '#/definitions/dev.AuthProvider'
+        type: array
+      workspace_id:
         type: string
     type: object
   password.errorResponse:
@@ -2601,6 +2657,21 @@ paths:
               type: string
             type: object
       summary: Log out the current session
+      tags:
+      - auth
+  /api/v1/auth/providers:
+    get:
+      description: Returns the login providers the public login page may render. Sensitive
+        diagnostics are omitted.
+      operationId: listAuthProviders
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Auth providers
+          schema:
+            $ref: '#/definitions/dev.authProvidersResponse'
+      summary: List auth providers
       tags:
       - auth
   /api/v1/bootstrap:
@@ -4980,6 +5051,39 @@ paths:
       summary: List workspace audit records
       tags:
       - workspaces
+  /api/v1/workspaces/{workspaceID}/auth/providers:
+    get:
+      description: Returns read-only auth provider status for workspace owners/admins.
+        Secret values are never returned.
+      operationId: listWorkspaceAuthProviders
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Auth provider diagnostics
+          schema:
+            $ref: '#/definitions/dev.workspaceAuthProvidersResponse'
+        "400":
+          description: workspace_id must be a valid uuid
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not workspace owner/admin
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List workspace auth provider diagnostics
+      tags:
+      - auth
   /api/v1/workspaces/{workspaceID}/capabilities:
     get:
       description: Returns the workspace's own capabilities plus its marketplace installs

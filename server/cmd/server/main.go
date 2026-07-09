@@ -354,6 +354,7 @@ func main() {
 	opts := []dev.RouterOption{
 		dev.WithDispatchContext(serverRootCtx),
 		dev.WithRunStreamBroker(runStreamBroker),
+		dev.WithAuthProviders(buildAuthProviderRegistry(envLookup, cfg, feishuDecision)),
 	}
 	if truthy(envLookup("PARSAR_FEISHU_APP_REGISTRATION")) {
 		if regClient, err := gatewaypkg.NewFeishuAppRegistrationClient(gatewaypkg.FeishuAppRegistrationClientOptions{
@@ -1062,6 +1063,63 @@ func decideFeishuStartup(env func(string) string) feishuStartupDecision {
 		RegisterWebhookSecurity: webhookConfigured,
 		CookieSecureWarning:     oauthConfigured && !strings.EqualFold(strings.TrimSpace(env("PARSAR_COOKIE_SECURE")), "true"),
 	}
+}
+
+func buildAuthProviderRegistry(env func(string) string, cfg config.Config, feishuDecision feishuStartupDecision) dev.AuthProviderRegistry {
+	if env == nil {
+		env = os.Getenv
+	}
+	providers := []dev.AuthProvider{{
+		ID:         "password",
+		Type:       dev.AuthProviderTypePassword,
+		Label:      "Email password",
+		Enabled:    true,
+		Configured: true,
+		LoginURL:   "/login",
+	}}
+
+	required := []string{
+		feishu.EnvAppID,
+		feishu.EnvAppSecret,
+		feishu.EnvRedirectURI,
+	}
+	missing := missingEnv(env, required)
+	configured := feishuDecision.RegisterOAuthHandlers
+	if feishu.IsMockEnabled(env) {
+		missing = nil
+		configured = true
+	}
+	callbackURL := strings.TrimSpace(env(feishu.EnvRedirectURI))
+	if callbackURL == "" {
+		callbackURL = cfg.BuildPublicURL("/api/v1/auth/feishu/callback")
+	}
+	feishuProvider := dev.AuthProvider{
+		ID:          "feishu",
+		Type:        dev.AuthProviderTypeOAuth,
+		Label:       "Feishu",
+		Enabled:     feishuDecision.RegisterOAuthHandlers,
+		Configured:  configured,
+		CallbackURL: callbackURL,
+		RequiredEnv: required,
+		MissingEnv:  missing,
+		DocsURL:     "docs/deploy/feishu-prod.md",
+	}
+	if feishuProvider.Enabled {
+		feishuProvider.LoginURL = "/api/v1/auth/feishu/start"
+	}
+	providers = append(providers, feishuProvider)
+
+	return dev.AuthProviderRegistry{Providers: providers}
+}
+
+func missingEnv(env func(string) string, names []string) []string {
+	missing := make([]string, 0, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(env(name)) == "" {
+			missing = append(missing, name)
+		}
+	}
+	return missing
 }
 
 func drainAudit(ing *audit.Ingester) {

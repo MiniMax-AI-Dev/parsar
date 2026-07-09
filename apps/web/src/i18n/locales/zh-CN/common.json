@@ -120,6 +120,8 @@
     "submitting": "登录中...",
     "invalidCredentials": "邮箱或密码错误",
     "genericError": "发生错误,请稍后重试。",
+    "ssoDivider": "SSO",
+    "ssoButton": "使用 {{provider}} 登录",
     "noAccountHint": "首次访问?请联系管理员发送邀请。"
   },
   "setup": {

@@ -120,6 +120,8 @@
     "submitting": "Signing in...",
     "invalidCredentials": "Invalid email or password",
     "genericError": "Something went wrong. Please try again.",
+    "ssoDivider": "SSO",
+    "ssoButton": "Sign in with {{provider}}",
     "noAccountHint": "First time here? Ask your admin for an invite."
   },
   "setup": {
