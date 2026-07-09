@@ -8,12 +8,11 @@
   <b>Your team's intent, parsed into action.</b>
   <br />
   The open-source agent collaboration control plane for engineering teams.
-  <br />
-  <br />
-  ⚠️ <strong>Alpha — under active development, not production-ready.</strong>
-  <br />
-  APIs, schemas, and configs may change without notice between commits.
 </p>
+
+> [!WARNING]
+> **Alpha — under active development, not production-ready.**
+> APIs, schemas, and configs may change without notice between commits.
 
 ## What is Parsar
 
@@ -46,6 +45,8 @@ PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
 ```
 
 Open <http://127.0.0.1:18080>. Mock auth signs you in as `admin@example.com` — no secrets, no `.env`, no config.
+
+> **Platform.** Verified on Linux/amd64. The Agent sandbox image is currently amd64-only, so Apple Silicon (arm64) is not yet supported out of the box.
 
 ## Contributing
 
