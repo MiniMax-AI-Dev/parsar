@@ -52,11 +52,8 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 # updating this list AND the lockfile.
 COPY apps/web/package.json apps/web/
 COPY packages/cli/package.json packages/cli/
-COPY packages/core/package.json packages/core/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/opencode-plugin/package.json packages/opencode-plugin/
-COPY packages/ui/package.json packages/ui/
-COPY packages/views/package.json packages/views/
 
 # Install only the deps the web app actually needs.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
