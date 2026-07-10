@@ -55,6 +55,79 @@ Direct development on `main` is not allowed. Every session honours this rule.
   the agent (`project_agents.runtime_id`); the daemon's internal adapter
   picks which CLI actually executes.
 
+## Code quality & architecture
+
+Parsar favors small, single-purpose files and reused helpers over growing
+files and copy-pasted logic. These rules are forward-looking: they do not
+require immediately splitting existing large files, but any PR that adds
+substantial new code to one of the files named below as an example must
+split relevant pieces out first rather than growing the file further.
+
+### File and function size
+
+- Go: a source file crossing ~500 lines is a signal to split by
+  sub-concern before adding more code to it. New files should stay under
+  this from the start.
+- React/TS: a component file crossing ~400 lines is a signal to extract
+  sub-components/dialogs into their own files.
+- What not to imitate: `server/internal/dev/routes.go` (6300+ lines),
+  `server/internal/store/store.go` (8400+ lines),
+  `apps/web/src/pages/admin/AgentsPage.tsx` (2000+ lines, ~40 top-level
+  functions/components in one file).
+
+### Package and file cohesion
+
+- A package/directory groups one domain concern. `server/internal/dev`
+  currently mixes auth, capabilities, uploads, scheduled tasks, RBAC, and
+  sandbox admin in one flat package — do not add another unrelated route
+  group there. Give a new domain its own file at minimum, and its own
+  subpackage once it needs more than ~3 files or crosses ~800 lines.
+- Store methods belong grouped by entity, not accreted into a single
+  `Store` file/struct — see `server/internal/store/store.go` as the file
+  not to imitate.
+
+### No duplicate logic
+
+- Before writing a formatter, parser, validator, or error-mapping helper,
+  grep for an existing one. Reuse or extend it rather than writing a
+  second `formatDuration` / `parseXID` / `writeXError`.
+- If the same 3+ line pattern appears at a second call site, extract it
+  before a third copy is added.
+- Known helpers to reuse rather than reinvent: `decodeJSONWithField` /
+  `decodeJSONWithFields` (`server/internal/dev/routes.go`) for JSON body
+  decode errors; `parseLimit` / `parseOffset` (same file) for pagination;
+  `apiRequest<T>()` (`apps/web/src/lib/api-client.ts`) for all HTTP calls
+  from the web app — do not hand-roll `fetch`.
+
+### Error-handling contract (Go handlers)
+
+- One error-response helper per API surface, not a new sentinel→HTTP-status
+  switch per file. `server/internal/dev/` currently has 6+ near-duplicate
+  mappers (`writeRBACError`, `writeCredentialKindError`,
+  `writeCapabilityError`, `writeImportParseError`, `writeReadError`,
+  `writeStoreAgentError`) — new handlers must reuse an existing mapper for
+  their domain instead of writing a parallel one, and must not inline an
+  ad hoc `switch { case errors.Is(...) }` in the handler body.
+
+### Frontend shared logic
+
+- Cross-page utilities (date/time/duration formatting, status labels,
+  etc.) live once in `apps/web/src/lib/`. Do not reimplement inside a page
+  component "because it's just a few lines" — that is how
+  `RunsPage.tsx`'s `fmtDuration` and `AgentsPage.tsx`'s `durationMs` /
+  `formatDurationMs` diverged into two slightly different
+  implementations.
+- `packages/ui` / `packages/core` are reserved for logic shared across
+  more than one app. Until they are populated, shared web-only logic
+  still belongs in `apps/web/src/lib/`, not duplicated per page.
+
+### Testing granularity
+
+- When a function or file is split for the reasons above, its test moves
+  or splits with it. Do not keep appending to an already-large `_test.go`
+  (e.g. `routes_test.go`, `store_test.go`) for newly extracted code — give
+  the new file its own scoped test file.
+
 ## Web UI hard rules
 
 Dialogs / drawers / modals and detail panels **must not show a horizontal
