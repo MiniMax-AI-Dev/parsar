@@ -61,7 +61,7 @@ export PARSAR_TEST_DATABASE_URL="$PARSAR_CHECK_DATABASE_URL"
 pg_connect_ready=0
 for _ in $(seq 1 30); do
   if docker compose -f docker-compose.dev.yml exec -T postgres \
-    psql "$PARSAR_CHECK_DATABASE_URL" -c 'select 1' >/dev/null 2>&1; then
+    psql -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" -c 'select 1' >/dev/null 2>&1; then
     pg_connect_ready=1
     break
   fi
