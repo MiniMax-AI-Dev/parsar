@@ -11,6 +11,23 @@ implementation, refactor, or schema / API change.
 Except for user-facing internationalized bilingual copy, comments and
 documentation must be written in English.
 
+## Code quality
+
+Full rules: [`CONTRIBUTING.md#code-quality--architecture`](./CONTRIBUTING.md#code-quality--architecture).
+Headlines:
+
+- Split before you grow: Go files over ~500 lines / React components over
+  ~400 lines are a signal to extract, not append to.
+- Grep before you write: reuse an existing formatter / parser / error
+  mapper instead of adding a near-duplicate one.
+- One error-response helper per API surface — don't add another
+  sentinel→status switch.
+- Shared frontend logic (formatting, labels) lives once in
+  `apps/web/src/lib/`, never copy-pasted per page.
+- `server/internal/dev/routes.go`, `server/internal/store/store.go`, and
+  `apps/web/src/pages/admin/AgentsPage.tsx` are known oversized files —
+  do not add more weight to them; split out the piece you're touching.
+
 ## HTTP contract (swaggo generation)
 
 `docs/openapi/openapi.yaml` is a **build artifact**, not a hand-edited
