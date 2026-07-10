@@ -21,13 +21,6 @@ set -euo pipefail
 
 go test $(cd server && go list ./... | grep -Ev 'internal/(store|seed)$')
 
-# store + seed share the same Postgres test database; keep them serial
-# with -p 1. Cross-package serialisation inside store is already done
-# via pg_advisory_lock(8675309) in openTestDB, so limiting the outer
-# `go test` runner is only about not letting seed and store trample
-# each other's TRUNCATE.
-go test -p 1 ./server/internal/store ./server/internal/seed
-
 ./scripts/check-migrations.sh
 
 if [[ ! -d node_modules ]]; then

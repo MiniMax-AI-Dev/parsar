@@ -28,40 +28,19 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-env.sh"
 docker compose -f docker-compose.dev.yml down -v --remove-orphans >/dev/null 2>&1 || true
 docker compose -f docker-compose.dev.yml up -d postgres >/dev/null
 
-# Wait for Postgres to actually accept connections. pg_isready can return
-# 0 (accepting) only after the entrypoint finishes initdb and the
-# postmaster binds 5432 — on cold cache CI that takes 5–15s. We poll
-# up to 60s and treat any non-zero exit as "not yet". The previous
-# loop double-checked outside the loop, which raced the initdb window
-# (#12 follow-up: CI hit "Postgres did not become ready" 1.5s after
-# Started because the very first probe transient-failed and a second
-# probe was issued before postmaster was up).
-pg_ready=0
-for _ in $(seq 1 60); do
-  if docker compose -f docker-compose.dev.yml exec -T postgres pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
-    pg_ready=1
-    break
-  fi
-  sleep 1
-done
-
-if [[ "$pg_ready" -ne 1 ]]; then
-  echo "Postgres did not become ready within 60s" >&2
-  docker compose -f docker-compose.dev.yml logs --tail=80 postgres >&2 || true
-  exit 1
-fi
-
 PARSAR_CHECK_DATABASE_URL="${DATABASE_URL:-$(parsar_dev_database_url)}"
 export PARSAR_CHECK_DATABASE_URL
 export PARSAR_TEST_DATABASE_URL="$PARSAR_CHECK_DATABASE_URL"
 
-# `pg_isready` can flip green slightly before the server will accept a
-# first real client session on cold CI boots, so verify an actual SQL
-# round-trip before invoking migrations.
+# Wait for the same host-published endpoint that Go tests will use.
+# The Postgres image briefly starts an internal bootstrap server during
+# initdb, so a TCP SQL round-trip is the only readiness signal that
+# proves the final server and mapped port are usable.
 pg_connect_ready=0
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
   if docker compose -f docker-compose.dev.yml exec -T postgres \
-    psql -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" -c 'select 1' >/dev/null 2>&1; then
+    env PGPASSWORD="$PARSAR_PG_PASSWORD" \
+    psql -h 127.0.0.1 -p 5432 -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" -c 'select 1' >/dev/null 2>&1; then
     pg_connect_ready=1
     break
   fi
@@ -69,7 +48,7 @@ for _ in $(seq 1 30); do
 done
 
 if [[ "$pg_connect_ready" -ne 1 ]]; then
-  echo "Postgres accepted readiness probes but not SQL connections within 30s" >&2
+  echo "Postgres did not accept SQL connections within 60s" >&2
   docker compose -f docker-compose.dev.yml logs --tail=80 postgres >&2 || true
   exit 1
 fi
