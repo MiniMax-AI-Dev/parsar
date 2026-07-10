@@ -116,6 +116,21 @@ func TestResolveAgentDaemonPublicWSURLKeepsLoopbackWhenDockerNetworkSet(t *testi
 	}
 }
 
+func TestResolveAgentDaemonPublicWSURLUsesSandboxServerURL(t *testing.T) {
+	var cfg config.Config
+	cfg.Server.PublicURL = "http://127.0.0.1:18090"
+	env := dockerBackendEnv(map[string]string{
+		"AGENT_DAEMON_SANDBOX_BACKEND":        "docker",
+		"AGENT_DAEMON_SANDBOX_DOCKER_NETWORK": "parsar_default",
+		"AGENT_DAEMON_SANDBOX_SERVER_URL":     "http://parsar-server:8080",
+	})
+
+	got := resolveAgentDaemonPublicWSURL(env, cfg)
+	if want := "ws://parsar-server:8080/agent-daemon/ws"; got != want {
+		t.Fatalf("resolveAgentDaemonPublicWSURL = %q, want %q", got, want)
+	}
+}
+
 func TestResolveAgentDaemonPublicWSURLLeavesNonLoopbackUntouched(t *testing.T) {
 	// A real public host is reachable from inside the container as-is; only the
 	// scheme swap from buildAgentDaemonWSURL applies.

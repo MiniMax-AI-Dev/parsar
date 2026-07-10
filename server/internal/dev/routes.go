@@ -241,6 +241,7 @@ type routerConfig struct {
 	connectorRegistry    *connector.Registry
 	authMiddleware       *auth.Middleware
 	oauthDeps            *OAuthHandlerDeps
+	authProviders        AuthProviderRegistry
 	githubConnectionDeps *GitHubConnectionDeps
 	feishuWebhook        feishuWebhookConfig
 	feishuRegistration   feishuRegistrationConfig
@@ -336,6 +337,13 @@ func WithAuthMiddleware(m *auth.Middleware) RouterOption {
 func WithOAuthHandlers(deps OAuthHandlerDeps) RouterOption {
 	return func(cfg *routerConfig) {
 		cfg.oauthDeps = &deps
+	}
+}
+
+// WithAuthProviders wires read-only auth provider discovery and diagnostics.
+func WithAuthProviders(registry AuthProviderRegistry) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.authProviders = registry
 	}
 }
 
@@ -553,6 +561,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 				r.Get("/auth/feishu/callback", feishuCallbackHandler(*cfg.oauthDeps))
 				r.Post("/auth/logout", authLogoutHandler(*cfg.oauthDeps))
 			}
+			r.Get("/auth/providers", listAuthProviders(cfg.authProviders))
 		})
 
 		r.Group(func(r chi.Router) {
@@ -685,6 +694,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/join-requests/{requestID}/reject", rejectJoinRequest(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/settings", getWorkspaceSettings(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/settings", patchWorkspaceSettings(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/auth/providers", listWorkspaceAuthProviders(runtimeStore, cfg.authProviders))
 			r.Post("/workspaces/{workspaceID}/agents", createAgent(runtimeStore, cfg.agentDaemonSandbox))
 			r.Post("/workspaces", createWorkspace(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}", updateWorkspace(runtimeStore))

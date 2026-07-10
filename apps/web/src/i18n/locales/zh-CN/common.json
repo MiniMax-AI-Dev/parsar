@@ -111,9 +111,6 @@
   "login": {
     "title": "Parsar",
     "subtitle": "团队 Agent 协作控制台",
-    "feishuButton": "使用飞书登录",
-    "firstLoginNote": "首次登录会自动创建账号",
-    "terms": "登录即表示同意《使用条款》",
     "loading": "登录态加载中...",
     "emailLabel": "邮箱",
     "emailPlaceholder": "you@company.com",
@@ -123,7 +120,8 @@
     "submitting": "登录中...",
     "invalidCredentials": "邮箱或密码错误",
     "genericError": "发生错误,请稍后重试。",
-    "orDivider": "或",
+    "ssoDivider": "SSO",
+    "ssoButton": "使用 {{provider}} 登录",
     "noAccountHint": "首次访问?请联系管理员发送邀请。"
   },
   "setup": {

@@ -121,6 +121,25 @@ func TestIngesterStopWaitsForWorker(t *testing.T) {
 	}
 }
 
+func TestIngesterFlushWaitsForInFlightWrite(t *testing.T) {
+	sink := &fakeSink{delay: 75 * time.Millisecond}
+	ing := NewIngester(sink, Options{BufferCapacity: 4, WriteTimeout: time.Second})
+	ing.Start(context.Background())
+	defer func() { _ = ing.Stop(context.Background()) }()
+
+	if err := ing.Emit(Event{Source: SourceAdmin, EventType: "test.flush", ActorType: ActorTypeSystem}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := ing.Flush(ctx); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	if got := len(sink.Events()); got != 1 {
+		t.Fatalf("Flush returned before in-flight sink write completed; got %d events", got)
+	}
+}
+
 func TestIngesterCountsSinkErrors(t *testing.T) {
 	sink := &fakeSink{errOnce: errors.New("boom")}
 	ing := NewIngester(sink, Options{BufferCapacity: 4})

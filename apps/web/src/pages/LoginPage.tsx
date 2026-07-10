@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 
 import { ApiError } from "../lib/api-client"
-import { feishuLoginUrl, useLoginWithPassword } from "../lib/api-auth"
+import { useAuthProviders, useLoginWithPassword } from "../lib/api-auth"
 import { useBootstrapStatus } from "../lib/api-bootstrap"
 import { SetupPage } from "./SetupPage"
 
@@ -11,12 +11,7 @@ import { SetupPage } from "./SetupPage"
  *
  * Behavior branches on `GET /api/v1/bootstrap/status`:
  *   status.needed=true  -> render <SetupPage/> (first-owner registration)
- *   status.needed=false -> render the email/password form + Feishu button
- *
- * We deliberately do NOT hide the Feishu button in the setup path:
- * once the first owner is created they still need Feishu to onboard
- * additional team members in Feishu-first tenants. The two paths are
- * meant to coexist forever.
+ *   status.needed=false -> render the email/password form
  */
 export function LoginPage() {
   const { t } = useTranslation("common")
@@ -38,12 +33,17 @@ export function LoginPage() {
 function SignInView() {
   const { t } = useTranslation("common")
   const loginM = useLoginWithPassword()
+  const providersQ = useAuthProviders()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
 
   const submitting = loginM.isPending
   const invalid = email.trim() === "" || password === ""
+  const ssoProviders =
+    providersQ.data?.providers.filter(
+      (p) => p.enabled && p.id !== "password" && Boolean(p.login_url),
+    ) ?? []
 
   const errorMsg = (() => {
     const err = loginM.error
@@ -124,18 +124,27 @@ function SignInView() {
           </button>
         </form>
 
-        <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wide text-fg-faint">
-          <span className="h-px flex-1 bg-line" />
-          <span>{t("login.orDivider")}</span>
-          <span className="h-px flex-1 bg-line" />
-        </div>
+        {ssoProviders.length > 0 && (
+          <>
+            <div className="my-6 flex items-center gap-3 text-xs text-fg-faint">
+              <span className="h-px flex-1 bg-line" />
+              <span>{t("login.ssoDivider")}</span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
 
-        <a
-          href={feishuLoginUrl()}
-          className="mx-auto flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-base font-medium text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          {t("login.feishuButton")}
-        </a>
+            <div className="grid gap-2">
+              {ssoProviders.map((provider) => (
+                <a
+                  key={provider.id}
+                  href={provider.login_url}
+                  className="flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-base font-medium text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                >
+                  {t("login.ssoButton", { provider: provider.label })}
+                </a>
+              ))}
+            </div>
+          </>
+        )}
 
         <p className="mt-6 text-center text-sm leading-5 text-fg-faint">
           {t("login.noAccountHint")}

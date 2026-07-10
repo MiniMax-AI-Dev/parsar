@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { apiRequest } from "./api-client"
+import { apiRequest, noUnreachableRetry } from "./api-client"
 
 export interface MeResponse {
   user_id: string
@@ -19,6 +19,62 @@ export function logout(): Promise<void> {
 
 export function feishuLoginUrl(): string {
   return "/api/v1/auth/feishu/start"
+}
+
+export interface PublicAuthProvider {
+  id: string
+  type: "password" | "oauth" | "oidc" | "saml" | string
+  label: string
+  enabled: boolean
+  login_url?: string
+}
+
+export interface AuthProvidersResponse {
+  providers: PublicAuthProvider[]
+}
+
+export interface WorkspaceAuthProvider extends PublicAuthProvider {
+  configured: boolean
+  callback_url?: string
+  required_env?: string[]
+  missing_env?: string[]
+  docs_url?: string
+}
+
+export interface WorkspaceAuthProvidersResponse {
+  workspace_id: string
+  providers: WorkspaceAuthProvider[]
+}
+
+export function getAuthProviders(): Promise<AuthProvidersResponse> {
+  return apiRequest<AuthProvidersResponse>("/api/v1/auth/providers")
+}
+
+export function getWorkspaceAuthProviders(
+  workspaceID: string,
+): Promise<WorkspaceAuthProvidersResponse> {
+  return apiRequest<WorkspaceAuthProvidersResponse>(
+    `/api/v1/workspaces/${workspaceID}/auth/providers`,
+  )
+}
+
+export function useAuthProviders() {
+  return useQuery({
+    queryKey: ["auth", "providers"],
+    queryFn: getAuthProviders,
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
+export function useWorkspaceAuthProviders(workspaceID: string | null | undefined) {
+  return useQuery({
+    queryKey: ["admin", "authProviders", workspaceID ?? "_none"],
+    queryFn: () => getWorkspaceAuthProviders(workspaceID ?? ""),
+    enabled: Boolean(workspaceID),
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
 }
 
 /* --- Email/password login ---------------------------------------------

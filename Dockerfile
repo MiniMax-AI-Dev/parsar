@@ -38,7 +38,7 @@ ARG NODE_VERSION=22-alpine
 ARG GO_VERSION=1.25-bookworm
 ARG RUNTIME_BASE=debian:bookworm-slim
 
-FROM node:${NODE_VERSION} AS web-builder
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION} AS web-builder
 ENV PNPM_HOME=/pnpm
 ENV PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
@@ -74,7 +74,9 @@ RUN pnpm --filter @parsar/web build
 # minimal runtime. trimpath strips build-host file paths from the
 # binary (defence-in-depth against operator info leaks).
 ###############################################################################
-FROM golang:${GO_VERSION} AS go-builder
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS go-builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 
 # Module graph first, source second — keeps `go mod download` cacheable.
@@ -92,11 +94,11 @@ COPY server ./server
 # combined they shave ~25% off binary size with no runtime cost.
 RUN cd server \
  && mkdir -p /out \
- && CGO_ENABLED=0 GOFLAGS=-trimpath go build -ldflags="-s -w" \
+ && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOFLAGS=-trimpath go build -ldflags="-s -w" \
       -o /out/parsar-server    ./cmd/server \
- && CGO_ENABLED=0 GOFLAGS=-trimpath go build -ldflags="-s -w" \
+ && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOFLAGS=-trimpath go build -ldflags="-s -w" \
       -o /out/parsar-migrate   ./cmd/migrate \
- && CGO_ENABLED=0 GOFLAGS=-trimpath go build -ldflags="-s -w" \
+ && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOFLAGS=-trimpath go build -ldflags="-s -w" \
       -o /out/parsar-bootstrap ./cmd/parsar-bootstrap
 
 # parsar-daemon source (root module, no separate go.mod). Copied after the
@@ -127,7 +129,7 @@ RUN mkdir -p /out/daemon \
 #   - The opencode local runner may shell out (rg, basic core utils);
 #     keeping a real userland avoids surprises.
 ###############################################################################
-FROM ${RUNTIME_BASE} AS runtime
+FROM --platform=$TARGETPLATFORM ${RUNTIME_BASE} AS runtime
 
 ARG PARSAR_USER=parsar
 ARG PARSAR_UID=10001

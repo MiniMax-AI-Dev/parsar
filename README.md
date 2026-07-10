@@ -35,18 +35,27 @@ Supported agent runtimes:
 
 ## Quick Start
 
-Requires only `git` and `docker`.
+Requires Docker with Docker Compose v2.
 
 ```bash
-git clone https://github.com/MiniMax-AI-Dev/parsar.git
-cd parsar
-docker build -t parsar:local .
-PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
+curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 ```
 
-Open <http://127.0.0.1:18080>. Mock auth signs you in as `admin@example.com` — no secrets, no `.env`, no config.
+Open <http://127.0.0.1:18080> and create the first owner account in the web
+setup flow. The first registered user is the administrator.
 
-> **Platform.** Verified on Linux/amd64. The Agent sandbox image is currently amd64-only, so Apple Silicon (arm64) is not yet supported out of the box.
+The installer writes generated config, secrets, database files, and runtime
+state under `~/.parsar/`.
+
+For local development from a checkout:
+
+```bash
+make docker-build
+./install.sh --image parsar:dev
+```
+
+> **Platform.** Docker-managed agent sandboxes require Linux. Non-Linux hosts
+> can start the web control plane with `--no-sandbox`.
 
 ## Contributing
 

@@ -49,6 +49,9 @@ func resolveAgentDaemonPublicWSURL(env func(string) string, cfg config.Config) s
 	if env == nil {
 		env = os.Getenv
 	}
+	if serverURL := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_SERVER_URL")); serverURL != "" {
+		return agentDaemonWSURLFromBase(serverURL)
+	}
 	base := buildAgentDaemonWSURL(cfg)
 	if strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_BACKEND")) != "docker" {
 		return base
@@ -58,6 +61,23 @@ func resolveAgentDaemonPublicWSURL(env func(string) string, cfg config.Config) s
 	}
 	rewritten, _ := dockerDialBackURL(base)
 	return rewritten
+}
+
+func agentDaemonWSURLFromBase(base string) string {
+	const path = "/agent-daemon/ws"
+	raw := strings.TrimRight(strings.TrimSpace(base), "/")
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return "ws://" + raw + path
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https", "wss":
+		parsed.Scheme = "wss"
+	default:
+		parsed.Scheme = "ws"
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + path
+	return parsed.String()
 }
 
 // buildDockerAgentDaemonSandboxProvider wires a local-docker-backed
@@ -105,6 +125,10 @@ func buildDockerAgentDaemonSandboxProvider(
 	// by service name, so the loopback rewrite/host-gateway is unnecessary.
 	if network != "" {
 		serverURL = publicURL
+		hostGateway = false
+	}
+	if override := strings.TrimRight(strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_SERVER_URL")), "/"); override != "" {
+		serverURL = override
 		hostGateway = false
 	}
 

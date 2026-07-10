@@ -55,6 +55,25 @@ PARSAR_CHECK_DATABASE_URL="${DATABASE_URL:-$(parsar_dev_database_url)}"
 export PARSAR_CHECK_DATABASE_URL
 export PARSAR_TEST_DATABASE_URL="$PARSAR_CHECK_DATABASE_URL"
 
+# `pg_isready` can flip green slightly before the server will accept a
+# first real client session on cold CI boots, so verify an actual SQL
+# round-trip before invoking migrations.
+pg_connect_ready=0
+for _ in $(seq 1 30); do
+  if docker compose -f docker-compose.dev.yml exec -T postgres \
+    psql -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" -c 'select 1' >/dev/null 2>&1; then
+    pg_connect_ready=1
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$pg_connect_ready" -ne 1 ]]; then
+  echo "Postgres accepted readiness probes but not SQL connections within 30s" >&2
+  docker compose -f docker-compose.dev.yml logs --tail=80 postgres >&2 || true
+  exit 1
+fi
+
 (
   cd server
   DATABASE_URL="$PARSAR_CHECK_DATABASE_URL" PARSAR_MIGRATIONS_DIR="$PWD/migrations" go run ./cmd/migrate

@@ -1803,6 +1803,22 @@
       "runtimeRoot": "本地 Runtime Root",
       "runtimeRootHint": "运行配置、日志、状态和缓存统一放在这里，不写入仓库根目录。"
     },
+    "authentication": {
+      "title": "认证",
+      "description": "只读展示部署配置里的登录 Provider 状态。Secret 仍由 env 或 secret manager 管理。",
+      "loading": "正在加载认证 Provider 状态...",
+      "error": "无法加载认证 Provider 状态。",
+      "callbackUrl": "Callback URL",
+      "requiredEnv": "必需 env",
+      "missingEnv": "缺失 env",
+      "noneMissing": "没有缺失的必需 env。",
+      "docsHint": "部署文档:",
+      "status": {
+        "enabled": "已启用",
+        "configured": "已配置",
+        "missing": "未配置"
+      }
+    },
     "gatewayDefaults": {
       "title": "网关默认值",
       "description": "新接入网关时自动套用的默认行为。已配置的网关不受影响。",
