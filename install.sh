@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+DEFAULT_COMPOSE_URL="https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/docker-compose.local.yml"
 DEFAULT_SERVER_IMAGE="ghcr.io/minimax-ai-dev/parsar-server:latest"
 DEFAULT_SANDBOX_IMAGE="ghcr.io/minimax-ai-dev/parsar-sandbox:latest"
 
@@ -15,6 +16,8 @@ Usage:
 Options:
   --home PATH            Install state directory. Must be absolute or ~/...
                          Default: ~/.parsar
+  --compose-file PATH    Compose file to use. Default: ./docker-compose.local.yml
+                         when present, otherwise download the published template.
   --image IMAGE          parsar-server image.
                          Default: ghcr.io/minimax-ai-dev/parsar-server:latest
   --sandbox-image IMAGE  Docker sandbox image.
@@ -24,14 +27,13 @@ Options:
   --bind ADDR            Web UI bind address. Default: 127.0.0.1
   --public-url URL       Browser-facing URL. Default: http://127.0.0.1:<port>
   --project-name NAME    Docker Compose project name. Default: parsar
-  --no-sandbox           Start without Docker-managed agent sandboxes.
   --dry-run              Generate files and validate compose config only.
   --help                 Show this help.
 
 Environment variables with the same names are also honored:
-  PARSAR_HOME, PARSAR_SERVER_IMAGE, PARSAR_SANDBOX_IMAGE,
-  PARSAR_LOCAL_PORT, PARSAR_PG_PORT, PARSAR_BIND_ADDR,
-  PARSAR_PUBLIC_URL, PARSAR_PROJECT_NAME, PARSAR_NO_SANDBOX.
+  PARSAR_HOME, PARSAR_COMPOSE_FILE, PARSAR_SERVER_IMAGE,
+  PARSAR_SANDBOX_IMAGE, PARSAR_LOCAL_PORT, PARSAR_PG_PORT,
+  PARSAR_BIND_ADDR, PARSAR_PUBLIC_URL, PARSAR_PROJECT_NAME.
 EOF
 }
 
@@ -104,117 +106,27 @@ compose_run() {
   docker_run compose -f "$compose_file" --env-file "$env_file" "$@"
 }
 
-write_compose() {
-  compose_file="$1"
-  enable_sandbox="$2"
-
-  cat >"$compose_file" <<'EOF'
-name: ${PARSAR_PROJECT_NAME}
-
-networks:
-  default:
-    name: ${PARSAR_PROJECT_NAME}_default
-
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: parsar
-      POSTGRES_PASSWORD: ${PARSAR_PG_PASSWORD}
-      POSTGRES_DB: parsar
-    ports:
-      - "127.0.0.1:${PARSAR_PG_PORT}:5432"
-    volumes:
-      - ${PARSAR_PG_DATA_DIR}:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U parsar -d parsar"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 10s
-
-  parsar-init:
-    image: ${PARSAR_SERVER_IMAGE}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD}@postgres:5432/parsar?sslmode=disable
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        parsar-migrate
-        echo "[parsar-init] migrations complete; create the first owner in the web setup flow"
-    restart: "no"
-
-  parsar-server:
-    image: ${PARSAR_SERVER_IMAGE}
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      parsar-init:
-        condition: service_completed_successfully
-    ports:
-      - "${PARSAR_BIND_ADDR}:${PARSAR_LOCAL_PORT}:8080"
-    environment:
-      DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD}@postgres:5432/parsar?sslmode=disable
-      http_proxy: ${HTTP_PROXY:-}
-      https_proxy: ${HTTPS_PROXY:-}
-      no_proxy: localhost,127.0.0.1,postgres,parsar-server
-      PARSAR_ADDR: ":8080"
-      PARSAR_DATA_DIR: /var/lib/parsar
-      PARSAR_PUBLIC_URL: ${PARSAR_PUBLIC_URL}
-      PARSAR_COOKIE_SECURE: ${PARSAR_COOKIE_SECURE}
-      PARSAR_MASTER_KEY: ${PARSAR_MASTER_KEY}
-      PARSAR_AGENT_DAEMON_OWNER_URL: http://parsar-server:8080
-      PARSAR_FEISHU_MOCK: ${PARSAR_FEISHU_MOCK:-}
-      PARSAR_FEISHU_APP_ID: ${PARSAR_FEISHU_APP_ID:-}
-      PARSAR_FEISHU_APP_SECRET: ${PARSAR_FEISHU_APP_SECRET:-}
-      PARSAR_FEISHU_REDIRECT_URI: ${PARSAR_FEISHU_REDIRECT_URI:-}
-      PARSAR_FEISHU_VERIFICATION_TOKEN: ${PARSAR_FEISHU_VERIFICATION_TOKEN:-}
-      PARSAR_FEISHU_ENCRYPT_KEY: ${PARSAR_FEISHU_ENCRYPT_KEY:-}
-      PARSAR_FEISHU_APP_REGISTRATION: ${PARSAR_FEISHU_APP_REGISTRATION:-}
-      PARSAR_FEISHU_WEBSOCKET: ${PARSAR_FEISHU_WEBSOCKET:-}
-      PARSAR_FEISHU_OUTBOUND: ${PARSAR_FEISHU_OUTBOUND:-}
-      PARSAR_SLACK_CONNECTORS: ${PARSAR_SLACK_CONNECTORS:-}
-      PARSAR_DISCORD_CONNECTORS: ${PARSAR_DISCORD_CONNECTORS:-}
-      PARSAR_SLACK_SOCKET: ${PARSAR_SLACK_SOCKET:-}
-      PARSAR_DISCORD_GATEWAY: ${PARSAR_DISCORD_GATEWAY:-}
-EOF
-
-  if [ "$enable_sandbox" = "true" ]; then
-    cat >>"$compose_file" <<'EOF'
-      AGENT_DAEMON_SANDBOX_BACKEND: docker
-      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: ${PARSAR_SANDBOX_IMAGE}
-      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: ${PARSAR_PROJECT_NAME}_default
-      AGENT_DAEMON_SANDBOX_SERVER_URL: http://parsar-server:8080
-    group_add:
-      - "${DOCKER_GID}"
-    volumes:
-      - ${PARSAR_DATA_DIR}:/var/lib/parsar
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${PARSAR_DOCKER_BIN}:/usr/bin/docker:ro
-EOF
-  else
-    cat >>"$compose_file" <<'EOF'
-    volumes:
-      - ${PARSAR_DATA_DIR}:/var/lib/parsar
-EOF
+fetch_compose() {
+  if [ -n "$compose_arg" ]; then
+    src="$(expand_home_path "$compose_arg")"
+    [ -f "$src" ] || die "compose file does not exist: $src"
+    compose_file="$src"
+    return
   fi
 
-  cat >>"$compose_file" <<'EOF'
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- --tries=1 --timeout=3 http://127.0.0.1:8080/healthz >/dev/null
-      interval: 10s
-      timeout: 3s
-      start_period: 15s
-      retries: 3
-EOF
+  if [ -f "./docker-compose.local.yml" ]; then
+    compose_file="$PWD/docker-compose.local.yml"
+    return
+  fi
+
+  compose_file="$parsar_home/docker-compose.local.yml"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$DEFAULT_COMPOSE_URL" -o "$compose_file"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$compose_file" "$DEFAULT_COMPOSE_URL"
+  else
+    die "curl or wget is required to download docker-compose.local.yml"
+  fi
 }
 
 wait_for_health() {
@@ -228,6 +140,7 @@ wait_for_health() {
 }
 
 home_arg="${PARSAR_HOME:-$HOME/.parsar}"
+compose_arg="${PARSAR_COMPOSE_FILE:-}"
 server_image="${PARSAR_SERVER_IMAGE:-$DEFAULT_SERVER_IMAGE}"
 sandbox_image="${PARSAR_SANDBOX_IMAGE:-$DEFAULT_SANDBOX_IMAGE}"
 local_port="${PARSAR_LOCAL_PORT:-18080}"
@@ -236,11 +149,11 @@ bind_addr="${PARSAR_BIND_ADDR:-127.0.0.1}"
 public_url="${PARSAR_PUBLIC_URL:-}"
 project_name="${PARSAR_PROJECT_NAME:-parsar}"
 dry_run="false"
-no_sandbox="${PARSAR_NO_SANDBOX:-}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --home) home_arg="${2:?missing value for --home}"; shift 2 ;;
+    --compose-file) compose_arg="${2:?missing value for --compose-file}"; shift 2 ;;
     --image) server_image="${2:?missing value for --image}"; shift 2 ;;
     --sandbox-image) sandbox_image="${2:?missing value for --sandbox-image}"; shift 2 ;;
     --port) local_port="${2:?missing value for --port}"; shift 2 ;;
@@ -248,7 +161,6 @@ while [ "$#" -gt 0 ]; do
     --bind) bind_addr="${2:?missing value for --bind}"; shift 2 ;;
     --public-url) public_url="${2:?missing value for --public-url}"; shift 2 ;;
     --project-name) project_name="${2:?missing value for --project-name}"; shift 2 ;;
-    --no-sandbox) no_sandbox="true"; shift ;;
     --dry-run) dry_run="true"; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown option: $1" ;;
@@ -273,27 +185,9 @@ if [ -z "$public_url" ]; then
   public_url="http://${public_host}:${local_port}"
 fi
 
-enable_sandbox="true"
-if [ "$no_sandbox" = "true" ] || [ "$no_sandbox" = "1" ]; then
-  enable_sandbox="false"
-fi
-if [ "$(uname -s)" != "Linux" ]; then
-  enable_sandbox="false"
-  log "Docker-managed sandboxes are disabled on non-Linux hosts by default"
-fi
-if [ ! -S /var/run/docker.sock ]; then
-  enable_sandbox="false"
-  log "Docker-managed sandboxes are disabled because /var/run/docker.sock is unavailable"
-fi
-
 detect_docker
 
 docker_bin="$(command -v docker || true)"
-if [ "$enable_sandbox" = "true" ] && [ -z "$docker_bin" ]; then
-  enable_sandbox="false"
-  log "Docker-managed sandboxes are disabled because docker is not on PATH"
-fi
-
 docker_gid="999"
 if [ -S /var/run/docker.sock ] && command -v stat >/dev/null 2>&1; then
   docker_gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || printf '999')"
@@ -303,10 +197,11 @@ umask 077
 mkdir -p "$parsar_home" "$parsar_home/postgres" "$parsar_home/data"
 
 env_file="$parsar_home/.env"
-compose_file="$parsar_home/compose.yml"
 if [ ! -f "$env_file" ]; then
   : >"$env_file"
 fi
+
+fetch_compose
 
 set_env "PARSAR_HOME" "$parsar_home" "$env_file"
 set_env "PARSAR_PROJECT_NAME" "$project_name" "$env_file"
@@ -324,9 +219,7 @@ set_env "PARSAR_DATA_DIR" "$parsar_home/data" "$env_file"
 set_env "PARSAR_DOCKER_BIN" "${docker_bin:-/usr/bin/docker}" "$env_file"
 set_env "DOCKER_GID" "$docker_gid" "$env_file"
 
-write_compose "$compose_file" "$enable_sandbox"
-
-log "Wrote $compose_file"
+log "Using $compose_file"
 log "Wrote $env_file"
 compose_run config --quiet
 
@@ -337,12 +230,6 @@ fi
 
 log "Starting Parsar with Docker Compose"
 compose_run up -d --remove-orphans
-
-if [ "$enable_sandbox" = "true" ]; then
-  if ! docker_run pull "$sandbox_image" >/dev/null 2>&1; then
-    log "Could not pre-pull sandbox image $sandbox_image; managed sandboxes may pull or fail on first use"
-  fi
-fi
 
 if wait_for_health; then
   log "Parsar is healthy"
