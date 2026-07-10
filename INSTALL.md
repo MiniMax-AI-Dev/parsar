@@ -22,14 +22,15 @@ user is the administrator.
 ## Requirements
 
 - Docker Engine with Docker Compose v2.
-- Linux for Docker-managed agent sandboxes. Non-Linux hosts can still start
-  the web control plane, but managed Docker sandboxes are disabled by default.
+- Linux host with access to `/var/run/docker.sock`. The local compose stack
+  enables Docker-managed agent sandboxes and mounts the Docker socket.
 
 ## What The Installer Does
 
 The script:
 
-- creates `~/.parsar/compose.yml`
+- uses `docker-compose.local.yml` from the current checkout, or downloads the
+  published copy to `~/.parsar/docker-compose.local.yml`
 - creates `~/.parsar/.env`
 - generates and persists `PARSAR_MASTER_KEY`
 - generates and persists the Postgres password
@@ -49,11 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.
 
 # Use a pinned image.
 curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh \
-  | bash -s -- --image ghcr.io/minimax-ai-dev/parsar-server:v0.1.0
-
-# Start without Docker-managed agent sandboxes.
-curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh \
-  | bash -s -- --no-sandbox
+  | bash -s -- --image ghcr.io/minimax-ai-dev/parsar-server:parsar-server-v0.1.0
 ```
 
 For local development from a checkout:
@@ -66,9 +63,9 @@ make docker-build
 ## Manage The Stack
 
 ```bash
-docker compose -f ~/.parsar/compose.yml --env-file ~/.parsar/.env ps
-docker compose -f ~/.parsar/compose.yml --env-file ~/.parsar/.env logs -f parsar-server
-docker compose -f ~/.parsar/compose.yml --env-file ~/.parsar/.env down
+docker compose -f ~/.parsar/docker-compose.local.yml --env-file ~/.parsar/.env ps
+docker compose -f ~/.parsar/docker-compose.local.yml --env-file ~/.parsar/.env logs -f parsar-server
+docker compose -f ~/.parsar/docker-compose.local.yml --env-file ~/.parsar/.env down
 ```
 
 To remove all local data, stop the stack first and then delete `~/.parsar/`.

@@ -20,34 +20,38 @@
 #       PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
 #
 # Override knobs (all optional — defaults make `up` work with no .env):
+#   PARSAR_PROJECT_NAME   compose project/network prefix (default: parsar)
 #   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
+#   PARSAR_SANDBOX_IMAGE  sandbox image ref (default: GHCR latest)
 #   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
 #   PARSAR_PG_PORT        host port for Postgres (default: 15432)
 #   PARSAR_BIND_ADDR      host bind address (default: 127.0.0.1)
+#   PARSAR_PG_DATA_DIR    host path for Postgres data (default: named volume)
+#   PARSAR_DATA_DIR       host path for server data (default: named volume)
 
 # Explicit project name so the auto-created network is always parsar_default
 # regardless of the clone directory name. The sandbox provider hard-codes this
 # network below (AGENT_DAEMON_SANDBOX_DOCKER_NETWORK); mismatched names would
 # leave every acquired sandbox unable to reach parsar-server.
-name: parsar
+name: ${PARSAR_PROJECT_NAME:-parsar}
 
 networks:
   default:
-    name: parsar_default
+    name: ${PARSAR_PROJECT_NAME:-parsar}_default
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: parsar-local-postgres
+    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: parsar
-      POSTGRES_PASSWORD: parsar
+      POSTGRES_PASSWORD: ${PARSAR_PG_PASSWORD:-parsar}
       POSTGRES_DB: parsar
     ports:
       - "127.0.0.1:${PARSAR_PG_PORT:-15432}:5432"
     volumes:
-      - parsar-local-pg:/var/lib/postgresql/data
+      - ${PARSAR_PG_DATA_DIR:-parsar-local-pg}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U parsar -d parsar"]
       interval: 5s
@@ -59,12 +63,12 @@ services:
   # happens in the web setup flow (POST /api/v1/bootstrap).
   parsar-init:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
-    container_name: parsar-local-init
+    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-init
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
+      DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -75,7 +79,7 @@ services:
 
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
-    container_name: parsar-local-server
+    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-server
     restart: unless-stopped
     depends_on:
       postgres:
@@ -85,7 +89,7 @@ services:
     ports:
       - "${PARSAR_BIND_ADDR:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
-      DATABASE_URL: postgres://parsar:parsar@postgres:5432/parsar?sslmode=disable
+      DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
       # Network proxy — only needed if your host requires a proxy for internet
       # access (e.g. pulling MCP packages inside sandbox). Leave empty if not.
       http_proxy: "${HTTP_PROXY:-}"
@@ -109,7 +113,7 @@ services:
       # Public URL must match the host port the browser hits so OAuth
       # callbacks AND the minted one-line connect command line up. Kept in
       # sync with the published port via the same variable.
-      PARSAR_PUBLIC_URL: "http://${PARSAR_HOST_IP:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}"
+      PARSAR_PUBLIC_URL: "${PARSAR_PUBLIC_URL:-http://${PARSAR_HOST_IP:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}}"
       # Inter-pod owner-routing URL. The server refuses to boot until this
       # resolves (no fallback to PublicURL/127.0.0.1, which are unsafe under
       # multi-replica load balancing — see resolveAgentDaemonOwnerURL in
@@ -166,21 +170,18 @@ services:
       # `name: parsar` + `networks:` block at the head of this file
       # guarantees that alias regardless of the clone directory.
       AGENT_DAEMON_SANDBOX_BACKEND: "docker"
-      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${AGENT_DAEMON_SANDBOX_DOCKER_IMAGE:-parsar-sandbox:local}"
-      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "parsar_default"
+      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}"
+      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "${PARSAR_PROJECT_NAME:-parsar}_default"
       AGENT_DAEMON_SANDBOX_SERVER_URL: "http://parsar-server:8080"
     group_add:
       - "${DOCKER_GID:-999}"
     volumes:
-      - parsar-local-data:/var/lib/parsar
-      # Overlay the hand-maintained OpenAPI spec so /docs updates without
-      # a full image rebuild. RegisterDocsRoutes re-reads on every request.
-      - ./docs/openapi/openapi.yaml:/app/docs/openapi/openapi.yaml:ro
+      - ${PARSAR_DATA_DIR:-parsar-local-data}:/var/lib/parsar
       # Docker sandbox — the server calls `docker` against the host
       # daemon to acquire/release sandbox containers. The GID mapping
       # above (DOCKER_GID) grants the parsar user rights on the socket.
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker:ro
+      - ${PARSAR_DOCKER_BIN:-/usr/bin/docker}:/usr/bin/docker:ro
     # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`
     # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
     # so the default probe reports the container "unhealthy" even though it
