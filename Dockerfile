@@ -59,7 +59,8 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/views/package.json packages/views/
 
 # Install only the deps the web app actually needs.
-RUN pnpm install --filter @parsar/web... --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --store-dir /pnpm/store --filter @parsar/web... --frozen-lockfile
 
 # Source for the web app (and any workspace packages it imports).
 COPY apps/web ./apps/web
@@ -84,7 +85,8 @@ COPY go.mod go.sum go.work ./
 # go.work.sum may not exist on freshly-cloned checkouts; the trailing
 # glob makes the COPY tolerate that.
 COPY go.work.sum* ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY internal ./internal
 COPY server ./server
@@ -92,7 +94,9 @@ COPY server ./server
 # Build all three binaries in one RUN so the layer represents one
 # logical "compile" operation. -s -w strips debug info / symbol table;
 # combined they shave ~25% off binary size with no runtime cost.
-RUN cd server \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd server \
  && mkdir -p /out \
  && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOFLAGS=-trimpath go build -ldflags="-s -w" \
       -o /out/parsar-server    ./cmd/server \
@@ -111,7 +115,9 @@ COPY apps/parsar-daemon ./apps/parsar-daemon
 # minting server hand the host-appropriate binary to the one-line connect
 # command with no GitHub release (PARSAR_DAEMON_CONNECT_URL path). CGO
 # stays off so each cross-target links statically.
-RUN mkdir -p /out/daemon \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    mkdir -p /out/daemon \
  && for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do \
       os="${target%/*}"; arch="${target#*/}"; \
       CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" GOFLAGS=-trimpath \

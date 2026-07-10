@@ -77,10 +77,21 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up QEMU
+        if: github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - name: Choose build platforms
+        id: platforms
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "value=linux/amd64" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Compute lowercase GHCR image name
         id: image
@@ -112,7 +123,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.value }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
