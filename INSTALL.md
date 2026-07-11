@@ -23,13 +23,13 @@ user is the administrator.
 
 - Docker Engine with Docker Compose v2.
 - Linux host with access to `/var/run/docker.sock`. The local compose stack
-  enables Docker-managed agent sandboxes and mounts the Docker socket.
-- To actually run Agents in sandbox mode, build the sandbox image first —
-  there is no published default:
+  enables Docker-managed agent sandboxes and mounts the Docker socket. The
+  sandbox image (`ghcr.io/minimax-ai-dev/parsar-sandbox:latest`) is pulled
+  automatically — build your own instead with:
   ```bash
   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
+  PARSAR_SANDBOX_IMAGE=parsar-sandbox:local ./install.sh
   ```
-  Everything else in the stack works without it.
 
 ## What The Installer Does
 
