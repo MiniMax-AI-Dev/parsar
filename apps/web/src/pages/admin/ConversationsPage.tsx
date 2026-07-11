@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import { AlertTriangle, Bot, Check, ChevronLeft, ChevronRight, ChevronDown, CircleDot, Clock, MessageSquarePlus, Pencil, Send, ShieldAlert, Square, Trash2, X, Loader2 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
@@ -20,6 +21,7 @@ import { Skeleton } from "../../components/ui/skeleton"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAgents, useCancelRun, useCancelConversation } from "../../lib/api-agents"
+import { agentNeedsSandbox } from "../../lib/agent-runtime"
 import {
   createConversation,
   sendUserMessage,
@@ -32,6 +34,7 @@ import {
   useSendUserMessage,
   useUpdateConversationTitle,
 } from "../../lib/api-conversations"
+import { useSandboxBinding, type SandboxBinding } from "../../lib/api-sandbox"
 import type {
   ConversationListItem,
   ConversationTimelineRun,
@@ -51,6 +54,11 @@ const FOLD_KEY = "parsar:conv:sidebarFolded"
  *   just_completed: brief post-completion flash before clearing
  */
 type RunStatus = "generating" | "just_completed"
+
+interface SandboxSendGuard {
+  blocked: boolean
+  message: string
+}
 
 /* ============================================================== */
 /*  ConversationsPage — top-level: 3-col shell (admin | conv | main) */
@@ -87,6 +95,15 @@ export function ConversationsPage() {
     currentConv?.primary_agent_id ||
     (allAgents[0]?.id ?? "")
   const selectedAgent = allAgents.find((a) => a.id === selectedAgentId)
+  const needsSandbox = agentNeedsSandbox(selectedAgent)
+  const sandboxQ = useSandboxBinding(
+    needsSandbox ? wsId : null,
+    needsSandbox ? selectedAgentId : null,
+  )
+  const sandboxGuard = useMemo(
+    () => sandboxSendGuard(t, selectedAgent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error),
+    [t, selectedAgent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error],
+  )
 
   // Sidebar conversations: scoped to the selected agent.
   const convsQ = useConversations(wsId, selectedAgentId)
@@ -199,10 +216,35 @@ export function ConversationsPage() {
           onSendFromEmpty={handleSendFromEmpty}
           onRenameAfterFirstMessage={handleRenameConversation}
           focusComposer={focusTarget === "compose"}
+          sandboxGuard={sandboxGuard}
         />
       </div>
     </AdminLayout>
   )
+}
+
+function sandboxSendGuard(
+  t: TFunction<"admin">,
+  agent: Agent | undefined,
+  binding: SandboxBinding | null | undefined,
+  loading: boolean,
+  error: unknown,
+): SandboxSendGuard | undefined {
+  if (!agentNeedsSandbox(agent)) return undefined
+  if (loading) {
+    return { blocked: true, message: t("conversations.sandboxGuard.checking") }
+  }
+  if (error) {
+    const detail = error instanceof Error ? error.message : t("conversations.sandboxGuard.errorFallback")
+    return { blocked: true, message: t("conversations.sandboxGuard.error", { error: detail }) }
+  }
+  if (!binding) {
+    return { blocked: true, message: t("conversations.sandboxGuard.missing") }
+  }
+  if (binding.status_kind !== "live") {
+    return { blocked: true, message: t("conversations.sandboxGuard.notLive", { status: binding.status }) }
+  }
+  return { blocked: false, message: "" }
 }
 
 /* ============================================================== */
@@ -597,6 +639,7 @@ interface MainProps {
   onSendFromEmpty: (content: string) => Promise<void>
   onRenameAfterFirstMessage: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
+  sandboxGuard?: SandboxSendGuard
 }
 
 function ConversationMain(p: MainProps) {
@@ -645,6 +688,7 @@ function ConversationMain(p: MainProps) {
             pageDescription={p.onPageDescription}
             onSendFromEmpty={p.onSendFromEmpty}
             focusComposer={p.focusComposer}
+            sandboxGuard={p.sandboxGuard}
           />
         ) : p.messageCount === 0 ? (
           // 0 messages: keep the EmptyChat aurora so a new conv looks
@@ -655,9 +699,15 @@ function ConversationMain(p: MainProps) {
             conversationId={p.conversationId}
             onRenameAfterFirstMessage={p.onRenameAfterFirstMessage}
             focusComposer={p.focusComposer}
+            sandboxGuard={p.sandboxGuard}
           />
         ) : (
-          <ChatStream conversationId={p.conversationId} agent={p.agent} sidebarFolded={p.folded} />
+          <ChatStream
+            conversationId={p.conversationId}
+            agent={p.agent}
+            sidebarFolded={p.folded}
+            sandboxGuard={p.sandboxGuard}
+          />
         )}
       </div>
     </main>
@@ -675,6 +725,7 @@ function EmptyChat({
   onSendFromEmpty,
   onRenameAfterFirstMessage,
   focusComposer,
+  sandboxGuard,
 }: {
   agent: Agent | undefined
   pageDescription: string
@@ -684,6 +735,7 @@ function EmptyChat({
   onSendFromEmpty?: (content: string) => Promise<void>
   onRenameAfterFirstMessage?: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
+  sandboxGuard?: SandboxSendGuard
 }) {
   const { t } = useTranslation("admin")
   return (
@@ -712,7 +764,7 @@ function EmptyChat({
 
             <ComposerForm
               conversationId={conversationId ?? ""}
-              disabled={!agent}
+              disabled={!agent || sandboxGuard?.blocked}
               autoFocus={focusComposer}
               placeholder={
                 agent
@@ -721,6 +773,7 @@ function EmptyChat({
               }
               onSendDirect={!conversationId && agent ? onSendFromEmpty : undefined}
               onAfterSend={conversationId && onRenameAfterFirstMessage ? (title) => onRenameAfterFirstMessage(conversationId, title) : undefined}
+              blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
             />
           </div>
         </div>
@@ -733,7 +786,17 @@ function EmptyChat({
 /*  Chat stream — user (right bubble) + agent (left plain text)     */
 /* ============================================================== */
 
-function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: string; agent: Agent | undefined; sidebarFolded?: boolean }) {
+function ChatStream({
+  conversationId,
+  agent,
+  sidebarFolded,
+  sandboxGuard,
+}: {
+  conversationId: string
+  agent: Agent | undefined
+  sidebarFolded?: boolean
+  sandboxGuard?: SandboxSendGuard
+}) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
   const { navigate } = useAdminView()
@@ -946,7 +1009,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
           <ComposerForm
             conversationId={conversationId}
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
-            disabled={!agent}
+            disabled={!agent || sandboxGuard?.blocked}
             onRunStarted={setActiveRunId}
             onStartError={setChatToast}
             activeRunId={activeRunId}
@@ -966,6 +1029,7 @@ function ChatStream({ conversationId, agent, sidebarFolded }: { conversationId: 
                 : undefined
             }
             cancelling={cancelRunMut.isPending}
+            blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
           />
         </div>
       </div>
@@ -1156,6 +1220,7 @@ function ComposerForm({
   activeRunId,
   onCancelActiveRun,
   cancelling,
+  blockReason,
 }: {
   conversationId: string
   placeholder: string
@@ -1194,6 +1259,7 @@ function ComposerForm({
   activeRunId?: string | null
   onCancelActiveRun?: () => void
   cancelling?: boolean
+  blockReason?: string
 }) {
   const { t } = useTranslation("admin")
   const [content, setContent] = useState("")
@@ -1266,6 +1332,12 @@ function ComposerForm({
 
   return (
     <form onSubmit={submit}>
+      {blockReason && (
+        <div className="mb-2 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+          <span className="break-words">{blockReason}</span>
+        </div>
+      )}
       <div
         className={cn(
           "flex min-h-[64px] items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04),_0_12px_34px_rgba(15,23,42,0.08)] transition-shadow",

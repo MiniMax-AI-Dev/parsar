@@ -289,6 +289,13 @@
       "sending": "Sending…",
       "stopAria": "Stop generating"
     },
+    "sandboxGuard": {
+      "checking": "Checking this Agent's sandbox before sending…",
+      "missing": "This Agent does not have a healthy sandbox yet. Provision or rebuild its sandbox from the Agent detail page before sending a message.",
+      "notLive": "This Agent's sandbox is not ready ({{status}}). Rebuild it from the Agent detail page before sending a message.",
+      "error": "Could not check this Agent's sandbox health: {{error}}",
+      "errorFallback": "unknown error"
+    },
     "loadError": {
       "title": "Failed to load conversation",
       "description": "Backend returned an error.",
