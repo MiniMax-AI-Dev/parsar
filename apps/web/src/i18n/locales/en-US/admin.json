@@ -1445,6 +1445,10 @@
         "stepOf": "Step {{current}} of {{total}}",
         "complete": "{{percent}}% complete",
         "steps": {
+          "setup": {
+            "title": "Setup",
+            "summary": "Identity, runtime, and model"
+          },
           "identity": {
             "title": "Identity",
             "summary": "Name, description, and visibility"

@@ -43,6 +43,7 @@ type ExecutionMode = "sandbox" | "local_device" | "external"
 type AgentEngine = "claude_code" | "opencode" | "codex" | "pi"
 type SandboxSize = "standard" | "xl"
 type RuntimeChoice = AgentRuntime
+type WizardStep = 1 | 2
 
 function connectorForExecutionMode(mode: ExecutionMode): string {
   if (mode === "external") return "http"
@@ -310,7 +311,7 @@ export function CreateAgentDialog({
   const [modelNewSecretPlaintext, setModelNewSecretPlaintext] = useState("")
   const [modelNewSecretShowPlaintext, setModelNewSecretShowPlaintext] = useState(false)
   const [modelNewSecretExpanded, setModelNewSecretExpanded] = useState(false)
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<WizardStep>(1)
 
   const capabilitiesQ = useCapabilitiesQuery(workspaceID, capabilitySearch)
   const allCapabilitiesQ = useCapabilitiesQuery(workspaceID, "")
@@ -952,31 +953,26 @@ export function CreateAgentDialog({
     (mode !== "create" || !allCapabilitiesQ.isLoading) &&
     (aggregatedRequiredKinds.length === 0 || allCredentialsSatisfied)
 
-  // Step 2 mirrors submit()'s runtime+model+device checks so finishing the
-  // wizard never violates the submit guard.
-  const step1Valid = name.trim() !== ""
-  const step2Valid =
+  const step1Valid =
+    name.trim() !== "" &&
     hasConnector &&
     hasRequiredModel &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid
-  const totalSteps = 3
+  const totalSteps = 2
   const progressPercent = Math.round((step / totalSteps) * 100)
 
-  function tryAdvance(target: 1 | 2 | 3) {
+  function tryAdvance(target: WizardStep) {
     if (target <= step) {
       setStep(target)
       return
     }
     setSubmitAttempted(true)
-    if (step === 1 && !step1Valid) return
-    if (step === 2) {
-      if (!step2Valid) {
-        if (requiresModel && !selectedModelID) {
-          modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
-        }
-        return
+    if (step === 1 && !step1Valid) {
+      if (requiresModel && !selectedModelID) {
+        modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
       }
+      return
     }
     setStep(target)
   }
@@ -993,8 +989,8 @@ export function CreateAgentDialog({
           step={step}
           totalSteps={totalSteps}
           progressPercent={progressPercent}
-          title={t(`agents.form.wizard.steps.${step === 1 ? "identity" : step === 2 ? "runtime" : "capabilities"}.title` as never)}
-          summary={t(`agents.form.wizard.steps.${step === 1 ? "identity" : step === 2 ? "runtime" : "capabilities"}.summary` as never)}
+          title={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.title` as never)}
+          summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never)}
           stepOfLabel={t("agents.form.wizard.stepOf", { current: step, total: totalSteps })}
           completeLabel={t("agents.form.wizard.complete", { percent: progressPercent })}
         />
@@ -1008,21 +1004,19 @@ export function CreateAgentDialog({
           }}
         >
           {step === 1 && (
-            <section className="space-y-3">
-              <Field
-                label={t("agents.form.fields.name")}
-                required
-              >
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("agents.form.placeholders.name")} autoFocus />
-              </Field>
-              <Field label={t("agents.form.fields.description")}>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
-              </Field>
-            </section>
-          )}
-
-          {step === 2 && (
-            <section className="space-y-3">
+            <div className="space-y-5">
+              <section className="space-y-3">
+                <Field
+                  label={t("agents.form.fields.name")}
+                  required
+                >
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("agents.form.placeholders.name")} autoFocus />
+                </Field>
+                <Field label={t("agents.form.fields.description")}>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
+                </Field>
+              </section>
+              <section className="space-y-3">
               {showExecutionChoices ? (
                 <>
                   <Field label={t("agents.form.fields.executionMode")} required>
@@ -1410,10 +1404,11 @@ export function CreateAgentDialog({
                   </div>
                 </Field>
               )}
-            </section>
+              </section>
+            </div>
           )}
 
-          {step === 3 && (
+          {step === 2 && (
             <>
               <section className="space-y-3">
                 <Input value={capabilitySearch} onChange={(e) => setCapabilitySearch(e.target.value)} placeholder={t("agents.form.placeholders.capabilitySearch")} />
@@ -1519,7 +1514,7 @@ export function CreateAgentDialog({
 
         <DialogFooter className="shrink-0 border-t border-line-muted pt-4">
           {step > 1 ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => setStep((step - 1) as 1 | 2 | 3)} disabled={pending}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setStep((step - 1) as WizardStep)} disabled={pending}>
               {t("agents.form.wizard.actions.back")}
             </Button>
           ) : (
@@ -1532,8 +1527,8 @@ export function CreateAgentDialog({
               type="button"
               size="sm"
               className="bg-success text-white hover:bg-success"
-              onClick={() => tryAdvance((step + 1) as 1 | 2 | 3)}
-              disabled={pending || (step === 1 && !step1Valid) || (step === 2 && !step2Valid)}
+              onClick={() => tryAdvance((step + 1) as WizardStep)}
+              disabled={pending || (step === 1 && !step1Valid)}
             >
               {t("agents.form.wizard.actions.next")}
             </Button>
@@ -1569,7 +1564,7 @@ export function CreateAgentDialog({
 }
 
 interface WizardProgressProps {
-  step: 1 | 2 | 3
+  step: WizardStep
   totalSteps: number
   progressPercent: number
   title: string
