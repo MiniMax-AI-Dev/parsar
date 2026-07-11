@@ -1,5 +1,13 @@
 SHELL := /bin/bash
 
+GO_TEST_PACKAGE ?= $(shell cd server && go list ./... | grep -Ev 'internal/(store|seed)$$')
+GO_TEST_RUN ?=
+GO_TEST_ARGS ?=
+
+ifneq ($(strip $(GO_TEST_RUN)),)
+GO_TEST_RUN_FLAG := -run '$(GO_TEST_RUN)'
+endif
+
 # Production image knobs. Override at the CLI:
 #   make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=v0.1.0
 # PARSAR_IMAGE is intentionally a generic local name — the open-source
@@ -8,16 +16,40 @@ SHELL := /bin/bash
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: setup dev dev-db check reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
+.PHONY: help setup node-deps dev dev-db check test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
+
+help:
+	@printf '%s\n' \
+	  'Local development:' \
+	  '  make dev-all          Start Postgres, API, web, and HTTP runner' \
+	  '  make dev-db           Start the development Postgres only' \
+	  '  make server           Run the API in the foreground' \
+	  '  make web              Run the web app in the foreground' \
+	  '' \
+	  'Fast feedback:' \
+	  '  make test-fast        Run Go tests plus frontend/CLI checks' \
+	  '  make test-go          Run all Go tests without integration DB packages' \
+	  '  make test-go GO_TEST_PACKAGE=./server/internal/api/...' \
+	  '  make test-go GO_TEST_PACKAGE=./server/internal/api GO_TEST_RUN=TestHealth' \
+	  '  make test-web         Typecheck web and check design-system lint' \
+	  '  make lint-web         Run the full web lint (existing debt may fail)' \
+	  '  make test-cli         Run CLI unit tests' \
+	  '  make typecheck        Typecheck all TypeScript packages' \
+	  '' \
+	  'Before review:' \
+	  '  make check            Run the required full repository gate'
 
 setup:
 	./scripts/setup.sh
+
+node-deps:
+	@if [[ ! -d node_modules ]]; then pnpm install --frozen-lockfile; fi
 
 paths:
 	./scripts/setup.sh paths
 
 migrate-dev:
-	cd server && go run ./cmd/migrate
+	./scripts/with-dev-env.sh bash -c 'cd server && exec go run ./cmd/migrate'
 
 # `make bootstrap` is the operator-side first-owner provisioning
 # entry point for a freshly-installed Parsar. Required flags must
@@ -47,6 +79,36 @@ dev: dev-db
 check:
 	./scripts/check.sh
 
+# Fast local feedback. Unlike `make check`, these targets skip setup,
+# code-generation drift checks, and database-backed migration tests.
+test: test-fast
+
+test-fast: test-go test-web test-cli
+
+test-go:
+	go test $(GO_TEST_PACKAGE) $(GO_TEST_RUN_FLAG) $(GO_TEST_ARGS)
+
+test-web: typecheck-web lint-web-design
+
+typecheck-web: node-deps
+	pnpm --filter @parsar/web typecheck
+
+lint-web-design: node-deps
+	@if (cd apps/web && npx eslint src/ 2>&1) | grep -q "no-restricted-syntax"; then \
+	  echo "Design-system lint violations (arbitrary font sizes or raw palette):" >&2; \
+	  (cd apps/web && npx eslint src/ 2>&1) | grep "no-restricted-syntax" >&2; \
+	  exit 1; \
+	fi
+
+lint-web: node-deps
+	pnpm --filter @parsar/web lint
+
+test-cli: node-deps
+	pnpm --filter @parsar/cli test
+
+typecheck: node-deps
+	pnpm typecheck
+
 reset-dev:
 	./scripts/reset-dev.sh
 
@@ -54,7 +116,7 @@ clean-dev:
 	./scripts/reset-dev.sh --all
 
 server:
-	cd server && go run ./cmd/server
+	./scripts/with-dev-env.sh bash -c 'cd server && exec go run ./cmd/server'
 
 # Persistent dev server lifecycle. The binary lives at ~/.parsar/bin
 # and runs inside a tmux session that survives sandbox bash exits and

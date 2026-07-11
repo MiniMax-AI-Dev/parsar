@@ -40,6 +40,17 @@ export PARSAR_WEB_PORT="${PARSAR_WEB_PORT:-5173}"
 # in prod) — see docs/deploy/config.example.yaml.
 export PARSAR_DEV_AUTH="${PARSAR_DEV_AUTH:-true}"
 
+# ── Server runtime posture ───────────────────────────────────────────
+# Loopback public_url selects the development validation profile. These
+# values are intentionally safe only for local development and remain
+# override-friendly for alternate ports or integration setups.
+export PARSAR_ADDR="${PARSAR_ADDR:-127.0.0.1:$PARSAR_DEV_SERVER_PORT}"
+export PARSAR_PUBLIC_URL="${PARSAR_PUBLIC_URL:-http://127.0.0.1:$PARSAR_DEV_SERVER_PORT}"
+export PARSAR_COOKIE_SECURE="${PARSAR_COOKIE_SECURE:-false}"
+export PARSAR_MASTER_KEY="${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
+export PARSAR_FEISHU_MOCK="${PARSAR_FEISHU_MOCK:-true}"
+export PARSAR_AGENT_DAEMON_OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-$PARSAR_PUBLIC_URL}"
+
 # Builds the dev DATABASE_URL from the parts above. Optional args let a
 # caller override host ($1) and port ($2) without touching the creds —
 # used by dev-all.sh, which picks an ephemeral free port for Postgres.
