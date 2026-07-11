@@ -6,8 +6,8 @@
 #   - parsar CLI (spec/memory client) is installed under /usr/local/bin/parsar, compiled
 #     on-the-fly in Stage 1 from apps/parsar/cmd/parsar. Multi-stage keeps the Go toolchain
 #     out of the runtime image (final image only contains the static binary).
-#   - Hook scripts for Claude Code + OpenCode are pre-baked under
-#     /opt/parsar/hooks/{claude,opencode}/. Platform settings files
+#   - Hook scripts for Claude Code are pre-baked under
+#     /opt/parsar/hooks/claude/. Platform settings files
 #     (~/.claude/settings.json etc.) are NOT pre-baked — server's sandbox
 #     provider writes them at runtime via e2b Exec because they carry
 #     runtime-specific values.
@@ -118,16 +118,14 @@ COPY --from=parsar-builder /out/parsar /usr/local/bin/parsar
 RUN chmod +x /usr/local/bin/parsar \
  && /usr/local/bin/parsar --version
 
-# --- Hook scripts (Claude Code + OpenCode) ---
-# Pre-baked under /opt/parsar/hooks/. The Claude Python hooks must be
-# executable since Claude Code invokes them directly as commands. OpenCode
-# plugins are loaded by `node` so executable-bit doesn't matter, but we
-# set it anyway for uniformity.
+# --- Hook scripts (Claude Code) ---
+# Pre-baked under /opt/parsar/hooks/claude/. The Python hooks must be
+# executable since Claude Code invokes them directly as commands.
 #
-# Platform settings.json / opencode config that POINTS at these scripts is
-# NOT baked here — the server's sandbox provider writes those at runtime
-# (carries PARSAR_* env vars + sandbox-specific values).
-COPY infra/e2b-templates/parsar-daemon-claudecode/hooks /opt/parsar/hooks
+# settings.json that POINTS at these scripts is NOT baked here — the
+# server's sandbox provider writes it at runtime (carries PARSAR_* env
+# vars + sandbox-specific values).
+COPY infra/e2b-templates/parsar-daemon-claudecode/hooks/claude /opt/parsar/hooks/claude
 RUN chmod -R a+rx /opt/parsar/hooks
 
 # --- Sandbox identity ---
