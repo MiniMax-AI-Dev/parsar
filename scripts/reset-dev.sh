@@ -4,9 +4,9 @@ set -euo pipefail
 PARSAR_HOME="${PARSAR_HOME:-$HOME/.parsar}"
 
 if [[ "${1:-}" == "--all" ]]; then
-  docker compose -f docker-compose.dev.yml down -v --remove-orphans
+  ./scripts/dev-compose.sh down -v --remove-orphans
 else
-  docker compose -f docker-compose.dev.yml down --remove-orphans
+  ./scripts/dev-compose.sh down --remove-orphans
 fi
 
 mkdir -p "$PARSAR_HOME/dev"

@@ -13,13 +13,32 @@ PARSAR_STATE_DIR="$PARSAR_HOME/state"
 PARSAR_DEV_DIR="$PARSAR_HOME/dev"
 mkdir -p "$PARSAR_LOG_DIR" "$PARSAR_STATE_DIR" "$PARSAR_DEV_DIR"
 
-docker compose -f docker-compose.dev.yml up -d postgres
+./scripts/dev-compose.sh up -d postgres
+
+printf 'Waiting for Postgres'
+for _ in {1..30}; do
+  if ./scripts/dev-compose.sh exec -T postgres \
+    pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
+    printf ' ready\n'
+    break
+  fi
+  printf '.'
+  sleep 1
+done
+
+if ! ./scripts/dev-compose.sh exec -T postgres \
+  pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
+  printf '\nPostgres did not become ready; inspect logs with:\n' >&2
+  printf '  ./scripts/dev-compose.sh logs postgres\n' >&2
+  exit 1
+fi
+
 cat <<INFO
 Parsar dev stack started.
 
 Postgres: ${PARSAR_POSTGRES_HOST}:${PARSAR_POSTGRES_PORT} (db=${PARSAR_PG_DB} user=${PARSAR_PG_USER} password=${PARSAR_PG_PASSWORD})
 Migrate:  make migrate-dev
-Server:   make server             # http://127.0.0.1:8080/api/v1/health
+Server:   make server             # http://127.0.0.1:${PARSAR_DEV_SERVER_PORT}/api/v1/health
 Web:      make web                # http://127.0.0.1:${PARSAR_WEB_PORT}
 Runner:   make http-runner-loop   # bounded local HTTP Agent runner
 Logs:     $PARSAR_LOG_DIR
