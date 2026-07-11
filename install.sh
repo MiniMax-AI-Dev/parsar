@@ -3,7 +3,7 @@ set -euo pipefail
 
 DEFAULT_COMPOSE_URL="https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/docker-compose.yml"
 DEFAULT_SERVER_IMAGE="ghcr.io/minimax-ai-dev/parsar-server:latest"
-DEFAULT_SANDBOX_IMAGE="ghcr.io/minimax-ai-dev/parsar-sandbox:latest"
+DEFAULT_SANDBOX_IMAGE="parsar-sandbox:local"
 
 usage() {
   cat <<'EOF'
@@ -20,8 +20,10 @@ Options:
                          when present, otherwise download the published template.
   --image IMAGE          parsar-server image.
                          Default: ghcr.io/minimax-ai-dev/parsar-server:latest
-  --sandbox-image IMAGE  Docker sandbox image.
-                         Default: ghcr.io/minimax-ai-dev/parsar-sandbox:latest
+  --sandbox-image IMAGE  Docker sandbox image. There is no published
+                         default — build one first:
+                         docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+                         Default: parsar-sandbox:local
   --port PORT            Web UI host port. Default: 18080
   --pg-port PORT         Postgres host port. Default: 15432
   --bind ADDR            Web UI bind address. Default: 127.0.0.1

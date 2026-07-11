@@ -1,34 +1,64 @@
-# Parsar sandbox image — local Docker build variant.
+# Parsar local docker sandbox image — minimal, multi-arch (amd64 + arm64).
 #
-# Differences from the K8s/e2b Dockerfile:
-#   - No envd (local docker sandbox uses `docker exec`, not envd API)
-#   - parsar-daemon copied from the parsar:local server image (no GitHub Release)
-#   - parsar CLI compiled in a Go builder stage (hooks need `parsar inject`)
-#   - Claude Code from downloads.claude.ai; OpenCode / Codex / Pi via npm
+# For AGENT_DAEMON_SANDBOX_BACKEND=docker, the sandbox provider does
+# `docker run -d --entrypoint sleep <image> infinity` then drives
+# everything else via `docker exec ... bash -c <command>`
+# (server/internal/sandbox/docker/client.go). No envd, no e2b API — the
+# image just needs the agent CLIs + parsar-daemon on PATH and a shell.
+#
+# Contents:
+#   - Claude Code CLI + Codex CLI + Pi CLI
+#   - parsar-daemon + parsar CLI (spec/memory hook injection), both
+#     compiled from source in the builder stage below — no dependency
+#     on the parsar:local server image being built first
+#   - Claude Code hook scripts (session-start / user-prompt-submit)
+#   - Node 20 + Python 3 + uv for MCP server runtimes
+#
+# Deliberately NOT included: OpenCode. Add it back (`npm install -g
+# opencode-ai`) if a local sandbox needs to run agent_kind=opencode.
 #
 # All Agent CLI installs are FAIL-LOUD: if any of them fails, the build
 # aborts. A silently missing CLI would only surface at run time when a
 # user creates an Agent with the corresponding agent_kind and the sandbox
 # reports "command not found".
 #
-# Build (from repo root):
+# Build (from repo root; buildx cross-compiles the Go binaries natively
+# and downloads the right CLI binary for TARGETARCH):
 #   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+#   docker build --platform linux/arm64 -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+#
+# Build args:
+#   --build-arg GO_VERSION=<tag>               builder Go image (default: matches repo go.work)
+#   --build-arg CLAUDE_CODE_VERSION=<version>  pin claude code (default: latest)
+#   --build-arg CODEX_VERSION=<version>        pin codex-rs (default: 0.141.0)
 
 ###############################################################################
-# Stage 1: parsar-builder — compile the parsar CLI from apps/parsar/cmd/parsar.
-# Hook scripts call `parsar inject snapshot` / `parsar inject incremental`
-# to fetch spec+memory from the server — without this binary, hooks fail open
-# and the agent boots without workspace context.
+# Stage 1: go-builder — compile parsar-daemon + parsar CLI for TARGETARCH.
+# --platform=$BUILDPLATFORM keeps the Go toolchain itself running natively
+# (no QEMU) while GOARCH=$TARGETARCH cross-compiles the output binaries.
 ###############################################################################
 ARG GO_VERSION=1.25-bookworm
 
-FROM golang:${GO_VERSION} AS parsar-builder
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS go-builder
+ARG TARGETARCH
 WORKDIR /src
+
+# Module graph first, source second — keeps `go mod download` cacheable.
 COPY go.mod go.sum go.work ./
 COPY go.work.sum* ./
 RUN go mod download
+
+# parsar-daemon depends on the repo-root internal/ packages (single
+# go.work module graph, no separate go.mod under apps/).
+COPY internal ./internal
 COPY apps ./apps
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS=-trimpath \
+
+# Hook scripts call `parsar inject snapshot/incremental` to fetch
+# spec+memory from the server — without this binary, hooks fail open and
+# the agent boots without workspace context.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-trimpath \
+    go build -ldflags="-s -w" -o /out/parsar-daemon ./apps/parsar-daemon/cmd/parsar-daemon
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-trimpath \
     go build -ldflags="-s -w -X github.com/MiniMax-AI-Dev/parsar/apps/parsar/internal/cli.Version=sandbox" \
     -o /out/parsar ./apps/parsar/cmd/parsar
 
@@ -36,14 +66,21 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS=-trimpath \
 # Stage 2: runtime — the actual sandbox image.
 ###############################################################################
 FROM ubuntu:22.04
+ARG TARGETARCH
 
 # --- Base tools ---
+# curl/ca-certificates for downloads, jq for JSON, git for repo ops,
+# ripgrep for Claude Code's code search.
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends \
       curl ca-certificates jq git ripgrep \
  && rm -rf /var/lib/apt/lists/*
 
 # --- MCP server runtimes (Node + Python + uv) ---
+# Most community MCP servers are launched via `npx <package>` or `uvx
+# <package>`; without these pre-installed, --mcp-config entries fail with
+# `spawn npx/uvx ENOENT` after capability resolution already logged
+# success — a silent runtime failure with no UI signal.
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends nodejs python3 \
  && rm -rf /var/lib/apt/lists/* \
@@ -56,6 +93,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && uvx --version
 
 # --- Claude Code CLI ---
+# Pulled from Anthropic's downloads CDN, not claude.ai/install.sh — the
+# latter sits behind a bot challenge that 403s non-browser User-Agents.
+#
+# To pin (e.g. for a bisect):
+#   docker build --build-arg CLAUDE_CODE_VERSION=2.1.179 ...
 ARG CLAUDE_CODE_VERSION=""
 RUN set -e; \
     DOWNLOAD_BASE="https://downloads.claude.ai/claude-code-releases"; \
@@ -64,39 +106,54 @@ RUN set -e; \
       VERSION="$(curl -fsSL "$DOWNLOAD_BASE/latest")"; \
       [ -n "$VERSION" ] || { echo "claude install: failed to resolve latest version" >&2; exit 1; }; \
     fi; \
-    echo "Installing claude code ${VERSION}"; \
+    case "$TARGETARCH" in \
+      amd64) CLAUDE_ARCH=linux-x64 ;; \
+      arm64) CLAUDE_ARCH=linux-arm64 ;; \
+      *) echo "claude install: unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    echo "Installing claude code ${VERSION} (${CLAUDE_ARCH})"; \
     mkdir -p /root/.local/bin; \
-    curl -fsSL "$DOWNLOAD_BASE/${VERSION}/linux-x64/claude" -o /root/.local/bin/claude; \
+    curl -fsSL "$DOWNLOAD_BASE/${VERSION}/${CLAUDE_ARCH}/claude" -o /root/.local/bin/claude; \
     chmod +x /root/.local/bin/claude; \
     ln -sf /root/.local/bin/claude /usr/local/bin/claude; \
     /usr/local/bin/claude --version
 
-# --- OpenCode CLI (via npm, Node already installed above) ---
-# Fail the build if the install breaks — a silently missing CLI would
-# only surface when a user creates an agent_kind=opencode Agent and the
-# sandbox reports "command not found" at runtime.
-RUN npm install -g opencode-ai && opencode --version
+# --- OpenAI Codex CLI (codex-rs) ---
+# linux-musl builds are statically linked, no glibc dependency added.
+# Pinned by default for reproducible builds; bump deliberately.
+#
+# Override: docker build --build-arg CODEX_VERSION=0.142.0 ...
+ARG CODEX_VERSION="0.141.0"
+RUN set -e; \
+    case "$TARGETARCH" in \
+      amd64) CODEX_ARCH=x86_64-unknown-linux-musl ;; \
+      arm64) CODEX_ARCH=aarch64-unknown-linux-musl ;; \
+      *) echo "codex install: unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    echo "Installing codex ${CODEX_VERSION} (${CODEX_ARCH})"; \
+    curl -fsSL \
+      "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-${CODEX_ARCH}.tar.gz" \
+      -o /tmp/codex.tar.gz; \
+    tar -xzf /tmp/codex.tar.gz -C /tmp/; \
+    install -m 0755 "/tmp/codex-${CODEX_ARCH}" /usr/local/bin/codex; \
+    rm -rf /tmp/codex*; \
+    /usr/local/bin/codex --version
 
-# --- parsar-daemon from the server image ---
-COPY --from=parsar:local /usr/local/share/parsar/daemon/parsar-daemon-linux-amd64 /usr/local/bin/parsar-daemon
-RUN chmod +x /usr/local/bin/parsar-daemon && /usr/local/bin/parsar-daemon version
-
-# --- parsar CLI (spec/memory client for hook scripts) ---
-COPY --from=parsar-builder /out/parsar /usr/local/bin/parsar
-RUN chmod +x /usr/local/bin/parsar && /usr/local/bin/parsar --version
-
-# --- Codex CLI (via npm, Node already installed above) ---
-RUN npm install -g @openai/codex && codex --version
-
-# --- Pi CLI (via npm) ---
+# --- Pi CLI (via npm, Node already installed above) ---
 RUN npm install -g @earendil-works/pi-coding-agent && pi --version
 
-# --- Hook scripts (Claude Code + OpenCode) ---
-# Pre-baked under /opt/parsar/hooks/. Claude hooks are Python, OpenCode
-# hooks are JS. Both call `parsar inject snapshot/incremental` at runtime.
-# The seed step (sandbox_seed.go) writes platform-specific config that
-# POINTS at these scripts — they are not loaded directly by convention.
-COPY infra/e2b-templates/parsar-daemon-claudecode/hooks /opt/parsar/hooks
+# --- parsar-daemon + parsar CLI (compiled in the go-builder stage) ---
+COPY --from=go-builder /out/parsar-daemon /usr/local/bin/parsar-daemon
+COPY --from=go-builder /out/parsar /usr/local/bin/parsar
+RUN chmod +x /usr/local/bin/parsar-daemon /usr/local/bin/parsar \
+ && /usr/local/bin/parsar-daemon version \
+ && /usr/local/bin/parsar --version
+
+# --- Hook scripts (Claude Code) ---
+# Pre-baked under /opt/parsar/hooks/claude/. Hook scripts call `parsar
+# inject snapshot/incremental` at runtime. settings.json pointing at
+# these scripts is written per-sandbox at seed time, not baked here.
+COPY infra/e2b-templates/parsar-daemon-claudecode/hooks/claude /opt/parsar/hooks/claude
 RUN chmod -R a+rx /opt/parsar/hooks
 
 # --- Sandbox environment ---

@@ -207,7 +207,9 @@ sudo docker run --rm --entrypoint ls parsar:local /usr/local/share/parsar/daemon
 ### 5.2 Build the sandbox image
 
 The sandbox image is the container Agents start when running in
-Docker-sandbox mode; it contains Claude Code + Codex + parsar-daemon.
+Docker-sandbox mode; it contains Claude Code + Codex + Pi CLI +
+parsar-daemon. It builds parsar-daemon and the parsar CLI from source in
+its own Go builder stage — independent of 5.1, order doesn't matter.
 
 ```bash
 # With proxy (read from .env):
@@ -221,11 +223,15 @@ sudo docker build \
 
 # Without proxy:
 sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+
+# On Apple Silicon (arm64):
+sudo docker build --platform linux/arm64 -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
 ```
 
-> `Dockerfile.local` copies the daemon binary from the server image and
-> downloads the Claude Code CLI from a CDN — no GitHub Release required.
-> **You must complete 5.1 before running 5.2.**
+> `Dockerfile.local` downloads the Claude Code + Codex CLIs from their
+> respective CDN/release endpoints and compiles parsar-daemon + the
+> parsar CLI from this repo's source — no GitHub Release, no dependency
+> on the server image (5.1) being built first.
 
 Verify:
 

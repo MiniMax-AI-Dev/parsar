@@ -154,16 +154,18 @@ services:
       PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
       PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
       # Docker sandbox — Agent runs inside a sandboxed container with
-      # Claude Code + OpenCode + Codex + Pi + parsar-daemon. The server
-      # calls docker to start / exec / stop sandbox containers via the
-      # mounted /var/run/docker.sock below. Build the sandbox image
-      # first (README's 5.2 section):
+      # Claude Code + Codex + Pi + parsar-daemon. The server calls docker
+      # to start / exec / stop sandbox containers via the mounted
+      # /var/run/docker.sock below. There is no published image for this —
+      # build one locally first (README's 5.2 section):
       #   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+      # Until you do, sandbox-mode Agent runs fail with "no such image";
+      # everything else in this stack works fine without it.
       # The network below is pinned to `parsar_default` — the top-level
       # `name: parsar` + `networks:` block at the head of this file
       # guarantees that alias regardless of the clone directory.
       AGENT_DAEMON_SANDBOX_BACKEND: "docker"
-      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}"
+      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${PARSAR_SANDBOX_IMAGE:-parsar-sandbox:local}"
       AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "${PARSAR_PROJECT_NAME:-parsar}_default"
       AGENT_DAEMON_SANDBOX_SERVER_URL: "http://parsar-server:8080"
     group_add:
