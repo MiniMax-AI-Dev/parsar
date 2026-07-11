@@ -5,7 +5,7 @@
 #   - parsar-sandbox            local docker-backed sandbox provider
 #                                (AGENT_DAEMON_SANDBOX_BACKEND=docker),
 #                                multi-arch (amd64 + arm64)
-#   - parsar-daemon-claudecode  e2b.app SaaS template, amd64 only
+#   - parsar-sandbox-e2b  e2b.app SaaS template, amd64 only
 #
 # Both compile parsar-daemon + the parsar CLI from source in the shared
 # Dockerfile's builder stage — neither depends on a published
@@ -20,7 +20,7 @@
 #
 # Output:
 #   ghcr.io/<owner-lowercase>/parsar-sandbox:<tag>
-#   ghcr.io/<owner-lowercase>/parsar-daemon-claudecode:<tag>
+#   ghcr.io/<owner-lowercase>/parsar-sandbox-e2b:<tag>
 #     - latest        on default-branch pushes
 #     - <short-sha>   on every build
 #     - <release-tag> on tag pushes (e.g. sandbox-v0.1.0)
@@ -74,7 +74,7 @@ jobs:
             platforms_pr: linux/amd64
             platforms_publish: linux/amd64,linux/arm64
           - variant: e2b
-            image_name: parsar-daemon-claudecode
+            image_name: parsar-sandbox-e2b
             base_image: e2bdev/base:latest
             # e2b.app sandboxes are amd64 only — no point publishing arm64.
             platforms_pr: linux/amd64

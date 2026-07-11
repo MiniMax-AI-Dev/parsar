@@ -17,7 +17,7 @@
 //	first prompt  -> Connector hits ErrNotBound -> sees daemon_mode=sandbox
 //	             -> SandboxProvider.Acquire(ctx, in):
 //	                  1. CreateRuntimePairing(type=agent_daemon)  -> token + runtimeID(=deviceID)
-//	                  2. e2b.Create("parsar-daemon-claudecode")        -> sandbox handle
+//	                  2. e2b.Create("parsar-sandbox-e2b")        -> sandbox handle
 //	                  3. RunCommand(parsar-daemon connect -b + env token)
 //	                     -> daemon pairs, then dials WS in background
 //	                  4. Registry.WaitForDevice(deviceID, 45s)     -> blocks until WS upgrade lands
@@ -197,7 +197,7 @@ type RuntimeMinter interface {
 //   - Store: runtime pairing minter.
 //   - Registry: the gateway registry to WaitForDevice against.
 //   - Binder: persisted conversation->device bindings.
-//   - Template: the e2b template id (e.g. "parsar-daemon-claudecode"). The
+//   - Template: the e2b template id (e.g. "parsar-sandbox-e2b"). The
 //     deployment must publish this template before sandbox mode works.
 //   - ServerURL: the public URL the daemon inside the sandbox dials
 //     back to. Must be reachable from inside the sandbox network.
@@ -215,12 +215,12 @@ type DeviceOwnerChecker interface {
 }
 
 type E2BProviderConfig struct {
-	Client        E2BClient
-	Store         RuntimeMinter
-	Registry      *gateway.Registry
-	Binder        binding.Binder
-	Bindings      SandboxBindingPersister // nil = memory-only (local dev)
-	Template      string
+	Client   E2BClient
+	Store    RuntimeMinter
+	Registry *gateway.Registry
+	Binder   binding.Binder
+	Bindings SandboxBindingPersister // nil = memory-only (local dev)
+	Template string
 	// Templates maps a sandbox_size label (e.g. "standard", "xl") to the
 	// e2b template id for that size. The agent's agents.config
 	// `sandbox_size` field selects which template gets used on cold start.
@@ -300,7 +300,7 @@ func NewE2BSandboxProvider(cfg E2BProviderConfig) (*E2BSandboxProvider, error) {
 		return nil, errors.New("E2BSandboxProvider: Binder required")
 	}
 	if cfg.Template == "" {
-		return nil, errors.New("E2BSandboxProvider: Template required (e.g. parsar-daemon-claudecode)")
+		return nil, errors.New("E2BSandboxProvider: Template required (e.g. parsar-sandbox-e2b)")
 	}
 	if cfg.ServerURL == "" {
 		return nil, errors.New("E2BSandboxProvider: ServerURL required (the URL the daemon inside the sandbox should dial back to)")
@@ -509,10 +509,10 @@ func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.P
 	cacheKey := "agent_daemon:" + in.AgentID
 	_, templateID := p.resolveTemplate(in)
 	row, won, err := p.cfg.Bindings.ReserveSandboxBindingSlot(ctx, store.ReserveSandboxBindingSlotInput{
-		WorkspaceID:    in.WorkspaceID,
-		AgentID:        in.AgentID,
-		CacheKey:       cacheKey,
-		TemplateID:     templateID,
+		WorkspaceID: in.WorkspaceID,
+		AgentID:     in.AgentID,
+		CacheKey:    cacheKey,
+		TemplateID:  templateID,
 		Metadata: map[string]any{
 			"sandbox_kind": "agent_daemon",
 			"connector":    string(p.cfg.Connector),
@@ -610,9 +610,9 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		// owned by the agent, not a human user.
 		TokenTTL: SandboxAcquireTimeout + 30*time.Second,
 		Config: map[string]any{
-			"created_by":       "sandbox_provider",
-			"agent_id": in.AgentID,
-			"sandbox_kind":     "agent_daemon_claude_code",
+			"created_by":   "sandbox_provider",
+			"agent_id":     in.AgentID,
+			"sandbox_kind": "agent_daemon_claude_code",
 		},
 	})
 	if err != nil {
@@ -626,10 +626,10 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		TemplateID:     templateID,
 		TimeoutSeconds: int(SandboxDefaultTTL.Seconds()),
 		Metadata: map[string]string{
-			"parsar.workspace_id":     in.WorkspaceID,
-			"parsar.agent_id": in.AgentID,
-			"parsar.device_id":        deviceID,
-			"parsar.sandbox_kind":     "agent_daemon_claude_code",
+			"parsar.workspace_id": in.WorkspaceID,
+			"parsar.agent_id":     in.AgentID,
+			"parsar.device_id":    deviceID,
+			"parsar.sandbox_kind": "agent_daemon_claude_code",
 		},
 	})
 	if err != nil {
@@ -839,12 +839,12 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 			}
 		} else {
 			binding, bindErr := p.cfg.Bindings.CreateSandboxBinding(bootCtx, store.CreateSandboxBindingInput{
-				WorkspaceID:    in.WorkspaceID,
-				AgentID:        in.AgentID,
-				CacheKey:       "agent_daemon:" + in.AgentID,
-				SandboxID:      sandbox.SandboxID,
-				TemplateID:     templateID,
-				Status:         store.SandboxBindingStatusActive,
+				WorkspaceID: in.WorkspaceID,
+				AgentID:     in.AgentID,
+				CacheKey:    "agent_daemon:" + in.AgentID,
+				SandboxID:   sandbox.SandboxID,
+				TemplateID:  templateID,
+				Status:      store.SandboxBindingStatusActive,
 				Metadata: map[string]any{
 					"sandbox_kind": "agent_daemon",
 					"device_id":    deviceID,
@@ -1025,7 +1025,7 @@ func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
 	cutoff := time.Now().UTC().Add(-SandboxIdleReapThreshold)
 	type victim struct {
 		agentID string
-		entry          *sandboxEntry
+		entry   *sandboxEntry
 	}
 	var victims []victim
 	p.cacheMu.Lock()
