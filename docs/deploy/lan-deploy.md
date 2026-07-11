@@ -207,25 +207,31 @@ sudo docker run --rm --entrypoint ls parsar:local /usr/local/share/parsar/daemon
 ### 5.2 Build the sandbox image
 
 The sandbox image is the container Agents start when running in
-Docker-sandbox mode; it contains Claude Code + Codex + parsar-daemon.
+Docker-sandbox mode; it contains Claude Code + Codex + Pi CLI +
+parsar-daemon. It builds parsar-daemon and the parsar CLI from source in
+its own Go builder stage — independent of 5.1, order doesn't matter.
 
 ```bash
 # With proxy (read from .env):
 source .env
 sudo docker build \
-  -f infra/sandbox/Dockerfile.local \
+  -f infra/sandbox/Dockerfile \
   -t parsar-sandbox:local \
   --build-arg http_proxy="$HTTP_PROXY" \
   --build-arg https_proxy="$HTTPS_PROXY" \
   .
 
 # Without proxy:
-sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+sudo docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
+
+# On Apple Silicon (arm64):
+sudo docker build --platform linux/arm64 -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
 ```
 
-> `Dockerfile.local` copies the daemon binary from the server image and
-> downloads the Claude Code CLI from a CDN — no GitHub Release required.
-> **You must complete 5.1 before running 5.2.**
+> `Dockerfile` downloads the Claude Code + Codex CLIs from their
+> respective CDN/release endpoints and compiles parsar-daemon + the
+> parsar CLI from this repo's source — no GitHub Release, no dependency
+> on the server image (5.1) being built first.
 
 Verify:
 
@@ -334,7 +340,7 @@ sudo docker compose -f docker-compose.yml down -v    # also delete data volumes
 ```bash
 git pull
 sudo docker build -t parsar:local .
-sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+sudo docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
 sudo docker compose -f docker-compose.yml up -d --force-recreate
 ```
 
@@ -374,7 +380,7 @@ snippets in §5) because `docker build` does not read `.env`.
 | Feishu login reports `redirect_uri mismatch` | `.env`'s `REDIRECT_URI` does not match the Feishu console | Keep both sides completely identical (scheme, IP, port, path) |
 | Other machines cannot reach 18080 | Firewall blocking it | `sudo ufw allow 18080/tcp` or the equivalent firewall rule |
 | Device pairing downloads daemon and hits **404** | The GHCR image has no embedded daemon | Build the server image locally (§5.1) |
-| Agent reports **"no runtime yet — ask an admin to rebuild it"** | The sandbox image lacks the Agent CLI | Rebuild the sandbox image via `Dockerfile.local` (§5.2), then click Rebuild in the UI |
+| Agent reports **"no runtime yet — ask an admin to rebuild it"** | The sandbox image lacks the Agent CLI | Rebuild the sandbox image via `Dockerfile` (§5.2), then click Rebuild in the UI |
 | Sandbox comes up but the daemon cannot reach the server | Compose project name is not `parsar`, so network names do not match | Use the repo's `docker-compose.yml` (has `name: parsar` pinned at the top); do not override with `-p <other name>` |
 | Group @Bot **no response**, DM works fine | `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID` not set | Add the Bot's open_id to `.env` and restart the server |
 | Bot receives messages but does not reply | Outbound worker is not up | Grep server logs for `feishu outbound`; confirm `PARSAR_FEISHU_OUTBOUND=true` (compose already sets it) |
@@ -425,7 +431,7 @@ vim .env   # fill in Feishu credentials + master key + PARSAR_HOST_IP + Bot Open
 
 # 2. Build images
 sudo docker build -t parsar:local .
-sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+sudo docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
 
 # 3. Bring it up
 sudo docker compose -f docker-compose.yml up -d

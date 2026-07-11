@@ -410,7 +410,7 @@ ValidateRunnerToken(ctx, token) (RuntimeIdentity, error)
 
 ### 3.4 Dockerfile changes
 
-File: `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile`
+File: `infra/sandbox/Dockerfile`
 
 New content (after the existing parsar-daemon install section):
 ```dockerfile
@@ -419,14 +419,14 @@ ARG PARSAR_VERSION=...
 RUN curl -fSL "$GITLAB_URL/parsar-$PARSAR_VERSION-linux-amd64" -o /usr/local/bin/parsar \
     && chmod +x /usr/local/bin/parsar
 
-# Hook scripts (COPYed from the build context; source at infra/e2b-templates/parsar-daemon-claudecode/hooks/)
+# Hook scripts (COPYed from the build context; source at infra/sandbox/hooks/)
 COPY hooks/claude /opt/parsar/hooks/claude
 COPY hooks/opencode /opt/parsar/hooks/opencode
 RUN chmod +x /opt/parsar/hooks/claude/*.py
 ```
 
 Hook script sources go under
-`infra/e2b-templates/parsar-daemon-claudecode/hooks/{claude,opencode}/`.
+`infra/sandbox/hooks/{claude,opencode}/`.
 
 **`.claude/settings.json` / opencode config are not seeded into the
 image**; instead, after the sandbox starts, the server calls e2b Exec to
@@ -548,9 +548,9 @@ Put the helper `seedPlatformConfig` in `sandbox_provider.go` or a new
 19. Cross-compile (linux/amd64 + linux/arm64), publish to GitLab artifact.
 
 ### Phase 7: sandbox image & hooks
-20. Modify `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile` to install the `parsar` binary + COPY the hook script directory.
-21. Create `infra/e2b-templates/parsar-daemon-claudecode/hooks/claude/{session-start.py, user-prompt-submit.py}`.
-22. Create `infra/e2b-templates/parsar-daemon-claudecode/hooks/opencode/{session-injection.js, per-turn-injection.js}`.
+20. Modify `infra/sandbox/Dockerfile` to install the `parsar` binary + COPY the hook script directory.
+21. Create `infra/sandbox/hooks/claude/{session-start.py, user-prompt-submit.py}`.
+22. Create `infra/sandbox/hooks/opencode/{session-injection.js, per-turn-injection.js}`.
 23. Rewrite the three-platform hooks uniformly to "call `parsar inject ...` for data" (injection logic centralizes in Go).
 
 ### Phase 8: sandbox lifecycle changes
@@ -585,8 +585,8 @@ depends on 4.
 | Sandbox lifecycle | `server/internal/connector/agentdaemon/sandbox_provider.go` (change; add seedPlatformConfig) |
 | Proto (no change) | `internal/agentdaemon/proto/outbound.go` (already supports the AgentOptions map) |
 | Audit hookup (no schema change) | `server/internal/audit/postgres.go:24-50` current `PostgresSink.Write()` |
-| Dockerfile | `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile` (change) |
-| Hook scripts | `infra/e2b-templates/parsar-daemon-claudecode/hooks/{claude,opencode}/` (new) |
+| Dockerfile | `infra/sandbox/Dockerfile` (change) |
+| Hook scripts | `infra/sandbox/hooks/{claude,opencode}/` (new) |
 | CLI source | `cmd/parsar/` (new) |
 | UI | Depends on the frontend layout; typically `web/src/pages/workspace/spec/` etc. (mirror the existing workspace settings page) |
 
