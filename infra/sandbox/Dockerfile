@@ -78,7 +78,15 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-trimpath \
 # Stage 2: runtime — the actual sandbox image.
 ###############################################################################
 FROM ${BASE_IMAGE}
-ARG TARGETARCH=amd64
+# Bare, no default: BuildKit auto-populates this per target platform for
+# every multi-platform build graph node. A hardcoded default here (we
+# used to have =amd64, reasoning "e2b is amd64-only anyway") SHADOWS
+# that auto-injection instead of just being a fallback — it silently
+# forced every platform, including arm64 build graph nodes, to resolve
+# TARGETARCH=amd64, downloading x86_64 CLI binaries onto an aarch64
+# rootfs (fails at exec time: "No such file or directory", the classic
+# symptom of a missing ELF interpreter for the wrong architecture).
+ARG TARGETARCH
 
 # --- Base tools ---
 # curl/ca-certificates for downloads, jq for JSON, git for repo ops,
