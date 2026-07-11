@@ -596,6 +596,7 @@ func main() {
 		SandboxProber:   runtimeStatusProber,
 		Profile:         runtimeProfile,
 		ConfiguredByOps: strings.TrimSpace(envLookup("PARSAR_OPENCODE_RUNNER")) != "",
+		SandboxImage:    configuredDockerSandboxImage(envLookup),
 	}
 	log.Bg().Info("runtime status profile configured",
 		"profile", runtimeProfile,

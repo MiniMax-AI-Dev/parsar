@@ -20,6 +20,7 @@ import { ApiError } from "../../lib/api-client"
 import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery, useEnableAgentCapabilityMutation } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
+import { useRuntimeStatus } from "../../lib/api-runtime"
 import type { UpdateAgentProfileRequest } from "../../lib/api-agents"
 import type {
   AgentInlineNewSecret,
@@ -251,6 +252,7 @@ export function CreateAgentDialog({
   onOpenChange,
   onSubmit,
 }: CreateAgentDialogProps) {
+  const runtimeStatus = useRuntimeStatus(open ? workspaceID : null)
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const queryClient = useQueryClient()
@@ -1079,20 +1081,29 @@ export function CreateAgentDialog({
                     </Field>
                   )}
                   {connector === "agent_daemon" && executionMode === "sandbox" && (
-                    <Field
-                      label={t("agents.form.fields.sandboxSize")}
-                      hint={t("agents.form.sandboxSize.hint")}
-                    >
-                      <select
-                        value={sandboxSize}
-                        onChange={(e) => setSandboxSize(e.target.value === "xl" ? "xl" : "standard")}
-                        disabled={pending}
-                        className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
+                    <div className="space-y-3">
+                      <Field
+                        label={t("agents.form.fields.sandboxSize")}
+                        hint={t("agents.form.sandboxSize.hint")}
                       >
-                        <option value="standard">{t("agents.form.sandboxSize.standard")}</option>
-                        <option value="xl">{t("agents.form.sandboxSize.xl")}</option>
-                      </select>
-                    </Field>
+                        <select
+                          value={sandboxSize}
+                          onChange={(e) => setSandboxSize(e.target.value === "xl" ? "xl" : "standard")}
+                          disabled={pending}
+                          className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
+                        >
+                          <option value="standard">{t("agents.form.sandboxSize.standard")}</option>
+                          <option value="xl">{t("agents.form.sandboxSize.xl")}</option>
+                        </select>
+                      </Field>
+                      {runtimeStatus.data?.sandbox_image ? (
+                        <Field label={t("agents.form.fields.sandboxImage")} hint={t("agents.form.sandboxImage.hint")}>
+                          <code className="block break-all rounded-md border border-line bg-surface-subtle px-3 py-2 text-xs text-fg-muted">
+                            {runtimeStatus.data.sandbox_image}
+                          </code>
+                        </Field>
+                      ) : null}
+                    </div>
                   )}
                 </>
               ) : (

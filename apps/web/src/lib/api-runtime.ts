@@ -32,6 +32,7 @@ export interface RuntimeStatus {
   sandbox_agent_count: number
   profile: RuntimeProfile
   configured_by?: RuntimeConfiguredBy
+  sandbox_image?: string
 }
 
 const KEY_RUNTIME_STATUS = (workspaceID: string) =>

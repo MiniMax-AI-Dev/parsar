@@ -164,6 +164,16 @@ func buildDockerAgentDaemonSandboxProvider(
 	return provider
 }
 
+func configuredDockerSandboxImage(env func(string) string) string {
+	if env == nil {
+		env = os.Getenv
+	}
+	if strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_BACKEND")) != "docker" {
+		return ""
+	}
+	return strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_IMAGE"))
+}
+
 // Built-in sandbox caps used when the operator sets no override. PidsLimit has
 // no default — a low pids cap breaks parallel builds (`make -j`, `go test ./...`).
 const (

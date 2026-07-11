@@ -676,6 +676,11 @@ definitions:
           SandboxAgentCount is the number of agents in this workspace
           whose declared runtime is 'sandbox'.
         type: integer
+      sandbox_image:
+        description: |-
+          SandboxImage is the operator-configured container image used for
+          docker-backed sandbox agents. Empty for non-docker providers.
+        type: string
     type: object
   dev.sandboxConnectivityCheck:
     properties:
