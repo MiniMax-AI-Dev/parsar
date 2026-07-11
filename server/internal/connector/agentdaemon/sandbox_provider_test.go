@@ -82,7 +82,7 @@ func (f *fakeE2BClient) Create(_ context.Context, _ e2b.CreateInput) (e2b.Sandbo
 	if err != nil {
 		return e2b.Sandbox{}, err
 	}
-	sb := e2b.Sandbox{SandboxID: pad("sbx-", id), TemplateID: "parsar-daemon-claudecode"}
+	sb := e2b.Sandbox{SandboxID: pad("sbx-", id), TemplateID: "parsar-sandbox-e2b"}
 	if f.onCreate != nil {
 		f.onCreate(sb)
 	}
@@ -221,7 +221,7 @@ func TestNewE2BSandboxProvider_RequiredFields(t *testing.T) {
 		Store:     &fakeMinter{},
 		Registry:  gateway.NewRegistry(),
 		Binder:    binding.NewInMemoryBinder(),
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 	}
 	good, err := NewE2BSandboxProvider(base)
@@ -279,7 +279,7 @@ func TestE2BSandboxProvider_AcquireColdStart(t *testing.T) {
 		Store:     minter,
 		Registry:  reg,
 		Binder:    binding.NewInMemoryBinder(),
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 	})
 	if err != nil {
@@ -348,7 +348,7 @@ func TestE2BSandboxProvider_AcquireWarmCacheHit(t *testing.T) {
 		Store:     &fakeMinter{},
 		Registry:  reg,
 		Binder:    binding.NewInMemoryBinder(),
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 	})
 	// Pre-seed cache as if a prior cold start had populated it.
@@ -393,7 +393,7 @@ func TestE2BSandboxProvider_AcquireRecoversFromDeadDevice(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:   binding.NewInMemoryBinder(),
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 	// Pre-seed with a stale entry whose device is not in the registry.
 	p.cache["pa-1"] = &sandboxEntry{
@@ -437,7 +437,7 @@ func TestE2BSandboxProvider_AcquireSerialisesConcurrent(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:   binding.NewInMemoryBinder(),
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 
 	var wg sync.WaitGroup
@@ -478,7 +478,7 @@ func TestE2BSandboxProvider_AcquireConnectFailureKillsSandbox(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:   binding.NewInMemoryBinder(),
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
 		AgentID: "pa-1", WorkspaceID: "wks-1",
@@ -516,7 +516,7 @@ func TestE2BSandboxProvider_AcquireWaitForDeviceTimeout(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:   binding.NewInMemoryBinder(),
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
 		AgentID: "pa-1", WorkspaceID: "wks-1",
@@ -544,7 +544,7 @@ func TestE2BSandboxProvider_Release(t *testing.T) {
 	})
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: &fakeMinter{}, Registry: reg, Binder: binder,
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 	p.cache["pa-1"] = &sandboxEntry{
 		deviceID: "dev-runtime-01",
@@ -574,7 +574,7 @@ func TestE2BSandboxProvider_Reap(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: &fakeMinter{}, Registry: reg,
 		Binder:   binding.NewInMemoryBinder(),
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 	prev := SandboxIdleReapThreshold
 	SandboxIdleReapThreshold = 1 * time.Minute
@@ -648,7 +648,7 @@ func TestE2BSandboxProvider_SeedFailureKillsSandbox(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:   binding.NewInMemoryBinder(),
-		Template: "parsar-daemon-claudecode", ServerURL: "https://parsar.example.com",
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
 	})
 	_, err := p.Acquire(context.Background(), connector.PromptInput{
 		AgentID: "pa-1", WorkspaceID: "wks-1",
@@ -699,7 +699,7 @@ func TestE2BSandboxProvider_ColdStartPropagatesTGEnv(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:    binding.NewInMemoryBinder(),
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 		// Leave Connector zero-value: documented to default to claude
 		// because the only published template is Claude-based. Test
@@ -768,7 +768,7 @@ func TestE2BSandboxProvider_ColdStartOmitsEmptyTGEnv(t *testing.T) {
 	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
 		Client: e2bClient, Store: minter, Registry: reg,
 		Binder:    binding.NewInMemoryBinder(),
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 		Connector: SandboxConnectorClaude, // explicit, not zero-value
 	})
@@ -908,7 +908,7 @@ func TestE2BSandboxProvider_AcquireWinnerFinalizesReservation(t *testing.T) {
 		Registry:  reg,
 		Binder:    binding.NewInMemoryBinder(),
 		Bindings:  bindings,
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 	})
 	if err != nil {
@@ -982,7 +982,7 @@ func TestE2BSandboxProvider_AcquireLoserReusesWinnerDevice(t *testing.T) {
 		Registry:  reg,
 		Binder:    binding.NewInMemoryBinder(),
 		Bindings:  bindings,
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 	})
 	if err != nil {
@@ -1038,7 +1038,7 @@ func TestE2BSandboxProvider_AcquireWinnerFailureReleasesReservation(t *testing.T
 		Registry:  reg,
 		Binder:    binding.NewInMemoryBinder(),
 		Bindings:  bindings,
-		Template:  "parsar-daemon-claudecode",
+		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
 	})
 	if err != nil {

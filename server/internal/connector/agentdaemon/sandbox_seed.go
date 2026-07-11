@@ -134,7 +134,7 @@ func seedPlatformConfig(ctx context.Context, client E2BClient, sb e2b.Sandbox, c
 	switch conn {
 	case SandboxConnectorClaude, "":
 		// Empty defaults to Claude because the only template currently
-		// boots Claude (parsar-daemon-claudecode).
+		// boots Claude (parsar-sandbox-e2b).
 		return seedClaudeConfig(ctx, client, sb, envdURL)
 	case SandboxConnectorOpenCode:
 		// TODO: wire spec/memory injection via OpenCode hook scripts
