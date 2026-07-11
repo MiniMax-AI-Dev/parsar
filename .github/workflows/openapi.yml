@@ -21,14 +21,14 @@ on:
     paths:
       - 'docs/openapi/**'
       - 'redocly.yaml'
-      - 'server/**'
+      - 'server/**/*.go'
       - '.github/workflows/openapi.yml'
       - 'Makefile'
   pull_request:
     paths:
       - 'docs/openapi/**'
       - 'redocly.yaml'
-      - 'server/**'
+      - 'server/**/*.go'
       - '.github/workflows/openapi.yml'
       - 'Makefile'
 

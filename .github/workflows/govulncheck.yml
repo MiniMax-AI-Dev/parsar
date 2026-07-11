@@ -10,7 +10,23 @@ name: govulncheck
 on:
   push:
     branches: [main]
+    paths:
+      - "server/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/govulncheck.yml"
   pull_request:
+    paths:
+      - "server/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/govulncheck.yml"
   schedule:
     - cron: "17 8 * * 1"
 

@@ -9,7 +9,43 @@ name: check
 on:
   push:
     branches: [main]
+    paths:
+      - "server/**"
+      - "internal/**"
+      - "apps/web/**"
+      - "packages/cli/**"
+      - "packages/opencode-plugin/**"
+      - "packages/eslint-config/**"
+      - "scripts/**"
+      - "docker-compose.dev.yml"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - "go.work.sum"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "Makefile"
+      - ".github/workflows/check.yml"
   pull_request:
+    paths:
+      - "server/**"
+      - "internal/**"
+      - "apps/web/**"
+      - "packages/cli/**"
+      - "packages/opencode-plugin/**"
+      - "packages/eslint-config/**"
+      - "scripts/**"
+      - "docker-compose.dev.yml"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - "go.work.sum"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "Makefile"
+      - ".github/workflows/check.yml"
 
 permissions:
   contents: read
