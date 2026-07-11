@@ -10,7 +10,7 @@
 # implementation for that OS.
 #
 # The same artifacts are consumed by the sandbox image build (the e2b
-# Dockerfile at infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile
+# Dockerfile at infra/sandbox/Dockerfile.e2b
 # pins PARSAR_DAEMON_VERSION and curls the matching linux/amd64 binary from
 # the deployment's download mirror). When cutting a sandbox template
 # rebuild, bump the tag here first, wait for this workflow to publish,
@@ -149,7 +149,7 @@ jobs:
 
             ## Install (sandbox template)
             Bump `PARSAR_DAEMON_VERSION` in
-            `infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile`
+            `infra/sandbox/Dockerfile.e2b`
             to this release, then rebuild the e2b template.
 
             ## Install (local laptop)

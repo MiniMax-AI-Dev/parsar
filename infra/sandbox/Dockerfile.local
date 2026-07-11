@@ -7,20 +7,18 @@
 # image just needs the agent CLIs + parsar-daemon on PATH and a shell.
 #
 # Contents:
-#   - Claude Code CLI + Codex CLI + Pi CLI
+#   - Claude Code CLI + Codex CLI + Pi CLI (installed by the shared
+#     infra/sandbox/scripts/install-agents.sh — also used by
+#     Dockerfile.e2b, so the two images can't drift apart again)
 #   - parsar-daemon + parsar CLI (spec/memory hook injection), both
 #     compiled from source in the builder stage below — no dependency
 #     on the parsar:local server image being built first
 #   - Claude Code hook scripts (session-start / user-prompt-submit)
-#   - Node 20 + Python 3 + uv for MCP server runtimes
+#   - Python 3 + uv for MCP server runtimes (Node comes from
+#     install-agents.sh)
 #
 # Deliberately NOT included: OpenCode. Add it back (`npm install -g
 # opencode-ai`) if a local sandbox needs to run agent_kind=opencode.
-#
-# All Agent CLI installs are FAIL-LOUD: if any of them fails, the build
-# aborts. A silently missing CLI would only surface at run time when a
-# user creates an Agent with the corresponding agent_kind and the sandbox
-# reports "command not found".
 #
 # Build (from repo root; buildx cross-compiles the Go binaries natively
 # and downloads the right CLI binary for TARGETARCH):
@@ -31,6 +29,7 @@
 #   --build-arg GO_VERSION=<tag>               builder Go image (default: matches repo go.work)
 #   --build-arg CLAUDE_CODE_VERSION=<version>  pin claude code (default: latest)
 #   --build-arg CODEX_VERSION=<version>        pin codex-rs (default: 0.141.0)
+#   --build-arg PI_VERSION=<version>           pin pi CLI (default: 0.80.6)
 
 ###############################################################################
 # Stage 1: go-builder — compile parsar-daemon + parsar CLI for TARGETARCH.
@@ -76,71 +75,31 @@ RUN apt-get update -y \
       curl ca-certificates jq git ripgrep \
  && rm -rf /var/lib/apt/lists/*
 
-# --- MCP server runtimes (Node + Python + uv) ---
+# --- Agent CLIs (Node + Claude Code + Codex + Pi) ---
+# See infra/sandbox/scripts/install-agents.sh for the install logic and
+# version-pin build args.
+ARG CLAUDE_CODE_VERSION=""
+ARG CODEX_VERSION="0.141.0"
+ARG PI_VERSION="0.80.6"
+COPY infra/sandbox/scripts/install-agents.sh /tmp/install-agents.sh
+RUN CLAUDE_CODE_VERSION="$CLAUDE_CODE_VERSION" CODEX_VERSION="$CODEX_VERSION" PI_VERSION="$PI_VERSION" \
+    /tmp/install-agents.sh "$TARGETARCH" \
+ && rm -f /tmp/install-agents.sh
+
+# --- Python 3 + uv (MCP server runtimes) ---
 # Most community MCP servers are launched via `npx <package>` or `uvx
 # <package>`; without these pre-installed, --mcp-config entries fail with
 # `spawn npx/uvx ENOENT` after capability resolution already logged
-# success — a silent runtime failure with no UI signal.
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
- && apt-get install -y --no-install-recommends nodejs python3 \
+# success — a silent runtime failure with no UI signal. npx already
+# resolves from install-agents.sh's Node install.
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends python3 \
  && rm -rf /var/lib/apt/lists/* \
  && curl -LsSf https://astral.sh/uv/install.sh | sh \
  && ln -sf /root/.local/bin/uv /usr/local/bin/uv \
  && ln -sf /root/.local/bin/uvx /usr/local/bin/uvx \
- && node --version \
- && npx --version \
  && python3 --version \
  && uvx --version
-
-# --- Claude Code CLI ---
-# Pulled from Anthropic's downloads CDN, not claude.ai/install.sh — the
-# latter sits behind a bot challenge that 403s non-browser User-Agents.
-#
-# To pin (e.g. for a bisect):
-#   docker build --build-arg CLAUDE_CODE_VERSION=2.1.179 ...
-ARG CLAUDE_CODE_VERSION=""
-RUN set -e; \
-    DOWNLOAD_BASE="https://downloads.claude.ai/claude-code-releases"; \
-    VERSION="${CLAUDE_CODE_VERSION}"; \
-    if [ -z "$VERSION" ]; then \
-      VERSION="$(curl -fsSL "$DOWNLOAD_BASE/latest")"; \
-      [ -n "$VERSION" ] || { echo "claude install: failed to resolve latest version" >&2; exit 1; }; \
-    fi; \
-    case "$TARGETARCH" in \
-      amd64) CLAUDE_ARCH=linux-x64 ;; \
-      arm64) CLAUDE_ARCH=linux-arm64 ;; \
-      *) echo "claude install: unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
-    esac; \
-    echo "Installing claude code ${VERSION} (${CLAUDE_ARCH})"; \
-    mkdir -p /root/.local/bin; \
-    curl -fsSL "$DOWNLOAD_BASE/${VERSION}/${CLAUDE_ARCH}/claude" -o /root/.local/bin/claude; \
-    chmod +x /root/.local/bin/claude; \
-    ln -sf /root/.local/bin/claude /usr/local/bin/claude; \
-    /usr/local/bin/claude --version
-
-# --- OpenAI Codex CLI (codex-rs) ---
-# linux-musl builds are statically linked, no glibc dependency added.
-# Pinned by default for reproducible builds; bump deliberately.
-#
-# Override: docker build --build-arg CODEX_VERSION=0.142.0 ...
-ARG CODEX_VERSION="0.141.0"
-RUN set -e; \
-    case "$TARGETARCH" in \
-      amd64) CODEX_ARCH=x86_64-unknown-linux-musl ;; \
-      arm64) CODEX_ARCH=aarch64-unknown-linux-musl ;; \
-      *) echo "codex install: unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
-    esac; \
-    echo "Installing codex ${CODEX_VERSION} (${CODEX_ARCH})"; \
-    curl -fsSL \
-      "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-${CODEX_ARCH}.tar.gz" \
-      -o /tmp/codex.tar.gz; \
-    tar -xzf /tmp/codex.tar.gz -C /tmp/; \
-    install -m 0755 "/tmp/codex-${CODEX_ARCH}" /usr/local/bin/codex; \
-    rm -rf /tmp/codex*; \
-    /usr/local/bin/codex --version
-
-# --- Pi CLI (via npm, Node already installed above) ---
-RUN npm install -g @earendil-works/pi-coding-agent && pi --version
 
 # --- parsar-daemon + parsar CLI (compiled in the go-builder stage) ---
 COPY --from=go-builder /out/parsar-daemon /usr/local/bin/parsar-daemon
@@ -153,7 +112,7 @@ RUN chmod +x /usr/local/bin/parsar-daemon /usr/local/bin/parsar \
 # Pre-baked under /opt/parsar/hooks/claude/. Hook scripts call `parsar
 # inject snapshot/incremental` at runtime. settings.json pointing at
 # these scripts is written per-sandbox at seed time, not baked here.
-COPY infra/e2b-templates/parsar-daemon-claudecode/hooks/claude /opt/parsar/hooks/claude
+COPY infra/sandbox/hooks/claude /opt/parsar/hooks/claude
 RUN chmod -R a+rx /opt/parsar/hooks
 
 # --- Sandbox environment ---

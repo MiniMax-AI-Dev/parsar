@@ -1,7 +1,11 @@
-# Parsar agent_daemon sandbox template — base image w/ Claude Code CLI + parsar-daemon preinstalled
+# Parsar agent_daemon sandbox template — base image w/ Claude Code + Codex +
+# Pi CLIs + parsar-daemon preinstalled
 #
 # Builds an E2B sandbox image where:
-#   - Claude Code CLI is installed under /usr/local/bin/claude (Anthropic's installer)
+#   - Claude Code + Codex + Pi CLIs are installed under /usr/local/bin/
+#     (install logic shared with infra/sandbox/Dockerfile.local via
+#     infra/sandbox/scripts/install-agents.sh — edit there, not inline
+#     here, so the two images can't drift apart)
 #   - parsar-daemon static linux/amd64 binary is installed under /usr/local/bin/parsar-daemon
 #   - parsar CLI (spec/memory client) is installed under /usr/local/bin/parsar, compiled
 #     on-the-fly in Stage 1 from apps/parsar/cmd/parsar. Multi-stage keeps the Go toolchain
@@ -21,11 +25,10 @@
 #   1. Sandbox.Create("parsar-daemon-claudecode", { timeout })
 #   2. RunCommand: parsar-daemon connect --device-name <deviceId> -b (URL/token via env)
 #   3. Wait for the gateway to see deviceId dial in (gateway.Registry.WaitForDevice)
-# No npm / curl at spawn time → boot ~3-5s instead of 30s+.
+# No curl at spawn time → boot ~3-5s instead of 30s+.
 #
 # Build (from REPO ROOT, not this directory — Stage 1 needs apps/parsar source):
-#   docker build -f infra/e2b-templates/parsar-daemon-claudecode/e2b.Dockerfile \
-#                -t parsar-daemon-claudecode .
+#   docker build -f infra/sandbox/Dockerfile.e2b -t parsar-daemon-claudecode .
 #
 # CRITICAL: parsar-daemon ships as a static Go binary, downloaded from GitHub
 # Releases at build time. CI publishes new binaries on every release tag
@@ -45,7 +48,7 @@
 # Only apps/ is COPY'd (parsar only imports apps/parsar/internal/cli) so server-
 # side changes don't bust this layer's cache.
 ###############################################################################
-ARG GO_VERSION=1.24-bookworm
+ARG GO_VERSION=1.25-bookworm
 
 FROM golang:${GO_VERSION} AS parsar-builder
 WORKDIR /src
@@ -67,23 +70,23 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS=-trimpath \
 # Stage 2: runtime — the actual sandbox image.
 ###############################################################################
 FROM e2bdev/base:latest
+ARG TARGETARCH=amd64
 
 # --- Base tools (curl + ca-certs for downloads, jq optional for debugging) ---
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends curl ca-certificates jq \
  && rm -rf /var/lib/apt/lists/*
 
-# --- Claude Code CLI ---
-# Anthropic's installer drops claude into /root/.local/bin by default; symlink
-# it into /usr/local/bin so the daemon's exec.LookPath("claude") works without
-# a PATH override. The `claude --version` sanity-check at the end fails the
-# build loudly if the installer ever changes layout.
-RUN curl -fsSL https://claude.ai/install.sh | bash \
- && CLAUDE_BIN="$(command -v claude || true)" \
- && if [ -z "$CLAUDE_BIN" ] && [ -x /root/.local/bin/claude ]; then CLAUDE_BIN=/root/.local/bin/claude; fi \
- && if [ -z "$CLAUDE_BIN" ]; then echo "claude install failed: no binary on PATH"; exit 1; fi \
- && ln -sf "$CLAUDE_BIN" /usr/local/bin/claude \
- && /usr/local/bin/claude --version
+# --- Agent CLIs (Node + Claude Code + Codex + Pi) ---
+# See infra/sandbox/scripts/install-agents.sh for the install logic and
+# version-pin build args.
+ARG CLAUDE_CODE_VERSION=""
+ARG CODEX_VERSION="0.141.0"
+ARG PI_VERSION="0.80.6"
+COPY infra/sandbox/scripts/install-agents.sh /tmp/install-agents.sh
+RUN CLAUDE_CODE_VERSION="$CLAUDE_CODE_VERSION" CODEX_VERSION="$CODEX_VERSION" PI_VERSION="$PI_VERSION" \
+    /tmp/install-agents.sh "$TARGETARCH" \
+ && rm -f /tmp/install-agents.sh
 
 # --- parsar-daemon static binary ---
 # Pulled from GitHub Releases (default `MiniMax-AI-Dev/parsar`). CI publishes
@@ -125,7 +128,7 @@ RUN chmod +x /usr/local/bin/parsar \
 # settings.json that POINTS at these scripts is NOT baked here — the
 # server's sandbox provider writes it at runtime (carries PARSAR_* env
 # vars + sandbox-specific values).
-COPY infra/e2b-templates/parsar-daemon-claudecode/hooks/claude /opt/parsar/hooks/claude
+COPY infra/sandbox/hooks/claude /opt/parsar/hooks/claude
 RUN chmod -R a+rx /opt/parsar/hooks
 
 # --- Sandbox identity ---
