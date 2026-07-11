@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_COMPOSE_URL="https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/docker-compose.local.yml"
+DEFAULT_COMPOSE_URL="https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/docker-compose.yml"
 DEFAULT_SERVER_IMAGE="ghcr.io/minimax-ai-dev/parsar-server:latest"
 DEFAULT_SANDBOX_IMAGE="ghcr.io/minimax-ai-dev/parsar-sandbox:latest"
 
@@ -16,7 +16,7 @@ Usage:
 Options:
   --home PATH            Install state directory. Must be absolute or ~/...
                          Default: ~/.parsar
-  --compose-file PATH    Compose file to use. Default: ./docker-compose.local.yml
+  --compose-file PATH    Compose file to use. Default: ./docker-compose.yml
                          when present, otherwise download the published template.
   --image IMAGE          parsar-server image.
                          Default: ghcr.io/minimax-ai-dev/parsar-server:latest
@@ -85,21 +85,28 @@ set_env() {
 }
 
 detect_docker() {
-  if docker compose version >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  if docker compose version >/dev/null 2>&1 </dev/null && docker info >/dev/null 2>&1 </dev/null; then
     DOCKER=(docker)
     return
   fi
   if command -v sudo >/dev/null 2>&1 &&
-    sudo -n docker compose version >/dev/null 2>&1 &&
-    sudo -n docker info >/dev/null 2>&1; then
+    sudo -n docker compose version >/dev/null 2>&1 </dev/null &&
+    sudo -n docker info >/dev/null 2>&1 </dev/null; then
     DOCKER=(sudo -n docker)
     return
   fi
   die "Docker Compose v2 is required and the current user cannot reach the Docker daemon"
 }
 
+# Piped via `curl | bash`, our own stdin (fd 0) is the same pipe still
+# delivering the unparsed tail of this script. `docker`/`docker compose`
+# subcommands like `exec` forward stdin to the container by default, and
+# will happily drain that pipe out from under bash mid-parse (silently
+# truncating everything after the command that stole it — including the
+# closing banner). Redirect from /dev/null so no docker invocation can
+# ever compete with bash for bytes of its own source.
 docker_run() {
-  "${DOCKER[@]}" "$@"
+  "${DOCKER[@]}" "$@" </dev/null
 }
 
 compose_run() {
@@ -114,18 +121,18 @@ fetch_compose() {
     return
   fi
 
-  if [ -f "./docker-compose.local.yml" ]; then
-    compose_file="$PWD/docker-compose.local.yml"
+  if [ -f "./docker-compose.yml" ]; then
+    compose_file="$PWD/docker-compose.yml"
     return
   fi
 
-  compose_file="$parsar_home/docker-compose.local.yml"
+  compose_file="$parsar_home/docker-compose.yml"
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$DEFAULT_COMPOSE_URL" -o "$compose_file"
   elif command -v wget >/dev/null 2>&1; then
     wget -qO "$compose_file" "$DEFAULT_COMPOSE_URL"
   else
-    die "curl or wget is required to download docker-compose.local.yml"
+    die "curl or wget is required to download docker-compose.yml"
   fi
 }
 

@@ -145,10 +145,9 @@ PARSAR_FEISHU_VERIFICATION_TOKEN=xxxxxxxx    # Verification Token from §2.1
 PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID=ou_xxxxxx  # Bot Open ID from §2.1
 
 # ---- Security ----
-# PARSAR_MASTER_KEY encrypts every Bot credential in the DB. Leave blank on
-# first run — parsar-init in step 6 will auto-generate one on `up`, print it
-# to the logs, and then fatal-exit; copy the printed key back into .env and
-# run `up` again. You can also pre-generate:
+# PARSAR_MASTER_KEY encrypts every Bot credential in the DB. There is no
+# auto-generation — parsar-server fatal-exits at startup if this is empty
+# in production profile. Generate it before the first `up`:
 #   echo "PARSAR_MASTER_KEY=$(openssl rand -hex 32)" >> .env
 # Once set, DO NOT change it: any Bot credentials already stored become
 # undecryptable and every Bot must be re-bound.
@@ -241,23 +240,22 @@ sudo docker run --rm --entrypoint /bin/sh parsar-sandbox:local \
 ## 6. Bring up the service stack
 
 ```bash
-sudo docker compose -f docker-compose.local.yml up -d
+sudo docker compose -f docker-compose.yml up -d
 ```
 
 **Startup order (automatic):**
 1. `postgres` — PostgreSQL 16, wait for healthcheck.
-2. `parsar-init` — master-key validation + database migration.
-3. `parsar-server` — binds `0.0.0.0:18080`; Feishu WebSocket inbound + outbound worker start automatically.
+2. `parsar-server` — runs `parsar-migrate` then starts serving; binds `0.0.0.0:18080`; Feishu WebSocket inbound + outbound worker start automatically.
 
-> **First run will fatal-exit — that is intentional.**
-> If you did not manually pre-fill `PARSAR_MASTER_KEY` in step 4, `parsar-init` generates one, prints it to its logs (`sudo docker logs parsar-local-init`), and then `parsar-server` refuses to start because env still has no key. **Copy the printed `PARSAR_MASTER_KEY=...` line from the init log into `.env`** and run `up -d` again to complete startup.
-> On subsequent starts, if the key does not change, parsar-init only runs migrations and leaves the key alone.
+> **If you left `PARSAR_MASTER_KEY` blank in step 4, startup will fatal-exit.**
+> `parsar-server` refuses to start in production profile without a master key — it does not generate one for you. **Generate it yourself** (`echo "PARSAR_MASTER_KEY=$(openssl rand -hex 32)" >> .env`) **before** running `up -d`.
+> Migrations re-run (as a fast no-op) on every restart, so this is safe to run `up -d` again after fixing `.env`.
 
 **Verify:**
 
 ```bash
 # Container status
-sudo docker compose -f docker-compose.local.yml ps
+sudo docker compose -f docker-compose.yml ps
 
 # Health checks
 curl -s http://YOUR_IP:18080/healthz    # 200
@@ -320,16 +318,15 @@ sudo docker logs parsar-local-server 2>&1 | grep "feishu.*inbound.*ready"
 ### View logs
 
 ```bash
-sudo docker logs -f parsar-local-server    # server logs
-sudo docker logs parsar-local-init         # migration logs
+sudo docker logs -f parsar-local-server    # server logs (includes migration output on startup)
 sudo docker logs parsar-local-postgres     # DB logs
 ```
 
 ### Stop / clean up
 
 ```bash
-sudo docker compose -f docker-compose.local.yml down       # stop, keep data
-sudo docker compose -f docker-compose.local.yml down -v    # also delete data volumes
+sudo docker compose -f docker-compose.yml down       # stop, keep data
+sudo docker compose -f docker-compose.yml down -v    # also delete data volumes
 ```
 
 ### Upgrade
@@ -338,7 +335,7 @@ sudo docker compose -f docker-compose.local.yml down -v    # also delete data vo
 git pull
 sudo docker build -t parsar:local .
 sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
-sudo docker compose -f docker-compose.local.yml up -d --force-recreate
+sudo docker compose -f docker-compose.yml up -d --force-recreate
 ```
 
 ### Change port
@@ -347,7 +344,7 @@ Edit `PARSAR_LOCAL_PORT` in `.env` and **also update**:
 - the port in `PARSAR_FEISHU_REDIRECT_URI`
 - the redirect URL configured on the Feishu Open Platform
 
-Then `sudo docker compose -f docker-compose.local.yml up -d --force-recreate`.
+Then `sudo docker compose -f docker-compose.yml up -d --force-recreate`.
 
 ---
 
@@ -361,7 +358,7 @@ HTTP_PROXY=http://your-proxy:port
 HTTPS_PROXY=http://your-proxy:port
 ```
 
-`docker-compose.local.yml` reads these variables and passes them to the
+`docker-compose.yml` reads these variables and passes them to the
 container. Leave them blank on machines that do not need a proxy.
 
 You must also pass the proxy args at image-build time (see the `--build-arg`
@@ -373,12 +370,12 @@ snippets in §5) because `docker build` does not read `.env`.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Server fatal-exits with `secret.master_key is required in production` | `.env` has an empty `PARSAR_MASTER_KEY` | Let `parsar-init` run once → copy the generated key from its logs into `.env` → `up -d` again |
+| Server fatal-exits with `secret.master_key is required in production` | `.env` has an empty `PARSAR_MASTER_KEY` | Generate one yourself (`echo "PARSAR_MASTER_KEY=$(openssl rand -hex 32)" >> .env`) → `up -d` again |
 | Feishu login reports `redirect_uri mismatch` | `.env`'s `REDIRECT_URI` does not match the Feishu console | Keep both sides completely identical (scheme, IP, port, path) |
 | Other machines cannot reach 18080 | Firewall blocking it | `sudo ufw allow 18080/tcp` or the equivalent firewall rule |
 | Device pairing downloads daemon and hits **404** | The GHCR image has no embedded daemon | Build the server image locally (§5.1) |
 | Agent reports **"no runtime yet — ask an admin to rebuild it"** | The sandbox image lacks the Agent CLI | Rebuild the sandbox image via `Dockerfile.local` (§5.2), then click Rebuild in the UI |
-| Sandbox comes up but the daemon cannot reach the server | Compose project name is not `parsar`, so network names do not match | Use the repo's `docker-compose.local.yml` (has `name: parsar` pinned at the top); do not override with `-p <other name>` |
+| Sandbox comes up but the daemon cannot reach the server | Compose project name is not `parsar`, so network names do not match | Use the repo's `docker-compose.yml` (has `name: parsar` pinned at the top); do not override with `-p <other name>` |
 | Group @Bot **no response**, DM works fine | `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID` not set | Add the Bot's open_id to `.env` and restart the server |
 | Bot receives messages but does not reply | Outbound worker is not up | Grep server logs for `feishu outbound`; confirm `PARSAR_FEISHU_OUTBOUND=true` (compose already sets it) |
 | Server crash-loops with `owner URL not resolvable` | `PARSAR_AGENT_DAEMON_OWNER_URL` missing | Confirm compose has `PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"` |
@@ -390,32 +387,29 @@ snippets in §5) because `docker build` does not read `.env`.
 ## Architecture overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Deploy machine (YOUR_IP)                  │
-│                                                                 │
-│  ┌────────────┐  ┌────────────┐  ┌─────────────────────────┐   │
-│  │ PostgreSQL │  │ parsar-init│  │     parsar-server        │   │
-│  │ :5432      │  │ (one-shot) │  │  SPA + API + WS          │   │
-│  │ data vol   │  │ migrate+   │  │  Feishu WS inbound +     │   │
-│  │            │  │ onboard    │  │  outbound worker         │   │
-│  └────────────┘  └────────────┘  │  Docker sandbox mgr      │   │
-│                                  └─────────┬───────────────┘   │
-│                                            │                   │
-│  ┌──────────────────────┐        0.0.0.0:18080                 │
-│  │  sandbox container   │                 │                   │
-│  │  (on demand)         │                 │                   │
-│  │  Claude Code + Codex │                 │                   │
-│  │  parsar-daemon       │                 │                   │
-│  └──────────────────────┘                  │                   │
-└────────────────────────────────────────────┼───────────────────┘
-                                             │
-          ┌──────────────────────────────────┼─────────────┐
-          │              LAN / Feishu        │             │
-          │                                  │             │
-          │   User browser ──── HTTP ────────┘             │
-          │   User device ────── WebSocket ──┘             │
-          │   Feishu group/DM ── Feishu WS ──┘             │
-          └────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Deploy machine (YOUR_IP)                                           │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────────────────────────────┐         │
+│  │PostgreSQL    │  │parsar-server                         │         │
+│  │:5432         │  │migrate on startup, then:             │         │
+│  │data vol      │  │SPA + API + WS                        │         │
+│  └──────────────┘  │Feishu WS inbound + outbound worker   │         │
+│                    │Docker sandbox mgr                    │         │
+│                    └──────────────────────────────────────┘         │
+│                                                                     │
+│  ┌──────────────────────────────────────┐                           │
+│  │sandbox container (on demand)         │                           │
+│  │Claude Code + Codex + parsar-daemon   │                           │
+│  └──────────────────────────────────────┘                           │
+│                                                                     │
+│  Listens on 0.0.0.0:18080                                           │
+└─────────────────────────────────────────────────────────────────────┘
+
+LAN / Feishu clients reach parsar-server on port 18080:
+  - User browser      ── HTTP ──────→ parsar-server (web UI)
+  - User device       ── WebSocket ─→ parsar-server (device pairing)
+  - Feishu group/DM   ── Feishu WS ─→ parsar-server (bot)
 ```
 
 ---
@@ -434,7 +428,7 @@ sudo docker build -t parsar:local .
 sudo docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
 
 # 3. Bring it up
-sudo docker compose -f docker-compose.local.yml up -d
+sudo docker compose -f docker-compose.yml up -d
 
 # 4. Verify
 curl http://YOUR_IP:18080/healthz   # 200

@@ -160,7 +160,7 @@ sleep 1
 FEISHU_MOCK="${PARSAR_FEISHU_MOCK:-true}"
 OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-http://127.0.0.1:${PORT}}"
 # Feishu Bot IM (websocket inbound + outbound reply cards). Mirrors
-# docker-compose.local.yml so the script path is turnkey — profile not
+# docker-compose.yml so the script path is turnkey — profile not
 # fork. Gates default ON but stay override-friendly; with no bot bound
 # the manager just idles. Bot credentials are NOT set here: they flow in
 # through the Web UI bind card into the encrypted vault (hot-reloaded

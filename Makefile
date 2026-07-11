@@ -8,16 +8,13 @@ SHELL := /bin/bash
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: setup dev check reset-dev clean-dev paths seed-dev migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache docker-image-info openapi
+.PHONY: setup dev check reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
 
 setup:
 	./scripts/setup.sh
 
 paths:
-	./scripts/parsar-paths.sh
-
-seed-dev:
-	pnpm --filter @parsar/cli parsar -- seed-dev
+	./scripts/setup.sh paths
 
 migrate-dev:
 	cd server && go run ./cmd/migrate
@@ -73,7 +70,7 @@ web:
 	pnpm --filter @parsar/web dev
 
 cli:
-	pnpm --filter @parsar/cli parsar -- --help
+	pnpm --filter @parsar/cli parsar --help
 
 devgateway:
 	cd server && go run ./cmd/devgateway --help
@@ -122,16 +119,6 @@ docker-build-no-cache:
 	    -t $(PARSAR_IMAGE):$(PARSAR_IMAGE_TAG) \
 	    -f Dockerfile \
 	    .
-
-# Quick sanity print so operators can confirm what they just built
-# without piecing together `docker images | grep ...`. The size
-# column is the strongest "I shipped the right thing" signal — if
-# the runtime image is >300 MB the multi-stage build broke and
-# someone is shipping the Go toolchain.
-docker-image-info:
-	@docker image inspect \
-	    --format 'image={{.RepoTags}} id={{.Id}} created={{.Created}} size={{.Size}}' \
-	    $(PARSAR_IMAGE):$(PARSAR_IMAGE_TAG)
 
 # --- OpenAPI spec (generated from swaggo annotations) ------------------
 #
