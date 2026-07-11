@@ -135,7 +135,7 @@
     "workspacePlaceholder": "Acme",
     "passwordLabel": "密码",
     "passwordPlaceholder": "至少 12 位,词组 + 数字混合",
-    "passwordHint": "推荐使用至少 60 bits 熵的密码 — 4 个以上单词组成的短语最省心。",
+    "passwordHint": "建议使用更长、好记的密码。4 个以上词组成的短语就很合适。",
     "submitButton": "创建管理员账号",
     "submitting": "正在创建...",
     "closedTitle": "已完成初始化",
