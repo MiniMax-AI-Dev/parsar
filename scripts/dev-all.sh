@@ -21,7 +21,7 @@ PY
 
 # Pick an ephemeral Postgres port BEFORE sourcing dev-env.sh so its
 # default (15432) only fills the blank — dev-all intentionally runs on a
-# free port to avoid colliding with a `make dev` stack.
+# free port to avoid colliding with a `make dev-db` stack.
 if [[ -z "${PARSAR_POSTGRES_PORT:-}" ]]; then
   PARSAR_POSTGRES_PORT="$(free_port)"
   export PARSAR_POSTGRES_PORT

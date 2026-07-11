@@ -8,7 +8,7 @@ SHELL := /bin/bash
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: setup dev check reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
+.PHONY: setup dev dev-db check reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
 
 setup:
 	./scripts/setup.sh
@@ -38,8 +38,11 @@ bootstrap:
 sqlc-generate:
 	cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
 
-dev:
+dev-db:
 	./scripts/dev-stack.sh
+
+# Backward-compatible alias. Prefer `make dev-db` for the DB-only dev stack.
+dev: dev-db
 
 check:
 	./scripts/check.sh

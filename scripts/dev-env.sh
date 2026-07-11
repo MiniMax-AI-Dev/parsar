@@ -8,7 +8,7 @@
 # it wins (the `${VAR:-default}` form below only fills in the blank).
 #
 # Consumers:
-#   scripts/dev-stack.sh      (make dev)
+#   scripts/dev-stack.sh      (make dev-db; make dev is a compatibility alias)
 #   scripts/dev-all.sh        (make dev-all)
 #   scripts/dev-server-up.sh  (make dev-server-up)
 #   docker-compose.dev.yml    (reads the exported PARSAR_PG_* values;
