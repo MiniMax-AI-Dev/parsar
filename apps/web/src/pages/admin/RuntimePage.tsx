@@ -1,11 +1,7 @@
 import React, { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  Cloud,
-  PlugZap,
-  Skull,
-  Zap,
-} from "lucide-react"
+import type { TFunction } from "i18next"
+import { Cloud, PlugZap, Skull, Zap } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -46,6 +42,7 @@ import {
   useWorkspaceRuntimes,
   type Runtime,
 } from "../../lib/api-runtimes"
+import { isSandboxPairingExpired } from "../../lib/sandbox-runtime"
 import {
   killSandboxRequestRaw,
   useSandboxConnectivityTest,
@@ -64,8 +61,18 @@ type SortKey = "last_active" | "created_at" | "agent"
 type BadgeVariant = "success" | "warning" | "destructive" | "neutral" | "primary"
 
 function SandboxStatusBadge({ kind, status }: { kind: SandboxStatusKind; status: string }) {
-  if (kind === "live") return <Badge variant="success" dot>{status}</Badge>
-  if (kind === "transient") return <Badge variant="warning" dot>{status}</Badge>
+  if (kind === "live")
+    return (
+      <Badge variant="success" dot>
+        {status}
+      </Badge>
+    )
+  if (kind === "transient")
+    return (
+      <Badge variant="warning" dot>
+        {status}
+      </Badge>
+    )
   return <Badge variant="neutral">{status}</Badge>
 }
 
@@ -127,7 +134,9 @@ export function RuntimePage() {
   const [sortKey, setSortKey] = useState<SortKey>("last_active")
   const [confirming, setConfirming] = useState(false)
   const [bulkPending, setBulkPending] = useState(false)
-  const [bulkErrors, setBulkErrors] = useState<{ sandboxID: string; status: number | string; message: string }[]>([])
+  const [bulkErrors, setBulkErrors] = useState<
+    { sandboxID: string; status: number | string; message: string }[]
+  >([])
 
   useNow()
 
@@ -244,7 +253,10 @@ export function RuntimePage() {
       <ConfirmBulkKillDialog
         open={confirming}
         count={selected.size}
-        preview={activeBindings.filter((b) => selected.has(b.binding_id)).slice(0, 5).map((b) => b.sandbox_id)}
+        preview={activeBindings
+          .filter((b) => selected.has(b.binding_id))
+          .slice(0, 5)
+          .map((b) => b.sandbox_id)}
         loading={bulkPending}
         onCancel={() => setConfirming(false)}
         onConfirm={() => void performBulkKill()}
@@ -302,7 +314,8 @@ function CloudSandboxPanel({
 }) {
   const { t } = useTranslation("admin")
   const stateBody = cloudStateBody(t, cloudState, status)
-  const showCredentialControl = cloudState !== "loading" && cloudState !== "unknown" && status?.profile !== "managed"
+  const showCredentialControl =
+    cloudState !== "loading" && cloudState !== "unknown" && status?.profile !== "managed"
   const showInstances = !statusError && Boolean(workspaceID)
 
   return (
@@ -315,12 +328,12 @@ function CloudSandboxPanel({
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-fg">{t("runtime.providers.sandbox.title")}</h2>
+                <h2 className="text-base font-semibold text-fg">
+                  {t("runtime.providers.sandbox.title")}
+                </h2>
                 <CloudStateBadge state={cloudState} />
               </div>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-fg-muted">
-                {stateBody}
-              </p>
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-fg-muted">{stateBody}</p>
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -329,7 +342,6 @@ function CloudSandboxPanel({
             )}
           </div>
         </div>
-
       </div>
 
       <CloudDaemonRuntimesPanel
@@ -401,7 +413,10 @@ function CloudInstancesPanel({
   const { t } = useTranslation("admin")
   const checkLabelFor = useConnectivityCheckLabel()
   const [testingId, setTestingId] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{ bindingId: string; result: ConnectivityResult } | null>(null)
+  const [testResult, setTestResult] = useState<{
+    bindingId: string
+    result: ConnectivityResult
+  } | null>(null)
   const connTest = useSandboxConnectivityTest()
 
   function handleTestConnection(b: SandboxBinding) {
@@ -495,7 +510,9 @@ function CloudInstancesPanel({
           <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-danger-emphasis">
             {bulkErrors.map((e) => (
               <li key={e.sandboxID} className="flex items-start gap-2 font-mono">
-                <span className="shrink-0 rounded bg-danger-subtle/70 px-1.5 py-0.5 text-xs text-danger-emphasis">{e.status}</span>
+                <span className="shrink-0 rounded bg-danger-subtle/70 px-1.5 py-0.5 text-xs text-danger-emphasis">
+                  {e.status}
+                </span>
                 <span className="shrink-0 text-danger-emphasis">{e.sandboxID}</span>
                 <span className="text-danger-emphasis">{e.message}</span>
               </li>
@@ -553,7 +570,9 @@ function CloudInstancesPanel({
                       }
                     }}
                     role="link"
-                    aria-label={t("runtime.list.table.rowLabel", { agent: b.agent_id ?? b.sandbox_id })}
+                    aria-label={t("runtime.list.table.rowLabel", {
+                      agent: b.agent_id ?? b.sandbox_id,
+                    })}
                     className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                     data-testid={`runtime-row-${b.binding_id}`}
                   >
@@ -567,12 +586,19 @@ function CloudInstancesPanel({
                         data-testid={`runtime-select-${b.binding_id}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-[180px] truncate font-mono text-sm text-fg-emphasis" title={b.sandbox_id}>
+                    <TableCell
+                      className="max-w-[180px] truncate font-mono text-sm text-fg-emphasis"
+                      title={b.sandbox_id}
+                    >
                       {b.sandbox_id}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-fg-subtle">{b.agent_id ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs text-fg-subtle">
+                      {b.agent_id ?? "—"}
+                    </TableCell>
                     <TableCell className="text-sm text-fg-muted">{b.template_id}</TableCell>
-                    <TableCell><SandboxStatusBadge kind={b.status_kind} status={b.status} /></TableCell>
+                    <TableCell>
+                      <SandboxStatusBadge kind={b.status_kind} status={b.status} />
+                    </TableCell>
                     <TableCell>
                       <span title={b.last_active_at} className="text-sm text-fg-muted">
                         {relativeAgo(b.last_active_at)}
@@ -588,7 +614,11 @@ function CloudInstancesPanel({
                         variant="ghost"
                         size="sm"
                         className="h-7 gap-1 px-2 text-sm"
-                        disabled={!canTest || isTesting || (testingId !== null && testingId !== b.binding_id)}
+                        disabled={
+                          !canTest ||
+                          isTesting ||
+                          (testingId !== null && testingId !== b.binding_id)
+                        }
                         onClick={() => handleTestConnection(b)}
                         data-testid={`runtime-test-conn-${b.binding_id}`}
                       >
@@ -647,7 +677,9 @@ function CloudDaemonRuntimesPanel({
   if (error) {
     return (
       <ErrorState
-        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "Failed to load sandbox daemons" })}
+        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", {
+          defaultValue: "Failed to load sandbox daemons",
+        })}
         description={error instanceof Error ? error.message : String(error)}
         onRetry={onRefresh}
       />
@@ -666,7 +698,8 @@ function CloudDaemonRuntimesPanel({
           <p className="mt-0.5 max-w-3xl text-sm leading-relaxed text-fg-subtle">
             {t("runtime.cloud.daemonRuntimes.description", {
               count: runtimes.length,
-              defaultValue: "parsar-daemon processes running inside cloud sandboxes — these belong to the sandbox, not a physical device.",
+              defaultValue:
+                "parsar-daemon processes running inside cloud sandboxes — these belong to the sandbox, not a physical device.",
             })}
           </p>
         </div>
@@ -677,12 +710,28 @@ function CloudDaemonRuntimesPanel({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agent", { defaultValue: "Agent" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent engines" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "Status" })}</TableHead>
-            <TableHead>{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "Last heartbeat" })}</TableHead>
+            <TableHead>
+              {t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}
+            </TableHead>
+            <TableHead>
+              {t("runtime.cloud.daemonRuntimes.table.agent", { defaultValue: "Agent" })}
+            </TableHead>
+            <TableHead>
+              {t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}
+            </TableHead>
+            <TableHead>
+              {t("runtime.cloud.daemonRuntimes.table.agentEngines", {
+                defaultValue: "Agent engines",
+              })}
+            </TableHead>
+            <TableHead>
+              {t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "Status" })}
+            </TableHead>
+            <TableHead>
+              {t("runtime.cloud.daemonRuntimes.table.heartbeat", {
+                defaultValue: "Last heartbeat",
+              })}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -704,9 +753,12 @@ function CloudDaemonRuntimesPanel({
                 {formatRuntimeAgentKinds(runtime)}
               </TableCell>
               <TableCell>
-                <RuntimeLivenessBadge runtime={runtime} />
+                <SandboxRuntimeStatus runtime={runtime} />
               </TableCell>
-              <TableCell className="text-sm text-fg-muted" title={runtime.last_heartbeat_at ?? undefined}>
+              <TableCell
+                className="text-sm text-fg-muted"
+                title={runtime.last_heartbeat_at ?? undefined}
+              >
                 {runtime.last_heartbeat_at ? relativeAgo(runtime.last_heartbeat_at) : "—"}
               </TableCell>
             </TableRow>
@@ -717,17 +769,63 @@ function CloudDaemonRuntimesPanel({
   )
 }
 
+function SandboxRuntimeStatus({ runtime }: { runtime: Runtime }) {
+  const { t } = useTranslation("admin")
+  const expired = isSandboxPairingExpired(runtime)
+  if (runtime.liveness === "pending_pairing") {
+    return (
+      <div className="space-y-1">
+        <Badge variant={expired ? "destructive" : "warning"}>
+          {expired
+            ? t("runtime.cloud.daemonRuntimes.status.timedOut", {
+                defaultValue: "Startup timed out",
+              })
+            : t("runtime.cloud.daemonRuntimes.status.preparing", { defaultValue: "Preparing" })}
+        </Badge>
+        <p className="max-w-sm text-xs leading-relaxed text-fg-subtle">
+          {expired
+            ? t("runtime.cloud.daemonRuntimes.status.timedOutDetail", {
+                defaultValue:
+                  "The sandbox did not pair before the startup token expired. Retry provisioning from the Agent detail.",
+              })
+            : t("runtime.cloud.daemonRuntimes.status.preparingDetail", {
+                defaultValue:
+                  "Starting the sandbox and waiting for parsar-daemon to pair. First local Docker startup may include pulling the sandbox image.",
+              })}
+        </p>
+      </div>
+    )
+  }
+  return <RuntimeLivenessBadge runtime={runtime} />
+}
+
 function RuntimeLivenessBadge({ runtime }: { runtime: Runtime }) {
   const { t } = useTranslation("admin")
   switch (runtime.liveness) {
     case "online":
-      return <Badge variant="success" dot>{t("runtime.agentDaemon.status.online", { defaultValue: "Online" })}</Badge>
+      return (
+        <Badge variant="success" dot>
+          {t("runtime.agentDaemon.status.online", { defaultValue: "Online" })}
+        </Badge>
+      )
     case "pending_pairing":
-      return <Badge variant="warning">{t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "Pairing" })}</Badge>
+      return (
+        <Badge variant="warning">
+          {t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "Pairing" })}
+        </Badge>
+      )
     case "error":
-      return <Badge variant="destructive">{t("runtime.agentDaemon.status.error", { defaultValue: "Error" })}</Badge>
+      return (
+        <Badge variant="destructive">
+          {t("runtime.agentDaemon.status.error", { defaultValue: "Error" })}
+        </Badge>
+      )
     default:
-      return <Badge variant="neutral">{t("runtime.agentDaemon.status.offline", { defaultValue: "Offline" })}</Badge>
+      return (
+        <Badge variant="neutral">
+          {t("runtime.agentDaemon.status.offline", { defaultValue: "Offline" })}
+        </Badge>
+      )
   }
 }
 
@@ -762,13 +860,7 @@ function shortID(id: string): string {
   return id.length > 12 ? id.slice(0, 12) : id
 }
 
-function RuntimeTabs({
-  tab,
-  onChange,
-}: {
-  tab: RuntimeTab
-  onChange: (next: RuntimeTab) => void
-}) {
+function RuntimeTabs({ tab, onChange }: { tab: RuntimeTab; onChange: (next: RuntimeTab) => void }) {
   const { t } = useTranslation("admin")
   return (
     <div className="mb-4 border-b border-line" role="tablist" aria-label={t("runtime.page.title")}>
@@ -838,9 +930,12 @@ function CloudStateBadge({ state }: { state: CloudState }) {
     error: "destructive",
     unknown: "warning",
   }
-  return <Badge variant={variantByState[state]} dot={state === "ready"}>{t(`runtime.cloud.state.${state}.label`)}</Badge>
+  return (
+    <Badge variant={variantByState[state]} dot={state === "ready"}>
+      {t(`runtime.cloud.state.${state}.label`)}
+    </Badge>
+  )
 }
-
 
 function ExternalAgentPanel() {
   const { t } = useTranslation("admin")
@@ -851,7 +946,9 @@ function ExternalAgentPanel() {
           <PlugZap className="h-4 w-4" strokeWidth={1.9} />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-fg">{t("runtime.providers.external.title")}</h2>
+          <h2 className="text-base font-semibold text-fg">
+            {t("runtime.providers.external.title")}
+          </h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-fg-muted">
             {t("runtime.external.body")}
           </p>
@@ -879,7 +976,12 @@ function ConfirmBulkKillDialog({
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !loading) onCancel()
+      }}
+    >
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
           <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
@@ -894,7 +996,11 @@ function ConfirmBulkKillDialog({
             </DialogDescription>
             {preview.length > 0 && (
               <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
-                {preview.map((id) => <li key={id} className="font-mono">{id}</li>)}
+                {preview.map((id) => (
+                  <li key={id} className="font-mono">
+                    {id}
+                  </li>
+                ))}
                 {count > preview.length && (
                   <li className="list-none text-fg-faint">
                     {t("runtime.list.confirmBulkKill.andMore", { count: count - preview.length })}
@@ -942,7 +1048,7 @@ function resolveCloudState({
 }
 
 function cloudStateBody(
-  t: any,
+  t: TFunction<"admin">,
   state: CloudState,
   status: RuntimeStatus | undefined,
 ): string {

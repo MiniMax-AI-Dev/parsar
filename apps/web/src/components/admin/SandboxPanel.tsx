@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Box, CalendarClock, Loader2, RotateCcw, ShieldAlert } from "lucide-react"
 
@@ -15,10 +15,27 @@ import {
 import { EmptyState } from "../ui/empty-state"
 import { ErrorState } from "../ui/error-state"
 import { Skeleton } from "../ui/skeleton"
-import { useSandboxBinding, useRebuildSandbox, useAcquireSandbox, useRenewSandbox, type SandboxStatusKind } from "../../lib/api-sandbox"
+import {
+  useSandboxBinding,
+  useRebuildSandbox,
+  useAcquireSandbox,
+  useRenewSandbox,
+  type SandboxStatusKind,
+} from "../../lib/api-sandbox"
+import { useWorkspaceRuntimes } from "../../lib/api-runtimes"
+import { findSandboxRuntimeForAgent, isSandboxPairingExpired } from "../../lib/sandbox-runtime"
 import { useNow } from "../../lib/use-now"
+import { SandboxPreparingNotice, SandboxStartupTimedOutNotice } from "./SandboxProvisioningNotice"
 
-function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
+function Card({
+  title,
+  className,
+  children,
+}: {
+  title: string
+  className?: string
+  children: React.ReactNode
+}) {
   return (
     <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
       <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
@@ -37,8 +54,18 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
 }
 
 function SandboxStatusBadge({ kind, status }: { kind: SandboxStatusKind; status: string }) {
-  if (kind === "live") return <Badge variant="success" dot>{status}</Badge>
-  if (kind === "transient") return <Badge variant="warning" dot>{status}</Badge>
+  if (kind === "live")
+    return (
+      <Badge variant="success" dot>
+        {status}
+      </Badge>
+    )
+  if (kind === "transient")
+    return (
+      <Badge variant="warning" dot>
+        {status}
+      </Badge>
+    )
   return <Badge variant="neutral">{status}</Badge>
 }
 
@@ -95,19 +122,22 @@ function ExpiresValue({ iso }: { iso?: string }) {
   const { t } = useTranslation("admin")
   const now = useNow()
   if (!iso) {
-    return <span className="text-sm text-fg-subtle">{t("agents.detail.sandbox.fields.expiresAtUnknown")}</span>
+    return (
+      <span className="text-sm text-fg-subtle">
+        {t("agents.detail.sandbox.fields.expiresAtUnknown")}
+      </span>
+    )
   }
   const desc = describeRemaining(iso, now)
   const toneClass =
-    desc?.tone === "red" ? "text-danger"
-    : desc?.tone === "amber" ? "text-warning"
-    : "text-success"
+    desc?.tone === "red" ? "text-danger" : desc?.tone === "amber" ? "text-warning" : "text-success"
   const absolute = new Date(iso).toLocaleString()
-  const label = desc?.state === "expired"
-    ? t("agents.detail.sandbox.expires.expired")
-    : desc
-      ? t("agents.detail.sandbox.expires.remaining", { value: desc.value })
-      : null
+  const label =
+    desc?.state === "expired"
+      ? t("agents.detail.sandbox.expires.expired")
+      : desc
+        ? t("agents.detail.sandbox.expires.remaining", { value: desc.value })
+        : null
   return (
     <span title={iso} className="text-sm text-fg-emphasis">
       {absolute}
@@ -139,7 +169,12 @@ function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useTranslation("common")
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !loading) onCancel()
+      }}
+    >
       <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
         <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
           <div
@@ -153,9 +188,7 @@ function ConfirmDialog({
           </div>
           <div className="space-y-1.5">
             <DialogTitle className="text-sm">{title}</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {description}
-            </DialogDescription>
+            <DialogDescription className="text-sm leading-relaxed">{description}</DialogDescription>
           </div>
         </DialogHeader>
         <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
@@ -187,15 +220,48 @@ export function SandboxPanel({
 }) {
   const { t } = useTranslation("admin")
   const query = useSandboxBinding(workspaceID, agentID)
+  const runtimeQuery = useWorkspaceRuntimes(workspaceID ?? "", "agent_daemon")
   const rebuildMut = useRebuildSandbox(workspaceID, agentID)
   const acquireMut = useAcquireSandbox(workspaceID, agentID)
   const renewMut = useRenewSandbox(workspaceID, agentID)
+  const now = useNow()
+  const refetchSandbox = query.refetch
+  const refetchRuntimes = runtimeQuery.refetch
 
   const [confirmingRebuild, setConfirmingRebuild] = useState(false)
+  const [provisioningSince, setProvisioningSince] = useState<number | null>(null)
 
   function handleConfirm() {
+    setProvisioningSince(Date.now())
     rebuildMut.mutate(undefined, { onSettled: () => setConfirmingRebuild(false) })
   }
+
+  function triggerAcquire() {
+    setProvisioningSince(Date.now())
+    acquireMut.mutate()
+  }
+
+  const binding = query.data
+  const sandboxRuntime = findSandboxRuntimeForAgent(runtimeQuery.data ?? [], agentID)
+  const runtimeTimedOut = sandboxRuntime ? isSandboxPairingExpired(sandboxRuntime, now) : false
+  const manualProvisioningActive =
+    provisioningSince !== null &&
+    now - provisioningSince < 5 * 60_000 &&
+    (!binding || binding.status_kind !== "live")
+  const preparing =
+    acquireMut.isPending ||
+    rebuildMut.isPending ||
+    manualProvisioningActive ||
+    Boolean(sandboxRuntime?.liveness === "pending_pairing" && !runtimeTimedOut)
+
+  useEffect(() => {
+    if (!preparing) return
+    const tick = window.setInterval(() => {
+      void refetchSandbox()
+      void refetchRuntimes()
+    }, 2500)
+    return () => window.clearInterval(tick)
+  }, [preparing, refetchSandbox, refetchRuntimes])
 
   if (query.isLoading) {
     return (
@@ -215,31 +281,44 @@ export function SandboxPanel({
       />
     )
   }
-
-  const binding = query.data
-
   if (!binding) {
     return (
       <Card title={t("agents.detail.sandbox.title")}>
-        <EmptyState
-          icon={Box}
-          title={t("agents.detail.sandbox.empty.title")}
-        />
-        <div className="mt-3 flex justify-center">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={acquireMut.isPending}
-            onClick={() => acquireMut.mutate()}
-          >
-            {acquireMut.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-            {t("agents.detail.sandbox.actions.provision")}
-          </Button>
-        </div>
-        {acquireMut.isSuccess && (
-          <p className="mt-2 text-center text-sm text-fg-subtle">
-            {t("agents.detail.sandbox.provisioningHint")}
-          </p>
+        {preparing ? (
+          <SandboxPreparingNotice
+            runtime={sandboxRuntime}
+            startedAt={
+              sandboxRuntime?.created_at ??
+              (provisioningSince ? new Date(provisioningSince).toISOString() : undefined)
+            }
+          />
+        ) : sandboxRuntime && runtimeTimedOut ? (
+          <SandboxStartupTimedOutNotice
+            runtime={sandboxRuntime}
+            retrying={acquireMut.isPending}
+            onRetry={triggerAcquire}
+          />
+        ) : (
+          <>
+            <EmptyState icon={Box} title={t("agents.detail.sandbox.empty.title")} />
+            <div className="mt-3 flex justify-center">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={acquireMut.isPending}
+                onClick={triggerAcquire}
+              >
+                {acquireMut.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                {t("agents.detail.sandbox.actions.provision")}
+              </Button>
+            </div>
+          </>
+        )}
+        {acquireMut.error && (
+          <ErrorState
+            title={t("agents.detail.sandbox.provisionError")}
+            description={(acquireMut.error as Error).message}
+          />
         )}
       </Card>
     )
@@ -255,7 +334,9 @@ export function SandboxPanel({
               size="sm"
               variant="outline"
               data-testid="sandbox-renew-button"
-              disabled={renewMut.isPending || rebuildMut.isPending || binding.status_kind !== "live"}
+              disabled={
+                renewMut.isPending || rebuildMut.isPending || binding.status_kind !== "live"
+              }
               onClick={() => renewMut.mutate()}
             >
               <CalendarClock className="mr-1 h-3.5 w-3.5" strokeWidth={2} />
@@ -267,7 +348,9 @@ export function SandboxPanel({
               size="sm"
               variant="outline"
               data-testid="sandbox-rebuild-button"
-              disabled={rebuildMut.isPending || renewMut.isPending || binding.status_kind !== "live"}
+              disabled={
+                rebuildMut.isPending || renewMut.isPending || binding.status_kind !== "live"
+              }
               onClick={() => setConfirmingRebuild(true)}
             >
               <RotateCcw className="mr-1 h-3.5 w-3.5" strokeWidth={2} />
@@ -278,21 +361,54 @@ export function SandboxPanel({
           </div>
         </div>
         <dl>
-          <Field label={t("agents.detail.sandbox.fields.sandboxId")} value={binding.sandbox_id} mono />
-          <Field label={t("agents.detail.sandbox.fields.templateId")} value={binding.template_id} mono />
-          <Field label={t("agents.detail.sandbox.fields.expiresAt")} value={<ExpiresValue iso={binding.expires_at} />} />
-          <Field label={t("agents.detail.sandbox.fields.lastActive")} value={<Timestamp iso={binding.last_active_at} />} />
-          <Field label={t("agents.detail.sandbox.fields.createdAt")} value={<Timestamp iso={binding.created_at} />} />
+          <Field
+            label={t("agents.detail.sandbox.fields.sandboxId")}
+            value={binding.sandbox_id}
+            mono
+          />
+          <Field
+            label={t("agents.detail.sandbox.fields.templateId")}
+            value={binding.template_id}
+            mono
+          />
+          <Field
+            label={t("agents.detail.sandbox.fields.expiresAt")}
+            value={<ExpiresValue iso={binding.expires_at} />}
+          />
+          <Field
+            label={t("agents.detail.sandbox.fields.lastActive")}
+            value={<Timestamp iso={binding.last_active_at} />}
+          />
+          <Field
+            label={t("agents.detail.sandbox.fields.createdAt")}
+            value={<Timestamp iso={binding.created_at} />}
+          />
           {binding.killed_at && (
-            <Field label={t("agents.detail.sandbox.fields.killedAt")} value={<Timestamp iso={binding.killed_at} />} />
+            <Field
+              label={t("agents.detail.sandbox.fields.killedAt")}
+              value={<Timestamp iso={binding.killed_at} />}
+            />
           )}
-          <Field label={t("agents.detail.sandbox.fields.bindingId")} value={binding.binding_id} mono />
-          <Field label={t("agents.detail.sandbox.fields.cacheKey")} value={binding.cache_key} mono />
+          <Field
+            label={t("agents.detail.sandbox.fields.bindingId")}
+            value={binding.binding_id}
+            mono
+          />
+          <Field
+            label={t("agents.detail.sandbox.fields.cacheKey")}
+            value={binding.cache_key}
+            mono
+          />
         </dl>
         {binding.status_kind !== "live" && (
           <p className="mt-3 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
             {t("agents.detail.sandbox.notLiveHint")}
           </p>
+        )}
+        {preparing && (
+          <div className="mt-3">
+            <SandboxPreparingNotice runtime={sandboxRuntime} />
+          </div>
         )}
       </Card>
 
@@ -310,7 +426,9 @@ export function SandboxPanel({
       )}
       {renewMut.isSuccess && renewMut.data?.expires_at && (
         <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
-          {t("agents.detail.sandbox.renewedToast", { expiresAt: new Date(renewMut.data.expires_at).toLocaleString() })}
+          {t("agents.detail.sandbox.renewedToast", {
+            expiresAt: new Date(renewMut.data.expires_at).toLocaleString(),
+          })}
         </div>
       )}
 

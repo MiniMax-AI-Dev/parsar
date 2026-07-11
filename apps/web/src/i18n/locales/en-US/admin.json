@@ -1325,7 +1325,8 @@
           "rebuilding": "Rebuilding…",
           "renew": "Renew",
           "renewing": "Renewing…",
-          "provision": "Provision Sandbox"
+          "provision": "Provision Sandbox",
+          "retryProvision": "Retry provisioning"
         },
         "expires": {
           "remaining": "{{value}} remaining",
@@ -1333,7 +1334,30 @@
           "fresh": "Just renewed"
         },
         "renewedToast": "Renewed until {{expiresAt}}",
-        "provisioningHint": "Sandbox is being provisioned, typically takes 10-30 seconds…",
+        "provisionError": "Provisioning failed",
+        "provisioningHint": "Sandbox is being provisioned. A warm start usually takes 10-30 seconds; the first local Docker startup can take longer while the sandbox image is pulled.",
+        "preparing": {
+          "title": "Preparing sandbox",
+          "body": "Starting the sandbox and waiting for parsar-daemon to pair.",
+          "coldStartBody": "A warm start usually takes 10-30 seconds. The first local Docker startup can take longer while the sandbox image is pulled.",
+          "runtimeId": "Runtime id",
+          "started": "Started",
+          "steps": {
+            "prepareImage": "Prepare image",
+            "prepareImageDetail": "Checking the sandbox image and startup settings.",
+            "pullImage": "Pull sandbox image",
+            "pullImageDetail": "If this image is not cached locally, Docker may be downloading it now.",
+            "pullImageSlowDetail": "Still waiting. First pull can take several minutes on a slow network.",
+            "startContainer": "Start container",
+            "startContainerDetail": "Create the isolated sandbox container after the image is ready.",
+            "pairDaemon": "Pair daemon",
+            "pairDaemonDetail": "Wait for parsar-daemon inside the sandbox to connect back."
+          }
+        },
+        "startupTimedOut": {
+          "title": "Sandbox startup timed out",
+          "body": "The sandbox did not pair before the startup token expired. This often happens when the first local Docker startup is still pulling the sandbox image."
+        },
         "confirm": {
           "kill": {
             "title": "Kill this sandbox?",
@@ -2522,6 +2546,12 @@
       "daemonRuntimes": {
         "title": "Sandbox Daemons",
         "description": "parsar-daemon processes running inside Cloud Sandboxes. They belong to Cloud Sandbox, not Local Device.",
+        "status": {
+          "preparing": "Preparing",
+          "preparingDetail": "Starting the sandbox and waiting for parsar-daemon to pair. First local Docker startup may include pulling the sandbox image.",
+          "timedOut": "Startup timed out",
+          "timedOutDetail": "The sandbox did not pair before the startup token expired. Retry provisioning from the Agent detail."
+        },
         "errors": {
           "loadFailed": "Failed to load Sandbox Daemons"
         },
@@ -2875,14 +2905,41 @@
     "never": "—",
     "enabled": "Enabled",
     "disabled": "Disabled",
-    "col": { "name": "Name", "frequency": "Frequency", "status": "Status", "nextRun": "Next run", "actions": "Actions" },
+    "col": {
+      "name": "Name",
+      "frequency": "Frequency",
+      "status": "Status",
+      "nextRun": "Next run",
+      "actions": "Actions"
+    },
     "action": { "edit": "Edit", "runNow": "Run now", "delete": "Delete" },
     "runNowOk": "Triggered a run",
     "runNowErr": "Failed to trigger",
     "deleteConfirm": "Delete this scheduled task? Past runs are kept.",
-    "status": { "queued": "Queued", "running": "Running", "completed": "Succeeded", "failed": "Failed", "cancelled": "Cancelled", "interrupted": "Interrupted", "skipped_overlap": "Skipped (overlap)", "auto_disabled": "Auto-disabled", "none": "Not run yet" },
-    "pagination": { "prev": "Previous", "next": "Next", "range": "Showing {{from}}-{{to}} of {{total}}" },
-    "freq": { "hourly": "Hourly", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "weekday": "Weekdays", "custom": "Custom" },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted",
+      "skipped_overlap": "Skipped (overlap)",
+      "auto_disabled": "Auto-disabled",
+      "none": "Not run yet"
+    },
+    "pagination": {
+      "prev": "Previous",
+      "next": "Next",
+      "range": "Showing {{from}}-{{to}} of {{total}}"
+    },
+    "freq": {
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "weekday": "Weekdays",
+      "custom": "Custom"
+    },
     "desc": {
       "hourly": "Hourly at minute {{minute}}",
       "daily": "Daily at {{time}}",
