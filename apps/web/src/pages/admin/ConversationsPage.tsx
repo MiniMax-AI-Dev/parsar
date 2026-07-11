@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { AlertTriangle, Bot, Check, ChevronLeft, ChevronRight, ChevronDown, CircleDot, Clock, MessageSquarePlus, Pencil, Send, ShieldAlert, Square, Trash2, X, Loader2 } from "lucide-react"
@@ -44,16 +44,14 @@ import type {
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
+import {
+  forgetConversationViewConversation,
+  readConversationViewState,
+  writeConversationViewState,
+} from "../../lib/conversation-view-state"
 import { credentialKindLabel } from "./capability-ui"
 
 const FOLD_KEY = "parsar:conv:sidebarFolded"
-
-/**
- * Sidebar per-conversation status indicator state.
- *   generating: agent run streaming or queued
- *   just_completed: brief post-completion flash before clearing
- */
-type RunStatus = "generating" | "just_completed"
 
 interface SandboxSendGuard {
   blocked: boolean
@@ -69,6 +67,8 @@ export function ConversationsPage() {
   const { entityId, navigate } = useAdminView()
   const focusTarget = new URLSearchParams(window.location.search).get("focus")
   const wsId = useWorkspaceId()
+  const restoreViewState = !entityId && focusTarget !== "compose"
+  const savedViewState = useMemo(() => readConversationViewState(wsId), [wsId])
 
   const agentsQ = useAgents(wsId)
   const allAgents: Agent[] = useMemo(
@@ -83,17 +83,27 @@ export function ConversationsPage() {
 
   // Selected agent: current conv's primary_agent_id → user pick →
   // first active agent → "".
-  const [pickedAgentId, setPickedAgentId] = useState<string>("")
-  useEffect(() => {
-    if (currentConv?.primary_agent_id) {
-      setPickedAgentId(currentConv.primary_agent_id)
-    }
-  }, [currentConv?.primary_agent_id])
+  const [pickedAgent, setPickedAgent] = useState<{
+    workspaceId: string | null
+    agentId: string | null
+  }>({
+    workspaceId: null,
+    agentId: null,
+  })
 
-  const selectedAgentId =
-    pickedAgentId ||
-    currentConv?.primary_agent_id ||
-    (allAgents[0]?.id ?? "")
+  useEffect(() => {
+    if (!wsId || !restoreViewState) return
+    const saved = readConversationViewState(wsId)
+    if (saved.conversationId) {
+      navigate("conversations", { id: saved.conversationId })
+    }
+  }, [wsId, restoreViewState, navigate])
+
+  const pickedAgentId =
+    pickedAgent.workspaceId === wsId && pickedAgent.agentId
+      ? pickedAgent.agentId
+      : savedViewState.agentId
+  const selectedAgentId = currentConv?.primary_agent_id || pickedAgentId || (allAgents[0]?.id ?? "")
   const selectedAgent = allAgents.find((a) => a.id === selectedAgentId)
   const needsSandbox = agentNeedsSandbox(selectedAgent)
   const sandboxQ = useSandboxBinding(
@@ -104,6 +114,29 @@ export function ConversationsPage() {
     () => sandboxSendGuard(t, selectedAgent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error),
     [t, selectedAgent, sandboxQ.data, sandboxQ.isLoading, sandboxQ.error],
   )
+
+  useEffect(() => {
+    if (!wsId || !selectedAgentId) return
+    writeConversationViewState(wsId, { agentId: selectedAgentId })
+  }, [wsId, selectedAgentId])
+
+  useEffect(() => {
+    if (!wsId || !entityId) return
+    writeConversationViewState(wsId, {
+      agentId: currentConv?.primary_agent_id ?? selectedAgentId ?? null,
+      conversationId: entityId,
+    })
+  }, [wsId, entityId, currentConv?.primary_agent_id, selectedAgentId])
+
+  useEffect(() => {
+    if (!wsId || !entityId) return
+    if (!(currentConvQ.error instanceof ApiError)) return
+    if (currentConvQ.error.envelope.status !== 404) return
+    const saved = readConversationViewState(wsId)
+    if (saved.conversationId !== entityId) return
+    forgetConversationViewConversation(wsId, entityId)
+    navigate("conversations", { id: "", focus: "compose" })
+  }, [wsId, entityId, currentConvQ.error, navigate])
 
   // Sidebar conversations: scoped to the selected agent.
   const convsQ = useConversations(wsId, selectedAgentId)
@@ -135,7 +168,7 @@ export function ConversationsPage() {
   // conv — the conv is created on first send via handleSendFromEmpty,
   // so the sidebar only shows rows with a real first user turn.
   const openCreate = () => {
-    navigate("conversations", { id: "" })
+    navigate("conversations", { id: "", focus: "compose" })
   }
 
   // First-send creates the conv + posts the message + navigates in.
@@ -164,6 +197,10 @@ export function ConversationsPage() {
       })
       qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conv.id] })
     }
+    writeConversationViewState(wsId, {
+      agentId: selectedAgentId,
+      conversationId: conv.id,
+    })
     navigate("conversations", { id: conv.id })
   }
 
@@ -174,10 +211,11 @@ export function ConversationsPage() {
   }
   const handleDeleteConversation = async (cid: string): Promise<void> => {
     await deleteMutation.mutateAsync(cid)
+    forgetConversationViewConversation(wsId, cid)
     // If we just deleted the active conv, navigate away — otherwise
     // useConversation 404s and the UI jumps to EmptyChat.
     if (cid === entityId) {
-      navigate("conversations", { id: "" })
+      navigate("conversations", { id: "", focus: "compose" })
     }
   }
 
@@ -189,13 +227,20 @@ export function ConversationsPage() {
             agents={allAgents}
             selectedAgentId={selectedAgentId}
             onPickAgent={(id) => {
-              setPickedAgentId(id)
-              navigate("conversations", { id: "" })
+              setPickedAgent({ workspaceId: wsId, agentId: id })
+              writeConversationViewState(wsId, { agentId: id })
+              navigate("conversations", { id: "", focus: "compose" })
             }}
             agentsLoading={agentsQ.isLoading}
             conversations={conversations}
             selectedConversationId={entityId ?? ""}
-            onPickConversation={(id) => navigate("conversations", { id })}
+            onPickConversation={(id) => {
+              writeConversationViewState(wsId, {
+                agentId: selectedAgentId,
+                conversationId: id,
+              })
+              navigate("conversations", { id })
+            }}
             convsLoading={convsQ.isLoading}
             onNewConversation={openCreate}
             onFold={toggleFold}
@@ -825,8 +870,8 @@ function ChatStream({
   const hasActiveStream = !!activeRunId && stream.status !== "error" && stream.status !== "done"
 
   const timelineQ = useConversationTimeline(conversationId, undefined, { pollingEnabled: !hasActiveStream })
-  const messages = timelineQ.data?.messages ?? []
-  const runs = timelineQ.data?.agent_runs ?? []
+  const messages = useMemo(() => timelineQ.data?.messages ?? [], [timelineQ.data?.messages])
+  const runs = useMemo(() => timelineQ.data?.agent_runs ?? [], [timelineQ.data?.agent_runs])
 
   // Map output_message_id → runs[] so MessageRow can render StepTrace
   const runsByOutputMessage = useMemo(() => {
@@ -858,7 +903,8 @@ function ChatStream({
     if (!activeRunId) return
     if (stream.status !== "done" && stream.status !== "error") return
     qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conversationId] })
-    setActiveRunId(null)
+    const timer = window.setTimeout(() => setActiveRunId(null), 0)
+    return () => window.clearTimeout(timer)
   }, [stream.status, activeRunId, conversationId, qc])
 
   return (
