@@ -641,6 +641,33 @@ definitions:
       updated_at:
         type: string
     type: object
+  dev.RuntimeProviderStatus:
+    properties:
+      action:
+        type: string
+      available:
+        type: boolean
+      configured:
+        type: boolean
+      id:
+        type: string
+      kind:
+        type: string
+      label:
+        type: string
+      message:
+        type: string
+      missing:
+        items:
+          type: string
+        type: array
+      recommended:
+        type: boolean
+      requires:
+        items:
+          type: string
+        type: array
+    type: object
   dev.runtimeStatusResponse:
     properties:
       available:
@@ -649,11 +676,6 @@ definitions:
           Only meaningful after credential registration in oss/selfhost;
           in managed profile no workspace credential is expected.
         type: boolean
-      configured_by:
-        description: |-
-          ConfiguredBy is "ops" when PARSAR_OPENCODE_RUNNER was set at
-          server boot. Informational only — admin UI badge.
-        type: string
       credential_masked:
         description: |-
           CredentialMasked is the redacted form (e.g. "e2b_•••••...xyz")
@@ -671,16 +693,19 @@ definitions:
           deployment operator provides cloud sandbox credentials and
           workspaces don't need to register an E2B key.
         type: string
+      providers:
+        description: |-
+          Providers is the normalized runtime connection surface. Product-wise
+          there are only two runtime provider families: manual_daemon and
+          e2b_compatible. A server-managed local daemon is still manual_daemon.
+        items:
+          $ref: '#/definitions/dev.RuntimeProviderStatus'
+        type: array
       sandbox_agent_count:
         description: |-
           SandboxAgentCount is the number of agents in this workspace
           whose declared runtime is 'sandbox'.
         type: integer
-      sandbox_image:
-        description: |-
-          SandboxImage is the operator-configured container image used for
-          docker-backed sandbox agents. Empty for non-docker providers.
-        type: string
     type: object
   dev.sandboxConnectivityCheck:
     properties:

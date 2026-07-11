@@ -3,7 +3,6 @@ set -euo pipefail
 
 DEFAULT_COMPOSE_URL="https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/docker-compose.yml"
 DEFAULT_SERVER_IMAGE="ghcr.io/minimax-ai-dev/parsar-server:latest"
-DEFAULT_SANDBOX_IMAGE="ghcr.io/minimax-ai-dev/parsar-sandbox:latest"
 
 usage() {
   cat <<'EOF'
@@ -20,11 +19,6 @@ Options:
                          when present, otherwise download the published template.
   --image IMAGE          parsar-server image.
                          Default: ghcr.io/minimax-ai-dev/parsar-server:latest
-  --sandbox-image IMAGE  Docker sandbox image.
-                         Default: ghcr.io/minimax-ai-dev/parsar-sandbox:latest
-                         To use your own build instead:
-                         docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
-                         --sandbox-image parsar-sandbox:local
   --port PORT            Web UI host port. Default: 18080
   --pg-port PORT         Postgres host port. Default: 15432
   --bind ADDR            Web UI bind address. Default: 127.0.0.1
@@ -35,8 +29,8 @@ Options:
 
 Environment variables with the same names are also honored:
   PARSAR_HOME, PARSAR_COMPOSE_FILE, PARSAR_SERVER_IMAGE,
-  PARSAR_SANDBOX_IMAGE, PARSAR_LOCAL_PORT, PARSAR_PG_PORT,
-  PARSAR_BIND_ADDR, PARSAR_PUBLIC_URL, PARSAR_PROJECT_NAME.
+  PARSAR_LOCAL_PORT, PARSAR_PG_PORT, PARSAR_BIND_ADDR,
+  PARSAR_PUBLIC_URL, PARSAR_PROJECT_NAME.
 EOF
 }
 
@@ -152,7 +146,6 @@ wait_for_health() {
 home_arg="${PARSAR_HOME:-$HOME/.parsar}"
 compose_arg="${PARSAR_COMPOSE_FILE:-}"
 server_image="${PARSAR_SERVER_IMAGE:-$DEFAULT_SERVER_IMAGE}"
-sandbox_image="${PARSAR_SANDBOX_IMAGE:-$DEFAULT_SANDBOX_IMAGE}"
 local_port="${PARSAR_LOCAL_PORT:-18080}"
 pg_port="${PARSAR_PG_PORT:-15432}"
 bind_addr="${PARSAR_BIND_ADDR:-127.0.0.1}"
@@ -165,7 +158,6 @@ while [ "$#" -gt 0 ]; do
     --home) home_arg="${2:?missing value for --home}"; shift 2 ;;
     --compose-file) compose_arg="${2:?missing value for --compose-file}"; shift 2 ;;
     --image) server_image="${2:?missing value for --image}"; shift 2 ;;
-    --sandbox-image) sandbox_image="${2:?missing value for --sandbox-image}"; shift 2 ;;
     --port) local_port="${2:?missing value for --port}"; shift 2 ;;
     --pg-port) pg_port="${2:?missing value for --pg-port}"; shift 2 ;;
     --bind) bind_addr="${2:?missing value for --bind}"; shift 2 ;;
@@ -197,12 +189,6 @@ fi
 
 detect_docker
 
-docker_bin="$(command -v docker || true)"
-docker_gid="999"
-if [ -S /var/run/docker.sock ] && command -v stat >/dev/null 2>&1; then
-  docker_gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || printf '999')"
-fi
-
 umask 077
 mkdir -p "$parsar_home" "$parsar_home/postgres" "$parsar_home/data"
 
@@ -216,7 +202,6 @@ fetch_compose
 set_env "PARSAR_HOME" "$parsar_home" "$env_file"
 set_env "PARSAR_PROJECT_NAME" "$project_name" "$env_file"
 set_env "PARSAR_SERVER_IMAGE" "$server_image" "$env_file"
-set_env "PARSAR_SANDBOX_IMAGE" "$sandbox_image" "$env_file"
 set_env "PARSAR_LOCAL_PORT" "$local_port" "$env_file"
 set_env "PARSAR_PG_PORT" "$pg_port" "$env_file"
 set_env "PARSAR_BIND_ADDR" "$bind_addr" "$env_file"
@@ -226,8 +211,6 @@ ensure_env "PARSAR_PG_PASSWORD" "$(random_hex 24)" "$env_file"
 ensure_env "PARSAR_MASTER_KEY" "$(random_hex 32)" "$env_file"
 set_env "PARSAR_PG_DATA_DIR" "$parsar_home/postgres" "$env_file"
 set_env "PARSAR_DATA_DIR" "$parsar_home/data" "$env_file"
-set_env "PARSAR_DOCKER_BIN" "${docker_bin:-/usr/bin/docker}" "$env_file"
-set_env "DOCKER_GID" "$docker_gid" "$env_file"
 
 log "Using $compose_file"
 log "Wrote $env_file"

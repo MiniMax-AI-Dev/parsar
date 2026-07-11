@@ -16,14 +16,26 @@ import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
  *                          matrix branch.
  *   - profile:             deployment profile ("oss" / "managed" /
  *                          "selfhost")
- *   - configured_by:       legacy field; "ops" when server has
- *                          PARSAR_OPENCODE_RUNNER set. Informational only
- *                          (env no longer drives runtime selection).
+ *   - providers:           normalized runtime providers. Product-wise this is
+ *                          manual_daemon plus optional e2b_compatible.
  */
 
 export type RuntimeMode = "sandbox" | "local"
 export type RuntimeProfile = "oss" | "managed" | "selfhost"
-export type RuntimeConfiguredBy = "ops" | "self"
+export type RuntimeProviderID = "manual_daemon" | "e2b_compatible"
+
+export interface RuntimeProviderStatus {
+  id: RuntimeProviderID
+  label: string
+  kind: "manual" | "managed"
+  configured: boolean
+  available: boolean
+  recommended?: boolean
+  requires?: string[]
+  missing?: string[]
+  message?: string
+  action?: "pair_daemon" | "configure_e2b"
+}
 
 export interface RuntimeStatus {
   has_credential: boolean
@@ -31,8 +43,7 @@ export interface RuntimeStatus {
   available: boolean
   sandbox_agent_count: number
   profile: RuntimeProfile
-  configured_by?: RuntimeConfiguredBy
-  sandbox_image?: string
+  providers: RuntimeProviderStatus[]
 }
 
 const KEY_RUNTIME_STATUS = (workspaceID: string) =>

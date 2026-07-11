@@ -22,14 +22,9 @@ user is the administrator.
 ## Requirements
 
 - Docker Engine with Docker Compose v2.
-- Linux host with access to `/var/run/docker.sock`. The local compose stack
-  enables Docker-managed agent sandboxes and mounts the Docker socket. The
-  sandbox image (`ghcr.io/minimax-ai-dev/parsar-sandbox:latest`) is pulled
-  automatically — build your own instead with:
-  ```bash
-  docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
-  PARSAR_SANDBOX_IMAGE=parsar-sandbox:local ./install.sh
-  ```
+- `parsar-server` does not need host container-engine privileges. Local
+  execution uses `manual_daemon`; managed isolation uses an E2B-compatible
+  provider.
 
 ## What The Installer Does
 

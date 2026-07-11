@@ -149,7 +149,6 @@ func TestNormalizeRuntimeProfile(t *testing.T) {
 // TestRuntimeStatusNoCredential — fresh workspace, no E2B credential
 // recorded. Response: has_credential=false, available=false (prober
 // is not even invoked when no credential), sandbox_agent_count=0.
-// configured_by absent.
 func TestRuntimeStatusNoCredential(t *testing.T) {
 	prober := &fakeSandboxProber{}
 	r := newRuntimeStatusTestRouter(RuntimeStatusDeps{
@@ -182,18 +181,32 @@ func TestRuntimeStatusNoCredential(t *testing.T) {
 	if got := resp["profile"]; got != "oss" {
 		t.Errorf("profile: want oss, got %v", got)
 	}
-	if _, present := resp["configured_by"]; present {
-		t.Errorf("configured_by should be OMITTED when ConfiguredByOps=false, got %v", resp["configured_by"])
-	}
 	if prober.callCount() != 0 {
 		t.Errorf("prober must NOT be invoked when has_credential=false (saves a probe), got %d calls", prober.callCount())
 	}
 }
 
-func TestRuntimeStatusIncludesSandboxImage(t *testing.T) {
+func TestRuntimeStatusIncludesProviders(t *testing.T) {
 	r := newRuntimeStatusTestRouter(RuntimeStatusDeps{
 		SettingsStore: fakeRuntimeSettingsStore{settings: store.WorkspaceRuntimeSettingsRead{}},
-		SandboxImage:  "ghcr.io/example/sandbox:test",
+		Providers: []RuntimeProviderStatus{
+			{
+				ID:          "manual_daemon",
+				Label:       "Manual daemon",
+				Kind:        "manual",
+				Configured:  true,
+				Available:   true,
+				Recommended: true,
+			},
+			{
+				ID:        "e2b_compatible",
+				Label:     "E2B compatible",
+				Kind:      "managed",
+				Requires:  []string{"AGENT_DAEMON_SANDBOX_TEMPLATE", "workspace_runtime_credential"},
+				Missing:   []string{"workspace_runtime_credential"},
+				Available: false,
+			},
+		},
 	})
 
 	rec := httptest.NewRecorder()
@@ -206,8 +219,23 @@ func TestRuntimeStatusIncludesSandboxImage(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got := resp["sandbox_image"]; got != "ghcr.io/example/sandbox:test" {
-		t.Errorf("sandbox_image: want configured image, got %v", got)
+	providers, ok := resp["providers"].([]any)
+	if !ok || len(providers) != 2 {
+		t.Fatalf("providers: got %#v", resp["providers"])
+	}
+	manual, _ := providers[0].(map[string]any)
+	if got := manual["id"]; got != "manual_daemon" {
+		t.Errorf("manual provider id: got %v", got)
+	}
+	if got := manual["available"]; got != true {
+		t.Errorf("manual provider available: got %v", got)
+	}
+	e2b, _ := providers[1].(map[string]any)
+	if got := e2b["id"]; got != "e2b_compatible" {
+		t.Errorf("e2b provider id: got %v", got)
+	}
+	if got := e2b["available"]; got != false {
+		t.Errorf("e2b provider available without credential: got %v", got)
 	}
 }
 
@@ -363,7 +391,6 @@ func TestRuntimeStatusHasCredentialNoProber(t *testing.T) {
 		SettingsStore: fakeRuntimeSettingsStore{settings: store.WorkspaceRuntimeSettingsRead{
 			RuntimeCredentialSecretID: "00000000-0000-0000-0000-000000000123",
 		}},
-		ConfiguredByOps: true,
 	})
 
 	rec := httptest.NewRecorder()
@@ -378,9 +405,6 @@ func TestRuntimeStatusHasCredentialNoProber(t *testing.T) {
 	}
 	if got := resp["available"]; got != false {
 		t.Errorf("available: want false, got %v", got)
-	}
-	if got := resp["configured_by"]; got != "ops" {
-		t.Errorf("configured_by: want ops, got %v", got)
 	}
 }
 

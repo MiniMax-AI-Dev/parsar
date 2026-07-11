@@ -25,12 +25,11 @@ type SandboxLivenessProber interface {
 }
 
 type RuntimeStatusDeps struct {
-	SettingsStore   RuntimeSettingsStore
-	SandboxProber   SandboxLivenessProber
-	Profile         string
-	ConfiguredByOps bool
-	SandboxImage    string
-	PingTimeout     time.Duration
+	SettingsStore RuntimeSettingsStore
+	SandboxProber SandboxLivenessProber
+	Profile       string
+	PingTimeout   time.Duration
+	Providers     []RuntimeProviderStatus
 }
 
 type RuntimeSettingsStore interface {
@@ -63,13 +62,23 @@ type runtimeStatusResponse struct {
 	// workspaces don't need to register an E2B key.
 	Profile string `json:"profile"`
 
-	// ConfiguredBy is "ops" when PARSAR_OPENCODE_RUNNER was set at
-	// server boot. Informational only — admin UI badge.
-	ConfiguredBy string `json:"configured_by,omitempty"`
+	// Providers is the normalized runtime connection surface. Product-wise
+	// there are only two runtime provider families: manual_daemon and
+	// e2b_compatible. A server-managed local daemon is still manual_daemon.
+	Providers []RuntimeProviderStatus `json:"providers"`
+}
 
-	// SandboxImage is the operator-configured container image used for
-	// docker-backed sandbox agents. Empty for non-docker providers.
-	SandboxImage string `json:"sandbox_image,omitempty"`
+type RuntimeProviderStatus struct {
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Kind        string   `json:"kind"`
+	Configured  bool     `json:"configured"`
+	Available   bool     `json:"available"`
+	Recommended bool     `json:"recommended,omitempty"`
+	Requires    []string `json:"requires,omitempty"`
+	Missing     []string `json:"missing,omitempty"`
+	Message     string   `json:"message,omitempty"`
+	Action      string   `json:"action,omitempty"`
 }
 
 // runtimeStatus returns the workspace runtime status. 503 when no
@@ -125,13 +134,10 @@ func runtimeStatus(deps RuntimeStatusDeps) http.HandlerFunc {
 			Available:         available,
 			SandboxAgentCount: settings.SandboxAgentCount,
 			Profile:           profile,
-			SandboxImage:      strings.TrimSpace(deps.SandboxImage),
+			Providers:         runtimeProvidersForResponse(deps.Providers, hasCredential, profile, available),
 		}
 		if masked := strings.TrimSpace(settings.RuntimeCredentialMasked); masked != "" {
 			resp.CredentialMasked = &masked
-		}
-		if deps.ConfiguredByOps {
-			resp.ConfiguredBy = "ops"
 		}
 		writeJSON(w, http.StatusOK, resp)
 	}
@@ -161,4 +167,46 @@ func computeSandboxReachable(ctx context.Context, prober SandboxLivenessProber, 
 		return false
 	}
 	return true
+}
+
+func runtimeProvidersForResponse(providers []RuntimeProviderStatus, hasCredential bool, profile string, sandboxAvailable bool) []RuntimeProviderStatus {
+	out := make([]RuntimeProviderStatus, 0, len(providers))
+	for _, p := range providers {
+		cp := p
+		cp.Requires = append([]string(nil), p.Requires...)
+		cp.Missing = append([]string(nil), p.Missing...)
+		switch cp.ID {
+		case "manual_daemon":
+			cp.Configured = true
+			if cp.Action == "" {
+				cp.Action = "pair_daemon"
+			}
+			if cp.Message == "" {
+				cp.Message = "Install or start parsar-daemon and pair it with this workspace."
+			}
+		case "e2b_compatible":
+			if normalizeRuntimeProfile(profile) == "managed" {
+				cp.Available = sandboxAvailable
+				cp.Configured = cp.Configured || cp.Available
+				cp.Missing = nil
+				break
+			}
+			if hasCredential {
+				cp.Missing = removeString(cp.Missing, "workspace_runtime_credential")
+			}
+			cp.Available = cp.Configured && hasCredential && sandboxAvailable
+		}
+		out = append(out, cp)
+	}
+	return out
+}
+
+func removeString(items []string, value string) []string {
+	out := items[:0]
+	for _, item := range items {
+		if item != value {
+			out = append(out, item)
+		}
+	}
+	return out
 }

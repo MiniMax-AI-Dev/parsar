@@ -18,22 +18,20 @@
 #   - Local build fallback (before the tag is published, or to test your
 #     own changes):
 #       make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
-#       PARSAR_SERVER_IMAGE=parsar:local docker compose up
+#       PARSAR_SERVER_IMAGE=parsar:local
+#       docker compose up
 #
 # Override knobs (all optional — defaults make `up` work with no .env):
 #   PARSAR_PROJECT_NAME   compose project/network prefix (default: parsar)
 #   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
-#   PARSAR_SANDBOX_IMAGE  sandbox image ref (default: GHCR latest)
 #   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
 #   PARSAR_PG_PORT        host port for Postgres (default: 15432)
 #   PARSAR_BIND_ADDR      host bind address (default: 0.0.0.0)
 #   PARSAR_PG_DATA_DIR    host path for Postgres data (default: named volume)
 #   PARSAR_DATA_DIR       host path for server data (default: named volume)
 
-# Explicit project name so the auto-created network is always parsar_default
-# regardless of the clone directory name. The sandbox provider hard-codes this
-# network below (AGENT_DAEMON_SANDBOX_DOCKER_NETWORK); mismatched names would
-# leave every acquired sandbox unable to reach parsar-server.
+# Explicit project name so container names and the compose network stay stable
+# across install directories.
 name: ${PARSAR_PROJECT_NAME:-parsar}
 
 networks:
@@ -154,31 +152,8 @@ services:
       PARSAR_DISCORD_GATEWAY: "${PARSAR_DISCORD_GATEWAY:-}"
       PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
       PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
-      # Docker sandbox — Agent runs inside a sandboxed container with
-      # Claude Code + Codex + Pi + parsar-daemon. The server calls docker
-      # to start / exec / stop sandbox containers via the mounted
-      # /var/run/docker.sock below. Defaults to the GHCR-published image
-      # (infra/sandbox/Dockerfile, built + pushed by
-      # .github/workflows/sandbox-image-release.yml). Build your own
-      # instead with:
-      #   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
-      #   PARSAR_SANDBOX_IMAGE=parsar-sandbox:local
-      # The network below is pinned to `parsar_default` — the top-level
-      # `name: parsar` + `networks:` block at the head of this file
-      # guarantees that alias regardless of the clone directory.
-      AGENT_DAEMON_SANDBOX_BACKEND: "docker"
-      AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}"
-      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "${PARSAR_PROJECT_NAME:-parsar}_default"
-      AGENT_DAEMON_SANDBOX_SERVER_URL: "http://parsar-server:8080"
-    group_add:
-      - "${DOCKER_GID:-999}"
     volumes:
       - ${PARSAR_DATA_DIR:-parsar-local-data}:/var/lib/parsar
-      # Docker sandbox — the server calls `docker` against the host
-      # daemon to acquire/release sandbox containers. The GID mapping
-      # above (DOCKER_GID) grants the parsar user rights on the socket.
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${PARSAR_DOCKER_BIN:-/usr/bin/docker}:/usr/bin/docker:ro
     # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`
     # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
     # so the default probe reports the container "unhealthy" even though it

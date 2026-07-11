@@ -6,6 +6,7 @@
 #   - parsar-server     (default CMD, serves the API and the SPA)
 #   - parsar-migrate    (goose migration runner)
 #   - parsar-bootstrap  (first-owner provisioning CLI)
+#   - parsar-daemon     (manual daemon runtime)
 #   - /app/web/dist       (Vite build output, served via PARSAR_WEB_DIST)
 #   - /app/migrations     (SQL migrations, picked up via PARSAR_MIGRATIONS_DIR)
 #
@@ -66,7 +67,7 @@ COPY packages ./packages
 RUN pnpm --filter @parsar/web build
 
 ###############################################################################
-# Stage 2: go-builder — compile the three Go binaries.
+# Stage 2: go-builder — compile the Go binaries.
 #
 # CGO is off so the binaries are statically linked and can run on a
 # minimal runtime. trimpath strips build-host file paths from the
@@ -88,7 +89,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY internal ./internal
 COPY server ./server
 
-# Build all three binaries in one RUN so the layer represents one
+# Build server-side binaries in one RUN so the layer represents one
 # logical "compile" operation. -s -w strips debug info / symbol table;
 # combined they shave ~25% off binary size with no runtime cost.
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -122,6 +123,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
           -o "/out/daemon/parsar-daemon-${os}-${arch}" \
           ./apps/parsar-daemon/cmd/parsar-daemon; \
     done
+
+RUN cp "/out/daemon/parsar-daemon-linux-${TARGETARCH}" /out/parsar-daemon
 
 ###############################################################################
 # Stage 3: runtime — debian-slim with a non-root user.
@@ -160,6 +163,7 @@ RUN set -eux; \
 COPY --from=go-builder /out/parsar-server    /usr/local/bin/parsar-server
 COPY --from=go-builder /out/parsar-migrate   /usr/local/bin/parsar-migrate
 COPY --from=go-builder /out/parsar-bootstrap /usr/local/bin/parsar-bootstrap
+COPY --from=go-builder /out/parsar-daemon    /usr/local/bin/parsar-daemon
 
 # Per-platform parsar-daemon binaries. RegisterParsarDaemonDownloadRoute
 # serves these (from PARSAR_DAEMON_BINARY_DIR) to the one-line connect

@@ -1090,9 +1090,9 @@
     "runtime": {
       "label": "运行环境",
       "local": "本机连接",
-      "sandbox": "云端隔离 (推荐)",
+      "sandbox": "Cloud (E2B) (推荐)",
       "localHint": "Agent 直接在本机进程运行，与当前机器共享文件系统。",
-      "sandboxHint": "Agent 在云端独立沙盒里跑，互不影响、不接触你本地。",
+      "sandboxHint": "Agent 在 Cloud (E2B) 独立环境里跑，互不影响、不接触你本地。",
       "followWorkspace": "跟随工作区默认 (推荐)"
     },
     "loadError": {
@@ -1335,33 +1335,33 @@
         },
         "renewedToast": "已续期到 {{expiresAt}}",
         "provisionError": "分配失败",
-        "provisioningHint": "沙盒正在准备中。热启动通常需要 10-30 秒；本地 Docker 首次启动可能需要先拉取沙盒镜像，因此会更久。",
+        "provisioningHint": "Cloud (E2B) 正在准备中。热启动通常需要 10-30 秒。",
         "preparing": {
-          "title": "正在准备沙盒",
-          "body": "正在启动沙盒，并等待 parsar-daemon 完成配对。",
-          "coldStartBody": "热启动通常需要 10-30 秒。本地 Docker 首次启动可能需要先拉取沙盒镜像，因此会更久。",
+          "title": "正在准备 Cloud (E2B)",
+          "body": "正在启动云端环境，并等待 parsar-daemon 完成配对。",
+          "coldStartBody": "热启动通常需要 10-30 秒。",
           "runtimeId": "Runtime id",
           "started": "开始于",
           "steps": {
             "prepareImage": "准备镜像",
-            "prepareImageDetail": "检查沙盒镜像和启动参数。",
-            "pullImage": "拉取沙盒镜像",
-            "pullImageDetail": "如果本机还没有缓存该镜像，Docker 现在可能正在下载。",
-            "pullImageSlowDetail": "仍在等待。首次拉取在慢网络下可能需要几分钟。",
-            "startContainer": "启动容器",
-            "startContainerDetail": "镜像就绪后创建隔离的沙盒容器。",
+            "prepareImageDetail": "检查 E2B template 和启动参数。",
+            "pullImage": "准备 template",
+            "pullImageDetail": "云端 provider 正在准备 runtime template。",
+            "pullImageSlowDetail": "仍在等待。冷启动时云端分配可能更久。",
+            "startContainer": "启动环境",
+            "startContainerDetail": "template 就绪后创建隔离云端环境。",
             "pairDaemon": "配对 daemon",
-            "pairDaemonDetail": "等待沙盒内的 parsar-daemon 反向连接。"
+            "pairDaemonDetail": "等待云端环境里的 parsar-daemon 反向连接。"
           }
         },
         "startupTimedOut": {
-          "title": "沙盒启动超时",
-          "body": "沙盒没有在启动 token 过期前完成配对。常见原因是本地 Docker 首次启动仍在拉取沙盒镜像。"
+          "title": "Cloud 启动超时",
+          "body": "云端环境没有在启动 token 过期前完成配对。请到 Agent 详情页重试分配。"
         },
         "confirm": {
           "kill": {
             "title": "确定 Kill 这个 sandbox 吗？",
-            "description": "与该 Agent 绑定的长期 E2B sandbox 会立刻销毁。当前 sandbox 里正在做的事会丢失；下一次 prompt 会从基础模板冷启一个新 sandbox（约 10-20 秒）。如果你最近改过 Agent 的沙盒规格,Kill 后下次冷启会切到新规格。",
+            "description": "与该 Agent 绑定的长期 E2B sandbox 会立刻销毁。当前 sandbox 里正在做的事会丢失；下一次 prompt 会从基础模板冷启一个新 sandbox（约 10-20 秒）。如果你最近改过 Cloud size，Kill 后下次冷启会切到新规格。",
             "confirmLabel": "Kill sandbox"
           },
           "rebuild": {
@@ -1399,8 +1399,7 @@
         "executionMode": "执行方式",
         "agentEngine": "Agent 引擎",
         "device": "本地设备",
-        "sandboxSize": "沙盒规格",
-        "sandboxImage": "沙盒镜像",
+        "sandboxSize": "云端规格",
         "workDir": "工作目录（可选）"
       },
       "placeholders": {
@@ -1425,12 +1424,9 @@
         "workDirAbsolute": "工作目录必须是绝对路径（以 / 开头）。"
       },
       "sandboxSize": {
-        "hint": "改完规格后,等当前沙盒被释放才会切换到新规格。",
+        "hint": "改完规格后，等当前云端环境释放后才会切换到新规格。",
         "standard": "标准 (2 vCPU / 4 GiB)",
         "xl": "大规格 (4 vCPU / 8 GiB)"
-      },
-      "sandboxImage": {
-        "hint": "Agent 首次启动沙盒时，服务端会拉取这个容器镜像。"
       },
       "emptyModel": {
         "title": "还没有可用 Model",
@@ -1442,7 +1438,7 @@
         "description": "先配置一个 Connector，Agent 才知道在哪里运行。",
         "cta": "去配置 Connector"
       },
-      "runtimeHint": "运行环境是 Agent 身份的一部分，创建后不可修改。要换运行方式请新建 Agent。选「云端隔离」需要部署已启用云端沙盒；开源/自托管场景可能需要工作区运行凭证。",
+      "runtimeHint": "运行环境是 Agent 身份的一部分，创建后不可修改。要换运行方式请新建 Agent。Cloud (E2B) 需要 E2B-compatible provider；Local device 使用默认本地 daemon 或已配对设备。",
       "runtimeLocked": "运行环境创建时确定，不可修改",
       "noTagsAdmin": "当前工作区还没有可复用的能力标签。",
       "noTagsMember": "当前工作区还没有可复用的能力标签。",
@@ -1503,12 +1499,12 @@
       "modelProtocolMismatch": "{{engine}} 无法使用该模型的协议",
       "selected": "已选择",
       "devicePicker": {
-        "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。"
+        "hint": "选择默认本地 daemon 或另一台已连接设备。Cloud (E2B) 不需要选择本地设备。"
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
         "hintLocal": "Agent 在你这台本地设备上运行时的目录。留空则每个会话各用一个临时目录。路径不存在时自动创建。",
-        "hintSandbox": "Agent 在沙盒容器内运行时的目录（如 /workspace/my-app）。留空则每个会话各用一个临时目录。路径不存在时自动创建。"
+        "hintSandbox": "Agent 在 Cloud (E2B) 环境内运行时的目录（如 /workspace/my-app）。留空则每个会话各用一个临时目录。路径不存在时自动创建。"
       }
     },
     "pendingCapability": {
@@ -1527,17 +1523,17 @@
     },
     "execution": {
       "sandbox": {
-        "title": "云端隔离",
-        "description": "Parsar 自动准备隔离沙箱,约 10 秒就绪。",
+        "title": "Cloud (E2B)",
+        "description": "在 E2B-compatible 云端环境中运行。",
         "poolHint": "沙盒池：{{idle}} 个可用",
         "poolEmpty": "沙盒池已空，创建后需要等待冷启动"
       },
       "localDevice": {
-        "title": "本地设备",
-        "description": "使用已配对的本地设备,贴近本机代码。"
+        "title": "Local device",
+        "description": "使用默认本地 daemon 或另一台已配对设备。"
       },
       "external": {
-        "title": "外部 Agent",
+        "title": "HTTP Agent",
         "description": "接入企业自管 HTTP Agent 服务。"
       }
     },
@@ -1680,7 +1676,7 @@
     },
     "empty": {
       "modelKeys": "还没有模型 API Key。通常从 Models 页创建 Provider 时自动生成。",
-      "runtimeKeys": "还没有运行环境凭据。需要云端隔离运行时再配置。"
+      "runtimeKeys": "还没有运行环境凭据。需要 Cloud (E2B) 运行时再配置。"
     },
     "error": {
       "load": {
@@ -2251,7 +2247,7 @@
         "placeholder": "本机运行始终可用 · Agent 实例聚合视图建设中。"
       },
       "sandbox": {
-        "title": "云端隔离运行",
+        "title": "Cloud (E2B) 运行",
         "healthy": "凭证已就绪，{{count}} 个 Agent 选择云端运行。",
         "notConfigured": "未录入工作区凭证；标记为云端运行的 Agent 暂时无法启动。",
         "misconfigured": "已录入凭证但无法连通，请重置凭证或联系部署方。",
@@ -2260,7 +2256,7 @@
     },
     "credential": {
       "title": "E2B API Key",
-      "description": "Agent 选择云端沙盒时会使用这条 Key。保存后只展示遮蔽形式。",
+      "description": "Agent 选择 Cloud (E2B) 时会使用这条 Key。保存后只展示遮蔽形式。",
       "state": {
         "hasCredential": "已保存",
         "noCredential": "尚未录入。"
@@ -2286,7 +2282,7 @@
       },
       "delete": {
         "title": "删除 E2B API Key？",
-        "description": "删除后，选择云端沙盒的 Agent 在重新录入前无法启动。",
+        "description": "删除后，选择 Cloud (E2B) 的 Agent 在重新录入前无法启动。",
         "confirm": "确认删除"
       },
       "error": {
@@ -2295,17 +2291,17 @@
     },
     "status": {
       "cloudReady": "云端运行已就绪",
-      "cloudReadyHint": "当前工作区可让 Agent 运行在云端隔离环境中。",
+      "cloudReadyHint": "当前工作区可让 Agent 运行在 Cloud (E2B) 环境中。",
       "cloudReadyManaged": "运行环境由 Parsar 托管，无需配置。",
       "cloudReadyOps": "云端运行已就绪 · 由管理员配置。联系系统管理员调整额度。",
       "cloudOff": "本工作区尚未录入云端凭证",
-      "cloudOffHint": "Agent 仍可走本机或外部环境运行；如需让 Agent 走云端隔离，请在下方「工作区凭证」录入。",
+      "cloudOffHint": "Agent 仍可走 Local device 运行；如需使用 Cloud (E2B)，请在下方「工作区凭证」录入。",
       "cloudOffActionDocs": "查看部署文档",
       "cloudMisconfigured": "云端运行配置不完整 — 请检查工作区凭证或联系部署方。",
       "unreachable": "无法连接到 Parsar 后端，无法判断运行环境状态。",
       "retry": "重试",
-      "cloudRunnerUnavailable": "云端沙盒暂未启用",
-      "cloudRunnerUnavailableHint": "当前部署还没有启用云端沙盒。请联系部署管理员开启后再使用。"
+      "cloudRunnerUnavailable": "Cloud (E2B) 暂未启用",
+      "cloudRunnerUnavailableHint": "当前部署还没有启用 Cloud (E2B)。请联系部署管理员开启后再使用。"
     },
     "list": {
       "summary": "{{count}} 个运行实例",
@@ -2335,14 +2331,14 @@
       },
       "empty": {
         "newDeployment": {
-          "title": "还没有正在运行的云端沙盒",
-          "description": "选择云端沙盒的 Agent 收到消息后，会自动启动隔离环境并出现在这里。",
+          "title": "还没有正在运行的 Cloud (E2B) 环境",
+          "description": "选择 Cloud (E2B) 的 Agent 收到消息后，会自动启动隔离环境并出现在这里。",
           "tryCta": "想立刻验证配置已通？点击下方按钮，会临时启动一个测试环境、运行健康检查，然后自动回收。不会占用任何 Agent。",
           "tryCtaInline": "验证连接"
         },
         "localOss": {
           "title": "本工作区尚未录入云端凭证",
-          "description": "Agent 仍可走本机或外部环境运行。如需让 Agent 在云端隔离环境运行，请在上方「工作区凭证」录入 sandbox 提供方 API key。",
+          "description": "Agent 仍可走 Local device 运行。如需让 Agent 在 Cloud (E2B) 环境运行，请在上方「工作区凭证」录入 provider API key。",
           "afterSnippet": "录入完成后，本工作区里所有 runtime=sandbox 的 Agent 会共用这条凭证。完整说明见 ",
           "docsLink": "部署文档",
           "e2bSignup": "还没有 E2B account？在 E2B 创建一个"
@@ -2350,12 +2346,12 @@
         "localManaged": {
           "title": "云端运行未启用",
           "description": "你的工作区当前没有云端运行环境配额。请联系 Parsar 团队或你的 workspace owner 开启。",
-          "fallback": "仍可使用本机/外部 Agent 运行模式 —— 进入 Agent 详情 → 运行环境 tab 选择「跟随工作区」之外的选项。"
+          "fallback": "Agent 仍可走 Local device 运行。"
         },
         "localSelfhost": {
           "title": "本工作区尚未录入云端凭证",
           "description": "你的私有部署当前在本地模式运行。工作区管理员可以在上方的「工作区凭证」卡片录入云端 sandbox 凭证；如果公司统一管理凭证，请联系 ops 或 IT 管理员协助。",
-          "afterSnippet": "录入凭证前，Agent 只能在本地或外部环境运行。"
+          "afterSnippet": "录入凭证前，Agent 只能在 Local device 运行。"
         },
         "misconfiguredOss": {
           "title": "云端运行配置不完整",
@@ -2393,7 +2389,7 @@
       "placeholderDescription": "完整详情视图（连通性测试、概览、技术细节）将在后续 PR 中实现。",
       "placeholderBody": "详情页建设中 — Agent ID: {{id}}",
       "title": "{{agentName}} 的运行实例",
-      "subtitle": "云端隔离环境 · 由 Agent {{agentName}} 的下次消息按需启用，超过空闲阈值自动回收。",
+      "subtitle": "Cloud (E2B) 环境 · 由 Agent {{agentName}} 的下次消息按需启用，超过空闲阈值自动回收。",
       "sections": {
         "overview": "概览",
         "connectivity": "连通性测试结果",
@@ -2479,16 +2475,16 @@
     },
     "providers": {
       "sandbox": {
-        "title": "云端沙盒",
-        "description": "Agent 在隔离云环境中运行，适合需要稳定隔离和统一凭据治理的任务。"
+        "title": "Cloud (E2B)",
+        "description": "Agent 在 E2B-compatible 云端环境中运行，适合需要稳定隔离和统一凭据治理的任务。"
       },
       "localDevice": {
-        "title": "本地设备",
-        "description": "把团队自己的机器接入 Parsar，让 Agent 使用本机 CLI、代码目录和 BYO 凭据。",
+        "title": "Local device",
+        "description": "使用默认本地 daemon，或把团队自己的机器接入 Parsar，让 Agent 使用本机 CLI、代码目录和 BYO 凭据。",
         "badge": "设备配对"
       },
       "external": {
-        "title": "外部 Agent",
+        "title": "HTTP Agent",
         "description": "把已有 Agent 服务接入 Parsar，由具体 Agent 配置入口地址。",
         "badge": "按 Agent 配置"
       },
@@ -2506,21 +2502,21 @@
         },
         "deploymentOff": {
           "label": "部署未启用",
-          "body": "当前部署还没有启用云端沙盒。这里不需要继续填写，启用后再配置工作区的 E2B API Key。",
-          "bodyWithCredential": "E2B API Key 已保存；当前部署还没有启用云端沙盒。启用后，选择云端沙盒的 Agent 才能启动隔离环境。"
+          "body": "当前部署还没有启用 Cloud (E2B)。这里不需要继续填写，启用后再配置工作区的 E2B API Key。",
+          "bodyWithCredential": "E2B API Key 已保存；当前部署还没有启用 Cloud (E2B)。启用后，选择 Cloud (E2B) 的 Agent 才能启动隔离环境。"
         },
         "notConfigured": {
           "label": "工作区未配置",
-          "body": "录入 E2B API Key 后，Agent 才能选择云端沙盒运行。"
+          "body": "录入 E2B API Key 后，Agent 才能选择 Cloud (E2B) 运行。"
         },
         "ready": {
           "label": "已就绪",
-          "body": "云端沙盒已就绪。当前有 {{count}} 个 Agent 选择云端沙盒。"
+          "body": "Cloud (E2B) 已就绪。当前有 {{count}} 个 Agent 选择 Cloud (E2B)。"
         },
         "error": {
           "label": "异常",
-          "body": "云端沙盒暂时不可用。请检查工作区配置后再验证。",
-          "managedBody": "云端沙盒由部署方托管，但当前暂不可用。请联系部署管理员检查沙盒服务。",
+          "body": "Cloud (E2B) 暂时不可用。请检查工作区配置后再验证。",
+          "managedBody": "Cloud (E2B) 由部署方托管，但当前暂不可用。请联系部署管理员检查 provider。",
           "bodyWithCredential": "已保存 {{value}}，但当前连接校验没有通过。可以重新录入 E2B API Key 后再验证。"
         },
         "unknown": {
@@ -2532,7 +2528,7 @@
       "stats": {
         "deployment": "部署状态",
         "workspace": "工作区配置",
-        "agents": "选择云端沙盒的 Agent",
+        "agents": "选择 Cloud (E2B) 的 Agent",
         "enabled": "已启用",
         "disabled": "未启用",
         "configured": "已配置",
@@ -2543,26 +2539,26 @@
         "body": "本工作区不需要单独录入 E2B API Key。"
       },
       "instances": {
-        "title": "正在运行的云端沙盒",
-        "emptyTitle": "还没有正在运行的云端沙盒",
-        "emptyBody": "选择云端沙盒的 Agent 收到消息后，会自动启动隔离环境并出现在这里。"
+        "title": "正在运行的 Cloud (E2B) 环境",
+        "emptyTitle": "还没有正在运行的 Cloud (E2B) 环境",
+        "emptyBody": "选择 Cloud (E2B) 的 Agent 收到消息后，会自动启动隔离环境并出现在这里。"
       },
       "daemonRuntimes": {
-        "title": "沙盒内 Daemon",
-        "description": "运行在云端沙盒里的 parsar-daemon 进程。它们属于云端沙盒，不是本地设备。",
+        "title": "Cloud Daemon",
+        "description": "运行在 Cloud (E2B) 环境里的 parsar-daemon 进程。它们属于 Cloud (E2B)，不是 Local device。",
         "status": {
           "preparing": "准备中",
-          "preparingDetail": "正在启动沙盒，并等待 parsar-daemon 完成配对。本地 Docker 首次启动可能需要先拉取沙盒镜像。",
+          "preparingDetail": "正在启动云端环境，并等待 parsar-daemon 完成配对。",
           "timedOut": "启动超时",
-          "timedOutDetail": "沙盒没有在启动 token 过期前完成配对。请到 Agent 详情页重试分配。"
+          "timedOutDetail": "云端环境没有在启动 token 过期前完成配对。请到 Agent 详情页重试分配。"
         },
         "errors": {
-          "loadFailed": "无法加载沙盒内 Daemon"
+          "loadFailed": "无法加载 Cloud Daemon"
         },
         "table": {
           "runtime": "Runtime",
           "agent": "Agent",
-          "kind": "沙盒类型",
+          "kind": "云端运行环境",
           "agentEngines": "Agent 引擎",
           "status": "状态",
           "heartbeat": "最后心跳"
@@ -2570,11 +2566,17 @@
       }
     },
     "external": {
-      "body": "外部 Agent 不需要工作区级配置。创建或编辑 Agent 时选择外部 Agent，并填写服务入口与认证方式即可。"
+      "body": "HTTP agent 不需要工作区级配置；在 Agent 配置里填写服务入口和认证方式即可。"
     },
     "agentDaemon": {
       "intro": "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
       "empty": "尚未接入任何本地设备。点击右上角按钮生成连接命令。",
+      "defaultDevice": {
+        "title": "默认本地 daemon",
+        "statusReady": "已启动",
+        "statusPending": "启动中",
+        "description": "Parsar 安装 server 时会启动一个本地 daemon。优先使用这个默认本地路径；只有 Agent 需要另一台机器时，再额外配对设备。"
+      },
       "errors": {
         "loadFailed": "无法加载本地设备列表"
       },

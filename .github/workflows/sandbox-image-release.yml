@@ -1,11 +1,7 @@
-# Build + push the Parsar sandbox images to GHCR.
+# Build + push the Parsar E2B-compatible sandbox image to GHCR.
 #
-# One Dockerfile (infra/sandbox/Dockerfile), two published images selected
-# by --build-arg BASE_IMAGE:
-#   - parsar-sandbox            local docker-backed sandbox provider
-#                                (AGENT_DAEMON_SANDBOX_BACKEND=docker),
-#                                multi-arch (amd64 + arm64)
-#   - parsar-sandbox-e2b  e2b.app SaaS template, amd64 only
+# Published image:
+#   - parsar-sandbox-e2b  E2B-compatible template, amd64 only
 #
 # Both compile parsar-daemon + the parsar CLI from source in the shared
 # Dockerfile's builder stage — neither depends on a published
@@ -19,7 +15,6 @@
 #   - Manual workflow_dispatch             -> build + push
 #
 # Output:
-#   ghcr.io/<owner-lowercase>/parsar-sandbox:<tag>
 #   ghcr.io/<owner-lowercase>/parsar-sandbox-e2b:<tag>
 #     - latest        on default-branch pushes
 #     - <short-sha>   on every build
@@ -29,7 +24,7 @@
 # `images:` field, or just build infra/sandbox/Dockerfile locally and
 # never run this workflow.
 
-name: sandbox images
+name: e2b sandbox image
 
 on:
   push:
@@ -64,28 +59,9 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: local
-            image_name: parsar-sandbox
-            base_image: ubuntu:22.04
-            platforms_pr: linux/amd64
-            platforms_publish: linux/amd64,linux/arm64
-          - variant: e2b
-            image_name: parsar-sandbox-e2b
-            base_image: e2bdev/base:latest
-            # e2b.app sandboxes are amd64 only — no point publishing arm64.
-            platforms_pr: linux/amd64
-            platforms_publish: linux/amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        if: github.event_name != 'pull_request' && matrix.variant == 'local'
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -94,16 +70,12 @@ jobs:
         id: platforms
         shell: bash
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            echo "value=${{ matrix.platforms_pr }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${{ matrix.platforms_publish }}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "value=linux/amd64" >> "$GITHUB_OUTPUT"
 
       - name: Compute lowercase GHCR image name
         id: image
         shell: bash
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image_name }}" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/parsar-sandbox-e2b" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -132,9 +104,9 @@ jobs:
           file: infra/sandbox/Dockerfile
           platforms: ${{ steps.platforms.outputs.value }}
           build-args: |
-            BASE_IMAGE=${{ matrix.base_image }}
+            BASE_IMAGE=e2bdev/base:latest
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=sandbox-${{ matrix.variant }}
-          cache-to: type=gha,mode=max,scope=sandbox-${{ matrix.variant }}
+          cache-from: type=gha,scope=sandbox-e2b
+          cache-to: type=gha,mode=max,scope=sandbox-e2b

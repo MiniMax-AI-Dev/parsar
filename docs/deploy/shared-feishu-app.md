@@ -68,7 +68,7 @@ Pre-configured allowlist:
 
 | Scenario | `PARSAR_PUBLIC_URL` | `PARSAR_FEISHU_REDIRECT_URI` |
 |---|---|---|
-| Local docker compose default | `http://localhost:8080` | `http://localhost:8080/api/v1/auth/feishu/callback` |
+| Local compose default | `http://localhost:8080` | `http://localhost:8080/api/v1/auth/feishu/callback` |
 | Local, custom port | `http://localhost:<port>` | `http://localhost:<port>/api/v1/auth/feishu/callback` |
 | Tunneled / temporary public URL | `<TODO owner: e.g. https://parsar-test.example.com>` | Same + `/api/v1/auth/feishu/callback` |
 

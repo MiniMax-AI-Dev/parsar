@@ -411,7 +411,7 @@ func main() {
 		})
 		agentDaemonRegistry := agentdaemongateway.NewRegistry()
 		agentDaemonAuth := agentdaemongateway.NewAuthenticator(dbStore)
-		publicWSURL := resolveAgentDaemonPublicWSURL(envLookup, cfg)
+		publicWSURL := buildAgentDaemonWSURL(cfg)
 		agentDaemonPodID := resolveAgentDaemonOwnerPodID(envLookup)
 		agentDaemonOwnerURL, err := resolveAgentDaemonOwnerURL(envLookup, cfg)
 		if err != nil {
@@ -586,17 +586,14 @@ func main() {
 		log.Bg().Info("streaming dispatch hook wired")
 	}
 
-	// Runtime status banner: ConfiguredByOps marks "operator set
-	// PARSAR_OPENCODE_RUNNER explicitly" and is retained only for
-	// the legacy admin badge query; it no longer drives runtime
-	// selection.
+	// Runtime status banner: expose the two runtime provider families only:
+	// manual_daemon and e2b_compatible.
 	runtimeProfile := resolveRuntimeProfile(envLookup, managedSandboxProviderWired)
 	runtimeStatusDeps := dev.RuntimeStatusDeps{
-		SettingsStore:   dbStore,
-		SandboxProber:   runtimeStatusProber,
-		Profile:         runtimeProfile,
-		ConfiguredByOps: strings.TrimSpace(envLookup("PARSAR_OPENCODE_RUNNER")) != "",
-		SandboxImage:    configuredDockerSandboxImage(envLookup),
+		SettingsStore: dbStore,
+		SandboxProber: runtimeStatusProber,
+		Profile:       runtimeProfile,
+		Providers:     buildRuntimeProviderStatuses(envLookup, managedSandboxProviderWired),
 	}
 	log.Bg().Info("runtime status profile configured",
 		"profile", runtimeProfile,
@@ -1384,6 +1381,47 @@ func (configuredSandboxProber) Ping(ctx context.Context) error {
 	return ctx.Err()
 }
 
+func buildRuntimeProviderStatuses(env func(string) string, e2bProviderWired bool) []dev.RuntimeProviderStatus {
+	if env == nil {
+		env = os.Getenv
+	}
+	providers := []dev.RuntimeProviderStatus{
+		{
+			ID:          "manual_daemon",
+			Label:       "Manual daemon",
+			Kind:        "manual",
+			Configured:  true,
+			Available:   true,
+			Recommended: true,
+			Requires:    []string{"parsar-daemon"},
+			Action:      "pair_daemon",
+			Message:     "Default runtime path. The server-managed local daemon and user-installed daemons both use this provider.",
+		},
+	}
+
+	template := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE"))
+	apiKey := strings.TrimSpace(env("PARSAR_E2B_API_KEY"))
+	missing := make([]string, 0, 2)
+	if template == "" {
+		missing = append(missing, "AGENT_DAEMON_SANDBOX_TEMPLATE")
+	}
+	if apiKey == "" {
+		missing = append(missing, "workspace_runtime_credential")
+	}
+	providers = append(providers, dev.RuntimeProviderStatus{
+		ID:         "e2b_compatible",
+		Label:      "E2B compatible",
+		Kind:       "managed",
+		Configured: template != "" && (apiKey != "" || e2bProviderWired),
+		Available:  e2bProviderWired,
+		Requires:   []string{"AGENT_DAEMON_SANDBOX_TEMPLATE", "workspace_runtime_credential"},
+		Missing:    missing,
+		Action:     "configure_e2b",
+		Message:    "Optional managed sandbox provider for isolated cloud execution.",
+	})
+	return providers
+}
+
 // buildAgentDaemonSandboxProvider wires the lazy-create SandboxProvider
 // for the agent_daemon connector. Returns nil when sandbox mode is not
 // configured (caller falls back to NoopSandboxProvider).
@@ -1404,12 +1442,6 @@ func buildAgentDaemonSandboxProvider(
 ) connagentdaemon.SandboxProvider {
 	if env == nil {
 		env = os.Getenv
-	}
-	// Local-docker backend short-circuit: when AGENT_DAEMON_SANDBOX_BACKEND
-	// is "docker" this returns a container-backed provider and we skip the
-	// e2b-specific API-key/CA/pod-IP wiring below entirely.
-	if p := buildDockerAgentDaemonSandboxProvider(env, cfg, dbStore, registry, binder, selfPodID); p != nil {
-		return p
 	}
 	template := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TEMPLATE"))
 	if template == "" {

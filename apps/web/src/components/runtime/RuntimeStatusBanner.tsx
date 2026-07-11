@@ -79,7 +79,6 @@ function describeStatus(
     available: boolean
     sandbox_agent_count: number
     profile: string
-    configured_by?: string
     credential_masked?: string | null
   },
 ): BannerKeys {

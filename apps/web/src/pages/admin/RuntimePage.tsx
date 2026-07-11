@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Cloud, PlugZap, Skull, Zap } from "lucide-react"
+import { Cloud, Skull, Zap } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -54,7 +54,7 @@ import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
 
-type RuntimeTab = "sandbox" | "local_device" | "external"
+type RuntimeTab = "sandbox" | "local_device"
 type CloudState = "loading" | "notConfigured" | "ready" | "error" | "unknown"
 type SortKey = "last_active" | "created_at" | "agent"
 
@@ -242,13 +242,7 @@ export function RuntimePage() {
         />
       )}
 
-      {tab === "local_device" && (
-        <section className="rounded-lg border border-line bg-surface p-4">
-          <LocalDeviceRuntimesPanel />
-        </section>
-      )}
-
-      {tab === "external" && <ExternalAgentPanel />}
+      {tab === "local_device" && <LocalDeviceRuntimesPanel />}
 
       <ConfirmBulkKillDialog
         open={confirming}
@@ -786,11 +780,11 @@ function SandboxRuntimeStatus({ runtime }: { runtime: Runtime }) {
           {expired
             ? t("runtime.cloud.daemonRuntimes.status.timedOutDetail", {
                 defaultValue:
-                  "The sandbox did not pair before the startup token expired. Retry provisioning from the Agent detail.",
+                  "The cloud environment did not pair before the startup token expired. Retry provisioning from the Agent detail.",
               })
             : t("runtime.cloud.daemonRuntimes.status.preparingDetail", {
                 defaultValue:
-                  "Starting the sandbox and waiting for parsar-daemon to pair. First local Docker startup may include pulling the sandbox image.",
+                  "Starting the cloud environment and waiting for parsar-daemon to pair.",
               })}
         </p>
       </div>
@@ -879,13 +873,6 @@ function RuntimeTabs({ tab, onChange }: { tab: RuntimeTab; onChange: (next: Runt
         >
           {t("runtime.providers.localDevice.title", { defaultValue: "Local Device" })}
         </RuntimeTabButton>
-        <RuntimeTabButton
-          active={tab === "external"}
-          onClick={() => onChange("external")}
-          testId="runtime-tab-external"
-        >
-          {t("runtime.providers.external.title")}
-        </RuntimeTabButton>
       </div>
     </div>
   )
@@ -934,27 +921,6 @@ function CloudStateBadge({ state }: { state: CloudState }) {
     <Badge variant={variantByState[state]} dot={state === "ready"}>
       {t(`runtime.cloud.state.${state}.label`)}
     </Badge>
-  )
-}
-
-function ExternalAgentPanel() {
-  const { t } = useTranslation("admin")
-  return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <div className="flex items-start gap-3">
-        <div className="rounded-md border border-line bg-surface-subtle p-2 text-fg-muted">
-          <PlugZap className="h-4 w-4" strokeWidth={1.9} />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-fg">
-            {t("runtime.providers.external.title")}
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-fg-muted">
-            {t("runtime.external.body")}
-          </p>
-        </div>
-      </div>
-    </section>
   )
 }
 

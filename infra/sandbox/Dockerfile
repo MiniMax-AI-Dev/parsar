@@ -1,27 +1,11 @@
-# Parsar sandbox image — one Dockerfile, two deployment targets selected
-# by BASE_IMAGE:
-#
-#   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
-#     Local docker sandbox (default). For AGENT_DAEMON_SANDBOX_BACKEND=docker,
-#     the sandbox provider does `docker run -d --entrypoint sleep <image>
-#     infinity` then drives everything else via `docker exec ... bash -c
-#     <command>` (server/internal/sandbox/docker/client.go). No envd, no
-#     e2b API — just needs the agent CLIs + parsar-daemon on PATH + a
-#     shell. Multi-arch: add --platform linux/arm64 to cross-build.
+# Parsar E2B-compatible sandbox image.
 #
 #   docker build -f infra/sandbox/Dockerfile \
 #     --build-arg BASE_IMAGE=e2bdev/base:latest -t parsar-sandbox-e2b .
-#     e2b.app SaaS template. amd64 only. After build, the SandboxProvider
-#     only needs to: Sandbox.Create("parsar-sandbox-e2b", {timeout})
-#     → RunCommand: parsar-daemon connect --device-name <deviceId> -b
-#     (URL/token via env) → wait for the gateway to see deviceId dial in.
 #
-# Everything below this point is identical for both targets — swapping
-# BASE_IMAGE is the only thing that changes what gets built. Don't fork
-# this into two files; that's what drifted before (an old arm64-only
-# local variant missing Codex/Pi, and the e2b variant downloading
-# parsar-daemon from GitHub Releases instead of compiling it like this
-# one does).
+# After build, the provider creates the template, runs
+# `parsar-daemon connect --device-name <deviceId> -b` with URL/token in env,
+# and waits for the gateway to see that device connect.
 #
 # Contents:
 #   - Claude Code CLI + Codex CLI + Pi CLI (installed by

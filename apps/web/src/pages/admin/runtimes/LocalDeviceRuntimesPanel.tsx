@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Loader2, ShieldAlert, Trash2 } from "lucide-react"
+import { Laptop, Loader2, ShieldAlert, Trash2 } from "lucide-react"
 
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
@@ -32,6 +32,7 @@ import {
   type Runtime,
   type SupportedAgentKind,
 } from "../../../lib/api-runtimes"
+import { useRuntimeStatus } from "../../../lib/api-runtime"
 import { useWorkspaceId } from "../../../lib/workspace"
 
 export function LocalDeviceRuntimesPanel() {
@@ -43,6 +44,7 @@ export function LocalDeviceRuntimesPanel() {
 
 function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string }) {
   const { t } = useTranslation("admin")
+  const statusQ = useRuntimeStatus(workspaceID)
   const listQ = useWorkspaceRuntimes(workspaceID, "agent_daemon")
   const deleteMut = useDeleteRuntime(workspaceID)
   const [pairOpen, setPairOpen] = useState(false)
@@ -71,8 +73,43 @@ function LocalDeviceRuntimesPanelInner({ workspaceID }: { workspaceID: string })
   const runtimes = (listQ.data ?? []).filter(
     (r) => isLocalDeviceRuntime(r) && r.liveness !== "pending_pairing",
   )
+  const manualProvider = statusQ.data?.providers.find((provider) => provider.id === "manual_daemon")
   return (
     <div className="space-y-3">
+      <section className="rounded-lg border border-line bg-surface p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-md border border-line bg-surface-subtle p-2 text-fg-muted">
+              <Laptop className="h-4 w-4" strokeWidth={1.9} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-medium text-fg">
+                  {t("runtime.agentDaemon.defaultDevice.title", {
+                    defaultValue: "Default local daemon",
+                  })}
+                </h3>
+                <Badge variant={manualProvider?.available === false ? "warning" : "success"} dot>
+                  {manualProvider?.available === false
+                    ? t("runtime.agentDaemon.defaultDevice.statusPending", {
+                        defaultValue: "Starting",
+                      })
+                    : t("runtime.agentDaemon.defaultDevice.statusReady", {
+                        defaultValue: "Started",
+                      })}
+                </Badge>
+              </div>
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-fg-muted">
+                {t("runtime.agentDaemon.defaultDevice.description", {
+                  defaultValue:
+                    "Parsar starts a local daemon with the server install. Use this default local path first; pair extra devices only when Agents need another machine.",
+                })}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-fg-subtle">
           {t("runtime.agentDaemon.intro", {

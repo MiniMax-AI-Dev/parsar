@@ -1335,28 +1335,28 @@
         },
         "renewedToast": "Renewed until {{expiresAt}}",
         "provisionError": "Provisioning failed",
-        "provisioningHint": "Sandbox is being provisioned. A warm start usually takes 10-30 seconds; the first local Docker startup can take longer while the sandbox image is pulled.",
+        "provisioningHint": "Cloud (E2B) is being provisioned. A warm start usually takes 10-30 seconds.",
         "preparing": {
-          "title": "Preparing sandbox",
-          "body": "Starting the sandbox and waiting for parsar-daemon to pair.",
-          "coldStartBody": "A warm start usually takes 10-30 seconds. The first local Docker startup can take longer while the sandbox image is pulled.",
+          "title": "Preparing Cloud (E2B)",
+          "body": "Starting the cloud environment and waiting for parsar-daemon to pair.",
+          "coldStartBody": "A warm start usually takes 10-30 seconds.",
           "runtimeId": "Runtime id",
           "started": "Started",
           "steps": {
             "prepareImage": "Prepare image",
-            "prepareImageDetail": "Checking the sandbox image and startup settings.",
-            "pullImage": "Pull sandbox image",
-            "pullImageDetail": "If this image is not cached locally, Docker may be downloading it now.",
-            "pullImageSlowDetail": "Still waiting. First pull can take several minutes on a slow network.",
-            "startContainer": "Start container",
-            "startContainerDetail": "Create the isolated sandbox container after the image is ready.",
+            "prepareImageDetail": "Checking the E2B template and startup settings.",
+            "pullImage": "Prepare template",
+            "pullImageDetail": "The cloud provider is preparing the runtime template.",
+            "pullImageSlowDetail": "Still waiting. Cloud provisioning can take longer on a cold start.",
+            "startContainer": "Start environment",
+            "startContainerDetail": "Create the isolated cloud environment after the template is ready.",
             "pairDaemon": "Pair daemon",
-            "pairDaemonDetail": "Wait for parsar-daemon inside the sandbox to connect back."
+            "pairDaemonDetail": "Wait for parsar-daemon inside the cloud environment to connect back."
           }
         },
         "startupTimedOut": {
-          "title": "Sandbox startup timed out",
-          "body": "The sandbox did not pair before the startup token expired. This often happens when the first local Docker startup is still pulling the sandbox image."
+          "title": "Cloud startup timed out",
+          "body": "The cloud environment did not pair before the startup token expired. Retry provisioning from the Agent detail."
         },
         "confirm": {
           "kill": {
@@ -1399,8 +1399,7 @@
         "executionMode": "Execution mode",
         "agentEngine": "Agent engine",
         "device": "Local device",
-        "sandboxSize": "Sandbox size",
-        "sandboxImage": "Sandbox image",
+        "sandboxSize": "Cloud size",
         "workDir": "Working directory (optional)"
       },
       "placeholders": {
@@ -1425,12 +1424,9 @@
         "workDirAbsolute": "Working directory must be an absolute path (starting with /)."
       },
       "sandboxSize": {
-        "hint": "Changes take effect after the current sandbox is released.",
+        "hint": "Changes take effect after the current cloud environment is released.",
         "standard": "Standard (2 vCPU / 4 GiB)",
         "xl": "Large (4 vCPU / 8 GiB)"
-      },
-      "sandboxImage": {
-        "hint": "The server pulls this container image when the Agent's sandbox starts for the first time."
       },
       "emptyModel": {
         "title": "No usable Model yet",
@@ -1442,7 +1438,7 @@
         "description": "Configure a Connector first so the Agent knows where to run.",
         "cta": "Configure Connector"
       },
-      "runtimeHint": "Runtime is part of an agent's identity and cannot be changed after creation. To switch, recreate the agent. Cloud Sandbox requires the deployment to have cloud runtime enabled; open-source/self-hosted deployments may also need a workspace runtime credential.",
+      "runtimeHint": "Runtime is part of an agent's identity and cannot be changed after creation. To switch, recreate the agent. Cloud (E2B) needs an E2B-compatible provider; Local device uses the default local daemon or a paired device.",
       "runtimeLocked": "Runtime is set at creation and cannot be changed",
       "noTagsAdmin": "This workspace has no reusable capability tags yet.",
       "noTagsMember": "This workspace has no reusable capability tags yet.",
@@ -1503,12 +1499,12 @@
       "modelProtocolMismatch": "{{engine}} can't use this model's protocol",
       "selected": "Selected",
       "devicePicker": {
-        "hint": "Pick a connected local daemon. Cloud isolation does not need a device; Parsar lazy-starts a sandbox daemon on first run."
+        "hint": "Pick the default local daemon or another connected device. Cloud (E2B) does not need a local device."
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
         "hintLocal": "Directory the agent runs in on your local device. Leave blank to use a per-conversation scratch dir. Created if it does not exist.",
-        "hintSandbox": "Directory inside the sandbox container (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
+        "hintSandbox": "Directory inside the Cloud (E2B) environment (e.g. /workspace/my-app). Leave blank to use a per-conversation scratch dir. Created if it does not exist."
       }
     },
     "pendingCapability": {
@@ -1527,17 +1523,17 @@
     },
     "execution": {
       "sandbox": {
-        "title": "Cloud isolation",
-        "description": "Parsar prepares an isolated sandbox in ~10s.",
+        "title": "Cloud (E2B)",
+        "description": "Run in an E2B-compatible cloud environment.",
         "poolHint": "Sandbox pool: {{idle}} available",
         "poolEmpty": "Sandbox pool is empty — cold start required after creation"
       },
       "localDevice": {
         "title": "Local device",
-        "description": "Use a paired local device for local code."
+        "description": "Use the default local daemon or another paired device."
       },
       "external": {
-        "title": "External Agent",
+        "title": "HTTP Agent",
         "description": "Route to a self-managed HTTP Agent service."
       }
     },
@@ -2260,7 +2256,7 @@
     },
     "credential": {
       "title": "E2B API Key",
-      "description": "Agents using Cloud Sandbox use this key. Once saved, only the masked form is shown.",
+      "description": "Agents using Cloud (E2B) use this key. Once saved, only the masked form is shown.",
       "state": {
         "hasCredential": "Saved",
         "noCredential": "Not entered yet."
@@ -2286,7 +2282,7 @@
       },
       "delete": {
         "title": "Delete E2B API Key?",
-        "description": "Agents using Cloud Sandbox cannot start until a new key is entered.",
+        "description": "Agents using Cloud (E2B) cannot start until a new key is entered.",
         "confirm": "Confirm delete"
       },
       "error": {
@@ -2299,13 +2295,13 @@
       "cloudReadyManaged": "Runtime is managed by Parsar — no setup required.",
       "cloudReadyOps": "Cloud runtime ready · configured by your administrator. Contact ops to adjust quotas.",
       "cloudOff": "No cloud credential registered for this workspace",
-      "cloudOffHint": "Agents can still run locally or in external environments. To use cloud isolation, register a credential in the Workspace credential card below.",
+      "cloudOffHint": "Agents can still run on Local device. To use Cloud (E2B), register a credential in the Workspace credential card below.",
       "cloudOffActionDocs": "Open deployment docs",
       "cloudMisconfigured": "Cloud runtime configuration is incomplete — check the workspace credential or contact the operator.",
       "unreachable": "Cannot reach the Parsar backend; runtime status is unknown.",
       "retry": "Retry",
-      "cloudRunnerUnavailable": "Cloud Sandbox is not enabled",
-      "cloudRunnerUnavailableHint": "This deployment has not enabled Cloud Sandbox yet. Contact the deployment administrator."
+      "cloudRunnerUnavailable": "Cloud (E2B) is not enabled",
+      "cloudRunnerUnavailableHint": "This deployment has not enabled Cloud (E2B) yet. Contact the deployment administrator."
     },
     "list": {
       "summary": "{{count}} runtime instance(s)",
@@ -2342,7 +2338,7 @@
         },
         "localOss": {
           "title": "No cloud credential registered for this workspace",
-          "description": "Agents can still run locally or externally. To run an Agent inside an isolated cloud environment, register the sandbox provider's API key in the Workspace credential card above.",
+          "description": "Agents can still run on Local device. To run an Agent inside an isolated Cloud (E2B) environment, register the provider API key in the Workspace credential card above.",
           "afterSnippet": "Once registered, every runtime=sandbox Agent in this workspace shares the credential. Full setup at ",
           "docsLink": "deployment docs",
           "e2bSignup": "No E2B account yet? Create one at E2B"
@@ -2350,12 +2346,12 @@
         "localManaged": {
           "title": "Cloud runtime is not enabled",
           "description": "This workspace currently has no cloud runtime quota. Contact the Parsar team or your workspace owner to enable it.",
-          "fallback": "Agents can still run locally / externally — open Agent detail → Runtime tab and pick any option other than \"Follow workspace\"."
+          "fallback": "Agents can still run on Local device."
         },
         "localSelfhost": {
           "title": "No workspace runtime credential yet",
           "description": "This private deployment is running in local mode. Workspace admins can register a cloud sandbox credential in the \"Workspace credential\" card above; if your company centrally manages credentials, ask ops or IT for help.",
-          "afterSnippet": "Until a credential is registered, Agents only run locally or in external environments."
+          "afterSnippet": "Until a credential is registered, Agents only run on Local device."
         },
         "misconfiguredOss": {
           "title": "Cloud runtime configuration is incomplete",
@@ -2479,16 +2475,16 @@
     },
     "providers": {
       "sandbox": {
-        "title": "Cloud Sandbox",
-        "description": "Run Agents in isolated cloud environments for stronger isolation and credential governance."
+        "title": "Cloud (E2B)",
+        "description": "Run Agents in E2B-compatible cloud environments for stronger isolation and credential governance."
       },
       "localDevice": {
         "title": "Local Device",
-        "description": "Connect team-owned machines to Parsar so Agents can use local CLIs, workdirs, and BYO credentials.",
+        "description": "Use the default local daemon, or connect team-owned machines so Agents can use local CLIs, workdirs, and BYO credentials.",
         "badge": "Paired device"
       },
       "external": {
-        "title": "External Agent",
+        "title": "HTTP Agent",
         "description": "Attach an existing Agent service to Parsar from the Agent configuration.",
         "badge": "Per Agent"
       },
@@ -2506,21 +2502,21 @@
         },
         "deploymentOff": {
           "label": "Not enabled",
-          "body": "Cloud Sandbox is not enabled for this deployment yet. No workspace setup is needed until it is enabled.",
-          "bodyWithCredential": "The E2B API Key is saved, but Cloud Sandbox is not enabled for this deployment yet."
+          "body": "Cloud (E2B) is not enabled for this deployment yet. No workspace setup is needed until it is enabled.",
+          "bodyWithCredential": "The E2B API Key is saved, but Cloud (E2B) is not enabled for this deployment yet."
         },
         "notConfigured": {
           "label": "Not configured",
-          "body": "Enter an E2B API Key before Agents can use Cloud Sandbox."
+          "body": "Enter an E2B API Key before Agents can use Cloud (E2B)."
         },
         "ready": {
           "label": "Ready",
-          "body": "Cloud Sandbox is ready. {{count}} Agent(s) currently use Cloud Sandbox."
+          "body": "Cloud (E2B) is ready. {{count}} Agent(s) currently use Cloud (E2B)."
         },
         "error": {
           "label": "Error",
-          "body": "Cloud Sandbox is temporarily unavailable. Check workspace configuration and validate again.",
-          "managedBody": "Cloud Sandbox is managed by the deployment but is temporarily unavailable. Contact the deployment administrator to check the sandbox service.",
+          "body": "Cloud (E2B) is temporarily unavailable. Check workspace configuration and validate again.",
+          "managedBody": "Cloud (E2B) is managed by the deployment but is temporarily unavailable. Contact the deployment administrator to check the provider.",
           "bodyWithCredential": "{{value}} is saved, but connection validation did not pass. Re-enter the E2B API Key and validate again."
         },
         "unknown": {
@@ -2532,7 +2528,7 @@
       "stats": {
         "deployment": "Deployment",
         "workspace": "Workspace",
-        "agents": "Agents using Cloud Sandbox",
+        "agents": "Agents using Cloud (E2B)",
         "enabled": "Enabled",
         "disabled": "Disabled",
         "configured": "Configured",
@@ -2543,26 +2539,26 @@
         "body": "This workspace does not need its own E2B API Key."
       },
       "instances": {
-        "title": "Active Cloud Sandboxes",
-        "emptyTitle": "No active Cloud Sandbox yet",
-        "emptyBody": "Agents using Cloud Sandbox start an isolated environment on their next message and appear here."
+        "title": "Active Cloud (E2B) Environments",
+        "emptyTitle": "No active Cloud (E2B) environment yet",
+        "emptyBody": "Agents using Cloud (E2B) start an isolated environment on their next message and appear here."
       },
       "daemonRuntimes": {
-        "title": "Sandbox Daemons",
-        "description": "parsar-daemon processes running inside Cloud Sandboxes. They belong to Cloud Sandbox, not Local Device.",
+        "title": "Cloud Daemons",
+        "description": "parsar-daemon processes running inside Cloud (E2B) environments. They belong to Cloud (E2B), not Local Device.",
         "status": {
           "preparing": "Preparing",
-          "preparingDetail": "Starting the sandbox and waiting for parsar-daemon to pair. First local Docker startup may include pulling the sandbox image.",
+          "preparingDetail": "Starting the cloud environment and waiting for parsar-daemon to pair.",
           "timedOut": "Startup timed out",
-          "timedOutDetail": "The sandbox did not pair before the startup token expired. Retry provisioning from the Agent detail."
+          "timedOutDetail": "The cloud environment did not pair before the startup token expired. Retry provisioning from the Agent detail."
         },
         "errors": {
-          "loadFailed": "Failed to load Sandbox Daemons"
+          "loadFailed": "Failed to load Cloud Daemons"
         },
         "table": {
           "runtime": "Runtime",
           "agent": "Agent",
-          "kind": "Sandbox kind",
+          "kind": "Cloud runtime",
           "agentEngines": "Agent engines",
           "status": "Status",
           "heartbeat": "Last heartbeat"
@@ -2570,11 +2566,17 @@
       }
     },
     "external": {
-      "body": "External Agents do not need workspace-level setup. Create or edit an Agent, choose External Agent, then fill in its endpoint and auth method."
+      "body": "HTTP agents do not need workspace-level setup. Configure the endpoint and auth method from the Agent configuration."
     },
     "agentDaemon": {
       "intro": "Local devices connect back to Parsar through parsar-daemon so Agents can use Claude Code / OpenCode CLIs on that machine.",
       "empty": "No local device is connected yet. Generate a connection command from the button on the right.",
+      "defaultDevice": {
+        "title": "Default local daemon",
+        "statusReady": "Started",
+        "statusPending": "Starting",
+        "description": "Parsar starts a local daemon with the server install. Use this default local path first; pair extra devices only when Agents need another machine."
+      },
       "errors": {
         "loadFailed": "Failed to load Local Devices"
       },
