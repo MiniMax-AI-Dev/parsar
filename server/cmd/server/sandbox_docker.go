@@ -90,9 +90,11 @@ func agentDaemonWSURLFromBase(base string) string {
 //   - AGENT_DAEMON_SANDBOX_DOCKER_IMAGE — local image tag to run.
 //   - AGENT_DAEMON_SANDBOX_DOCKER_NETWORK — optional docker network to join
 //     (use the compose network when the server runs as a compose service).
-//   - AGENT_DAEMON_SANDBOX_DOCKER_MEMORY / _CPUS — optional `docker run`
-//     resource caps; unset = built-in default (4g / 2 CPU). Set to
-//     0/unlimited/none to remove the cap.
+//   - AGENT_DAEMON_SANDBOX_DOCKER_MEMORY / _CPUS — optional global
+//     `docker run` resource caps for every sandbox size. Unset =
+//     size-specific defaults below. Set to 0/unlimited/none to remove the cap.
+//   - AGENT_DAEMON_SANDBOX_DOCKER_STANDARD_MEMORY / _STANDARD_CPUS and
+//     _XL_MEMORY / _XL_CPUS — optional per-size overrides.
 //   - AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT — optional pids cap; unset = no
 //     cap (docker default).
 func buildDockerAgentDaemonSandboxProvider(
@@ -140,7 +142,7 @@ func buildDockerAgentDaemonSandboxProvider(
 		Binder:       binder,
 		Bindings:     dbStore,
 		Template:     image,
-		Templates:    map[string]string{"standard": image},
+		Templates:    map[string]string{"standard": image, "xl": image},
 		DefaultSize:  "standard",
 		ServerURL:    serverURL,
 		OwnerChecker: dbStore,
@@ -162,13 +164,13 @@ func buildDockerAgentDaemonSandboxProvider(
 	return provider
 }
 
-// Built-in sandbox caps used when the operator sets no override: a
-// conservative default stops one runaway sandbox starving the host (raise it
-// with the env var, or disable it with 0/unlimited). PidsLimit has no default
-// — a low pids cap breaks parallel builds (`make -j`, `go test ./...`).
+// Built-in sandbox caps used when the operator sets no override. PidsLimit has
+// no default — a low pids cap breaks parallel builds (`make -j`, `go test ./...`).
 const (
-	defaultDockerMemory = "4g"
-	defaultDockerCPUs   = "2"
+	defaultDockerStandardMemory = "4g"
+	defaultDockerStandardCPUs   = "2"
+	defaultDockerXLMemory       = "8g"
+	defaultDockerXLCPUs         = "4"
 )
 
 // dockerClientFromEnv builds the docker sandbox client, resolving the
@@ -176,14 +178,49 @@ const (
 // fall back to the built-in default when unset, pids stays off; see
 // resolveDockerLimit for the 0/unlimited escape hatch.
 func dockerClientFromEnv(env func(string) string, image, network string, hostGateway bool) *dockersandbox.Client {
+	standardLimits, xlLimits := dockerLimitsFromEnv(env)
 	return &dockersandbox.Client{
-		Image:       image,
-		Network:     network,
-		HostGateway: hostGateway,
-		Memory:      resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_MEMORY"), defaultDockerMemory),
-		CPUs:        resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_CPUS"), defaultDockerCPUs),
-		PidsLimit:   resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT"), ""),
+		Image:        image,
+		Network:      network,
+		HostGateway:  hostGateway,
+		Memory:       standardLimits.Memory,
+		CPUs:         standardLimits.CPUs,
+		PidsLimit:    standardLimits.PidsLimit,
+		LimitsBySize: map[string]dockersandbox.ResourceLimits{"standard": standardLimits, "xl": xlLimits},
 	}
+}
+
+func dockerLimitsFromEnv(env func(string) string) (standard dockersandbox.ResourceLimits, xl dockersandbox.ResourceLimits) {
+	globalMemory := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_MEMORY"))
+	globalCPUs := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_CPUS"))
+	pidsLimit := resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT"), "")
+
+	standardMemoryDefault := defaultDockerStandardMemory
+	xlMemoryDefault := defaultDockerXLMemory
+	if globalMemory != "" {
+		resolved := resolveDockerLimit(globalMemory, "")
+		standardMemoryDefault = resolved
+		xlMemoryDefault = resolved
+	}
+	standardCPUsDefault := defaultDockerStandardCPUs
+	xlCPUsDefault := defaultDockerXLCPUs
+	if globalCPUs != "" {
+		resolved := resolveDockerLimit(globalCPUs, "")
+		standardCPUsDefault = resolved
+		xlCPUsDefault = resolved
+	}
+
+	standard = dockersandbox.ResourceLimits{
+		Memory:    resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_STANDARD_MEMORY"), standardMemoryDefault),
+		CPUs:      resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_STANDARD_CPUS"), standardCPUsDefault),
+		PidsLimit: pidsLimit,
+	}
+	xl = dockersandbox.ResourceLimits{
+		Memory:    resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_XL_MEMORY"), xlMemoryDefault),
+		CPUs:      resolveDockerLimit(env("AGENT_DAEMON_SANDBOX_DOCKER_XL_CPUS"), xlCPUsDefault),
+		PidsLimit: pidsLimit,
+	}
+	return standard, xl
 }
 
 // resolveDockerLimit resolves one resource cap: empty env → built-in default;

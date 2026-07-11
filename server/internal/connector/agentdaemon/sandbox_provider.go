@@ -630,6 +630,7 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 			"parsar.agent_id":     in.AgentID,
 			"parsar.device_id":    deviceID,
 			"parsar.sandbox_kind": "agent_daemon_claude_code",
+			"parsar.sandbox_size": resolvedSize,
 		},
 	})
 	if err != nil {

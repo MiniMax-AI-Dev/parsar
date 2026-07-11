@@ -16,9 +16,9 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // SandboxBindingStore is the data-layer dependency for admin sandbox
@@ -45,17 +45,17 @@ type sandboxAdminDeps struct {
 
 // sandboxStatusResponse is the GET response shape.
 type sandboxStatusResponse struct {
-	BindingID      string     `json:"binding_id"`
-	WorkspaceID    string     `json:"workspace_id"`
-	AgentID        *string    `json:"agent_id"`
-	Name           *string    `json:"name,omitempty"`
-	SandboxID      string     `json:"sandbox_id"`
-	TemplateID     string     `json:"template_id"`
-	Status         string     `json:"status"`
-	StatusKind     string     `json:"status_kind"`
-	CreatedAt      time.Time  `json:"created_at"`
-	LastActiveAt   time.Time  `json:"last_active_at"`
-	KilledAt       *time.Time `json:"killed_at,omitempty"`
+	BindingID    string     `json:"binding_id"`
+	WorkspaceID  string     `json:"workspace_id"`
+	AgentID      *string    `json:"agent_id"`
+	Name         *string    `json:"name,omitempty"`
+	SandboxID    string     `json:"sandbox_id"`
+	TemplateID   string     `json:"template_id"`
+	Status       string     `json:"status"`
+	StatusKind   string     `json:"status_kind"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastActiveAt time.Time  `json:"last_active_at"`
+	KilledAt     *time.Time `json:"killed_at,omitempty"`
 	// ExpiresAt is fetched live from the e2b control plane. Nil when
 	// the binding isn't in this pod's cache or the lookup failed.
 	ExpiresAt *time.Time     `json:"expires_at,omitempty"`
@@ -243,9 +243,9 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 		}
 		if !found {
 			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error":            "no active sandbox binding to rebuild",
-				"workspace_id":     workspaceID,
-				"agent_id": agentID,
+				"error":        "no active sandbox binding to rebuild",
+				"workspace_id": workspaceID,
+				"agent_id":     agentID,
 			})
 			return
 		}
@@ -295,9 +295,9 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 				}
 				if runtimeStore != nil {
 					if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
-						WorkspaceID:    workspaceID,
-						AgentID: agentID,
-						RuntimeID:      deviceID,
+						WorkspaceID: workspaceID,
+						AgentID:     agentID,
+						RuntimeID:   deviceID,
 					}); bindErr != nil {
 						log.Bg().Error("sandbox rebuild: re-acquired but runtime_id persist failed",
 							"agent_id", agentID,
@@ -362,9 +362,9 @@ func renewSandbox(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager) ht
 		}
 		if !found {
 			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error":            "no active sandbox binding to renew",
-				"workspace_id":     workspaceID,
-				"agent_id": agentID,
+				"error":        "no active sandbox binding to renew",
+				"workspace_id": workspaceID,
+				"agent_id":     agentID,
 			})
 			return
 		}
@@ -381,9 +381,9 @@ func renewSandbox(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager) ht
 			// This pod's cache doesn't own the binding; UI poll will
 			// pick up the new owner within ~15s.
 			writeJSON(w, http.StatusConflict, map[string]string{
-				"error":            "sandbox not owned by this pod; refresh and retry",
-				"workspace_id":     workspaceID,
-				"agent_id": agentID,
+				"error":        "sandbox not owned by this pod; refresh and retry",
+				"workspace_id": workspaceID,
+				"agent_id":     agentID,
 			})
 			return
 		}
@@ -437,11 +437,18 @@ func acquireSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, provider A
 			if _, found, _ := deps.store.GetActiveSandboxBindingForAgent(
 				r.Context(), workspaceID, agentID); found {
 				writeJSON(w, http.StatusOK, map[string]string{
-					"status":           "already_bound",
+					"status":   "already_bound",
 					"agent_id": agentID,
 				})
 				return
 			}
+		}
+		var agentConfig map[string]any
+		if detail, detailErr := deps.store.GetAgentDetail(r.Context(), agentID); detailErr == nil {
+			agentConfig = detail.Config
+		} else {
+			log.Bg().Warn("sandbox acquire (manual): load agent config failed; acquire will use default sandbox size",
+				"agent_id", agentID, "err", detailErr)
 		}
 		// Fire-and-forget: return 202 immediately. On success, persist
 		// the new deviceID to agents.runtime_id.
@@ -451,6 +458,7 @@ func acquireSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, provider A
 			deviceID, err := provider.Acquire(ctx, connector.PromptInput{
 				AgentID:     agentID,
 				WorkspaceID: workspaceID,
+				AgentConfig: agentConfig,
 			})
 			if err != nil {
 				log.Bg().Warn("sandbox acquire (manual) failed",
@@ -459,9 +467,9 @@ func acquireSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, provider A
 			}
 			if runtimeStore != nil {
 				if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
-					WorkspaceID:    workspaceID,
-					AgentID: agentID,
-					RuntimeID:      deviceID,
+					WorkspaceID: workspaceID,
+					AgentID:     agentID,
+					RuntimeID:   deviceID,
 				}); bindErr != nil {
 					log.Bg().Error("sandbox acquire (manual) succeeded but runtime_id persist failed",
 						"agent_id", agentID,
@@ -474,7 +482,7 @@ func acquireSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, provider A
 				"agent_id", agentID, "device_id", deviceID)
 		}()
 		writeJSON(w, http.StatusAccepted, map[string]string{
-			"status":           "provisioning",
+			"status":   "provisioning",
 			"agent_id": agentID,
 		})
 	}
@@ -501,9 +509,9 @@ func performLifecycleAction(w http.ResponseWriter, r *http.Request, deps sandbox
 	}
 	if !found {
 		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error":            "no active sandbox binding to act on",
-			"workspace_id":     workspaceID,
-			"agent_id": agentID,
+			"error":        "no active sandbox binding to act on",
+			"workspace_id": workspaceID,
+			"agent_id":     agentID,
 		})
 		return
 	}
@@ -531,9 +539,9 @@ func performLifecycleAction(w http.ResponseWriter, r *http.Request, deps sandbox
 	// next dispatch experience — never block the kill response on it.
 	if runtimeStore != nil {
 		if _, clearErr := runtimeStore.SetAgentRuntime(r.Context(), store.SetAgentRuntimeInput{
-			WorkspaceID:    workspaceID,
-			AgentID: agentID,
-			RuntimeID:      "",
+			WorkspaceID: workspaceID,
+			AgentID:     agentID,
+			RuntimeID:   "",
 		}); clearErr != nil {
 			log.Bg().Warn("sandbox kill: clear agent runtime_id failed (next dispatch may target dead device)",
 				"agent_id", agentID, "err", clearErr)
@@ -559,18 +567,18 @@ func toSandboxStatusResponse(b store.SandboxBindingRead) sandboxStatusResponse {
 		kind = "terminal"
 	}
 	return sandboxStatusResponse{
-		BindingID:   b.ID,
-		WorkspaceID: b.WorkspaceID,
-		AgentID:     b.AgentID,
-		Name:        b.Name,
-		SandboxID:      b.SandboxID,
-		TemplateID:     b.TemplateID,
-		Status:         b.Status,
-		StatusKind:     kind,
-		CreatedAt:      b.CreatedAt,
-		LastActiveAt:   b.LastActiveAt,
-		KilledAt:       b.KilledAt,
-		Metadata:       b.Metadata,
+		BindingID:    b.ID,
+		WorkspaceID:  b.WorkspaceID,
+		AgentID:      b.AgentID,
+		Name:         b.Name,
+		SandboxID:    b.SandboxID,
+		TemplateID:   b.TemplateID,
+		Status:       b.Status,
+		StatusKind:   kind,
+		CreatedAt:    b.CreatedAt,
+		LastActiveAt: b.LastActiveAt,
+		KilledAt:     b.KilledAt,
+		Metadata:     b.Metadata,
 	}
 }
 

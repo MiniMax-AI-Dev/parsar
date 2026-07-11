@@ -128,6 +128,33 @@ func TestCreateAppliesNetworkHostGatewayEnvAndLabels(t *testing.T) {
 	}
 }
 
+func TestCreateAppliesSizeSpecificResourceLimits(t *testing.T) {
+	var got recordedCall
+	fake := &fakeRunner{handler: func(call recordedCall) (execResult, error) {
+		got = call
+		return execResult{Stdout: "cid\n"}, nil
+	}}
+	client := &Client{
+		Image:  "img",
+		Memory: "4g",
+		CPUs:   "2",
+		runner: fake.run,
+		LimitsBySize: map[string]ResourceLimits{
+			"xl": {Memory: "8g", CPUs: "4"},
+		},
+	}
+	_, err := client.Create(context.Background(), e2b.CreateInput{
+		Metadata: map[string]string{"parsar.sandbox_size": "xl"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	joined := strings.Join(got.Args, " ")
+	if !strings.Contains(joined, "--memory 8g") || !strings.Contains(joined, "--cpus 4") {
+		t.Fatalf("expected xl resource limits, got %v", got.Args)
+	}
+}
+
 func TestKillRemovesContainer(t *testing.T) {
 	fake := &fakeRunner{}
 	client := &Client{Image: "img", runner: fake.run}

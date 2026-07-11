@@ -127,6 +127,7 @@ type fakeDaemonManager struct {
 	// when unset.
 	acquireDeviceID string
 	acquireCalls    []string
+	acquireInputs   []connector.PromptInput
 }
 
 func (f *fakeDaemonManager) Acquire(_ context.Context, in connector.PromptInput) (string, error) {
@@ -136,8 +137,17 @@ func (f *fakeDaemonManager) Acquire(_ context.Context, in connector.PromptInput)
 		device = "fake-device"
 	}
 	f.acquireCalls = append(f.acquireCalls, in.AgentID)
+	f.acquireInputs = append(f.acquireInputs, in)
 	f.mu.Unlock()
 	return device, nil
+}
+
+func (f *fakeDaemonManager) inputs() []connector.PromptInput {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]connector.PromptInput, len(f.acquireInputs))
+	copy(out, f.acquireInputs)
+	return out
 }
 
 func (f *fakeDaemonManager) SandboxStatus(_ context.Context, _ string) (connector.SandboxInfo, bool, error) {
@@ -333,7 +343,15 @@ func TestSandboxAdminRebuildKillsAndReProvisions(t *testing.T) {
 		SandboxID: "sbx_abc",
 		Status:    store.SandboxBindingStatusActive,
 	}
-	storeFake := &fakeSandboxBindingStore{binding: &binding}
+	storeFake := &fakeSandboxBindingStore{
+		binding: &binding,
+		agentDetails: map[string]store.AgentStatusRead{
+			"00000000-0000-0000-0000-000000000009": {
+				AgentID: "00000000-0000-0000-0000-000000000009",
+				Config:  map[string]any{"sandbox_size": "xl"},
+			},
+		},
+	}
 	daemonFake := &fakeDaemonManager{acquireDeviceID: "device-new"}
 	runtimeFake := &recordingRuntimeStore{}
 	deps := sandboxAdminDeps{store: storeFake, daemonMgr: daemonFake}
@@ -369,6 +387,10 @@ func TestSandboxAdminRebuildKillsAndReProvisions(t *testing.T) {
 	}
 	if calls[0].RuntimeID != "device-new" {
 		t.Errorf("rebuild should write the new device id; got %q", calls[0].RuntimeID)
+	}
+	inputs := daemonFake.inputs()
+	if len(inputs) != 1 || inputs[0].AgentConfig["sandbox_size"] != "xl" {
+		t.Fatalf("rebuild should pass agent config to Acquire; got %+v", inputs)
 	}
 }
 
@@ -531,7 +553,14 @@ func TestSandboxAdminAcquireWritesRuntimeIDOnSuccess(t *testing.T) {
 	// No active binding → handler should kick off Acquire in a goroutine
 	// and, on success, persist the new device id to
 	// agents.runtime_id.
-	storeFake := &fakeSandboxBindingStore{} // no binding
+	storeFake := &fakeSandboxBindingStore{
+		agentDetails: map[string]store.AgentStatusRead{
+			"00000000-0000-0000-0000-000000000009": {
+				AgentID: "00000000-0000-0000-0000-000000000009",
+				Config:  map[string]any{"sandbox_size": "xl"},
+			},
+		},
+	} // no binding
 	daemonFake := &fakeDaemonManager{acquireDeviceID: "device-fresh"}
 	runtimeFake := &recordingRuntimeStore{}
 	deps := sandboxAdminDeps{store: storeFake, daemonMgr: daemonFake}
@@ -560,5 +589,9 @@ func TestSandboxAdminAcquireWritesRuntimeIDOnSuccess(t *testing.T) {
 	}
 	if calls[0].AgentID != "00000000-0000-0000-0000-000000000009" {
 		t.Errorf("SetAgentRuntime should target the agent from URL; got %q", calls[0].AgentID)
+	}
+	inputs := daemonFake.inputs()
+	if len(inputs) != 1 || inputs[0].AgentConfig["sandbox_size"] != "xl" {
+		t.Fatalf("manual acquire should pass agent config to Acquire; got %+v", inputs)
 	}
 }
