@@ -1325,7 +1325,8 @@
           "rebuilding": "Rebuilding…",
           "renew": "续期",
           "renewing": "续期中…",
-          "provision": "分配沙盒"
+          "provision": "分配沙盒",
+          "retryProvision": "重试分配"
         },
         "expires": {
           "remaining": "剩余 {{value}}",
@@ -1333,7 +1334,30 @@
           "fresh": "刚续期"
         },
         "renewedToast": "已续期到 {{expiresAt}}",
-        "provisioningHint": "沙盒正在准备中，通常需要 10-30 秒…",
+        "provisionError": "分配失败",
+        "provisioningHint": "沙盒正在准备中。热启动通常需要 10-30 秒；本地 Docker 首次启动可能需要先拉取沙盒镜像，因此会更久。",
+        "preparing": {
+          "title": "正在准备沙盒",
+          "body": "正在启动沙盒，并等待 parsar-daemon 完成配对。",
+          "coldStartBody": "热启动通常需要 10-30 秒。本地 Docker 首次启动可能需要先拉取沙盒镜像，因此会更久。",
+          "runtimeId": "Runtime id",
+          "started": "开始于",
+          "steps": {
+            "prepareImage": "准备镜像",
+            "prepareImageDetail": "检查沙盒镜像和启动参数。",
+            "pullImage": "拉取沙盒镜像",
+            "pullImageDetail": "如果本机还没有缓存该镜像，Docker 现在可能正在下载。",
+            "pullImageSlowDetail": "仍在等待。首次拉取在慢网络下可能需要几分钟。",
+            "startContainer": "启动容器",
+            "startContainerDetail": "镜像就绪后创建隔离的沙盒容器。",
+            "pairDaemon": "配对 daemon",
+            "pairDaemonDetail": "等待沙盒内的 parsar-daemon 反向连接。"
+          }
+        },
+        "startupTimedOut": {
+          "title": "沙盒启动超时",
+          "body": "沙盒没有在启动 token 过期前完成配对。常见原因是本地 Docker 首次启动仍在拉取沙盒镜像。"
+        },
         "confirm": {
           "kill": {
             "title": "确定 Kill 这个 sandbox 吗？",
@@ -2522,6 +2546,12 @@
       "daemonRuntimes": {
         "title": "沙盒内 Daemon",
         "description": "运行在云端沙盒里的 parsar-daemon 进程。它们属于云端沙盒，不是本地设备。",
+        "status": {
+          "preparing": "准备中",
+          "preparingDetail": "正在启动沙盒，并等待 parsar-daemon 完成配对。本地 Docker 首次启动可能需要先拉取沙盒镜像。",
+          "timedOut": "启动超时",
+          "timedOutDetail": "沙盒没有在启动 token 过期前完成配对。请到 Agent 详情页重试分配。"
+        },
         "errors": {
           "loadFailed": "无法加载沙盒内 Daemon"
         },
@@ -2875,14 +2905,41 @@
     "never": "—",
     "enabled": "已启用",
     "disabled": "已停用",
-    "col": { "name": "任务名", "frequency": "频率", "status": "状态", "nextRun": "下次运行", "actions": "操作" },
+    "col": {
+      "name": "任务名",
+      "frequency": "频率",
+      "status": "状态",
+      "nextRun": "下次运行",
+      "actions": "操作"
+    },
     "action": { "edit": "编辑", "runNow": "立即运行", "delete": "删除" },
     "runNowOk": "已触发一次运行",
     "runNowErr": "触发失败",
     "deleteConfirm": "确认删除该定时任务？历史运行记录会保留。",
-    "status": { "queued": "排队中", "running": "运行中", "completed": "成功", "failed": "失败", "cancelled": "已取消", "interrupted": "已中断", "skipped_overlap": "跳过(上次未完成)", "auto_disabled": "已自动停用", "none": "未运行" },
-    "pagination": { "prev": "上一页", "next": "下一页", "range": "第 {{from}}-{{to}} 条,共 {{total}} 条" },
-    "freq": { "hourly": "每小时", "daily": "每天", "weekly": "每周", "monthly": "每月", "weekday": "工作日", "custom": "自定义" },
+    "status": {
+      "queued": "排队中",
+      "running": "运行中",
+      "completed": "成功",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "interrupted": "已中断",
+      "skipped_overlap": "跳过(上次未完成)",
+      "auto_disabled": "已自动停用",
+      "none": "未运行"
+    },
+    "pagination": {
+      "prev": "上一页",
+      "next": "下一页",
+      "range": "第 {{from}}-{{to}} 条,共 {{total}} 条"
+    },
+    "freq": {
+      "hourly": "每小时",
+      "daily": "每天",
+      "weekly": "每周",
+      "monthly": "每月",
+      "weekday": "工作日",
+      "custom": "自定义"
+    },
     "desc": {
       "hourly": "每小时第 {{minute}} 分",
       "daily": "每天 {{time}}",
