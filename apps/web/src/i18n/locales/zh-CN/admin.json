@@ -289,6 +289,13 @@
       "sending": "发送中…",
       "stopAria": "停止生成"
     },
+    "sandboxGuard": {
+      "checking": "发送前正在检查此 Agent 的 sandbox…",
+      "missing": "此 Agent 还没有健康的 sandbox。请先在 Agent 详情页创建或重建 sandbox，再发送消息。",
+      "notLive": "此 Agent 的 sandbox 还没就绪（{{status}}）。请先在 Agent 详情页重建 sandbox，再发送消息。",
+      "error": "无法检查此 Agent 的 sandbox 健康状态：{{error}}",
+      "errorFallback": "未知错误"
+    },
     "loadError": {
       "title": "无法加载对话",
       "description": "后端返回错误。",

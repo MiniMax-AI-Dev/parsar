@@ -90,6 +90,7 @@ import {
 import { useMyCredentials } from "../../lib/api-credentials"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useMarketplaceList } from "../../lib/api-marketplace"
+import { agentExecutionPlacement } from "../../lib/agent-runtime"
 import type { Agent, AgentCapability, AgentRunStatus, AgentRunSummary, Capability, CapabilityVersion, Model, UserCredential } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
@@ -128,7 +129,7 @@ function runtimeOf(a: Agent): "local" | "sandbox" {
   // trust it alone — for agent_daemon the placement lives in
   // pa.config.daemon_mode. "unknown" fallback maps to "sandbox" so the
   // detail label still renders for very old rows.
-  const placement = executionPlacement(a)
+  const placement = agentExecutionPlacement(a)
   return placement === "local" ? "local" : "sandbox"
 }
 
@@ -171,21 +172,6 @@ function runtimeLivenessTone(agent: Agent): LivenessTone | null {
   if (lv === "online" || lv === "live") return "online"
   if (lv === "pending_pairing" || lv === "pending") return "pending"
   return "offline"
-}
-
-/**
- * Intended execution placement. Prefers the per-agent `runtime` mirror,
- * falls back to `pa.config.daemon_mode` (the backend zeroes the mirror
- * for `agent_daemon` rows). "unknown" only for pre-mirror legacy rows.
- */
-function executionPlacement(agent: Agent): "local" | "sandbox" | "unknown" {
-  if (agent.runtime === "local") return "local"
-  if (agent.runtime === "sandbox") return "sandbox"
-  const pa = (agent.config as Record<string, unknown> | undefined) ?? {}
-  const mode = String(pa.daemon_mode ?? "")
-  if (mode === "sandbox") return "sandbox"
-  if (mode === "local") return "local"
-  return "unknown"
 }
 
 function StatusDot({ tone, title }: { tone: LivenessTone; title?: string }) {
@@ -246,7 +232,7 @@ function TruncatedName({
  */
 function RuntimeCell({ agent }: { agent: Agent }) {
   const { t } = useTranslation("admin")
-  const placement = executionPlacement(agent)
+  const placement = agentExecutionPlacement(agent)
 
   // Prefer the active sandbox's E2B id over runtime_name (which is the
   // synthetic "sandbox <pa-shortid>" — meaningless to the user).
