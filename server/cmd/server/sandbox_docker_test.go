@@ -41,18 +41,42 @@ func TestDockerClientFromEnvReadsResourceLimits(t *testing.T) {
 	if c.Memory != "2g" || c.CPUs != "1.5" || c.PidsLimit != "512" {
 		t.Fatalf("resource limits not wired: %+v", c)
 	}
+	if c.LimitsBySize["standard"].Memory != "2g" || c.LimitsBySize["xl"].Memory != "2g" {
+		t.Fatalf("global memory override should apply to every size: %+v", c.LimitsBySize)
+	}
 }
 
 func TestDockerClientFromEnvAppliesBuiltInDefaults(t *testing.T) {
-	// With the env unset the operator still gets a safe built-in cap (2 CPU /
-	// 4GB) so one runaway sandbox can't starve the host. PidsLimit stays unset:
-	// a low pids cap is a classic build-breaker (make -j, go test ./...).
+	// With the env unset the operator gets the smaller advertised standard size.
+	// PidsLimit stays unset: a low pids cap is a classic build-breaker
+	// (make -j, go test ./...).
 	c := dockerClientFromEnv(func(string) string { return "" }, "img", "", false)
 	if c.CPUs != "2" || c.Memory != "4g" {
 		t.Fatalf("expected default 2 CPU / 4g, got cpus=%q memory=%q", c.CPUs, c.Memory)
 	}
+	if xl := c.LimitsBySize["xl"]; xl.CPUs != "4" || xl.Memory != "8g" {
+		t.Fatalf("expected xl default 4 CPU / 8g, got %+v", xl)
+	}
 	if c.PidsLimit != "" {
 		t.Fatalf("expected pids-limit unset by default, got %q", c.PidsLimit)
+	}
+}
+
+func TestDockerClientFromEnvReadsPerSizeOverrides(t *testing.T) {
+	env := func(k string) string {
+		return map[string]string{
+			"AGENT_DAEMON_SANDBOX_DOCKER_STANDARD_MEMORY": "6g",
+			"AGENT_DAEMON_SANDBOX_DOCKER_STANDARD_CPUS":   "3",
+			"AGENT_DAEMON_SANDBOX_DOCKER_XL_MEMORY":       "64g",
+			"AGENT_DAEMON_SANDBOX_DOCKER_XL_CPUS":         "6",
+		}[k]
+	}
+	c := dockerClientFromEnv(env, "img", "", false)
+	if got := c.LimitsBySize["standard"]; got.Memory != "6g" || got.CPUs != "3" {
+		t.Fatalf("standard override not wired: %+v", got)
+	}
+	if got := c.LimitsBySize["xl"]; got.Memory != "64g" || got.CPUs != "6" {
+		t.Fatalf("xl override not wired: %+v", got)
 	}
 }
 

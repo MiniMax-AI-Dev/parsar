@@ -1425,8 +1425,8 @@
       },
       "sandboxSize": {
         "hint": "改完规格后,等当前沙盒被释放才会切换到新规格。",
-        "standard": "标准 (4 vCPU / 8 GiB)",
-        "xl": "XL (4 vCPU / 50 GiB)"
+        "standard": "标准 (2 vCPU / 4 GiB)",
+        "xl": "大规格 (4 vCPU / 8 GiB)"
       },
       "emptyModel": {
         "title": "还没有可用 Model",

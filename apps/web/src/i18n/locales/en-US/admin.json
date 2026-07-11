@@ -1425,8 +1425,8 @@
       },
       "sandboxSize": {
         "hint": "Changes take effect after the current sandbox is released.",
-        "standard": "Standard (4 vCPU / 8 GiB)",
-        "xl": "XL (4 vCPU / 50 GiB)"
+        "standard": "Standard (2 vCPU / 4 GiB)",
+        "xl": "Large (4 vCPU / 8 GiB)"
       },
       "emptyModel": {
         "title": "No usable Model yet",

@@ -37,10 +37,17 @@ type Client struct {
 	// when non-empty (empty = flag omitted, docker's default). A malformed
 	// value makes `docker run` exit non-zero, which Create surfaces as an
 	// error, so no pre-validation is needed here.
-	Memory    string // --memory, e.g. "2g"
-	CPUs      string // --cpus, e.g. "1.5"
-	PidsLimit string // --pids-limit, e.g. "512"
-	runner    runnerFunc
+	Memory       string // --memory, e.g. "2g"
+	CPUs         string // --cpus, e.g. "1.5"
+	PidsLimit    string // --pids-limit, e.g. "512"
+	LimitsBySize map[string]ResourceLimits
+	runner       runnerFunc
+}
+
+type ResourceLimits struct {
+	Memory    string
+	CPUs      string
+	PidsLimit string
 }
 
 func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox, error) {
@@ -51,13 +58,14 @@ func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox
 	if c.HostGateway {
 		args = append(args, "--add-host", "host.docker.internal:host-gateway")
 	}
-	if m := strings.TrimSpace(c.Memory); m != "" {
+	limits := c.limitsFor(input)
+	if m := strings.TrimSpace(limits.Memory); m != "" {
 		args = append(args, "--memory", m)
 	}
-	if cpus := strings.TrimSpace(c.CPUs); cpus != "" {
+	if cpus := strings.TrimSpace(limits.CPUs); cpus != "" {
 		args = append(args, "--cpus", cpus)
 	}
-	if pids := strings.TrimSpace(c.PidsLimit); pids != "" {
+	if pids := strings.TrimSpace(limits.PidsLimit); pids != "" {
 		args = append(args, "--pids-limit", pids)
 	}
 	for k, v := range input.Metadata {
@@ -83,6 +91,20 @@ func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox
 		return e2b.Sandbox{}, fmt.Errorf("dockersandbox: docker run returned no container id (stderr: %s)", strings.TrimSpace(res.Stderr))
 	}
 	return e2b.Sandbox{SandboxID: id}, nil
+}
+
+func (c *Client) limitsFor(input e2b.CreateInput) ResourceLimits {
+	size := strings.TrimSpace(input.Metadata["parsar.sandbox_size"])
+	if size != "" && c.LimitsBySize != nil {
+		if limits, ok := c.LimitsBySize[size]; ok {
+			return limits
+		}
+	}
+	return ResourceLimits{
+		Memory:    c.Memory,
+		CPUs:      c.CPUs,
+		PidsLimit: c.PidsLimit,
+	}
 }
 
 // RunCommand execs into the container and returns the command's exit code as
