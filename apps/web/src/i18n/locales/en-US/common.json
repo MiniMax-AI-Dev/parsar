@@ -135,7 +135,7 @@
     "workspacePlaceholder": "Acme",
     "passwordLabel": "Password",
     "passwordPlaceholder": "At least 12 characters, mix words + numbers",
-    "passwordHint": "Use at least 60 bits of entropy — a passphrase of 4+ words works well.",
+    "passwordHint": "Choose a longer password. A memorable phrase with 4 or more words works well.",
     "submitButton": "Create owner account",
     "submitting": "Creating your account...",
     "closedTitle": "Setup already complete",
