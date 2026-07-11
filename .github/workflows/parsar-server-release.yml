@@ -1,6 +1,6 @@
 # Build the parsar-server image in CI and push releases to GHCR.
 #
-# This is the Phase 1 deliverable's "one command" enabler: docker-compose.local.yml
+# This is the Phase 1 deliverable's "one command" enabler: docker-compose.yml
 # (and the Phase 2 self-host compose) pull ghcr.io/<owner>/parsar-server by
 # default. Same image, two compose profiles — profile not fork.
 #

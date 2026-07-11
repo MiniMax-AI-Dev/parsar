@@ -78,7 +78,7 @@ services:
       start_period: 10s
 
   parsar-server:
-    # Defaults to the GHCR prebuilt image (same one docker-compose.local.yml
+    # Defaults to the GHCR prebuilt image (same one docker-compose.yml
     # uses — profile not fork). Override PARSAR_SERVER_IMAGE in .env to pull
     # from your own registry (e.g. an Aliyun ACR mirror) or a pinned tag.
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}

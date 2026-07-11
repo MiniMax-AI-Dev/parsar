@@ -29,8 +29,8 @@ user is the administrator.
 
 The script:
 
-- uses `docker-compose.local.yml` from the current checkout, or downloads the
-  published copy to `~/.parsar/docker-compose.local.yml`
+- uses `docker-compose.yml` from the current checkout, or downloads the
+  published copy to `~/.parsar/docker-compose.yml`
 - creates `~/.parsar/.env`
 - generates and persists `PARSAR_MASTER_KEY`
 - generates and persists the Postgres password
@@ -63,9 +63,9 @@ make docker-build
 ## Manage The Stack
 
 ```bash
-docker compose -f ~/.parsar/docker-compose.local.yml --env-file ~/.parsar/.env ps
-docker compose -f ~/.parsar/docker-compose.local.yml --env-file ~/.parsar/.env logs -f parsar-server
-docker compose -f ~/.parsar/docker-compose.local.yml --env-file ~/.parsar/.env down
+docker compose -f ~/.parsar/docker-compose.yml --env-file ~/.parsar/.env ps
+docker compose -f ~/.parsar/docker-compose.yml --env-file ~/.parsar/.env logs -f parsar-server
+docker compose -f ~/.parsar/docker-compose.yml --env-file ~/.parsar/.env down
 ```
 
 To remove all local data, stop the stack first and then delete `~/.parsar/`.

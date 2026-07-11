@@ -2,11 +2,11 @@
 #
 # One command, single machine, zero secrets to generate:
 #
-#   docker compose -f docker-compose.local.yml up
+#   docker compose up
 #
-# Brings up Postgres + a one-shot migration init + parsar-server. Open
-# http://127.0.0.1:18080 and create the first owner account in the web setup
-# flow.
+# Brings up Postgres + parsar-server (which runs migrations on startup
+# before serving). Open http://127.0.0.1:18080 and create the first owner
+# account in the web setup flow.
 #
 # Profile not fork: this is the SAME image as the self-host deployment
 # (deploy/compose/compose.selfhost.yml). Differences live only in this file
@@ -17,7 +17,7 @@
 #   - Local build fallback (before the tag is published, or to test your
 #     own changes):
 #       make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
-#       PARSAR_SERVER_IMAGE=parsar:local docker compose -f docker-compose.local.yml up
+#       PARSAR_SERVER_IMAGE=parsar:local docker compose up
 #
 # Override knobs (all optional — defaults make `up` work with no .env):
 #   PARSAR_PROJECT_NAME   compose project/network prefix (default: parsar)
@@ -59,24 +59,6 @@ services:
       retries: 20
       start_period: 10s
 
-  # One-shot: run migrations before the server starts. First owner creation
-  # happens in the web setup flow (POST /api/v1/bootstrap).
-  parsar-init:
-    image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
-    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-init
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        parsar-migrate
-        echo "[parsar-init] migrations complete — create the first owner in the web setup flow"
-    restart: "no"
-
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
     container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-server
@@ -84,8 +66,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      parsar-init:
-        condition: service_completed_successfully
+    # Run migrations before serving, in the same container as the server.
+    # goose migrations are idempotent (already-applied ones are skipped),
+    # so re-running this on every `restart: unless-stopped` cycle is a
+    # cheap no-op — no separate one-shot init container needed. `exec`
+    # replaces the shell with parsar-server so it stays tini's direct
+    # child for correct signal handling. First owner creation happens in
+    # the web setup flow (POST /api/v1/bootstrap).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        parsar-migrate
+        exec /usr/local/bin/parsar-server
     ports:
       - "${PARSAR_BIND_ADDR:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
