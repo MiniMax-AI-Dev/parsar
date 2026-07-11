@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // SandboxLivenessProber tests sandbox provider liveness. Implementations
@@ -29,6 +29,7 @@ type RuntimeStatusDeps struct {
 	SandboxProber   SandboxLivenessProber
 	Profile         string
 	ConfiguredByOps bool
+	SandboxImage    string
 	PingTimeout     time.Duration
 }
 
@@ -65,6 +66,10 @@ type runtimeStatusResponse struct {
 	// ConfiguredBy is "ops" when PARSAR_OPENCODE_RUNNER was set at
 	// server boot. Informational only — admin UI badge.
 	ConfiguredBy string `json:"configured_by,omitempty"`
+
+	// SandboxImage is the operator-configured container image used for
+	// docker-backed sandbox agents. Empty for non-docker providers.
+	SandboxImage string `json:"sandbox_image,omitempty"`
 }
 
 // runtimeStatus returns the workspace runtime status. 503 when no
@@ -120,6 +125,7 @@ func runtimeStatus(deps RuntimeStatusDeps) http.HandlerFunc {
 			Available:         available,
 			SandboxAgentCount: settings.SandboxAgentCount,
 			Profile:           profile,
+			SandboxImage:      strings.TrimSpace(deps.SandboxImage),
 		}
 		if masked := strings.TrimSpace(settings.RuntimeCredentialMasked); masked != "" {
 			resp.CredentialMasked = &masked

@@ -179,3 +179,21 @@ func TestResolveAgentDaemonPublicWSURLNoRewriteWhenBackendNotDocker(t *testing.T
 		t.Fatalf("resolveAgentDaemonPublicWSURL = %q, want %q", got, want)
 	}
 }
+
+func TestConfiguredDockerSandboxImage(t *testing.T) {
+	env := dockerBackendEnv(map[string]string{
+		"AGENT_DAEMON_SANDBOX_BACKEND":      "docker",
+		"AGENT_DAEMON_SANDBOX_DOCKER_IMAGE": "example/sandbox:test",
+	})
+	if got := configuredDockerSandboxImage(env); got != "example/sandbox:test" {
+		t.Fatalf("configuredDockerSandboxImage() = %q, want example/sandbox:test", got)
+	}
+
+	env = dockerBackendEnv(map[string]string{
+		"AGENT_DAEMON_SANDBOX_BACKEND":      "e2b",
+		"AGENT_DAEMON_SANDBOX_DOCKER_IMAGE": "example/sandbox:test",
+	})
+	if got := configuredDockerSandboxImage(env); got != "" {
+		t.Fatalf("configuredDockerSandboxImage() = %q for non-docker backend, want empty", got)
+	}
+}

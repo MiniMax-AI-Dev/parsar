@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // fakeSandboxProber satisfies SandboxLivenessProber. The default
@@ -187,6 +187,27 @@ func TestRuntimeStatusNoCredential(t *testing.T) {
 	}
 	if prober.callCount() != 0 {
 		t.Errorf("prober must NOT be invoked when has_credential=false (saves a probe), got %d calls", prober.callCount())
+	}
+}
+
+func TestRuntimeStatusIncludesSandboxImage(t *testing.T) {
+	r := newRuntimeStatusTestRouter(RuntimeStatusDeps{
+		SettingsStore: fakeRuntimeSettingsStore{settings: store.WorkspaceRuntimeSettingsRead{}},
+		SandboxImage:  "ghcr.io/example/sandbox:test",
+	})
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, runtimeStatusRequest())
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := resp["sandbox_image"]; got != "ghcr.io/example/sandbox:test" {
+		t.Errorf("sandbox_image: want configured image, got %v", got)
 	}
 }
 
