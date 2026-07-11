@@ -27,7 +27,7 @@ user is the administrator.
 - To actually run Agents in sandbox mode, build the sandbox image first —
   there is no published default:
   ```bash
-  docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+  docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
   ```
   Everything else in the stack works without it.
 

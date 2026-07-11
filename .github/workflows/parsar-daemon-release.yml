@@ -9,12 +9,13 @@
 # project_daemon_platform_scope decision and the absence of a fork
 # implementation for that OS.
 #
-# The same artifacts are consumed by the sandbox image build (the e2b
-# Dockerfile at infra/sandbox/Dockerfile.e2b
-# pins PARSAR_DAEMON_VERSION and curls the matching linux/amd64 binary from
-# the deployment's download mirror). When cutting a sandbox template
-# rebuild, bump the tag here first, wait for this workflow to publish,
-# then trigger the template rebuild against the new version.
+# These artifacts back the device-pairing "one-line connect command"
+# (scripts/install-parsar-daemon.sh / server/internal/api/
+# install_parsar_daemon.sh pull from here). The sandbox image build
+# (infra/sandbox/Dockerfile) does NOT consume
+# this release — it compiles parsar-daemon from source in its own
+# builder stage, so sandbox templates always match the checked-out
+# commit and don't need a release cut first.
 
 name: parsar-daemon release
 
@@ -68,8 +69,9 @@ jobs:
         id: ver
         run: |
           # Strip the `parsar-daemon-` prefix from the tag so the binary
-          # filename matches the e2b Dockerfile's PARSAR_DAEMON_VERSION arg
-          # (which is bare semver like `v0.1.0` or `0.1.0`).
+          # filename matches what scripts/install-parsar-daemon.sh /
+          # server/internal/api/install_parsar_daemon.sh expect (bare
+          # semver like `v0.1.0` or `0.1.0`).
           if [[ "${GITHUB_REF}" == refs/tags/parsar-daemon-* ]]; then
             VERSION="${GITHUB_REF#refs/tags/parsar-daemon-}"
           else
@@ -147,10 +149,10 @@ jobs:
           body: |
             parsar-daemon binaries for macOS + Linux (amd64 / arm64).
 
-            ## Install (sandbox template)
-            Bump `PARSAR_DAEMON_VERSION` in
-            `infra/sandbox/Dockerfile.e2b`
-            to this release, then rebuild the e2b template.
+            The sandbox image (infra/sandbox/Dockerfile) compiles
+            parsar-daemon from source and doesn't consume this release —
+            these binaries are for the device-pairing "one-line connect
+            command" only.
 
             ## Install (local laptop)
             ```sh

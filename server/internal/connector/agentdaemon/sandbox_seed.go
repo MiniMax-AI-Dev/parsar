@@ -35,7 +35,7 @@ const (
 )
 
 // In-image absolute paths to the hook scripts baked by
-// infra/sandbox/Dockerfile.e2b. Keeping
+// infra/sandbox/Dockerfile. Keeping
 // them as constants here means a Dockerfile move forces an update on
 // the Go side too.
 const (

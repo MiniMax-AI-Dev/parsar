@@ -22,7 +22,7 @@ Options:
                          Default: ghcr.io/minimax-ai-dev/parsar-server:latest
   --sandbox-image IMAGE  Docker sandbox image. There is no published
                          default — build one first:
-                         docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+                         docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
                          Default: parsar-sandbox:local
   --port PORT            Web UI host port. Default: 18080
   --pg-port PORT         Postgres host port. Default: 15432

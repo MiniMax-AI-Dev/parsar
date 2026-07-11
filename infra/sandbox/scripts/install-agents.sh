@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Installs every agent CLI a Parsar sandbox image needs: Node 22 (for npm-
-# based installs), Claude Code, Codex, and Pi. Shared by every sandbox
-# Dockerfile (infra/sandbox/Dockerfile.local + infra/sandbox/Dockerfile.e2b)
-# so the two images can't drift apart again — they already had once (an
-# old arm64-only local variant was missing Codex/Pi that the amd64 one
-# had). Edit here, not inline in a Dockerfile.
+# based installs), Claude Code, Codex, and Pi. Used by
+# infra/sandbox/Dockerfile (both the local-docker and e2b.app build
+# targets, selected by --build-arg BASE_IMAGE). Edit here, not inline in
+# the Dockerfile.
 #
 # Usage: install-agents.sh <amd64|arm64>
 # Version overrides (env, all optional):

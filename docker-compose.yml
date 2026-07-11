@@ -158,7 +158,7 @@ services:
       # to start / exec / stop sandbox containers via the mounted
       # /var/run/docker.sock below. There is no published image for this —
       # build one locally first (README's 5.2 section):
-      #   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+      #   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
       # Until you do, sandbox-mode Agent runs fail with "no such image";
       # everything else in this stack works fine without it.
       # The network below is pinned to `parsar_default` — the top-level

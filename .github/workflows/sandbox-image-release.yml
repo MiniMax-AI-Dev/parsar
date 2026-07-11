@@ -1,0 +1,140 @@
+# Build + push the Parsar sandbox images to GHCR.
+#
+# One Dockerfile (infra/sandbox/Dockerfile), two published images selected
+# by --build-arg BASE_IMAGE:
+#   - parsar-sandbox            local docker-backed sandbox provider
+#                                (AGENT_DAEMON_SANDBOX_BACKEND=docker),
+#                                multi-arch (amd64 + arm64)
+#   - parsar-daemon-claudecode  e2b.app SaaS template, amd64 only
+#
+# Both compile parsar-daemon + the parsar CLI from source in the shared
+# Dockerfile's builder stage — neither depends on a published
+# parsar-daemon release existing first (see parsar-daemon-release.yml,
+# which is a separate artifact for the device-pairing connect command).
+#
+# Triggers:
+#   - Pull request touching sandbox inputs -> build only, no push
+#   - Push to main touching sandbox inputs -> :latest + :<sha>
+#   - Tag push matching `sandbox-v*`       -> :<release-tag>
+#   - Manual workflow_dispatch             -> build + push
+#
+# Output:
+#   ghcr.io/<owner-lowercase>/parsar-sandbox:<tag>
+#   ghcr.io/<owner-lowercase>/parsar-daemon-claudecode:<tag>
+#     - latest        on default-branch pushes
+#     - <short-sha>   on every build
+#     - <release-tag> on tag pushes (e.g. sandbox-v0.1.0)
+#
+# Operators using their own registry: copy this into a fork and swap the
+# `images:` field, or just build infra/sandbox/Dockerfile locally and
+# never run this workflow.
+
+name: sandbox images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/sandbox/**"
+      - "internal/**"
+      - "apps/parsar/**"
+      - "apps/parsar-daemon/**"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - ".github/workflows/sandbox-image-release.yml"
+    tags:
+      - "sandbox-v*"
+  pull_request:
+    paths:
+      - "infra/sandbox/**"
+      - "internal/**"
+      - "apps/parsar/**"
+      - "apps/parsar-daemon/**"
+      - "go.mod"
+      - "go.sum"
+      - "go.work"
+      - ".github/workflows/sandbox-image-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: local
+            image_name: parsar-sandbox
+            base_image: ubuntu:22.04
+            platforms_pr: linux/amd64
+            platforms_publish: linux/amd64,linux/arm64
+          - variant: e2b
+            image_name: parsar-daemon-claudecode
+            base_image: e2bdev/base:latest
+            # e2b.app sandboxes are amd64 only — no point publishing arm64.
+            platforms_pr: linux/amd64
+            platforms_publish: linux/amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        if: github.event_name != 'pull_request' && matrix.variant == 'local'
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Choose build platforms
+        id: platforms
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "value=${{ matrix.platforms_pr }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ matrix.platforms_publish }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute lowercase GHCR image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=ref,event=tag
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/sandbox/Dockerfile
+          platforms: ${{ steps.platforms.outputs.value }}
+          build-args: |
+            BASE_IMAGE=${{ matrix.base_image }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=sandbox-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=sandbox-${{ matrix.variant }}

@@ -1,31 +1,43 @@
-# Parsar local docker sandbox image — minimal, multi-arch (amd64 + arm64).
+# Parsar sandbox image — one Dockerfile, two deployment targets selected
+# by BASE_IMAGE:
 #
-# For AGENT_DAEMON_SANDBOX_BACKEND=docker, the sandbox provider does
-# `docker run -d --entrypoint sleep <image> infinity` then drives
-# everything else via `docker exec ... bash -c <command>`
-# (server/internal/sandbox/docker/client.go). No envd, no e2b API — the
-# image just needs the agent CLIs + parsar-daemon on PATH and a shell.
+#   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
+#     Local docker sandbox (default). For AGENT_DAEMON_SANDBOX_BACKEND=docker,
+#     the sandbox provider does `docker run -d --entrypoint sleep <image>
+#     infinity` then drives everything else via `docker exec ... bash -c
+#     <command>` (server/internal/sandbox/docker/client.go). No envd, no
+#     e2b API — just needs the agent CLIs + parsar-daemon on PATH + a
+#     shell. Multi-arch: add --platform linux/arm64 to cross-build.
+#
+#   docker build -f infra/sandbox/Dockerfile \
+#     --build-arg BASE_IMAGE=e2bdev/base:latest -t parsar-daemon-claudecode .
+#     e2b.app SaaS template. amd64 only. After build, the SandboxProvider
+#     only needs to: Sandbox.Create("parsar-daemon-claudecode", {timeout})
+#     → RunCommand: parsar-daemon connect --device-name <deviceId> -b
+#     (URL/token via env) → wait for the gateway to see deviceId dial in.
+#
+# Everything below this point is identical for both targets — swapping
+# BASE_IMAGE is the only thing that changes what gets built. Don't fork
+# this into two files; that's what drifted before (an old arm64-only
+# local variant missing Codex/Pi, and the e2b variant downloading
+# parsar-daemon from GitHub Releases instead of compiling it like this
+# one does).
 #
 # Contents:
-#   - Claude Code CLI + Codex CLI + Pi CLI (installed by the shared
-#     infra/sandbox/scripts/install-agents.sh — also used by
-#     Dockerfile.e2b, so the two images can't drift apart again)
+#   - Claude Code CLI + Codex CLI + Pi CLI (installed by
+#     infra/sandbox/scripts/install-agents.sh)
 #   - parsar-daemon + parsar CLI (spec/memory hook injection), both
-#     compiled from source in the builder stage below — no dependency
-#     on the parsar:local server image being built first
+#     compiled from source in the builder stage below — no dependency on
+#     a published parsar-daemon release or the parsar:local server image
 #   - Claude Code hook scripts (session-start / user-prompt-submit)
 #   - Python 3 + uv for MCP server runtimes (Node comes from
 #     install-agents.sh)
 #
 # Deliberately NOT included: OpenCode. Add it back (`npm install -g
-# opencode-ai`) if a local sandbox needs to run agent_kind=opencode.
-#
-# Build (from repo root; buildx cross-compiles the Go binaries natively
-# and downloads the right CLI binary for TARGETARCH):
-#   docker build -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
-#   docker build --platform linux/arm64 -f infra/sandbox/Dockerfile.local -t parsar-sandbox:local .
+# opencode-ai`) if a sandbox needs to run agent_kind=opencode.
 #
 # Build args:
+#   --build-arg BASE_IMAGE=<image>             ubuntu:22.04 (local) or e2bdev/base:latest (e2b)
 #   --build-arg GO_VERSION=<tag>               builder Go image (default: matches repo go.work)
 #   --build-arg CLAUDE_CODE_VERSION=<version>  pin claude code (default: latest)
 #   --build-arg CODEX_VERSION=<version>        pin codex-rs (default: 0.141.0)
@@ -37,6 +49,7 @@
 # (no QEMU) while GOARCH=$TARGETARCH cross-compiles the output binaries.
 ###############################################################################
 ARG GO_VERSION=1.25-bookworm
+ARG BASE_IMAGE=ubuntu:22.04
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS go-builder
 ARG TARGETARCH
@@ -64,8 +77,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-trimpath \
 ###############################################################################
 # Stage 2: runtime — the actual sandbox image.
 ###############################################################################
-FROM ubuntu:22.04
-ARG TARGETARCH
+FROM ${BASE_IMAGE}
+ARG TARGETARCH=amd64
 
 # --- Base tools ---
 # curl/ca-certificates for downloads, jq for JSON, git for repo ops,

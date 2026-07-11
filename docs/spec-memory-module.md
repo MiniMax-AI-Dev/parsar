@@ -410,7 +410,7 @@ ValidateRunnerToken(ctx, token) (RuntimeIdentity, error)
 
 ### 3.4 Dockerfile changes
 
-File: `infra/sandbox/Dockerfile.e2b`
+File: `infra/sandbox/Dockerfile`
 
 New content (after the existing parsar-daemon install section):
 ```dockerfile
@@ -548,7 +548,7 @@ Put the helper `seedPlatformConfig` in `sandbox_provider.go` or a new
 19. Cross-compile (linux/amd64 + linux/arm64), publish to GitLab artifact.
 
 ### Phase 7: sandbox image & hooks
-20. Modify `infra/sandbox/Dockerfile.e2b` to install the `parsar` binary + COPY the hook script directory.
+20. Modify `infra/sandbox/Dockerfile` to install the `parsar` binary + COPY the hook script directory.
 21. Create `infra/sandbox/hooks/claude/{session-start.py, user-prompt-submit.py}`.
 22. Create `infra/sandbox/hooks/opencode/{session-injection.js, per-turn-injection.js}`.
 23. Rewrite the three-platform hooks uniformly to "call `parsar inject ...` for data" (injection logic centralizes in Go).
@@ -585,7 +585,7 @@ depends on 4.
 | Sandbox lifecycle | `server/internal/connector/agentdaemon/sandbox_provider.go` (change; add seedPlatformConfig) |
 | Proto (no change) | `internal/agentdaemon/proto/outbound.go` (already supports the AgentOptions map) |
 | Audit hookup (no schema change) | `server/internal/audit/postgres.go:24-50` current `PostgresSink.Write()` |
-| Dockerfile | `infra/sandbox/Dockerfile.e2b` (change) |
+| Dockerfile | `infra/sandbox/Dockerfile` (change) |
 | Hook scripts | `infra/sandbox/hooks/{claude,opencode}/` (new) |
 | CLI source | `cmd/parsar/` (new) |
 | UI | Depends on the frontend layout; typically `web/src/pages/workspace/spec/` etc. (mirror the existing workspace settings page) |
