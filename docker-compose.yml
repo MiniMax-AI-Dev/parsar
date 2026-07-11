@@ -5,7 +5,8 @@
 #   docker compose up
 #
 # Brings up Postgres + parsar-server (which runs migrations on startup
-# before serving). Open http://127.0.0.1:18080 and create the first owner
+# before serving). Open http://127.0.0.1:18080 locally, or
+# http://<server-ip>:18080 from another machine, and create the first owner
 # account in the web setup flow.
 #
 # Profile not fork: this is the SAME image as the self-host deployment
@@ -20,29 +21,18 @@
 #       PARSAR_SERVER_IMAGE=parsar:local docker compose up
 #
 # Override knobs (all optional — defaults make `up` work with no .env):
-#   PARSAR_PROJECT_NAME   compose project/network prefix (default: parsar)
+#   COMPOSE_PROJECT_NAME  compose project/network prefix (or pass `-p`)
 #   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
 #   PARSAR_SANDBOX_IMAGE  sandbox image ref (default: GHCR latest)
 #   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
 #   PARSAR_PG_PORT        host port for Postgres (default: 15432)
-#   PARSAR_BIND_ADDR      host bind address (default: 127.0.0.1)
+#   PARSAR_BIND_ADDR      host bind address (default: 0.0.0.0)
 #   PARSAR_PG_DATA_DIR    host path for Postgres data (default: named volume)
 #   PARSAR_DATA_DIR       host path for server data (default: named volume)
-
-# Explicit project name so the auto-created network is always parsar_default
-# regardless of the clone directory name. The sandbox provider hard-codes this
-# network below (AGENT_DAEMON_SANDBOX_DOCKER_NETWORK); mismatched names would
-# leave every acquired sandbox unable to reach parsar-server.
-name: ${PARSAR_PROJECT_NAME:-parsar}
-
-networks:
-  default:
-    name: ${PARSAR_PROJECT_NAME:-parsar}_default
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: parsar
@@ -61,7 +51,6 @@ services:
 
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
-    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-server
     restart: unless-stopped
     depends_on:
       postgres:
@@ -80,7 +69,7 @@ services:
         parsar-migrate
         exec /usr/local/bin/parsar-server
     ports:
-      - "${PARSAR_BIND_ADDR:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}:8080"
+      - "${PARSAR_BIND_ADDR:-0.0.0.0}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
       DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
       # Network proxy — only needed if your host requires a proxy for internet
@@ -162,12 +151,12 @@ services:
       # instead with:
       #   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
       #   PARSAR_SANDBOX_IMAGE=parsar-sandbox:local
-      # The network below is pinned to `parsar_default` — the top-level
-      # `name: parsar` + `networks:` block at the head of this file
-      # guarantees that alias regardless of the clone directory.
+      # Join acquired sandbox containers to this compose project's default
+      # network so they can reach parsar-server by service name. Docker Compose
+      # exposes the effective project name here, including when `-p` is used.
       AGENT_DAEMON_SANDBOX_BACKEND: "docker"
       AGENT_DAEMON_SANDBOX_DOCKER_IMAGE: "${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}"
-      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "${PARSAR_PROJECT_NAME:-parsar}_default"
+      AGENT_DAEMON_SANDBOX_DOCKER_NETWORK: "${COMPOSE_PROJECT_NAME}_default"
       AGENT_DAEMON_SANDBOX_SERVER_URL: "http://parsar-server:8080"
     group_add:
       - "${DOCKER_GID:-999}"

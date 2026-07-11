@@ -113,7 +113,7 @@ docker_run() {
 }
 
 compose_run() {
-  docker_run compose -f "$compose_file" --env-file "$env_file" "$@"
+  docker_run compose -p "$project_name" -f "$compose_file" --env-file "$env_file" "$@"
 }
 
 fetch_compose() {
@@ -215,6 +215,7 @@ fetch_compose
 
 set_env "PARSAR_HOME" "$parsar_home" "$env_file"
 set_env "PARSAR_PROJECT_NAME" "$project_name" "$env_file"
+set_env "COMPOSE_PROJECT_NAME" "$project_name" "$env_file"
 set_env "PARSAR_SERVER_IMAGE" "$server_image" "$env_file"
 set_env "PARSAR_SANDBOX_IMAGE" "$sandbox_image" "$env_file"
 set_env "PARSAR_LOCAL_PORT" "$local_port" "$env_file"
