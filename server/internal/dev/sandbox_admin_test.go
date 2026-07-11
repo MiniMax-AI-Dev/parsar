@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // fakeSandboxBindingStore is the test-side SandboxBindingStore stand-in.
@@ -213,15 +213,15 @@ func TestSandboxAdminStatusReturnsLiveBinding(t *testing.T) {
 	now := time.Now().UTC()
 	storeFake := &fakeSandboxBindingStore{
 		binding: &store.SandboxBindingRead{
-			ID:             "11111111-1111-1111-1111-111111111111",
-			WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-			AgentID: strPtr("00000000-0000-0000-0000-000000000009"),
-			SandboxID:      "sbx_abc",
-			TemplateID:     "parsar-daemon-claudecode",
-			Status:         store.SandboxBindingStatusActive,
-			CreatedAt:      now.Add(-2 * time.Minute),
-			LastActiveAt:   now.Add(-30 * time.Second),
-			Metadata:       map[string]any{"source": "test"},
+			ID:           "11111111-1111-1111-1111-111111111111",
+			WorkspaceID:  "00000000-0000-0000-0000-000000000002",
+			AgentID:      strPtr("00000000-0000-0000-0000-000000000009"),
+			SandboxID:    "sbx_abc",
+			TemplateID:   "parsar-sandbox-e2b",
+			Status:       store.SandboxBindingStatusActive,
+			CreatedAt:    now.Add(-2 * time.Minute),
+			LastActiveAt: now.Add(-30 * time.Second),
+			Metadata:     map[string]any{"source": "test"},
 		},
 	}
 	router := newSandboxTestRouter(sandboxAdminDeps{store: storeFake})
@@ -377,26 +377,26 @@ func TestSandboxAdminListReturnsActiveBindings(t *testing.T) {
 	storeFake := &fakeSandboxBindingStore{
 		listRows: []store.SandboxBindingRead{
 			{
-				ID:             "00000000-0000-0000-0000-000000000aa1",
-				WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-				AgentID: strPtr("00000000-0000-0000-0000-000000000009"),
-				SandboxID:      "sbx_alpha",
-				TemplateID:     "parsar-daemon-claudecode",
-				Status:         store.SandboxBindingStatusActive,
-				CreatedAt:      now.Add(-5 * time.Minute),
-				LastActiveAt:   now.Add(-30 * time.Second),
-				Metadata:       map[string]any{"sandbox_kind": "agent_daemon"},
+				ID:           "00000000-0000-0000-0000-000000000aa1",
+				WorkspaceID:  "00000000-0000-0000-0000-000000000002",
+				AgentID:      strPtr("00000000-0000-0000-0000-000000000009"),
+				SandboxID:    "sbx_alpha",
+				TemplateID:   "parsar-sandbox-e2b",
+				Status:       store.SandboxBindingStatusActive,
+				CreatedAt:    now.Add(-5 * time.Minute),
+				LastActiveAt: now.Add(-30 * time.Second),
+				Metadata:     map[string]any{"sandbox_kind": "agent_daemon"},
 			},
 			{
-				ID:             "00000000-0000-0000-0000-000000000aa2",
-				WorkspaceID:    "00000000-0000-0000-0000-000000000002",
-				AgentID: strPtr("00000000-0000-0000-0000-000000000010"),
-				SandboxID:      "sbx_beta",
-				TemplateID:     "parsar-daemon-claudecode",
-				Status:         store.SandboxBindingStatusSpawning,
-				CreatedAt:      now.Add(-1 * time.Minute),
-				LastActiveAt:   now.Add(-1 * time.Minute),
-				Metadata:       map[string]any{"sandbox_kind": "agent_daemon"},
+				ID:           "00000000-0000-0000-0000-000000000aa2",
+				WorkspaceID:  "00000000-0000-0000-0000-000000000002",
+				AgentID:      strPtr("00000000-0000-0000-0000-000000000010"),
+				SandboxID:    "sbx_beta",
+				TemplateID:   "parsar-sandbox-e2b",
+				Status:       store.SandboxBindingStatusSpawning,
+				CreatedAt:    now.Add(-1 * time.Minute),
+				LastActiveAt: now.Add(-1 * time.Minute),
+				Metadata:     map[string]any{"sandbox_kind": "agent_daemon"},
 			},
 		},
 	}

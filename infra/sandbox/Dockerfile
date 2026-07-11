@@ -10,9 +10,9 @@
 #     shell. Multi-arch: add --platform linux/arm64 to cross-build.
 #
 #   docker build -f infra/sandbox/Dockerfile \
-#     --build-arg BASE_IMAGE=e2bdev/base:latest -t parsar-daemon-claudecode .
+#     --build-arg BASE_IMAGE=e2bdev/base:latest -t parsar-sandbox-e2b .
 #     e2b.app SaaS template. amd64 only. After build, the SandboxProvider
-#     only needs to: Sandbox.Create("parsar-daemon-claudecode", {timeout})
+#     only needs to: Sandbox.Create("parsar-sandbox-e2b", {timeout})
 #     → RunCommand: parsar-daemon connect --device-name <deviceId> -b
 #     (URL/token via env) → wait for the gateway to see deviceId dial in.
 #
