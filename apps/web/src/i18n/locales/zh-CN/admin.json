@@ -1445,6 +1445,10 @@
         "stepOf": "第 {{current}} / {{total}} 步",
         "complete": "{{percent}}% 完成",
         "steps": {
+          "setup": {
+            "title": "基础设置",
+            "summary": "Agent 身份、运行方式和模型"
+          },
           "identity": {
             "title": "身份",
             "summary": "Agent 的名字、介绍和可见性"
