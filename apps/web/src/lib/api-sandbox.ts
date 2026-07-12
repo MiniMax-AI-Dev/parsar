@@ -47,6 +47,13 @@ interface SandboxLifecycleResponse {
   sandbox_id: string
 }
 
+interface SandboxAcquireResponse {
+  status: string
+  agent_id?: string
+}
+
+type SandboxLifecycleAction = "kill" | "rebuild" | "renew" | "acquire"
+
 /* --- Query keys --------------------------------------------------------- */
 
 const KEY_SANDBOX = (workspaceID: string, agentID: string) =>
@@ -70,12 +77,13 @@ async function getSandboxBinding(
   }
 }
 
-async function killSandboxRequest(
+function postSandboxAction<Response>(
   workspaceID: string,
   agentID: string,
-): Promise<SandboxLifecycleResponse> {
-  return apiRequest<SandboxLifecycleResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/kill`,
+  action: SandboxLifecycleAction,
+): Promise<Response> {
+  return apiRequest<Response>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/${action}`,
     { method: "POST" },
   )
 }
@@ -89,17 +97,7 @@ export async function killSandboxRequestRaw(
   workspaceID: string,
   agentID: string,
 ): Promise<SandboxLifecycleResponse> {
-  return killSandboxRequest(workspaceID, agentID)
-}
-
-async function rebuildSandboxRequest(
-  workspaceID: string,
-  agentID: string,
-): Promise<SandboxLifecycleResponse> {
-  return apiRequest<SandboxLifecycleResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/rebuild`,
-    { method: "POST" },
-  )
+  return postSandboxAction<SandboxLifecycleResponse>(workspaceID, agentID, "kill")
 }
 
 /* --- Hooks -------------------------------------------------------------- */
@@ -127,7 +125,11 @@ export function useSandboxBinding(
   })
 }
 
-export function useKillSandbox(workspaceID: string | null, agentID: string | null) {
+function useSandboxAction<Response>(
+  workspaceID: string | null,
+  agentID: string | null,
+  action: SandboxLifecycleAction,
+) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
@@ -135,49 +137,27 @@ export function useKillSandbox(workspaceID: string | null, agentID: string | nul
         throw new ApiError({
           status: 0,
           code: "no_target",
-          message: "workspaceID + agentID required for sandbox kill",
+          message: `workspaceID + agentID required for sandbox ${action}`,
           unreachable: false,
         })
       }
-      return killSandboxRequest(workspaceID, agentID)
+      return postSandboxAction<Response>(workspaceID, agentID, action)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
     },
   })
+}
+
+export function useKillSandbox(workspaceID: string | null, agentID: string | null) {
+  return useSandboxAction<SandboxLifecycleResponse>(workspaceID, agentID, "kill")
 }
 
 export function useRebuildSandbox(workspaceID: string | null, agentID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async () => {
-      if (!workspaceID || !agentID) {
-        throw new ApiError({
-          status: 0,
-          code: "no_target",
-          message: "workspaceID + agentID required for sandbox rebuild",
-          unreachable: false,
-        })
-      }
-      return rebuildSandboxRequest(workspaceID, agentID)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
-    },
-  })
+  return useSandboxAction<SandboxLifecycleResponse>(workspaceID, agentID, "rebuild")
 }
 
 /* --- Renew (extend e2b TTL on a live sandbox) ------------------------- */
-
-async function renewSandboxRequest(
-  workspaceID: string,
-  agentID: string,
-): Promise<SandboxRenewResponse> {
-  return apiRequest<SandboxRenewResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/renew`,
-    { method: "POST" },
-  )
-}
 
 /**
  * useRenewSandbox extends the e2b-side TTL on the agent's live sandbox.
@@ -185,36 +165,10 @@ async function renewSandboxRequest(
  * usually redirects to the owning pod within one cycle.
  */
 export function useRenewSandbox(workspaceID: string | null, agentID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async () => {
-      if (!workspaceID || !agentID) {
-        throw new ApiError({
-          status: 0,
-          code: "no_target",
-          message: "workspaceID + agentID required for sandbox renew",
-          unreachable: false,
-        })
-      }
-      return renewSandboxRequest(workspaceID, agentID)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
-    },
-  })
+  return useSandboxAction<SandboxRenewResponse>(workspaceID, agentID, "renew")
 }
 
 /* --- Acquire (manual provision) ---------------------------------------- */
-
-async function acquireSandboxRequest(
-  workspaceID: string,
-  agentID: string,
-): Promise<{ status: string; agent_id?: string }> {
-  return apiRequest(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/sandbox/acquire`,
-    { method: "POST" },
-  )
-}
 
 /**
  * useAcquireSandbox triggers sandbox provisioning for an agent with
@@ -222,23 +176,7 @@ async function acquireSandboxRequest(
  * background and useSandboxBinding's 15s poll picks up the result.
  */
 export function useAcquireSandbox(workspaceID: string | null, agentID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async () => {
-      if (!workspaceID || !agentID) {
-        throw new ApiError({
-          status: 0,
-          code: "no_target",
-          message: "workspaceID + agentID required for sandbox acquire",
-          unreachable: false,
-        })
-      }
-      return acquireSandboxRequest(workspaceID, agentID)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin", "sandbox"] })
-    },
-  })
+  return useSandboxAction<SandboxAcquireResponse>(workspaceID, agentID, "acquire")
 }
 
 /* --- Workspace-scoped list (admin Sandboxes page) ----------------------- */
