@@ -65,7 +65,9 @@ export function SetupPage() {
       />
       <section className="relative w-full max-w-[460px] rounded-2xl border border-line/80 bg-surface p-9 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_20px_48px_-16px_rgb(0_0_0/0.16)]">
         <div className="mb-7 flex flex-col items-center text-center">
-          <img src="/parsar-banner.png" alt="Parsar" className="h-auto w-[280px] max-w-full" />
+          <div className="rounded-xl bg-fg-on-emphasis px-5 py-3 shadow-sm ring-1 ring-line-muted">
+            <img src="/parsar-banner.png" alt="Parsar" className="h-auto w-[260px] max-w-full" />
+          </div>
           <h1 className="mt-4 text-lg font-semibold text-fg">{t("setup.title")}</h1>
           <p className="mt-2 text-base leading-relaxed text-fg-subtle">{t("setup.subtitle")}</p>
         </div>

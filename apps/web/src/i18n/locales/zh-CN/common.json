@@ -6,6 +6,15 @@
     "zh-CN": "中文",
     "en-US": "English"
   },
+  "theme": {
+    "label": "主题",
+    "trigger": "切换主题",
+    "options": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    }
+  },
   "actions": {
     "refresh": "刷新",
     "cancel": "取消",

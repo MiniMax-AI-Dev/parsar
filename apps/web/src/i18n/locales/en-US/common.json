@@ -6,6 +6,15 @@
     "zh-CN": "中文",
     "en-US": "English"
   },
+  "theme": {
+    "label": "Theme",
+    "trigger": "Change theme",
+    "options": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    }
+  },
   "actions": {
     "refresh": "Refresh",
     "cancel": "Cancel",

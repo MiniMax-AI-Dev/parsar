@@ -11,7 +11,7 @@ import {
   Send,
   X,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
@@ -53,8 +53,14 @@ export function WorkspaceSwitcher() {
   const discoverableQuery = useDiscoverableWorkspaces({ limit: 5 })
   const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false)
 
-  const workspaces = workspacesQuery.data?.workspaces ?? []
-  const discoverable = discoverableQuery.data?.workspaces ?? []
+  const workspaces = useMemo(
+    () => workspacesQuery.data?.workspaces ?? [],
+    [workspacesQuery.data?.workspaces]
+  )
+  const discoverable = useMemo(
+    () => discoverableQuery.data?.workspaces ?? [],
+    [discoverableQuery.data?.workspaces]
+  )
   const discoverableTotal = discoverableQuery.data?.total ?? discoverable.length
   const currentWorkspace = workspaces.find((w) => w.id === wsId)
 
@@ -102,7 +108,7 @@ export function WorkspaceSwitcher() {
           <button
             type="button"
             aria-label={t("workspaceSwitcher.triggerAriaLabel")}
-            className="ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-fg-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 data-[state=open]:bg-surface-muted"
+            className="ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-fg-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong data-[state=open]:bg-surface-muted"
           >
             <span className="font-medium">{triggerLabel}</span>
             {!wsId && (
