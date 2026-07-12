@@ -92,3 +92,7 @@ When a platform such as Dokploy adds its ingress network to `parsar-server`,
 keep the service attached to the Compose `default` network as well. Postgres
 and the local runtime are intentionally private and use that network for
 service discovery.
+
+The Feishu WebSocket inbound manager and outbound worker are driven by the
+workspace connector saved in the admin UI. No additional deployment flag is
+required after enabling the connector.
