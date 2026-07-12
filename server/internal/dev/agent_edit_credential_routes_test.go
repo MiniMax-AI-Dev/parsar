@@ -93,9 +93,7 @@ func TestUpdateAgentPersistsCredentialBindings(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !rec.lastUpdateInput.ConfigSet {
 		t.Fatalf("expected ConfigSet=true on UpdateAgentInput, got false")
 	}
@@ -158,9 +156,7 @@ func TestUpdateAgentWithoutConfigLeavesConfigSetFalse(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if rec.lastUpdateInput.ConfigSet {
 		t.Fatalf("ConfigSet should be false when config not in PATCH body, got true")
 	}
@@ -198,9 +194,7 @@ func TestUpdateAgentClearsBindingsOnEmptyPayload(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !rec.lastUpdateInput.ConfigSet {
 		t.Fatalf("expected ConfigSet=true on clear payload, got false")
 	}
@@ -231,9 +225,7 @@ func TestUpdatePublicAgentClearsNullModelBinding(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !rec.lastUpdateInput.ConfigSet {
 		t.Fatalf("expected ConfigSet=true on clear payload, got false")
 	}

@@ -81,9 +81,7 @@ func TestDevAuthVerification(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/auth/verify", body)
 	res := httptest.NewRecorder()
 	testRouter().ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 }
 
 func TestDevMeRequiresAuthCookie(t *testing.T) {
@@ -130,9 +128,7 @@ func TestE2BSmokeEndpointRequiresAPIKey(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/sandboxes/e2b/smoke", bytes.NewBufferString(`{}`))
 	res := httptest.NewRecorder()
 	testRouter().ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 	if !strings.Contains(res.Body.String(), "api_key") {
 		t.Fatalf("expected missing api key error, got %s", res.Body.String())
 	}
@@ -147,9 +143,7 @@ func TestE2BSmokeEndpointRunsCommandAndKillsSandbox(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/sandboxes/e2b/smoke", bytes.NewBufferString(body))
 	res := httptest.NewRecorder()
 	testRouter().ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !*killed {
 		t.Fatalf("expected smoke handler to kill sandbox when keep_alive=false")
 	}
@@ -168,9 +162,7 @@ func TestE2BSmokeEndpointKeepAliveSkipsKill(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/sandboxes/e2b/smoke", bytes.NewBufferString(body))
 	res := httptest.NewRecorder()
 	testRouter().ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if *killed {
 		t.Fatalf("expected keep_alive=true to skip sandbox kill")
 	}
@@ -192,9 +184,7 @@ func TestE2BSmokeEndpointRedactsAPIKeyFromUpstreamError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/sandboxes/e2b/smoke", bytes.NewBufferString(body))
 	res := httptest.NewRecorder()
 	testRouter().ServeHTTP(res, req)
-	if res.Code != http.StatusBadGateway {
-		t.Fatalf("expected 502, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadGateway)
 	bodyText := res.Body.String()
 	if strings.Contains(bodyText, apiKey) {
 		t.Fatalf("response leaked api key: %s", bodyText)
@@ -289,9 +279,7 @@ func TestSecretAPIEncryptsAndMasksSecret(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/secrets", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	bodyText := res.Body.String()
 	if strings.Contains(bodyText, "sk-test-secret-value") || !strings.Contains(bodyText, "sk-tes...") {
 		t.Fatalf("expected masked response without plaintext secret, got %s", bodyText)
@@ -305,9 +293,7 @@ func TestSecretAPIRequiresServerMasterKey(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/secrets", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusServiceUnavailable)
 }
 
 func TestSecretAPIAllowsServerMasterKey(t *testing.T) {
@@ -319,9 +305,7 @@ func TestSecretAPIAllowsServerMasterKey(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/secrets", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 }
 
 func TestCreateSecretRequiresWorkspaceOwnerOrAdmin(t *testing.T) {
@@ -360,9 +344,7 @@ func TestListSecretAPIDoesNotReturnPlaintext(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/secrets", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if strings.Contains(res.Body.String(), "sk-test-secret-value") {
 		t.Fatalf("list response leaked secret: %s", res.Body.String())
 	}
@@ -374,9 +356,7 @@ func TestDisableModelAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/disable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"status":"disabled"`) {
 		t.Fatalf("expected disabled model response, got %s", res.Body.String())
 	}
@@ -389,16 +369,12 @@ func TestDisableModelAPIErrors(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/not-a-uuid/disable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000099999/disable", nil)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusNotFound)
 }
 
 func TestUpdateModelAPI(t *testing.T) {
@@ -422,9 +398,7 @@ func TestUpdateModelAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"name":"GPT-5.5 Renamed"`) {
 		t.Fatalf("expected renamed model, got %s", res.Body.String())
 	}
@@ -471,9 +445,7 @@ func TestUpdateModelAPIErrors(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPatch, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000099999", body)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusNotFound)
 }
 
 // connectivityStubStore overrides ResolveModelRuntime + GetSecretPayload
@@ -680,9 +652,7 @@ func TestModelConnectivityUnsupportedAdapter(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/test", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"supported":false`) {
 		t.Fatalf("expected supported:false, got %s", body)
@@ -731,9 +701,7 @@ func TestModelConnectivityAnthropicSuccess(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/test", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"success":true`) || !strings.Contains(body, `"sample":"pong from anthropic"`) {
 		t.Fatalf("expected success + anthropic sample, got %s", body)
@@ -796,9 +764,7 @@ func TestModelConnectivitySuccess(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/test", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"success":true`) || !strings.Contains(body, `"sample":"pong"`) {
 		t.Fatalf("expected success+pong, got %s", body)
@@ -864,9 +830,7 @@ func TestGatewayInboundReturnsScheduledRuns(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	bodyText := res.Body.String()
 	if !strings.Contains(bodyText, `"gateway":"feishu"`) || !strings.Contains(bodyText, "message_id") || !strings.Contains(bodyText, "run-1") {
 		t.Fatalf("expected gateway scheduled run response, got %s", bodyText)
@@ -882,9 +846,7 @@ func TestGatewayInboundPassesSourceAndGateway(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if capturing.lastInput.Source != "gateway" || capturing.lastInput.Gateway != "feishu" {
 		t.Fatalf("expected gateway source metadata, got %+v", capturing.lastInput)
 	}
@@ -899,9 +861,7 @@ func TestGatewayInboundPassesExternalIDs(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if capturing.lastInput.ExternalChatID != "oc_demo" || capturing.lastInput.ExternalUserID != "ou_demo" || capturing.lastInput.ExternalThreadID != "om_thread" || capturing.lastInput.ExternalMessageID != "om_message" {
 		t.Fatalf("expected external ids passed to store, got %+v", capturing.lastInput)
 	}
@@ -916,9 +876,7 @@ func TestGatewayInboundNormalizesAdapterPayload(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if capturing.lastInput.Text != "@backend-agent take a look" || capturing.lastInput.ExternalMessageID != "om_message" || capturing.lastInput.ExternalChatID != "oc_demo" || capturing.lastInput.ExternalUserID != "ou_demo" {
 		t.Fatalf("expected normalized adapter payload, got %+v", capturing.lastInput)
 	}
@@ -947,9 +905,7 @@ func TestFeishuMessageEventNormalizesToGatewayInbound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if !strings.Contains(res.Body.String(), `"gateway":"feishu"`) || !strings.Contains(res.Body.String(), "run-1") {
 		t.Fatalf("expected feishu gateway response, got %s", res.Body.String())
 	}
@@ -979,9 +935,7 @@ func TestFeishuMessageEventUsesUserIDFallback(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if capturing.lastInput.ExternalUserID != "user_demo" {
 		t.Fatalf("expected user_id fallback, got %+v", capturing.lastInput)
 	}
@@ -1010,9 +964,7 @@ func TestFeishuWebhookRoutesByAppIDToTargetAgent(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if capturing.lastInput.Gateway != "feishu" || capturing.lastInput.TargetAgentID != "00000000-0000-0000-0000-000000000901" || capturing.lastInput.SourceAppID != "cli_test_bot" {
 		t.Fatalf("expected app_id routed target fields, got %+v", capturing.lastInput)
 	}
@@ -1494,9 +1446,7 @@ func TestFeishuProvisioningBeginReturnsQRCodeMaterial(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000901/connector/feishu/provision/begin", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"device_code":"dc_begin"`) || !strings.Contains(res.Body.String(), `"next_interval_sec":5`) {
 		t.Fatalf("unexpected begin response: %s", res.Body.String())
 	}
@@ -1517,9 +1467,7 @@ func TestFeishuProvisioningPollPendingDoesNotWriteSecrets(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000901/connector/feishu/provision/poll", strings.NewReader(`{"device_code":"dc","interval_sec":5}`))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"status":"pending"`) || !strings.Contains(res.Body.String(), `"next_interval_sec":10`) {
 		t.Fatalf("unexpected pending response: %s", res.Body.String())
 	}
@@ -1563,9 +1511,7 @@ func TestFeishuProvisioningPollSuccessStoresSecretAndBindsWebSocketConnector(t *
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000901/connector/feishu/provision/poll", strings.NewReader(`{"device_code":"dc","interval_sec":5}`))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if tokenBody["app_id"] != "cli_qr_bound" || tokenBody["app_secret"] != "qr-secret" {
 		t.Fatalf("unexpected token exchange body: %+v", tokenBody)
 	}
@@ -1594,9 +1540,7 @@ func TestFeishuMessageEventMapsInvalidJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", bytes.NewBufferString(`{`))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 }
 
 func TestFeishuMessageEventMapsUnknownStoreErrors(t *testing.T) {
@@ -1617,9 +1561,7 @@ func TestFeishuMessageEventMapsUnknownStoreErrors(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 			res := httptest.NewRecorder()
 			r.ServeHTTP(res, req)
-			if res.Code != http.StatusBadRequest {
-				t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-			}
+			requireStatus(t, res, http.StatusBadRequest)
 		})
 	}
 }
@@ -1632,9 +1574,7 @@ func TestFeishuMessageEventMapsInternalStoreError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusInternalServerError)
 }
 
 func TestFeishuMessageEventVerifiesToken(t *testing.T) {
@@ -1646,9 +1586,7 @@ func TestFeishuMessageEventVerifiesToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if capturing.lastInput.ExternalMessageID != "om_message" {
 		t.Fatalf("expected normal flow after token verification, got %+v", capturing.lastInput)
 	}
@@ -1662,9 +1600,7 @@ func TestFeishuMessageEventRejectsBadToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusUnauthorized)
 }
 
 func TestFeishuMessageEventChallengeEcho(t *testing.T) {
@@ -1688,9 +1624,7 @@ func TestFeishuMessageEventChallengeRejectsBadToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusUnauthorized)
 }
 
 func TestConfigureConversationExternalRefRoute(t *testing.T) {
@@ -1701,9 +1635,7 @@ func TestConfigureConversationExternalRefRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/"+testConversationID+"/external-ref", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	bodyText := res.Body.String()
 	if !strings.Contains(bodyText, `"platform":"feishu"`) || !strings.Contains(bodyText, `"external_id":"oc_demo"`) {
 		t.Fatalf("expected external conversation mapping, got %s", bodyText)
@@ -1718,9 +1650,7 @@ func TestGatewayInboundValidatesRequiredFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/dev/gateway/inbound", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 }
 
 func TestWorkspaceAgentsRouteReturnsEnabledAgents(t *testing.T) {
@@ -1730,9 +1660,7 @@ func TestWorkspaceAgentsRouteReturnsEnabledAgents(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agents", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), "Product Agent") || !strings.Contains(res.Body.String(), "Backend Agent") || !strings.Contains(res.Body.String(), "TestAgent") {
 		t.Fatalf("expected three enabled agents, got %s", res.Body.String())
 	}
@@ -1746,9 +1674,7 @@ func TestConfigureAgentConnectorRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000010/connector", body)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	bodyText := res.Body.String()
 	if !strings.Contains(bodyText, `"connector_type":"http"`) || !strings.Contains(bodyText, `"endpoint":"http://127.0.0.1:19090/agent"`) {
 		t.Fatalf("expected configured http connector response, got %s", bodyText)
@@ -1789,9 +1715,7 @@ func TestConversationTimelineRouteReturnsMessagesAndRuns(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations/"+testConversationID+"/timeline", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, "user message") || !strings.Contains(body, "agent output") || !strings.Contains(body, `"status":"completed"`) {
 		t.Fatalf("expected timeline messages and run status, got %s", body)
@@ -1805,9 +1729,7 @@ func TestAgentRunRouteReturnsDetail(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent-runs/"+testRunID, nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"status":"completed"`) || !strings.Contains(body, `"output_message"`) || !strings.Contains(body, "agent output") {
 		t.Fatalf("expected completed run detail with output message, got %s", body)
@@ -1821,9 +1743,7 @@ func TestGatewayOutboundRoutes(t *testing.T) {
 	listReq := httptest.NewRequest(http.MethodGet, "/dev/gateway/outbound?gateway=feishu", nil)
 	listRes := httptest.NewRecorder()
 	r.ServeHTTP(listRes, listReq)
-	if listRes.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", listRes.Code, listRes.Body.String())
-	}
+	requireStatus(t, listRes, http.StatusOK)
 	// The endpoint returns the inflight slot view rather than a P1
 	// outbound queue.
 	if !strings.Contains(listRes.Body.String(), `"external_chat_id":"oc_demo"`) ||
@@ -1836,9 +1756,7 @@ func TestGatewayOutboundRoutes(t *testing.T) {
 	deliverReq := httptest.NewRequest(http.MethodPost, "/dev/gateway/outbound/00000000-0000-0000-0000-000000000202/delivered", body)
 	deliverRes := httptest.NewRecorder()
 	r.ServeHTTP(deliverRes, deliverReq)
-	if deliverRes.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", deliverRes.Code, deliverRes.Body.String())
-	}
+	requireStatus(t, deliverRes, http.StatusOK)
 	// Only gateway_delivered_at is persisted; delivery_id /
 	// delivery_status fields were dropped with the P1 worker.
 	if !strings.Contains(deliverRes.Body.String(), `"gateway_delivered_at"`) {
@@ -1853,9 +1771,7 @@ func TestWorkspaceAgentRunsRoutePassesStatusFilter(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs?status=queued", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"status":"queued"`) || strings.Contains(body, `"status":"completed"`) {
 		t.Fatalf("expected queued-only run response, got %s", body)
@@ -1871,9 +1787,7 @@ func TestWorkspaceAgentRunsRouteAcceptsMultipleStatuses(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs?status=running,queued", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	// Stub only has queued+completed; queued must survive, completed must not.
 	if !strings.Contains(body, `"status":"queued"`) || strings.Contains(body, `"status":"completed"`) {
@@ -1894,9 +1808,7 @@ func TestWorkspaceAgentRunsRouteReturnsPaginationEnvelope(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs?limit=1&offset=1", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	// Stub returns 2 runs total (newest first: completed @ 0:01, then
 	// queued @ 0:00). offset=1+limit=1 → second item = queued.
@@ -1921,9 +1833,7 @@ func TestWorkspaceAgentMetricsRouteReturnsSnapshot(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agents/00000000-0000-0000-0000-000000000009/metrics", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"window_days":30`) {
 		t.Fatalf("expected default window_days=30, got %s", body)
@@ -1940,9 +1850,7 @@ func TestWorkspaceAgentMetricsRouteHonorsDaysParam(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agents/00000000-0000-0000-0000-000000000009/metrics?days=7", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"window_days":7`) {
 		t.Fatalf("expected window_days=7 in response, got %s", res.Body.String())
 	}
@@ -1955,9 +1863,7 @@ func TestAgentRunEventsRouteReturnsEventsWithCursor(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/agent-runs/"+testRunID+"/events?after_sequence=1", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"events"`) || !strings.Contains(body, `"sequence":2`) || !strings.Contains(body, `"event_kind":"run.completed"`) || strings.Contains(body, `"sequence":1`) {
 		t.Fatalf("expected cursor-filtered events response, got %s", body)
@@ -1971,9 +1877,7 @@ func TestAgentRunEventsRouteRejectsWorkspaceMismatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000009999/agent-runs/"+testRunID+"/events", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusNotFound)
 }
 
 func TestWorkspaceAuditRecordsRouteFiltersBySource(t *testing.T) {
@@ -1983,9 +1887,7 @@ func TestWorkspaceAuditRecordsRouteFiltersBySource(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/audit-records?source=runtime&limit=10", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	// runtime row stays, admin row gets filtered out
 	if !strings.Contains(body, `"audit_records"`) || !strings.Contains(body, `"source":"runtime"`) || strings.Contains(body, `"source":"admin"`) {
@@ -2000,9 +1902,7 @@ func TestWorkspaceAuditRecordsRouteRejectsBadWorkspaceID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/not-a-uuid/audit-records", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 }
 
 func TestWorkspaceUsageRouteReturnsUsageAndFiltersRun(t *testing.T) {
@@ -2012,9 +1912,7 @@ func TestWorkspaceUsageRouteReturnsUsageAndFiltersRun(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/usage?agent_run_id="+testRunID+"&limit=1", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"usage_logs"`) || !strings.Contains(body, `"agent_run_id":"`+testRunID+`"`) || !strings.Contains(body, `"input_tokens":12`) || strings.Contains(body, `"agent_run_id":"00000000-0000-0000-0000-000000000102"`) {
 		t.Fatalf("expected filtered usage logs, got %s", body)
@@ -2059,9 +1957,7 @@ func TestWorkspaceUsageRouteRejectsMalformedAgentRunID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/usage?agent_run_id=not-a-uuid", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 }
 
 type stubRuntimeStore struct {
@@ -3329,9 +3225,7 @@ func TestListWorkspaceConversationsAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000004/conversations", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"conversations"`) || !strings.Contains(body, `"Demo Group"`) || !strings.Contains(body, `"message_count":2`) {
 		t.Fatalf("expected conversation list payload, got %s", body)
@@ -3365,9 +3259,7 @@ func TestListMyWorkspacesAPIDefaultUser(t *testing.T) {
 	req = req.WithContext(auth.WithUserID(req.Context(), store.DefaultDevFixtureIDs().UserID))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	// Default user is the dev seed UserID — header fallback path.
 	if !strings.Contains(body, `"user_id":"00000000-0000-0000-0000-000000000001"`) {
@@ -3386,9 +3278,7 @@ func TestListMyWorkspacesAPICustomUser(t *testing.T) {
 	req = req.WithContext(auth.WithUserID(req.Context(), "00000000-0000-0000-0000-0000000000aa"))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"user_id":"00000000-0000-0000-0000-0000000000aa"`) {
 		t.Fatalf("expected custom user_id echoed back, got %s", res.Body.String())
 	}
@@ -3419,9 +3309,7 @@ func TestListMyWorkspacesAPIPlatformAdminListsAll(t *testing.T) {
 	req = req.WithContext(auth.WithUserID(req.Context(), adminID))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"Other Workspace"`) {
 		t.Fatalf("platform admin should see workspaces they're not a member of; got %s", body)
@@ -3438,9 +3326,7 @@ func TestCreateWorkspaceAPIHappyPath(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	if !strings.Contains(res.Body.String(), `"workspace"`) || !strings.Contains(res.Body.String(), `"member"`) {
 		t.Fatalf("expected workspace + member envelope, got %s", res.Body.String())
 	}
@@ -3491,9 +3377,7 @@ func TestUpdateWorkspaceAPIHappyPath(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"name":"Renamed"`) {
 		t.Fatalf("expected new name echoed, got %s", res.Body.String())
 	}
@@ -3521,9 +3405,7 @@ func TestArchiveWorkspaceAPIHappyPath(t *testing.T) {
 	req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/archive", nil))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 }
 
 func TestArchiveWorkspaceAPIUnknown(t *testing.T) {
@@ -3810,9 +3692,7 @@ func TestCreateConversationAPI(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusCreated)
 	body := res.Body.String()
 	if !strings.Contains(body, `"title":"Troubleshoot API"`) || !strings.Contains(body, `"surface":"web"`) || !strings.Contains(body, `"form":"thread"`) {
 		t.Fatalf("expected created conversation echoed, got %s", body)
@@ -3878,9 +3758,7 @@ func TestGetConversationAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations/00000000-0000-0000-0000-000000000c10", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"Demo Group"`) {
 		t.Fatalf("expected Demo Group payload, got %s", res.Body.String())
 	}
@@ -3888,9 +3766,7 @@ func TestGetConversationAPI(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/conversations/00000000-0000-0000-0000-000000000404", nil)
 	res = httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusNotFound)
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/conversations/not-a-uuid", nil)
 	res = httptest.NewRecorder()
@@ -3907,9 +3783,7 @@ func TestDisableAgentAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/disable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"status":"disabled"`) {
 		t.Fatalf("expected disabled status, got %s", res.Body.String())
 	}
@@ -3922,9 +3796,7 @@ func TestEnableAgentAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/enable", nil)
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	if !strings.Contains(res.Body.String(), `"status":"active"`) {
 		t.Fatalf("expected active status, got %s", res.Body.String())
 	}

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // runtimeCredentialStubStore extends the role-aware test store with
@@ -141,9 +141,7 @@ func TestPutRuntimeCredentialHappyPath(t *testing.T) {
 		`{"api_key":"e2b_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 		testOwnerUserID))
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	var body runtimeCredentialResponse
 	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -214,9 +212,7 @@ func TestPutRuntimeCredentialMissingServerMasterKey(t *testing.T) {
 		`{"api_key":"e2b_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 		testOwnerUserID))
 
-	if res.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusServiceUnavailable)
 }
 
 // TestPutRuntimeCredentialEmptyAPIKey — payload validates but contains
@@ -235,9 +231,7 @@ func TestPutRuntimeCredentialEmptyAPIKey(t *testing.T) {
 		`{"api_key":"   "}`,
 		testOwnerUserID))
 
-	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusBadRequest)
 }
 
 // TestPutRuntimeCredentialMemberForbidden — workspace member (not
@@ -255,9 +249,7 @@ func TestPutRuntimeCredentialMemberForbidden(t *testing.T) {
 		`{"api_key":"e2b_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 		testMemberUserID))
 
-	if res.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusForbidden)
 	if calls := stubStore.snapshotRegister(); len(calls) != 0 {
 		t.Errorf("expected zero Register calls on RBAC reject, got %d", len(calls))
 	}
@@ -276,9 +268,7 @@ func TestDeleteRuntimeCredentialIdempotent(t *testing.T) {
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, runtimeCredentialDELETE(t, testOwnerUserID))
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	var body runtimeCredentialResponse
 	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -302,9 +292,7 @@ func TestDeleteRuntimeCredentialMemberForbidden(t *testing.T) {
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, runtimeCredentialDELETE(t, testMemberUserID))
 
-	if res.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusForbidden)
 }
 
 // Compile-time check: stub implementations satisfy the RuntimeStore
