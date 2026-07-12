@@ -124,8 +124,7 @@ type ModelConfig struct {
 // SandboxConfig drives the OpenCode runner provider selection.
 // Runner=local (default) forks opencode on the host.
 // Runner=sandbox routes through the E2B sandbox provider (E2B API
-// key is read inside the e2b package via the same env merge). The
-// pre-warmed sandbox pool is admin-managed via the Runtime page.
+// key is read inside the e2b package via the same env merge).
 type SandboxConfig struct {
 	// Runner picks the OpenCode runner provider: "local" or
 	// "sandbox". Default "local". Env PARSAR_OPENCODE_RUNNER.

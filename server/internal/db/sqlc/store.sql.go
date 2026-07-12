@@ -1180,21 +1180,6 @@ func (q *Queries) CountActiveFeishuBotAgents(ctx context.Context) (int32, error)
 	return column_1, err
 }
 
-const countActiveSandboxPoolEntries = `-- name: CountActiveSandboxPoolEntries :one
-select count(*)::bigint
-from sandboxes
-where workspace_id = $1::uuid
-  and killed_at is null
-  and allocation_status in ('pooled', 'bound')
-`
-
-func (q *Queries) CountActiveSandboxPoolEntries(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveSandboxPoolEntries, workspaceID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const countActiveWorkspaceOwners = `-- name: CountActiveWorkspaceOwners :one
 select count(*)::bigint as owner_count
 from workspace_members wm
@@ -2272,59 +2257,6 @@ func (q *Queries) CreateSandboxOfflineNotice(ctx context.Context, arg CreateSand
 		arg.Content,
 		arg.Metadata,
 		arg.Now,
-	)
-	return err
-}
-
-const createSandboxPoolEntry = `-- name: CreateSandboxPoolEntry :exec
-
-insert into sandboxes(
-  id, workspace_id, sandbox_id, template_id,
-  lifecycle_status, allocation_status,
-  created_at, last_active_at, last_renewed_at,
-  expires_at, timeout_seconds
-)
-values (
-  gen_random_uuid(), $1::uuid, $2, $3,
-  'running', 'pooled',
-  $4, $4, $4,
-  $5, $6
-)
-on conflict (sandbox_id) do nothing
-`
-
-type CreateSandboxPoolEntryParams struct {
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	SandboxID      string             `json:"sandbox_id"`
-	TemplateID     string             `json:"template_id"`
-	Now            pgtype.Timestamptz `json:"now"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	TimeoutSeconds int32              `json:"timeout_seconds"`
-}
-
-// ============================================================
-// sandbox pool view over sandboxes (workspace-scoped admin lifecycle)
-// ============================================================
-//
-// Pool is in-memory source-of-truth at runtime; these queries write
-// through for admin UI listings and post-restart cleanup. Failure
-// to write does NOT abort the pool path (best-effort; pool.go logs
-// and continues).
-//
-// The pool is no longer a physical table. Pool entries are provider
-// sandbox instances in sandboxes with allocation_status='pooled'.
-// Timeout / expiry / auto-renew are sandbox lifecycle attributes, so
-// they live on the same row that later becomes allocation_status='bound'
-// when an agent claims it.
-// Insert when admin batch-spawn creates a fresh blank pool sandbox.
-func (q *Queries) CreateSandboxPoolEntry(ctx context.Context, arg CreateSandboxPoolEntryParams) error {
-	_, err := q.db.Exec(ctx, createSandboxPoolEntry,
-		arg.WorkspaceID,
-		arg.SandboxID,
-		arg.TemplateID,
-		arg.Now,
-		arg.ExpiresAt,
-		arg.TimeoutSeconds,
 	)
 	return err
 }
@@ -5473,60 +5405,6 @@ func (q *Queries) GetPasswordHashByEmail(ctx context.Context, email string) (Get
 	return i, err
 }
 
-const getSandboxPoolEntry = `-- name: GetSandboxPoolEntry :one
-select
-  sandbox_id,
-  template_id,
-  case allocation_status::text
-    when 'pooled' then case lifecycle_status::text when 'renewing' then 'renewing' else 'idle' end
-    when 'bound' then 'claimed'
-    else lifecycle_status::text
-  end::text as status,
-  created_at,
-  coalesce(last_renewed_at, created_at)::timestamptz as last_renewed_at,
-  killed_at,
-  expires_at,
-  timeout_seconds,
-  auto_renew_threshold_seconds
-from sandboxes
-where sandbox_id = $1
-  and workspace_id = $2::uuid
-`
-
-type GetSandboxPoolEntryParams struct {
-	SandboxID   string      `json:"sandbox_id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-type GetSandboxPoolEntryRow struct {
-	SandboxID                 string             `json:"sandbox_id"`
-	TemplateID                string             `json:"template_id"`
-	Status                    string             `json:"status"`
-	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
-	LastRenewedAt             pgtype.Timestamptz `json:"last_renewed_at"`
-	KilledAt                  pgtype.Timestamptz `json:"killed_at"`
-	ExpiresAt                 pgtype.Timestamptz `json:"expires_at"`
-	TimeoutSeconds            int32              `json:"timeout_seconds"`
-	AutoRenewThresholdSeconds int32              `json:"auto_renew_threshold_seconds"`
-}
-
-func (q *Queries) GetSandboxPoolEntry(ctx context.Context, arg GetSandboxPoolEntryParams) (GetSandboxPoolEntryRow, error) {
-	row := q.db.QueryRow(ctx, getSandboxPoolEntry, arg.SandboxID, arg.WorkspaceID)
-	var i GetSandboxPoolEntryRow
-	err := row.Scan(
-		&i.SandboxID,
-		&i.TemplateID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.LastRenewedAt,
-		&i.KilledAt,
-		&i.ExpiresAt,
-		&i.TimeoutSeconds,
-		&i.AutoRenewThresholdSeconds,
-	)
-	return i, err
-}
-
 const getScheduledTask = `-- name: GetScheduledTask :one
 select
   t.id::text                                  as id,
@@ -6447,80 +6325,6 @@ func (q *Queries) ListActiveSandboxBindingsForWorkspace(ctx context.Context, arg
 			&i.LastActiveAt,
 			&i.KilledAt,
 			&i.Metadata,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listActiveSandboxPoolEntries = `-- name: ListActiveSandboxPoolEntries :many
-select
-  sandbox_id,
-  template_id,
-  case allocation_status::text
-    when 'pooled' then case lifecycle_status::text when 'renewing' then 'renewing' else 'idle' end
-    when 'bound' then 'claimed'
-    else lifecycle_status::text
-  end::text as status,
-  created_at,
-  coalesce(last_renewed_at, created_at)::timestamptz as last_renewed_at,
-  killed_at,
-  expires_at,
-  timeout_seconds,
-  auto_renew_threshold_seconds
-from sandboxes
-where workspace_id = $1::uuid
-  and killed_at is null
-  and allocation_status in ('pooled', 'bound')
-order by created_at desc
-limit $3::int
-offset $2::int
-`
-
-type ListActiveSandboxPoolEntriesParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	OffsetN     int32       `json:"offset_n"`
-	LimitN      int32       `json:"limit_n"`
-}
-
-type ListActiveSandboxPoolEntriesRow struct {
-	SandboxID                 string             `json:"sandbox_id"`
-	TemplateID                string             `json:"template_id"`
-	Status                    string             `json:"status"`
-	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
-	LastRenewedAt             pgtype.Timestamptz `json:"last_renewed_at"`
-	KilledAt                  pgtype.Timestamptz `json:"killed_at"`
-	ExpiresAt                 pgtype.Timestamptz `json:"expires_at"`
-	TimeoutSeconds            int32              `json:"timeout_seconds"`
-	AutoRenewThresholdSeconds int32              `json:"auto_renew_threshold_seconds"`
-}
-
-// Admin UI page: workspace-scoped sandbox-pool view. Claimed/bound
-// rows stay visible until a real kill so admins can see handoff.
-func (q *Queries) ListActiveSandboxPoolEntries(ctx context.Context, arg ListActiveSandboxPoolEntriesParams) ([]ListActiveSandboxPoolEntriesRow, error) {
-	rows, err := q.db.Query(ctx, listActiveSandboxPoolEntries, arg.WorkspaceID, arg.OffsetN, arg.LimitN)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListActiveSandboxPoolEntriesRow{}
-	for rows.Next() {
-		var i ListActiveSandboxPoolEntriesRow
-		if err := rows.Scan(
-			&i.SandboxID,
-			&i.TemplateID,
-			&i.Status,
-			&i.CreatedAt,
-			&i.LastRenewedAt,
-			&i.KilledAt,
-			&i.ExpiresAt,
-			&i.TimeoutSeconds,
-			&i.AutoRenewThresholdSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -8056,54 +7860,6 @@ func (q *Queries) ListPendingWorkspaceInvitations(ctx context.Context, arg ListP
 	return items, nil
 }
 
-const listSandboxPoolEntriesDueForAutoRenew = `-- name: ListSandboxPoolEntriesDueForAutoRenew :many
-select
-  sandbox_id,
-  template_id,
-  expires_at,
-  timeout_seconds,
-  auto_renew_threshold_seconds
-from sandboxes
-where workspace_id = $1::uuid
-  and killed_at is null
-  and auto_renew_threshold_seconds > 0
-order by expires_at asc
-`
-
-type ListSandboxPoolEntriesDueForAutoRenewRow struct {
-	SandboxID                 string             `json:"sandbox_id"`
-	TemplateID                string             `json:"template_id"`
-	ExpiresAt                 pgtype.Timestamptz `json:"expires_at"`
-	TimeoutSeconds            int32              `json:"timeout_seconds"`
-	AutoRenewThresholdSeconds int32              `json:"auto_renew_threshold_seconds"`
-}
-
-func (q *Queries) ListSandboxPoolEntriesDueForAutoRenew(ctx context.Context, workspaceID pgtype.UUID) ([]ListSandboxPoolEntriesDueForAutoRenewRow, error) {
-	rows, err := q.db.Query(ctx, listSandboxPoolEntriesDueForAutoRenew, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSandboxPoolEntriesDueForAutoRenewRow{}
-	for rows.Next() {
-		var i ListSandboxPoolEntriesDueForAutoRenewRow
-		if err := rows.Scan(
-			&i.SandboxID,
-			&i.TemplateID,
-			&i.ExpiresAt,
-			&i.TimeoutSeconds,
-			&i.AutoRenewThresholdSeconds,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listScheduledTasksByAgent = `-- name: ListScheduledTasksByAgent :many
 select
   t.id::text                                  as id,
@@ -9547,66 +9303,6 @@ func (q *Queries) MarkSandboxBindingKilled(ctx context.Context, arg MarkSandboxB
 	return err
 }
 
-const markSandboxPoolEntryClaimed = `-- name: MarkSandboxPoolEntryClaimed :exec
-update sandboxes
-set allocation_status = 'bound',
-    agent_id   = $1::uuid,
-    cache_key          = $2,
-    last_renewed_at    = $3,
-    last_active_at     = $3,
-    lifecycle_status   = 'running'
-where sandbox_id = $4
-  and workspace_id = $5::uuid
-  and allocation_status = 'pooled'
-  and killed_at is null
-`
-
-type MarkSandboxPoolEntryClaimedParams struct {
-	AgentID     pgtype.UUID        `json:"agent_id"`
-	CacheKey    pgtype.Text        `json:"cache_key"`
-	Now         pgtype.Timestamptz `json:"now"`
-	SandboxID   string             `json:"sandbox_id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-}
-
-// Claim handoff: same sandbox row becomes a bound sandbox for one
-// workspace/agent/cache_key. The in-memory pool owns the actual
-// claim selection; this query records the attribution.
-func (q *Queries) MarkSandboxPoolEntryClaimed(ctx context.Context, arg MarkSandboxPoolEntryClaimedParams) error {
-	_, err := q.db.Exec(ctx, markSandboxPoolEntryClaimed,
-		arg.AgentID,
-		arg.CacheKey,
-		arg.Now,
-		arg.SandboxID,
-		arg.WorkspaceID,
-	)
-	return err
-}
-
-const markSandboxPoolEntryKilled = `-- name: MarkSandboxPoolEntryKilled :exec
-update sandboxes
-set lifecycle_status  = $1,
-    allocation_status = 'released',
-    killed_at         = $2,
-    last_renewed_at   = $2,
-    last_active_at    = $2
-where sandbox_id = $3
-  and killed_at is null
-`
-
-type MarkSandboxPoolEntryKilledParams struct {
-	Status    string             `json:"status"`
-	Now       pgtype.Timestamptz `json:"now"`
-	SandboxID string             `json:"sandbox_id"`
-}
-
-// Terminal kill for pool/admin paths. Use status 'killed' or
-// 'killed_orphaned'. The row remains as sandbox history.
-func (q *Queries) MarkSandboxPoolEntryKilled(ctx context.Context, arg MarkSandboxPoolEntryKilledParams) error {
-	_, err := q.db.Exec(ctx, markSandboxPoolEntryKilled, arg.Status, arg.Now, arg.SandboxID)
-	return err
-}
-
 const markScheduledTaskDispatched = `-- name: MarkScheduledTaskDispatched :exec
 update scheduled_tasks
 set last_run_at = $1::timestamptz,
@@ -10296,24 +9992,6 @@ func (q *Queries) SetBuiltinCapabilityEnabled(ctx context.Context, arg SetBuilti
 	return err
 }
 
-const setSandboxPoolAutoRenewThreshold = `-- name: SetSandboxPoolAutoRenewThreshold :exec
-update sandboxes
-set auto_renew_threshold_seconds = $1
-where sandbox_id = $2
-  and killed_at is null
-`
-
-type SetSandboxPoolAutoRenewThresholdParams struct {
-	ThresholdSeconds int32  `json:"threshold_seconds"`
-	SandboxID        string `json:"sandbox_id"`
-}
-
-// Admin PATCH: set per-sandbox auto-renew threshold. 0 turns it off.
-func (q *Queries) SetSandboxPoolAutoRenewThreshold(ctx context.Context, arg SetSandboxPoolAutoRenewThresholdParams) error {
-	_, err := q.db.Exec(ctx, setSandboxPoolAutoRenewThreshold, arg.ThresholdSeconds, arg.SandboxID)
-	return err
-}
-
 const setWorkspaceRuntimeCredentialSecret = `-- name: SetWorkspaceRuntimeCredentialSecret :exec
 update workspaces
    set config = jsonb_set(config, '{runtime_credential_secret_id}', to_jsonb($1::text), true),
@@ -10731,28 +10409,6 @@ func (q *Queries) SweepOrphanedSandboxBindings(ctx context.Context, now pgtype.T
 	return result.RowsAffected(), nil
 }
 
-const sweepOrphanedSandboxPoolEntries = `-- name: SweepOrphanedSandboxPoolEntries :execrows
-update sandboxes
-set lifecycle_status  = 'killed_orphaned',
-    allocation_status = 'released',
-    killed_at         = $1,
-    last_renewed_at   = $1,
-    last_active_at    = $1
-where killed_at is null
-  and allocation_status in ('pooled', 'bound')
-  and lifecycle_status in ('running', 'renewing', 'spawning', 'killing')
-`
-
-// Server startup: every active pooled/bound pool row from the previous
-// lifetime has lost in-memory tracking. Mark them killed_orphaned.
-func (q *Queries) SweepOrphanedSandboxPoolEntries(ctx context.Context, now pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, sweepOrphanedSandboxPoolEntries, now)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const touchConnectorSessionBinding = `-- name: TouchConnectorSessionBinding :exec
 update connector_session_bindings
 set last_active_at = now()
@@ -10833,29 +10489,6 @@ type TouchSandboxBindingByCacheKeyParams struct {
 // the persistent sandbox Provider's OnCacheHit hook.
 func (q *Queries) TouchSandboxBindingByCacheKey(ctx context.Context, arg TouchSandboxBindingByCacheKeyParams) error {
 	_, err := q.db.Exec(ctx, touchSandboxBindingByCacheKey, arg.Now, arg.CacheKey)
-	return err
-}
-
-const touchSandboxPoolRenewed = `-- name: TouchSandboxPoolRenewed :exec
-update sandboxes
-set last_renewed_at  = $1,
-    last_active_at   = $1,
-    expires_at       = $2,
-    lifecycle_status = 'running'
-where sandbox_id = $3
-  and killed_at is null
-`
-
-type TouchSandboxPoolRenewedParams struct {
-	Now       pgtype.Timestamptz `json:"now"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	SandboxID string             `json:"sandbox_id"`
-}
-
-// Bump last_renewed_at + roll expires_at forward after a successful
-// Renew (manual or auto). Idempotent against rows killed concurrently.
-func (q *Queries) TouchSandboxPoolRenewed(ctx context.Context, arg TouchSandboxPoolRenewedParams) error {
-	_, err := q.db.Exec(ctx, touchSandboxPoolRenewed, arg.Now, arg.ExpiresAt, arg.SandboxID)
 	return err
 }
 

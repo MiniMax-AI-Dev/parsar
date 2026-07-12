@@ -398,10 +398,6 @@ func main() {
 
 		// SweepOrphanedSandboxBindings is intentionally kept in the
 		// store layer for a future heartbeat-driven reaper to reuse.
-		// The startup sweep was written for the legacy Acquire flow
-		// whose envd token lived only in the previous process; under
-		// agent_daemon the sandbox outlives the server process and the
-		// daemon reconnects via persisted runner_credential.
 
 		// PublicWSURL derives from cfg.Server.PublicURL by swapping the
 		// scheme (http→ws, https→wss). Dev falls back to 127.0.0.1:18080;

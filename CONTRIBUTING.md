@@ -174,10 +174,6 @@ description and keep ownership on the side listed here.
   it must be owned by an explicit local supervisor/runtime provider with a
   reviewed Docker socket boundary, not by ad hoc server-side `docker run`
   calls.
-- Eager acquisition must be best-effort. Failure to prewarm a sandbox should
-  surface as runtime health/provisioning state, not crash unrelated startup
-  paths.
-
 ### API, DB, and generated surfaces
 
 - New persistent state starts with a migration and sqlc query. Avoid direct
