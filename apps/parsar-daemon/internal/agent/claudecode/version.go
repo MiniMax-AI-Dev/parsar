@@ -1,12 +1,10 @@
 package claudecode
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"os/exec"
-	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/versionprobe"
 )
 
 // InstallURL points to the official Claude Code install instructions.
@@ -24,32 +22,9 @@ var ErrCLINotFound = errors.New("claude CLI not found")
 // error wraps ErrCLINotFound; on other failures the wrapped error
 // keeps the raw stderr.
 func CheckCLIAvailable(ctx context.Context, binary string) (string, error) {
-	if binary == "" {
-		binary = "claude"
-	}
-
-	if _, lookErr := exec.LookPath(binary); lookErr != nil {
-		return "", fmt.Errorf("%w: %s", ErrCLINotFound, binary)
-	}
-
-	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, binary, "--version")
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", fmt.Errorf("claude --version failed: %s", msg)
-	}
-
-	out := strings.TrimSpace(stdout.String())
-	if i := strings.IndexByte(out, '\n'); i >= 0 {
-		out = out[:i]
-	}
-	if out == "" {
-		return "", fmt.Errorf("claude --version returned empty output")
-	}
-	return out, nil
+	return versionprobe.Check(ctx, binary, versionprobe.Config{
+		Name:          "claude",
+		DefaultBinary: "claude",
+		MissingError:  ErrCLINotFound,
+	})
 }
