@@ -1618,10 +1618,9 @@ func defaultFeishuSharedBotEnv(env func(string) string) feishuSharedBotEnv {
 }
 
 // buildFeishuWebSocketManager constructs the Feishu event-websocket inbound
-// manager from env. Returns nil when disabled.
+// manager for DB-driven workspace connectors and optional legacy env bots.
 //
 // Env contract:
-//   - PARSAR_FEISHU_WEBSOCKET                (default off; "true" enables)
 //   - PARSAR_FEISHU_WS_REFRESH_SECONDS       (optional; default 30, cap 600)
 //   - PARSAR_FEISHU_OPENAPI_BASE_URL         (optional; default SDK domain)
 //   - PARSAR_FEISHU_DEFAULT_BOT_APP_ID       (optional; falls back to PARSAR_FEISHU_APP_ID)
@@ -1629,12 +1628,9 @@ func defaultFeishuSharedBotEnv(env func(string) string) feishuSharedBotEnv {
 //   - PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID      (optional; self-message dedup)
 //   - PARSAR_MASTER_KEY                      (REQUIRED when enabled)
 func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*inbound.Manager, error) {
-	if !truthy(env("PARSAR_FEISHU_WEBSOCKET")) {
-		return nil, nil
-	}
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
-		return nil, errors.New("PARSAR_FEISHU_WEBSOCKET=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+		return nil, nil
 	}
 	secretsSvc, err := secrets.New(masterKey)
 	if err != nil {
@@ -2264,11 +2260,10 @@ func (r inboundPromptForUserChoiceRouter) SubmitPromptForUserChoice(ctx context.
 	return lastErr
 }
 
-// buildFeishuOutboundWorker constructs the Feishu outbound poll worker
-// from env. Returns nil (silent skip) when the feature flag is off.
+// buildFeishuOutboundWorker constructs the outbound worker for DB-driven
+// workspace connectors and optional legacy env bots.
 //
 // Env contract:
-//   - PARSAR_FEISHU_OUTBOUND                (default off; "true" enables)
 //   - PARSAR_FEISHU_OUTBOUND_POLL_SECONDS   (optional; default 10, cap 600)
 //   - PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT    (optional; default 32, cap 256)
 //   - PARSAR_FEISHU_OPENAPI_BASE_URL        (optional; default Feishu prod)
@@ -2277,12 +2272,9 @@ func (r inboundPromptForUserChoiceRouter) SubmitPromptForUserChoice(ctx context.
 //   - PARSAR_MASTER_KEY                     (REQUIRED when enabled — same
 //     key used by the secret vault encryptor)
 func buildFeishuOutboundWorker(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, deviceResolver inflight.DeviceResolver, publicURL string) (*inflight.Worker, error) {
-	if !truthy(env("PARSAR_FEISHU_OUTBOUND")) {
-		return nil, nil
-	}
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
-		return nil, errors.New("PARSAR_FEISHU_OUTBOUND=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+		return nil, nil
 	}
 	secretsSvc, err := secrets.New(masterKey)
 	if err != nil {

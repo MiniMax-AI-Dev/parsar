@@ -117,8 +117,6 @@ services:
       #   openssl rand -hex 32
       PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
       PARSAR_FEISHU_APP_REGISTRATION: "${PARSAR_FEISHU_APP_REGISTRATION:-}"
-      PARSAR_FEISHU_WEBSOCKET: "${PARSAR_FEISHU_WEBSOCKET:-}"
-      PARSAR_FEISHU_OUTBOUND: "${PARSAR_FEISHU_OUTBOUND:-}"
       # Workspace-dimension IM connector reconcilers (workspace_im_connectors
       # table → one Socket Mode / Gateway runner per workspace|app_id, hot-
       # reloading on token rotation). Opt-in gates read in main.go

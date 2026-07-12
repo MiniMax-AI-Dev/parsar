@@ -7,6 +7,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 func TestDecideFeishuStartup(t *testing.T) {
@@ -227,6 +228,48 @@ func TestDefaultFeishuSharedBotEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWorkspaceFeishuWorkersFollowStoredConnectorConfiguration(t *testing.T) {
+	dbStore := store.New(nil)
+
+	t.Run("missing master key skips workers", func(t *testing.T) {
+		env := envMap(nil)
+		manager, err := buildFeishuWebSocketManager(env, dbStore, nil, "")
+		if err != nil {
+			t.Fatalf("buildFeishuWebSocketManager() error = %v", err)
+		}
+		if manager != nil {
+			t.Fatal("buildFeishuWebSocketManager() returned manager without master key")
+		}
+		worker, err := buildFeishuOutboundWorker(env, dbStore, nil, nil, "")
+		if err != nil {
+			t.Fatalf("buildFeishuOutboundWorker() error = %v", err)
+		}
+		if worker != nil {
+			t.Fatal("buildFeishuOutboundWorker() returned worker without master key")
+		}
+	})
+
+	t.Run("master key starts workers without feature flags", func(t *testing.T) {
+		env := envMap(map[string]string{
+			"PARSAR_MASTER_KEY": "0000000000000000000000000000000000000000000000000000000000000000",
+		})
+		manager, err := buildFeishuWebSocketManager(env, dbStore, nil, "")
+		if err != nil {
+			t.Fatalf("buildFeishuWebSocketManager() error = %v", err)
+		}
+		if manager == nil {
+			t.Fatal("buildFeishuWebSocketManager() returned nil with master key")
+		}
+		worker, err := buildFeishuOutboundWorker(env, dbStore, nil, nil, "")
+		if err != nil {
+			t.Fatalf("buildFeishuOutboundWorker() error = %v", err)
+		}
+		if worker == nil {
+			t.Fatal("buildFeishuOutboundWorker() returned nil with master key")
+		}
+	})
 }
 
 func TestResolveRuntimeProfile(t *testing.T) {
