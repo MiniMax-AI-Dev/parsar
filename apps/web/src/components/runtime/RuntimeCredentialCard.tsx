@@ -59,8 +59,6 @@ export function RuntimeCredentialCard({ workspaceID, isAdmin, variant = "card" }
     )
   }
 
-  // RuntimeStatusBanner already surfaces "unreachable"; suppress here
-  // to avoid duplicating the warning.
   if (statusQ.error || !statusQ.data) {
     return null
   }
