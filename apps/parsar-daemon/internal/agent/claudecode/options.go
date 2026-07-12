@@ -286,10 +286,6 @@ type userContentSource struct {
 	Data      string `json:"data"`
 }
 
-func buildUserMessage(prompt string) ([]byte, error) {
-	return buildUserMessageWithAttachments(prompt, nil)
-}
-
 // buildUserMessageWithAttachments is the multimodal-aware variant. With
 // no attachments, the output is byte-identical to the bare-string
 // Content path so existing log greps for prompt content keep working.

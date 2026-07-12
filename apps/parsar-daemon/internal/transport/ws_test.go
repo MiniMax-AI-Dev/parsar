@@ -24,10 +24,9 @@ import (
 type fakeGateway struct {
 	upgrader websocket.Upgrader
 
-	mu       sync.Mutex
-	dialURL  string
-	frames   []proto.Envelope
-	wantAuth bool
+	mu      sync.Mutex
+	dialURL string
+	frames  []proto.Envelope
 
 	connCh chan *websocket.Conn
 }

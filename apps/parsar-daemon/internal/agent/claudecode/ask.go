@@ -166,40 +166,6 @@ func (p *pendingAskTable) Len() int {
 	return len(p.byAskID)
 }
 
-// interceptAskUserQuestion handled the tool_use path historically. It's
-// retained as exported test scaffolding (legacy unit tests still cover
-// the case-by-case payload parsing) — translateAssistant no longer
-// calls it. See parser.go's tool_use branch comment.
-//
-// Returns ok=false (no envelope, fall through to a normal TypeToolCall)
-// when askPending / askMint are missing, the input shape doesn't fit,
-// or the tool_use id is empty.
-func (t *translator) interceptAskUserQuestion(toolUseID string, input map[string]any) (proto.Envelope, bool) {
-	if t.askPending == nil || t.askMint == nil {
-		return proto.Envelope{}, false
-	}
-	if toolUseID == "" {
-		return proto.Envelope{}, false
-	}
-	questions, ok := parseAskUserQuestionInput(input)
-	if !ok {
-		return proto.Envelope{}, false
-	}
-
-	askID := t.askMint()
-	t.askPending.Record(askID, toolUseID, questions)
-
-	env, err := proto.NewEnvelope(proto.TypePromptForUserChoice, t.runID, proto.PromptForUserChoicePayload{
-		AskID:     askID,
-		Questions: questions,
-		ToolUseID: toolUseID,
-	})
-	if err != nil {
-		return proto.Envelope{}, false
-	}
-	return env, true
-}
-
 // interceptAskUserQuestionFromControlRequest is the control_request-
 // path twin. Under --permission-prompt-tool stdio, claude-code wraps
 // AskUserQuestion as a can_use_tool permission check instead of
