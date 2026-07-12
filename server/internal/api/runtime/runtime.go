@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // Deps bundles what the runtime package needs from cmd/server. Now is
@@ -36,6 +36,9 @@ import (
 type Deps struct {
 	Store *store.Store
 	Now   func() time.Time
+	// SharedRuntimeToken lets the compose-resident local sandbox pair with a
+	// pre-shared token instead of an admin-minted one-shot pairing token.
+	SharedRuntimeToken string
 }
 
 // RegisterAdminRoutes mounts the workspace-admin tree. Caller MUST wrap
@@ -664,7 +667,7 @@ type pairResponse struct {
 // the daemon has no credential yet.
 //
 //	@Summary		Complete runtime pairing
-//	@Description	Consumes a pairing token minted by POST /api/v1/workspaces/{workspaceID}/runtimes and returns the runner credential used to authenticate subsequent heartbeats. Open endpoint — the daemon has no credential yet.
+//	@Description	Consumes a pairing token minted by POST /api/v1/workspaces/{workspaceID}/runtimes, or the configured shared local-runtime token, and returns the runner credential used to authenticate subsequent heartbeats. Open endpoint — the daemon has no credential yet.
 //	@Tags			runtimes
 //	@ID				pairRuntime
 //	@Accept			json
@@ -673,12 +676,17 @@ type pairResponse struct {
 //	@Success		200		{object}	pairResponse		"Runtime promoted and runner credential minted"
 //	@Failure		400		{object}	map[string]string	"Bad request"
 //	@Failure		401		{object}	map[string]string	"Pairing token invalid or expired"
+//	@Failure		503		{object}	map[string]string	"Shared local runtime cannot pair before workspace setup"
 //	@Failure		500		{object}	map[string]string	"Credential mint or persist failed"
 //	@Router			/api/v1/runtimes/pair [post]
 func (h *handler) pairRuntime(w http.ResponseWriter, r *http.Request) {
 	var body pairRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
+		return
+	}
+	if h.isSharedRuntimeToken(body.PairingToken) {
+		h.pairSharedRuntime(w, r, body)
 		return
 	}
 	// Consume the token first; only mint the long-lived credential once
@@ -713,6 +721,52 @@ func (h *handler) pairRuntime(w http.ResponseWriter, r *http.Request) {
 	if err := h.deps.Store.SetRuntimeRunnerCredentialHash(r.Context(), rt.ID, hash); err != nil {
 		writeError(w, http.StatusInternalServerError, "credential_persist_failed", err.Error())
 		return
+	}
+	rt.Config["runner_credential_hash"] = hash
+	writeJSON(w, http.StatusOK, pairResponse{
+		Runtime:          newRuntimeDTO(rt),
+		RunnerCredential: credential,
+	})
+}
+
+func (h *handler) isSharedRuntimeToken(presented string) bool {
+	configured := strings.TrimSpace(h.deps.SharedRuntimeToken)
+	presented = strings.TrimSpace(presented)
+	if configured == "" {
+		return false
+	}
+	if len(presented) != len(configured) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(presented), []byte(configured)) == 1
+}
+
+func (h *handler) pairSharedRuntime(w http.ResponseWriter, r *http.Request, body pairRequest) {
+	rt, err := h.deps.Store.PairSharedRuntime(r.Context(), store.PairSharedRuntimeInput{
+		Hostname:        body.Hostname,
+		Version:         body.Version,
+		RunnerPublicKey: body.RunnerPublicKey,
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNoWorkspaceForSharedRuntime) {
+			writeError(w, http.StatusServiceUnavailable, "workspace_not_ready",
+				"no workspace exists yet; complete the web setup flow first")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "pair_failed", err.Error())
+		return
+	}
+	credential, hash, err := store.MintRuntimeCredential()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "mint_failed", err.Error())
+		return
+	}
+	if err := h.deps.Store.SetRuntimeRunnerCredentialHash(r.Context(), rt.ID, hash); err != nil {
+		writeError(w, http.StatusInternalServerError, "credential_persist_failed", err.Error())
+		return
+	}
+	if rt.Config == nil {
+		rt.Config = map[string]any{}
 	}
 	rt.Config["runner_credential_hash"] = hash
 	writeJSON(w, http.StatusOK, pairResponse{

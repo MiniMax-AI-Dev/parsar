@@ -57,6 +57,12 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
   }, [compatibleDevices, localDevices, preserveSelected, value])
 
   useEffect(() => {
+    if (value || disabled || q.isLoading || q.isFetching || q.error) return
+    if (selectableDevices.length !== 1) return
+    onChange(selectableDevices[0].id)
+  }, [disabled, onChange, q.error, q.isFetching, q.isLoading, selectableDevices, value])
+
+  useEffect(() => {
     // Skip while fetching, not just isLoading: a sibling PairDaemonDialog
     // invalidates this list as the new daemon comes online, and during
     // that refetch the freshly-set value would get wiped before the new

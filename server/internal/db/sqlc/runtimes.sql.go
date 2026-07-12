@@ -100,7 +100,6 @@ func (q *Queries) ConsumePairingToken(ctx context.Context, arg ConsumePairingTok
 }
 
 const createRuntimePairing = `-- name: CreateRuntimePairing :one
-
 insert into runtimes(
   id, workspace_id, type, name, liveness, provider,
   owner_user_id, version, hostname,
@@ -162,13 +161,6 @@ type CreateRuntimePairingRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
-// runtimes.sql — runtime lifecycle and Agent Daemon pairing queries.
-//
-// Scope: SQL backing the runtimes table: admin lifecycle, daemon
-// pairing, runtime credential heartbeat, and agent_daemon heartbeat
-// capability persistence. Conventions follow the existing store.sql
-// (uuid cast to text on the way out, jsonb cast for write-side params,
-// @now/@id parameter naming).
 // Admin UI calls this to register a new Agent Daemon runtime in
 // pending_pairing state. The pairing token is generated server-side,
 // hashed (sha256 hex) and stored here; the plaintext is returned to
@@ -206,6 +198,29 @@ func (q *Queries) CreateRuntimePairing(ctx context.Context, arg CreateRuntimePai
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getOldestActiveWorkspaceID = `-- name: GetOldestActiveWorkspaceID :one
+
+select id::text as id
+from workspaces
+where deleted_at is null
+order by created_at asc, id asc
+limit 1
+`
+
+// runtimes.sql — runtime lifecycle and Agent Daemon pairing queries.
+//
+// Scope: SQL backing the runtimes table: admin lifecycle, daemon
+// pairing, runtime credential heartbeat, and agent_daemon heartbeat
+// capability persistence. Conventions follow the existing store.sql
+// (uuid cast to text on the way out, jsonb cast for write-side params,
+// @now/@id parameter naming).
+func (q *Queries) GetOldestActiveWorkspaceID(ctx context.Context) (string, error) {
+	row := q.db.QueryRow(ctx, getOldestActiveWorkspaceID)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getRuntime = `-- name: GetRuntime :one
@@ -710,5 +725,107 @@ func (q *Queries) TouchRuntimeHeartbeat(ctx context.Context, arg TouchRuntimeHea
 	row := q.db.QueryRow(ctx, touchRuntimeHeartbeat, arg.Now, arg.ID)
 	var i TouchRuntimeHeartbeatRow
 	err := row.Scan(&i.ID, &i.Liveness, &i.LastHeartbeatAt)
+	return i, err
+}
+
+const upsertSharedRuntime = `-- name: UpsertSharedRuntime :one
+insert into runtimes(
+  id, workspace_id, type, name, liveness, provider,
+  owner_user_id, version, hostname,
+  last_heartbeat_at,
+  pairing_token_hash, pairing_token_expires_at,
+  config, created_at, updated_at, deleted_at
+)
+values (
+  $1::uuid, $2::uuid, $3, $4, 'offline', $5,
+  null, $6, $7,
+  null,
+  null, null,
+  $8::jsonb, $9, $9, null
+)
+on conflict (workspace_id, name) where deleted_at is null
+do update set
+  version                  = excluded.version,
+  hostname                 = excluded.hostname,
+  config                   = coalesce(runtimes.config, '{}'::jsonb) || excluded.config,
+  liveness                 = case when runtimes.liveness = 'online' then 'online' else 'offline' end,
+  pairing_token_hash       = null,
+  pairing_token_expires_at = null,
+  updated_at               = $9
+returning
+  id::text                       as id,
+  workspace_id::text             as workspace_id,
+  type,
+  name,
+  liveness,
+  provider,
+  owner_user_id,
+  version,
+  hostname,
+  last_heartbeat_at,
+  pairing_token_expires_at,
+  config,
+  created_at,
+  updated_at
+`
+
+type UpsertSharedRuntimeParams struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Type        string             `json:"type"`
+	Name        string             `json:"name"`
+	Provider    string             `json:"provider"`
+	Version     string             `json:"version"`
+	Hostname    string             `json:"hostname"`
+	Config      []byte             `json:"config"`
+	Now         pgtype.Timestamptz `json:"now"`
+}
+
+type UpsertSharedRuntimeRow struct {
+	ID                    string             `json:"id"`
+	WorkspaceID           string             `json:"workspace_id"`
+	Type                  string             `json:"type"`
+	Name                  string             `json:"name"`
+	Liveness              string             `json:"liveness"`
+	Provider              string             `json:"provider"`
+	OwnerUserID           pgtype.UUID        `json:"owner_user_id"`
+	Version               string             `json:"version"`
+	Hostname              string             `json:"hostname"`
+	LastHeartbeatAt       pgtype.Timestamptz `json:"last_heartbeat_at"`
+	PairingTokenExpiresAt pgtype.Timestamptz `json:"pairing_token_expires_at"`
+	Config                []byte             `json:"config"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpsertSharedRuntime(ctx context.Context, arg UpsertSharedRuntimeParams) (UpsertSharedRuntimeRow, error) {
+	row := q.db.QueryRow(ctx, upsertSharedRuntime,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Type,
+		arg.Name,
+		arg.Provider,
+		arg.Version,
+		arg.Hostname,
+		arg.Config,
+		arg.Now,
+	)
+	var i UpsertSharedRuntimeRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Type,
+		&i.Name,
+		&i.Liveness,
+		&i.Provider,
+		&i.OwnerUserID,
+		&i.Version,
+		&i.Hostname,
+		&i.LastHeartbeatAt,
+		&i.PairingTokenExpiresAt,
+		&i.Config,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
 }

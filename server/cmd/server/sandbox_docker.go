@@ -49,6 +49,9 @@ func resolveAgentDaemonPublicWSURL(env func(string) string, cfg config.Config) s
 	if env == nil {
 		env = os.Getenv
 	}
+	if wsURL := strings.TrimSpace(env("PARSAR_AGENT_DAEMON_WS_URL")); wsURL != "" {
+		return agentDaemonWSURLFromBase(wsURL)
+	}
 	if serverURL := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_SERVER_URL")); serverURL != "" {
 		return agentDaemonWSURLFromBase(serverURL)
 	}
@@ -76,7 +79,9 @@ func agentDaemonWSURLFromBase(base string) string {
 	default:
 		parsed.Scheme = "ws"
 	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + path
+	if strings.TrimRight(parsed.Path, "/") != path {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + path
+	}
 	return parsed.String()
 }
 

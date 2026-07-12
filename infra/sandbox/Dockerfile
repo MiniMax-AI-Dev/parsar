@@ -134,7 +134,10 @@ RUN chmod +x /usr/local/bin/parsar-daemon /usr/local/bin/parsar \
 # inject snapshot/incremental` at runtime. settings.json pointing at
 # these scripts is written per-sandbox at seed time, not baked here.
 COPY infra/sandbox/hooks/claude /opt/parsar/hooks/claude
-RUN chmod -R a+rx /opt/parsar/hooks
+RUN mkdir -p /opt/parsar/bin
+COPY infra/sandbox/scripts/runtime-entrypoint.sh /opt/parsar/bin/runtime-entrypoint.sh
+RUN chmod -R a+rx /opt/parsar/hooks \
+ && chmod +x /opt/parsar/bin/runtime-entrypoint.sh
 
 # --- Sandbox environment ---
 ENV IS_SANDBOX=1

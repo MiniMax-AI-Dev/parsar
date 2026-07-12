@@ -3670,9 +3670,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Consumes a pairing token minted by POST /api/v1/workspaces/{workspaceID}/runtimes
-        and returns the runner credential used to authenticate subsequent heartbeats.
-        Open endpoint — the daemon has no credential yet.
+      description: Consumes a pairing token minted by POST /api/v1/workspaces/{workspaceID}/runtimes,
+        or the configured shared local-runtime token, and returns the runner credential
+        used to authenticate subsequent heartbeats. Open endpoint — the daemon has
+        no credential yet.
       operationId: pairRuntime
       parameters:
       - description: Pairing token exchange
@@ -3702,6 +3703,12 @@ paths:
             type: object
         "500":
           description: Credential mint or persist failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Shared local runtime cannot pair before workspace setup
           schema:
             additionalProperties:
               type: string

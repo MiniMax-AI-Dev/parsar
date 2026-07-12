@@ -22,10 +22,10 @@ user is the administrator.
 ## Requirements
 
 - Docker Engine with Docker Compose v2.
-- Linux host with access to `/var/run/docker.sock`. The local compose stack
-  enables Docker-managed agent sandboxes and mounts the Docker socket. The
-  sandbox image (`ghcr.io/minimax-ai-dev/parsar-sandbox:latest`) is pulled
-  automatically — build your own instead with:
+- No host Docker socket mount is required for the default install. The local
+  runtime is a compose service that runs the sandbox image
+  (`ghcr.io/minimax-ai-dev/parsar-sandbox:latest`) and connects back with
+  `parsar-daemon`. Build your own image instead with:
   ```bash
   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
   PARSAR_SANDBOX_IMAGE=parsar-sandbox:local ./install.sh
@@ -39,8 +39,9 @@ The script:
   published copy to `~/.parsar/docker-compose.yml`
 - creates `~/.parsar/.env`
 - generates and persists `PARSAR_MASTER_KEY`
+- generates and persists `PARSAR_SHARED_RUNTIME_TOKEN`
 - generates and persists the Postgres password
-- starts Postgres, runs migrations, and starts `parsar-server`
+- starts Postgres, `parsar-server`, and the default local runtime service
 - leaves Feishu, Slack, and Discord integrations disabled unless explicitly
   enabled in `~/.parsar/.env`
 

@@ -129,7 +129,7 @@ export function RuntimePage() {
   const daemonRuntimesQuery = useWorkspaceRuntimes(workspaceID ?? "", "agent_daemon")
   const workspacesQ = useMyWorkspaces()
 
-  const [tab, setTab] = useState<RuntimeTab>("sandbox")
+  const [tab, setTab] = useState<RuntimeTab>("local_device")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortKey, setSortKey] = useState<SortKey>("last_active")
   const [confirming, setConfirming] = useState(false)
@@ -866,18 +866,18 @@ function RuntimeTabs({ tab, onChange }: { tab: RuntimeTab; onChange: (next: Runt
     <div className="mb-4 border-b border-line" role="tablist" aria-label={t("runtime.page.title")}>
       <div className="flex flex-wrap items-end gap-1">
         <RuntimeTabButton
-          active={tab === "sandbox"}
-          onClick={() => onChange("sandbox")}
-          testId="runtime-tab-sandbox"
-        >
-          {t("runtime.providers.sandbox.title")}
-        </RuntimeTabButton>
-        <RuntimeTabButton
           active={tab === "local_device"}
           onClick={() => onChange("local_device")}
           testId="runtime-tab-local-device"
         >
           {t("runtime.providers.localDevice.title", { defaultValue: "Local Device" })}
+        </RuntimeTabButton>
+        <RuntimeTabButton
+          active={tab === "sandbox"}
+          onClick={() => onChange("sandbox")}
+          testId="runtime-tab-sandbox"
+        >
+          {t("runtime.providers.sandbox.title")}
         </RuntimeTabButton>
         <RuntimeTabButton
           active={tab === "external"}
