@@ -91,6 +91,9 @@ description and keep ownership on the side listed here.
 - Services exposed through a deployment platform may gain an ingress network,
   but they must remain explicitly attached to the Compose `default` network
   when they depend on internal service DNS names such as `postgres`.
+- DB-driven workspace connectors exposed in the admin UI must start and stop
+  from their persisted `enabled` and event-mode settings. Do not add a second
+  deployment environment flag after a connector is saved and marked enabled.
 - The local compose file must express the same default with
   `PARSAR_IMAGE_PULL_POLICY=always` for Parsar-owned images. Local image
   testing must opt out explicitly with `PARSAR_IMAGE_PULL_POLICY=never`.
