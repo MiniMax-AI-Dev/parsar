@@ -1,7 +1,6 @@
 # Run with: docker compose up -d
 # Open http://127.0.0.1:18080 and configure integrations in the web UI.
 # Production deployments should override the three dev-only secrets below.
-name: parsar
 
 services:
   postgres:
@@ -10,11 +9,10 @@ services:
     environment:
       POSTGRES_USER: parsar
       POSTGRES_PASSWORD: ${PARSAR_PG_PASSWORD:-parsar}
-      POSTGRES_DB: parsar
     volumes:
       - ${PARSAR_PG_DATA_DIR:-postgres-data}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U parsar -d parsar"]
+      test: ["CMD-SHELL", "pg_isready -U parsar"]
 
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
@@ -38,8 +36,6 @@ services:
       PARSAR_AGENT_DAEMON_WS_URL: "ws://parsar-server:8080/agent-daemon/ws"
     volumes:
       - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
 
   parsar-runtime:
     image: ${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}
