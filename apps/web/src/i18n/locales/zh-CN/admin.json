@@ -157,62 +157,6 @@
     "cancelled": "已取消",
     "interrupted": "已中断"
   },
-  "approvals": {
-    "page": {
-      "title": "收件箱 / 审批",
-      "description": "集中处理需要人类判断的事项。Agent 想做高风险动作时会落到这里，不让风险动作散落在 IM thread 里。"
-    },
-    "tabs": {
-      "pending": "待审批",
-      "decided": "已处理",
-      "expired": "已过期 / 已取消"
-    },
-    "risk": {
-      "high": "高风险",
-      "medium": "中风险",
-      "low": "低风险"
-    },
-    "actions": {
-      "allowOnce": "允许一次",
-      "deny": "拒绝"
-    },
-    "detail": {
-      "agent": "Agent",
-      "conversation": "关联对话",
-      "requestedBy": "请求者",
-      "resource": "目标资源",
-      "payload": "Payload 摘要",
-      "createdAt": "创建于",
-      "expiresIn": "剩余时间",
-      "decision": "决定",
-      "allow": "已允许",
-      "deny": "已拒绝",
-      "alreadyDecided": "这条审批已经处理过，不能再操作。",
-      "relatedLinks": "关联跳转",
-      "openRun": "打开 Run Detail",
-      "openConversation": "打开 Conversation",
-      "openIM": "跳回 IM thread",
-      "empty": "选一条审批查看详情"
-    },
-    "empty": {
-      "title": "暂时没有审批",
-      "description": "Agent 触发高风险动作时会落到这里需要你裁决。"
-    },
-    "loadError": {
-      "title": "无法加载审批列表",
-      "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前工作区存在。",
-      "unreachable": {
-        "title": "无法连接到 Parsar server",
-        "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
-        "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
-      }
-    },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
-    }
-  },
   "conversations": {
     "page": {
       "title": "对话",

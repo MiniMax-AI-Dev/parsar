@@ -157,62 +157,6 @@
     "cancelled": "Cancelled",
     "interrupted": "Interrupted"
   },
-  "approvals": {
-    "page": {
-      "title": "Inbox / Approvals",
-      "description": "Where Agent actions that need human judgment land. Keeps risky moves out of IM threads and into a place you can audit."
-    },
-    "tabs": {
-      "pending": "Pending",
-      "decided": "Decided",
-      "expired": "Expired / Cancelled"
-    },
-    "risk": {
-      "high": "High risk",
-      "medium": "Medium risk",
-      "low": "Low risk"
-    },
-    "actions": {
-      "allowOnce": "Allow once",
-      "deny": "Deny"
-    },
-    "detail": {
-      "agent": "Agent",
-      "conversation": "Conversation",
-      "requestedBy": "Requested by",
-      "resource": "Target resource",
-      "payload": "Payload preview",
-      "createdAt": "Created",
-      "expiresIn": "Expires in",
-      "decision": "Decision",
-      "allow": "Allowed",
-      "deny": "Denied",
-      "alreadyDecided": "This approval has been handled — actions are no longer available.",
-      "relatedLinks": "Related",
-      "openRun": "Open Run Detail",
-      "openConversation": "Open Conversation",
-      "openIM": "Open in IM thread",
-      "empty": "Select an approval to see details"
-    },
-    "empty": {
-      "title": "No approvals",
-      "description": "When an Agent tries a high-risk action, it lands here for your call."
-    },
-    "loadError": {
-      "title": "Failed to load approvals",
-      "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current workspace exists.",
-      "unreachable": {
-        "title": "Cannot reach the Parsar server",
-        "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
-      }
-    },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
-    }
-  },
   "conversations": {
     "page": {
       "title": "Conversations",
