@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type recordingSink struct {
@@ -113,10 +113,7 @@ func TestAddWorkspaceMemberEmitsAdminAuditRecord(t *testing.T) {
 	ing.Start(ctx)
 
 	st := New(pool, WithAudit(ing))
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatalf("SeedDevFixture: %v", err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	added, err := st.AddWorkspaceMember(ctx, AddWorkspaceMemberInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -170,10 +167,7 @@ func TestSecretAndModelLifecycleEmitsAuditRecords(t *testing.T) {
 	ing.Start(ctx)
 
 	st := New(pool, WithAudit(ing))
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatalf("SeedDevFixture: %v", err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	// encrypted_payload is jsonb; audit producer doesn't inspect contents
 	// so a minimal valid JSON object suffices.

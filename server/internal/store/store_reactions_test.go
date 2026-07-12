@@ -15,10 +15,7 @@ func TestFeishuInboundReactionLookupsRoundTrip(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevConversationExternalRef(ctx, ConfigureDevConversationExternalRefInput{
 		ConversationID: ids.ConversationID,
 		Gateway:        "feishu",

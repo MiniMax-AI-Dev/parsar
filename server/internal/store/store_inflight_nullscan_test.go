@@ -20,10 +20,7 @@ func TestListActiveFeishuInflightConversations_NullOutputMessageIDDoesNotPanic(t
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	// Wire the dev conversation to a feishu external chat so it
 	// matches `where c.platform = 'feishu'`; without this the row would

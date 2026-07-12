@@ -338,9 +338,7 @@ func TestCreateAgentBindsInitialCapabilityVersions(t *testing.T) {
 	ids := DefaultDevFixtureIDs()
 	st := New(db)
 
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, st)
 	capability, err := st.CreateCapability(ctx, CreateCapabilityInput{
 		WorkspaceID: ids.WorkspaceID,
 		CreatorID:   ids.UserID,
@@ -407,9 +405,7 @@ func TestCreateAgentAutoAllocatesUniqueSlug(t *testing.T) {
 	ids := DefaultDevFixtureIDs()
 	st := New(db)
 
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, st)
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Backend Agent",
@@ -452,9 +448,7 @@ func TestSeedDevFixtureReactivatesSeededAgents(t *testing.T) {
 	store := New(db)
 	ids := DefaultDevFixtureIDs()
 
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 	if _, err := db.Exec(ctx, `update agents set status = 'disabled' where id = $1`, ids.BackendAgentID); err != nil {
 		t.Fatal(err)
 	}
@@ -493,9 +487,7 @@ func TestCreateInboundIMMessageCreatesSingleAgentRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -522,9 +514,7 @@ func TestCreateGatewayMessagePersistsGatewaySource(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	result, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -559,10 +549,7 @@ func TestGatewayMessageResolvesExternalConversationID(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	configured, err := store.ConfigureDevConversationExternalRef(ctx, ConfigureDevConversationExternalRefInput{
 		ConversationID:   ids.ConversationID,
 		Gateway:          "feishu",
@@ -605,10 +592,7 @@ func TestGatewayMessageDedupesExternalMessageID(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevConversationExternalRef(ctx, ConfigureDevConversationExternalRefInput{ConversationID: ids.ConversationID, Gateway: "feishu", ExternalChatID: "oc_demo"}); err != nil {
 		t.Fatal(err)
 	}
@@ -649,10 +633,7 @@ func TestTargetedFeishuInboundCreatesConversationAndSourceAppOutbound(t *testing
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		Text:              "@feishu-bot implicit @Agent should still route to target Agent",
@@ -707,10 +688,7 @@ func TestFeishuConnectorDiagnosticsSummarizesInboundOutboundState(t *testing.T) 
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	unconfigured, err := st.GetFeishuConnectorDiagnostics(ctx, ids.BackendAgentID)
 	if err != nil {
@@ -824,10 +802,7 @@ func TestGatewayOutboundMessagesAndDelivery(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevConversationExternalRef(ctx, ConfigureDevConversationExternalRefInput{ConversationID: ids.ConversationID, Gateway: "dev", ExternalChatID: "oc_demo"}); err != nil {
 		t.Fatal(err)
 	}
@@ -872,10 +847,7 @@ func TestListWorkspaceEnabledAgentsReturnsSeededAgents(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	agents, err := store.ListWorkspaceEnabledAgents(ctx, ids.WorkspaceID)
 	if err != nil {
@@ -898,10 +870,7 @@ func TestDaemonExecutionConfigIsAgentScoped(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
@@ -975,10 +944,7 @@ func TestConfigureDevAgentConnectorRejectsInvalidInputs(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	_, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{AgentID: ids.BackendAgentID, ConnectorType: "bogus"})
 	if !errors.Is(err, ErrInvalidConnectorType) {
@@ -1000,10 +966,7 @@ func TestClaimNextQueuedHTTPAgentRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
 		AgentID:       ids.BackendAgentID,
 		ConnectorType: "http",
@@ -1050,10 +1013,7 @@ func TestFailAgentRunWritesFailedStatusAndAudit(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
 		AgentID:       ids.BackendAgentID,
 		ConnectorType: "http",
@@ -1108,10 +1068,7 @@ func TestRequeueFailedAgentRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevAgentConnector(ctx, ConfigureDevAgentConnectorInput{
 		AgentID:       ids.BackendAgentID,
 		ConnectorType: "http",
@@ -1159,9 +1116,7 @@ func TestRequeueFailedAgentRunRejectsNonFailedRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
 		SenderEmail:       "admin@example.com",
@@ -1181,9 +1136,7 @@ func TestCancelAgentRunIsIdempotent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent check the API", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
@@ -1223,9 +1176,7 @@ func TestDequeueNextRunPicksOldestQueuedSibling(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	s := New(db)
-	if _, err := s.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, s)
 	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent first", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
@@ -1278,9 +1229,7 @@ func TestHasInflightRunForConversationAgentDetectsSibling(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	s := New(db)
-	if _, err := s.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, s)
 	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent one", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
@@ -1325,9 +1274,7 @@ func TestMarkAgentRunRunningBlockedByInflightSibling(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	s := New(db)
-	if _, err := s.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, s)
 	created1, err := s.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent one", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
@@ -1358,9 +1305,7 @@ func TestCancelAgentRunDoesNotCancelCompletedRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{ConversationTitle: "Demo Group", SenderEmail: "admin@example.com", Text: "@backend-agent check the API", Mentions: []string{"@backend-agent"}})
 	if err != nil {
 		t.Fatal(err)
@@ -1389,9 +1334,7 @@ func TestCompleteHTTPAgentRunUsesHTTPAuditSource(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1444,9 +1387,7 @@ func TestCompleteAgentRunWritesEmptyUsageWhenNoneReported(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1480,10 +1421,7 @@ func TestCompleteAgentRunMentionCreatesChildRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1527,10 +1465,7 @@ func TestCompleteAgentRunSelfTriggerSkipped(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1557,10 +1492,7 @@ func TestCompleteAgentRunDuplicateTargetSkipped(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1593,10 +1525,7 @@ func TestConversationTimelineShowsMessagesAndRunStatus(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1634,10 +1563,7 @@ func TestConversationTimelineIncludesFailedRunReason(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	sent, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
@@ -1679,10 +1605,7 @@ func TestConversationTimelineAndRunDetailShowAgentHandoff(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1726,10 +1649,7 @@ func TestGetAgentRunDetailShowsCompletedOutputMessage(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1834,10 +1754,7 @@ func TestRecordAgentRunExecutionSnapshotFreezesRuntimeRead(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -1953,9 +1870,7 @@ func TestListWorkspaceUsageLogsUnknownWorkspace(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	_, err := store.ListWorkspaceUsageLogs(ctx, "00000000-0000-0000-0000-000000099999", "", 10)
 	if !errors.Is(err, ErrUnknownWorkspace) {
@@ -1967,10 +1882,7 @@ func TestListWorkspaceAgentRunsFiltersByStatus(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -2048,9 +1960,7 @@ func TestCompleteAgentRunRejectsCompletedRunWithoutDirtyWrite(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -2097,9 +2007,7 @@ func TestCompleteAgentRunRejectsUnknownRun(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	_, err := store.CompleteAgentRun(ctx, CompleteAgentRunInput{RunID: "00000000-0000-0000-0000-000000099999"})
 	if !errors.Is(err, ErrUnknownAgentRun) {
@@ -2119,9 +2027,7 @@ func TestCompleteAgentRunRejectsInvalidAgentRelation(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -2353,10 +2259,7 @@ func TestConfigureAgentProfileChecksModelStatus(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	model, err := store.CreateModel(ctx, CreateModelInput{
 		Name:               "Profile Validity Model",
@@ -2401,9 +2304,7 @@ func TestCompleteAgentRunSanitizesMessageAndStoresTranscript(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -2460,9 +2361,7 @@ func TestCompleteAgentRunSkipsTranscriptWhenAlreadyClean(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	created, err := store.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		ConversationTitle: "Demo Group",
@@ -2495,10 +2394,7 @@ func TestCreateWorkspaceConversationCreatesActiveWebConversation(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -2537,10 +2433,7 @@ func TestRuntimeErrorSystemMessagePersistsStructuredPayload(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID:    ids.WorkspaceID,
 		Title:          "Runtime credential failure",
@@ -2586,10 +2479,7 @@ func TestCreateWorkspaceConversationDefaultsAndValidates(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{WorkspaceID: ids.WorkspaceID})
 	if err != nil {
@@ -2615,10 +2505,7 @@ func TestCreateWorkspaceConversationBindsPrimaryAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID:    ids.WorkspaceID,
@@ -2658,10 +2545,7 @@ func TestCreateWorkspaceConversationRejectsForeignAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	// Random UUID — not an agent in this workspace.
 	_, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
@@ -2689,10 +2573,7 @@ func TestCreateWorkspaceConversationRejectsReservedMetadataKey(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	_, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -2720,10 +2601,7 @@ func TestListWorkspaceConversationsOrdersByRecentActivity(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	// Seeded Demo Group has no messages yet. A fresh empty conversation
 	// should sort by created_at desc against Demo Group.
@@ -2787,10 +2665,7 @@ func TestUpdateConversationTitleRenamesActiveConversation(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,
 		Title:       "original title",
@@ -2822,10 +2697,7 @@ func TestSoftDeleteConversationHidesFromUserSurfaces(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,
 		Title:       "to be deleted",
@@ -2877,10 +2749,7 @@ func TestListWorkspaceConversationsFiltersByAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	// Two new conversations bound to two different agents.
 	boundBackend, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
@@ -2951,10 +2820,7 @@ func TestListUserWorkspacesReturnsSeededWorkspace(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	rows, err := store.ListUserWorkspaces(ctx, ids.UserID, 10)
 	if err != nil {
@@ -2976,9 +2842,7 @@ func TestListUserWorkspacesEmptyForUnknownUser(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	mustSeedDevFixture(t, ctx, store)
 
 	rows, err := store.ListUserWorkspaces(ctx, "00000000-0000-0000-0000-0000000000aa", 10)
 	if err != nil {
@@ -2993,10 +2857,7 @@ func TestCreateWorkspaceHappyPath(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
 	result, err := st.CreateWorkspace(ctx, CreateWorkspaceInput{
@@ -3031,10 +2892,7 @@ func TestCreateWorkspaceWithCJKNameStillSucceeds(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	result, err := st.CreateWorkspace(ctx, CreateWorkspaceInput{
 		Name:      "中文工作区",
@@ -3060,10 +2918,7 @@ func TestCreateWorkspaceRejectsEmptyName(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	if _, err := st.CreateWorkspace(ctx, CreateWorkspaceInput{
 		Name:      "   ",
@@ -3078,10 +2933,7 @@ func TestUpdateWorkspaceRenames(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	newName := "Renamed Demo"
 	row, err := st.UpdateWorkspace(ctx, UpdateWorkspaceInput{
@@ -3106,10 +2958,7 @@ func TestUpdateWorkspaceRejectsEmptyPatch(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	if _, err := st.UpdateWorkspace(ctx, UpdateWorkspaceInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -3124,10 +2973,7 @@ func TestArchiveWorkspaceSoftDeletes(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	if _, err := st.ArchiveWorkspace(ctx, ArchiveWorkspaceInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -3151,10 +2997,7 @@ func TestArchiveWorkspaceRejectsMarketplaceDependents(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, st)
 	sourceWorkspaceID := "00000000-0000-0000-0000-000000000202"
 	capabilityID := "00000000-0000-0000-0000-000000000203"
 	versionID := "00000000-0000-0000-0000-000000000204"
@@ -3277,10 +3120,7 @@ func TestDisableEnableAgentRoundtripGuardsMentions(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	disabled, err := store.DisableAgent(ctx, ids.BackendAgentID)
 	if err != nil {
@@ -3393,10 +3233,7 @@ func TestAddWorkspaceMemberWritesAuditLog(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store, auditIng := newAuditAwareStore(t, db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	result, err := store.AddWorkspaceMember(ctx, AddWorkspaceMemberInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -3429,10 +3266,7 @@ func TestAddWorkspaceMemberLowercasesInviteEmail(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	if _, err := store.AddWorkspaceMember(ctx, AddWorkspaceMemberInput{
 		WorkspaceID: ids.WorkspaceID,
@@ -3468,10 +3302,7 @@ func TestMarkAgentRunRunningStateTransitionsAndConversationGuard(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	sent, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
@@ -3535,10 +3366,7 @@ func TestSendAssistantMessageFromRunPersistsAssistantMessageAndCompletes(t *test
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 	sent, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
 		ConversationID:    ids.ConversationID,
 		UserID:            ids.UserID,
@@ -3593,10 +3421,7 @@ func TestSendUserMessageImplicitPrimaryAgentDispatchesWithoutMention(t *testing.
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, store)
 
 	conv, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID:    ids.WorkspaceID,
@@ -3691,10 +3516,7 @@ func TestSendUserMessageAgentDaemonAgentAutoStartsStreaming(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
@@ -3751,10 +3573,7 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	for _, badRuntime := range []string{"local", "sandbox"} {
 		_, err := st.CreateAgent(ctx, CreateAgentInput{
@@ -3850,10 +3669,7 @@ func TestCreateInboundIMMessageInitiatorUserIDShortCircuitsLookup(t *testing.T) 
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	created, err := st.CreateInboundIMMessage(ctx, CreateInboundIMMessageInput{
 		Text: "rerun after credential bind",
@@ -3904,10 +3720,7 @@ func TestResolveAgentNameForConversationReadsPrimaryAgentMetadata(t *testing.T) 
 	db := openTestDB(t)
 	ctx := context.Background()
 	st := New(db)
-	ids := DefaultDevFixtureIDs()
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ids := mustSeedDevFixture(t, ctx, st)
 
 	// CreateInboundIMMessage with a TargetAgentID stamps
 	// metadata.primary_agent_id on the new conversation row — that's

@@ -34,9 +34,7 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 	ids := DefaultDevFixtureIDs()
 	st := New(db)
 
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatalf("SeedDevFixture: %v", err)
-	}
+	mustSeedDevFixture(t, ctx, st)
 
 	const v2SHA = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 	canonicalV2, err := json.Marshal(map[string]any{
@@ -204,9 +202,7 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 	ids := DefaultDevFixtureIDs()
 	st := New(db)
 
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatalf("SeedDevFixture: %v", err)
-	}
+	mustSeedDevFixture(t, ctx, st)
 
 	const goodSHA = "1111111111111111111111111111111111111111111111111111111111111111"
 	canonicalGood, _ := json.Marshal(map[string]any{

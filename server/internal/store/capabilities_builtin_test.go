@@ -14,9 +14,7 @@ func TestBuiltinCapabilityEnabled_RoundTrip(t *testing.T) {
 	ids := DefaultDevFixtureIDs()
 	st := New(db)
 
-	if _, err := st.SeedDevFixture(ctx); err != nil {
-		t.Fatalf("SeedDevFixture: %v", err)
-	}
+	mustSeedDevFixture(t, ctx, st)
 
 	const key = "parsar_chat_history"
 	agentID := ids.ProductAgentID
