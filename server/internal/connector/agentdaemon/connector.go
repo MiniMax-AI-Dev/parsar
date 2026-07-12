@@ -49,11 +49,6 @@ type Config struct {
 
 	Binder binding.Binder
 
-	// Sandbox is the lazy-create provider for sandbox-mode
-	// agents. The default dispatch path no longer Acquires on
-	// ErrNotBound (see acquireSandboxBinding); the provider is kept for
-	// a future conversation-scoped ephemeral sandbox feature.
-	//
 	// Optional: nil falls back to NoopSandboxProvider, which surfaces
 	// ErrSandboxProviderDisabled as a clean EventError so deployments
 	// without an e2b template still boot.
@@ -1006,53 +1001,6 @@ func configuredDeviceBinding(in connector.PromptInput) (binding.Binding, bool) {
 
 func agentStateKey(conversationID, agentID, agentKind string) string {
 	return strings.TrimSpace(conversationID) + "/" + strings.TrimSpace(agentID) + "/" + strings.TrimSpace(agentKind)
-}
-
-// acquireSandboxBinding is the cold-start path: ErrNotBound and the
-// agent is configured for sandbox mode. The provider blocks
-// until the daemon's WS upgrade lands in gateway.Registry (it owns
-// WaitForDevice internally), so by the time this returns the deviceID
-// is guaranteed to resolve via registry.LookupDevice.
-//
-// Per agent_must_bind_runtime memory: this is no longer called by the
-// default dispatch path. Kept for a future conversation-scoped
-// ephemeral sandbox feature.
-func (c *Connector) acquireSandboxBinding(ctx context.Context, in connector.PromptInput) (binding.Binding, error) {
-	deviceID, err := c.sandbox.Acquire(ctx, in)
-	if err != nil {
-		if errors.Is(err, ErrSandboxProviderDisabled) {
-			// Clean user-facing message — don't leak the internal env
-			// var name; platform owner sees it in the server logs.
-			c.log.Warn("agent_daemon: sandbox mode requested but provider not configured",
-				"agent_id", in.AgentID)
-			return binding.Binding{}, fmt.Errorf("sandbox mode requested but this deployment does not have a sandbox template configured; switch the agent to local-runtime mode or contact the platform owner")
-		}
-		return binding.Binding{}, fmt.Errorf("sandbox acquire: %w", err)
-	}
-
-	b := binding.Binding{
-		ConversationID: in.ConversationID,
-		AgentID:        in.AgentID,
-		DeviceID:       deviceID,
-		AgentKind:      resolveAgentKind(in),
-		// WorkDir intentionally empty: parsar-daemon resolves a
-		// per-conversation scratch dir and uses it for BOTH plugin
-		// installs and the subprocess cwd so they stay on the same
-		// tree regardless of the sandbox image's WORKDIR.
-	}
-	if err := c.binder.Bind(ctx, b); err != nil {
-		// Don't tear down the sandbox: the next prompt's Acquire will
-		// return the cached entry, and Bind may succeed once the DB
-		// blip clears.
-		c.log.Warn("agent_daemon: persist sandbox binding failed; sandbox kept",
-			"err", err, "device_id", deviceID, "agent_id", in.AgentID)
-		return binding.Binding{}, fmt.Errorf("persist sandbox binding: %w", err)
-	}
-	c.log.Info("agent_daemon: sandbox binding established",
-		"device_id", deviceID,
-		"conversation_id", in.ConversationID,
-		"agent_id", in.AgentID)
-	return b, nil
 }
 
 // errorChannel builds a closed PromptEvent channel that emits one
