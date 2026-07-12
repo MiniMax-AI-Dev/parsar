@@ -21,7 +21,6 @@ import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
  *                          (env no longer drives runtime selection).
  */
 
-export type RuntimeMode = "sandbox" | "local"
 export type RuntimeProfile = "oss" | "managed" | "selfhost"
 export type RuntimeConfiguredBy = "ops" | "self"
 
