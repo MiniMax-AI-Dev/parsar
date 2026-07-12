@@ -1,17 +1,13 @@
-# Parsar local edition (all-in-one) — Phase 1 deliverable.
+# Parsar all-in-one deployment.
 #
 # One command, single machine:
 #
-#   ./install.sh
+#   docker compose up -d
 #
-# The installer writes a .env with PARSAR_SHARED_RUNTIME_TOKEN, then brings
-# up Postgres + parsar-server + a compose-resident local runtime. Open
-# http://127.0.0.1:18080 locally, or
-# http://<server-ip>:18080 from another machine, and create the first owner
-# account in the web setup flow.
-# Profile not fork: this is the SAME image as the self-host deployment
-# (deploy/compose/compose.selfhost.yml). Differences live only in this file
-# + the env values below. No separate "local" binary or image.
+# This file is the deployment contract. It does not require install.sh or an
+# .env file. Open http://127.0.0.1:18080 and create the first owner account.
+# install.sh is only a convenience wrapper that downloads this file, creates
+# persistent random secrets, starts the stack, and waits for health.
 #
 # Image source:
 #   - Default: GHCR prebuilt image (PARSAR_SERVER_IMAGE below).
@@ -20,40 +16,30 @@
 #       make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
 #       PARSAR_IMAGE_PULL_POLICY=never PARSAR_SERVER_IMAGE=parsar:local docker compose up
 #
-# Override knobs:
-#   PARSAR_PROJECT_NAME   compose project/network prefix (default: parsar)
+# Common overrides:
 #   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
 #   PARSAR_SANDBOX_IMAGE  default local runtime image ref (default: GHCR latest)
 #   PARSAR_IMAGE_PULL_POLICY image freshness policy (default: always; set
 #                         never for local images)
-#   PARSAR_SHARED_RUNTIME_TOKEN shared token for parsar-runtime pairing
 #   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
-#   PARSAR_PG_PORT        host port for Postgres (default: 15432)
-#   PARSAR_BIND_ADDR      host bind address (default: 0.0.0.0)
-#   PARSAR_PG_DATA_DIR    host path for Postgres data (default: named volume)
-#   PARSAR_DATA_DIR       host path for server data (default: named volume)
+#   PARSAR_BIND_ADDR      host bind address (default: 127.0.0.1)
+# Production deployments should also set PARSAR_PG_PASSWORD,
+# PARSAR_MASTER_KEY, and PARSAR_SHARED_RUNTIME_TOKEN to stable random values.
 
 # Explicit project name so the auto-created network is always parsar_default
 # regardless of the clone directory name.
-name: ${PARSAR_PROJECT_NAME:-parsar}
-
-networks:
-  default:
-    name: ${PARSAR_PROJECT_NAME:-parsar}_default
+name: parsar
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: parsar
       POSTGRES_PASSWORD: ${PARSAR_PG_PASSWORD:-parsar}
       POSTGRES_DB: parsar
-    ports:
-      - "127.0.0.1:${PARSAR_PG_PORT:-15432}:5432"
     volumes:
-      - ${PARSAR_PG_DATA_DIR:-parsar-local-pg}:/var/lib/postgresql/data
+      - ${PARSAR_PG_DATA_DIR:-postgres-data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U parsar -d parsar"]
       interval: 5s
@@ -64,11 +50,16 @@ services:
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
     pull_policy: ${PARSAR_IMAGE_PULL_POLICY:-always}
-    container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-server
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+    # Keep the application network explicit. Platforms such as Dokploy attach
+    # this service to an additional ingress network; the server must remain on
+    # the Compose default network so Docker DNS can resolve postgres and the
+    # compose-resident runtime can resolve parsar-server.
+    networks:
+      - default
     # Run migrations before serving, in the same container as the server.
     # goose migrations are idempotent (already-applied ones are skipped),
     # so re-running this on every `restart: unless-stopped` cycle is a
@@ -83,7 +74,7 @@ services:
         parsar-migrate
         exec /usr/local/bin/parsar-server
     ports:
-      - "${PARSAR_BIND_ADDR:-0.0.0.0}:${PARSAR_LOCAL_PORT:-18080}:8080"
+      - "${PARSAR_BIND_ADDR:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
       DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
       # Network proxy — only needed if your host requires a proxy for internet
@@ -119,11 +110,12 @@ services:
       # Same service-name default the self-host compose uses (profile not
       # fork) — `parsar-server` is this service's network alias.
       PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"
-      # Optional connector credentials and workers. On the loopback default,
-      # the server seeds a stable dev-only PARSAR_MASTER_KEY so one-command
-      # local startup needs no secrets. Set a real 64-hex key when exposing
-      # this compose stack beyond loopback.
-      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-}"
+      # Optional connector credentials and workers. The default key is fixed
+      # so docker-compose.yml can run standalone, but it is dev-only. Set a
+      # stable random 64-hex value when exposing this stack or preserving
+      # encrypted secrets across deployments:
+      #   openssl rand -hex 32
+      PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
       PARSAR_FEISHU_APP_REGISTRATION: "${PARSAR_FEISHU_APP_REGISTRATION:-}"
       PARSAR_FEISHU_WEBSOCKET: "${PARSAR_FEISHU_WEBSOCKET:-}"
       PARSAR_FEISHU_OUTBOUND: "${PARSAR_FEISHU_OUTBOUND:-}"
@@ -157,11 +149,12 @@ services:
       PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
       PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
       # Shared token used only by the compose-resident local runtime below.
-      # install.sh generates a random value into .env.
-      PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-}"
+      # The fixed default keeps raw docker compose/Dokploy deployments from
+      # failing with an empty runtime token. Override it in real deployments.
+      PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
       PARSAR_AGENT_DAEMON_WS_URL: "ws://parsar-server:8080/agent-daemon/ws"
     volumes:
-      - ${PARSAR_DATA_DIR:-parsar-local-data}:/var/lib/parsar
+      - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
     # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`
     # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
     # so the default probe reports the container "unhealthy" even though it
@@ -185,7 +178,7 @@ services:
         condition: service_healthy
     environment:
       PARSAR_SERVER_URL: "http://parsar-server:8080"
-      PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-}"
+      PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
       PARSAR_RUNTIME_NAME: "local-sandbox"
       PARSAR_RUNTIME_PROFILE: "default-runtime"
     command: ["/opt/parsar/bin/runtime-entrypoint.sh"]
@@ -194,7 +187,7 @@ services:
       - parsar-runtime-workspace:/workspace
 
 volumes:
-  parsar-local-pg:
-  parsar-local-data:
+  postgres-data:
+  server-data:
   parsar-runtime-home:
   parsar-runtime-workspace:
