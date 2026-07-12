@@ -1756,40 +1756,6 @@
         "missing": "未配置"
       }
     },
-    "gatewayDefaults": {
-      "title": "网关默认值",
-      "description": "新接入网关时自动套用的默认行为。已配置的网关不受影响。",
-      "defaultVisibility": "新对话默认可见性",
-      "defaultVisibilityHint": "决定谁能看到通过这个 Gateway 进来的新对话。",
-      "dedupWindow": "事件去重窗口",
-      "dedupWindowHint": "同一外部 event_id 在此窗口内只处理一次。",
-      "replayProtection": "Replay 防护",
-      "replayProtectionHint": "拒绝 timestamp 漂移过大的 webhook 事件，缓解重放攻击。"
-    },
-    "security": {
-      "session": {
-        "title": "Session 策略",
-        "description": "登录态有效期 + MFA 要求。",
-        "idleTimeout": "Idle 超时",
-        "maxLifetime": "最大寿命",
-        "requireMFA": "Admin 必须 MFA",
-        "requireMFAHint": "对管理员账号强制启用 MFA。"
-      },
-      "pat": {
-        "title": "Personal Access Token (PAT)",
-        "description": "团队成员手动签发的访问 token 策略。",
-        "maxLifetime": "PAT 最大寿命",
-        "allowExpand": "允许成员自助扩展权限",
-        "allowExpandHint": "关闭则只能由 admin 给 PAT 加权限。"
-      },
-      "oidc": {
-        "title": "OIDC 单点登录",
-        "description": "对接企业 IdP（Okta / Azure AD / Auth0 等）。",
-        "issuer": "Issuer",
-        "clientId": "Client ID",
-        "note": "OIDC 是可选项；不配置则用本地账号登录。"
-      }
-    },
     "runtime": {
       "capability": {
         "title": "能力管理",
@@ -1826,28 +1792,6 @@
           "body": "工具权限、能力开关和凭证会在能力与连接器页面承接，不在设置页做假控件。",
           "value": "能力 / 连接器页面"
         }
-      }
-    },
-    "advanced": {
-      "dataRetention": {
-        "title": "数据保留",
-        "description": "运行历史和审计日志的保留时长。",
-        "runs": "Run 保留时长",
-        "audit": "Audit log 保留时长"
-      },
-      "experimental": {
-        "title": "实验性功能",
-        "description": "未稳定的能力，开启前请评估风险。",
-        "agentToAgent": "允许 Agent → Agent 调用",
-        "agentToAgentHint": "Agent 之间可以互相 @ 触发。链式深度由工作区配置控制。",
-        "memoryProposal": "Memory 写入提案审核",
-        "memoryProposalHint": "Agent 写入团队记忆前需要人审通过。"
-      },
-      "danger": {
-        "title": "危险区域",
-        "description": "不可逆操作，做之前先确认影响。",
-        "deleteWorkspace": "删除 Workspace",
-        "deleteWorkspaceHint": "删除后所有对话、运行、产物、审计日志都会永久删除，无法恢复。"
       }
     }
   },

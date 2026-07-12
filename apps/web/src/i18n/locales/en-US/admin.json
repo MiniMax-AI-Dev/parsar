@@ -1756,40 +1756,6 @@
         "missing": "Not configured"
       }
     },
-    "gatewayDefaults": {
-      "title": "Gateway defaults",
-      "description": "Defaults applied when a new gateway is wired up. Existing gateways aren't affected.",
-      "defaultVisibility": "New conversation visibility",
-      "defaultVisibilityHint": "Who can see new conversations from this gateway by default.",
-      "dedupWindow": "Event dedupe window",
-      "dedupWindowHint": "Same external event_id is processed only once within this window.",
-      "replayProtection": "Replay protection",
-      "replayProtectionHint": "Reject webhook events with stale timestamps to mitigate replay attacks."
-    },
-    "security": {
-      "session": {
-        "title": "Session policy",
-        "description": "Login lifetime + MFA requirements.",
-        "idleTimeout": "Idle timeout",
-        "maxLifetime": "Max lifetime",
-        "requireMFA": "Require MFA for admins",
-        "requireMFAHint": "Force MFA on admin accounts."
-      },
-      "pat": {
-        "title": "Personal Access Tokens",
-        "description": "Policy for tokens members issue manually.",
-        "maxLifetime": "Max PAT lifetime",
-        "allowExpand": "Allow self-service permission expansion",
-        "allowExpandHint": "Off means only admins can grant new scopes to a PAT."
-      },
-      "oidc": {
-        "title": "OIDC SSO",
-        "description": "Connect to your enterprise IdP (Okta / Azure AD / Auth0).",
-        "issuer": "Issuer",
-        "clientId": "Client ID",
-        "note": "OIDC is optional; without it, members log in via local accounts."
-      }
-    },
     "runtime": {
       "capability": {
         "title": "Capability management",
@@ -1826,28 +1792,6 @@
           "body": "Tool permissions, capability toggles, and credentials belong in Capabilities and Connectors instead of fake Settings controls.",
           "value": "Capabilities / Connectors"
         }
-      }
-    },
-    "advanced": {
-      "dataRetention": {
-        "title": "Data retention",
-        "description": "How long run history and audit logs are kept.",
-        "runs": "Run retention",
-        "audit": "Audit log retention"
-      },
-      "experimental": {
-        "title": "Experimental features",
-        "description": "Unstable capabilities. Evaluate risk before enabling.",
-        "agentToAgent": "Allow agent → agent calls",
-        "agentToAgentHint": "Agents can @-mention each other. Chain depth controlled per workspace.",
-        "memoryProposal": "Memory write proposal review",
-        "memoryProposalHint": "Agent memory writes need human approval first."
-      },
-      "danger": {
-        "title": "Danger zone",
-        "description": "Irreversible. Confirm impact before proceeding.",
-        "deleteWorkspace": "Delete workspace",
-        "deleteWorkspaceHint": "Permanently deletes all conversations, runs, artifacts, and audit logs. Cannot be undone."
       }
     }
   },
