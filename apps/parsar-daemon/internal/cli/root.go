@@ -34,6 +34,8 @@ func defaultRunContext() *runContext {
 // likely flow connect → status → stop / logs → logout.
 var commands = []command{
 	{name: "connect", summary: "Pair, open the reverse WebSocket, and start serving prompts", run: runConnect},
+	{name: "managed-connect", summary: "Auto-enroll the built-in Docker runtime and connect", run: runManagedConnect},
+	{name: "install-tool", summary: "Install a managed Agent CLI into persistent storage", run: runInstallTool},
 	{name: "status", summary: "Print the paired profile and daemon state", run: runStatus},
 	{name: "stop", summary: "Stop a background `connect -b` daemon", run: runStop},
 	{name: "logs", summary: "Tail the background daemon's log file", run: runLogs},

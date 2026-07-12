@@ -6,6 +6,18 @@
 -- (uuid cast to text on the way out, jsonb cast for write-side params,
 -- @now/@id parameter naming).
 
+-- name: GetFirstWorkspaceOwner :one
+select
+  w.id::text as workspace_id,
+  wm.user_id::text as owner_user_id
+from workspaces w
+join workspace_members wm on wm.workspace_id = w.id
+where w.deleted_at is null
+  and wm.deleted_at is null
+  and wm.role = 'owner'
+order by w.created_at asc, wm.created_at asc
+limit 1;
+
 -- name: CreateRuntimePairing :one
 -- Admin UI calls this to register a new Agent Daemon runtime in
 -- pending_pairing state. The pairing token is generated server-side,

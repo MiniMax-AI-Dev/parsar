@@ -2571,12 +2571,6 @@
     "agentDaemon": {
       "intro": "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
       "empty": "尚未接入任何本地设备。点击右上角按钮生成连接命令。",
-      "defaultDevice": {
-        "title": "默认本地 daemon",
-        "statusReady": "已启动",
-        "statusPending": "启动中",
-        "description": "Parsar 安装 server 时会启动一个本地 daemon。优先使用这个默认本地路径；只有 Agent 需要另一台机器时，再额外配对设备。"
-      },
       "errors": {
         "loadFailed": "无法加载本地设备列表"
       },

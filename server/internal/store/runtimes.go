@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	sqlc "github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Runtime type / liveness / provider constants mirror DB CHECK
@@ -84,6 +84,22 @@ type CreateRuntimePairingInput struct {
 type CreateRuntimePairingResult struct {
 	Runtime      RuntimeRead
 	PairingToken string
+}
+
+type FirstWorkspaceOwner struct {
+	WorkspaceID string
+	OwnerUserID string
+}
+
+func (s *Store) GetFirstWorkspaceOwner(ctx context.Context) (FirstWorkspaceOwner, bool, error) {
+	row, err := sqlc.New(s.db).GetFirstWorkspaceOwner(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return FirstWorkspaceOwner{}, false, nil
+		}
+		return FirstWorkspaceOwner{}, false, err
+	}
+	return FirstWorkspaceOwner{WorkspaceID: row.WorkspaceID, OwnerUserID: row.OwnerUserID}, true, nil
 }
 
 // CreateRuntimePairing mints a runtime row in pending_pairing state,

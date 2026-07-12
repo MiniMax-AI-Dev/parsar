@@ -45,6 +45,14 @@ func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- pro
 	return newSession(ctx, req, out, defaultSessionConfig())
 }
 
+func FactoryWithBinary(binary string) agent.Factory {
+	return func(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
+		cfg := defaultSessionConfig()
+		cfg.codexBinary = binary
+		return newSession(ctx, req, out, cfg)
+	}
+}
+
 // Session implements agent.Session. State lifecycle:
 //
 //  1. Factory builds it, RPC client is spawned + initialized.

@@ -147,6 +147,7 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        curl \
         tini \
         wget \
     ; \
@@ -156,14 +157,16 @@ RUN set -eux; \
              --home-dir /var/lib/parsar \
              --shell /usr/sbin/nologin \
              ${PARSAR_USER}; \
-    mkdir -p /var/lib/parsar /app/web /app/migrations; \
-    chown -R ${PARSAR_UID}:${PARSAR_GID} /var/lib/parsar
+    mkdir -p /var/lib/parsar /workspace /app/web /app/migrations; \
+    chown -R ${PARSAR_UID}:${PARSAR_GID} /var/lib/parsar /workspace
 
 # Binaries on $PATH — operators override CMD to switch between them.
 COPY --from=go-builder /out/parsar-server    /usr/local/bin/parsar-server
 COPY --from=go-builder /out/parsar-migrate   /usr/local/bin/parsar-migrate
 COPY --from=go-builder /out/parsar-bootstrap /usr/local/bin/parsar-bootstrap
 COPY --from=go-builder /out/parsar-daemon    /usr/local/bin/parsar-daemon
+COPY scripts/parsar-container-entrypoint.sh /usr/local/bin/parsar-container-entrypoint
+RUN chmod 0755 /usr/local/bin/parsar-container-entrypoint
 
 # Per-platform parsar-daemon binaries. RegisterParsarDaemonDownloadRoute
 # serves these (from PARSAR_DAEMON_BINARY_DIR) to the one-line connect
@@ -214,4 +217,4 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
 # image weeks later would find a process table full of `<defunct>`
 # entries with no obvious culprit.
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/usr/local/bin/parsar-server"]
+CMD ["/usr/local/bin/parsar-container-entrypoint"]

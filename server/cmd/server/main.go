@@ -496,11 +496,11 @@ func main() {
 		// so createAgent can eager-acquire and the /sandbox/acquire
 		// endpoint works. nil provider is safe — both paths degrade
 		// to lazy-create or 503 respectively.
+		opts = append(opts, dev.WithSandboxLifecycle(dbStore, agentDaemonSandbox))
 		if agentDaemonSandbox != nil {
 			managedSandboxProviderWired = true
 			runtimeStatusProber = configuredSandboxProber{}
 			opts = append(opts, dev.WithAgentDaemonSandbox(agentDaemonSandbox))
-			opts = append(opts, dev.WithSandboxLifecycle(dbStore, agentDaemonSandbox))
 
 			// Reap ticker: evict idle agent_daemon sandboxes so they
 			// don't leak E2B resources. 5-minute interval mirrors the
@@ -709,6 +709,7 @@ func main() {
 			runtimeapi.RegisterAdminRoutes(r, runtimeDeps)
 		})
 		runtimeapi.RegisterRunnerRoutes(r, runtimeDeps)
+		runtimeapi.RegisterManagedRoutes(r, runtimeDeps)
 		log.Bg().Info("runtime lifecycle API mounted",
 			"admin_paths", "/api/v1/workspaces/{wid}/runtimes",
 			"runtime_paths", "/api/v1/runtimes/pair, /api/v1/runtimes/{id}/heartbeat")
@@ -1390,12 +1391,13 @@ func buildRuntimeProviderStatuses(env func(string) string, e2bProviderWired bool
 			ID:          "manual_daemon",
 			Label:       "Manual daemon",
 			Kind:        "manual",
-			Configured:  true,
-			Available:   true,
+			Configured:  false,
+			Available:   false,
 			Recommended: true,
 			Requires:    []string{"parsar-daemon"},
+			Missing:     []string{"paired_runtime"},
 			Action:      "pair_daemon",
-			Message:     "Default runtime path. The server-managed local daemon and user-installed daemons both use this provider.",
+			Message:     "Install or start parsar-daemon and pair it with this workspace.",
 		},
 	}
 

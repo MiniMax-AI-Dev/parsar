@@ -259,3 +259,35 @@ func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 		t.Fatalf("pi factory not registered: %v", err)
 	}
 }
+
+func TestRegisterAgentKindsAdvertisesLazyCodex(t *testing.T) {
+	t.Setenv("PARSAR_DAEMON_LAZY_CODEX", "true")
+	reg := agent.NewRegistry()
+	registerAgentKinds(reg, agentCLIDiscovery{
+		ClaudeCode: proto.SupportedAgentKind{Kind: "claude_code"},
+		OpenCode:   proto.SupportedAgentKind{Kind: "opencode"},
+		Codex: proto.SupportedAgentKind{
+			Kind: "codex",
+			Capabilities: proto.AgentKindCapabilities{
+				Streaming: true,
+				Usage:     true,
+				Resume:    true,
+			},
+		},
+		Pi: proto.SupportedAgentKind{Kind: "pi"},
+	})
+
+	for _, kind := range reg.SupportedAgentKinds() {
+		if kind.Kind != "codex" {
+			continue
+		}
+		if !kind.Available {
+			t.Fatalf("lazy codex should be advertised as available: %#v", kind)
+		}
+		if kind.Version != "managed; installs on first use" {
+			t.Fatalf("lazy codex version = %q", kind.Version)
+		}
+		return
+	}
+	t.Fatal("codex descriptor not registered")
+}

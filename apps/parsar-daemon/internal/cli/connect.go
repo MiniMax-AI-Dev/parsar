@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/daemonize"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/dispatch"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/tools"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/transport"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
@@ -330,7 +332,7 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", pi.InstallURL)
 	}
 
-	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available {
+	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available && os.Getenv("PARSAR_DAEMON_ALLOW_EMPTY_AGENT_CLIS") != "true" {
 		return out, fmt.Errorf("connect: no supported agent CLI available (install Claude Code, OpenCode, Codex, or pi)")
 	}
 	return out, nil
@@ -339,8 +341,38 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery) {
 	registry.RegisterKind(agentCLIs.ClaudeCode, claudecode.Factory)
 	registry.RegisterKind(agentCLIs.OpenCode, opencodeagent.Factory)
-	registry.RegisterKind(agentCLIs.Codex, codex.Factory)
+	if os.Getenv("PARSAR_DAEMON_LAZY_CODEX") == "true" {
+		agentCLIs.Codex.Available = true
+		if agentCLIs.Codex.Version == "" {
+			agentCLIs.Codex.Version = "managed; installs on first use"
+		}
+		registry.RegisterKind(agentCLIs.Codex, lazyCodexFactory(registry, agentCLIs.Codex))
+	} else {
+		registry.RegisterKind(agentCLIs.Codex, codex.Factory)
+	}
 	registry.RegisterKind(agentCLIs.Pi, pi.Factory)
+}
+
+func lazyCodexFactory(registry *agent.Registry, info proto.SupportedAgentKind) agent.Factory {
+	var mu sync.Mutex
+	var binary string
+	return func(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if binary == "" {
+			installCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			installedBinary, version, err := tools.EnsureCodex(installCtx)
+			cancel()
+			if err != nil {
+				return nil, fmt.Errorf("install codex: %w", err)
+			}
+			binary = installedBinary
+			info.Available = true
+			info.Version = version
+			registry.UpdateKind(info)
+		}
+		return codex.FactoryWithBinary(binary)(ctx, req, out)
+	}
 }
 
 // spawnBackground forks the daemon into the background. Parent
@@ -426,6 +458,9 @@ func mainLoop(rc *runContext, profile string, prof auth.Profile, agentCLIs agent
 	wsURL, err := transport.DeriveWSURL(*boot, prof.ServerURL)
 	if err != nil {
 		return fmt.Errorf("connect: derive ws url: %w", err)
+	}
+	if override := strings.TrimSpace(os.Getenv("PARSAR_DAEMON_WS_URL_OVERRIDE")); override != "" {
+		wsURL = override
 	}
 	obslog.Bg().Info("bootstrap ok", "device_id", boot.DeviceID, "ws_url", wsURL, "heartbeat_interval", boot.HeartbeatInterval())
 

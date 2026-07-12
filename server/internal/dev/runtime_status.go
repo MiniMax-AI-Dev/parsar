@@ -34,6 +34,7 @@ type RuntimeStatusDeps struct {
 
 type RuntimeSettingsStore interface {
 	GetWorkspaceRuntimeSettings(ctx context.Context, workspaceID string) (store.WorkspaceRuntimeSettingsRead, error)
+	ListRuntimes(ctx context.Context, workspaceID, typeFilter string, limit int32) ([]store.RuntimeRead, error)
 }
 
 const defaultRuntimePingTimeout = 1 * time.Second
@@ -119,6 +120,11 @@ func runtimeStatus(deps RuntimeStatusDeps) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "runtime settings unavailable"})
 			return
 		}
+		runtimes, err := deps.SettingsStore.ListRuntimes(r.Context(), workspaceID, store.RuntimeTypeAgentDaemon, 500)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "runtime list unavailable"})
+			return
+		}
 
 		profile := normalizeRuntimeProfile(deps.Profile)
 		hasCredential := strings.TrimSpace(settings.RuntimeCredentialSecretID) != ""
@@ -134,7 +140,7 @@ func runtimeStatus(deps RuntimeStatusDeps) http.HandlerFunc {
 			Available:         available,
 			SandboxAgentCount: settings.SandboxAgentCount,
 			Profile:           profile,
-			Providers:         runtimeProvidersForResponse(deps.Providers, hasCredential, profile, available),
+			Providers:         runtimeProvidersForResponse(deps.Providers, hasCredential, profile, available, hasOnlineManualDaemon(runtimes)),
 		}
 		if masked := strings.TrimSpace(settings.RuntimeCredentialMasked); masked != "" {
 			resp.CredentialMasked = &masked
@@ -169,7 +175,7 @@ func computeSandboxReachable(ctx context.Context, prober SandboxLivenessProber, 
 	return true
 }
 
-func runtimeProvidersForResponse(providers []RuntimeProviderStatus, hasCredential bool, profile string, sandboxAvailable bool) []RuntimeProviderStatus {
+func runtimeProvidersForResponse(providers []RuntimeProviderStatus, hasCredential bool, profile string, sandboxAvailable, manualAvailable bool) []RuntimeProviderStatus {
 	out := make([]RuntimeProviderStatus, 0, len(providers))
 	for _, p := range providers {
 		cp := p
@@ -177,7 +183,11 @@ func runtimeProvidersForResponse(providers []RuntimeProviderStatus, hasCredentia
 		cp.Missing = append([]string(nil), p.Missing...)
 		switch cp.ID {
 		case "manual_daemon":
-			cp.Configured = true
+			cp.Configured = manualAvailable
+			cp.Available = manualAvailable
+			if manualAvailable {
+				cp.Missing = nil
+			}
 			if cp.Action == "" {
 				cp.Action = "pair_daemon"
 			}
@@ -199,6 +209,15 @@ func runtimeProvidersForResponse(providers []RuntimeProviderStatus, hasCredentia
 		out = append(out, cp)
 	}
 	return out
+}
+
+func hasOnlineManualDaemon(runtimes []store.RuntimeRead) bool {
+	for _, runtime := range runtimes {
+		if runtime.Liveness == store.RuntimeLivenessOnline && runtime.Provider != store.RuntimeProviderAgentDaemonSandbox {
+			return true
+		}
+	}
+	return false
 }
 
 func removeString(items []string, value string) []string {

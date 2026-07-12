@@ -100,7 +100,6 @@ func (q *Queries) ConsumePairingToken(ctx context.Context, arg ConsumePairingTok
 }
 
 const createRuntimePairing = `-- name: CreateRuntimePairing :one
-
 insert into runtimes(
   id, workspace_id, type, name, liveness, provider,
   owner_user_id, version, hostname,
@@ -162,13 +161,6 @@ type CreateRuntimePairingRow struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
-// runtimes.sql — runtime lifecycle and Agent Daemon pairing queries.
-//
-// Scope: SQL backing the runtimes table: admin lifecycle, daemon
-// pairing, runtime credential heartbeat, and agent_daemon heartbeat
-// capability persistence. Conventions follow the existing store.sql
-// (uuid cast to text on the way out, jsonb cast for write-side params,
-// @now/@id parameter naming).
 // Admin UI calls this to register a new Agent Daemon runtime in
 // pending_pairing state. The pairing token is generated server-side,
 // hashed (sha256 hex) and stored here; the plaintext is returned to
@@ -205,6 +197,39 @@ func (q *Queries) CreateRuntimePairing(ctx context.Context, arg CreateRuntimePai
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getFirstWorkspaceOwner = `-- name: GetFirstWorkspaceOwner :one
+
+select
+  w.id::text as workspace_id,
+  wm.user_id::text as owner_user_id
+from workspaces w
+join workspace_members wm on wm.workspace_id = w.id
+where w.deleted_at is null
+  and wm.deleted_at is null
+  and wm.role = 'owner'
+order by w.created_at asc, wm.created_at asc
+limit 1
+`
+
+type GetFirstWorkspaceOwnerRow struct {
+	WorkspaceID string `json:"workspace_id"`
+	OwnerUserID string `json:"owner_user_id"`
+}
+
+// runtimes.sql — runtime lifecycle and Agent Daemon pairing queries.
+//
+// Scope: SQL backing the runtimes table: admin lifecycle, daemon
+// pairing, runtime credential heartbeat, and agent_daemon heartbeat
+// capability persistence. Conventions follow the existing store.sql
+// (uuid cast to text on the way out, jsonb cast for write-side params,
+// @now/@id parameter naming).
+func (q *Queries) GetFirstWorkspaceOwner(ctx context.Context) (GetFirstWorkspaceOwnerRow, error) {
+	row := q.db.QueryRow(ctx, getFirstWorkspaceOwner)
+	var i GetFirstWorkspaceOwnerRow
+	err := row.Scan(&i.WorkspaceID, &i.OwnerUserID)
 	return i, err
 }
 

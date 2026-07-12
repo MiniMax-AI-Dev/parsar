@@ -210,6 +210,33 @@ definitions:
       type:
         type: string
     type: object
+  dev.RuntimeProviderStatus:
+    properties:
+      action:
+        type: string
+      available:
+        type: boolean
+      configured:
+        type: boolean
+      id:
+        type: string
+      kind:
+        type: string
+      label:
+        type: string
+      message:
+        type: string
+      missing:
+        items:
+          type: string
+        type: array
+      recommended:
+        type: boolean
+      requires:
+        items:
+          type: string
+        type: array
+    type: object
   dev.addWorkspaceMemberRequest:
     properties:
       email:
@@ -641,33 +668,6 @@ definitions:
       updated_at:
         type: string
     type: object
-  dev.RuntimeProviderStatus:
-    properties:
-      action:
-        type: string
-      available:
-        type: boolean
-      configured:
-        type: boolean
-      id:
-        type: string
-      kind:
-        type: string
-      label:
-        type: string
-      message:
-        type: string
-      missing:
-        items:
-          type: string
-        type: array
-      recommended:
-        type: boolean
-      requires:
-        items:
-          type: string
-        type: array
-    type: object
   dev.runtimeStatusResponse:
     properties:
       available:
@@ -1029,6 +1029,13 @@ definitions:
   runtime.heartbeatResponse:
     properties:
       liveness:
+        type: string
+    type: object
+  runtime.managedEnrollResponse:
+    properties:
+      pairing_token:
+        type: string
+      server_url:
         type: string
     type: object
   runtime.pairRequest:
@@ -8283,6 +8290,40 @@ paths:
               type: string
             type: object
       summary: Fetch internal IM history
+      tags:
+      - internal
+  /internal/managed-daemon/enroll:
+    post:
+      description: Loopback-only endpoint used by the all-in-one container after first-owner
+        bootstrap. Replaces the fixed Default Docker Runtime and returns a one-shot
+        pairing token.
+      operationId: enrollManagedLocalDaemon
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/runtime.managedEnrollResponse'
+        "403":
+          description: Request is not loopback
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: First workspace has not been created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Managed runtime enrollment failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Enroll managed local daemon
       tags:
       - internal
   /readyz:

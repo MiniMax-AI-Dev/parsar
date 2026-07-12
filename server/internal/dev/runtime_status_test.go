@@ -64,6 +64,7 @@ func newRuntimeStatusTestRouter(deps RuntimeStatusDeps) chi.Router {
 
 type fakeRuntimeSettingsStore struct {
 	settings store.WorkspaceRuntimeSettingsRead
+	runtimes []store.RuntimeRead
 	err      error
 }
 
@@ -74,6 +75,13 @@ func (f fakeRuntimeSettingsStore) GetWorkspaceRuntimeSettings(ctx context.Contex
 	settings := f.settings
 	settings.WorkspaceID = workspaceID
 	return settings, nil
+}
+
+func (f fakeRuntimeSettingsStore) ListRuntimes(context.Context, string, string, int32) ([]store.RuntimeRead, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.runtimes, nil
 }
 
 // runtimeStatusRequest is a tiny helper for the URL the handler is
@@ -188,15 +196,23 @@ func TestRuntimeStatusNoCredential(t *testing.T) {
 
 func TestRuntimeStatusIncludesProviders(t *testing.T) {
 	r := newRuntimeStatusTestRouter(RuntimeStatusDeps{
-		SettingsStore: fakeRuntimeSettingsStore{settings: store.WorkspaceRuntimeSettingsRead{}},
+		SettingsStore: fakeRuntimeSettingsStore{
+			settings: store.WorkspaceRuntimeSettingsRead{},
+			runtimes: []store.RuntimeRead{{
+				Type:     store.RuntimeTypeAgentDaemon,
+				Provider: store.RuntimeProviderAgentDaemon,
+				Liveness: store.RuntimeLivenessOnline,
+			}},
+		},
 		Providers: []RuntimeProviderStatus{
 			{
 				ID:          "manual_daemon",
 				Label:       "Manual daemon",
 				Kind:        "manual",
-				Configured:  true,
-				Available:   true,
+				Configured:  false,
+				Available:   false,
 				Recommended: true,
+				Missing:     []string{"paired_runtime"},
 			},
 			{
 				ID:        "e2b_compatible",
@@ -229,6 +245,9 @@ func TestRuntimeStatusIncludesProviders(t *testing.T) {
 	}
 	if got := manual["available"]; got != true {
 		t.Errorf("manual provider available: got %v", got)
+	}
+	if got := manual["configured"]; got != true {
+		t.Errorf("manual provider configured: got %v", got)
 	}
 	e2b, _ := providers[1].(map[string]any)
 	if got := e2b["id"]; got != "e2b_compatible" {

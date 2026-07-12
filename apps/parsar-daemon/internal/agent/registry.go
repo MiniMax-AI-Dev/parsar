@@ -104,6 +104,17 @@ func (r *Registry) RegisterKind(info proto.SupportedAgentKind, f Factory) {
 	r.kinds[kind] = info
 }
 
+func (r *Registry) UpdateKind(info proto.SupportedAgentKind) {
+	if info.Kind == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.factories[info.Kind]; ok {
+		r.kinds[info.Kind] = info
+	}
+}
+
 // Resolve returns the factory for kind, or wraps ErrUnsupportedKind.
 func (r *Registry) Resolve(kind string) (Factory, error) {
 	r.mu.RLock()

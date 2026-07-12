@@ -65,19 +65,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Run migrations before serving, in the same container as the server.
-    # goose migrations are idempotent (already-applied ones are skipped),
-    # so re-running this on every `restart: unless-stopped` cycle is a
-    # cheap no-op — no separate one-shot init container needed. `exec`
-    # replaces the shell with parsar-server so it stays tini's direct
-    # child for correct signal handling. First owner creation happens in
-    # the web setup flow (POST /api/v1/bootstrap).
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        parsar-migrate
-        exec /usr/local/bin/parsar-server
+    # The image entrypoint runs migrations, parsar-server, and the managed
+    # local daemon. The daemon waits for first-owner bootstrap, then enrolls
+    # a Default Docker Runtime and reconnects from persisted credentials.
     ports:
       - "${PARSAR_BIND_ADDR:-0.0.0.0}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:

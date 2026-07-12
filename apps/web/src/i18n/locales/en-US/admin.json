@@ -2571,12 +2571,6 @@
     "agentDaemon": {
       "intro": "Local devices connect back to Parsar through parsar-daemon so Agents can use Claude Code / OpenCode CLIs on that machine.",
       "empty": "No local device is connected yet. Generate a connection command from the button on the right.",
-      "defaultDevice": {
-        "title": "Default local daemon",
-        "statusReady": "Started",
-        "statusPending": "Starting",
-        "description": "Parsar starts a local daemon with the server install. Use this default local path first; pair extra devices only when Agents need another machine."
-      },
       "errors": {
         "loadFailed": "Failed to load Local Devices"
       },
