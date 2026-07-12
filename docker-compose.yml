@@ -18,12 +18,14 @@
 #   - Local build fallback (before the tag is published, or to test your
 #     own changes):
 #       make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
-#       PARSAR_SERVER_IMAGE=parsar:local docker compose up
+#       PARSAR_IMAGE_PULL_POLICY=never PARSAR_SERVER_IMAGE=parsar:local docker compose up
 #
 # Override knobs:
 #   PARSAR_PROJECT_NAME   compose project/network prefix (default: parsar)
 #   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
 #   PARSAR_SANDBOX_IMAGE  default local runtime image ref (default: GHCR latest)
+#   PARSAR_IMAGE_PULL_POLICY image freshness policy (default: always; set
+#                         never for local images)
 #   PARSAR_SHARED_RUNTIME_TOKEN shared token for parsar-runtime pairing
 #   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
 #   PARSAR_PG_PORT        host port for Postgres (default: 15432)
@@ -61,6 +63,7 @@ services:
 
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
+    pull_policy: ${PARSAR_IMAGE_PULL_POLICY:-always}
     container_name: ${PARSAR_PROJECT_NAME:-parsar}-local-server
     restart: unless-stopped
     depends_on:
@@ -175,6 +178,7 @@ services:
 
   parsar-runtime:
     image: ${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}
+    pull_policy: ${PARSAR_IMAGE_PULL_POLICY:-always}
     restart: unless-stopped
     depends_on:
       parsar-server:

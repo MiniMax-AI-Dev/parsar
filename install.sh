@@ -24,7 +24,9 @@ Options:
                          Default: ghcr.io/minimax-ai-dev/parsar-sandbox:latest
                          To use your own build instead:
                          docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
-                         --sandbox-image parsar-sandbox:local
+                         --sandbox-image parsar-sandbox:local --pull-policy never
+  --pull-policy POLICY   Compose image pull policy: always, missing, or never.
+                         Default: always. Use never for local images.
   --port PORT            Web UI host port. Default: 18080
   --pg-port PORT         Postgres host port. Default: 15432
   --bind ADDR            Web UI bind address. Default: 127.0.0.1
@@ -35,8 +37,9 @@ Options:
 
 Environment variables with the same names are also honored:
   PARSAR_HOME, PARSAR_COMPOSE_FILE, PARSAR_SERVER_IMAGE,
-  PARSAR_SANDBOX_IMAGE, PARSAR_LOCAL_PORT, PARSAR_PG_PORT,
-  PARSAR_BIND_ADDR, PARSAR_PUBLIC_URL, PARSAR_PROJECT_NAME.
+  PARSAR_SANDBOX_IMAGE, PARSAR_IMAGE_PULL_POLICY,
+  PARSAR_LOCAL_PORT, PARSAR_PG_PORT, PARSAR_BIND_ADDR,
+  PARSAR_PUBLIC_URL, PARSAR_PROJECT_NAME.
 EOF
 }
 
@@ -153,6 +156,7 @@ home_arg="${PARSAR_HOME:-$HOME/.parsar}"
 compose_arg="${PARSAR_COMPOSE_FILE:-}"
 server_image="${PARSAR_SERVER_IMAGE:-$DEFAULT_SERVER_IMAGE}"
 sandbox_image="${PARSAR_SANDBOX_IMAGE:-$DEFAULT_SANDBOX_IMAGE}"
+pull_policy="${PARSAR_IMAGE_PULL_POLICY:-always}"
 local_port="${PARSAR_LOCAL_PORT:-18080}"
 pg_port="${PARSAR_PG_PORT:-15432}"
 bind_addr="${PARSAR_BIND_ADDR:-127.0.0.1}"
@@ -166,6 +170,7 @@ while [ "$#" -gt 0 ]; do
     --compose-file) compose_arg="${2:?missing value for --compose-file}"; shift 2 ;;
     --image) server_image="${2:?missing value for --image}"; shift 2 ;;
     --sandbox-image) sandbox_image="${2:?missing value for --sandbox-image}"; shift 2 ;;
+    --pull-policy) pull_policy="${2:?missing value for --pull-policy}"; shift 2 ;;
     --port) local_port="${2:?missing value for --port}"; shift 2 ;;
     --pg-port) pg_port="${2:?missing value for --pg-port}"; shift 2 ;;
     --bind) bind_addr="${2:?missing value for --bind}"; shift 2 ;;
@@ -179,6 +184,10 @@ done
 
 case "$local_port" in (*[!0-9]*|"") die "--port must be numeric" ;; esac
 case "$pg_port" in (*[!0-9]*|"") die "--pg-port must be numeric" ;; esac
+case "$pull_policy" in
+  always|missing|never) ;;
+  *) die "--pull-policy must be one of: always, missing, never" ;;
+esac
 case "$project_name" in
   ""|[!a-z0-9]*) die "--project-name must start with a lowercase letter or digit" ;;
 esac
@@ -211,6 +220,7 @@ set_env "PARSAR_HOME" "$parsar_home" "$env_file"
 set_env "PARSAR_PROJECT_NAME" "$project_name" "$env_file"
 set_env "PARSAR_SERVER_IMAGE" "$server_image" "$env_file"
 set_env "PARSAR_SANDBOX_IMAGE" "$sandbox_image" "$env_file"
+set_env "PARSAR_IMAGE_PULL_POLICY" "$pull_policy" "$env_file"
 set_env "PARSAR_LOCAL_PORT" "$local_port" "$env_file"
 set_env "PARSAR_PG_PORT" "$pg_port" "$env_file"
 set_env "PARSAR_BIND_ADDR" "$bind_addr" "$env_file"
@@ -232,6 +242,12 @@ if [ "$dry_run" = "true" ]; then
 fi
 
 log "Starting Parsar with Docker Compose"
+if [ "$pull_policy" != "never" ]; then
+  log "Pulling Parsar images with policy: $pull_policy"
+  compose_run pull --ignore-pull-failures --policy "$pull_policy" parsar-server parsar-runtime || true
+else
+  log "Skipping image pull because PARSAR_IMAGE_PULL_POLICY=never"
+fi
 compose_run up -d --remove-orphans
 
 if wait_for_health; then
