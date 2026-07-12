@@ -4,9 +4,7 @@ import * as Tooltip from "@radix-ui/react-tooltip"
 import {
   ArrowUpRight,
   Bot,
-  Cable,
   Copy,
-  Database,
   Loader2,
   MessageSquare,
   Pencil,
@@ -20,10 +18,6 @@ import { PageHeader } from "../../components/layout/PageHeader"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimeline"
 import { SandboxPanel } from "../../components/admin/SandboxPanel"
-import {
-  FeishuConnectorPanel,
-  readFeishuConfigFromAgent,
-} from "../../components/admin/FeishuConnectorPanel"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -70,15 +64,12 @@ import {
   useAgents,
   useSetAgentStatus,
   useUpdateAgent,
-  useUpdateAgentVisibility,
   useUpdateAgentProfile,
   useAgentMetrics,
   useAgentRuns,
   type AgentMetrics,
-  type AgentVisibility,
 } from "../../lib/api-agents"
 import { useModels } from "../../lib/api-models"
-import { useSandboxBinding } from "../../lib/api-sandbox"
 import {
   useCapabilitiesQuery,
   useCapabilityVersionsQuery,
@@ -131,12 +122,6 @@ function runtimeOf(a: Agent): "local" | "sandbox" {
   // detail label still renders for very old rows.
   const placement = agentExecutionPlacement(a)
   return placement === "local" ? "local" : "sandbox"
-}
-
-function tagsOf(a: Agent): string[] {
-  const profile = ((a.config as Record<string, unknown> | undefined)?.profile
-    ?? {}) as Record<string, unknown>
-  return Array.isArray(profile.skills) ? profile.skills.filter((v): v is string => typeof v === "string") : []
 }
 
 function starterConversationTitle(agentName: string, language: string): string {
@@ -682,8 +667,6 @@ export function AgentDetailPage({ id }: { id: string }) {
   const query = useAgents(wid)
   const modelsQ = useModels(wid)
   const workspacesQ = useMyWorkspaces()
-  const updateMut = useUpdateAgent(wid)
-  const statusMut = useSetAgentStatus(wid)
   const agents = query.data?.agents ?? []
   const agent = agents.find((a) => a.id === id) ?? agents[0]
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
@@ -788,21 +771,6 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
     <div className="mb-2 last:mb-0">
       <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
       <dd className={`text-sm text-fg-emphasis ${mono ? "font-mono" : ""}`}>{value}</dd>
-    </div>
-  )
-}
-
-function TagsField({ label, tags }: { label: string; tags: string[] }) {
-  return (
-    <div className="mb-2 last:mb-0">
-      <dt className="mb-1 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className="flex flex-wrap gap-1.5">
-        {tags.length === 0 ? (
-          <span className="text-sm text-fg-faint">—</span>
-        ) : (
-          tags.map((tag) => <Badge key={tag} variant="neutral">{tag}</Badge>)
-        )}
-      </dd>
     </div>
   )
 }
@@ -1355,150 +1323,6 @@ function Card({ title, className, children }: { title: string; className?: strin
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-surface p-4">
-      <div className="text-xs font-medium text-fg-faint">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-fg">{value}</div>
-    </div>
-  )
-}
-
-/**
- * Agent visibility radio + confirmation dialog when tightening FROM
- * `public` to a stricter tier. RBAC-gated client-side; backend re-enforces.
- */
-function VisibilityCard({
-  agentID,
-  workspaceID,
-  current,
-  canEdit,
-  onSuccess,
-}: {
-  agentID: string
-  workspaceID: string | null
-  current: AgentVisibility
-  canEdit: boolean
-  onSuccess: (next: AgentVisibility) => void
-}) {
-  const { t } = useTranslation("admin")
-  const mut = useUpdateAgentVisibility(workspaceID)
-  const [pendingDowngrade, setPendingDowngrade] = useState<AgentVisibility | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-
-  const apply = (next: AgentVisibility) => {
-    setErrorMsg(null)
-    mut.mutate(
-      { agentID, visibility: next },
-      {
-        onSuccess: () => {
-          setPendingDowngrade(null)
-          onSuccess(next)
-        },
-        onError: (err) => {
-          setErrorMsg((err as Error)?.message ?? t("agents.visibility.updateError"))
-        },
-      },
-    )
-  }
-
-  const onSelect = (next: AgentVisibility) => {
-    if (next === current) return
-    // Tightening from public kicks out external users — confirm first.
-    if (current === "public" && next !== "public") {
-      setPendingDowngrade(next)
-      return
-    }
-    apply(next)
-  }
-
-  const tiers: { value: AgentVisibility; hint: string }[] = [
-    { value: "workspace", hint: t("agents.visibility.workspaceHint") },
-    { value: "tenant", hint: t("agents.visibility.tenantHint") },
-    { value: "public", hint: t("agents.visibility.publicHint") },
-  ]
-
-  return (
-    <Card title={t("agents.table.visibility")} className="mt-4">
-      <div className="space-y-2">
-        {tiers.map((tier) => (
-          <label
-            key={tier.value}
-            className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors ${
-              current === tier.value
-                ? "border-line-strong bg-surface-subtle"
-                : "border-line hover:bg-surface-subtle"
-            } ${!canEdit ? "cursor-not-allowed opacity-60" : ""}`}
-          >
-            <input
-              type="radio"
-              name="agent-visibility"
-              value={tier.value}
-              checked={current === tier.value}
-              disabled={!canEdit || mut.isPending}
-              onChange={() => onSelect(tier.value)}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-fg">
-                {t(`agents.visibility.${tier.value}`)}
-              </div>
-              <div className="mt-0.5 text-sm text-fg-subtle">{tier.hint}</div>
-            </div>
-          </label>
-        ))}
-      </div>
-      {!canEdit && (
-        <p className="mt-2 text-sm text-fg-faint">
-          {t("agents.visibility.ownerOnly")}
-        </p>
-      )}
-      {errorMsg && (
-        <p className="mt-2 text-sm text-danger" role="alert">
-          {errorMsg}
-        </p>
-      )}
-
-      {pendingDowngrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-emphasis/40 px-4">
-          <div className="w-full max-w-md rounded-lg bg-surface p-5 shadow-xl">
-            <h4 className="text-base font-semibold text-fg">
-              {t("agents.visibility.downgradeWarnTitle")}
-            </h4>
-            <p className="mt-2 text-sm text-fg-muted">
-              {t("agents.visibility.downgradeWarnBody", {
-                to: t(`agents.visibility.${pendingDowngrade}`),
-              })}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingDowngrade(null)}
-                className="rounded-md border border-line px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-subtle"
-                disabled={mut.isPending}
-              >
-                {t("agents.visibility.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => apply(pendingDowngrade)}
-                className="rounded-md bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:opacity-60"
-                disabled={mut.isPending}
-              >
-                {mut.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  t("agents.visibility.confirmDowngrade")
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
-  )
-}
-
 /* ------------------------------------------------------------------ */
 /*  AgentDynamicsTab — "Activity" tab.                                 */
 /* ------------------------------------------------------------------ */
@@ -1506,7 +1330,6 @@ function VisibilityCard({
 const RECENT_RUNS_LIMIT = 10
 
 function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string | null; agent: Agent }) {
-  const { t } = useTranslation("admin")
   // Filter client-side: list-runs takes only workspace + status, no
   // per-agent query option yet.
   const inflightQ = useAgentRuns(workspaceID, { statuses: ["running", "queued"], limit: 50 })
