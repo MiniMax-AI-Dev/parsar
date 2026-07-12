@@ -704,7 +704,10 @@ func main() {
 	// inside the package. Wired AFTER dev.RegisterRoutesWithStore so
 	// chi's NotFound fallback still fires last.
 	if pool != nil && dbStore != nil {
-		runtimeDeps := runtimeapi.Deps{Store: dbStore}
+		runtimeDeps := runtimeapi.Deps{
+			Store:              dbStore,
+			SharedRuntimeToken: strings.TrimSpace(envLookup("PARSAR_SHARED_RUNTIME_TOKEN")),
+		}
 		sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
 		authMw := auth.NewMiddleware(sessionStore).WithDevAuth(cfg.Auth.DevAuth)
 		r.Group(func(r chi.Router) {

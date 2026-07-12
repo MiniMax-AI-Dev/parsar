@@ -20,7 +20,7 @@ Options:
                          when present, otherwise download the published template.
   --image IMAGE          parsar-server image.
                          Default: ghcr.io/minimax-ai-dev/parsar-server:latest
-  --sandbox-image IMAGE  Docker sandbox image.
+  --sandbox-image IMAGE  Default local runtime sandbox image.
                          Default: ghcr.io/minimax-ai-dev/parsar-sandbox:latest
                          To use your own build instead:
                          docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
@@ -197,12 +197,6 @@ fi
 
 detect_docker
 
-docker_bin="$(command -v docker || true)"
-docker_gid="999"
-if [ -S /var/run/docker.sock ] && command -v stat >/dev/null 2>&1; then
-  docker_gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || printf '999')"
-fi
-
 umask 077
 mkdir -p "$parsar_home" "$parsar_home/postgres" "$parsar_home/data"
 
@@ -224,10 +218,9 @@ set_env "PARSAR_PUBLIC_URL" "$public_url" "$env_file"
 set_env "PARSAR_COOKIE_SECURE" "false" "$env_file"
 ensure_env "PARSAR_PG_PASSWORD" "$(random_hex 24)" "$env_file"
 ensure_env "PARSAR_MASTER_KEY" "$(random_hex 32)" "$env_file"
+ensure_env "PARSAR_SHARED_RUNTIME_TOKEN" "$(random_hex 32)" "$env_file"
 set_env "PARSAR_PG_DATA_DIR" "$parsar_home/postgres" "$env_file"
 set_env "PARSAR_DATA_DIR" "$parsar_home/data" "$env_file"
-set_env "PARSAR_DOCKER_BIN" "${docker_bin:-/usr/bin/docker}" "$env_file"
-set_env "DOCKER_GID" "$docker_gid" "$env_file"
 
 log "Using $compose_file"
 log "Wrote $env_file"

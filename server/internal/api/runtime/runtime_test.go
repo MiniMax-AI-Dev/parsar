@@ -102,6 +102,67 @@ func TestRuntimeHTTPSurfaceDaemonPairingRoundTrip(t *testing.T) {
 		http.StatusOK)
 }
 
+func TestSharedRuntimeStaticTokenPair(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	s := store.New(db)
+
+	const sharedToken = "test-shared-runtime-token"
+	r := chi.NewRouter()
+	runtimeapi.RegisterRunnerRoutes(r, runtimeapi.Deps{Store: s, SharedRuntimeToken: sharedToken})
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	pairBody := map[string]any{
+		"pairing_token":     sharedToken,
+		"hostname":          "parsar-runtime",
+		"version":           "0.1.0",
+		"runner_public_key": "fakepubkey==",
+	}
+	postJSON(t, srv.URL+"/api/v1/runtimes/pair", pairBody, http.StatusServiceUnavailable)
+
+	ids := store.DefaultDevFixtureIDs()
+	if _, err := s.InsertDevFixture(ctx, ids); err != nil {
+		t.Fatalf("seed dev fixture: %v", err)
+	}
+
+	pairOut := postJSON(t, srv.URL+"/api/v1/runtimes/pair", pairBody, http.StatusOK)
+	credential := pairOut["runner_credential"].(string)
+	if !strings.HasPrefix(credential, "rtc_") {
+		t.Fatalf("runner credential prefix wrong: %q", credential)
+	}
+	rt := pairOut["runtime"].(map[string]any)
+	if rt["name"] != store.SharedRuntimeName {
+		t.Fatalf("runtime name = %v, want %q", rt["name"], store.SharedRuntimeName)
+	}
+	if rt["workspace_id"] != ids.WorkspaceID {
+		t.Fatalf("workspace_id = %v, want %v", rt["workspace_id"], ids.WorkspaceID)
+	}
+	rtID := rt["id"].(string)
+
+	repairOut := postJSON(t, srv.URL+"/api/v1/runtimes/pair", pairBody, http.StatusOK)
+	rt2 := repairOut["runtime"].(map[string]any)
+	if rt2["id"] != rtID {
+		t.Fatalf("re-pair changed runtime id: %v -> %v", rtID, rt2["id"])
+	}
+	if repairOut["runner_credential"] == credential {
+		t.Fatal("re-pair returned the same runner credential")
+	}
+
+	hb := postJSONBearer(t, srv.URL+"/api/v1/runtimes/"+rtID+"/heartbeat",
+		repairOut["runner_credential"].(string), nil, http.StatusOK)
+	if hb["liveness"] != "online" {
+		t.Fatalf("heartbeat liveness = %v, want online", hb["liveness"])
+	}
+
+	postJSON(t, srv.URL+"/api/v1/runtimes/pair", map[string]any{
+		"pairing_token":     "test-shared-runtime-tokeX",
+		"hostname":          "parsar-runtime",
+		"version":           "0.1.0",
+		"runner_public_key": "fakepubkey==",
+	}, http.StatusUnauthorized)
+}
+
 func TestRuntimeListFiltersSelectableLocalDaemon(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

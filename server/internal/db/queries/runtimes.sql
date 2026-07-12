@@ -6,6 +6,13 @@
 -- (uuid cast to text on the way out, jsonb cast for write-side params,
 -- @now/@id parameter naming).
 
+-- name: GetOldestActiveWorkspaceID :one
+select id::text as id
+from workspaces
+where deleted_at is null
+order by created_at asc, id asc
+limit 1;
+
 -- name: CreateRuntimePairing :one
 -- Admin UI calls this to register a new Agent Daemon runtime in
 -- pending_pairing state. The pairing token is generated server-side,
@@ -123,6 +130,46 @@ returning
   id::text       as id,
   liveness,
   last_heartbeat_at;
+
+-- name: UpsertSharedRuntime :one
+insert into runtimes(
+  id, workspace_id, type, name, liveness, provider,
+  owner_user_id, version, hostname,
+  last_heartbeat_at,
+  pairing_token_hash, pairing_token_expires_at,
+  config, created_at, updated_at, deleted_at
+)
+values (
+  @id::uuid, @workspace_id::uuid, @type, @name, 'offline', @provider,
+  null, @version, @hostname,
+  null,
+  null, null,
+  @config::jsonb, @now, @now, null
+)
+on conflict (workspace_id, name) where deleted_at is null
+do update set
+  version                  = excluded.version,
+  hostname                 = excluded.hostname,
+  config                   = coalesce(runtimes.config, '{}'::jsonb) || excluded.config,
+  liveness                 = case when runtimes.liveness = 'online' then 'online' else 'offline' end,
+  pairing_token_hash       = null,
+  pairing_token_expires_at = null,
+  updated_at               = @now
+returning
+  id::text                       as id,
+  workspace_id::text             as workspace_id,
+  type,
+  name,
+  liveness,
+  provider,
+  owner_user_id,
+  version,
+  hostname,
+  last_heartbeat_at,
+  pairing_token_expires_at,
+  config,
+  created_at,
+  updated_at;
 
 -- name: GetRuntime :one
 -- Single runtime fetch (admin detail page + runner self-query).

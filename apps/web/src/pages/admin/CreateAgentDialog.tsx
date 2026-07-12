@@ -52,7 +52,7 @@ function connectorForExecutionMode(mode: ExecutionMode): string {
 }
 
 function executionModeFromAgent(a?: Agent | null): ExecutionMode {
-  if (!a) return "sandbox"
+  if (!a) return "local_device"
   if (a.connector_type === "http") return "external"
   if (a.connector_type === "agent_daemon") {
     return String(agentConfig(a).daemon_mode ?? "local") === "sandbox" ? "sandbox" : "local_device"
@@ -261,7 +261,7 @@ export function CreateAgentDialog({
   const defaultAgentDescription = t("agents.form.defaults.description", { workspace: workspaceDisplayName })
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>("sandbox")
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>("local_device")
   const [agentEngine, setAgentEngine] = useState<AgentEngine>("claude_code")
   const [sandboxSize, setSandboxSize] = useState<SandboxSize>("standard")
   const [modelID, setModelID] = useState("")
@@ -507,7 +507,7 @@ export function CreateAgentDialog({
       const cloneSuffix = cloneSource?.name ? " (Copy)" : ""
       setName(params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : defaultAgentName))
       setDescription(params.get("agent_description") ?? cloneSource?.description ?? defaultAgentDescription)
-      setExecutionMode(cloneSource ? executionModeFromAgent(cloneSource) : "sandbox")
+      setExecutionMode(cloneSource ? executionModeFromAgent(cloneSource) : "local_device")
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
       setSandboxSize(cloneSource ? sandboxSizeFromAgent(cloneSource) : "standard")
       setModelID(cloneSource ? modelIDFromAgent(cloneSource) : "")
@@ -1024,18 +1024,18 @@ export function CreateAgentDialog({
                   <Field label={t("agents.form.fields.executionMode")} required>
                     <div className={"grid gap-2 " + (mode === "create" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
                       <ChoiceCard
-                        icon={<Cloud className="h-4 w-4" />}
-                        title={t("agents.execution.sandbox.title")}
-                        description={t("agents.execution.sandbox.description")}
-                        selected={executionMode === "sandbox"}
-                        onSelect={() => setExecutionMode("sandbox")}
-                      />
-                      <ChoiceCard
                         icon={<Laptop className="h-4 w-4" />}
                         title={t("agents.execution.localDevice.title")}
                         description={t("agents.execution.localDevice.description")}
                         selected={executionMode === "local_device"}
                         onSelect={() => setExecutionMode("local_device")}
+                      />
+                      <ChoiceCard
+                        icon={<Cloud className="h-4 w-4" />}
+                        title={t("agents.execution.sandbox.title")}
+                        description={t("agents.execution.sandbox.description")}
+                        selected={executionMode === "sandbox"}
+                        onSelect={() => setExecutionMode("sandbox")}
                       />
                       {mode === "create" && (
                         <ChoiceCard
