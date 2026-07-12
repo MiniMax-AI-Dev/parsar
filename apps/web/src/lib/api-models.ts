@@ -92,26 +92,6 @@ export function useDisableModel(workspaceID: string | null) {
   })
 }
 
-export function useUpdateModel(workspaceID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (input: { modelID: string; body: UpdateModelRequest }) => {
-      if (!workspaceID) {
-        throw new ApiError({
-          status: 0,
-          code: "no_workspace",
-          message: "no workspace selected — pick a workspace first",
-          unreachable: false,
-        })
-      }
-      return updateModelRequest(workspaceID, input.modelID, input.body)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
-    },
-  })
-}
-
 /* --- Inline create -------------------------------------------------------
  *
  * Creating a shared model is a single dialog submit even when no Secret

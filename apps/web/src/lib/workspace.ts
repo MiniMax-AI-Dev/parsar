@@ -4,7 +4,7 @@
  * Resolution order: URL param `?ws=<uuid>` → localStorage `parsar.ws` →
  * null (UI shows "no workspace" empty state).
  */
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 
 const WS_KEY = "parsar.ws"
 const WS_PARAM = "ws"
@@ -80,13 +80,4 @@ export function useWorkspaceId(): string | null {
     }
   }, [])
   return ws
-}
-
-/**
- * Whether a real workspace is currently bound. False ⇒ pages should show
- * "pick a workspace" empty state.
- */
-export function useHasWorkspace(): boolean {
-  const ws = useWorkspaceId()
-  return useMemo(() => isUUID(ws), [ws])
 }

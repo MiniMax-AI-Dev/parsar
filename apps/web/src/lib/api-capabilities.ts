@@ -50,17 +50,6 @@ export interface UpdateCapabilityRequest {
   status?: "active" | "disabled"
 }
 
-export interface CreateCapabilityVersionRequest {
-  version: string
-  git_repo_url?: string
-  git_ref?: string
-  path?: string
-  content?: Record<string, unknown>
-  required_credentials?: RequiredCredential[]
-  schema_version?: number
-  canonical_spec?: CanonicalSpec
-}
-
 export function systemPromptCapabilityPayload(input: {
   name: string
   description: string
@@ -90,29 +79,6 @@ export function agentCapabilityVersionID(item: AgentCapability): string {
 
 export function skillVersionRef(version: CapabilityVersion): string {
   return version.git_ref ?? ""
-}
-
-export function skillCapabilityPayload(input: {
-  name: string
-  description: string
-  requiredCredentials: RequiredCredential[]
-  version: string
-  repoURL: string
-  ref: string
-  path: string
-}): CreateCapabilityRequest {
-  return {
-    type: "skill",
-    name: input.name,
-    description: input.description,
-    scope: "private",
-    status: "active",
-    required_credentials: input.requiredCredentials,
-    version: input.version,
-    git_repo_url: input.repoURL,
-    git_ref: input.ref,
-    path: input.path,
-  }
 }
 
 async function listCapabilities(
@@ -169,17 +135,6 @@ async function updateCapability(
   return apiRequest<Capability>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}`,
     { method: "PATCH", body }
-  )
-}
-
-async function createCapabilityVersion(
-  workspaceID: string,
-  capabilityID: string,
-  body: CreateCapabilityVersionRequest
-): Promise<CapabilityVersion> {
-  return apiRequest<CapabilityVersion>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/versions`,
-    { method: "POST", body }
   )
 }
 

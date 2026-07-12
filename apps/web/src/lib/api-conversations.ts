@@ -307,30 +307,6 @@ export function useAgentRunStream(
   return state
 }
 
-export function useCreateConversation(wsId: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: CreateConversationRequest) => {
-      if (!wsId) throw new Error("workspace id is required")
-      return createConversation(wsId, body)
-    },
-    retry: noUnreachableRetry,
-    onSuccess: () => {
-      // New conversation may be bound to any agent, so invalidate every
-      // per-agent slice for this workspace. Predicate matches both
-      // ['admin','conversations',wsId,'_all'] and the per-agent variant.
-      if (wsId) {
-        qc.invalidateQueries({
-          predicate: (q) =>
-            q.queryKey[0] === "admin" &&
-            q.queryKey[1] === "conversations" &&
-            q.queryKey[2] === wsId,
-        })
-      }
-    },
-  })
-}
-
 export function useSendUserMessage(cid: string | null) {
   const qc = useQueryClient()
   return useMutation({

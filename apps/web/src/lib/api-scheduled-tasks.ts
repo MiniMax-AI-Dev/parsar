@@ -24,22 +24,6 @@ export interface ScheduledTask {
   updated_at: string
 }
 
-export interface ScheduledTaskRun {
-  id: string
-  conversation_id: string
-  agent_id: string
-  connector_type: string
-  status: string
-  failure_reason: string
-  trigger_source: string
-  trigger_channel: string
-  trigger_ref_id: string
-  created_at: string
-  started_at: string | null
-  finished_at: string | null
-  updated_at: string
-}
-
 export interface ScheduledTaskCreateRequest {
   name: string
   prompt: string
@@ -77,9 +61,6 @@ const KEY_TASKS_BY_WORKSPACE_PREFIX = (workspaceID: string) =>
   ["admin", "scheduledTasksByWorkspace", workspaceID] as const
 const KEY_TASKS_BY_WORKSPACE = (workspaceID: string, offset: number, limit: number) =>
   [...KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID), offset, limit] as const
-const KEY_TASK_RUNS = (taskID: string) =>
-  ["admin", "scheduledTaskRuns", taskID] as const
-
 /* --- Network ------------------------------------------------------------ */
 
 async function listTasksByWorkspace(
@@ -91,13 +72,6 @@ async function listTasksByWorkspace(
   return apiRequest<ScheduledTasksByWorkspaceResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/scheduled-tasks`,
     { query: { limit, offset } },
-  )
-}
-
-async function listTaskRuns(taskID: string | null): Promise<ScheduledTaskRun[]> {
-  if (!taskID) return []
-  return apiRequest<ScheduledTaskRun[]>(
-    `/api/v1/scheduled-tasks/${encodeURIComponent(taskID)}/runs`,
   )
 }
 
@@ -116,16 +90,6 @@ export function useScheduledTasksByWorkspace(
     staleTime: 15_000,
     // Keep the previous page on screen while the next one fetches.
     placeholderData: (prev) => prev,
-  })
-}
-
-export function useScheduledTaskRuns(taskID: string | null) {
-  return useQuery({
-    queryKey: KEY_TASK_RUNS(taskID ?? "_none"),
-    queryFn: () => listTaskRuns(taskID),
-    enabled: Boolean(taskID),
-    retry: noUnreachableRetry,
-    staleTime: 10_000,
   })
 }
 
@@ -181,9 +145,8 @@ export function useRunScheduledTaskNow(workspaceID: string | null) {
         `/api/v1/scheduled-tasks/${encodeURIComponent(taskID)}/run-now`,
         { method: "POST", body: {} },
       ),
-    onSuccess: (_res, taskID) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY_TASKS_BY_WORKSPACE_PREFIX(workspaceID ?? "_none") })
-      void qc.invalidateQueries({ queryKey: KEY_TASK_RUNS(taskID) })
     },
   })
 }

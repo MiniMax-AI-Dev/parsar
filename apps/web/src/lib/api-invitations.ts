@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiRequest, noUnreachableRetry } from "./api-client"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { apiRequest } from "./api-client"
 import type { MemberRole } from "./api-types"
 
 export interface CreateInvitationRequest {
@@ -14,16 +14,6 @@ export interface CreateInvitationResponse {
   email: string
   role: MemberRole
   expires_at: string
-}
-
-export interface PendingInvitation {
-  id: string
-  email: string
-  role: MemberRole
-  invited_by: string
-  invited_by_name: string
-  expires_at: string
-  created_at: string
 }
 
 export interface InviteInfoResponse {
@@ -43,11 +33,7 @@ export interface AcceptInviteResponse {
   workspace_id: string
 }
 
-const KEY_INVITATIONS = (wsId: string) =>
-  ["admin", "invitations", wsId] as const
-
 export function useCreateInvitation(wsId: string | null) {
-  const qc = useQueryClient()
   return useMutation({
     mutationFn: async (body: CreateInvitationRequest) => {
       if (!wsId) throw new Error("no workspace selected")
@@ -55,39 +41,6 @@ export function useCreateInvitation(wsId: string | null) {
         `/api/v1/workspaces/${wsId}/invitations`,
         { method: "POST", body }
       )
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_INVITATIONS(wsId ?? "_none") })
-    },
-  })
-}
-
-export function usePendingInvitations(wsId: string | null) {
-  return useQuery({
-    queryKey: KEY_INVITATIONS(wsId ?? "_none"),
-    queryFn: () =>
-      apiRequest<PendingInvitation[]>(
-        `/api/v1/workspaces/${wsId}/invitations`,
-        { method: "GET" }
-      ),
-    enabled: !!wsId,
-    retry: noUnreachableRetry,
-    staleTime: 30_000,
-  })
-}
-
-export function useRevokeInvitation(wsId: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (invitationId: string) => {
-      if (!wsId) throw new Error("no workspace selected")
-      return apiRequest<void>(
-        `/api/v1/workspaces/${wsId}/invitations/${invitationId}`,
-        { method: "DELETE" }
-      )
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_INVITATIONS(wsId ?? "_none") })
     },
   })
 }
