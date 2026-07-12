@@ -76,11 +76,6 @@ type WorkspaceSlackConnectorSnapshot struct {
 	EventMode        string `json:"event_mode"`
 }
 
-func (s WorkspaceSlackConnectorSnapshot) isZero() bool {
-	return !s.Enabled && s.AppID == "" && s.BotTokenRef == "" && s.AppTokenRef == "" &&
-		s.SigningSecretRef == "" && (s.EventMode == "" || s.EventMode == "socket")
-}
-
 // toConfigMap returns only the jsonb-stored fields (column fields excluded).
 func (s WorkspaceSlackConnectorSnapshot) toConfigMap() map[string]any {
 	return map[string]any{
@@ -99,10 +94,6 @@ type WorkspaceDiscordConnectorSnapshot struct {
 	BotTokenRef  string `json:"bot_token_ref"`
 	PublicKeyRef string `json:"public_key_ref"`
 	Intents      string `json:"intents"`
-}
-
-func (s WorkspaceDiscordConnectorSnapshot) isZero() bool {
-	return !s.Enabled && s.AppID == "" && s.BotTokenRef == "" && s.PublicKeyRef == "" && s.Intents == ""
 }
 
 func (s WorkspaceDiscordConnectorSnapshot) toConfigMap() map[string]any {
@@ -145,11 +136,6 @@ type WorkspaceFeishuConnectorSnapshot struct {
 	EncryptKeyRef        string `json:"encrypt_key_ref"`
 	BotOpenID            string `json:"bot_open_id"`
 	EventMode            string `json:"event_mode"`
-}
-
-func (s WorkspaceFeishuConnectorSnapshot) isZero() bool {
-	return !s.Enabled && s.AppID == "" && s.AppSecretRef == "" && s.VerificationTokenRef == "" &&
-		s.EncryptKeyRef == "" && s.BotOpenID == "" && (s.EventMode == "" || s.EventMode == "webhook")
 }
 
 func (s WorkspaceFeishuConnectorSnapshot) toConfigMap() map[string]any {

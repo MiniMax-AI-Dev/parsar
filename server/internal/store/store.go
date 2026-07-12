@@ -1956,7 +1956,6 @@ var ErrUnknownModel = errors.New("unknown model")
 var ErrModelDisabled = errors.New("model or provider disabled")
 
 const defaultReadLimit int32 = 100
-const defaultMaxAgentChainDepth int32 = 3
 
 // Every admin / runtime emit in this file uses ActorType: audit.ActorTypeSystem
 // because the dev auth path doesn't yet surface a real caller identity.

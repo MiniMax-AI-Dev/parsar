@@ -29,32 +29,6 @@ var builtInCredentialKindSeeds = []builtInCredentialKindSeed{
 	{Code: "internal_gw_api_key", DisplayName: "Internal Gateway API Key", Description: "Personal credential for the internal LLM gateway", Source: CredentialKindSourcePlatformModel},
 }
 
-var SupportedCredentialKinds = []string{
-	"github_pat",
-	"slack_bot_token",
-	"teams_app_password",
-	"postgres_dsn",
-	"notion_integration",
-	"jira_api_token",
-	"openai_api_key",
-	"anthropic_api_key",
-	"deepseek_api_key",
-	"internal_gw_api_key",
-}
-
-var supportedCredentialKindSet = func() map[string]struct{} {
-	out := make(map[string]struct{}, len(SupportedCredentialKinds))
-	for _, kind := range SupportedCredentialKinds {
-		out[kind] = struct{}{}
-	}
-	return out
-}()
-
-func IsSupportedCredentialKind(kind string) bool {
-	_, ok := supportedCredentialKindSet[strings.ToLower(strings.TrimSpace(kind))]
-	return ok
-}
-
 func normalizeCredentialKindCode(kind string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(kind))
 	if normalized == "" {
