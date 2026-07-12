@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
+import { ArrowRight, LoaderCircle } from "lucide-react"
 
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
 import { ApiError } from "../lib/api-client"
 import { useAuthProviders, useLoginWithPassword } from "../lib/api-auth"
 import { useBootstrapStatus } from "../lib/api-bootstrap"
@@ -69,15 +72,21 @@ function SignInView() {
   }
 
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-surface px-6 text-fg">
+    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-surface-subtle px-6 py-12 text-fg">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,var(--color-line-strong)_1px,transparent_1px)] [background-size:26px_26px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_42%,black,transparent)] opacity-50"
+        className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,var(--color-line-strong)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_65%_58%_at_50%_45%,black,transparent)] opacity-35"
       />
-      <section className="relative w-full max-w-[460px] rounded-2xl border border-line/80 bg-surface p-9 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_20px_48px_-16px_rgb(0_0_0/0.16)]">
+      <section className="app-panel relative w-full max-w-[460px] p-9">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="rounded-xl bg-fg-on-emphasis px-5 py-3 shadow-sm ring-1 ring-line-muted">
-            <img src="/parsar-banner.png" alt="Parsar" className="h-auto w-[280px] max-w-full" />
+          <div className="rounded-2xl bg-fg-on-emphasis px-5 py-3 shadow-sm ring-1 ring-line-muted">
+            <img
+              src="/parsar-banner.png"
+              alt="Parsar"
+              width="560"
+              height="96"
+              className="h-auto w-[280px] max-w-full"
+            />
           </div>
           <p className="mt-4 text-base leading-relaxed text-fg-subtle">{t("login.subtitle")}</p>
         </div>
@@ -85,26 +94,29 @@ function SignInView() {
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-fg-muted">{t("login.emailLabel")}</span>
-            <input
+            <Input
               type="email"
+              name="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("login.emailPlaceholder")}
               autoComplete="email"
+              spellCheck={false}
               required
-              className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
+              className="h-11 text-base"
             />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-fg-muted">{t("login.passwordLabel")}</span>
-            <input
+            <Input
               type="password"
+              name="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("login.passwordPlaceholder")}
               autoComplete="current-password"
               required
-              className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
+              className="h-11 text-base"
             />
           </label>
 
@@ -117,13 +129,22 @@ function SignInView() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={invalid || submitting}
-            className="mt-1 flex h-11 w-full items-center justify-center rounded-full bg-surface-emphasis px-5 text-lg font-medium text-white shadow-sm transition-all hover:bg-surface-inverse hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+            size="lg"
+            shape="pill"
+            className="mt-1 h-11 w-full text-base"
           >
+            {submitting ? (
+              <LoaderCircle
+                className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : null}
             {submitting ? t("login.submitting") : t("login.submitButton")}
-          </button>
+            {!submitting ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : null}
+          </Button>
         </form>
 
         {ssoProviders.length > 0 && (
@@ -139,7 +160,7 @@ function SignInView() {
                 <a
                   key={provider.id}
                   href={provider.login_url}
-                  className="flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-base font-medium text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                  className="flex h-11 w-full items-center justify-center rounded-full border border-line bg-surface px-5 text-base font-medium text-fg shadow-sm transition-[color,background-color,border-color,box-shadow] hover:border-line-strong hover:bg-surface-subtle hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                 >
                   {t("login.ssoButton", { provider: provider.label })}
                 </a>

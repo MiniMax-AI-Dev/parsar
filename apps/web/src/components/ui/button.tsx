@@ -4,13 +4,16 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/15 focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50 active:translate-y-px",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50 active:translate-y-px motion-reduce:transition-none motion-reduce:active:translate-y-0",
   {
     variants: {
       variant: {
-        default: "bg-surface-emphasis text-white shadow-sm hover:bg-surface-inverse",
-        destructive: "bg-danger text-white shadow-sm hover:bg-danger-emphasis",
-        outline: "border border-line bg-surface text-fg shadow-sm hover:bg-surface-subtle hover:border-line-strong",
+        default:
+          "bg-surface-emphasis text-fg-on-emphasis shadow-sm hover:bg-surface-inverse hover:shadow-md",
+        destructive:
+          "bg-danger text-fg-on-emphasis shadow-sm hover:bg-danger-emphasis hover:shadow-md",
+        outline:
+          "border border-line bg-surface text-fg shadow-sm hover:border-line-strong hover:bg-surface-subtle hover:shadow-md",
         secondary: "bg-surface-muted text-fg hover:bg-surface-muted/70",
         ghost: "text-fg-muted hover:bg-surface-muted hover:text-fg",
         link: "text-fg underline-offset-4 hover:underline",
@@ -36,12 +39,11 @@ const buttonVariants = cva(
       size: "default",
       shape: "rounded",
     },
-  }
+  },
 )
 
 interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean
 }
 
@@ -55,7 +57,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       />
     )
-  }
+  },
 )
 Button.displayName = "Button"
 
