@@ -240,9 +240,7 @@ func TestSandboxAdminStatusReturnsLiveBinding(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp sandboxStatusResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -264,9 +262,7 @@ func TestSandboxAdminStatusReturnsNullOnNoBinding(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	if got := strings.TrimSpace(rec.Body.String()); got != "null" {
 		t.Errorf("expected body=null; got %q", got)
 	}
@@ -302,9 +298,7 @@ func TestSandboxAdminKillMarksDBAndCallsRelease(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	if got := daemonFake.released; len(got) != 1 || got[0] != "00000000-0000-0000-0000-000000000009" {
 		t.Errorf("Release should be called once with agent_id; got %v", got)
 	}
@@ -363,9 +357,7 @@ func TestSandboxAdminRebuildKillsAndReProvisions(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	if got := daemonFake.released; len(got) != 1 {
 		t.Errorf("Release should be called once; got %v", got)
 	}
@@ -429,9 +421,7 @@ func TestSandboxAdminListReturnsActiveBindings(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var got listSandboxesResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -455,9 +445,7 @@ func TestSandboxAdminListEmptyReturnsEmptyArray(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	if !strings.Contains(rec.Body.String(), `"sandboxes":[]`) {
 		t.Errorf("expected empty array literal in body; got %s", rec.Body.String())
 	}
@@ -497,9 +485,7 @@ func TestSandboxAdminListLimitOverride(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	if storeFake.listLimit != 25 {
 		t.Errorf("?limit=25 should reach the store; got listLimit=%d", storeFake.listLimit)
 	}
@@ -517,9 +503,7 @@ func TestSandboxAdminListLimitNegativeIgnored(t *testing.T) {
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusOK {
-				t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
-			}
+			requireStatus(t, rec, http.StatusOK)
 			if storeFake.listLimit != 0 {
 				t.Errorf("invalid limit should be ignored; got listLimit=%d", storeFake.listLimit)
 			}
@@ -572,9 +556,7 @@ func TestSandboxAdminAcquireWritesRuntimeIDOnSuccess(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("expected 202; got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusAccepted)
 	if err := waitFor(t, 2*time.Second, func() bool {
 		return len(runtimeFake.calls()) >= 1
 	}); err != nil {

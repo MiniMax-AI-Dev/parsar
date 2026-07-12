@@ -10,9 +10,18 @@ package dev
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 )
+
+func requireStatus(t *testing.T, response *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if response.Code != want {
+		t.Fatalf("expected %d, got %d: %s", want, response.Code, response.Body.String())
+	}
+}
 
 // withTestUserID returns a copy of req with the dev fixture user
 // injected into the context — same shim the existing routes_test.go

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 func TestMeHandlerReturnsContextUser(t *testing.T) {
@@ -22,9 +22,7 @@ func TestMeHandlerReturnsContextUser(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusOK)
 	body := res.Body.String()
 	if !strings.Contains(body, `"user_id":"00000000-0000-0000-0000-0000000000aa"`) || !strings.Contains(body, `"email":"bob@example.com"`) {
 		t.Fatalf("expected context user profile, got %s", body)
@@ -42,9 +40,7 @@ func TestMeHandlerMissingContextUserReturnsInternalError(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusInternalServerError)
 	if !strings.Contains(res.Body.String(), "authenticated user missing from request context") {
 		t.Fatalf("expected missing context user error, got %s", res.Body.String())
 	}
@@ -59,9 +55,7 @@ func TestMeHandlerUnknownUserReturnsInternalError(t *testing.T) {
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
 
-	if res.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", res.Code, res.Body.String())
-	}
+	requireStatus(t, res, http.StatusInternalServerError)
 	if !strings.Contains(res.Body.String(), "resolved user does not exist") {
 		t.Fatalf("expected resolved user error, got %s", res.Body.String())
 	}

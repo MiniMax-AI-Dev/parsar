@@ -160,9 +160,7 @@ func TestRuntimeStatusNoCredential(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -199,9 +197,7 @@ func TestRuntimeStatusIncludesSandboxImage(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -224,9 +220,7 @@ func TestRuntimeStatusManagedNoCredentialReachable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -259,9 +253,7 @@ func TestRuntimeStatusManagedNoCredentialUnreachable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -298,9 +290,7 @@ func TestRuntimeStatusHasCredentialReachable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -339,9 +329,7 @@ func TestRuntimeStatusHasCredentialUnreachableProberError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -369,9 +357,7 @@ func TestRuntimeStatusHasCredentialNoProber(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusOK)
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -395,9 +381,7 @@ func TestRuntimeStatusUnwired(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, runtimeStatusRequest())
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d body=%s", rec.Code, rec.Body.String())
-	}
+	requireStatus(t, rec, http.StatusServiceUnavailable)
 	if !strings.Contains(rec.Body.String(), "not wired") {
 		t.Errorf("expected 'not wired' in body, got %s", rec.Body.String())
 	}
