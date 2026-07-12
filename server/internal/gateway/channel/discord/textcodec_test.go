@@ -3,6 +3,8 @@ package discord
 import (
 	"strings"
 	"testing"
+
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 )
 
 // TestFormat_PassThroughMarkdown asserts Discord's near-pass-through Format:
@@ -70,7 +72,7 @@ func TestTruncate_ShortTextSingleChunk(t *testing.T) {
 // as broken code.
 func TestSplitPreservingFences(t *testing.T) {
 	text := "intro line\n```go\nL1\nL2\nL3\nL4\nL5\n```\noutro"
-	chunks := splitPreservingFences(text, 20)
+	chunks := channel.SplitPreservingFences(text, 20)
 	if len(chunks) < 2 {
 		t.Fatalf("expected multiple chunks, got %d", len(chunks))
 	}

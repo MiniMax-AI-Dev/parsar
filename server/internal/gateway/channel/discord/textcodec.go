@@ -55,7 +55,7 @@ func (c *Channel) Format(text string) string {
 // closed with a fence and the next reopened with one, so neither half renders
 // as broken code.
 func (c *Channel) Truncate(text string) []string {
-	return splitPreservingFences(text, discordMaxMessageLen)
+	return channel.SplitPreservingFences(text, discordMaxMessageLen)
 }
 
 // ExtractMedia pulls Markdown image references (![alt](url)) out of the text,
@@ -82,66 +82,4 @@ func (c *Channel) ExtractMedia(text string) ([]channel.Media, string) {
 // isFence reports whether a line opens or closes a Markdown code fence.
 func isFence(line string) bool {
 	return strings.HasPrefix(strings.TrimSpace(line), "```")
-}
-
-// runeLen counts runes (Discord limits are character/rune based, not bytes).
-func runeLen(s string) int { return len([]rune(s)) }
-
-// splitPreservingFences splits text into ≤limit-rune chunks on line boundaries,
-// keeping fenced code blocks valid across a split. Mirrors the Slack adapter's
-// helper of the same name (the algorithm is platform-neutral).
-func splitPreservingFences(text string, limit int) []string {
-	if runeLen(text) <= limit {
-		return []string{text}
-	}
-	srcLines := strings.Split(text, "\n")
-
-	var (
-		out      []string
-		chunk    []string
-		chunkLen int
-		inFence  bool
-		fenceTok = "```"
-	)
-
-	flush := func() {
-		if len(chunk) == 0 {
-			return
-		}
-		body := chunk
-		if inFence {
-			body = append(append([]string(nil), chunk...), fenceTok)
-		}
-		out = append(out, strings.Join(body, "\n"))
-		chunk = nil
-		chunkLen = 0
-		if inFence {
-			chunk = append(chunk, fenceTok)
-			chunkLen = runeLen(fenceTok) + 1
-		}
-	}
-
-	for _, line := range srcLines {
-		add := runeLen(line) + 1 // +1 for the joining newline
-		if chunkLen+add > limit && len(chunk) > 0 {
-			flush()
-		}
-		chunk = append(chunk, line)
-		chunkLen += add
-		if isFence(line) {
-			if !inFence {
-				inFence = true
-				if tok := strings.TrimSpace(line); tok != "" {
-					fenceTok = tok
-				}
-			} else {
-				inFence = false
-				fenceTok = "```"
-			}
-		}
-	}
-	if len(chunk) > 0 {
-		out = append(out, strings.Join(chunk, "\n"))
-	}
-	return out
 }

@@ -287,8 +287,9 @@ func TestRenderCredentialForm_FieldsAndButton(t *testing.T) {
 func TestCustomID_CapsAt100(t *testing.T) {
 	long := strings.Repeat("a", 200)
 	id := customID("permission_allow", long)
-	if runeLen(id) > discordCustomIDLimit {
-		t.Errorf("custom_id len = %d, want ≤ %d", runeLen(id), discordCustomIDLimit)
+	idLen := len([]rune(id))
+	if idLen > discordCustomIDLimit {
+		t.Errorf("custom_id len = %d, want ≤ %d", idLen, discordCustomIDLimit)
 	}
 	// No-value form returns the bare action.
 	if got := customID("permission_allow", ""); got != "permission_allow" {
