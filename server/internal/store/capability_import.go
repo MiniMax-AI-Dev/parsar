@@ -681,36 +681,20 @@ func validateMCPSpecPreCommit(m canonical.MCPSpec) error {
 }
 
 func credentialKindFromListRow(row sqlc.ListCredentialKindsRow) CredentialKindRead {
-	return CredentialKindRead{
-		ID:          row.ID,
-		Code:        row.Code,
-		DisplayName: row.DisplayName,
-		Description: row.Description,
-		ValueSchema: decodeJSONMap(row.ValueSchema),
-		BuiltIn:     row.BuiltIn,
-		Source:      row.Source,
-		CreatedBy:   anyToString(row.CreatedBy),
-		CreatedAt:   pgTime(row.CreatedAt),
-		UpdatedAt:   pgTime(row.UpdatedAt),
-	}
+	return credentialKindFromRow(credentialKindRow(row))
 }
 
 func credentialKindFromGetRow(row sqlc.GetCredentialKindByCodeRow) CredentialKindRead {
-	return CredentialKindRead{
-		ID:          row.ID,
-		Code:        row.Code,
-		DisplayName: row.DisplayName,
-		Description: row.Description,
-		ValueSchema: decodeJSONMap(row.ValueSchema),
-		BuiltIn:     row.BuiltIn,
-		Source:      row.Source,
-		CreatedBy:   anyToString(row.CreatedBy),
-		CreatedAt:   pgTime(row.CreatedAt),
-		UpdatedAt:   pgTime(row.UpdatedAt),
-	}
+	return credentialKindFromRow(credentialKindRow(row))
 }
 
 func credentialKindFromCreateRow(row sqlc.CreateCredentialKindRow) CredentialKindRead {
+	return credentialKindFromRow(credentialKindRow(row))
+}
+
+type credentialKindRow sqlc.ListCredentialKindsRow
+
+func credentialKindFromRow(row credentialKindRow) CredentialKindRead {
 	return CredentialKindRead{
 		ID:          row.ID,
 		Code:        row.Code,
