@@ -13,6 +13,7 @@ type fakeOwnerStore struct {
 	renewOK      bool
 	renewCalls   int
 	releaseCalls int
+	releaseCh    chan struct{}
 	lastRenewGen int64
 }
 
@@ -28,6 +29,13 @@ func (f *fakeOwnerStore) RenewAgentDaemonDeviceOwner(_ context.Context, in store
 
 func (f *fakeOwnerStore) ReleaseAgentDaemonDeviceOwner(context.Context, store.ReleaseAgentDaemonDeviceOwnerInput) (bool, error) {
 	f.releaseCalls++
+	if f.releaseCh != nil {
+		select {
+		case <-f.releaseCh:
+		default:
+			close(f.releaseCh)
+		}
+	}
 	return true, nil
 }
 
@@ -38,7 +46,7 @@ func (f *fakeOwnerStore) GetAgentDaemonDeviceOwner(context.Context, string) (sto
 func TestSessionOwnerLeaseLostClosesStaleConnection(t *testing.T) {
 	reg := NewRegistry()
 	conn := newFakeConn()
-	owners := &fakeOwnerStore{renewOK: false}
+	owners := &fakeOwnerStore{renewOK: false, releaseCh: make(chan struct{})}
 	lease := &ownerLease{store: owners, deviceID: "dev-1", ownerPodID: "pod-a", generation: 7, ttl: time.Minute}
 	sess := NewSessionWithOwner(conn, "dev-1", "wks-1", proto.Version, reg, nil, lease)
 	reg.Register(sess)
@@ -56,7 +64,12 @@ func TestSessionOwnerLeaseLostClosesStaleConnection(t *testing.T) {
 	if owners.renewCalls == 0 || owners.lastRenewGen != 7 {
 		t.Fatalf("renew not called with generation 7: calls=%d gen=%d", owners.renewCalls, owners.lastRenewGen)
 	}
-	if owners.releaseCalls == 0 {
+	select {
+	case <-owners.releaseCh:
+	case <-time.After(2 * time.Second):
 		t.Fatal("release not called on close")
+	}
+	if owners.releaseCalls == 0 {
+		t.Fatal("release count not incremented")
 	}
 }
