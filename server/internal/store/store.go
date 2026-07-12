@@ -8035,7 +8035,9 @@ func MapUserFacingReason(raw string) string {
 	return mapUserFacingReason(raw)
 }
 
-func messageFromConversationRow(row sqlc.ListConversationMessagesRow) MessageRead {
+type messageRow sqlc.ListConversationMessagesRow
+
+func messageFromRow(row messageRow) MessageRead {
 	return MessageRead{
 		ID:             row.MID,
 		WorkspaceID:    row.MWorkspaceID,
@@ -8048,24 +8050,19 @@ func messageFromConversationRow(row sqlc.ListConversationMessagesRow) MessageRea
 		Metadata:       decodeJSONMap(row.Metadata),
 		CreatedAt:      pgTime(row.CreatedAt),
 	}
+}
+
+func messageFromConversationRow(row sqlc.ListConversationMessagesRow) MessageRead {
+	return messageFromRow(messageRow(row))
 }
 
 func messageFromOutputRow(row sqlc.GetOutputMessageByRunIDRow) MessageRead {
-	return MessageRead{
-		ID:             row.MID,
-		WorkspaceID:    row.MWorkspaceID,
-		ConversationID: row.MConversationID,
-		SenderType:     row.SenderType,
-		SenderID:       row.MSenderID,
-		Kind:           row.Kind,
-		ContentFormat:  row.ContentFormat,
-		Content:        row.Content,
-		Metadata:       decodeJSONMap(row.Metadata),
-		CreatedAt:      pgTime(row.CreatedAt),
-	}
+	return messageFromRow(messageRow(row))
 }
 
-func agentRunBriefFromConversationRow(row sqlc.ListConversationAgentRunsRow) AgentRunBriefRead {
+type agentRunBriefRow sqlc.ListConversationAgentRunsRow
+
+func agentRunBriefFromRow(row agentRunBriefRow) AgentRunBriefRead {
 	brief := AgentRunBriefRead{
 		ID:               row.RID,
 		WorkspaceID:      row.RWorkspaceID,
@@ -8085,75 +8082,45 @@ func agentRunBriefFromConversationRow(row sqlc.ListConversationAgentRunsRow) Age
 		brief.UserFacingReason = userFacingReasonFromMetadata(decodeJSONMap(row.Metadata))
 	}
 	return brief
+}
+
+func agentRunBriefFromConversationRow(row sqlc.ListConversationAgentRunsRow) AgentRunBriefRead {
+	return agentRunBriefFromRow(agentRunBriefRow(row))
 }
 
 // agentRunBriefFromWorkspacePageRow maps a single ListWorkspaceAgentRunsPage row to the
 // AgentRunBriefRead shape the admin API serves.
 func agentRunBriefFromWorkspacePageRow(row sqlc.ListWorkspaceAgentRunsPageRow) AgentRunBriefRead {
-	brief := AgentRunBriefRead{
-		ID:               row.RID,
-		WorkspaceID:      row.RWorkspaceID,
-		ConversationID:   row.RConversationID,
-		TriggerMessageID: row.TriggerMessageID,
-		OutputMessageID:  row.OutputMessageID,
-		AgentID:          row.RAgentID,
-		AgentName:        row.AgentName,
-		AgentSlug:        row.AgentSlug,
-		ConnectorType:    row.ConnectorType,
-		Status:           row.Status,
-		CreatedAt:        pgTime(row.CreatedAt),
-		StartedAt:        pgOptionalTime(row.StartedAt),
-		FinishedAt:       pgOptionalTime(row.FinishedAt),
+	return agentRunBriefFromRow(agentRunBriefRow(row))
+}
+
+type usageLogRow sqlc.ListWorkspaceUsageLogsRow
+
+func usageLogFromRow(row usageLogRow) UsageLogRead {
+	return UsageLogRead{
+		ID:           row.ID,
+		WorkspaceID:  row.WorkspaceID,
+		AgentRunID:   row.AgentRunID,
+		Provider:     row.Provider,
+		Model:        row.Model,
+		InputTokens:  row.InputTokens,
+		OutputTokens: row.OutputTokens,
+		CostUSD:      numericFloat64(row.CostUsd),
+		Raw:          decodeJSONMap(row.Raw),
+		CreatedAt:    pgTime(row.CreatedAt),
 	}
-	if brief.Status == "failed" {
-		brief.UserFacingReason = userFacingReasonFromMetadata(decodeJSONMap(row.Metadata))
-	}
-	return brief
 }
 
 func usageLogFromWorkspaceRow(row sqlc.ListWorkspaceUsageLogsRow) UsageLogRead {
-	return UsageLogRead{
-		ID:           row.ID,
-		WorkspaceID:  row.WorkspaceID,
-		AgentRunID:   row.AgentRunID,
-		Provider:     row.Provider,
-		Model:        row.Model,
-		InputTokens:  row.InputTokens,
-		OutputTokens: row.OutputTokens,
-		CostUSD:      numericFloat64(row.CostUsd),
-		Raw:          decodeJSONMap(row.Raw),
-		CreatedAt:    pgTime(row.CreatedAt),
-	}
+	return usageLogFromRow(usageLogRow(row))
 }
 
 func usageLogFromWorkspaceRunRow(row sqlc.ListWorkspaceUsageLogsByRunRow) UsageLogRead {
-	return UsageLogRead{
-		ID:           row.ID,
-		WorkspaceID:  row.WorkspaceID,
-		AgentRunID:   row.AgentRunID,
-		Provider:     row.Provider,
-		Model:        row.Model,
-		InputTokens:  row.InputTokens,
-		OutputTokens: row.OutputTokens,
-		CostUSD:      numericFloat64(row.CostUsd),
-		Raw:          decodeJSONMap(row.Raw),
-		CreatedAt:    pgTime(row.CreatedAt),
-	}
+	return usageLogFromRow(usageLogRow(row))
 }
 
 func usageLogFromRunRow(row sqlc.ListUsageLogsByRunRow) UsageLogRead {
-	return UsageLogRead{
-		ID:           row.ID,
-		WorkspaceID:  row.WorkspaceID,
-		AgentRunID:   row.AgentRunID,
-		Provider:     row.Provider,
-		Model:        row.Model,
-		InputTokens:  row.InputTokens,
-		OutputTokens: row.OutputTokens,
-		CostUSD:      numericFloat64(row.CostUsd),
-		Raw:          decodeJSONMap(row.Raw),
-		CreatedAt:    pgTime(row.CreatedAt),
-	}
+	return usageLogFromRow(usageLogRow(row))
 }
 
 func secretReadFromCreateRow(row sqlc.CreateSecretRow) SecretRead {
