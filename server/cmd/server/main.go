@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net"
@@ -30,10 +31,13 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/pressly/goose/v3"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 	agentdaemonbinding "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/binding"
@@ -54,6 +58,7 @@ import (
 	connagentdaemon "github.com/MiniMax-AI-Dev/parsar/server/internal/connector/agentdaemon"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/embeddedpg"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/dev"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
@@ -203,6 +208,29 @@ func main() {
 		}
 	default:
 		log.Bg().Info("feishu auth/event routes disabled; email/password setup remains available")
+	}
+
+	// Embedded PostgreSQL: when DATABASE_URL is empty and we're in dev
+	// profile, start an embedded PG subprocess and auto-run migrations.
+	var embeddedPG *embeddedpg.EmbeddedPG
+	if strings.TrimSpace(cfg.Database.URL) == "" && cfg.Profile() == config.ProfileDev {
+		log.Bg().Info("DATABASE_URL not set — starting embedded PostgreSQL",
+			"data_dir", filepath.Join(cfg.Server.DataDir, "postgres"))
+		var err error
+		embeddedPG, err = embeddedpg.Start(cfg.Server.DataDir)
+		if err != nil {
+			log.Bg().Error("failed to start embedded PostgreSQL", "error", err)
+			os.Exit(1)
+		}
+		cfg.Database.URL = embeddedpg.ConnectionURL()
+		log.Bg().Info("embedded PostgreSQL ready", "url", cfg.Database.URL)
+
+		if err := runAutoMigrate(cfg.Database.URL); err != nil {
+			embeddedPG.Stop() //nolint:errcheck
+			log.Bg().Error("auto-migration failed", "error", err)
+			os.Exit(1)
+		}
+		log.Bg().Info("auto-migration complete")
 	}
 
 	pool := openPool(cfg.Database.URL)
@@ -1027,6 +1055,7 @@ func main() {
 			log.Bg().Error("parsar server stopped", "error", err)
 			drainOTLPReceiver(otlpReceiver)
 			drainAudit(auditIngester)
+			stopEmbeddedPG(embeddedPG)
 			os.Exit(1)
 		}
 	case <-ctx.Done():
@@ -1042,6 +1071,7 @@ func main() {
 		// ingester (flush buffer) last.
 		drainOTLPReceiver(otlpReceiver)
 		drainAudit(auditIngester)
+		stopEmbeddedPG(embeddedPG)
 	}
 }
 
@@ -1155,6 +1185,17 @@ func drainOTLPReceiver(r *otlp.Receiver) {
 	defer cancel()
 	if err := r.Shutdown(drainCtx); err != nil {
 		log.Bg().Warn("otlp receiver shutdown error", "error", err)
+	}
+}
+
+func stopEmbeddedPG(pg *embeddedpg.EmbeddedPG) {
+	if pg == nil {
+		return
+	}
+	if err := pg.Stop(); err != nil {
+		log.Bg().Warn("embedded PostgreSQL shutdown error", "error", err)
+	} else {
+		log.Bg().Info("embedded PostgreSQL stopped")
 	}
 }
 
@@ -1528,6 +1569,47 @@ func openPool(databaseURL string) *pgxpool.Pool {
 		return nil
 	}
 	return pool
+}
+
+// runAutoMigrate applies goose migrations against the given database URL.
+// Used only when embedded PG is active (no external DATABASE_URL).
+func runAutoMigrate(databaseURL string) error {
+	migrationsDir, err := resolveMigrationsDirForEmbed()
+	if err != nil {
+		return err
+	}
+	sqlDB, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return fmt.Errorf("auto-migrate: open: %w", err)
+	}
+	defer sqlDB.Close()
+
+	if err := sqlDB.Ping(); err != nil {
+		return fmt.Errorf("auto-migrate: ping: %w", err)
+	}
+	goose.SetBaseFS(nil)
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	return goose.UpContext(context.Background(), sqlDB, migrationsDir)
+}
+
+// resolveMigrationsDirForEmbed looks for the migrations directory in the
+// same priority as cmd/migrate: PARSAR_MIGRATIONS_DIR env, then
+// ./server/migrations relative to CWD.
+func resolveMigrationsDirForEmbed() (string, error) {
+	if explicit := os.Getenv("PARSAR_MIGRATIONS_DIR"); explicit != "" {
+		if info, err := os.Stat(explicit); err == nil && info.IsDir() {
+			return explicit, nil
+		}
+	}
+	candidate := filepath.Join("server", "migrations")
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		return candidate, nil
+	}
+	cwd, _ := os.Getwd()
+	return "", fmt.Errorf("auto-migrate: no migrations directory found (CWD=%s); set PARSAR_MIGRATIONS_DIR", cwd)
 }
 
 // buildStore constructs the *store.Store and the audit ingester from a
