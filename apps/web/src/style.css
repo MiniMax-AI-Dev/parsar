@@ -95,14 +95,81 @@
   --color-accent-fg:        var(--color-fg-on-emphasis);
 }
 
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+  --app-selection-bg: oklch(0.86 0.05 260);
+  --app-selection-fg: oklch(0.18 0.02 260);
+  --app-scrollbar-thumb: oklch(0.84 0 0);
+  --app-scrollbar-thumb-hover: oklch(0.7 0 0);
+  --app-chat-canvas: var(--color-surface);
+  --app-chat-user-bubble: oklch(0.965 0 0);
+  --app-chat-agent-text: oklch(0.22 0 0);
+  --app-chat-composer-shadow: rgb(0 0 0 / 10%);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-fg:          oklch(0.92 0 0);
+  --color-fg-emphasis: oklch(0.98 0 0);
+  --color-fg-muted:    oklch(0.76 0 0);
+  --color-fg-subtle:   oklch(0.66 0 0);
+  --color-fg-faint:    oklch(0.52 0 0);
+  --color-fg-on-emphasis: oklch(0.985 0 0);
+
+  --color-surface:          oklch(0.18 0 0);
+  --color-surface-subtle:   oklch(0.145 0 0);
+  --color-surface-muted:    oklch(0.25 0 0);
+  --color-surface-emphasis: oklch(0.33 0 0);
+  --color-surface-inverse:  oklch(0.4 0 0);
+
+  --color-line:         oklch(0.31 0 0);
+  --color-line-muted:   oklch(0.24 0 0);
+  --color-line-strong:  oklch(0.42 0 0);
+
+  --color-danger:           oklch(0.72 0.105 27.27);
+  --color-danger-emphasis:  oklch(0.82 0.095 27.49);
+  --color-danger-subtle:    oklch(0.25 0.035 25);
+  --color-danger-border:    oklch(0.38 0.055 25);
+
+  --color-warning:          oklch(0.76 0.08 74);
+  --color-warning-emphasis: oklch(0.84 0.075 74);
+  --color-warning-subtle:   oklch(0.25 0.03 78);
+  --color-warning-border:   oklch(0.38 0.045 78);
+
+  --color-success:          oklch(0.72 0.08 158);
+  --color-success-emphasis: oklch(0.82 0.075 158);
+  --color-success-subtle:   oklch(0.24 0.035 158);
+  --color-success-border:   oklch(0.36 0.05 158);
+
+  --color-info:             oklch(0.75 0.065 252.5);
+  --color-info-emphasis:    oklch(0.84 0.055 254.55);
+  --color-info-subtle:      oklch(0.24 0.035 252.5);
+  --color-info-border:      oklch(0.36 0.05 252.5);
+
+  --color-accent:           var(--color-fg);
+  --color-accent-emphasis:  var(--color-fg-emphasis);
+  --color-accent-fg:        var(--color-fg-on-emphasis);
+
+  --app-selection-bg: oklch(0.35 0.055 260);
+  --app-selection-fg: var(--color-fg-emphasis);
+  --app-scrollbar-thumb: oklch(0.36 0 0);
+  --app-scrollbar-thumb-hover: oklch(0.48 0 0);
+  --app-chat-canvas: var(--color-surface-subtle);
+  --app-chat-user-bubble: var(--color-surface-muted);
+  --app-chat-agent-text: var(--color-fg-muted);
+  --app-chat-composer-shadow: rgb(0 0 0 / 35%);
+}
+
 @keyframes fade-out {
   0%, 70% { opacity: 1; }
   100% { opacity: 0; }
 }
 
 :root {
-  color: #121212;
-  background: #ffffff;
+  color: var(--color-fg);
+  background: var(--color-surface);
   /* Monochrome type system. Inter renders Latin body/UI; Noto Sans SC renders
      Chinese (Inter has no CJK glyphs); system fonts are the final fallback.
      Display headings use Space Grotesk (see --font-display). */
@@ -174,8 +241,8 @@ textarea {
 
 /* Brand-tinted text selection (default is a flat grey-blue). */
 ::selection {
-  background: #c7d6ff;
-  color: #0f172a;
+  background: var(--app-selection-bg);
+  color: var(--app-selection-fg);
 }
 
 /* Thin, unobtrusive scrollbars for the admin shell — the default OS bars are
@@ -183,7 +250,7 @@ textarea {
    ::-webkit-scrollbar. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: var(--app-scrollbar-thumb) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -195,11 +262,11 @@ textarea {
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
-  background-color: #cbd5e1;
+  background-color: var(--app-scrollbar-thumb);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: var(--app-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-track {
@@ -210,7 +277,7 @@ textarea {
   display: flex;
   min-height: 100vh;
   justify-content: center;
-  background: #fff;
+  background: var(--app-chat-canvas);
 }
 
 .chat-stage {
@@ -220,7 +287,7 @@ textarea {
   min-height: 100vh;
   flex-direction: column;
   align-items: center;
-  background: #ffffff;
+  background: var(--app-chat-canvas);
   padding: 18px 28px 118px;
 }
 
@@ -296,9 +363,9 @@ p {
 }
 
 .secondary-button {
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  color: #374151;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-fg-muted);
 }
 
 .primary-button:disabled,
@@ -324,14 +391,14 @@ p {
 .console-page {
   display: flex;
   min-height: 100vh;
-  background: #f7f7f8;
+  background: var(--color-surface-subtle);
   padding: 0;
 }
 
 .console-sidebar {
   width: 220px;
-  border-right: 1px solid #e5e7eb;
-  background: #fff;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-surface);
   padding: 18px 12px;
 }
 
@@ -343,15 +410,15 @@ p {
 .console-sidebar a {
   display: block;
   border-radius: 10px;
-  color: #64748b;
+  color: var(--color-fg-muted);
   padding: 9px 10px;
   text-decoration: none;
 }
 
 .console-sidebar a.active,
 .console-sidebar a:hover {
-  background: #f1f5f9;
-  color: #111827;
+  background: var(--color-surface-muted);
+  color: var(--color-fg);
 }
 
 .console-workspace {
@@ -375,7 +442,7 @@ p {
 
 .console-subtitle {
   margin: 8px 0 0;
-  color: #64748b;
+  color: var(--color-fg-subtle);
 }
 
 .console-summary,
@@ -406,9 +473,9 @@ p {
 
 .console-summary article,
 .console-panel {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-line);
   border-radius: 22px;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: 0 10px 28px rgb(15 23 42 / 5%);
 }
 
@@ -423,11 +490,11 @@ p {
 .console-row small,
 .console-row p,
 .console-note {
-  color: #64748b;
+  color: var(--color-fg-subtle);
 }
 
 .console-summary strong {
-  color: #111827;
+  color: var(--color-fg-emphasis);
   font-size: 34px;
   line-height: 1;
 }
@@ -449,9 +516,9 @@ p {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
-  border: 1px solid #eef2f7;
+  border: 1px solid var(--color-line-muted);
   border-radius: 16px;
-  background: #fbfdff;
+  background: var(--color-surface-subtle);
   padding: 14px;
 }
 
@@ -459,10 +526,10 @@ p {
 .config-form select,
 .config-form textarea {
   width: 100%;
-  border: 1px solid #dbe3ef;
+  border: 1px solid var(--color-line);
   border-radius: 12px;
-  background: #fff;
-  color: #111827;
+  background: var(--color-surface);
+  color: var(--color-fg);
   padding: 10px 12px;
 }
 
@@ -475,15 +542,15 @@ p {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px 12px;
-  border: 1px solid #eef2f7;
+  border: 1px solid var(--color-line-muted);
   border-radius: 16px;
-  background: #fbfdff;
+  background: var(--color-surface-subtle);
   padding: 12px;
 }
 
 .console-row.selected {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: var(--color-info-border);
+  background: var(--color-info-subtle);
 }
 
 .console-row p {
@@ -595,7 +662,7 @@ p {
 .detail-section {
   border: 0;
   border-radius: 0;
-  background: #ffffff;
+  background: var(--app-chat-canvas);
   box-shadow: none;
 }
 
@@ -629,25 +696,25 @@ p {
 .composer-hint,
 .agent-meta,
 .details-footnote {
-  color: #64748b;
+  color: var(--color-fg-subtle);
   font-size: 13px;
 }
 
 .section-heading select {
   max-width: 340px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--color-line);
   border-radius: 12px;
-  background: #fff;
-  color: #172033;
+  background: var(--color-surface);
+  color: var(--color-fg);
   padding: 8px 10px;
 }
 
 .empty-state {
   margin: 0;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--color-line-strong);
   border-radius: 16px;
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--color-surface-subtle);
+  color: var(--color-fg-subtle);
   padding: 16px;
 }
 
@@ -664,7 +731,7 @@ p {
 }
 
 .empty-chat-state p {
-  color: #6b7280;
+  color: var(--color-fg-subtle);
 }
 
 .chat-flow {
@@ -686,7 +753,7 @@ p {
 .chat-user .chat-bubble {
   max-width: min(72%, 620px);
   border-radius: 22px;
-  background: #f4f4f4;
+  background: var(--app-chat-user-bubble);
   padding: 12px 16px;
 }
 
@@ -717,7 +784,7 @@ p {
 
 .chat-bubble p {
   margin-bottom: 12px;
-  color: #202124;
+  color: var(--app-chat-agent-text);
   line-height: 1.75;
   white-space: pre-wrap;
 }
@@ -732,7 +799,7 @@ p {
   gap: 8px;
   margin-top: 10px;
   margin-bottom: 8px;
-  color: #64748b;
+  color: var(--color-fg-subtle);
   font-size: 13px;
 }
 
@@ -745,10 +812,10 @@ p {
 .handoff-chip {
   display: inline-flex;
   gap: 8px;
-  border: 1px solid #ececf1;
+  border: 1px solid var(--color-line);
   border-radius: 999px;
-  background: #fff;
-  color: #374151;
+  background: var(--color-surface);
+  color: var(--color-fg-muted);
   cursor: pointer;
   padding: 7px 10px;
   text-align: left;
@@ -765,7 +832,7 @@ p {
 
 .handoff-chip small {
   display: none;
-  color: #64748b;
+  color: var(--color-fg-subtle);
 }
 
 .composer-panel {
@@ -794,10 +861,10 @@ p {
   display: flex;
   align-items: center;
   gap: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-line);
   border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
+  background: var(--color-surface);
+  box-shadow: 0 8px 28px var(--app-chat-composer-shadow);
   padding: 8px 10px;
 }
 
@@ -807,7 +874,7 @@ p {
   resize: vertical;
   border: 0;
   background: transparent;
-  color: #202124;
+  color: var(--color-fg);
   line-height: 1.6;
   padding: 8px 4px;
 }
@@ -846,54 +913,54 @@ p {
 }
 
 .send-status {
-  border: 1px solid #ececf1;
-  background: #ffffff;
-  color: #475569;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-fg-muted);
 }
 
 .send-status strong {
-  color: #1d4ed8;
+  color: var(--color-info-emphasis);
   white-space: nowrap;
 }
 
 .send-status-error,
 .error-box {
-  border: 1px solid #fecaca;
-  background: #fff1f2;
-  color: #991b1b;
+  border: 1px solid var(--color-danger-border);
+  background: var(--color-danger-subtle);
+  color: var(--color-danger-emphasis);
 }
 
 .form-warning {
   margin: 0;
-  color: #b91c1c;
+  color: var(--color-danger);
   font-size: 12px;
   font-weight: 700;
 }
 
 .send-status-error strong {
-  color: #991b1b;
+  color: var(--color-danger-emphasis);
 }
 
 .send-status-warning,
 .send-status-stale,
 .stale-box {
-  border: 1px solid #fed7aa;
-  background: #fff7ed;
-  color: #9a3412;
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-subtle);
+  color: var(--color-warning-emphasis);
 }
 
 .send-status-warning strong,
 .send-status-stale strong {
-  color: #9a3412;
+  color: var(--color-warning-emphasis);
 }
 
 .send-status-completed {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  border-color: var(--color-success-border);
+  background: var(--color-success-subtle);
 }
 
 .send-status-completed strong {
-  color: #166534;
+  color: var(--color-success-emphasis);
 }
 
 .agent-list,
@@ -906,9 +973,9 @@ p {
 .agent-card {
   display: grid;
   gap: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-line);
   border-radius: 18px;
-  background: #fbfdff;
+  background: var(--color-surface);
   padding: 16px;
 }
 
@@ -926,18 +993,18 @@ p {
 .agent-card-header p,
 .agent-meta,
 .muted {
-  color: #64748b;
+  color: var(--color-fg-subtle);
 }
 
 .agent-summary {
-  color: #334155;
+  color: var(--color-fg-muted);
   font-weight: 700;
 }
 
 .agent-output-preview {
   display: -webkit-box;
   overflow: hidden;
-  color: #475569;
+  color: var(--color-fg-subtle);
   font-size: 13px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -948,8 +1015,8 @@ p {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--color-surface-muted);
+  color: var(--color-fg-muted);
   font-size: 12px;
   font-weight: 900;
   padding: 4px 9px;
@@ -960,23 +1027,23 @@ p {
 .pill-completed,
 .pill-approved,
 .pill-delivered {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-success-subtle);
+  color: var(--color-success-emphasis);
 }
 
 .pill-queued,
 .pill-running,
 .pill-pending {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-warning-subtle);
+  color: var(--color-warning-emphasis);
 }
 
 .pill-failed,
 .pill-denied,
 .pill-cancelled,
 .pill-disabled {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-danger-subtle);
+  color: var(--color-danger-emphasis);
 }
 
 .details-panel {
@@ -987,13 +1054,13 @@ p {
 
 .details-panel summary {
   cursor: pointer;
-  color: #1d4ed8;
+  color: var(--color-info-emphasis);
   font-weight: 900;
   padding: 18px 22px;
 }
 
 .details-panel[open] summary {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .details-grid {
@@ -1015,14 +1082,14 @@ dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-line);
   border-radius: 16px;
-  background: #f8fafc;
+  background: var(--color-surface-subtle);
   padding: 16px;
 }
 
 dt {
-  color: #718096;
+  color: var(--color-fg-subtle);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -1035,7 +1102,7 @@ dd {
 }
 
 .subsection {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--color-line);
   padding-top: 14px;
 }
 
@@ -1049,8 +1116,8 @@ dd {
 .message-output {
   margin: 0;
   border-radius: 16px;
-  background: #f1f5f9;
-  color: #1e293b;
+  background: var(--color-surface-muted);
+  color: var(--color-fg-muted);
   line-height: 1.7;
   padding: 14px;
 }
@@ -1089,14 +1156,14 @@ dd {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-line);
   border-radius: 14px;
   padding: 12px;
 }
 
 .compact-list small,
 .event-list span {
-  color: #64748b;
+  color: var(--color-fg-subtle);
 }
 
 .metric-grid {
@@ -1111,19 +1178,19 @@ dd {
   min-height: 116px;
   flex-direction: column;
   justify-content: space-between;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--color-info-border);
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-info-subtle) 100%);
   padding: 16px;
 }
 
 .metric-card span,
 .metric-card small {
-  color: #64748b;
+  color: var(--color-fg-subtle);
 }
 
 .metric-card strong {
-  color: #172033;
+  color: var(--color-fg-emphasis);
   font-size: 30px;
   line-height: 1;
 }
@@ -1132,7 +1199,7 @@ dd {
   display: grid;
   gap: 8px;
   margin: 0;
-  color: #475569;
+  color: var(--color-fg-muted);
   padding-left: 22px;
 }
 

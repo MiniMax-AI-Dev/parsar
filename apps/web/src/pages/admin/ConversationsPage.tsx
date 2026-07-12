@@ -693,7 +693,7 @@ function ConversationMain(p: MainProps) {
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
 
   return (
-    <main className="relative flex min-w-0 flex-1 flex-col bg-[#fbfcfd]">
+    <main className="relative flex min-w-0 flex-1 flex-col bg-surface-subtle">
       {p.folded && (
         <button
           type="button"
@@ -784,7 +784,7 @@ function EmptyChat({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="flex flex-1 flex-col bg-[radial-gradient(circle_at_58%_28%,rgba(226,232,240,0.72),transparent_34%),linear-gradient(180deg,#fbfcfd_0%,#ffffff_72%)] px-5 py-6 sm:px-8">
+    <div className="flex flex-1 flex-col bg-surface-subtle px-5 py-6 sm:px-8">
       <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface/80 px-2 py-1 font-medium shadow-sm">
@@ -959,7 +959,7 @@ function ChatStream({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto bg-[#fbfcfd]">
+      <div className="flex flex-1 flex-col overflow-y-auto bg-surface-subtle">
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-5 py-6 sm:px-6 lg:px-10">
           {timelineQ.isLoading ? (
             <Skeleton className="h-24 w-3/4" />
@@ -1011,7 +1011,7 @@ function ChatStream({
                 }
               />
             ) : (
-              <div className="flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-slate-200/70">
+              <div className="flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-line/70">
                 <span className="flex items-center gap-1" aria-hidden="true">
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-300ms]" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-150ms]" />
@@ -1047,7 +1047,7 @@ function ChatStream({
         </div>
       </div>
 
-      <div className="bg-gradient-to-t from-white via-white to-white/70 px-5 pb-4 pt-2 sm:px-6 lg:px-10">
+      <div className="border-t border-line/60 bg-surface/95 px-5 pb-4 pt-2 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-4xl">
           {chatToast && (
             <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />

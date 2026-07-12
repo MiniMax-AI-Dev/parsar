@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
+import { ThemeMenu } from "./ThemeMenu"
 import { UserMenu } from "./UserMenu"
 
 interface AdminLayoutProps {
@@ -86,6 +87,7 @@ export function AdminLayout({
         <WorkspaceSwitcher />
 
         <div className="ml-auto flex items-center gap-2">
+          <ThemeMenu />
           <UserMenu />
         </div>
       </header>

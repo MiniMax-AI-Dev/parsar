@@ -24,7 +24,7 @@ export function UserMenu() {
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-full px-1 py-0.5 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 data-[state=open]:bg-surface-muted"
+          className="inline-flex items-center gap-1.5 rounded-full px-1 py-0.5 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong data-[state=open]:bg-surface-muted"
         >
           <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-surface-muted text-sm font-semibold text-fg-muted">
             {user.avatar_url ? (

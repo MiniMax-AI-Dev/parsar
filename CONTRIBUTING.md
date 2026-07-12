@@ -220,6 +220,10 @@ split relevant pieces out first rather than growing the file further.
 - `packages/ui` / `packages/core` are reserved for logic shared across
   more than one app. Until they are populated, shared web-only logic
   still belongs in `apps/web/src/lib/`, not duplicated per page.
+- Global theme state lives in `apps/web/src/lib/theme.tsx`; page components
+  must not read or write theme `localStorage` directly. Light/dark styling
+  must flow through semantic tokens in `apps/web/src/style.css`, not per-page
+  raw colors or duplicated `dark:` branches.
 
 ### Testing granularity
 
