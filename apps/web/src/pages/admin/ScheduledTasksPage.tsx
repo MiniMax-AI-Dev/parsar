@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Bot, ChevronLeft, ChevronRight, Pencil, Play, Plus, Trash2 } from "lucide-react"
+import { Bot, Pencil, Play, Plus, Trash2 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
+import { OffsetPagination } from "../../components/ui/offset-pagination"
 import {
   Dialog,
   DialogContent,
@@ -334,12 +335,18 @@ export function ScheduledTasksPage() {
           </div>
         )}
 
-        <SchedPager
+        <OffsetPagination
           offset={offset}
           limit={SCHED_PAGE_SIZE}
           total={total}
-          onPrev={() => setOffset((cur) => Math.max(0, cur - SCHED_PAGE_SIZE))}
+          rangeLabel={({ from, to, total: rangeTotal }) =>
+            t("scheduledTasks.pagination.range", { from, to, total: rangeTotal })
+          }
+          previousLabel={t("scheduledTasks.pagination.prev")}
+          nextLabel={t("scheduledTasks.pagination.next")}
+          onPrevious={() => setOffset((cur) => Math.max(0, cur - SCHED_PAGE_SIZE))}
           onNext={() => setOffset((cur) => cur + SCHED_PAGE_SIZE)}
+          className="text-xs text-fg-subtle"
         />
 
         {dialogOpen && (
@@ -373,45 +380,6 @@ export function ScheduledTasksPage() {
         )}
       </div>
     </AdminLayout>
-  )
-}
-
-// Disable boundary buttons (vs. hiding) so layout stays stable.
-function SchedPager({
-  offset,
-  limit,
-  total,
-  onPrev,
-  onNext,
-}: {
-  offset: number
-  limit: number
-  total: number
-  onPrev: () => void
-  onNext: () => void
-}) {
-  const { t } = useTranslation("admin")
-  if (total === 0) return null
-  const from = offset + 1
-  const to = Math.min(offset + limit, total)
-  const onFirstPage = offset === 0
-  const onLastPage = offset + limit >= total
-  return (
-    <div className="flex items-center justify-between gap-3 px-1 text-xs text-fg-subtle">
-      <span className="tabular-nums">
-        {t("scheduledTasks.pagination.range", { from, to, total })}
-      </span>
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={onPrev} disabled={onFirstPage}>
-          <ChevronLeft className="h-3.5 w-3.5" />
-          {t("scheduledTasks.pagination.prev")}
-        </Button>
-        <Button size="sm" variant="outline" onClick={onNext} disabled={onLastPage}>
-          {t("scheduledTasks.pagination.next")}
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    </div>
   )
 }
 

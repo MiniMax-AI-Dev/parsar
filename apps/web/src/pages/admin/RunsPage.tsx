@@ -5,8 +5,6 @@ import {
   ArrowUpRight,
   Bot,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Code,
   Database,
@@ -29,6 +27,7 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
+import { OffsetPagination } from "../../components/ui/offset-pagination"
 import { Skeleton } from "../../components/ui/skeleton"
 import {
   Tabs,
@@ -502,55 +501,22 @@ export function RunsPage() {
             </div>
           )}
 
-          <RunsPager
+          <OffsetPagination
             offset={offset}
             limit={RUNS_PAGE_SIZE}
             total={total}
-            onPrev={() => setOffset((cur) => Math.max(0, cur - RUNS_PAGE_SIZE))}
+            rangeLabel={({ from, to, total: rangeTotal }) =>
+              t("runs.table.pagination.range", { from, to, total: rangeTotal })
+            }
+            previousLabel={t("runs.table.pagination.prev")}
+            nextLabel={t("runs.table.pagination.next")}
+            onPrevious={() => setOffset((cur) => Math.max(0, cur - RUNS_PAGE_SIZE))}
             onNext={() => setOffset((cur) => cur + RUNS_PAGE_SIZE)}
+            className="text-sm text-fg-muted"
           />
         </div>
       )}
     </AdminLayout>
-  )
-}
-
-// Disable boundary buttons (vs. hiding) so layout stays stable.
-function RunsPager({
-  offset,
-  limit,
-  total,
-  onPrev,
-  onNext,
-}: {
-  offset: number
-  limit: number
-  total: number
-  onPrev: () => void
-  onNext: () => void
-}) {
-  const { t } = useTranslation("admin")
-  if (total === 0) return null
-  const from = offset + 1
-  const to = Math.min(offset + limit, total)
-  const onFirstPage = offset === 0
-  const onLastPage = offset + limit >= total
-  return (
-    <div className="flex items-center justify-between gap-3 px-1 text-sm text-fg-muted">
-      <span className="tabular-nums">
-        {t("runs.table.pagination.range", { from, to, total })}
-      </span>
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={onPrev} disabled={onFirstPage}>
-          <ChevronLeft className="h-3.5 w-3.5" />
-          {t("runs.table.pagination.prev")}
-        </Button>
-        <Button size="sm" variant="outline" onClick={onNext} disabled={onLastPage}>
-          {t("runs.table.pagination.next")}
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    </div>
   )
 }
 
