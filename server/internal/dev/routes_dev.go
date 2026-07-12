@@ -20,7 +20,7 @@ import (
 func getSeed(w http.ResponseWriter, r *http.Request) {
 	// SeedData is the human-readable fixture (back-compat with
 	// existing dev consumers). The `db` key carries the real DB UUIDs
-	// `cmd/seeddev` writes so the admin frontend can auto-bind.
+	// used by the development database so the admin frontend can auto-bind.
 	seed := DefaultSeed()
 	ids := store.DefaultDevFixtureIDs()
 	writeJSON(w, http.StatusOK, map[string]any{
