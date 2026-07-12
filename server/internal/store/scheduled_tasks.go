@@ -139,7 +139,9 @@ func scheduledRunTitle(name, timezone string, now time.Time) string {
 	return fmt.Sprintf("%s · %s", name, now.In(loc).Format("01-02 15:04"))
 }
 
-func scheduledTaskFromCreateRow(r sqlc.CreateScheduledTaskRow) ScheduledTaskRead {
+type scheduledTaskRow sqlc.CreateScheduledTaskRow
+
+func scheduledTaskFromRow(r scheduledTaskRow) ScheduledTaskRead {
 	return ScheduledTaskRead{
 		ID:                  r.ID,
 		AgentID:             r.AgentID,
@@ -160,98 +162,26 @@ func scheduledTaskFromCreateRow(r sqlc.CreateScheduledTaskRow) ScheduledTaskRead
 		CreatedAt:           r.CreatedAt.Time,
 		UpdatedAt:           r.UpdatedAt.Time,
 	}
+}
+
+func scheduledTaskFromCreateRow(r sqlc.CreateScheduledTaskRow) ScheduledTaskRead {
+	return scheduledTaskFromRow(scheduledTaskRow(r))
 }
 
 func scheduledTaskFromGetRow(r sqlc.GetScheduledTaskRow) ScheduledTaskRead {
-	return ScheduledTaskRead{
-		ID:                  r.ID,
-		AgentID:             r.AgentID,
-		ConversationID:      r.ConversationID,
-		Name:                r.Name,
-		Prompt:              r.Prompt,
-		CronExpr:            r.CronExpr,
-		Timezone:            r.Timezone,
-		Enabled:             r.Enabled,
-		FeishuChatID:        r.FeishuChatID,
-		FeishuChatName:      r.FeishuChatName,
-		NextRunAt:           timePtr(r.NextRunAt),
-		LastRunAt:           timePtr(r.LastRunAt),
-		LastRunID:           r.LastRunID,
-		LastStatus:          r.LastStatus,
-		ConsecutiveFailures: r.ConsecutiveFailures,
-		CreatedBy:           r.CreatedBy,
-		CreatedAt:           r.CreatedAt.Time,
-		UpdatedAt:           r.UpdatedAt.Time,
-	}
+	return scheduledTaskFromRow(scheduledTaskRow(r))
 }
 
 func scheduledTaskFromListRow(r sqlc.ListScheduledTasksByAgentRow) ScheduledTaskRead {
-	return ScheduledTaskRead{
-		ID:                  r.ID,
-		AgentID:             r.AgentID,
-		ConversationID:      r.ConversationID,
-		Name:                r.Name,
-		Prompt:              r.Prompt,
-		CronExpr:            r.CronExpr,
-		Timezone:            r.Timezone,
-		Enabled:             r.Enabled,
-		FeishuChatID:        r.FeishuChatID,
-		FeishuChatName:      r.FeishuChatName,
-		NextRunAt:           timePtr(r.NextRunAt),
-		LastRunAt:           timePtr(r.LastRunAt),
-		LastRunID:           r.LastRunID,
-		LastStatus:          r.LastStatus,
-		ConsecutiveFailures: r.ConsecutiveFailures,
-		CreatedBy:           r.CreatedBy,
-		CreatedAt:           r.CreatedAt.Time,
-		UpdatedAt:           r.UpdatedAt.Time,
-	}
+	return scheduledTaskFromRow(scheduledTaskRow(r))
 }
 
 func scheduledTaskFromListByWorkspaceRow(r sqlc.ListScheduledTasksByWorkspacePageRow) ScheduledTaskRead {
-	return ScheduledTaskRead{
-		ID:                  r.ID,
-		AgentID:             r.AgentID,
-		ConversationID:      r.ConversationID,
-		Name:                r.Name,
-		Prompt:              r.Prompt,
-		CronExpr:            r.CronExpr,
-		Timezone:            r.Timezone,
-		Enabled:             r.Enabled,
-		FeishuChatID:        r.FeishuChatID,
-		FeishuChatName:      r.FeishuChatName,
-		NextRunAt:           timePtr(r.NextRunAt),
-		LastRunAt:           timePtr(r.LastRunAt),
-		LastRunID:           r.LastRunID,
-		LastStatus:          r.LastStatus,
-		ConsecutiveFailures: r.ConsecutiveFailures,
-		CreatedBy:           r.CreatedBy,
-		CreatedAt:           r.CreatedAt.Time,
-		UpdatedAt:           r.UpdatedAt.Time,
-	}
+	return scheduledTaskFromRow(scheduledTaskRow(r))
 }
 
 func scheduledTaskFromUpdateRow(r sqlc.UpdateScheduledTaskRow) ScheduledTaskRead {
-	return ScheduledTaskRead{
-		ID:                  r.ID,
-		AgentID:             r.AgentID,
-		ConversationID:      r.ConversationID,
-		Name:                r.Name,
-		Prompt:              r.Prompt,
-		CronExpr:            r.CronExpr,
-		Timezone:            r.Timezone,
-		Enabled:             r.Enabled,
-		FeishuChatID:        r.FeishuChatID,
-		FeishuChatName:      r.FeishuChatName,
-		NextRunAt:           timePtr(r.NextRunAt),
-		LastRunAt:           timePtr(r.LastRunAt),
-		LastRunID:           r.LastRunID,
-		LastStatus:          r.LastStatus,
-		ConsecutiveFailures: r.ConsecutiveFailures,
-		CreatedBy:           r.CreatedBy,
-		CreatedAt:           r.CreatedAt.Time,
-		UpdatedAt:           r.UpdatedAt.Time,
-	}
+	return scheduledTaskFromRow(scheduledTaskRow(r))
 }
 
 // CreateScheduledTask inserts the task row. No conversation is built up front:

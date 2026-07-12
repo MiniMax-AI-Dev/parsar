@@ -7668,17 +7668,6 @@ func decodeJSONMap(value []byte) map[string]any {
 	return decoded
 }
 
-func decodeJSONStringSlice(value []byte) []string {
-	if len(value) == 0 {
-		return []string{}
-	}
-	var decoded []string
-	if err := json.Unmarshal(value, &decoded); err != nil || decoded == nil {
-		return []string{}
-	}
-	return normalizeStringSlice(decoded)
-}
-
 // DecodeMessageAttachments lifts the attachments slice out of a messages.metadata
 // jsonb payload. Lossy on purpose: malformed entries are skipped silently so a single
 // bad attachment cannot nuke a run with other content. Shape matches MessageAttachment.
