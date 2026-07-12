@@ -28,9 +28,6 @@ type BuildResult struct {
 }
 
 // BuildArgs translates an AgentOptions map into the `claude` CLI argv.
-// resumeSessionID, if non-empty, takes precedence over any
-// "resume_session_id" key in opts. Unknown keys are silently ignored so
-// the wire schema can add fields without bumping the daemon version.
 func BuildArgs(opts map[string]any, resumeSessionID string) (BuildResult, error) {
 	args := []string{
 		"--output-format", "stream-json",
@@ -169,19 +166,8 @@ func BuildArgs(opts map[string]any, resumeSessionID string) (BuildResult, error)
 		}
 	}
 
-	// resume: --resume <session-id>. Explicit param wins over the map key.
-	resume := resumeSessionID
-	if resume == "" {
-		if v, ok := opts["resume_session_id"]; ok {
-			s, ok := v.(string)
-			if !ok {
-				return result, fmt.Errorf("claudecode.BuildArgs: resume_session_id must be string, got %T", v)
-			}
-			resume = s
-		}
-	}
-	if resume != "" {
-		args = append(args, "--resume", resume)
+	if resumeSessionID != "" {
+		args = append(args, "--resume", resumeSessionID)
 	}
 
 	// env: passthrough KEY=value pairs.

@@ -70,9 +70,9 @@ type JSONRPCConfig struct {
 //   - response       (id + result|error)        → matched to a pending request
 //   - notification   (method + params, no id)   → routed to a per-method handler
 //   - server request (id + method + params)     → routed to a per-method handler,
-//                                                 reply is sent automatically
-//                                                 unless the handler returns
-//                                                 DeferReply.
+//     reply is sent automatically
+//     unless the handler returns
+//     DeferReply.
 //
 // stderr is line-pumped to the logger and never merged with stdout.
 type JSONRPCClient struct {
@@ -240,13 +240,24 @@ func (c *JSONRPCClient) Close() error {
 	var closeErr error
 	c.closeOnce.Do(func() {
 		c.mu.Lock()
+		cmd := c.cmd
+		stdin := c.stdin
 		c.alive = false
 		c.mu.Unlock()
-		if c.stdin != nil {
-			_ = c.stdin.Close()
+		if stdin != nil {
+			_ = stdin.Close()
 		}
-		if c.cmd != nil && c.cmd.Process != nil {
-			_ = c.cmd.Process.Kill()
+		if cmd != nil && cmd.Process != nil {
+			select {
+			case <-c.doneCh:
+			case <-time.After(250 * time.Millisecond):
+				_ = cmd.Process.Kill()
+				select {
+				case <-c.doneCh:
+				case <-time.After(rpcKillTimeout):
+					c.cfg.Logger.Warn("codex rpc child did not exit after kill", "tag", c.cfg.LogTag)
+				}
+			}
 		}
 		closeErr = c.drainPending(errors.New("codex rpc: client closed"))
 	})
@@ -387,7 +398,12 @@ func (c *JSONRPCClient) readStdoutLoop() {
 		c.dispatchFrame(line)
 	}
 	if err := sc.Err(); err != nil && !errors.Is(err, io.EOF) {
-		c.cfg.Logger.Warn("codex rpc stdout scan err", "tag", c.cfg.LogTag, "err", err)
+		c.mu.Lock()
+		alive := c.alive
+		c.mu.Unlock()
+		if alive {
+			c.cfg.Logger.Warn("codex rpc stdout scan err", "tag", c.cfg.LogTag, "err", err)
+		}
 	}
 }
 

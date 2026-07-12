@@ -660,7 +660,7 @@ func TestClose_InvalidatesBinder(t *testing.T) {
 	if err := c.Close(context.Background(), "conv-1"); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1"); !errors.Is(err, binding.ErrNotBound) {
+	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code"); !errors.Is(err, binding.ErrNotBound) {
 		t.Fatalf("expected ErrNotBound after Close, got %v", err)
 	}
 }
@@ -868,7 +868,7 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsConversation(t *testing.T) {
 		t.Fatalf("prompt_request mismatch: %+v", req)
 	}
 
-	b, err := binder.Resolve(context.Background(), "conv-1", "pa-1")
+	b, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code")
 	if err != nil {
 		t.Fatalf("binder.Resolve after configured device: %v", err)
 	}
@@ -944,7 +944,7 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsWithWorkdirKey(t *testing.T)
 		t.Fatalf("prompt_request work_dir mismatch: got %q, want %q (workdir alias should be honored)", req.WorkDir, "/repo/parsar")
 	}
 
-	b, err := binder.Resolve(context.Background(), "conv-1", "pa-1")
+	b, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code")
 	if err != nil {
 		t.Fatalf("binder.Resolve after configured device: %v", err)
 	}
@@ -1005,7 +1005,7 @@ func TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired(t *testing.T) {
 		t.Fatalf("expected sandbox-preparation hint, got %q", gotErr.Error)
 	}
 	// And nothing got bound.
-	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1"); err == nil {
+	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code"); err == nil {
 		t.Fatalf("expected no binding after refusing auto-acquire; one was persisted")
 	}
 }
@@ -1180,7 +1180,7 @@ loop:
 	// regresses, every subsequent turn would re-hit ErrNotBound and
 	// re-bind on the slow path, which mostly works but is wrong by
 	// design (see "lazy on first prompt" decision in the plan).
-	bind, err := binder.Resolve(context.Background(), "conv-1", "pa-1")
+	bind, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code")
 	if err != nil {
 		t.Fatalf("expected binder.Resolve to succeed after lazy bind, got %v", err)
 	}
@@ -1233,7 +1233,7 @@ func TestStreamPrompt_NoDeviceConfigStillReportsPickDevice(t *testing.T) {
 	// And: nothing should have been written to the binder. If the new
 	// switch ever falls through to Bind with empty device_id, this
 	// would catch it before it corrupts a fresh row.
-	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1"); !errors.Is(err, binding.ErrNotBound) {
+	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code"); !errors.Is(err, binding.ErrNotBound) {
 		t.Fatalf("binder must remain unbound after 'pick a device' error, got %v", err)
 	}
 

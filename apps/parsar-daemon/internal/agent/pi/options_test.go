@@ -107,20 +107,53 @@ func TestBuildArgsOverrideSystemPromptReplaces(t *testing.T) {
 	}
 }
 
-func TestBuildArgsResumeSessionExplicitWins(t *testing.T) {
+func TestBuildArgsResumeSessionUsesExplicitID(t *testing.T) {
+	sessionDir := filepath.Join(t.TempDir(), "sessions")
 	res, err := pi.BuildArgs("run-1", "hello", "", map[string]any{
 		"resume_session_id": "from-opts",
+		"session_dir":       sessionDir,
 	}, "from-param")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
 	defer res.Cleanup()
+	if !containsPair(res.Args, "--session-dir", sessionDir) {
+		t.Fatalf("args missing --session-dir: %v", res.Args)
+	}
 	if !containsPair(res.Args, "--session", "from-param") {
 		t.Fatalf("explicit resume id must win: %v", res.Args)
 	}
 }
 
-func TestBuildArgsResumeSessionFromOpts(t *testing.T) {
+func TestBuildArgsSessionDirCreatesAndAddsFlag(t *testing.T) {
+	sessionDir := filepath.Join(t.TempDir(), "missing", "sessions")
+	res, err := pi.BuildArgs("run-1", "hello", "", map[string]any{
+		"session_dir": sessionDir,
+	}, "")
+	if err != nil {
+		t.Fatalf("BuildArgs: %v", err)
+	}
+	defer res.Cleanup()
+	if !containsPair(res.Args, "--session-dir", sessionDir) {
+		t.Fatalf("args missing --session-dir: %v", res.Args)
+	}
+	info, err := os.Stat(sessionDir)
+	if err != nil {
+		t.Fatalf("stat session_dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("session_dir %q is not a directory", sessionDir)
+	}
+}
+
+func TestBuildArgsRejectsRelativeSessionDir(t *testing.T) {
+	_, err := pi.BuildArgs("run-1", "hello", "", map[string]any{"session_dir": "./sessions"}, "")
+	if err == nil || !strings.Contains(err.Error(), "session_dir") {
+		t.Fatalf("BuildArgs session_dir err = %v, want session_dir error", err)
+	}
+}
+
+func TestBuildArgsIgnoresResumeSessionIDOption(t *testing.T) {
 	res, err := pi.BuildArgs("run-1", "hello", "", map[string]any{
 		"resume_session_id": "sess-42",
 	}, "")
@@ -128,8 +161,8 @@ func TestBuildArgsResumeSessionFromOpts(t *testing.T) {
 		t.Fatalf("BuildArgs: %v", err)
 	}
 	defer res.Cleanup()
-	if !containsPair(res.Args, "--session", "sess-42") {
-		t.Fatalf("opts resume id missing: %v", res.Args)
+	if slices.Contains(res.Args, "--session") || slices.Contains(res.Args, "sess-42") {
+		t.Fatalf("resume_session_id option must be ignored: %v", res.Args)
 	}
 }
 

@@ -17,10 +17,7 @@ type BuildResult struct {
 	Cleanup func()
 }
 
-// BuildArgs translates the daemon prompt_request into a `pi --mode json`
-// invocation. resumeSessionID, if non-empty, takes precedence over any
-// "resume_session_id" key in opts. pi has no working-directory flag, so
-// WorkDir is resolved here and the caller sets cmd.Dir.
+// BuildArgs translates the daemon prompt_request into a `pi --mode json` invocation.
 func BuildArgs(runID, prompt, workDir string, opts map[string]any, resumeSessionID string) (BuildResult, error) {
 	_ = runID
 	result := BuildResult{Cleanup: func() {}}
@@ -60,10 +57,15 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any, resumeSession
 		args = append(args, "--append-system-prompt", sys)
 	}
 
-	resume := strings.TrimSpace(resumeSessionID)
-	if resume == "" {
-		resume = stringOpt(opts, "resume_session_id")
+	if sessionDir := stringOpt(opts, "session_dir"); sessionDir != "" {
+		resolvedSessionDir, err := resolveSessionDirOption(sessionDir)
+		if err != nil {
+			return result, err
+		}
+		args = append(args, "--session-dir", resolvedSessionDir)
 	}
+
+	resume := strings.TrimSpace(resumeSessionID)
 	if resume != "" {
 		args = append(args, "--session", resume)
 	}
@@ -113,6 +115,30 @@ func resolveWorkDir(input string) (string, error) {
 	}
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return "", fmt.Errorf("pi: mkdir work_dir %s: %w", abs, err)
+	}
+	return abs, nil
+}
+
+func resolveSessionDirOption(input string) (string, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", nil
+	}
+	var abs string
+	switch {
+	case strings.HasPrefix(trimmed, "~/"):
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("pi: resolve home dir: %w", err)
+		}
+		abs = filepath.Join(home, strings.TrimPrefix(trimmed, "~/"))
+	case filepath.IsAbs(trimmed):
+		abs = trimmed
+	default:
+		return "", fmt.Errorf("pi: session_dir must be absolute or start with ~/, got %q", trimmed)
+	}
+	if err := os.MkdirAll(abs, 0o700); err != nil {
+		return "", fmt.Errorf("pi: mkdir session_dir %s: %w", abs, err)
 	}
 	return abs, nil
 }

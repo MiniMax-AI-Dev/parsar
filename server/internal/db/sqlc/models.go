@@ -96,6 +96,22 @@ type AgentDaemonDeviceOwner struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Agent-daemon upstream engine session state
+type AgentEngineSession struct {
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	AgentID        pgtype.UUID `json:"agent_id"`
+	AgentKind      string      `json:"agent_kind"`
+	// Agent-engine session identifier, e.g. Claude session id, Codex thread id, or Pi session id
+	UpstreamSessionID string `json:"upstream_session_id"`
+	// Agent-engine session id type, e.g. claude_session, codex_thread, pi_session
+	UpstreamSessionType string `json:"upstream_session_type"`
+	// Stable daemon-side state directory key for this conversation, agent, and engine
+	StateDirKey string             `json:"state_dir_key"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Agent execution records
 type AgentRun struct {
 	// Run ID
@@ -190,6 +206,20 @@ type AgentRunEvent struct {
 	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
 	// Persistence time
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Agent-daemon conversation to runtime-device bindings
+type AgentRuntimeBinding struct {
+	// Conversation using the runtime
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	// Agent using the runtime
+	AgentID pgtype.UUID `json:"agent_id"`
+	// Runtime device assigned to this conversation and agent
+	RuntimeID pgtype.UUID `json:"runtime_id"`
+	// Stable working directory for this conversation and agent
+	WorkDir   string             `json:"work_dir"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Compliance audit stream

@@ -31,13 +31,13 @@ type remoteStreamPromptRequest struct {
 }
 
 type remoteSubmitPermissionRequest struct {
-	Generation int64                         `json:"generation"`
-	Decision   connector.PermissionDecision  `json:"decision"`
+	Generation int64                        `json:"generation"`
+	Decision   connector.PermissionDecision `json:"decision"`
 }
 
 type remoteSubmitPromptForUserChoiceRequest struct {
-	Generation int64                                  `json:"generation"`
-	Decision   connector.PromptForUserChoiceDecision  `json:"decision"`
+	Generation int64                                 `json:"generation"`
+	Decision   connector.PromptForUserChoiceDecision `json:"decision"`
 }
 
 // HTTPRemoteStreamer forwards StreamPrompt to the pod recorded in the
@@ -354,7 +354,7 @@ func (c *Connector) assertLocalOwner(ctx context.Context, in connector.PromptInp
 	if c.ownerResolver == nil {
 		return nil
 	}
-	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID)
+	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID, resolveAgentKind(in))
 	if err != nil {
 		return fmt.Errorf("stale_owner: resolve binding: %w", err)
 	}

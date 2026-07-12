@@ -12,12 +12,11 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/clirunner"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 )
@@ -43,15 +42,13 @@ type Session struct {
 	runID string
 	cfg   sessionConfig
 
-	cmd *exec.Cmd
-	out chan<- proto.Envelope
+	proc *clirunner.Process
+	out  chan<- proto.Envelope
 
 	cancelCtx context.Context
-	cancelFn  context.CancelFunc
 
 	cancelOnce   sync.Once
 	closeOutOnce sync.Once
-	waitDone     chan struct{}
 	cleanup      func()
 
 	stderrMu sync.Mutex
@@ -99,45 +96,33 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		}
 	}
 
-	// Without this, pi never sees the proxy base_url + X-Sub-Module header and
-	// sends the managed key to api.anthropic.com → 401. Writes models.json and
-	// sets PI_CODING_AGENT_DIR in opts["env"] (buildEnv forwards it).
-	provOpts, provErr := applyPiManagedProvider(opts, req.ConversationID, req.RunID)
+	// Materialise pi's managed config and pin --session-dir to the stable
+	// conversation/agent/engine state key so --session can resolve reliably.
+	provOpts, provErr := applyPiRuntimeState(opts, req.AgentStateKey, req.ConversationID, req.RunID)
 	if provErr != nil {
 		return nil, fmt.Errorf("pi: apply managed provider: %w", provErr)
 	}
 	opts = provOpts
 
-	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, opts, req.ResumeSessionID)
+	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, opts, req.AgentSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("pi: build args: %w", err)
 	}
-	cancelCtx, cancelFn := context.WithCancel(parent)
-
 	args := append([]string{}, buildRes.Args...)
 	args = append(args, cfg.extraArgs...)
-	cmd := exec.CommandContext(cancelCtx, cfg.piBinary, args...)
-	// pi has no working-directory flag, so the resolved WorkDir becomes
-	// the subprocess cwd.
+	dir := ""
 	if buildRes.WorkDir != "" {
-		cmd.Dir = buildRes.WorkDir
+		dir = buildRes.WorkDir
 	}
-	cmd.Env = append(os.Environ(), buildRes.Env...)
-
-	stdout, err := cmd.StdoutPipe()
+	proc, err := clirunner.Start(clirunner.StartOptions{
+		Parent:      parent,
+		Binary:      cfg.piBinary,
+		Args:        args,
+		Dir:         dir,
+		Env:         append(os.Environ(), buildRes.Env...),
+		KillTimeout: cfg.killTimeout,
+	})
 	if err != nil {
-		cancelFn()
-		buildRes.Cleanup()
-		return nil, fmt.Errorf("pi: stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		cancelFn()
-		buildRes.Cleanup()
-		return nil, fmt.Errorf("pi: stderr pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		cancelFn()
 		buildRes.Cleanup()
 		return nil, fmt.Errorf("pi: start %q: %w", cfg.piBinary, err)
 	}
@@ -145,33 +130,19 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	s := &Session{
 		runID:     req.RunID,
 		cfg:       cfg,
-		cmd:       cmd,
+		proc:      proc,
 		out:       out,
-		cancelCtx: cancelCtx,
-		cancelFn:  cancelFn,
-		waitDone:  make(chan struct{}),
+		cancelCtx: proc.Context(),
 		cleanup:   buildRes.Cleanup,
 	}
-	go s.pumpStderr(stderr)
-	go s.run(stdout)
+	go s.pumpStderr(proc.Stderr)
+	go s.run(proc.Stdout)
 	return s, nil
 }
 
 func (s *Session) Cancel(context.Context) error {
 	s.cancelOnce.Do(func() {
-		if s.cmd.Process == nil {
-			return
-		}
-		_ = s.cmd.Process.Signal(syscall.SIGTERM)
-		go func() {
-			select {
-			case <-s.waitDone:
-				return
-			case <-time.After(s.cfg.killTimeout):
-				_ = s.cmd.Process.Signal(syscall.SIGKILL)
-			}
-		}()
-		s.cancelFn()
+		s.proc.Cancel()
 	})
 	return nil
 }
@@ -185,7 +156,6 @@ func (s *Session) SubmitPromptForUserChoice(context.Context, string, proto.Promp
 }
 
 func (s *Session) run(stdout io.Reader) {
-	defer close(s.waitDone)
 	defer s.cleanup()
 	defer s.closeOut()
 
@@ -202,7 +172,7 @@ func (s *Session) run(stdout io.Reader) {
 			select {
 			case s.out <- env:
 			case <-s.cancelCtx.Done():
-				_ = s.cmd.Wait()
+				_ = s.proc.Wait()
 				return
 			}
 		}
@@ -211,7 +181,7 @@ func (s *Session) run(stdout io.Reader) {
 		s.cfg.logger.Warn("pi: scan stdout", "run_id", s.runID, "err", err)
 	}
 
-	waitErr := s.cmd.Wait()
+	waitErr := s.proc.Wait()
 	for _, env := range tr.terminalEnvelopes(waitErr, s.stderrString(), s.cancelCtx.Err() != nil) {
 		s.trySend(env)
 	}

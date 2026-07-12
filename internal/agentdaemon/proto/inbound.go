@@ -187,6 +187,11 @@ type DonePayload struct {
 	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
+const (
+	DoneMetaAgentSessionID   = "agent_session_id"
+	DoneMetaAgentSessionType = "agent_session_type"
+)
+
 // AgentKindCapabilities describes what a daemon-side agent_kind can
 // do inside one prompt session. Runtime-level capabilities such as
 // cancellation belong to the daemon connector itself; these bits are

@@ -2905,10 +2905,8 @@ where conversation_id = @conversation_id::text
 -- Enumerate all bindings for one conversation and connector type.
 -- Backs connector diagnostic dumps without exposing one connector's
 -- upstream sessions to another connector. `metadata` is returned so
--- connectors that overload the column (e.g. agent_daemon stashes
--- agent_kind / claude_session_id / work_dir there) can reconstruct
--- the full binding in one query; callers that don't care just ignore
--- it (opencode/bindingstore.go is one such caller).
+-- connectors that overload the column can reconstruct the full binding
+-- in one query; callers that don't care just ignore it.
 select binding_key::text, upstream_session_id::text, metadata
 from connector_session_bindings
 where conversation_id = @conversation_id::text
@@ -2960,6 +2958,81 @@ where connector_type = @connector_type::text
 -- Test-only helper mirroring the in-memory size().
 select count(*)::bigint as total
 from connector_session_bindings;
+
+-- name: GetAgentDaemonBinding :one
+select
+  arb.conversation_id::text as conversation_id,
+  arb.agent_id::text as agent_id,
+  arb.runtime_id::text as runtime_id,
+  arb.work_dir::text as work_dir,
+  coalesce(aes.upstream_session_id, ''::text)::text as upstream_session_id,
+  coalesce(aes.upstream_session_type, ''::text)::text as upstream_session_type,
+  coalesce(aes.state_dir_key, ''::text)::text as state_dir_key,
+  coalesce(aes.metadata, '{}'::jsonb) as metadata
+from agent_runtime_bindings arb
+left join agent_engine_sessions aes
+  on aes.conversation_id = arb.conversation_id
+ and aes.agent_id = arb.agent_id
+ and aes.agent_kind = @agent_kind::text
+where arb.conversation_id = @conversation_id::uuid
+  and arb.agent_id = @agent_id::uuid;
+
+-- name: ResolveAgentDaemonDeviceByConversation :one
+select runtime_id::text
+from agent_runtime_bindings
+where conversation_id = @conversation_id::uuid
+order by updated_at desc
+limit 1;
+
+-- name: UpsertAgentDaemonRuntimeBinding :exec
+insert into agent_runtime_bindings(conversation_id, agent_id, runtime_id, work_dir, created_at, updated_at)
+values (@conversation_id::uuid, @agent_id::uuid, @runtime_id::uuid, @work_dir::text, now(), now())
+on conflict (conversation_id, agent_id) do update
+set runtime_id = excluded.runtime_id,
+    work_dir = excluded.work_dir,
+    updated_at = now();
+
+-- name: UpsertAgentDaemonEngineSession :exec
+insert into agent_engine_sessions(
+  conversation_id,
+  agent_id,
+  agent_kind,
+  upstream_session_id,
+  upstream_session_type,
+  state_dir_key,
+  metadata,
+  created_at,
+  updated_at
+)
+select
+  @conversation_id::uuid,
+  @agent_id::uuid,
+  @agent_kind::text,
+  @upstream_session_id::text,
+  @upstream_session_type::text,
+  @state_dir_key::text,
+  coalesce(@metadata::jsonb, '{}'::jsonb),
+  now(),
+  now()
+where exists (
+  select 1 from agent_runtime_bindings
+  where conversation_id = @conversation_id::uuid
+    and agent_id = @agent_id::uuid
+)
+on conflict (conversation_id, agent_id, agent_kind) do update
+set upstream_session_id = excluded.upstream_session_id,
+    upstream_session_type = excluded.upstream_session_type,
+    state_dir_key = excluded.state_dir_key,
+    metadata = excluded.metadata,
+    updated_at = now();
+
+-- name: DeleteAgentDaemonBindingByConversation :exec
+delete from agent_runtime_bindings
+where conversation_id = @conversation_id::uuid;
+
+-- name: DeleteAgentDaemonBindingByRuntime :exec
+delete from agent_runtime_bindings
+where runtime_id = @runtime_id::uuid;
 
 -- ============================================================
 

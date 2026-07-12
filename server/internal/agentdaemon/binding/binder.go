@@ -1,11 +1,4 @@
-// Package binding owns the (conversation, agent) ↔ device mapping
-// for the agent_daemon connector, persisted via the generic
-// connector_session_bindings table:
-//
-//	connector_type      = "agent_daemon"
-//	binding_key         = agent id
-//	upstream_session_id = device id (runtimes row uuid)
-//	metadata.agent_kind / claude_session_id / work_dir
+// Package binding owns agent-daemon runtime bindings and engine sessions.
 package binding
 
 import (
@@ -13,68 +6,48 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
-// ConnectorType is the connector_type value the binding rows carry.
-const ConnectorType = "agent_daemon"
-
-// JSON keys used inside connector_session_bindings.metadata.
 const (
-	MetaAgentKind        = "agent_kind"
-	MetaClaudeSessionID  = "claude_session_id"
-	MetaWorkDir          = "work_dir"
-	MetaCreatedByPicker  = "created_by_picker"
-	MetaCreatedBySandbox = "created_by_sandbox"
-	// MetaSessionUpdatedAt is the RFC3339 timestamp of the run whose
-	// done event most recently wrote claude_session_id. Used as the
-	// CAS guard in RememberSession so a stale done event cannot
-	// overwrite a fresher session id from a newer run.
-	MetaSessionUpdatedAt = "session_updated_at"
+	SessionTypeClaude = "claude_session"
+	SessionTypeCodex  = "codex_thread"
+	SessionTypePi     = "pi_session"
 )
 
 // Binding is the resolved view a caller cares about.
 type Binding struct {
-	ConversationID  string
-	AgentID         string
-	DeviceID        string
-	AgentKind       string
-	ClaudeSessionID string
-	WorkDir         string
+	ConversationID   string
+	AgentID          string
+	DeviceID         string
+	AgentKind        string
+	AgentSessionID   string
+	AgentSessionType string
+	AgentStateKey    string
+	WorkDir          string
+	Metadata         map[string]any
 }
 
-// ErrNotBound is returned by Resolve when a conversation has no
-// binding for the requested agent.
+// ErrNotBound is returned when a conversation has no runtime binding.
 var ErrNotBound = errors.New("agentdaemon: conversation has no device binding for agent")
 
-// Binder is the public interface the connector and gateway use.
+// Binder persists conversation/agent runtime placement and engine session ids.
 type Binder interface {
-	Resolve(ctx context.Context, conversationID, agentID string) (Binding, error)
+	Resolve(ctx context.Context, conversationID, agentID, agentKind string) (Binding, error)
 	Bind(ctx context.Context, b Binding) error
-	// RememberSession folds a Claude session id into an existing
-	// binding's metadata. runStartedAt acts as a CAS guard: the new
-	// session id is written only when the existing
-	// metadata.session_updated_at is older than runStartedAt (or
-	// absent). Pass time.Time{} to opt out of the guard.
-	RememberSession(ctx context.Context, conversationID, agentID, claudeSessionID string, runStartedAt time.Time) error
+	RememberSession(ctx context.Context, b Binding) error
 	InvalidateConversation(ctx context.Context, conversationID string) error
 	InvalidateDevice(ctx context.Context, deviceID string) error
 }
 
-// ----------------------------------------------------------------------
-// Postgres-backed implementation
-// ----------------------------------------------------------------------
-
-// PgBinder is the production wiring over connector_session_bindings.
-// A nil logger silently swallows internal-error logs: a DB outage
-// degrades to "no binding cached, pick fresh" which is correct, just
-// slower.
+// PgBinder is the production wiring over agent_runtime_bindings and agent_engine_sessions.
 type PgBinder struct {
 	pool   *pgxpool.Pool
 	logger func(format string, args ...any)
@@ -87,265 +60,181 @@ func NewPgBinder(pool *pgxpool.Pool, logger func(format string, args ...any)) *P
 	return &PgBinder{pool: pool, logger: logger}
 }
 
-// Resolve returns ErrNotBound when no row exists for (conversation,
-// agent); other DB errors surface as-is.
-func (b *PgBinder) Resolve(ctx context.Context, conversationID, agentID string) (Binding, error) {
+func (b *PgBinder) Resolve(ctx context.Context, conversationID, agentID, agentKind string) (Binding, error) {
 	if conversationID == "" || agentID == "" {
 		return Binding{}, ErrNotBound
 	}
-	q := sqlc.New(b.pool)
-	rows, err := q.ListConnectorSessionBindings(ctx, sqlc.ListConnectorSessionBindingsParams{
-		ConversationID: conversationID,
-		ConnectorType:  ConnectorType,
+	convUUID, err := uuidParam(conversationID)
+	if err != nil {
+		return Binding{}, fmt.Errorf("agentdaemon binding: conversation_id: %w", err)
+	}
+	agentUUID, err := uuidParam(agentID)
+	if err != nil {
+		return Binding{}, fmt.Errorf("agentdaemon binding: agent_id: %w", err)
+	}
+	row, err := sqlc.New(b.pool).GetAgentDaemonBinding(ctx, sqlc.GetAgentDaemonBindingParams{
+		ConversationID: convUUID,
+		AgentID:        agentUUID,
+		AgentKind:      normaliseAgentKind(agentKind),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Binding{}, ErrNotBound
 		}
-		return Binding{}, fmt.Errorf("agentdaemon binding: list: %w", err)
+		return Binding{}, fmt.Errorf("agentdaemon binding: get: %w", err)
 	}
-	for _, r := range rows {
-		if r.BindingKey != agentID {
-			continue
-		}
-		out := Binding{
-			ConversationID: conversationID,
-			AgentID:        agentID,
-			DeviceID:       r.UpstreamSessionID,
-		}
-		applyMetadata(&out, r.Metadata)
-		// Best-effort; errors swallowed.
-		if touchErr := q.TouchConnectorSessionBinding(ctx, sqlc.TouchConnectorSessionBindingParams{
-			ConversationID: conversationID,
-			ConnectorType:  ConnectorType,
-			BindingKey:     agentID,
-		}); touchErr != nil {
-			b.logger("agentdaemon binding: touch failed: %v", touchErr)
-		}
-		return out, nil
-	}
-	return Binding{}, ErrNotBound
+	return Binding{
+		ConversationID:   row.ConversationID,
+		AgentID:          row.AgentID,
+		DeviceID:         row.RuntimeID,
+		AgentKind:        normaliseAgentKind(agentKind),
+		AgentSessionID:   row.UpstreamSessionID,
+		AgentSessionType: row.UpstreamSessionType,
+		AgentStateKey:    row.StateDirKey,
+		WorkDir:          row.WorkDir,
+		Metadata:         decodeMetadata(row.Metadata),
+	}, nil
 }
 
-// ResolveDeviceByConversation returns the device id of any
-// agent_daemon binding under conversationID. Used by the feishuoutbound
-// card-writer to stamp device_id onto the inflight slot without having
-// to thread agent_id through — a conversation effectively has
-// a single agent_daemon device today, so picking the first binding is
-// safe. Returns ErrNotBound when no agent_daemon binding exists.
 func (b *PgBinder) ResolveDeviceByConversation(ctx context.Context, conversationID string) (string, error) {
 	if conversationID == "" {
 		return "", ErrNotBound
 	}
-	q := sqlc.New(b.pool)
-	rows, err := q.ListConnectorSessionBindings(ctx, sqlc.ListConnectorSessionBindingsParams{
-		ConversationID: conversationID,
-		ConnectorType:  ConnectorType,
-	})
+	convUUID, err := uuidParam(conversationID)
+	if err != nil {
+		return "", fmt.Errorf("agentdaemon binding: conversation_id: %w", err)
+	}
+	deviceID, err := sqlc.New(b.pool).ResolveAgentDaemonDeviceByConversation(ctx, convUUID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrNotBound
 		}
-		return "", fmt.Errorf("agentdaemon binding: list: %w", err)
+		return "", fmt.Errorf("agentdaemon binding: resolve device: %w", err)
 	}
-	for _, r := range rows {
-		if r.UpstreamSessionID != "" {
-			return r.UpstreamSessionID, nil
-		}
-	}
-	return "", ErrNotBound
+	return deviceID, nil
 }
 
-// Bind upserts the (conversation, agent) → device mapping.
-// agent_kind defaults to "claude_code" when empty.
 func (b *PgBinder) Bind(ctx context.Context, in Binding) error {
 	if in.ConversationID == "" || in.AgentID == "" || in.DeviceID == "" {
 		return fmt.Errorf("agentdaemon binding: ConversationID, AgentID, DeviceID all required")
 	}
-	if in.AgentKind == "" {
-		in.AgentKind = "claude_code"
+	convUUID, err := uuidParam(in.ConversationID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: conversation_id: %w", err)
 	}
-	meta := map[string]any{MetaAgentKind: in.AgentKind}
-	if in.ClaudeSessionID != "" {
-		meta[MetaClaudeSessionID] = in.ClaudeSessionID
-		meta[MetaSessionUpdatedAt] = time.Now().UTC().Format(time.RFC3339Nano)
+	agentUUID, err := uuidParam(in.AgentID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: agent_id: %w", err)
 	}
-	if in.WorkDir != "" {
-		meta[MetaWorkDir] = in.WorkDir
+	deviceUUID, err := uuidParam(in.DeviceID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: runtime_id: %w", err)
 	}
-	rawMeta, err := json.Marshal(meta)
+	if err := sqlc.New(b.pool).UpsertAgentDaemonRuntimeBinding(ctx, sqlc.UpsertAgentDaemonRuntimeBindingParams{
+		ConversationID: convUUID,
+		AgentID:        agentUUID,
+		RuntimeID:      deviceUUID,
+		WorkDir:        in.WorkDir,
+	}); err != nil {
+		return fmt.Errorf("agentdaemon binding: upsert runtime: %w", err)
+	}
+	if strings.TrimSpace(in.AgentSessionID) != "" {
+		return b.RememberSession(ctx, in)
+	}
+	return nil
+}
+
+func (b *PgBinder) RememberSession(ctx context.Context, in Binding) error {
+	if strings.TrimSpace(in.AgentSessionID) == "" {
+		return nil
+	}
+	if in.ConversationID == "" || in.AgentID == "" {
+		return nil
+	}
+	convUUID, err := uuidParam(in.ConversationID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: conversation_id: %w", err)
+	}
+	agentUUID, err := uuidParam(in.AgentID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: agent_id: %w", err)
+	}
+	metadata, err := json.Marshal(nonNilMetadata(in.Metadata))
 	if err != nil {
 		return fmt.Errorf("agentdaemon binding: marshal metadata: %w", err)
 	}
-	if err := sqlc.New(b.pool).UpsertConnectorSessionBinding(ctx, sqlc.UpsertConnectorSessionBindingParams{
-		ConversationID:    in.ConversationID,
-		ConnectorType:     ConnectorType,
-		BindingKey:        in.AgentID,
-		UpstreamSessionID: in.DeviceID,
-		Metadata:          rawMeta,
+	if err := sqlc.New(b.pool).UpsertAgentDaemonEngineSession(ctx, sqlc.UpsertAgentDaemonEngineSessionParams{
+		ConversationID:      convUUID,
+		AgentID:             agentUUID,
+		AgentKind:           normaliseAgentKind(in.AgentKind),
+		UpstreamSessionID:   in.AgentSessionID,
+		UpstreamSessionType: normaliseSessionType(in.AgentSessionType),
+		StateDirKey:         defaultStateKey(in),
+		Metadata:            metadata,
 	}); err != nil {
-		return fmt.Errorf("agentdaemon binding: upsert: %w", err)
+		return fmt.Errorf("agentdaemon binding: upsert engine session: %w", err)
 	}
 	return nil
 }
 
-// RememberSession folds a Claude session id into an existing binding's
-// metadata. If no binding exists the call is a no-op.
-//
-// runStartedAt is the CAS guard: when non-zero, the new session id is
-// written only if the existing metadata.session_updated_at is older
-// than runStartedAt (or absent). Read-modify-write happens inside a
-// transaction with SELECT FOR UPDATE so two concurrent done events
-// for the same (conversation, agent) can't race.
-func (b *PgBinder) RememberSession(ctx context.Context, conversationID, agentID, claudeSessionID string, runStartedAt time.Time) error {
-	if claudeSessionID == "" {
-		return nil
-	}
-	if conversationID == "" || agentID == "" {
-		return nil
-	}
-	tx, err := b.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("agentdaemon binding: begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var rawMeta []byte
-	var upstream string
-	err = tx.QueryRow(ctx, `
-select upstream_session_id, metadata
-from connector_session_bindings
-where conversation_id = $1
-  and connector_type = $2
-  and binding_key = $3
-for update`, conversationID, ConnectorType, agentID).Scan(&upstream, &rawMeta)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		return fmt.Errorf("agentdaemon binding: select for update: %w", err)
-	}
-
-	var meta map[string]any
-	if len(rawMeta) > 0 {
-		if err := json.Unmarshal(rawMeta, &meta); err != nil {
-			return fmt.Errorf("agentdaemon binding: unmarshal metadata: %w", err)
-		}
-	}
-	if meta == nil {
-		meta = map[string]any{}
-	}
-
-	// Idempotent: same session id already stored.
-	if existing, _ := meta[MetaClaudeSessionID].(string); existing == claudeSessionID {
-		return nil
-	}
-
-	// Last-write-wins. The original CAS on runStartedAt vs stored
-	// MetaSessionUpdatedAt was meant to keep a stale done event from
-	// clobbering a newer run's session id, but in the supersede flow
-	// (run A asks → user cancels → run A's done arrives after run B
-	// has already started + finished) the "older" run actually holds
-	// the live transcript, including the ask history we want to
-	// --resume from. Same-(conversation, agent) runs are
-	// serialised by the sibling-blocked queue gate, so two writes
-	// never race for legitimate reasons; just keep the most recent.
-	_ = runStartedAt
-
-	meta[MetaClaudeSessionID] = claudeSessionID
-	meta[MetaSessionUpdatedAt] = time.Now().UTC().Format(time.RFC3339Nano)
-	newRaw, err := json.Marshal(meta)
-	if err != nil {
-		return fmt.Errorf("agentdaemon binding: marshal updated metadata: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `
-update connector_session_bindings
-set metadata = $4,
-    last_active_at = now()
-where conversation_id = $1
-  and connector_type = $2
-  and binding_key = $3`, conversationID, ConnectorType, agentID, newRaw); err != nil {
-		return fmt.Errorf("agentdaemon binding: update metadata: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("agentdaemon binding: commit: %w", err)
-	}
-	return nil
-}
-
-// InvalidateConversation drops every binding for the conversation.
 func (b *PgBinder) InvalidateConversation(ctx context.Context, conversationID string) error {
 	if conversationID == "" {
 		return nil
 	}
-	if err := sqlc.New(b.pool).DeleteConnectorSessionBindingsByConversation(ctx, sqlc.DeleteConnectorSessionBindingsByConversationParams{
-		ConversationID: conversationID,
-		ConnectorType:  ConnectorType,
-	}); err != nil {
+	convUUID, err := uuidParam(conversationID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: conversation_id: %w", err)
+	}
+	if err := sqlc.New(b.pool).DeleteAgentDaemonBindingByConversation(ctx, convUUID); err != nil {
 		return fmt.Errorf("agentdaemon binding: invalidate conversation: %w", err)
 	}
 	return nil
 }
 
-// InvalidateDevice drops every binding that points at a given device.
-// Scoped to connector_type so we don't accidentally evict another
-// connector's bindings that happen to share an upstream id.
 func (b *PgBinder) InvalidateDevice(ctx context.Context, deviceID string) error {
 	if deviceID == "" {
 		return nil
 	}
-	if err := sqlc.New(b.pool).DeleteConnectorSessionBindingsByUpstreamSession(ctx, sqlc.DeleteConnectorSessionBindingsByUpstreamSessionParams{
-		ConnectorType:     ConnectorType,
-		UpstreamSessionID: deviceID,
-	}); err != nil {
+	deviceUUID, err := uuidParam(deviceID)
+	if err != nil {
+		return fmt.Errorf("agentdaemon binding: runtime_id: %w", err)
+	}
+	if err := sqlc.New(b.pool).DeleteAgentDaemonBindingByRuntime(ctx, deviceUUID); err != nil {
 		return fmt.Errorf("agentdaemon binding: invalidate device: %w", err)
 	}
 	return nil
 }
 
-func applyMetadata(out *Binding, raw []byte) {
-	if len(raw) == 0 {
-		return
-	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return
-	}
-	if v, ok := m[MetaAgentKind].(string); ok {
-		out.AgentKind = v
-	}
-	if v, ok := m[MetaClaudeSessionID].(string); ok {
-		out.ClaudeSessionID = v
-	}
-	if v, ok := m[MetaWorkDir].(string); ok {
-		out.WorkDir = v
-	}
-}
-
-// ----------------------------------------------------------------------
-// In-memory implementation (tests / when no DB is wired)
-// ----------------------------------------------------------------------
-
-// InMemoryBinder is the default zero-value binder used by tests and by
-// any router that runs without a database. It is concurrency-safe.
+// InMemoryBinder is the default zero-value binder used by tests and by routers without a database.
 type InMemoryBinder struct {
-	bindings map[string]Binding // key = conversation_id|agent_id
-	mu       sync.Mutex
+	runtimeBindings map[string]Binding
+	engineSessions  map[string]Binding
+	mu              sync.Mutex
 }
 
 func NewInMemoryBinder() *InMemoryBinder {
-	return &InMemoryBinder{bindings: map[string]Binding{}}
+	return &InMemoryBinder{
+		runtimeBindings: map[string]Binding{},
+		engineSessions:  map[string]Binding{},
+	}
 }
 
-func (b *InMemoryBinder) Resolve(_ context.Context, conversationID, agentID string) (Binding, error) {
+func (b *InMemoryBinder) Resolve(_ context.Context, conversationID, agentID, agentKind string) (Binding, error) {
 	if conversationID == "" || agentID == "" {
 		return Binding{}, ErrNotBound
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out, ok := b.bindings[memKey(conversationID, agentID)]
+	out, ok := b.runtimeBindings[memKey(conversationID, agentID)]
 	if !ok {
 		return Binding{}, ErrNotBound
+	}
+	out.AgentKind = normaliseAgentKind(agentKind)
+	if sess, ok := b.engineSessions[sessionKey(conversationID, agentID, agentKind)]; ok {
+		out.AgentSessionID = sess.AgentSessionID
+		out.AgentSessionType = sess.AgentSessionType
+		out.AgentStateKey = sess.AgentStateKey
+		out.Metadata = sess.Metadata
 	}
 	return out, nil
 }
@@ -354,31 +243,41 @@ func (b *InMemoryBinder) Bind(_ context.Context, in Binding) error {
 	if in.ConversationID == "" || in.AgentID == "" || in.DeviceID == "" {
 		return fmt.Errorf("agentdaemon binding: ConversationID, AgentID, DeviceID all required")
 	}
-	if in.AgentKind == "" {
-		in.AgentKind = "claude_code"
-	}
+	in.AgentKind = normaliseAgentKind(in.AgentKind)
+	in.AgentStateKey = defaultStateKey(in)
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.bindings[memKey(in.ConversationID, in.AgentID)] = in
+	runtime := in
+	runtime.AgentSessionID = ""
+	runtime.AgentSessionType = ""
+	runtime.Metadata = nil
+	b.runtimeBindings[memKey(in.ConversationID, in.AgentID)] = runtime
+	if in.AgentSessionID != "" {
+		b.engineSessions[sessionKey(in.ConversationID, in.AgentID, in.AgentKind)] = in
+	}
 	return nil
 }
 
-func (b *InMemoryBinder) RememberSession(_ context.Context, conversationID, agentID, claudeSessionID string, runStartedAt time.Time) error {
-	if claudeSessionID == "" {
+func (b *InMemoryBinder) RememberSession(_ context.Context, in Binding) error {
+	if strings.TrimSpace(in.AgentSessionID) == "" {
 		return nil
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	key := memKey(conversationID, agentID)
-	cur, ok := b.bindings[key]
+	key := memKey(in.ConversationID, in.AgentID)
+	cur, ok := b.runtimeBindings[key]
 	if !ok {
 		return nil
 	}
-	// In-memory binder has no stored timestamp to CAS against; last
-	// write wins is the documented semantics for this stub.
-	_ = runStartedAt
-	cur.ClaudeSessionID = claudeSessionID
-	b.bindings[key] = cur
+	in.AgentKind = normaliseAgentKind(in.AgentKind)
+	in.AgentSessionType = normaliseSessionType(in.AgentSessionType)
+	in.AgentStateKey = defaultStateKey(in)
+	cur.AgentKind = in.AgentKind
+	cur.AgentSessionID = in.AgentSessionID
+	cur.AgentSessionType = in.AgentSessionType
+	cur.AgentStateKey = in.AgentStateKey
+	cur.Metadata = nonNilMetadata(in.Metadata)
+	b.engineSessions[sessionKey(in.ConversationID, in.AgentID, in.AgentKind)] = cur
 	return nil
 }
 
@@ -389,9 +288,14 @@ func (b *InMemoryBinder) InvalidateConversation(_ context.Context, conversationI
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	prefix := conversationID + "|"
-	for k := range b.bindings {
-		if hasPrefix(k, prefix) {
-			delete(b.bindings, k)
+	for k := range b.runtimeBindings {
+		if strings.HasPrefix(k, prefix) {
+			delete(b.runtimeBindings, k)
+		}
+	}
+	for k := range b.engineSessions {
+		if strings.HasPrefix(k, prefix) {
+			delete(b.engineSessions, k)
 		}
 	}
 	return nil
@@ -403,18 +307,72 @@ func (b *InMemoryBinder) InvalidateDevice(_ context.Context, deviceID string) er
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for k, v := range b.bindings {
+	for k, v := range b.runtimeBindings {
 		if v.DeviceID == deviceID {
-			delete(b.bindings, k)
+			delete(b.runtimeBindings, k)
+			for sessKey := range b.engineSessions {
+				if strings.HasPrefix(sessKey, k+"|") {
+					delete(b.engineSessions, sessKey)
+				}
+			}
 		}
 	}
 	return nil
+}
+
+func uuidParam(v string) (pgtype.UUID, error) {
+	var out pgtype.UUID
+	if err := out.Scan(v); err != nil {
+		return pgtype.UUID{}, err
+	}
+	return out, nil
+}
+
+func decodeMetadata(raw []byte) map[string]any {
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil || out == nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+func nonNilMetadata(in map[string]any) map[string]any {
+	if in == nil {
+		return map[string]any{}
+	}
+	return in
+}
+
+func normaliseAgentKind(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "claude_code"
+	}
+	return v
+}
+
+func normaliseSessionType(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "agent_session"
+	}
+	return v
+}
+
+func defaultStateKey(in Binding) string {
+	if strings.TrimSpace(in.AgentStateKey) != "" {
+		return in.AgentStateKey
+	}
+	return in.ConversationID + "/" + in.AgentID + "/" + normaliseAgentKind(in.AgentKind)
 }
 
 func memKey(conversationID, agentID string) string {
 	return conversationID + "|" + agentID
 }
 
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+func sessionKey(conversationID, agentID, agentKind string) string {
+	return conversationID + "|" + agentID + "|" + normaliseAgentKind(agentKind)
 }

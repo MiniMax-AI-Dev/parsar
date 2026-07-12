@@ -82,7 +82,7 @@ type translation struct {
 	// Terminal is true when this line was a `result` frame — the
 	// session should stop reading stdout after consuming it.
 	Terminal bool
-	// SessionID is the claude_session_id surfaced on a system init
+	// SessionID is the upstream Claude session id surfaced on a system init.
 	// line (and again on the result frame). session.go writes this
 	// into binding metadata for --resume.
 	SessionID string
@@ -438,12 +438,12 @@ func (t *translator) translateResult(line []byte, subtype string) (translation, 
 		envs = append(envs, errEnv)
 	}
 
-	// Fold session_id into Metadata so the server-side connector can
-	// RememberSession on this done event — without this, the next
-	// prompt starts a brand-new chat (no --resume), losing context.
 	var doneMeta map[string]any
 	if strings.TrimSpace(msg.SessionID) != "" {
-		doneMeta = map[string]any{"claude_session_id": msg.SessionID}
+		doneMeta = map[string]any{
+			proto.DoneMetaAgentSessionID:   msg.SessionID,
+			proto.DoneMetaAgentSessionType: "claude_session",
+		}
 	}
 	doneEnv, err := proto.NewEnvelope(proto.TypeDone, t.runID, proto.DonePayload{
 		Content:  msg.Result,

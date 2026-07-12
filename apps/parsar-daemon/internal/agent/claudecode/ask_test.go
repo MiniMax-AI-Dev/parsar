@@ -290,7 +290,7 @@ func TestBuildAskUserToolResultMultiSelect(t *testing.T) {
 		t.Fatalf("buildAskUserToolResult: %v", err)
 	}
 	v := decodeAskResult(t, body)
-	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"answer":"Safety, Performance"`) {
+	if !strings.Contains(v.Message.Content[0].Content[0].Text, `"answer":"Safety、Performance"`) {
 		t.Errorf("multi-select join failed: %s", v.Message.Content[0].Content[0].Text)
 	}
 }

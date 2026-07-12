@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
+	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
 
 // counterMinter emits perm_001, perm_002, ... for deterministic
@@ -328,13 +329,14 @@ func TestTranslateResultSuccessEmitsUsageThenDone(t *testing.T) {
 	if done.Content != "final answer text" {
 		t.Errorf("done.Content = %q", done.Content)
 	}
-	// claude_session_id MUST flow through DonePayload.Metadata so the
-	// connector can --resume on the next turn.
 	if done.Metadata == nil {
-		t.Fatalf("done.Metadata missing — claude_session_id never reaches the connector")
+		t.Fatalf("done.Metadata missing")
 	}
-	if got, _ := done.Metadata["claude_session_id"].(string); got != "sess_abc" {
-		t.Errorf("done.Metadata.claude_session_id = %q, want sess_abc", got)
+	if got, _ := done.Metadata[proto.DoneMetaAgentSessionID].(string); got != "sess_abc" {
+		t.Errorf("done.Metadata.agent_session_id = %q, want sess_abc", got)
+	}
+	if got, _ := done.Metadata[proto.DoneMetaAgentSessionType].(string); got != "claude_session" {
+		t.Errorf("done.Metadata.agent_session_type = %q", got)
 	}
 }
 

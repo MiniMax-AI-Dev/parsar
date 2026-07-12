@@ -2,6 +2,7 @@ package codex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,9 +56,7 @@ type SessionPlan struct {
 	ApprovalPolicy AskForApproval
 	Sandbox        SandboxMode
 
-	// Cleanup is the deferred housekeeping the session must run after
-	// the child exits — usually removing the temporary CODEX_HOME tree.
-	// Always non-nil; defaults to a no-op.
+	// Cleanup is the deferred housekeeping the session must run after the child exits.
 	Cleanup func()
 }
 
@@ -104,7 +103,7 @@ type SessionPlan struct {
 // Approval / sandbox keys are not exposed to admin yet — the daemon
 // always runs silent + full-access. Wire them through once a UI to flip
 // them lands.
-func BuildSessionPlan(runID, workDir string, opts map[string]any) (SessionPlan, error) {
+func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any) (SessionPlan, error) {
 	cleanup := func() {}
 	plan := SessionPlan{
 		ApprovalPolicy: SilentGranularPolicy(),
@@ -129,14 +128,13 @@ func BuildSessionPlan(runID, workDir string, opts map[string]any) (SessionPlan, 
 		return plan, err
 	}
 
-	// Allocate a per-run CODEX_HOME so codex's config / auth / sessions
-	// tree never collides with the daemon's user home (or with another
-	// concurrent session). The dir is removed in plan.Cleanup.
-	codexHome, homeCleanup, err := allocCodexHome(runID)
+	codexHome, err := allocCodexHome(agentStateKey)
 	if err != nil {
 		return plan, err
 	}
-	cleanup = homeCleanup
+	if err := resetGeneratedConfig(codexHome); err != nil {
+		return plan, err
+	}
 	env = append(env, "CODEX_HOME="+codexHome)
 
 	// MCP servers come pre-rendered from server/internal/connector/agentdaemon
@@ -228,19 +226,38 @@ func resolveWorkDirCodex(input string) (string, error) {
 	return abs, nil
 }
 
-func allocCodexHome(runID string) (string, func(), error) {
-	if strings.TrimSpace(runID) == "" {
-		return "", func() {}, fmt.Errorf("codex: runID required for CODEX_HOME allocation")
+func allocCodexHome(agentStateKey string) (string, error) {
+	if strings.TrimSpace(agentStateKey) == "" {
+		return "", fmt.Errorf("codex: agentStateKey required for CODEX_HOME allocation")
 	}
 	root, err := paths.Root()
 	if err != nil {
-		return "", func() {}, err
+		return "", err
 	}
-	dir := filepath.Join(root, "parsar-daemon", "scratch", "codex-"+safeRunIDCodex(runID))
+	parts := strings.Split(agentStateKey, "/")
+	safeParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if safe := safePathPartCodex(part); safe != "" {
+			safeParts = append(safeParts, safe)
+		}
+	}
+	if len(safeParts) == 0 {
+		return "", fmt.Errorf("codex: invalid agentStateKey %q", agentStateKey)
+	}
+	dirParts := append([]string{root, "parsar-daemon", "agent-sessions"}, safeParts...)
+	dir := filepath.Join(dirParts...)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", func() {}, fmt.Errorf("codex: create CODEX_HOME %s: %w", dir, err)
+		return "", fmt.Errorf("codex: create CODEX_HOME %s: %w", dir, err)
 	}
-	return dir, func() { _ = os.RemoveAll(dir) }, nil
+	return dir, nil
+}
+
+func resetGeneratedConfig(codexHome string) error {
+	path := filepath.Join(codexHome, "config.toml")
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("codex: remove generated config %s: %w", path, err)
+	}
+	return nil
 }
 
 func buildSessionEnv(opts map[string]any) ([]string, error) {
@@ -427,7 +444,7 @@ func stringOpt(opts map[string]any, key string) string {
 	return strings.TrimSpace(s)
 }
 
-func safeRunIDCodex(runID string) string {
+func safePathPartCodex(runID string) string {
 	var b strings.Builder
 	for _, r := range runID {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {

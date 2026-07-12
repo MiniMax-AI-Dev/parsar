@@ -58,8 +58,8 @@ func TestWriteCodexProviderConfig_FullProvider(t *testing.T) {
 		BearerToken: "sk-test-fixture",
 		WireAPI:     "responses",
 		HTTPHeaders: map[string]string{
-			"X-Sub-Module":  "codex-internal",
-			"X-Request-ID":  "abc",
+			"X-Sub-Module": "codex-internal",
+			"X-Request-ID": "abc",
 		},
 		QueryParams: map[string]string{
 			"api-version": "2025-04-01-preview",
@@ -179,7 +179,7 @@ func TestNormaliseProviderConfig_Nil(t *testing.T) {
 }
 
 func TestBuildSessionPlan_PinsModelProviderWhenProviderSet(t *testing.T) {
-	plan, err := BuildSessionPlan("run-x", "", map[string]any{
+	plan, err := BuildSessionPlan("run-x", "conv-1/agent-1/codex", "", map[string]any{
 		"codex_provider": map[string]any{
 			"base_url":     "https://x/v1",
 			"bearer_token": "sk-x",
@@ -216,7 +216,7 @@ func TestBuildSessionPlan_PinsModelProviderWhenProviderSet(t *testing.T) {
 }
 
 func TestBuildSessionPlan_NoProviderLeavesBuiltinDefault(t *testing.T) {
-	plan, err := BuildSessionPlan("run-y", "", nil)
+	plan, err := BuildSessionPlan("run-y", "conv-1/agent-1/codex", "", nil)
 	if err != nil {
 		t.Fatalf("BuildSessionPlan: %v", err)
 	}

@@ -70,10 +70,11 @@ type PromptRequestPayload struct {
 	// inspects them.
 	AgentOptions map[string]any `json:"agent_options,omitempty"`
 
-	// ResumeSessionID, when set, tells the agent to continue an
-	// earlier session. Sourced from
-	// connector_session_bindings.metadata.claude_session_id.
-	ResumeSessionID string `json:"resume_session_id,omitempty"`
+	// AgentSessionID is the upstream engine session id to resume.
+	AgentSessionID string `json:"agent_session_id,omitempty"`
+
+	// AgentStateKey is the stable daemon-side state directory key.
+	AgentStateKey string `json:"agent_state_key,omitempty"`
 }
 
 // PromptAttachment is one piece of non-text user input the daemon-side

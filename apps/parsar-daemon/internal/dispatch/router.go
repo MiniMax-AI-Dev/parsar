@@ -210,7 +210,8 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		"run_id", runID, "agent_kind", req.AgentKind,
 		"work_dir", req.WorkDir, "prompt_len", len(req.Prompt),
 		"has_agent_options", req.AgentOptions != nil,
-		"resume_session_id", req.ResumeSessionID)
+		"agent_session_id", req.AgentSessionID,
+		"agent_state_key", req.AgentStateKey)
 
 	factory, err := r.registry.Resolve(req.AgentKind)
 	if err != nil {
