@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -19,7 +18,7 @@ func TestHTTPMiddlewareAdoptsInboundHeader(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	h := HTTPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		Ctx(r.Context()).Info("handler ran")
+		Info(r.Context(), "handler ran")
 		w.WriteHeader(http.StatusOK)
 	}))
 	rec := httptest.NewRecorder()
@@ -105,18 +104,5 @@ func TestChildSpanKeepsTraceRotatesSpan(t *testing.T) {
 	}
 	if child.Span == parent.Span {
 		t.Fatalf("child should rotate span; both=%s", child.Span.String())
-	}
-}
-
-func TestCtxLoggerEmits(t *testing.T) {
-	carrier, _ := ParseTraceparent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
-	var buf bytes.Buffer
-	prev := slog.Default()
-	slog.SetDefault(slog.New(NewContextHandler(slog.NewJSONHandler(&buf, nil))))
-	t.Cleanup(func() { slog.SetDefault(prev) })
-
-	Ctx(WithTrace(context.Background(), carrier)).Info("via ctxLogger", "k", "v")
-	if !strings.Contains(buf.String(), "0af7651916cd43dd8448eb211c80319c") {
-		t.Fatalf("Ctx(ctx).Info should pipe ctx into handler: %s", buf.String())
 	}
 }

@@ -2,7 +2,6 @@ package log
 
 import (
 	"context"
-	"log/slog"
 )
 
 // traceCtxKey is an unexported type so external packages cannot
@@ -29,36 +28,4 @@ func TraceFromContext(ctx context.Context) (Carrier, bool) {
 		return Carrier{}, false
 	}
 	return c, true
-}
-
-// Ctx returns a ctxLogger so `log.Ctx(ctx).Info(...)` reads cleaner
-// than `slog.Default().InfoContext(ctx, ...)`. ctxLogger is stateless
-// w.r.t. trace IDs — every call re-reads ctx so a child span minted
-// via StartBackgroundTrace is not cached as a stale carrier.
-func Ctx(ctx context.Context) ctxLogger { return ctxLogger{ctx: ctx} }
-
-type ctxLogger struct {
-	ctx context.Context
-}
-
-func (l ctxLogger) Debug(msg string, args ...any) {
-	slog.Default().DebugContext(l.ctx, msg, args...)
-}
-
-func (l ctxLogger) Info(msg string, args ...any) {
-	slog.Default().InfoContext(l.ctx, msg, args...)
-}
-
-func (l ctxLogger) Warn(msg string, args ...any) {
-	slog.Default().WarnContext(l.ctx, msg, args...)
-}
-
-func (l ctxLogger) Error(msg string, args ...any) {
-	slog.Default().ErrorContext(l.ctx, msg, args...)
-}
-
-// With returns a slog.Logger with the supplied attrs bound. Ctx-derived
-// trace attrs still apply on subsequent InfoContext calls.
-func (l ctxLogger) With(args ...any) *slog.Logger {
-	return slog.Default().With(args...)
 }

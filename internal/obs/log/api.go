@@ -14,18 +14,6 @@ func Info(ctx context.Context, msg string, args ...any) {
 	slog.Default().InfoContext(ctx, msg, args...)
 }
 
-func Warn(ctx context.Context, msg string, args ...any) {
-	slog.Default().WarnContext(ctx, msg, args...)
-}
-
-func Error(ctx context.Context, msg string, args ...any) {
-	slog.Default().ErrorContext(ctx, msg, args...)
-}
-
-func Debug(ctx context.Context, msg string, args ...any) {
-	slog.Default().DebugContext(ctx, msg, args...)
-}
-
 // Bg returns slog.Default for ctx-less startup/init/shutdown sites.
 // Using Bg() in any handler-path code is a bug — it bypasses trace
 // attribution silently.

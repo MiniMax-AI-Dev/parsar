@@ -6,7 +6,7 @@ import (
 
 // HTTPMiddleware adopts a valid inbound `traceparent`, mints a fresh
 // Carrier otherwise, echoes it on the response, and installs it on
-// ctx so downstream `log.Ctx(ctx).Info(...)` gets trace attrs. A
+// ctx so downstream `log.Info(ctx, ...)` gets trace attrs. A
 // malformed header is treated identically to a missing one — never
 // 500 a real request over a logging concern.
 func HTTPMiddleware(next http.Handler) http.Handler {

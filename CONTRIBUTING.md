@@ -391,9 +391,8 @@ make check
   `log.Println`, `fmt.Println`, or a hand-rolled `*slog.Logger`. The
   linter (`forbidigo`) rejects direct `slog.Default()` outside
   `internal/obs/log` itself. Entry points:
-  - `log.Info(ctx, ...)` / `log.Warn(ctx, ...)` / `log.Error(ctx, ...)`
-    for request-scoped logs (routes through ContextHandler → trace_id
-    attribution).
+  - `log.Info(ctx, ...)` for request-scoped informational logs (routes
+    through ContextHandler → trace_id attribution).
   - `log.Bg()` for ctx-less startup / shutdown / init code that runs
     outside a request.
   - `log.With("component", "foo")` when you need a scoped `*slog.Logger`
