@@ -72,9 +72,25 @@ description and keep ownership on the side listed here.
 
 ### Install and image freshness
 
+- The root `docker-compose.yml` must be directly runnable with
+  `docker compose up -d`. Do not require `install.sh` to pre-generate `.env`
+  values for mandatory services to boot. If a service needs a local-only
+  shared secret, the compose file must provide a clearly documented dev-only
+  default and allow production/Dokploy installs to override it with a stable
+  random value.
 - The one-command installer is both install and upgrade path. Default GHCR
   images must be pulled before `docker compose up` so `:latest` does not
   silently reuse a stale local image after `main` changes.
+- `install.sh` may still write stable random overrides such as
+  `PARSAR_MASTER_KEY` and `PARSAR_SHARED_RUNTIME_TOKEN` for safer local
+  installs, but raw Compose/Dokploy deployments must not depend on those
+  installer-only side effects.
+- Keep `install.sh` a thin Compose wrapper. Its CLI is limited to installation
+  location, web bind/port, image overrides, and validation. Uncommon deployment
+  settings belong in the Compose environment rather than new installer flags.
+- Services exposed through a deployment platform may gain an ingress network,
+  but they must remain explicitly attached to the Compose `default` network
+  when they depend on internal service DNS names such as `postgres`.
 - The local compose file must express the same default with
   `PARSAR_IMAGE_PULL_POLICY=always` for Parsar-owned images. Local image
   testing must opt out explicitly with `PARSAR_IMAGE_PULL_POLICY=never`.

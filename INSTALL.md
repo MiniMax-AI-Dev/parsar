@@ -2,9 +2,9 @@
 
 ## One-command install
 
-Parsar can be installed without cloning the repository. The installer writes
-all generated config, secrets, database files, and runtime state under
-`~/.parsar/`.
+Parsar can be installed without cloning the repository. The installer is a
+small wrapper around the root `docker-compose.yml`; it keeps generated config,
+secrets, database files, and runtime state under `~/.parsar/`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
@@ -37,11 +37,10 @@ The script:
 
 - uses `docker-compose.yml` from the current checkout, or downloads the
   published copy to `~/.parsar/docker-compose.yml`
-- creates `~/.parsar/.env`
-- generates and persists `PARSAR_MASTER_KEY`
-- generates and persists `PARSAR_SHARED_RUNTIME_TOKEN`
-- generates and persists the Postgres password
+- creates `~/.parsar/.env` with persistent random secrets and data paths
+- pulls the Parsar images so upgrades do not reuse a stale `latest` image
 - starts Postgres, `parsar-server`, and the default local runtime service
+- waits for the server health check
 - leaves Feishu, Slack, and Discord integrations disabled unless explicitly
   enabled in `~/.parsar/.env`
 
@@ -85,5 +84,11 @@ Edit `~/.parsar/.env` and rerun:
 curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 ```
 
-The installer preserves generated secrets and refreshes non-secret settings
-such as ports, image names, and paths.
+The installer preserves generated secrets. It intentionally exposes only the
+common port, bind address, and image options; add uncommon Compose overrides
+directly to `.env` instead of adding more installer flags.
+
+When a platform such as Dokploy adds its ingress network to `parsar-server`,
+keep the service attached to the Compose `default` network as well. Postgres
+and the local runtime are intentionally private and use that network for
+service discovery.
