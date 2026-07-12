@@ -246,20 +246,6 @@
       "placeholderWithAgent": "Chat with {{agent}}…",
       "placeholderNoAgent": "Pick an Agent to start chatting"
     },
-    "create": {
-      "title": "New conversation",
-      "description": "Create a 1:1 conversation.",
-      "fields": {
-        "title": "Title (optional)",
-        "titlePlaceholder": "Leave blank to auto-name from the first 30 chars of your first message",
-        "agent": "Agent",
-        "agentPlaceholder": "Pick an Agent",
-        "agentRequired": "Please pick an Agent"
-      },
-      "cancel": "Cancel",
-      "submit": "Start chatting",
-      "submitting": "Creating…"
-    },
     "detail": {
       "kind": "CONVERSATION",
       "unnamed": "Untitled conversation",
@@ -314,22 +300,6 @@
       "retry": "Retry",
       "queued": "Queued",
       "queuedWithPosition": "Queued (position {{position}})"
-    },
-    "permission": {
-      "header": "Agent requests approval",
-      "headerWithAgent": "{{agent}} requests approval",
-      "toolLabel": "Tool:",
-      "unknownTool": "(unspecified)",
-      "defaultTitle": "Wants to run {{tool}}",
-      "payloadToggle": "Show full payload",
-      "allowOnce": "Allow once",
-      "alwaysAllow": "Always allow",
-      "deny": "Deny",
-      "deciding": "Submitting…",
-      "decided": "{{decision}}",
-      "allow_once": "Allowed (once)",
-      "always_allow": "Allowed (always)",
-      "decideFailed": "Submit failed: {{error}}"
     },
     "steps": {
       "working": "Working…",
@@ -699,26 +669,6 @@
         "title": "Delete {{version}} from \"{{name}}\"?",
         "description": "This version will disappear from history.",
         "notAvailable": "Deleting a single version isn't supported yet; to remove the entire capability use the Danger zone below."
-      }
-    },
-    "danger": {
-      "title": "Danger zone",
-      "description": "Disabling or deleting affects Agents using this capability.",
-      "deleteDisabled": "Disable this capability on all Agents first (currently used by {{count}} Agent(s)).",
-      "disable": {
-        "title": "Disable \"{{name}}\"?",
-        "description": "After disabling: {{count}} Agent(s) using it will fail on their next run; runs already in flight fail after their current turn; credentials are kept and this can be re-enabled later.",
-        "confirm": "Disable"
-      },
-      "enable": {
-        "title": "Enable \"{{name}}\"?",
-        "description": "After enabling, Agents can use this capability again on their next run.",
-        "confirm": "Enable"
-      },
-      "delete": {
-        "title": "Permanently delete \"{{name}}\"?",
-        "description": "After deletion: this capability disappears from the workspace list, all versions are deleted together, and this cannot be undone. Current installations: {{count}}.",
-        "confirm": "Permanently delete"
       }
     },
     "deleteBlocked": "Remove this capability from those Agents before deleting it.",
@@ -2517,19 +2467,6 @@
       "reconfigure": "Re-link",
       "remove": "Remove",
       "empty": "No model API key types are available yet."
-    },
-    "createKind": {
-      "title": "Add a model API key type",
-      "code": "Code",
-      "codePlaceholder": "mistral_api_key",
-      "codeHint": "Lowercase letters, digits, underscores; cannot be changed later",
-      "displayName": "Display name",
-      "displayNamePlaceholder": "Mistral API Key",
-      "descriptionField": "Description (optional)",
-      "descriptionPlaceholder": "Personal Mistral API key",
-      "submit": "Create",
-      "cancel": "Cancel",
-      "errorGeneric": "Failed to create, please try again later"
     },
     "connector": {
       "adminOnly": "Only workspace owners and admins can edit connector settings.",

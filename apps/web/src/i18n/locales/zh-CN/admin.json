@@ -246,20 +246,6 @@
       "placeholderWithAgent": "和 {{agent}} 聊聊…",
       "placeholderNoAgent": "选个 Agent 后开始聊"
     },
-    "create": {
-      "title": "新对话",
-      "description": "创建一个 1v1 对话。",
-      "fields": {
-        "title": "标题（可选）",
-        "titlePlaceholder": "留空会用首条消息前 30 字自动生成",
-        "agent": "Agent",
-        "agentPlaceholder": "选一个 Agent",
-        "agentRequired": "请选择一个 Agent"
-      },
-      "cancel": "取消",
-      "submit": "开始对话",
-      "submitting": "创建中…"
-    },
     "detail": {
       "kind": "CONVERSATION",
       "unnamed": "未命名对话",
@@ -314,22 +300,6 @@
       "retry": "重试",
       "queued": "排队中",
       "queuedWithPosition": "排队中（第 {{position}} 位）"
-    },
-    "permission": {
-      "header": "Agent 请求批准",
-      "headerWithAgent": "{{agent}} 请求批准",
-      "toolLabel": "工具：",
-      "unknownTool": "(未指定)",
-      "defaultTitle": "请求执行 {{tool}}",
-      "payloadToggle": "查看完整参数",
-      "allowOnce": "批准一次",
-      "alwaysAllow": "总是批准",
-      "deny": "拒绝",
-      "deciding": "提交中…",
-      "decided": "已{{decision}}",
-      "allow_once": "批准（一次）",
-      "always_allow": "批准（始终）",
-      "decideFailed": "提交失败：{{error}}"
     },
     "steps": {
       "working": "执行中…",
@@ -699,26 +669,6 @@
         "title": "删除「{{name}}」的 {{version}}？",
         "description": "此版本将从历史消失。",
         "notAvailable": "暂不支持删除单个版本；如需移除整个能力，请使用下方「危险区」。"
-      }
-    },
-    "danger": {
-      "title": "危险区",
-      "description": "停用或删除会影响已启用此能力的 Agent。",
-      "deleteDisabled": "请先在所有 Agent 上禁用此能力，再来删除（当前 {{count}} 个 Agent 启用中）。",
-      "disable": {
-        "title": "停用「{{name}}」能力？",
-        "description": "停用后：已启用此能力的 {{count}} 个 Agent 在下一次运行时会失败；已在跑的运行完成当前轮次后失败；已添加的凭据保留，可以随时重新启用。",
-        "confirm": "确认停用"
-      },
-      "enable": {
-        "title": "启用「{{name}}」能力？",
-        "description": "启用后，Agent 可以在下一次运行时继续使用此能力。",
-        "confirm": "启用"
-      },
-      "delete": {
-        "title": "永久删除「{{name}}」能力？",
-        "description": "删除后：此能力将从工作区列表消失，所有版本一起删除，此操作不可撤销。当前装配数：{{count}}。",
-        "confirm": "永久删除"
       }
     },
     "deleteBlocked": "请先从这些 Agent 移除装配，再删除此能力。",
@@ -2517,19 +2467,6 @@
       "reconfigure": "重新配置",
       "remove": "删除",
       "empty": "还没有可用的模型 API Key 类型。"
-    },
-    "createKind": {
-      "title": "新增模型 API Key 类型",
-      "code": "Code",
-      "codePlaceholder": "mistral_api_key",
-      "codeHint": "小写字母、数字、下划线;创建后不可修改",
-      "displayName": "显示名",
-      "displayNamePlaceholder": "Mistral API Key",
-      "descriptionField": "描述(可选)",
-      "descriptionPlaceholder": "Personal Mistral API key",
-      "submit": "创建",
-      "cancel": "取消",
-      "errorGeneric": "创建失败,请稍后再试"
     },
     "connector": {
       "adminOnly": "仅工作区所有者和管理员可以编辑连接器设置。",
