@@ -2020,20 +2020,15 @@ func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorRe
 // reconciler: it scans workspace_im_connectors for enabled slack rows and keeps
 // one Socket Mode runner per workspace|app_id, hot-reloading on token rotation.
 // This is the DB-driven multi-tenant twin of buildSlackRunner's single env bot.
-// Opt-in via PARSAR_SLACK_CONNECTORS=true; requires PARSAR_MASTER_KEY (vault
-// seal) since each bot's tokens are decrypted from the secret vault.
 //
 // The card-action router and the app_id credential resolver are built once and
 // shared across every per-bot adapter the NewAdapter factory mints — both
 // resolve by store lookup (card payload / app_id), not by a captured token, so a
 // single instance serves all workspace bots.
 func buildSlackInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*slackrunner.Manager, error) {
-	if !truthy(env("PARSAR_SLACK_CONNECTORS")) {
-		return nil, nil
-	}
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
-		return nil, errors.New("PARSAR_SLACK_CONNECTORS=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+		return nil, nil
 	}
 	secretsSvc, err := secrets.New(masterKey)
 	if err != nil {
@@ -2099,17 +2094,13 @@ func buildSlackInboundManager(env func(string) string, dbStore *store.Store, con
 
 // buildDiscordInboundManager is the Discord twin of buildSlackInboundManager: it
 // scans workspace_im_connectors for enabled discord rows and keeps one Gateway
-// WebSocket runner per workspace|app_id. Opt-in via PARSAR_DISCORD_CONNECTORS=
-// true; requires PARSAR_MASTER_KEY. Discord uses one bot token (no app token),
+// WebSocket runner per workspace|app_id. Discord uses one bot token (no app token),
 // so the NewAdapter factory takes only (appID, botToken). A MemoryPickStore is
 // injected per adapter so select-change interactions fold into the Submit click.
 func buildDiscordInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*discordrunner.Manager, error) {
-	if !truthy(env("PARSAR_DISCORD_CONNECTORS")) {
-		return nil, nil
-	}
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
-		return nil, errors.New("PARSAR_DISCORD_CONNECTORS=true requires PARSAR_MASTER_KEY (same value the secret vault was sealed with)")
+		return nil, nil
 	}
 	secretsSvc, err := secrets.New(masterKey)
 	if err != nil {

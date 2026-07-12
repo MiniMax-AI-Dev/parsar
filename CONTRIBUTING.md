@@ -94,6 +94,13 @@ description and keep ownership on the side listed here.
 - DB-driven workspace connectors exposed in the admin UI must start and stop
   from their persisted `enabled` and event-mode settings. Do not add a second
   deployment environment flag after a connector is saved and marked enabled.
+- The root Compose file contains deployment infrastructure only. Do not add
+  Feishu, Slack, Discord, or other workspace connector credentials or enable
+  flags there; those integrations are configured through the web UI and stored
+  in the encrypted connector tables.
+- Avoid spelling out image, application, or Docker defaults in Compose. Keep a
+  field only when it changes behavior, connects services, persists state, or
+  exposes an intentional operator override.
 - The local compose file must express the same default with
   `PARSAR_IMAGE_PULL_POLICY=always` for Parsar-owned images. Local image
   testing must opt out explicitly with `PARSAR_IMAGE_PULL_POLICY=never`.

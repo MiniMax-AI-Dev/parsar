@@ -1,33 +1,6 @@
-# Parsar all-in-one deployment.
-#
-# One command, single machine:
-#
-#   docker compose up -d
-#
-# This file is the deployment contract. It does not require install.sh or an
-# .env file. Open http://127.0.0.1:18080 and create the first owner account.
-# install.sh is only a convenience wrapper that downloads this file, creates
-# persistent random secrets, starts the stack, and waits for health.
-#
-# Image source:
-#   - Default: GHCR prebuilt image (PARSAR_SERVER_IMAGE below).
-#   - Local build fallback (before the tag is published, or to test your
-#     own changes):
-#       make docker-build PARSAR_IMAGE=parsar PARSAR_IMAGE_TAG=local
-#       PARSAR_IMAGE_PULL_POLICY=never PARSAR_SERVER_IMAGE=parsar:local docker compose up
-#
-# Common overrides:
-#   PARSAR_SERVER_IMAGE   server image ref (default: GHCR latest)
-#   PARSAR_SANDBOX_IMAGE  default local runtime image ref (default: GHCR latest)
-#   PARSAR_IMAGE_PULL_POLICY image freshness policy (default: always; set
-#                         never for local images)
-#   PARSAR_LOCAL_PORT     host port for the web UI (default: 18080)
-#   PARSAR_BIND_ADDR      host bind address (default: 127.0.0.1)
-# Production deployments should also set PARSAR_PG_PASSWORD,
-# PARSAR_MASTER_KEY, and PARSAR_SHARED_RUNTIME_TOKEN to stable random values.
-
-# Explicit project name so the auto-created network is always parsar_default
-# regardless of the clone directory name.
+# Run with: docker compose up -d
+# Open http://127.0.0.1:18080 and configure integrations in the web UI.
+# Production deployments should override the three dev-only secrets below.
 name: parsar
 
 services:
@@ -42,10 +15,6 @@ services:
       - ${PARSAR_PG_DATA_DIR:-postgres-data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U parsar -d parsar"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 10s
 
   parsar-server:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
@@ -54,118 +23,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Keep the application network explicit. Platforms such as Dokploy attach
-    # this service to an additional ingress network; the server must remain on
-    # the Compose default network so Docker DNS can resolve postgres and the
-    # compose-resident runtime can resolve parsar-server.
+    # Dokploy may add an ingress network; keep internal service DNS available.
     networks:
       - default
-    # Run migrations before serving, in the same container as the server.
-    # goose migrations are idempotent (already-applied ones are skipped),
-    # so re-running this on every `restart: unless-stopped` cycle is a
-    # cheap no-op — no separate one-shot init container needed. `exec`
-    # replaces the shell with parsar-server so it stays tini's direct
-    # child for correct signal handling. First owner creation happens in
-    # the web setup flow (POST /api/v1/bootstrap).
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        parsar-migrate
-        exec /usr/local/bin/parsar-server
+    command: ["/bin/sh", "-c", "parsar-migrate && exec /usr/local/bin/parsar-server"]
     ports:
       - "${PARSAR_BIND_ADDR:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}:8080"
     environment:
       DATABASE_URL: postgres://parsar:${PARSAR_PG_PASSWORD:-parsar}@postgres:5432/parsar?sslmode=disable
-      # Network proxy — only needed if your host requires a proxy for internet
-      # access (e.g. pulling MCP packages inside sandbox). Leave empty if not.
-      http_proxy: "${HTTP_PROXY:-}"
-      https_proxy: "${HTTPS_PROXY:-}"
-      no_proxy: "localhost,127.0.0.1,postgres,parsar-server"
-      # Optional Feishu SSO. Leave unset for the default email/password setup.
-      # Set PARSAR_FEISHU_MOCK=true only for explicit local SSO testing.
-      PARSAR_FEISHU_MOCK: "${PARSAR_FEISHU_MOCK:-}"
-      PARSAR_FEISHU_REDIRECT_URI: "${PARSAR_FEISHU_REDIRECT_URI:-}"
-      PARSAR_FEISHU_APP_ID: "${PARSAR_FEISHU_APP_ID:-}"
-      PARSAR_FEISHU_APP_SECRET: "${PARSAR_FEISHU_APP_SECRET:-}"
-      # Any non-empty value satisfies IsWebhookConfigured (needed to boot in
-      # real-Feishu mode); must match the Feishu console only when you actually
-      # exercise event subscription. Empty in mock mode — ignored there.
-      PARSAR_FEISHU_VERIFICATION_TOKEN: "${PARSAR_FEISHU_VERIFICATION_TOKEN:-}"
-      # Secure cookie can't ride plain HTTP — set false when the browser
-      # dials the raw compose port (127.0.0.1 or PARSAR_HOST_IP over LAN).
-      # Set true when a reverse proxy terminates HTTPS in front of this
-      # stack. Mock/ProfileDev ignores it entirely.
-      PARSAR_COOKIE_SECURE: "${PARSAR_COOKIE_SECURE:-false}"
-      # Public URL must match the host port the browser hits so OAuth
-      # callbacks AND the minted one-line connect command line up. Kept in
-      # sync with the published port via the same variable.
-      PARSAR_PUBLIC_URL: "${PARSAR_PUBLIC_URL:-http://${PARSAR_HOST_IP:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}}"
-      # Inter-pod owner-routing URL. The server refuses to boot until this
-      # resolves (no fallback to PublicURL/127.0.0.1, which are unsafe under
-      # multi-replica load balancing — see resolveAgentDaemonOwnerURL in
-      # server/cmd/server/main.go). On this single-node stack the owner is
-      # always THIS server, so the URL is stamped but never dialed for
-      # forwarding; it just has to point back here on the compose network.
-      # Same service-name default the self-host compose uses (profile not
-      # fork) — `parsar-server` is this service's network alias.
+      PARSAR_PUBLIC_URL: "${PARSAR_PUBLIC_URL:-http://127.0.0.1:${PARSAR_LOCAL_PORT:-18080}}"
       PARSAR_AGENT_DAEMON_OWNER_URL: "http://parsar-server:8080"
-      # Optional connector credentials and workers. The default key is fixed
-      # so docker-compose.yml can run standalone, but it is dev-only. Set a
-      # stable random 64-hex value when exposing this stack or preserving
-      # encrypted secrets across deployments:
-      #   openssl rand -hex 32
       PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
-      PARSAR_FEISHU_APP_REGISTRATION: "${PARSAR_FEISHU_APP_REGISTRATION:-}"
-      # Workspace-dimension IM connector reconcilers (workspace_im_connectors
-      # table → one Socket Mode / Gateway runner per workspace|app_id, hot-
-      # reloading on token rotation). Opt-in gates read in main.go
-      # (buildSlackInboundManager / buildDiscordInboundManager); both reuse
-      # PARSAR_MASTER_KEY above to decrypt the vaulted bot tokens.
-      PARSAR_SLACK_CONNECTORS: "true"
-      PARSAR_DISCORD_CONNECTORS: "true"
-      # Shared default Bot credentials. Values come from a gitignored .env
-      # file next to this compose (NEVER hardcode the App Secret here — this
-      # file is repo-tracked). The websocket manager reads these to open the
-      # env-backed shared bot long-connection (defaultFeishuSharedBotEnv in
-      # server/cmd/server/main.go). Empty default keeps `up` working when the
-      # .env is absent (Feishu just stays off).
-      PARSAR_FEISHU_DEFAULT_BOT_APP_ID: "${PARSAR_FEISHU_DEFAULT_BOT_APP_ID:-}"
-      PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET: "${PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET:-}"
-      # Bot's own open_id. Needed so the shared bot recognizes it was the one
-      # @-mentioned in a group chat — without it, ShouldSkipGroupWithoutMention
-      # drops every group @ (botLocalID=="" → skip). Read from .env.
-      PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID: "${PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID:-}"
-      # Discord shared bot (Gateway WS, server-initiated — works on 127.0.0.1,
-      # no public callback). GATEWAY enables buildDiscordRunner; BOT_TOKEN is
-      # required (server refuses to start the runner without it). APP_ID is
-      # optional. Reads PARSAR_MASTER_KEY for button/permission routing (already
-      # set above). All values from the gitignored .env. ⚠️ MESSAGE CONTENT
-      # privileged intent must be ON in the Developer Portal or message bodies
-      # come through empty (main.go:1467).
-      PARSAR_DISCORD_GATEWAY: "${PARSAR_DISCORD_GATEWAY:-}"
-      PARSAR_DISCORD_APP_ID: "${PARSAR_DISCORD_APP_ID:-}"
-      PARSAR_DISCORD_BOT_TOKEN: "${PARSAR_DISCORD_BOT_TOKEN:-}"
-      # Shared token used only by the compose-resident local runtime below.
-      # The fixed default keeps raw docker compose/Dokploy deployments from
-      # failing with an empty runtime token. Override it in real deployments.
       PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
       PARSAR_AGENT_DAEMON_WS_URL: "ws://parsar-server:8080/agent-daemon/ws"
     volumes:
       - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
-    # The image's baked-in HEALTHCHECK probes /healthz with `wget --spider`
-    # (an HTTP HEAD), but /healthz is GET-only and answers HEAD with 405 —
-    # so the default probe reports the container "unhealthy" even though it
-    # serves fine. Override with the same GET probe the self-host compose
-    # uses (deploy/compose/compose.selfhost.yml) — profile not fork.
     healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- --tries=1 --timeout=3 http://127.0.0.1:8080/healthz >/dev/null
-      interval: 10s
-      timeout: 3s
-      start_period: 15s
-      retries: 3
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
 
   parsar-runtime:
     image: ${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}
@@ -175,10 +49,7 @@ services:
       parsar-server:
         condition: service_healthy
     environment:
-      PARSAR_SERVER_URL: "http://parsar-server:8080"
       PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
-      PARSAR_RUNTIME_NAME: "local-sandbox"
-      PARSAR_RUNTIME_PROFILE: "default-runtime"
     command: ["/opt/parsar/bin/runtime-entrypoint.sh"]
     volumes:
       - parsar-runtime-home:/root/.parsar
