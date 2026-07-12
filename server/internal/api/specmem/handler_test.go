@@ -7,7 +7,6 @@ package specmem
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -179,25 +178,6 @@ func TestUserActor(t *testing.T) {
 }
 
 // ----- runtime-tree auth/validation (no service mocking needed) -------------
-
-// newRuntimeRouter mounts the runtime tree against a (possibly nil)
-// Service. Tests exercising pre-service short-circuits can pass nil.
-func newRuntimeRouter(t *testing.T, svc *specmemory.Service) chi.Router {
-	t.Helper()
-	r := chi.NewRouter()
-	RegisterRuntimeRoutes(r, Deps{Service: svc})
-	return r
-}
-
-// withIdentity stuffs a RuntimeIdentity into ctx like auth.RunnerCredential
-// does in production.
-func withIdentity(id store.RuntimeIdentity) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r.WithContext(auth.WithRuntimeIdentity(r.Context(), id)))
-		})
-	}
-}
 
 // newHandlerForValidation returns a handler bound to emptyService.
 // Suitable for tests exercising paths that short-circuit BEFORE the
@@ -1104,11 +1084,4 @@ func keys(m map[string]struct{}) []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-func decodeBody(t *testing.T, rr *httptest.ResponseRecorder, dst any) {
-	t.Helper()
-	if err := json.NewDecoder(rr.Body).Decode(dst); err != nil {
-		t.Fatalf("decode body %q: %v", rr.Body.String(), err)
-	}
 }
