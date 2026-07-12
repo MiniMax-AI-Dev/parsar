@@ -313,23 +313,6 @@ func (s *Store) CountStalePendingCredentialFormSlots(ctx context.Context, cutoff
 	return n, nil
 }
 
-// decodePendingCredentialFormSlot mirrors decodeWorkingSlot /
-// decodePermissionSlot in store_inflight.go: tolerant of nil / []byte
-// / string / map[string]any (pgx may decode jsonb to any of these
-// shapes depending on driver internals).
 func decodePendingCredentialFormSlot(raw any) PendingCredentialFormSlot {
-	var slot PendingCredentialFormSlot
-	switch v := raw.(type) {
-	case nil:
-		return slot
-	case []byte:
-		_ = json.Unmarshal(v, &slot)
-	case string:
-		_ = json.Unmarshal([]byte(v), &slot)
-	default:
-		if data, err := json.Marshal(v); err == nil {
-			_ = json.Unmarshal(data, &slot)
-		}
-	}
-	return slot
+	return decodeJSONBValue[PendingCredentialFormSlot](raw)
 }

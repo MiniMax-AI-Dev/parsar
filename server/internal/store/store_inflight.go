@@ -782,59 +782,16 @@ func (s *Store) StampQueueCardSent(ctx context.Context, runID string, now time.T
 
 // ----- private helpers -----
 
-// decodeWorkingSlot turns jsonb opaque returned from sqlc into a typed
-// slot. Tolerant of missing/empty input.
 func decodeWorkingSlot(raw any) WorkingInflightSlot {
-	var slot WorkingInflightSlot
-	switch v := raw.(type) {
-	case nil:
-		return slot
-	case []byte:
-		_ = json.Unmarshal(v, &slot)
-	case string:
-		_ = json.Unmarshal([]byte(v), &slot)
-	default:
-		// jsonb sometimes lands as map[string]any when the driver
-		// decodes ahead of us; re-marshal to use json struct tags.
-		if data, err := json.Marshal(v); err == nil {
-			_ = json.Unmarshal(data, &slot)
-		}
-	}
-	return slot
+	return decodeJSONBValue[WorkingInflightSlot](raw)
 }
 
 func decodePermissionSlot(raw any) PermissionInflightSlot {
-	var slot PermissionInflightSlot
-	switch v := raw.(type) {
-	case nil:
-		return slot
-	case []byte:
-		_ = json.Unmarshal(v, &slot)
-	case string:
-		_ = json.Unmarshal([]byte(v), &slot)
-	default:
-		if data, err := json.Marshal(v); err == nil {
-			_ = json.Unmarshal(data, &slot)
-		}
-	}
-	return slot
+	return decodeJSONBValue[PermissionInflightSlot](raw)
 }
 
 func decodePromptForUserChoiceSlot(raw any) PromptForUserChoiceInflightSlot {
-	var slot PromptForUserChoiceInflightSlot
-	switch v := raw.(type) {
-	case nil:
-		return slot
-	case []byte:
-		_ = json.Unmarshal(v, &slot)
-	case string:
-		_ = json.Unmarshal([]byte(v), &slot)
-	default:
-		if data, err := json.Marshal(v); err == nil {
-			_ = json.Unmarshal(data, &slot)
-		}
-	}
-	return slot
+	return decodeJSONBValue[PromptForUserChoiceInflightSlot](raw)
 }
 
 // Keep the pgtype import live.
