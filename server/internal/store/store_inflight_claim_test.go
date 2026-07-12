@@ -16,10 +16,7 @@ import (
 func seedFeishuRunForClaim(t *testing.T, store *Store, externalChatID string) (conversationID, runID string) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevConversationExternalRef(ctx, ConfigureDevConversationExternalRefInput{
 		ConversationID: ids.ConversationID,
 		Gateway:        "feishu",

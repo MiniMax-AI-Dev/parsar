@@ -46,10 +46,7 @@ func TestQueuePositionForRun_RunningSiblingNotCountedAsAhead(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, store)
 	runIDs := seedRunsForQueuePosition(t, store, ids.ConversationID, []string{
 		"running",
 		"queued",

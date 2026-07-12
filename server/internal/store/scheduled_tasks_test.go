@@ -14,10 +14,7 @@ type seededAgent struct {
 
 func seedProjectAgent(t *testing.T, s *Store) seededAgent {
 	t.Helper()
-	ids := DefaultDevFixtureIDs()
-	if _, err := s.SeedDevFixture(context.Background()); err != nil {
-		t.Fatalf("seed dev fixture: %v", err)
-	}
+	ids := mustSeedDevFixture(t, context.Background(), s)
 	return seededAgent{AgentID: ids.BackendAgentID, UserID: ids.UserID}
 }
 

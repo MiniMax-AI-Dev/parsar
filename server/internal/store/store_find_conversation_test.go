@@ -24,10 +24,7 @@ func TestFindConversationByExternalRefHitsRealColumns(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	store := New(db)
-	if _, err := store.SeedDevFixture(ctx); err != nil {
-		t.Fatal(err)
-	}
-	ids := DefaultDevFixtureIDs()
+	ids := mustSeedDevFixture(t, ctx, store)
 	if _, err := store.ConfigureDevConversationExternalRef(ctx, ConfigureDevConversationExternalRefInput{
 		ConversationID:   ids.ConversationID,
 		Gateway:          "feishu",
