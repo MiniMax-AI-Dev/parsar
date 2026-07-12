@@ -239,23 +239,3 @@ type GraphChannelLocation struct {
 	TeamID    string
 	ChannelID string
 }
-
-// graphLocationFrom pulls (team-id, channel-id) from a verified activity so
-// the history fetcher can address the Graph messages endpoint without
-// re-implementing the field dance. team_id is empty for personal/groupChat
-// conversations (the Graph chats API is a different endpoint — out of scope
-// for this fetcher).
-func graphLocationFrom(verified []byte) GraphChannelLocation {
-	var act activity
-	if err := json.Unmarshal(verified, &act); err != nil {
-		return GraphChannelLocation{}
-	}
-	ch := strings.TrimSpace(act.ChannelDat.Channel.ID)
-	if ch == "" {
-		ch = strings.TrimSpace(act.ChannelID)
-	}
-	return GraphChannelLocation{
-		TeamID:    strings.TrimSpace(act.ChannelDat.Team.ID),
-		ChannelID: ch,
-	}
-}

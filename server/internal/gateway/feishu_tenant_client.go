@@ -864,19 +864,6 @@ func BuildFeishuPromptForUserChoiceCardContent(title string, questions []PromptF
 	return MarshalCard(BuildPromptForUserChoiceCard(title, questions, requestID))
 }
 
-// BuildFeishuPromptForUserChoiceDoneCardContent wraps the post-answer
-// card the inbound handler PATCHes the original message into.
-func BuildFeishuPromptForUserChoiceDoneCardContent(title string, answers []PromptForUserChoiceCardAnswer) (string, error) {
-	return MarshalCard(BuildPromptForUserChoiceDoneCard(title, answers))
-}
-
-// BuildFeishuPromptForUserChoiceTimeoutCardContent wraps the
-// grey "Timed out" card the outbound driver patches the original message
-// into when the daemon-side watchdog (or the server tick belt) fires.
-func BuildFeishuPromptForUserChoiceTimeoutCardContent(title string, questions []PromptForUserChoiceCardQuestion) (string, error) {
-	return MarshalCard(BuildPromptForUserChoiceTimeoutCard(title, questions))
-}
-
 // FeishuMessageResource is the projection callers need after
 // downloading a binary payload attached to an inbound. MIME is the
 // upstream Content-Type; bytes are raw.

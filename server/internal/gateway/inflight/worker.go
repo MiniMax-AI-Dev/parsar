@@ -12,7 +12,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -23,7 +22,6 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -555,28 +553,4 @@ func (w *Worker) InvalidateTokenCacheForApp(workspaceID, appID string) {
 		return
 	}
 	c.InvalidateTokenCache()
-}
-
-// MaskedConfigJSON dumps the connector config with secret refs (NOT
-// decrypted secrets) for support / debug commands.
-func MaskedConfigJSON(cfg gateway.FeishuConnectorConfig) ([]byte, error) {
-	view := map[string]any{
-		"enabled":                cfg.Enabled,
-		"app_id":                 cfg.AppID,
-		"app_secret_ref":         cfg.AppSecretRef,
-		"verification_token_ref": cfg.VerificationTokenRef,
-		"encrypt_key_ref":        cfg.EncryptKeyRef,
-		"bot_open_id":            cfg.BotOpenID,
-		"event_mode":             cfg.EventMode,
-		"routing_mode":           cfg.RoutingMode,
-	}
-	return json.Marshal(view)
-}
-
-// MustSecretsDecrypter adapts *secrets.Service into SecretDecrypter.
-func MustSecretsDecrypter(svc *secrets.Service) SecretDecrypter {
-	if svc == nil {
-		panic("inflight: nil secrets.Service")
-	}
-	return svc
 }

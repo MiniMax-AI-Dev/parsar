@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/larksuite/oapi-sdk-go/v3/ws"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // Logger is the small logging surface Manager uses. *slog.Logger satisfies it.
@@ -1850,15 +1850,6 @@ func (m *Manager) buildPromptForUserChoiceDoneCardMap(ctx context.Context, conv 
 	return gateway.BuildPromptForUserChoiceDoneCard(title, cardAnswers)
 }
 
-// patchPromptForUserChoiceDoneCard removed — the click handler now
-// returns the done card body inline via ackToastWithCard, which the
-// Feishu client renders directly without a follow-up PATCH. A
-// PATCH-only flow would snap the client back to "Awaiting reply" a beat later
-// (see ackToastWithCard's comment); ackToastWithCard pins the new
-// content as canonical. If a future path needs an out-of-band patch
-// (e.g. stale sweep), restore the function and call
-// client.PatchMessage with BuildFeishuPromptForUserChoiceDoneCardContent.
-
 // extractPromptForUserChoiceFormAnswers placeholder removed — the
 // single-pick card we ship doesn't use a form +
 // checker layout, so there's no form_value to walk. If a future
@@ -1888,24 +1879,6 @@ func (m *Manager) resolvePermissionPatchSecret(ctx context.Context, workspaceID,
 		resolvedWorkspaceID = route.WorkspaceID
 	}
 	return m.loadAppSecret(ctx, resolvedWorkspaceID, cfg.AppSecretRef)
-}
-
-// cardActionStringValue safely pulls a string field out of an event's
-// Action.Value map; missing / non-string values collapse to "".
-func cardActionStringValue(event *callback.CardActionTriggerEvent, key string) string {
-	if event == nil || event.Event == nil || event.Event.Action == nil {
-		return ""
-	}
-	raw, ok := event.Event.Action.Value[key]
-	if !ok || raw == nil {
-		return ""
-	}
-	switch v := raw.(type) {
-	case string:
-		return strings.TrimSpace(v)
-	default:
-		return strings.TrimSpace(fmt.Sprint(v))
-	}
 }
 
 // cardActionFormValues returns the Action.FormValue map (never nil).
