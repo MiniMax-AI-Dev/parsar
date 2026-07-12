@@ -202,7 +202,7 @@ EXPOSE 8080
 # in /readyz which orchestrators consume separately. See
 # docs/deploy/health-and-smoke.md for the full probe contract.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-  CMD wget --quiet --spider http://127.0.0.1:8080/healthz || exit 1
+  CMD wget -qO- --tries=1 --timeout=3 http://127.0.0.1:8080/healthz >/dev/null || exit 1
 
 # tini reaps zombie subprocesses spawned by the opencode local runner
 # (or any future fork-exec path). Without it the server PID-1 would

@@ -96,3 +96,6 @@ service discovery.
 The Feishu WebSocket inbound manager and outbound worker are driven by the
 workspace connector saved in the admin UI. No additional deployment flag is
 required after enabling the connector.
+
+Feishu, Slack, and Discord credentials are configured in the workspace admin
+UI, not in `docker-compose.yml` or the installer environment.

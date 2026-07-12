@@ -272,6 +272,48 @@ func TestWorkspaceFeishuWorkersFollowStoredConnectorConfiguration(t *testing.T) 
 	})
 }
 
+func TestWorkspaceChatManagersFollowStoredConnectorConfiguration(t *testing.T) {
+	dbStore := store.New(nil)
+
+	t.Run("missing master key skips managers", func(t *testing.T) {
+		env := envMap(nil)
+		slackManager, err := buildSlackInboundManager(env, dbStore, nil, "")
+		if err != nil {
+			t.Fatalf("buildSlackInboundManager() error = %v", err)
+		}
+		if slackManager != nil {
+			t.Fatal("buildSlackInboundManager() returned manager without master key")
+		}
+		discordManager, err := buildDiscordInboundManager(env, dbStore, nil, "")
+		if err != nil {
+			t.Fatalf("buildDiscordInboundManager() error = %v", err)
+		}
+		if discordManager != nil {
+			t.Fatal("buildDiscordInboundManager() returned manager without master key")
+		}
+	})
+
+	t.Run("master key starts managers without feature flags", func(t *testing.T) {
+		env := envMap(map[string]string{
+			"PARSAR_MASTER_KEY": "0000000000000000000000000000000000000000000000000000000000000000",
+		})
+		slackManager, err := buildSlackInboundManager(env, dbStore, nil, "")
+		if err != nil {
+			t.Fatalf("buildSlackInboundManager() error = %v", err)
+		}
+		if slackManager == nil {
+			t.Fatal("buildSlackInboundManager() returned nil with master key")
+		}
+		discordManager, err := buildDiscordInboundManager(env, dbStore, nil, "")
+		if err != nil {
+			t.Fatalf("buildDiscordInboundManager() error = %v", err)
+		}
+		if discordManager == nil {
+			t.Fatal("buildDiscordInboundManager() returned nil with master key")
+		}
+	})
+}
+
 func TestResolveRuntimeProfile(t *testing.T) {
 	cases := []struct {
 		name    string
