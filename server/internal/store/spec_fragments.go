@@ -240,66 +240,28 @@ func (s *Store) SoftDeleteSpecFragment(ctx context.Context, idRaw string, now ti
 }
 
 func specFragmentFromInsertRow(r sqlc.InsertSpecFragmentRow) SpecFragmentRead {
-	return SpecFragmentRead{
-		ID:          r.ID,
-		WorkspaceID: r.WorkspaceID,
-		Title:       r.Title,
-		Body:        r.Body,
-		Tags:        r.Tags,
-		Source:      r.Source,
-		CreatedBy:   pgUUIDString(r.CreatedBy),
-		AgentActor:  r.AgentActor,
-		CreatedAt:   pgTime(r.CreatedAt),
-		UpdatedAt:   pgTime(r.UpdatedAt),
-	}
+	return specFragmentFromRow(specFragmentRow(r))
 }
 
 func specFragmentFromGetRow(r sqlc.GetSpecFragmentRow) SpecFragmentRead {
-	return SpecFragmentRead{
-		ID:          r.ID,
-		WorkspaceID: r.WorkspaceID,
-		Title:       r.Title,
-		Body:        r.Body,
-		Tags:        r.Tags,
-		Source:      r.Source,
-		CreatedBy:   pgUUIDString(r.CreatedBy),
-		AgentActor:  r.AgentActor,
-		CreatedAt:   pgTime(r.CreatedAt),
-		UpdatedAt:   pgTime(r.UpdatedAt),
-	}
+	return specFragmentFromRow(specFragmentRow(r))
 }
 
 func specFragmentFromListRow(r sqlc.ListWorkspaceSpecFragmentsRow) SpecFragmentRead {
-	return SpecFragmentRead{
-		ID:          r.ID,
-		WorkspaceID: r.WorkspaceID,
-		Title:       r.Title,
-		Body:        r.Body,
-		Tags:        r.Tags,
-		Source:      r.Source,
-		CreatedBy:   pgUUIDString(r.CreatedBy),
-		AgentActor:  r.AgentActor,
-		CreatedAt:   pgTime(r.CreatedAt),
-		UpdatedAt:   pgTime(r.UpdatedAt),
-	}
+	return specFragmentFromRow(specFragmentRow(r))
 }
 
 func specFragmentFromListSinceRow(r sqlc.ListWorkspaceSpecFragmentsSinceRow) SpecFragmentRead {
-	return SpecFragmentRead{
-		ID:          r.ID,
-		WorkspaceID: r.WorkspaceID,
-		Title:       r.Title,
-		Body:        r.Body,
-		Tags:        r.Tags,
-		Source:      r.Source,
-		CreatedBy:   pgUUIDString(r.CreatedBy),
-		AgentActor:  r.AgentActor,
-		CreatedAt:   pgTime(r.CreatedAt),
-		UpdatedAt:   pgTime(r.UpdatedAt),
-	}
+	return specFragmentFromRow(specFragmentRow(r))
 }
 
 func specFragmentFromUpdateRow(r sqlc.UpdateSpecFragmentRow) SpecFragmentRead {
+	return specFragmentFromRow(specFragmentRow(r))
+}
+
+type specFragmentRow sqlc.GetSpecFragmentRow
+
+func specFragmentFromRow(r specFragmentRow) SpecFragmentRead {
 	return SpecFragmentRead{
 		ID:          r.ID,
 		WorkspaceID: r.WorkspaceID,
