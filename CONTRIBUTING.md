@@ -13,6 +13,15 @@ read it before opening a PR.
   `~/`. Reject relative paths outright — do not resolve them against the CWD.
 - Before any install / setup step, ask yourself: does this write to the
   user's current directory? If yes, fix it before shipping.
+- Before any substantial implementation, refactor, runtime/process change,
+  schema/API change, or cross-package behavior change, read this guide. If
+  the change creates, removes, or clarifies an architecture rule, ownership
+  boundary, workflow, required check, or generated artifact contract, update
+  this guide in the same branch.
+- Keep contributor docs concise and single-sourced. `AGENTS.md` is only the
+  agent-facing shortcut; canonical rules live here. When two documents repeat
+  the same long-form rule, delete the duplicate and link to the canonical
+  section.
 
 ## Worktree workflow
 
@@ -54,6 +63,97 @@ Direct development on `main` is not allowed. Every session honours this rule.
 - Agent Daemon runs are dispatched to the `parsar-daemon` runtime bound to
   the agent (`project_agents.runtime_id`); the daemon's internal adapter
   picks which CLI actually executes.
+
+## Architecture boundaries
+
+The repo has several concepts that sound similar but must stay separate.
+When adding or changing code, name the boundary explicitly in the PR
+description and keep ownership on the side listed here.
+
+### Runtime and execution concepts
+
+- `connector_type` chooses the protocol Parsar uses to run an agent
+  (`agent_daemon`, `http_agent`, ...). It does not say where the process
+  runs.
+- `runtime_id` chooses the concrete paired runtime/device/sandbox that will
+  receive a run. It is a routing handle, not agent configuration.
+- `agent_kind` chooses the daemon-side engine (`claude_code`, `codex`,
+  `pi`, `opencode`). It is interpreted only by `parsar-daemon`.
+- Placement labels such as local device, cloud sandbox, and external agent
+  are UI/product concepts. Do not branch business logic on display copy.
+  Derive placement from typed runtime/provider/config fields in one shared
+  helper per layer.
+
+### Server versus daemon ownership
+
+- The server owns auth, workspaces, agent records, runtime bindings, run
+  records, audit/usage persistence, and upstream engine session ids.
+- `parsar-daemon` owns CLI discovery, process spawning, CLI-specific env,
+  cwd selection inside its host/container, permission prompts, and translating
+  CLI streams into Parsar daemon protocol frames.
+- `internal/agentdaemon/proto` is the only shared wire contract between the
+  server and daemon. The daemon must not import `server/internal/...`, and the
+  server must not import daemon-internal adapter packages.
+- Any state needed to recover a conversation after a server restart, daemon
+  reconnect, or child-process exit must be stored durably by the server.
+  In-memory maps may cache waiters or sockets only; they must not be the
+  source of truth for conversation/session continuity.
+- Work directory validation is a cross-boundary security rule: user input is
+  accepted only as an absolute path or `~/...`; daemon-side fallbacks must stay
+  under `~/.parsar/`.
+
+### Agent CLI adapter contract
+
+- Every daemon-side agent adapter must use a shared process runner for CLI
+  subprocesses. New adapters must not hand-roll separate `Start`, stdin,
+  cancellation, timeout, and `Wait` loops.
+- Every subprocess must be waited/reaped. Cancellation must close stdin when
+  appropriate, send a graceful signal first, and escalate to kill after a
+  bounded timeout.
+- A Parsar conversation is not a long-lived OS process. Each prompt turn may
+  start a CLI process, but the adapter must either resume the upstream engine
+  session on the next turn or explicitly document why that engine cannot
+  resume.
+- When an engine supports resume, persist the upstream session id through
+  `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
+  the daemon protocol. Do not keep resume ids only in adapter memory, files
+  without a server record, or frontend state.
+- Adapter-specific state directories must be derived from `AgentStateKey`
+  under `~/.parsar/`; never use the repo checkout, container image working
+  directory, or the process CWD as hidden state.
+
+### Sandbox and local runtime lifecycle
+
+- The default local install path provides one ready-to-use sandbox runtime.
+  Do not require the Parsar server container to create sibling Docker
+  containers through `/var/run/docker.sock` for normal first-run operation.
+- Local Docker lifecycle, cloud sandbox lifecycle, and user-paired devices are
+  different providers behind the same daemon protocol. Keep provider-specific
+  create/renew/kill logic in `server/internal/sandbox/...` or a narrowly named
+  runtime provider; do not spread Docker/E2B calls through handlers,
+  connectors, or frontend components.
+- Dynamic local sandbox scaling is not a product guarantee. If it is added,
+  it must be owned by an explicit local supervisor/runtime provider with a
+  reviewed Docker socket boundary, not by ad hoc server-side `docker run`
+  calls.
+- Eager acquisition must be best-effort. Failure to prewarm a sandbox should
+  surface as runtime health/provisioning state, not crash unrelated startup
+  paths.
+
+### API, DB, and generated surfaces
+
+- New persistent state starts with a migration and sqlc query. Avoid direct
+  SQL embedded in route handlers or connector code unless the package already
+  owns that persistence boundary and tests cover it.
+- JSON config blobs are allowed only at integration boundaries where providers
+  are genuinely schemaless. Once two call sites read the same key, introduce a
+  typed parser/normalizer and make all callers use it.
+- Frontend API shape mirrors must live in `apps/web/src/lib/` next to the API
+  client/hook that owns them. Page components should receive typed values, not
+  parse runtime/provider/config JSON themselves.
+- Generated files (`docs/openapi/openapi.yaml`, `server/internal/db/sqlc/*`)
+  are committed artifacts, but never the source of truth. Change annotations
+  or SQL first, then regenerate.
 
 ## Code quality & architecture
 
