@@ -2293,20 +2293,6 @@
         "generic": "操作失败，请重试。"
       }
     },
-    "status": {
-      "cloudReady": "云端运行已就绪",
-      "cloudReadyHint": "当前工作区可让 Agent 运行在云端隔离环境中。",
-      "cloudReadyManaged": "运行环境由 Parsar 托管，无需配置。",
-      "cloudReadyOps": "云端运行已就绪 · 由管理员配置。联系系统管理员调整额度。",
-      "cloudOff": "本工作区尚未录入云端凭证",
-      "cloudOffHint": "Agent 仍可走本机或外部环境运行；如需让 Agent 走云端隔离，请在下方「工作区凭证」录入。",
-      "cloudOffActionDocs": "查看部署文档",
-      "cloudMisconfigured": "云端运行配置不完整 — 请检查工作区凭证或联系部署方。",
-      "unreachable": "无法连接到 Parsar 后端，无法判断运行环境状态。",
-      "retry": "重试",
-      "cloudRunnerUnavailable": "云端沙盒暂未启用",
-      "cloudRunnerUnavailableHint": "当前部署还没有启用云端沙盒。请联系部署管理员开启后再使用。"
-    },
     "list": {
       "summary": "{{count}} 个运行实例",
       "sort": {
@@ -2333,50 +2319,6 @@
         "killN": "回收 {{count}} 个运行实例",
         "killingPending": "正在回收 {{count}} 个…"
       },
-      "empty": {
-        "newDeployment": {
-          "title": "还没有正在运行的云端沙盒",
-          "description": "选择云端沙盒的 Agent 收到消息后，会自动启动隔离环境并出现在这里。",
-          "tryCta": "想立刻验证配置已通？点击下方按钮，会临时启动一个测试环境、运行健康检查，然后自动回收。不会占用任何 Agent。",
-          "tryCtaInline": "验证连接"
-        },
-        "localOss": {
-          "title": "本工作区尚未录入云端凭证",
-          "description": "Agent 仍可走本机或外部环境运行。如需让 Agent 在云端隔离环境运行，请在上方「工作区凭证」录入 sandbox 提供方 API key。",
-          "afterSnippet": "录入完成后，本工作区里所有 runtime=sandbox 的 Agent 会共用这条凭证。完整说明见 ",
-          "docsLink": "部署文档",
-          "e2bSignup": "还没有 E2B account？在 E2B 创建一个"
-        },
-        "localManaged": {
-          "title": "云端运行未启用",
-          "description": "你的工作区当前没有云端运行环境配额。请联系 Parsar 团队或你的 workspace owner 开启。",
-          "fallback": "仍可使用本机/外部 Agent 运行模式 —— 进入 Agent 详情 → 运行环境 tab 选择「跟随工作区」之外的选项。"
-        },
-        "localSelfhost": {
-          "title": "本工作区尚未录入云端凭证",
-          "description": "你的私有部署当前在本地模式运行。工作区管理员可以在上方的「工作区凭证」卡片录入云端 sandbox 凭证；如果公司统一管理凭证，请联系 ops 或 IT 管理员协助。",
-          "afterSnippet": "录入凭证前，Agent 只能在本地或外部环境运行。"
-        },
-        "misconfiguredOss": {
-          "title": "云端运行配置不完整",
-          "description": "当前工作区的云端运行凭证无法连通。建议：",
-          "step1": "检查工作区保存的 E2B 凭证是否仍然有效；",
-          "step2": "查看 server 日志中以 sandbox-runner / e2b-client 开头的错误；",
-          "step3": "修复凭证后，可点击右上角 [ 🔁 重测云端可达性 ] 或 [ 修改 E2B 凭证 ] 验证。",
-          "docsLink": "查看部署文档"
-        },
-        "misconfiguredManaged": {
-          "title": "云端运行暂时不可用",
-          "description": "我们已经收到这条工作区的运行环境异常告警，Parsar 团队正在处理。受影响的 Agent 会自动 fall back 到本地或外部模式。",
-          "statusLink": "查看运维状态页"
-        },
-        "misconfiguredSelfhost": {
-          "title": "云端运行配置异常",
-          "description": "后端检测到云端运行环境凭证无法连通。请联系你公司的 ops 检查部署日志：",
-          "step1": "查找 sandbox-runner / e2b-client 日志条目；",
-          "step2": "验证出网防火墙是否允许 Parsar server 访问 E2B endpoint。"
-        }
-      },
       "errors": {
         "loadFailed": "加载运行实例失败",
         "bulkKillPartial": "部分运行实例回收失败",
@@ -2399,20 +2341,6 @@
         "connectivity": "连通性测试结果",
         "runtime": "运行环境详情",
         "technical": "技术细节"
-      },
-      "fields": {
-        "boundAgent": "绑定 Agent",
-        "status": "状态",
-        "lastActive": "最近活跃",
-        "createdAt": "创建于",
-        "killedAt": "已停止于",
-        "image": "镜像",
-        "mode": "运行模式",
-        "region": "区域 / Host",
-        "sandboxId": "Sandbox ID",
-        "bindingId": "Binding ID",
-        "cacheKey": "Cache Key",
-        "metadata": "Metadata"
       },
       "jumpToAgent": "在 Agent 详情中查看 →",
       "jumpToRuns": "最近运行 →",

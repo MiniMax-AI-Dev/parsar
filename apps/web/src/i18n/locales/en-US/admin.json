@@ -2293,20 +2293,6 @@
         "generic": "Action failed, please try again."
       }
     },
-    "status": {
-      "cloudReady": "Cloud runtime ready",
-      "cloudReadyHint": "Agents in this workspace can run inside isolated cloud environments.",
-      "cloudReadyManaged": "Runtime is managed by Parsar — no setup required.",
-      "cloudReadyOps": "Cloud runtime ready · configured by your administrator. Contact ops to adjust quotas.",
-      "cloudOff": "No cloud credential registered for this workspace",
-      "cloudOffHint": "Agents can still run locally or in external environments. To use cloud isolation, register a credential in the Workspace credential card below.",
-      "cloudOffActionDocs": "Open deployment docs",
-      "cloudMisconfigured": "Cloud runtime configuration is incomplete — check the workspace credential or contact the operator.",
-      "unreachable": "Cannot reach the Parsar backend; runtime status is unknown.",
-      "retry": "Retry",
-      "cloudRunnerUnavailable": "Cloud Sandbox is not enabled",
-      "cloudRunnerUnavailableHint": "This deployment has not enabled Cloud Sandbox yet. Contact the deployment administrator."
-    },
     "list": {
       "summary": "{{count}} runtime instance(s)",
       "sort": {
@@ -2333,50 +2319,6 @@
         "killN": "Reclaim {{count}} runtime instance(s)",
         "killingPending": "Reclaiming {{count}}…"
       },
-      "empty": {
-        "newDeployment": {
-          "title": "Waiting for the first agent to spin up a cloud runtime",
-          "description": "Any Agent switched to \"cloud\" runtime mode will boot an isolated environment on its next message and appear here.",
-          "tryCta": "Want to verify cloud runtime is wired before any Agent uses it? Click the button below — a test sandbox runs the health checks and is auto-reclaimed. It does not affect any Agent.",
-          "tryCtaInline": "🚀 Try a cloud run"
-        },
-        "localOss": {
-          "title": "No cloud credential registered for this workspace",
-          "description": "Agents can still run locally or externally. To run an Agent inside an isolated cloud environment, register the sandbox provider's API key in the Workspace credential card above.",
-          "afterSnippet": "Once registered, every runtime=sandbox Agent in this workspace shares the credential. Full setup at ",
-          "docsLink": "deployment docs",
-          "e2bSignup": "No E2B account yet? Create one at E2B"
-        },
-        "localManaged": {
-          "title": "Cloud runtime is not enabled",
-          "description": "This workspace currently has no cloud runtime quota. Contact the Parsar team or your workspace owner to enable it.",
-          "fallback": "Agents can still run locally / externally — open Agent detail → Runtime tab and pick any option other than \"Follow workspace\"."
-        },
-        "localSelfhost": {
-          "title": "No workspace runtime credential yet",
-          "description": "This private deployment is running in local mode. Workspace admins can register a cloud sandbox credential in the \"Workspace credential\" card above; if your company centrally manages credentials, ask ops or IT for help.",
-          "afterSnippet": "Until a credential is registered, Agents only run locally or in external environments."
-        },
-        "misconfiguredOss": {
-          "title": "Cloud runtime configuration is incomplete",
-          "description": "The cloud runtime credential saved for this workspace cannot connect. Try:",
-          "step1": "Verify the workspace E2B credential is still valid;",
-          "step2": "Search server logs for entries starting with sandbox-runner / e2b-client;",
-          "step3": "After fixing the credential, click [ 🔁 Recheck cloud reachability ] or [ Edit E2B credential ] in the top-right to verify.",
-          "docsLink": "View deployment docs"
-        },
-        "misconfiguredManaged": {
-          "title": "Cloud runtime is temporarily unavailable",
-          "description": "We have received the runtime alert for this workspace and the Parsar team is investigating. Affected Agents will automatically fall back to local or external mode.",
-          "statusLink": "Open status page"
-        },
-        "misconfiguredSelfhost": {
-          "title": "Cloud runtime is misconfigured",
-          "description": "The backend detected that cloud runtime credentials cannot connect. Ask your company's ops team to check the deployment logs:",
-          "step1": "Look for sandbox-runner / e2b-client entries in the server log;",
-          "step2": "Verify the egress firewall allows the Parsar server to reach the E2B endpoint."
-        }
-      },
       "errors": {
         "loadFailed": "Failed to load runtime instances",
         "bulkKillPartial": "Some runtime instances could not be reclaimed",
@@ -2399,20 +2341,6 @@
         "connectivity": "Connectivity test",
         "runtime": "Runtime details",
         "technical": "Technical details"
-      },
-      "fields": {
-        "boundAgent": "Bound agent",
-        "status": "Status",
-        "lastActive": "Last active",
-        "createdAt": "Created",
-        "killedAt": "Stopped at",
-        "image": "Image",
-        "mode": "Runtime mode",
-        "region": "Region / host",
-        "sandboxId": "Sandbox ID",
-        "bindingId": "Binding ID",
-        "cacheKey": "Cache key",
-        "metadata": "Metadata"
       },
       "jumpToAgent": "Open agent detail →",
       "jumpToRuns": "Recent runs →",
