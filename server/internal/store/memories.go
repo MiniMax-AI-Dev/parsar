@@ -340,7 +340,9 @@ func (s *Store) SoftDeleteMemory(ctx context.Context, idRaw string, now time.Tim
 	return nil
 }
 
-func memoryFromInsertRow(r sqlc.InsertMemoryRow) MemoryRead {
+type memoryRow sqlc.InsertMemoryRow
+
+func memoryFromRow(r memoryRow) MemoryRead {
 	return MemoryRead{
 		ID:             r.ID,
 		Scope:          r.Scope,
@@ -357,118 +359,32 @@ func memoryFromInsertRow(r sqlc.InsertMemoryRow) MemoryRead {
 		CreatedAt:      pgTime(r.CreatedAt),
 		UpdatedAt:      pgTime(r.UpdatedAt),
 	}
+}
+
+func memoryFromInsertRow(r sqlc.InsertMemoryRow) MemoryRead {
+	return memoryFromRow(memoryRow(r))
 }
 
 func memoryFromGetRow(r sqlc.GetMemoryRow) MemoryRead {
-	return MemoryRead{
-		ID:             r.ID,
-		Scope:          r.Scope,
-		UserID:         r.UserID,
-		WorkspaceID:    pgUUIDString(r.WorkspaceID),
-		MemoryType:     r.MemoryType,
-		Title:          r.Title,
-		Body:           r.Body,
-		Why:            r.Why,
-		Tags:           r.Tags,
-		Source:         r.Source,
-		AgentActor:     r.AgentActor,
-		ConversationID: pgUUIDString(r.ConversationID),
-		CreatedAt:      pgTime(r.CreatedAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return memoryFromRow(memoryRow(r))
 }
 
 func memoryFromListUserRow(r sqlc.ListUserMemoriesRow) MemoryRead {
-	return MemoryRead{
-		ID:             r.ID,
-		Scope:          r.Scope,
-		UserID:         r.UserID,
-		WorkspaceID:    pgUUIDString(r.WorkspaceID),
-		MemoryType:     r.MemoryType,
-		Title:          r.Title,
-		Body:           r.Body,
-		Why:            r.Why,
-		Tags:           r.Tags,
-		Source:         r.Source,
-		AgentActor:     r.AgentActor,
-		ConversationID: pgUUIDString(r.ConversationID),
-		CreatedAt:      pgTime(r.CreatedAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return memoryFromRow(memoryRow(r))
 }
 
 func memoryFromListWorkspaceRow(r sqlc.ListWorkspaceMemoriesRow) MemoryRead {
-	return MemoryRead{
-		ID:             r.ID,
-		Scope:          r.Scope,
-		UserID:         r.UserID,
-		WorkspaceID:    pgUUIDString(r.WorkspaceID),
-		MemoryType:     r.MemoryType,
-		Title:          r.Title,
-		Body:           r.Body,
-		Why:            r.Why,
-		Tags:           r.Tags,
-		Source:         r.Source,
-		AgentActor:     r.AgentActor,
-		ConversationID: pgUUIDString(r.ConversationID),
-		CreatedAt:      pgTime(r.CreatedAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return memoryFromRow(memoryRow(r))
 }
 
 func memoryFromListUserSinceRow(r sqlc.ListUserMemoriesSinceRow) MemoryRead {
-	return MemoryRead{
-		ID:             r.ID,
-		Scope:          r.Scope,
-		UserID:         r.UserID,
-		WorkspaceID:    pgUUIDString(r.WorkspaceID),
-		MemoryType:     r.MemoryType,
-		Title:          r.Title,
-		Body:           r.Body,
-		Why:            r.Why,
-		Tags:           r.Tags,
-		Source:         r.Source,
-		AgentActor:     r.AgentActor,
-		ConversationID: pgUUIDString(r.ConversationID),
-		CreatedAt:      pgTime(r.CreatedAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return memoryFromRow(memoryRow(r))
 }
 
 func memoryFromListWorkspaceSinceRow(r sqlc.ListWorkspaceMemoriesSinceRow) MemoryRead {
-	return MemoryRead{
-		ID:             r.ID,
-		Scope:          r.Scope,
-		UserID:         r.UserID,
-		WorkspaceID:    pgUUIDString(r.WorkspaceID),
-		MemoryType:     r.MemoryType,
-		Title:          r.Title,
-		Body:           r.Body,
-		Why:            r.Why,
-		Tags:           r.Tags,
-		Source:         r.Source,
-		AgentActor:     r.AgentActor,
-		ConversationID: pgUUIDString(r.ConversationID),
-		CreatedAt:      pgTime(r.CreatedAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return memoryFromRow(memoryRow(r))
 }
 
 func memoryFromUpdateRow(r sqlc.UpdateMemoryRow) MemoryRead {
-	return MemoryRead{
-		ID:             r.ID,
-		Scope:          r.Scope,
-		UserID:         r.UserID,
-		WorkspaceID:    pgUUIDString(r.WorkspaceID),
-		MemoryType:     r.MemoryType,
-		Title:          r.Title,
-		Body:           r.Body,
-		Why:            r.Why,
-		Tags:           r.Tags,
-		Source:         r.Source,
-		AgentActor:     r.AgentActor,
-		ConversationID: pgUUIDString(r.ConversationID),
-		CreatedAt:      pgTime(r.CreatedAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return memoryFromRow(memoryRow(r))
 }
