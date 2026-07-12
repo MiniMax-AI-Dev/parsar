@@ -178,36 +178,20 @@ func (s *Store) ExpireAgentDaemonDeviceOwners(ctx context.Context, now time.Time
 }
 
 func agentDaemonOwnerFromClaimRow(r sqlc.ClaimAgentDaemonDeviceOwnerRow) AgentDaemonDeviceOwnerRead {
-	return AgentDaemonDeviceOwnerRead{
-		DeviceID:       r.DeviceID,
-		WorkspaceID:    r.WorkspaceID,
-		OwnerPodID:     r.OwnerPodID,
-		OwnerURL:       r.OwnerUrl,
-		Generation:     r.Generation,
-		Status:         r.Status,
-		ConnectedAt:    pgTime(r.ConnectedAt),
-		LastSeenAt:     pgTime(r.LastSeenAt),
-		LeaseExpiresAt: pgTime(r.LeaseExpiresAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return agentDaemonOwnerFromRow(agentDaemonOwnerRow(r))
 }
 
 func agentDaemonOwnerFromGetRow(r sqlc.GetAgentDaemonDeviceOwnerRow) AgentDaemonDeviceOwnerRead {
-	return AgentDaemonDeviceOwnerRead{
-		DeviceID:       r.DeviceID,
-		WorkspaceID:    r.WorkspaceID,
-		OwnerPodID:     r.OwnerPodID,
-		OwnerURL:       r.OwnerUrl,
-		Generation:     r.Generation,
-		Status:         r.Status,
-		ConnectedAt:    pgTime(r.ConnectedAt),
-		LastSeenAt:     pgTime(r.LastSeenAt),
-		LeaseExpiresAt: pgTime(r.LeaseExpiresAt),
-		UpdatedAt:      pgTime(r.UpdatedAt),
-	}
+	return agentDaemonOwnerFromRow(agentDaemonOwnerRow(r))
 }
 
 func agentDaemonOwnerFromRenewRow(r sqlc.RenewAgentDaemonDeviceOwnerRow) AgentDaemonDeviceOwnerRead {
+	return agentDaemonOwnerFromRow(agentDaemonOwnerRow(r))
+}
+
+type agentDaemonOwnerRow sqlc.ClaimAgentDaemonDeviceOwnerRow
+
+func agentDaemonOwnerFromRow(r agentDaemonOwnerRow) AgentDaemonDeviceOwnerRead {
 	return AgentDaemonDeviceOwnerRead{
 		DeviceID:       r.DeviceID,
 		WorkspaceID:    r.WorkspaceID,
