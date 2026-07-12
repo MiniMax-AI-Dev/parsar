@@ -82,7 +82,7 @@ func TestBuildArgsHonoursPrimaryFlags(t *testing.T) {
 	}
 }
 
-func TestBuildArgsResumeArgWinsOverMapKey(t *testing.T) {
+func TestBuildArgsResumeUsesExplicitSessionID(t *testing.T) {
 	res, err := claudecode.BuildArgs(map[string]any{
 		"resume_session_id": "from-map",
 	}, "from-arg")
@@ -98,11 +98,11 @@ func TestBuildArgsResumeArgWinsOverMapKey(t *testing.T) {
 	}
 }
 
-func TestBuildArgsResumeFromMapWhenArgEmpty(t *testing.T) {
+func TestBuildArgsIgnoresResumeSessionIDOption(t *testing.T) {
 	res, _ := claudecode.BuildArgs(map[string]any{"resume_session_id": "session_xyz"}, "")
 	defer res.Cleanup()
-	if !containsPair(res.Args, "--resume", "session_xyz") {
-		t.Errorf("--resume session_xyz not in %v", res.Args)
+	if slices.Contains(res.Args, "--resume") || slices.Contains(res.Args, "session_xyz") {
+		t.Errorf("resume_session_id option must be ignored, args=%v", res.Args)
 	}
 }
 
@@ -262,7 +262,6 @@ func TestBuildArgsRejectsWrongShapes(t *testing.T) {
 		{"plugin_dirs element not string", map[string]any{"plugin_dirs": []any{"/a", 7}}},
 		{"mcp_servers not object", map[string]any{"mcp_servers": "json string"}},
 		{"env value not string", map[string]any{"env": map[string]any{"K": 1}}},
-		{"resume_session_id not string", map[string]any{"resume_session_id": 5}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

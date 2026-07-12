@@ -179,8 +179,11 @@ func TestSessionJSONSuccessEmitsDeltaUsageAndDone(t *testing.T) {
 	if done.Usage.Provider != "anthropic" || done.Usage.InputTokens != 4 || done.Usage.OutputTokens != 2 {
 		t.Fatalf("done usage = %#v", done.Usage)
 	}
-	if done.Metadata["pi_session_id"] != "sess-xyz" {
-		t.Fatalf("done metadata = %#v, want pi_session_id sess-xyz", done.Metadata)
+	if done.Metadata[proto.DoneMetaAgentSessionID] != "sess-xyz" {
+		t.Fatalf("done metadata = %#v, want agent_session_id sess-xyz", done.Metadata)
+	}
+	if done.Metadata[proto.DoneMetaAgentSessionType] != "pi_session" {
+		t.Fatalf("done metadata = %#v, want pi_session", done.Metadata)
 	}
 }
 
@@ -213,6 +216,10 @@ func TestSessionModelErrorStopReasonStillEmitsErrorAndDone(t *testing.T) {
 	}
 	if !strings.Contains(errPayload.Error, "model boom") {
 		t.Fatalf("error payload = %#v, want model boom", errPayload)
+	}
+	done := decodePayload[proto.DonePayload](t, got[len(got)-1])
+	if _, ok := done.Metadata[proto.DoneMetaAgentSessionID]; ok {
+		t.Fatalf("model error must not persist session metadata: %#v", done.Metadata)
 	}
 }
 

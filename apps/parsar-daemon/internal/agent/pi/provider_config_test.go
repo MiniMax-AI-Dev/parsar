@@ -184,7 +184,7 @@ func TestNormalisePiProvider_WrongType(t *testing.T) {
 func TestResolveAgentDirConversationScoped(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
-	got, err := resolveAgentDir("conv-abc", "run-1")
+	got, err := resolveAgentDir("", "conv-abc", "run-1")
 	if err != nil {
 		t.Fatalf("resolveAgentDir: %v", err)
 	}
@@ -196,10 +196,36 @@ func TestResolveAgentDirConversationScoped(t *testing.T) {
 	}
 }
 
+func TestResolveAgentDirStateKeyScoped(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	got, err := resolveAgentDir("conv-abc/agent-xyz/pi", "ignored-conv", "run-1")
+	if err != nil {
+		t.Fatalf("resolveAgentDir: %v", err)
+	}
+	want := filepath.Join(tmp, ".parsar", "runtime", "pi", "state", "conv-abc", "agent-xyz", "pi", "agent")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestResolveAgentDirSanitizesStateKey(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	got, err := resolveAgentDir("../conv abc/agent:xyz/pi", "ignored-conv", "run-1")
+	if err != nil {
+		t.Fatalf("resolveAgentDir: %v", err)
+	}
+	want := filepath.Join(tmp, ".parsar", "runtime", "pi", "state", "conv_abc", "agent_xyz", "pi", "agent")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestResolveAgentDirRunScopedFallback(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
-	got, err := resolveAgentDir("", "run-9")
+	got, err := resolveAgentDir("", "", "run-9")
 	if err != nil {
 		t.Fatalf("resolveAgentDir: %v", err)
 	}
@@ -209,7 +235,7 @@ func TestResolveAgentDirRunScopedFallback(t *testing.T) {
 	}
 }
 
-func TestApplyPiManagedProvider_WritesModelsAndSetsEnv(t *testing.T) {
+func TestApplyPiRuntimeState_WritesModelsSetsEnvAndSessionDir(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 	callerEnv := map[string]any{"PARSAR_PI_API_KEY": "sk-proxy", "OTHER": "x"}
@@ -225,12 +251,13 @@ func TestApplyPiManagedProvider_WritesModelsAndSetsEnv(t *testing.T) {
 		},
 	}
 
-	out, err := applyPiManagedProvider(opts, "conv-xyz", "run-1")
+	out, err := applyPiRuntimeState(opts, "conv-xyz/agent-1/pi", "ignored-conv", "run-1")
 	if err != nil {
-		t.Fatalf("applyPiManagedProvider: %v", err)
+		t.Fatalf("applyPiRuntimeState: %v", err)
 	}
 
-	agentDir := filepath.Join(tmp, ".parsar", "runtime", "pi", "conv-conv-xyz", "agent")
+	agentDir := filepath.Join(tmp, ".parsar", "runtime", "pi", "state", "conv-xyz", "agent-1", "pi", "agent")
+	sessionDir := filepath.Join(agentDir, "sessions")
 	env, ok := out["env"].(map[string]any)
 	if !ok {
 		t.Fatalf("out[env] not a map: %T", out["env"])
@@ -240,6 +267,12 @@ func TestApplyPiManagedProvider_WritesModelsAndSetsEnv(t *testing.T) {
 	}
 	if env["PARSAR_PI_API_KEY"] != "sk-proxy" || env["OTHER"] != "x" {
 		t.Errorf("pre-existing env not preserved: %+v", env)
+	}
+	if out["session_dir"] != sessionDir {
+		t.Errorf("session_dir = %v, want %q", out["session_dir"], sessionDir)
+	}
+	if info, err := os.Stat(sessionDir); err != nil || !info.IsDir() {
+		t.Fatalf("session dir not created at %s: %v", sessionDir, err)
 	}
 
 	p := readModelsJSON(t, agentDir).Providers[piManagedProviderSlug]
@@ -251,21 +284,25 @@ func TestApplyPiManagedProvider_WritesModelsAndSetsEnv(t *testing.T) {
 	// and a shared reference would leak PI_CODING_AGENT_DIR back to the
 	// server-owned options map across turns.
 	if _, leaked := callerEnv["PI_CODING_AGENT_DIR"]; leaked {
-		t.Error("applyPiManagedProvider mutated the caller's env map")
+		t.Error("applyPiRuntimeState mutated the caller's env map")
 	}
 }
 
-func TestApplyPiManagedProvider_NoProviderNoop(t *testing.T) {
+func TestApplyPiRuntimeState_NoProviderStillPinsSessionDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
 	opts := map[string]any{"model": "anthropic/x"}
-	out, err := applyPiManagedProvider(opts, "conv-1", "run-1")
+	out, err := applyPiRuntimeState(opts, "conv-1/agent-1/pi", "ignored-conv", "run-1")
 	if err != nil {
-		t.Fatalf("applyPiManagedProvider: %v", err)
+		t.Fatalf("applyPiRuntimeState: %v", err)
 	}
 	if env, ok := out["env"].(map[string]any); ok {
 		if _, set := env["PI_CODING_AGENT_DIR"]; set {
 			t.Fatal("PI_CODING_AGENT_DIR must not be set when no pi_provider present")
 		}
 	}
+	want := filepath.Join(tmp, ".parsar", "runtime", "pi", "state", "conv-1", "agent-1", "pi", "agent", "sessions")
+	if out["session_dir"] != want {
+		t.Fatalf("session_dir = %v, want %q", out["session_dir"], want)
+	}
 }
-
-

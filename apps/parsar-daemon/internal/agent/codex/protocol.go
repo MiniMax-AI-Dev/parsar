@@ -10,9 +10,8 @@
 //
 //  2. Multi-turn context lives in a Codex "thread" identified by the
 //     thread_id returned in the first `thread/started` notification.
-//     The daemon stamps that id into DonePayload.Metadata["claude_session_id"]
-//     (the agent-neutral session-id key the binder layer already
-//     understands) so the connector's RememberSession path persists it.
+//     The daemon stamps that id into DonePayload.Metadata["agent_session_id"]
+//     so the connector's RememberSession path persists it.
 //     Subsequent turns spawn a fresh app-server and call `thread/resume`
 //     with that id to graft the prior turn's context back in.
 package codex
@@ -39,10 +38,10 @@ type JsonRpcRequest struct {
 // JsonRpcResponse is an outbound reply to a server-initiated request.
 // Either Result or Error must be non-nil.
 type JsonRpcResponse struct {
-	JsonRpc string         `json:"jsonrpc"`
-	ID      any            `json:"id"`
-	Result  any            `json:"result,omitempty"`
-	Error   *JsonRpcError  `json:"error,omitempty"`
+	JsonRpc string        `json:"jsonrpc"`
+	ID      any           `json:"id"`
+	Result  any           `json:"result,omitempty"`
+	Error   *JsonRpcError `json:"error,omitempty"`
 }
 
 // JsonRpcError carries a structured failure reply. Codes follow the
@@ -149,18 +148,18 @@ type SandboxPolicy struct {
 // ---------------------------------------------------------------------------
 
 type ThreadStartParams struct {
-	Cwd                   string         `json:"cwd"`
-	Model                 string         `json:"model,omitempty"`
-	ModelProvider         string         `json:"modelProvider,omitempty"`
-	ApprovalPolicy        AskForApproval `json:"approvalPolicy"`
+	Cwd            string         `json:"cwd"`
+	Model          string         `json:"model,omitempty"`
+	ModelProvider  string         `json:"modelProvider,omitempty"`
+	ApprovalPolicy AskForApproval `json:"approvalPolicy"`
 	// Sandbox is the v0.141+ field name; previously called sandboxPolicy
 	// and took a tagged-enum object. Wire format now is a kebab-case
 	// string: "read-only" / "workspace-write" / "danger-full-access".
 	// Sending the old object shape causes codex to silently default to
 	// read-only, which terminates the turn before the model can reply.
-	Sandbox               SandboxMode    `json:"sandbox,omitempty"`
-	DeveloperInstructions string         `json:"developerInstructions,omitempty"`
-	RuntimeWorkspaceRoots []string       `json:"runtimeWorkspaceRoots,omitempty"`
+	Sandbox               SandboxMode `json:"sandbox,omitempty"`
+	DeveloperInstructions string      `json:"developerInstructions,omitempty"`
+	RuntimeWorkspaceRoots []string    `json:"runtimeWorkspaceRoots,omitempty"`
 }
 
 type Thread struct {
@@ -223,11 +222,11 @@ type TurnInterruptParams struct {
 }
 
 type TurnUsage struct {
-	InputTokens         int `json:"inputTokens,omitempty"`
-	OutputTokens        int `json:"outputTokens,omitempty"`
-	CachedInputTokens   int `json:"cachedInputTokens,omitempty"`
+	InputTokens          int `json:"inputTokens,omitempty"`
+	OutputTokens         int `json:"outputTokens,omitempty"`
+	CachedInputTokens    int `json:"cachedInputTokens,omitempty"`
 	CacheReadInputTokens int `json:"cacheReadInputTokens,omitempty"`
-	TotalTokens         int `json:"totalTokens,omitempty"`
+	TotalTokens          int `json:"totalTokens,omitempty"`
 }
 
 type Turn struct {
@@ -267,10 +266,10 @@ type ThreadItem struct {
 	ID   string `json:"id,omitempty"`
 
 	// agentMessage / reasoning
-	Text         string   `json:"text,omitempty"`
-	Summary      []string `json:"summary,omitempty"`
-	Content      []string `json:"content,omitempty"`
-	SummaryText  string   `json:"summary_text,omitempty"`
+	Text        string   `json:"text,omitempty"`
+	Summary     []string `json:"summary,omitempty"`
+	Content     []string `json:"content,omitempty"`
+	SummaryText string   `json:"summary_text,omitempty"`
 
 	// commandExecution
 	Command  string `json:"command,omitempty"`

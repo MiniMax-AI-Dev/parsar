@@ -35,10 +35,7 @@ import (
 )
 
 // ConnectorType is the connector_type string this connector handles.
-// Re-exported from binding.ConnectorType so a single constant cannot
-// drift and callers that only import this package don't need a second
-// import for the registry MustRegister call.
-const ConnectorType = binding.ConnectorType
+const ConnectorType = "agent_daemon"
 
 // ErrUnsupportedAgentKind is returned when the resolved agent_kind is not
 // advertised as available by the selected daemon device.
@@ -358,7 +355,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 		return errorChannel(in.RunID, err.Error()), nil
 	}
 
-	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID)
+	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID, agentKind)
 	if err != nil {
 		if errors.Is(err, binding.ErrNotBound) {
 			// Lazy-bind: pick up the runtime the user picked in the
@@ -400,6 +397,10 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 			"run_id", in.RunID,
 			"conversation_id", in.ConversationID,
 			"device_id", bind.DeviceID)
+	}
+	bind.AgentKind = agentKind
+	if bind.AgentStateKey == "" {
+		bind.AgentStateKey = agentStateKey(in.ConversationID, in.AgentID, agentKind)
 	}
 
 	if ch, routed, routeErr := c.routeRemoteIfNeeded(ctx, bind, in, allowRemote); routed || routeErr != nil {
@@ -459,14 +460,15 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	}
 
 	req, err := proto.NewEnvelope(proto.TypePromptRequest, in.RunID, proto.PromptRequestPayload{
-		AgentKind:       agentKind,
-		ConversationID:  in.ConversationID,
-		RunID:           in.RunID,
-		Prompt:          in.TriggerMessageContent,
-		Attachments:     promptAttachmentsFromStore(in.TriggerAttachments),
-		WorkDir:         bind.WorkDir,
-		AgentOptions:    agentOptions,
-		ResumeSessionID: bind.ClaudeSessionID,
+		AgentKind:      agentKind,
+		ConversationID: in.ConversationID,
+		RunID:          in.RunID,
+		Prompt:         in.TriggerMessageContent,
+		Attachments:    promptAttachmentsFromStore(in.TriggerAttachments),
+		WorkDir:        bind.WorkDir,
+		AgentOptions:   agentOptions,
+		AgentSessionID: bind.AgentSessionID,
+		AgentStateKey:  bind.AgentStateKey,
 	})
 	if err != nil {
 		sess.Unsubscribe(in.RunID)
@@ -736,33 +738,27 @@ func (c *Connector) handleUpstream(
 			Usage:      usageFromProto(p.Usage),
 			Metadata:   p.Metadata,
 		}
-		// Best-effort: persist claude_session_id so the next turn can
-		// pass --resume. Errors logged but do not abort the run.
-		if claudeSess, ok := p.Metadata["claude_session_id"].(string); ok && claudeSess != "" {
-			c.rememberClaudeSession(ctx, in, claudeSess)
+		// Best-effort: persist the engine session id so the next turn can resume.
+		if agentSessionID, ok := p.Metadata[proto.DoneMetaAgentSessionID].(string); ok && agentSessionID != "" {
+			sessionType, _ := p.Metadata[proto.DoneMetaAgentSessionType].(string)
+			c.rememberAgentSession(ctx, in, agentSessionID, sessionType)
 		}
 		out <- connector.PromptEvent{Type: connector.EventDone, Final: final, Sequence: atomic.AddUint64(seq, 1)}
 	}
 }
 
-// rememberClaudeSession folds the daemon's done-event claude_session_id
-// back into the conversation binding. Stale done events (the run was
-// cancelled and a new one already started) are filtered by the binder's
-// own CAS guard on session_updated_at — both ours and the next run's
-// writebacks carry runStartedAt, the older one loses.
-func (c *Connector) rememberClaudeSession(ctx context.Context, in connector.PromptInput, claudeSess string) {
-	var runStartedAt time.Time
-	if c.runStatus != nil {
-		_, startedAt, statusErr := c.runStatus.GetAgentRunStatusAndStartedAt(ctx, in.RunID)
-		if statusErr != nil {
-			c.log.Warn("agent_daemon: read run status for session write-back",
-				"err", statusErr, "run_id", in.RunID)
-		} else {
-			runStartedAt = startedAt
-		}
-	}
-	if err := c.binder.RememberSession(ctx, in.ConversationID, in.AgentID, claudeSess, runStartedAt); err != nil {
-		c.log.Warn("agent_daemon: remember claude_session_id", "err", err, "run_id", in.RunID)
+func (c *Connector) rememberAgentSession(ctx context.Context, in connector.PromptInput, sessionID, sessionType string) {
+	agentKind := resolveAgentKind(in)
+	stateKey := agentStateKey(in.ConversationID, in.AgentID, agentKind)
+	if err := c.binder.RememberSession(ctx, binding.Binding{
+		ConversationID:   in.ConversationID,
+		AgentID:          in.AgentID,
+		AgentKind:        agentKind,
+		AgentSessionID:   sessionID,
+		AgentSessionType: sessionType,
+		AgentStateKey:    stateKey,
+	}); err != nil {
+		c.log.Warn("agent_daemon: remember agent session", "err", err, "run_id", in.RunID)
 	}
 }
 
@@ -1003,8 +999,13 @@ func configuredDeviceBinding(in connector.PromptInput) (binding.Binding, bool) {
 		AgentID:        in.AgentID,
 		DeviceID:       deviceID,
 		AgentKind:      resolveAgentKind(in),
+		AgentStateKey:  agentStateKey(in.ConversationID, in.AgentID, resolveAgentKind(in)),
 		WorkDir:        workDir,
 	}, true
+}
+
+func agentStateKey(conversationID, agentID, agentKind string) string {
+	return strings.TrimSpace(conversationID) + "/" + strings.TrimSpace(agentID) + "/" + strings.TrimSpace(agentKind)
 }
 
 // acquireSandboxBinding is the cold-start path: ErrNotBound and the

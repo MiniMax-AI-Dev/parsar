@@ -101,7 +101,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.killTimeout = rpcKillTimeout
 	}
 
-	plan, err := BuildSessionPlan(req.RunID, req.WorkDir, req.AgentOptions)
+	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
 	if err != nil {
 		return nil, fmt.Errorf("codex: build session plan: %w", err)
 	}
@@ -192,14 +192,15 @@ func (s *Session) SubmitPromptForUserChoice(_ context.Context, _ string, _ proto
 
 func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	defer close(s.waitDone)
+	defer func() { _ = s.rpc.Close() }()
 	defer s.cleanup()
 	defer s.closeOut()
 
 	// Resolve thread: resume if possible, else start fresh.
-	if strings.TrimSpace(req.ResumeSessionID) != "" {
-		if err := s.resumeThread(req.ResumeSessionID); err != nil {
+	if strings.TrimSpace(req.AgentSessionID) != "" {
+		if err := s.resumeThread(req.AgentSessionID); err != nil {
 			s.cfg.logger.Warn("codex: thread/resume failed; starting fresh",
-				"run_id", s.runID, "thread_id", req.ResumeSessionID, "err", err)
+				"run_id", s.runID, "thread_id", req.AgentSessionID, "err", err)
 			if err := s.startThread(plan); err != nil {
 				s.emitTerminal(fmt.Sprintf("codex: thread/start: %v", err), true)
 				return
@@ -232,10 +233,7 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 		return
 	}
 
-	// Block until the RPC child exits or cancellation arrives. The
-	// notification handlers will have called s.finalizeTurn by the
-	// time we reach here (turn/completed handler emits TypeDone +
-	// triggers Close).
+	// Block until terminal handlers close the RPC child or cancellation arrives.
 	select {
 	case <-s.rpc.Done():
 	case <-s.cancelCtx.Done():
@@ -483,9 +481,11 @@ func (s *Session) onTurnCompleted(raw json.RawMessage) {
 			body = appendOnNewline(body, errText)
 		}
 		s.emitTerminal(body, true)
+		s.finishAfterTerminal()
 		return
 	}
 	s.emitDone(finalText, usage)
+	s.finishAfterTerminal()
 }
 
 // turnErrorMessage extracts a human-readable error string from
@@ -541,6 +541,7 @@ func (s *Session) onTurnFailed(raw json.RawMessage) {
 		"turn_status", p.Turn.Status,
 		"last_err_text_present", s.peekLastErrText() != "")
 	s.emitTerminal("codex: turn failed", true)
+	s.finishAfterTerminal()
 }
 
 func (s *Session) onErrorNotif(raw json.RawMessage) {
@@ -582,11 +583,8 @@ func (s *Session) peekLastErrText() string {
 func (s *Session) emitDone(content string, usage *TurnUsage) {
 	doneMeta := map[string]any{}
 	if tid := s.currentThreadID(); tid != "" {
-		// Use the agent-neutral session-id key the binder already
-		// understands; codex thread_id and claude session_id share
-		// "upstream session id" semantics on the binding layer.
-		doneMeta["claude_session_id"] = tid
-		doneMeta["codex_thread_id"] = tid
+		doneMeta[proto.DoneMetaAgentSessionID] = tid
+		doneMeta[proto.DoneMetaAgentSessionType] = "codex_thread"
 	}
 	payload := proto.DonePayload{Content: content, Metadata: doneMeta}
 	if usage != nil {
@@ -643,8 +641,8 @@ func (s *Session) emitTerminal(message string, asError bool) {
 	}
 	doneMeta := map[string]any{}
 	if tid := s.currentThreadID(); tid != "" {
-		doneMeta["claude_session_id"] = tid
-		doneMeta["codex_thread_id"] = tid
+		doneMeta[proto.DoneMetaAgentSessionID] = tid
+		doneMeta[proto.DoneMetaAgentSessionType] = "codex_thread"
 	}
 	env, err := proto.NewEnvelope(proto.TypeDone, s.runID, proto.DonePayload{
 		Content:  message,
@@ -667,6 +665,15 @@ func (s *Session) trySend(env proto.Envelope) {
 
 func (s *Session) closeOut() {
 	s.closeOutOnce.Do(func() { close(s.out) })
+}
+
+func (s *Session) finishAfterTerminal() {
+	if s.cancelFn != nil {
+		s.cancelFn()
+	}
+	if s.rpc != nil {
+		_ = s.rpc.Close()
+	}
 }
 
 // ---------------------------------------------------------------------------

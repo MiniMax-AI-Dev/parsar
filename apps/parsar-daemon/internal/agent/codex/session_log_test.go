@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
@@ -169,6 +170,64 @@ func TestOnTurnFailed_LogsBufferedError(t *testing.T) {
 	}
 	if !strings.Contains(logs, `"last_err_text_present":true`) {
 		t.Fatalf("turn/failed log must note that an upstream error was buffered\n%s", logs)
+	}
+}
+
+func TestTerminalTurnClosesRPCAndCancelsSession(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*Session)
+	}{
+		{
+			name: "completed",
+			run: func(s *Session) {
+				raw, _ := json.Marshal(TurnCompletedNotification{
+					Turn: Turn{ID: "turn-1", Status: "completed"},
+				})
+				s.onTurnCompleted(raw)
+			},
+		},
+		{
+			name: "failed",
+			run: func(s *Session) {
+				raw, _ := json.Marshal(TurnCompletedNotification{
+					Turn: Turn{ID: "turn-2", Status: "failed"},
+				})
+				s.onTurnFailed(raw)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rpc, _, cleanup := NewTestClient()
+			defer cleanup()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			out := make(chan proto.Envelope, 4)
+			s := &Session{
+				runID:     "run-terminal-" + tt.name,
+				cfg:       sessionConfig{logger: slog.New(slog.NewTextHandler(io.Discard, nil))},
+				out:       out,
+				rpc:       rpc.JSONRPCClient,
+				cancelCtx: ctx,
+				cancelFn:  cancel,
+			}
+			s.setThreadID("thread-" + tt.name)
+
+			tt.run(s)
+
+			if rpc.Alive() {
+				t.Fatal("terminal turn must close the codex RPC client")
+			}
+			select {
+			case <-ctx.Done():
+			default:
+				t.Fatal("terminal turn must cancel the session context")
+			}
+		})
 	}
 }
 

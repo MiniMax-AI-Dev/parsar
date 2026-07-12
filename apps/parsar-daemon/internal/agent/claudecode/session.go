@@ -9,14 +9,13 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/clirunner"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 )
@@ -69,7 +68,7 @@ type Session struct {
 	runID string
 	cfg   sessionConfig
 
-	cmd     *exec.Cmd
+	proc    *clirunner.Process
 	stdin   io.WriteCloser
 	stdinMu sync.Mutex
 
@@ -83,7 +82,6 @@ type Session struct {
 	// cancelCtx is a child of parent ctx so Session.Cancel can signal
 	// everyone without racing router shutdown.
 	cancelCtx context.Context
-	cancelFn  context.CancelFunc
 
 	cancelOnce sync.Once
 
@@ -92,17 +90,13 @@ type Session struct {
 	askTimersMu sync.Mutex
 	askTimers   map[string]*time.Timer
 
-	// latestSessionID is the most recent claude_session_id seen on a
+	// latestSessionID is the most recent upstream session id seen on a
 	// system-init / result frame. The cancel-path done envelope reads
 	// it back so the server can RememberSession even when claude was
 	// killed mid-prompt (without it, the next user message starts a
 	// brand-new chat with no --resume).
 	latestSessionIDMu sync.Mutex
 	latestSessionID   string
-
-	// waitDone closes after the stdout pump fully drains and Wait
-	// returns. Used by Cancel's SIGKILL escalation timer.
-	waitDone chan struct{}
 
 	buildCleanup func()
 }
@@ -135,7 +129,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		"run_id", req.RunID, "agent_kind", req.AgentKind,
 		"prompt_len", len(req.Prompt), "work_dir", req.WorkDir,
 		"has_agent_options", req.AgentOptions != nil,
-		"resume_session_id", req.ResumeSessionID,
+		"agent_session_id", req.AgentSessionID,
 		"claude_binary", cfg.claudeBinary)
 
 	// Install plugins BEFORE BuildArgs so the resolved local paths
@@ -211,7 +205,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 			"warn_count", len(installRes.Warnings))
 	}
 
-	buildRes, err := BuildArgs(pluginOpts, req.ResumeSessionID)
+	buildRes, err := BuildArgs(pluginOpts, req.AgentSessionID)
 	if err != nil {
 		cfg.logger.Error("claudecode: BuildArgs failed", "run_id", req.RunID, "err", err)
 		return nil, fmt.Errorf("claudecode: build args: %w", err)
@@ -219,65 +213,43 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	cfg.logger.Info("claudecode: BuildArgs ok",
 		"run_id", req.RunID, "args", buildRes.Args, "env_count", len(buildRes.Env))
 
-	cancelCtx, cancelFn := context.WithCancel(parent)
-
 	args := append([]string{}, buildRes.Args...)
 	args = append(args, cfg.extraArgs...)
-
-	cmd := exec.CommandContext(cancelCtx, cfg.claudeBinary, args...)
-	cmd.Dir = sessionWorkDir
-	cmd.Env = append(os.Environ(), buildRes.Env...)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		cancelFn()
-		buildRes.Cleanup()
-		return nil, fmt.Errorf("claudecode: stdin pipe: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		cancelFn()
-		buildRes.Cleanup()
-		return nil, fmt.Errorf("claudecode: stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		_ = stdin.Close()
-		cancelFn()
-		buildRes.Cleanup()
-		return nil, fmt.Errorf("claudecode: stderr pipe: %w", err)
-	}
 
 	cfg.logger.Info("claudecode: starting subprocess",
 		"run_id", req.RunID, "binary", cfg.claudeBinary,
 		"args", args, "dir", sessionWorkDir)
-	if err := cmd.Start(); err != nil {
+	proc, err := clirunner.Start(clirunner.StartOptions{
+		Parent:      parent,
+		Binary:      cfg.claudeBinary,
+		Args:        args,
+		Dir:         sessionWorkDir,
+		Env:         append(os.Environ(), buildRes.Env...),
+		NeedStdin:   true,
+		KillTimeout: cfg.killTimeout,
+	})
+	if err != nil {
 		cfg.logger.Error("claudecode: cmd.Start failed",
 			"run_id", req.RunID, "binary", cfg.claudeBinary, "err", err)
-		_ = stdin.Close()
-		cancelFn()
 		buildRes.Cleanup()
 		return nil, fmt.Errorf("claudecode: start %q: %w", cfg.claudeBinary, err)
 	}
 	cfg.logger.Info("claudecode: subprocess started",
-		"run_id", req.RunID, "pid", cmd.Process.Pid)
+		"run_id", req.RunID, "pid", proc.Cmd.Process.Pid)
 
 	pending := newPendingTable()
 	askPending := newPendingAskTable()
 	s := &Session{
 		runID:        req.RunID,
 		cfg:          cfg,
-		cmd:          cmd,
-		stdin:        stdin,
+		proc:         proc,
+		stdin:        proc.Stdin,
 		pending:      pending,
 		askPending:   askPending,
 		translator:   newTranslator(req.RunID, pending, askPending, defaultPermIDMinter, defaultAskIDMinter),
 		out:          out,
-		cancelCtx:    cancelCtx,
-		cancelFn:     cancelFn,
+		cancelCtx:    proc.Context(),
 		askTimers:    make(map[string]*time.Timer),
-		waitDone:     make(chan struct{}),
 		buildCleanup: buildRes.Cleanup,
 	}
 
@@ -300,8 +272,8 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	}
 
 	cfg.logger.Info("claudecode: launching stdout/stderr pumps", "run_id", req.RunID)
-	go s.pumpStderr(stderr)
-	go s.run(stdout)
+	go s.pumpStderr(proc.Stderr)
+	go s.run(proc.Stdout)
 
 	return s, nil
 }
@@ -321,23 +293,7 @@ func (s *Session) writeStdin(b []byte) (int, error) {
 func (s *Session) Cancel(_ context.Context) error {
 	s.cancelOnce.Do(func() {
 		s.stopAllAskTimers()
-		if s.cmd.Process == nil {
-			return
-		}
-		_ = s.cmd.Process.Signal(syscall.SIGTERM)
-
-		go func() {
-			select {
-			case <-s.waitDone:
-				return
-			case <-time.After(s.cfg.killTimeout):
-				_ = s.cmd.Process.Signal(syscall.SIGKILL)
-			}
-		}()
-
-		// Flip the context so blocked stdin writes / out sends see
-		// cancellation.
-		s.cancelFn()
+		s.proc.Cancel()
 	})
 	return nil
 }
@@ -503,7 +459,6 @@ func (s *Session) stopAskTimer(askID string) {
 // run is the stdout pump. Owns the out channel close.
 func (s *Session) run(stdout io.Reader) {
 	s.cfg.logger.Info("claudecode: run() stdout pump started", "run_id", s.runID)
-	defer close(s.waitDone)
 	defer s.buildCleanup()
 	defer s.closeOut()
 
@@ -562,12 +517,13 @@ func (s *Session) run(stdout io.Reader) {
 				}
 			case <-s.cancelCtx.Done():
 				s.cfg.logger.Info("claudecode: cancelled during out send", "run_id", s.runID)
-				_ = s.cmd.Wait() // reap
+				_ = s.proc.Wait()
 				return
 			}
 		}
 		if tx.Terminal {
 			terminal = true
+			s.finishAfterTerminal()
 			break
 		}
 	}
@@ -580,10 +536,10 @@ func (s *Session) run(stdout io.Reader) {
 	s.cfg.logger.Info("claudecode: stdout pump exiting",
 		"run_id", s.runID, "lines_read", lineCount, "terminal", terminal)
 
-	waitErr := s.cmd.Wait()
+	waitErr := s.proc.Wait()
 	s.cfg.logger.Info("claudecode: subprocess exited",
 		"run_id", s.runID, "wait_err", waitErr,
-		"exit_code", s.cmd.ProcessState.ExitCode())
+		"exit_code", s.proc.Cmd.ProcessState.ExitCode())
 
 	if !terminal {
 		s.synthesizeTerminal(waitErr)
@@ -623,10 +579,7 @@ func (s *Session) synthesizeTerminal(waitErr error) {
 	}
 }
 
-// doneMetaForCancel returns the metadata map attached to the cancel-
-// path Done envelope. Currently the only entry is claude_session_id,
-// which lets the server-side connector RememberSession on a cancelled
-// run so the next user message can --resume the same claude session.
+// doneMetaForCancel returns the metadata map attached to the cancel-path Done envelope.
 func (s *Session) doneMetaForCancel() map[string]any {
 	s.latestSessionIDMu.Lock()
 	id := s.latestSessionID
@@ -634,7 +587,10 @@ func (s *Session) doneMetaForCancel() map[string]any {
 	if id == "" {
 		return nil
 	}
-	return map[string]any{"claude_session_id": id}
+	return map[string]any{
+		proto.DoneMetaAgentSessionID:   id,
+		proto.DoneMetaAgentSessionType: "claude_session",
+	}
 }
 
 func (s *Session) trySend(env proto.Envelope) {
@@ -648,6 +604,18 @@ func (s *Session) trySend(env proto.Envelope) {
 
 func (s *Session) closeOut() {
 	s.closeOutOnce.Do(func() { close(s.out) })
+}
+
+func (s *Session) finishAfterTerminal() {
+	s.stdinMu.Lock()
+	if s.stdin != nil {
+		_ = s.stdin.Close()
+		s.stdin = nil
+	}
+	s.stdinMu.Unlock()
+	if s.proc != nil {
+		s.proc.Cancel()
+	}
 }
 
 // resolveSessionWorkDir returns the directory that BOTH plugin installs

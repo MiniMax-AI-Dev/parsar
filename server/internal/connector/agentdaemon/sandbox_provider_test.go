@@ -557,7 +557,7 @@ func TestE2BSandboxProvider_Release(t *testing.T) {
 	if e2bClient.killCalls != 1 {
 		t.Fatalf("Release should Kill; saw %d", e2bClient.killCalls)
 	}
-	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1"); !errors.Is(err, binding.ErrNotBound) {
+	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code"); !errors.Is(err, binding.ErrNotBound) {
 		t.Fatalf("Release should invalidate binder; resolve returned %v", err)
 	}
 	// Second release: no-op.

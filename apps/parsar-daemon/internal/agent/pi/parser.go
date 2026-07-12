@@ -24,6 +24,7 @@ type translator struct {
 	usage     proto.Usage
 	usageSet  bool
 	sessionID string
+	failed    bool
 }
 
 type translation struct {
@@ -203,6 +204,7 @@ func (t *translator) translateMessageEnd(line []byte) (translation, error) {
 	}
 
 	if msg.Message.StopReason == "error" {
+		t.failed = true
 		errMsg := msg.Message.ErrorMessage
 		if errMsg == "" {
 			errMsg = "pi: assistant message ended with error"
@@ -294,6 +296,7 @@ func (t *translator) terminalEnvelopes(waitErr error, stderr string, cancelled b
 		}
 	}
 
+	terminalFailed := t.failed || waitErr != nil || cancelled
 	if waitErr != nil || cancelled {
 		msg := "pi: subprocess exited without success"
 		if waitErr != nil {
@@ -311,12 +314,9 @@ func (t *translator) terminalEnvelopes(waitErr error, stderr string, cancelled b
 	}
 
 	metadata := map[string]any{"connector_path": "pi_print"}
-	if t.sessionID != "" {
-		metadata["pi_session_id"] = t.sessionID
-		// claude_session_id is the canonical key the server's resume
-		// write-back reads (binder MetaClaudeSessionID); mirror pi's id
-		// into it so --session resume works, exactly as codex does.
-		metadata["claude_session_id"] = t.sessionID
+	if t.sessionID != "" && !terminalFailed {
+		metadata[proto.DoneMetaAgentSessionID] = t.sessionID
+		metadata[proto.DoneMetaAgentSessionType] = "pi_session"
 	}
 	if env, err := proto.NewEnvelope(proto.TypeDone, t.runID, proto.DonePayload{
 		Content:    content,

@@ -2899,6 +2899,26 @@ func (q *Queries) DeleteAgentCapability(ctx context.Context, id pgtype.UUID) err
 	return err
 }
 
+const deleteAgentDaemonBindingByConversation = `-- name: DeleteAgentDaemonBindingByConversation :exec
+delete from agent_runtime_bindings
+where conversation_id = $1::uuid
+`
+
+func (q *Queries) DeleteAgentDaemonBindingByConversation(ctx context.Context, conversationID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAgentDaemonBindingByConversation, conversationID)
+	return err
+}
+
+const deleteAgentDaemonBindingByRuntime = `-- name: DeleteAgentDaemonBindingByRuntime :exec
+delete from agent_runtime_bindings
+where runtime_id = $1::uuid
+`
+
+func (q *Queries) DeleteAgentDaemonBindingByRuntime(ctx context.Context, runtimeID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAgentDaemonBindingByRuntime, runtimeID)
+	return err
+}
+
 const deleteConnectorSessionBindingsByBindingKey = `-- name: DeleteConnectorSessionBindingsByBindingKey :exec
 delete from connector_session_bindings
 where connector_type = $1::text
@@ -3850,6 +3870,58 @@ func (q *Queries) GetAgentCapability(ctx context.Context, id pgtype.UUID) (GetAg
 		&i.PinningMode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAgentDaemonBinding = `-- name: GetAgentDaemonBinding :one
+select
+  arb.conversation_id::text as conversation_id,
+  arb.agent_id::text as agent_id,
+  arb.runtime_id::text as runtime_id,
+  arb.work_dir::text as work_dir,
+  coalesce(aes.upstream_session_id, ''::text)::text as upstream_session_id,
+  coalesce(aes.upstream_session_type, ''::text)::text as upstream_session_type,
+  coalesce(aes.state_dir_key, ''::text)::text as state_dir_key,
+  coalesce(aes.metadata, '{}'::jsonb) as metadata
+from agent_runtime_bindings arb
+left join agent_engine_sessions aes
+  on aes.conversation_id = arb.conversation_id
+ and aes.agent_id = arb.agent_id
+ and aes.agent_kind = $1::text
+where arb.conversation_id = $2::uuid
+  and arb.agent_id = $3::uuid
+`
+
+type GetAgentDaemonBindingParams struct {
+	AgentKind      string      `json:"agent_kind"`
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	AgentID        pgtype.UUID `json:"agent_id"`
+}
+
+type GetAgentDaemonBindingRow struct {
+	ConversationID      string `json:"conversation_id"`
+	AgentID             string `json:"agent_id"`
+	RuntimeID           string `json:"runtime_id"`
+	WorkDir             string `json:"work_dir"`
+	UpstreamSessionID   string `json:"upstream_session_id"`
+	UpstreamSessionType string `json:"upstream_session_type"`
+	StateDirKey         string `json:"state_dir_key"`
+	Metadata            []byte `json:"metadata"`
+}
+
+func (q *Queries) GetAgentDaemonBinding(ctx context.Context, arg GetAgentDaemonBindingParams) (GetAgentDaemonBindingRow, error) {
+	row := q.db.QueryRow(ctx, getAgentDaemonBinding, arg.AgentKind, arg.ConversationID, arg.AgentID)
+	var i GetAgentDaemonBindingRow
+	err := row.Scan(
+		&i.ConversationID,
+		&i.AgentID,
+		&i.RuntimeID,
+		&i.WorkDir,
+		&i.UpstreamSessionID,
+		&i.UpstreamSessionType,
+		&i.StateDirKey,
+		&i.Metadata,
 	)
 	return i, err
 }
@@ -7271,10 +7343,8 @@ type ListConnectorSessionBindingsRow struct {
 // Enumerate all bindings for one conversation and connector type.
 // Backs connector diagnostic dumps without exposing one connector's
 // upstream sessions to another connector. `metadata` is returned so
-// connectors that overload the column (e.g. agent_daemon stashes
-// agent_kind / claude_session_id / work_dir there) can reconstruct
-// the full binding in one query; callers that don't care just ignore
-// it (opencode/bindingstore.go is one such caller).
+// connectors that overload the column can reconstruct the full binding
+// in one query; callers that don't care just ignore it.
 func (q *Queries) ListConnectorSessionBindings(ctx context.Context, arg ListConnectorSessionBindingsParams) ([]ListConnectorSessionBindingsRow, error) {
 	rows, err := q.db.Query(ctx, listConnectorSessionBindings, arg.ConversationID, arg.ConnectorType)
 	if err != nil {
@@ -9848,6 +9918,21 @@ func (q *Queries) ReserveSandboxBindingSlot(ctx context.Context, arg ReserveSand
 	return i, err
 }
 
+const resolveAgentDaemonDeviceByConversation = `-- name: ResolveAgentDaemonDeviceByConversation :one
+select runtime_id::text
+from agent_runtime_bindings
+where conversation_id = $1::uuid
+order by updated_at desc
+limit 1
+`
+
+func (q *Queries) ResolveAgentDaemonDeviceByConversation(ctx context.Context, conversationID pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, resolveAgentDaemonDeviceByConversation, conversationID)
+	var runtime_id string
+	err := row.Scan(&runtime_id)
+	return runtime_id, err
+}
+
 const resolveAgentNameForConversation = `-- name: ResolveAgentNameForConversation :one
 select coalesce(a.name, '')::text as agent_name
 from conversations c
@@ -11616,6 +11701,90 @@ func (q *Queries) UpgradeAgentCapability(ctx context.Context, arg UpgradeAgentCa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const upsertAgentDaemonEngineSession = `-- name: UpsertAgentDaemonEngineSession :exec
+insert into agent_engine_sessions(
+  conversation_id,
+  agent_id,
+  agent_kind,
+  upstream_session_id,
+  upstream_session_type,
+  state_dir_key,
+  metadata,
+  created_at,
+  updated_at
+)
+select
+  $1::uuid,
+  $2::uuid,
+  $3::text,
+  $4::text,
+  $5::text,
+  $6::text,
+  coalesce($7::jsonb, '{}'::jsonb),
+  now(),
+  now()
+where exists (
+  select 1 from agent_runtime_bindings
+  where conversation_id = $1::uuid
+    and agent_id = $2::uuid
+)
+on conflict (conversation_id, agent_id, agent_kind) do update
+set upstream_session_id = excluded.upstream_session_id,
+    upstream_session_type = excluded.upstream_session_type,
+    state_dir_key = excluded.state_dir_key,
+    metadata = excluded.metadata,
+    updated_at = now()
+`
+
+type UpsertAgentDaemonEngineSessionParams struct {
+	ConversationID      pgtype.UUID `json:"conversation_id"`
+	AgentID             pgtype.UUID `json:"agent_id"`
+	AgentKind           string      `json:"agent_kind"`
+	UpstreamSessionID   string      `json:"upstream_session_id"`
+	UpstreamSessionType string      `json:"upstream_session_type"`
+	StateDirKey         string      `json:"state_dir_key"`
+	Metadata            []byte      `json:"metadata"`
+}
+
+func (q *Queries) UpsertAgentDaemonEngineSession(ctx context.Context, arg UpsertAgentDaemonEngineSessionParams) error {
+	_, err := q.db.Exec(ctx, upsertAgentDaemonEngineSession,
+		arg.ConversationID,
+		arg.AgentID,
+		arg.AgentKind,
+		arg.UpstreamSessionID,
+		arg.UpstreamSessionType,
+		arg.StateDirKey,
+		arg.Metadata,
+	)
+	return err
+}
+
+const upsertAgentDaemonRuntimeBinding = `-- name: UpsertAgentDaemonRuntimeBinding :exec
+insert into agent_runtime_bindings(conversation_id, agent_id, runtime_id, work_dir, created_at, updated_at)
+values ($1::uuid, $2::uuid, $3::uuid, $4::text, now(), now())
+on conflict (conversation_id, agent_id) do update
+set runtime_id = excluded.runtime_id,
+    work_dir = excluded.work_dir,
+    updated_at = now()
+`
+
+type UpsertAgentDaemonRuntimeBindingParams struct {
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	AgentID        pgtype.UUID `json:"agent_id"`
+	RuntimeID      pgtype.UUID `json:"runtime_id"`
+	WorkDir        string      `json:"work_dir"`
+}
+
+func (q *Queries) UpsertAgentDaemonRuntimeBinding(ctx context.Context, arg UpsertAgentDaemonRuntimeBindingParams) error {
+	_, err := q.db.Exec(ctx, upsertAgentDaemonRuntimeBinding,
+		arg.ConversationID,
+		arg.AgentID,
+		arg.RuntimeID,
+		arg.WorkDir,
+	)
+	return err
 }
 
 const upsertAuthIdentity = `-- name: UpsertAuthIdentity :exec

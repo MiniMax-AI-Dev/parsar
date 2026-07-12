@@ -165,6 +165,9 @@ func TestTranslateMessageEndAccumulatesUsageAcrossFrames(t *testing.T) {
 // that as TypeError despite the clean process exit.
 func TestTranslateMessageEndErrorStopReasonEmitsError(t *testing.T) {
 	tr := pi.NewTranslatorForTest("run-err")
+	if _, err := tr.Translate([]byte(`{"type":"session","id":"sess-bad","cwd":"/x","timestamp":"t"}`)); err != nil {
+		t.Fatalf("Translate header: %v", err)
+	}
 	line := `{"type":"message_end","message":{"role":"assistant","content":[],"provider":"anthropic","model":"m","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"error","errorMessage":"boom"}}`
 	tx, err := tr.Translate([]byte(line))
 	if err != nil {
@@ -181,6 +184,11 @@ func TestTranslateMessageEndErrorStopReasonEmitsError(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected TypeError mentioning boom, got %#v", tx.Envelopes)
+	}
+	envs := tr.TerminalEnvelopes(nil, "", false)
+	done := decodePayload[proto.DonePayload](t, envs[len(envs)-1])
+	if _, ok := done.Metadata[proto.DoneMetaAgentSessionID]; ok {
+		t.Fatalf("failed pi turn must not persist session metadata: %#v", done.Metadata)
 	}
 }
 
@@ -201,17 +209,19 @@ func TestTerminalAlwaysEmitsDoneWithSessionMetadata(t *testing.T) {
 	if done.Content != "hello" {
 		t.Fatalf("done content = %q, want hello", done.Content)
 	}
-	if done.Metadata["pi_session_id"] != "sess-abc" {
-		t.Fatalf("done metadata = %#v, want pi_session_id sess-abc", done.Metadata)
+	if done.Metadata[proto.DoneMetaAgentSessionID] != "sess-abc" {
+		t.Fatalf("done metadata = %#v, want agent_session_id sess-abc", done.Metadata)
 	}
-	// Resume hinges on the canonical claude_session_id (see parser.go).
-	if done.Metadata["claude_session_id"] != "sess-abc" {
-		t.Fatalf("done metadata = %#v, want claude_session_id sess-abc", done.Metadata)
+	if done.Metadata[proto.DoneMetaAgentSessionType] != "pi_session" {
+		t.Fatalf("done metadata = %#v, want pi_session", done.Metadata)
 	}
 }
 
 func TestTerminalErrorIncludesStderr(t *testing.T) {
 	tr := pi.NewTranslatorForTest("run-e")
+	if _, err := tr.Translate([]byte(`{"type":"session","id":"sess-failed","cwd":"/x","timestamp":"t"}`)); err != nil {
+		t.Fatalf("Translate header: %v", err)
+	}
 	envs := tr.TerminalEnvelopes(errors.New("exit status 2"), "bad auth", false)
 	if len(envs) < 2 || envs[0].Type != proto.TypeError || envs[len(envs)-1].Type != proto.TypeDone {
 		t.Fatalf("error terminal envs = %#v", envs)
@@ -219,6 +229,10 @@ func TestTerminalErrorIncludesStderr(t *testing.T) {
 	errPayload := decodePayload[proto.ErrorPayload](t, envs[0])
 	if !strings.Contains(errPayload.Error, "bad auth") {
 		t.Fatalf("error payload = %#v", errPayload)
+	}
+	done := decodePayload[proto.DonePayload](t, envs[len(envs)-1])
+	if _, ok := done.Metadata[proto.DoneMetaAgentSessionID]; ok {
+		t.Fatalf("failed pi process must not persist session metadata: %#v", done.Metadata)
 	}
 }
 

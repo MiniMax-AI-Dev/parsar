@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildSessionPlan_DefaultsSilentAndFullAccess(t *testing.T) {
-	plan, err := BuildSessionPlan("run-1", "", nil)
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", nil)
 	if err != nil {
 		t.Fatalf("BuildSessionPlan: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestBuildSessionPlan_DefaultsSilentAndFullAccess(t *testing.T) {
 }
 
 func TestBuildSessionPlan_AllocsCodexHomeAndEnv(t *testing.T) {
-	plan, err := BuildSessionPlan("run-1", "", map[string]any{
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"env": map[string]any{
 			"OPENAI_API_KEY": "sk-test",
 		},
@@ -58,8 +58,23 @@ func TestBuildSessionPlan_AllocsCodexHomeAndEnv(t *testing.T) {
 	}
 }
 
+func TestBuildSessionPlan_StableCodexHomeByStateKey(t *testing.T) {
+	stateKey := "conv-stable/agent-stable/codex"
+	planA, err := BuildSessionPlan("run-a", stateKey, "", nil)
+	if err != nil {
+		t.Fatalf("BuildSessionPlan A: %v", err)
+	}
+	planB, err := BuildSessionPlan("run-b", stateKey, "", nil)
+	if err != nil {
+		t.Fatalf("BuildSessionPlan B: %v", err)
+	}
+	if codexHomeFromEnv(planA.Env) == "" || codexHomeFromEnv(planA.Env) != codexHomeFromEnv(planB.Env) {
+		t.Fatalf("CODEX_HOME must be stable by state key: A=%q B=%q", codexHomeFromEnv(planA.Env), codexHomeFromEnv(planB.Env))
+	}
+}
+
 func TestBuildSessionPlan_RoutesReasoningSummary(t *testing.T) {
-	plan, err := BuildSessionPlan("run-1", "", map[string]any{
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"reasoning_summary": "detailed",
 	})
 	if err != nil {
@@ -78,8 +93,17 @@ func TestBuildSessionPlan_RoutesReasoningSummary(t *testing.T) {
 	}
 }
 
+func codexHomeFromEnv(env []string) string {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "CODEX_HOME=") {
+			return strings.TrimPrefix(kv, "CODEX_HOME=")
+		}
+	}
+	return ""
+}
+
 func TestBuildSessionPlan_OverrideSystemPromptReplacesAppend(t *testing.T) {
-	plan, err := BuildSessionPlan("run-1", "", map[string]any{
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"system_prompt":          "user base",
 		"override_system_prompt": "you are pirate",
 	})
@@ -93,7 +117,7 @@ func TestBuildSessionPlan_OverrideSystemPromptReplacesAppend(t *testing.T) {
 }
 
 func TestBuildSessionPlan_EmptyOverrideKeepsSystemPrompt(t *testing.T) {
-	plan, err := BuildSessionPlan("run-1", "", map[string]any{
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"system_prompt":          "user base",
 		"override_system_prompt": "",
 	})
@@ -107,7 +131,7 @@ func TestBuildSessionPlan_EmptyOverrideKeepsSystemPrompt(t *testing.T) {
 }
 
 func TestBuildSessionPlan_RejectsRelativeWorkDir(t *testing.T) {
-	_, err := BuildSessionPlan("run-1", "relative/dir", nil)
+	_, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "relative/dir", nil)
 	if err == nil {
 		t.Fatal("relative work_dir must error")
 	}
@@ -119,7 +143,7 @@ func TestBuildSessionPlan_RejectsRelativeWorkDir(t *testing.T) {
 // hard-fail the first turn instead of running.
 func TestBuildSessionPlan_CreatesMissingWorkDir(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "missing", "parents", "leaf")
-	plan, err := BuildSessionPlan("run-1", target, nil)
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", target, nil)
 	if err != nil {
 		t.Fatalf("BuildSessionPlan: %v", err)
 	}
@@ -137,7 +161,7 @@ func TestBuildSessionPlan_CreatesMissingWorkDir(t *testing.T) {
 }
 
 func TestBuildSessionPlan_WritesMCPConfig(t *testing.T) {
-	plan, err := BuildSessionPlan("run-1", "", map[string]any{
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"mcp_servers": map[string]any{
 			"docs": map[string]any{
 				"command": "docs-server",
@@ -177,7 +201,7 @@ func TestBuildSessionPlan_WritesMCPConfig(t *testing.T) {
 }
 
 func TestBuildSessionPlan_MissingMCPCommandErrors(t *testing.T) {
-	_, err := BuildSessionPlan("run-1", "", map[string]any{
+	_, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
 		"mcp_servers": map[string]any{
 			"broken": map[string]any{
 				"args": []any{"--x"},

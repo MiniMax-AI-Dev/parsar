@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 )
 
 // piManagedProviderSlug is the provider key the daemon always writes into
@@ -112,44 +114,91 @@ func normalisePiProvider(raw any) (piProviderConfig, bool, error) {
 }
 
 // resolveAgentDir returns the directory set as PI_CODING_AGENT_DIR for this
-// prompt — pi reads models.json (and writes sessions) there. Scoped per
-// conversation as a sibling of resolveSkillsRoot so consecutive turns reuse
-// the same sessions/ tree (resume) without two conversations racing. runID
-// scopes the one-shot fallback when there is no conversation.
-func resolveAgentDir(conversationID, runID string) (string, error) {
-	home, err := os.UserHomeDir()
+// prompt. AgentStateKey is preferred because it scopes by conversation, agent,
+// and engine; conversation/run fallbacks exist for older callers and tests.
+func resolveAgentDir(agentStateKey, conversationID, runID string) (string, error) {
+	root, err := paths.Root()
 	if err != nil {
-		return "", fmt.Errorf("pi: resolve home: %w", err)
+		return "", fmt.Errorf("pi: resolve state root: %w", err)
 	}
-	base := filepath.Join(home, ".parsar", "runtime", "pi")
+	base := filepath.Join(root, "runtime", "pi")
+	if key := strings.TrimSpace(agentStateKey); key != "" {
+		parts := safeStatePathParts(key)
+		if len(parts) == 0 {
+			return "", fmt.Errorf("pi: invalid agentStateKey %q", agentStateKey)
+		}
+		dirParts := append([]string{base, "state"}, parts...)
+		return filepath.Join(append(dirParts, "agent")...), nil
+	}
 	if id := strings.TrimSpace(conversationID); id != "" {
 		return filepath.Join(base, "conv-"+id, "agent"), nil
 	}
 	return filepath.Join(base, "run-"+strings.TrimSpace(runID), "agent"), nil
 }
 
-// applyPiManagedProvider materialises opts["pi_provider"] into a per-conversation
-// models.json and returns a clone of opts with PI_CODING_AGENT_DIR injected into
-// opts["env"] (so buildEnv forwards it). When no pi_provider is present it
-// returns opts unchanged. The caller's opts and env maps are never mutated.
-func applyPiManagedProvider(opts map[string]any, conversationID, runID string) (map[string]any, error) {
+func resolveSessionDir(agentDir string) (string, error) {
+	sessionDir := filepath.Join(agentDir, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		return "", fmt.Errorf("pi: mkdir session dir %s: %w", sessionDir, err)
+	}
+	return sessionDir, nil
+}
+
+// applyPiRuntimeState returns a clone of opts with a stable pi --session-dir.
+// When opts["pi_provider"] is present it also writes models.json and injects
+// PI_CODING_AGENT_DIR into opts["env"] so buildEnv forwards it.
+func applyPiRuntimeState(opts map[string]any, agentStateKey, conversationID, runID string) (map[string]any, error) {
+	agentDir, err := resolveAgentDir(agentStateKey, conversationID, runID)
+	if err != nil {
+		return opts, err
+	}
+	sessionDir, err := resolveSessionDir(agentDir)
+	if err != nil {
+		return opts, err
+	}
+
+	out := cloneAgentOptions(opts)
+	out["session_dir"] = sessionDir
+
 	cfg, ok, err := normalisePiProvider(opts["pi_provider"])
 	if err != nil {
 		return opts, err
 	}
 	if !ok {
-		return opts, nil
-	}
-	agentDir, err := resolveAgentDir(conversationID, runID)
-	if err != nil {
-		return opts, err
+		return out, nil
 	}
 	if err := writePiModelsJSON(agentDir, cfg); err != nil {
 		return opts, err
 	}
-	out := cloneAgentOptions(opts)
 	out["env"] = withAgentDirEnv(opts["env"], agentDir)
 	return out, nil
+}
+
+func safeStatePathParts(key string) []string {
+	rawParts := strings.Split(key, "/")
+	parts := make([]string, 0, len(rawParts))
+	for _, part := range rawParts {
+		if safe := safeStatePathPart(part); safe != "" {
+			parts = append(parts, safe)
+		}
+	}
+	return parts
+}
+
+func safeStatePathPart(part string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(part) {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	out := b.String()
+	if out == "." || out == ".." {
+		return ""
+	}
+	return out
 }
 
 func withAgentDirEnv(existing any, agentDir string) map[string]any {
