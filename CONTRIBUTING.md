@@ -70,6 +70,18 @@ The repo has several concepts that sound similar but must stay separate.
 When adding or changing code, name the boundary explicitly in the PR
 description and keep ownership on the side listed here.
 
+### Install and image freshness
+
+- The one-command installer is both install and upgrade path. Default GHCR
+  images must be pulled before `docker compose up` so `:latest` does not
+  silently reuse a stale local image after `main` changes.
+- The local compose file must express the same default with
+  `PARSAR_IMAGE_PULL_POLICY=always` for Parsar-owned images. Local image
+  testing must opt out explicitly with `PARSAR_IMAGE_PULL_POLICY=never`.
+- Local development images stay opt-in through installer overrides such as
+  `--image parsar:local` / `--sandbox-image parsar-sandbox:local`; do not make
+  local tags the default path for end users.
+
 ### Runtime and execution concepts
 
 - `connector_type` chooses the protocol Parsar uses to run an agent
