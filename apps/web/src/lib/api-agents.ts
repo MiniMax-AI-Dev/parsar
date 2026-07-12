@@ -8,7 +8,6 @@ import type {
   AgentSummary,
   CreateAgentRequest,
   CreateAgentResponse,
-  DeleteAgentResponse,
   ListAgentRunEventsResponse,
   ListAgentRunsResponse,
   ListAgentsResponse,
@@ -99,13 +98,6 @@ async function listAgentRunEvents(
   )
 }
 
-async function requeueRunRequest(runID: string, reason?: string) {
-  return apiRequest<unknown>(
-    `/api/v1/agent-runs/${encodeURIComponent(runID)}/requeue`,
-    { method: "POST", body: reason ? { reason } : {} }
-  )
-}
-
 async function cancelRunRequest(runID: string, reason?: string) {
   return apiRequest<unknown>(
     `/api/v1/agent-runs/${encodeURIComponent(runID)}/cancel`,
@@ -181,13 +173,6 @@ async function updateAgentVisibilityRequest(
     { method: "PATCH", body: { visibility } }
   )
   return res.visibility
-}
-
-async function deleteAgentRequest(agentID: string): Promise<DeleteAgentResponse> {
-  return apiRequest<DeleteAgentResponse>(
-    `/api/v1/agents/${encodeURIComponent(agentID)}`,
-    { method: "DELETE" }
-  )
 }
 
 async function setAgentStatus(
@@ -322,21 +307,6 @@ export function useAgentRunEvents(
   })
 }
 
-export function useRequeueRun(workspaceID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ runID, reason }: { runID: string; reason?: string }) => {
-      if (!workspaceID) throw noWorkspaceError()
-      return requeueRunRequest(runID, reason)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin", "agentRuns"] })
-      void qc.invalidateQueries({ queryKey: ["admin", "agentRun"] })
-      void qc.invalidateQueries({ queryKey: ["admin", "agentRunEvents"] })
-    },
-  })
-}
-
 export function useCancelRun(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
@@ -451,16 +421,6 @@ export function useUpdateAgentProfile(workspaceID: string | null) {
       agentID: string
       body: UpdateAgentProfileRequest
     }) => updateAgentProfileRequest(agentID, body),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
-    },
-  })
-}
-
-export function useDeleteAgent(workspaceID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (agentID: string) => deleteAgentRequest(agentID),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
     },
