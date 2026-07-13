@@ -58,9 +58,6 @@ fi
   DATABASE_URL="$PARSAR_CHECK_DATABASE_URL" PARSAR_MIGRATIONS_DIR="$PWD/migrations" go run ./cmd/migrate
 )
 
-# -p 1 serializes packages: store tests and seed tests both use the same
-# Postgres instance and both TRUNCATE the same tables; running them in
-# parallel can deadlock on `pg_class` cascade locks.
-go test ./server/internal/store ./server/internal/seed -count=1 -p 1
+go test ./server/internal/store -count=1
 
 echo "Parsar migration and store integration smoke test passed."

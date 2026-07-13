@@ -53,8 +53,7 @@ function extractErrorMessage(err: unknown): string | null {
  * `@ai-sdk/openai` targets `/v1/responses`, which third-party
  * OpenAI-compatible gateways (vLLM, Ollama, DeepSeek, internal gateways)
  * typically don't implement — they only expose `/v1/chat/completions`.
- * Use `@ai-sdk/openai-compatible` for those. Same rule lives in
- * server/internal/seed/models.go::modelSpecs.
+ * Use `@ai-sdk/openai-compatible` for those.
  *
  * Branded providers come from lib/model-presets.ts, backed by a small
  * whitelisted JSON catalog. The two generic "custom gateway" entries are kept
