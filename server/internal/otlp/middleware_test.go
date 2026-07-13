@@ -2,16 +2,12 @@ package otlp
 
 import (
 	"bytes"
-	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 )
 
 // TestExtractBearer tables the RFC 7235 §2.1 happy + unhappy shapes
@@ -302,19 +298,3 @@ func (r *recordingResponseWriter) WriteHeader(status int) {
 }
 
 var _ http.ResponseWriter = (*recordingResponseWriter)(nil)
-
-func dummyMiddlewareLog() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
-func _testCtx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 2*time.Second)
-}
-
-func _ensureIngesterAlive() audit.Ingester { return audit.Ingester{} }
-
-var (
-	_ = dummyMiddlewareLog
-	_ = _testCtx
-	_ = _ensureIngesterAlive
-)
