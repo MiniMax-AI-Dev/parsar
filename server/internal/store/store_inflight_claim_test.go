@@ -238,165 +238,84 @@ func TestClaim_SamePodReacquires(t *testing.T) {
 	}
 }
 
-// TestClaim_RunStartedTriggersDriver: run.started must wake the driver
-// so it can send a placeholder card and lock in the message_id. The
-// placeholder send is how we prevent the double-send race.
-func TestClaim_RunStartedTriggersDriver(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-
-	_, runID := seedFeishuRunForClaim(t, store, "oc_claim_runstarted")
-	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
-		RunID:      runID,
-		EventKind:  "run.started",
-		Payload:    map[string]any{"source": "conversation_stream"},
-		OccurredAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("record run.started: %v", err)
+// TestClaim_DriverTriggerEvents verifies every event kind that must wake the
+// driver for placeholder, reasoning, and terminal card updates.
+func TestClaim_DriverTriggerEvents(t *testing.T) {
+	tests := []struct {
+		name      string
+		fixture   string
+		claimedBy string
+		eventKind string
+		payload   map[string]any
+		reason    string
+	}{
+		{
+			name:      "run started",
+			fixture:   "oc_claim_runstarted",
+			claimedBy: "pod-runstarted-test",
+			eventKind: "run.started",
+			payload:   map[string]any{"source": "conversation_stream"},
+			reason:    "the placeholder-card mechanism relies on this",
+		},
+		{
+			name:      "message thinking",
+			fixture:   "oc_claim_thinking",
+			claimedBy: "pod-thinking-test",
+			eventKind: "message.thinking",
+			payload:   map[string]any{"thinking": "The user said X. I will Y."},
+			reason:    "the Done card's Thinking panel must patch as reasoning lands",
+		},
+		{
+			name:      "run completed",
+			fixture:   "oc_claim_runcompleted",
+			claimedBy: "pod-runcompleted-test",
+			eventKind: "run.completed",
+			payload:   map[string]any{"source": "conversation_stream"},
+			reason:    "the terminal Done patch relies on this",
+		},
+		{
+			name:      "run failed",
+			fixture:   "oc_claim_runfailed",
+			claimedBy: "pod-runfailed-test",
+			eventKind: "run.failed",
+			payload:   map[string]any{"user_visible_message": "upstream agent died"},
+			reason:    "the terminal Error patch relies on this",
+		},
 	}
 
-	now := time.Now().UTC()
-	rows, err := store.ClaimActiveFeishuInflightConversations(ctx, ClaimActiveFeishuInflightConversationsInput{
-		FinishedCutoff: now.Add(-5 * time.Minute),
-		StaleBefore:    now.Add(-30 * time.Second),
-		ClaimedBy:      "pod-runstarted-test",
-		Limit:          32,
-	})
-	if err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	found := false
-	for _, r := range rows {
-		if r.AgentRunID == runID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("run with only run.started event did NOT trigger the driver; the placeholder-card mechanism relies on this — see ClaimActiveFeishuInflightConversations event_kind filter")
-	}
-}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db := openTestDB(t)
+			ctx := context.Background()
+			store := New(db)
 
-// TestClaim_MessageThinkingTriggersDriver: thinking events ride their
-// own event_kind (no longer miscast as message.delta) and must still
-// wake the driver so the inflight card patches as reasoning lands.
-func TestClaim_MessageThinkingTriggersDriver(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
+			_, runID := seedFeishuRunForClaim(t, store, test.fixture)
+			if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
+				RunID:      runID,
+				EventKind:  test.eventKind,
+				Payload:    test.payload,
+				OccurredAt: time.Now().UTC(),
+			}); err != nil {
+				t.Fatalf("record %s: %v", test.eventKind, err)
+			}
 
-	_, runID := seedFeishuRunForClaim(t, store, "oc_claim_thinking")
-	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
-		RunID:      runID,
-		EventKind:  "message.thinking",
-		Payload:    map[string]any{"thinking": "The user said X. I will Y."},
-		OccurredAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("record message.thinking: %v", err)
-	}
-
-	now := time.Now().UTC()
-	rows, err := store.ClaimActiveFeishuInflightConversations(ctx, ClaimActiveFeishuInflightConversationsInput{
-		FinishedCutoff: now.Add(-5 * time.Minute),
-		StaleBefore:    now.Add(-30 * time.Second),
-		ClaimedBy:      "pod-thinking-test",
-		Limit:          32,
-	})
-	if err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	found := false
-	for _, r := range rows {
-		if r.AgentRunID == runID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("run with only message.thinking event did NOT trigger the driver; the SQL filter must include message.thinking so the Done card's Thinking panel can patch")
-	}
-}
-
-// TestClaim_RunCompletedTriggersDriver: when seq_emitted has caught up
-// to the last user-visible event but run.completed lands afterwards,
-// the driver MUST still be woken so it can PATCH the working card into
-// its Done state.
-func TestClaim_RunCompletedTriggersDriver(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-
-	_, runID := seedFeishuRunForClaim(t, store, "oc_claim_runcompleted")
-	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
-		RunID:      runID,
-		EventKind:  "run.completed",
-		Payload:    map[string]any{"source": "conversation_stream"},
-		OccurredAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("record run.completed: %v", err)
-	}
-
-	now := time.Now().UTC()
-	rows, err := store.ClaimActiveFeishuInflightConversations(ctx, ClaimActiveFeishuInflightConversationsInput{
-		FinishedCutoff: now.Add(-5 * time.Minute),
-		StaleBefore:    now.Add(-30 * time.Second),
-		ClaimedBy:      "pod-runcompleted-test",
-		Limit:          32,
-	})
-	if err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	found := false
-	for _, r := range rows {
-		if r.AgentRunID == runID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("run with only run.completed event did NOT trigger the driver; the terminal Done patch relies on this — see ClaimActiveFeishuInflightConversations event_kind filter")
-	}
-}
-
-// TestClaim_RunFailedTriggersDriver: failure-path mirror of
-// RunCompletedTriggersDriver. The driver consumes the run.failed
-// payload via foldEventsIntoCardState and renders the Error card from
-// payload.user_visible_message.
-func TestClaim_RunFailedTriggersDriver(t *testing.T) {
-	db := openTestDB(t)
-	ctx := context.Background()
-	store := New(db)
-
-	_, runID := seedFeishuRunForClaim(t, store, "oc_claim_runfailed")
-	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
-		RunID:      runID,
-		EventKind:  "run.failed",
-		Payload:    map[string]any{"user_visible_message": "upstream agent died"},
-		OccurredAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("record run.failed: %v", err)
-	}
-
-	now := time.Now().UTC()
-	rows, err := store.ClaimActiveFeishuInflightConversations(ctx, ClaimActiveFeishuInflightConversationsInput{
-		FinishedCutoff: now.Add(-5 * time.Minute),
-		StaleBefore:    now.Add(-30 * time.Second),
-		ClaimedBy:      "pod-runfailed-test",
-		Limit:          32,
-	})
-	if err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	found := false
-	for _, r := range rows {
-		if r.AgentRunID == runID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("run with only run.failed event did NOT trigger the driver; the terminal Error patch relies on this")
+			now := time.Now().UTC()
+			rows, err := store.ClaimActiveFeishuInflightConversations(ctx, ClaimActiveFeishuInflightConversationsInput{
+				FinishedCutoff: now.Add(-5 * time.Minute),
+				StaleBefore:    now.Add(-30 * time.Second),
+				ClaimedBy:      test.claimedBy,
+				Limit:          32,
+			})
+			if err != nil {
+				t.Fatalf("claim: %v", err)
+			}
+			for _, row := range rows {
+				if row.AgentRunID == runID {
+					return
+				}
+			}
+			t.Errorf("run with only %s event did NOT trigger the driver; %s", test.eventKind, test.reason)
+		})
 	}
 }
 
