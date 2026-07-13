@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	sqlc "github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Runtime type / liveness / provider constants mirror DB CHECK
@@ -623,10 +623,28 @@ func runtimeAuditPayload(runtime RuntimeRead) map[string]any {
 	return payload
 }
 
-// One mapper per sqlc row type so column-addition surfaces as a
-// compile error here instead of a silent missing field at runtime.
+type runtimeReadRow struct {
+	ID                    string
+	WorkspaceID           string
+	Type                  string
+	Name                  string
+	Liveness              string
+	Provider              string
+	OwnerUserID           pgtype.UUID
+	Version               string
+	Hostname              string
+	LastHeartbeatAt       pgtype.Timestamptz
+	PairingTokenExpiresAt pgtype.Timestamptz
+	Config                []byte
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+}
 
 func runtimeReadFromCreateRow(r sqlc.CreateRuntimePairingRow) RuntimeRead {
+	return runtimeReadFromRow(runtimeReadRow(r))
+}
+
+func runtimeReadFromRow(r runtimeReadRow) RuntimeRead {
 	return RuntimeRead{
 		ID:                    r.ID,
 		WorkspaceID:           r.WorkspaceID,
@@ -663,60 +681,15 @@ func runtimeReadFromConsumeRow(r sqlc.ConsumePairingTokenRow) RuntimeRead {
 }
 
 func runtimeReadFromGetRow(r sqlc.GetRuntimeRow) RuntimeRead {
-	return RuntimeRead{
-		ID:                    r.ID,
-		WorkspaceID:           r.WorkspaceID,
-		Type:                  r.Type,
-		Name:                  r.Name,
-		Liveness:              r.Liveness,
-		Provider:              r.Provider,
-		OwnerUserID:           nullableUUIDString(r.OwnerUserID),
-		Version:               r.Version,
-		Hostname:              r.Hostname,
-		LastHeartbeatAt:       nullableTime(r.LastHeartbeatAt),
-		PairingTokenExpiresAt: nullableTime(r.PairingTokenExpiresAt),
-		Config:                unmarshalJSONOrEmpty(r.Config),
-		CreatedAt:             r.CreatedAt.Time,
-		UpdatedAt:             r.UpdatedAt.Time,
-	}
+	return runtimeReadFromRow(runtimeReadRow(r))
 }
 
 func runtimeReadFromListRow(r sqlc.ListRuntimesByWorkspaceRow) RuntimeRead {
-	return RuntimeRead{
-		ID:                    r.ID,
-		WorkspaceID:           r.WorkspaceID,
-		Type:                  r.Type,
-		Name:                  r.Name,
-		Liveness:              r.Liveness,
-		Provider:              r.Provider,
-		OwnerUserID:           nullableUUIDString(r.OwnerUserID),
-		Version:               r.Version,
-		Hostname:              r.Hostname,
-		LastHeartbeatAt:       nullableTime(r.LastHeartbeatAt),
-		PairingTokenExpiresAt: nullableTime(r.PairingTokenExpiresAt),
-		Config:                unmarshalJSONOrEmpty(r.Config),
-		CreatedAt:             r.CreatedAt.Time,
-		UpdatedAt:             r.UpdatedAt.Time,
-	}
+	return runtimeReadFromRow(runtimeReadRow(r))
 }
 
 func runtimeReadFromPatchRow(r sqlc.PatchRuntimeRow) RuntimeRead {
-	return RuntimeRead{
-		ID:                    r.ID,
-		WorkspaceID:           r.WorkspaceID,
-		Type:                  r.Type,
-		Name:                  r.Name,
-		Liveness:              r.Liveness,
-		Provider:              r.Provider,
-		OwnerUserID:           nullableUUIDString(r.OwnerUserID),
-		Version:               r.Version,
-		Hostname:              r.Hostname,
-		LastHeartbeatAt:       nullableTime(r.LastHeartbeatAt),
-		PairingTokenExpiresAt: nullableTime(r.PairingTokenExpiresAt),
-		Config:                unmarshalJSONOrEmpty(r.Config),
-		CreatedAt:             r.CreatedAt.Time,
-		UpdatedAt:             r.UpdatedAt.Time,
-	}
+	return runtimeReadFromRow(runtimeReadRow(r))
 }
 
 // marshalJSONOrEmpty serializes a map for a jsonb column write,

@@ -77,20 +77,5 @@ func IsSharedRuntime(rt RuntimeRead) bool {
 }
 
 func runtimeReadFromUpsertSharedRow(r sqlc.UpsertSharedRuntimeRow) RuntimeRead {
-	return RuntimeRead{
-		ID:                    r.ID,
-		WorkspaceID:           r.WorkspaceID,
-		Type:                  r.Type,
-		Name:                  r.Name,
-		Liveness:              r.Liveness,
-		Provider:              r.Provider,
-		OwnerUserID:           nullableUUIDString(r.OwnerUserID),
-		Version:               r.Version,
-		Hostname:              r.Hostname,
-		LastHeartbeatAt:       nullableTime(r.LastHeartbeatAt),
-		PairingTokenExpiresAt: nullableTime(r.PairingTokenExpiresAt),
-		Config:                unmarshalJSONOrEmpty(r.Config),
-		CreatedAt:             r.CreatedAt.Time,
-		UpdatedAt:             r.UpdatedAt.Time,
-	}
+	return runtimeReadFromRow(runtimeReadRow(r))
 }
