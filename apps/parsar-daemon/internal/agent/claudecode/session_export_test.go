@@ -32,3 +32,7 @@ func NewSessionForTest(ctx context.Context, req proto.PromptRequestPayload, out 
 func (s *Session) SubmitPromptForUserChoiceForTest(askID string, decision proto.PromptForUserChoiceDecisionPayload) error {
 	return s.SubmitPromptForUserChoice(context.Background(), askID, decision)
 }
+
+func (s *Session) ProcessDoneForTest() <-chan struct{} {
+	return s.proc.Done()
+}

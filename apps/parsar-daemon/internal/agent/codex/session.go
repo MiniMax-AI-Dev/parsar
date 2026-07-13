@@ -39,8 +39,9 @@ func defaultSessionConfig() sessionConfig {
 }
 
 // Factory implements agent.Factory for agent_kind="codex". Spawns one
-// codex app-server child per prompt; the child is torn down when the
-// turn completes or the parent context is cancelled.
+// codex app-server child per prompt. The run stream closes when the turn
+// completes; the router retains the child until the conversation's idle
+// window expires or cancellation shuts it down sooner.
 func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
 	return newSession(ctx, req, out, defaultSessionConfig())
 }
@@ -65,6 +66,8 @@ type Session struct {
 
 	cancelOnce   sync.Once
 	closeOutOnce sync.Once
+	outMu        sync.RWMutex
+	outClosed    bool
 	waitDone     chan struct{}
 	cleanup      func()
 
@@ -192,7 +195,6 @@ func (s *Session) SubmitPromptForUserChoice(_ context.Context, _ string, _ proto
 
 func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	defer close(s.waitDone)
-	defer func() { _ = s.rpc.Close() }()
 	defer s.cleanup()
 	defer s.closeOut()
 
@@ -655,6 +657,11 @@ func (s *Session) emitTerminal(message string, asError bool) {
 }
 
 func (s *Session) trySend(env proto.Envelope) {
+	s.outMu.RLock()
+	defer s.outMu.RUnlock()
+	if s.outClosed {
+		return
+	}
 	select {
 	case s.out <- env:
 	case <-s.cancelCtx.Done():
@@ -664,16 +671,16 @@ func (s *Session) trySend(env proto.Envelope) {
 }
 
 func (s *Session) closeOut() {
-	s.closeOutOnce.Do(func() { close(s.out) })
+	s.closeOutOnce.Do(func() {
+		s.outMu.Lock()
+		s.outClosed = true
+		close(s.out)
+		s.outMu.Unlock()
+	})
 }
 
 func (s *Session) finishAfterTerminal() {
-	if s.cancelFn != nil {
-		s.cancelFn()
-	}
-	if s.rpc != nil {
-		_ = s.rpc.Close()
-	}
+	s.closeOut()
 }
 
 // ---------------------------------------------------------------------------

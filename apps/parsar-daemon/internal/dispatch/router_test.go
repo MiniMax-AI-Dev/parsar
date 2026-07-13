@@ -68,6 +68,7 @@ type fakeSession struct {
 	out                 chan<- proto.Envelope
 	closeOutOnCancelMu  sync.Once
 	postCancelEnvelopes []proto.Envelope // emitted to out after Cancel fires
+	ctx                 context.Context
 }
 
 type permCall struct {
@@ -139,6 +140,10 @@ type harness struct {
 }
 
 func newHarness(t *testing.T) *harness {
+	return newHarnessWithIdleTimeout(t, time.Hour)
+}
+
+func newHarnessWithIdleTimeout(t *testing.T, idleTimeout time.Duration) *harness {
 	t.Helper()
 	h := &harness{
 		sender:  &recSender{},
@@ -146,18 +151,72 @@ func newHarness(t *testing.T) *harness {
 		gotReq:  make(chan proto.PromptRequestPayload, 16),
 		gotSess: make(chan *fakeSession, 16),
 	}
-	h.reg.Register("claude_code", func(_ context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
-		sess := &fakeSession{out: out}
+	h.reg.Register("claude_code", func(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
+		sess := &fakeSession{out: out, ctx: ctx}
 		h.gotReq <- req
 		h.gotSess <- sess
 		return sess, nil
 	})
-	r, err := dispatch.New(dispatch.Config{Registry: h.reg, Sender: h.sender})
+	r, err := dispatch.New(dispatch.Config{Registry: h.reg, Sender: h.sender, IdleTimeout: idleTimeout})
 	if err != nil {
 		t.Fatalf("dispatch.New: %v", err)
 	}
 	h.router = r
 	return h
+}
+
+func TestCompletedSessionCancelsAfterIdleTimeout(t *testing.T) {
+	h := newHarnessWithIdleTimeout(t, 40*time.Millisecond)
+	defer h.router.Shutdown(context.Background())
+
+	env := mustEnv(t, proto.TypePromptRequest, "run_idle", proto.PromptRequestPayload{
+		AgentKind: "claude_code", ConversationID: "conv-idle", AgentStateKey: "conv-idle/agent/claude_code",
+	})
+	if err := h.router.Handle(context.Background(), env); err != nil {
+		t.Fatalf("Handle prompt_request: %v", err)
+	}
+	sess := <-h.gotSess
+	close(sess.out)
+	waitFor(t, func() bool { return h.router.ActiveRuns() == 0 }, "active run cleanup")
+
+	select {
+	case <-sess.ctx.Done():
+		t.Fatal("completed session cancelled before idle timeout")
+	case <-time.After(15 * time.Millisecond):
+	}
+	waitFor(t, func() bool { return sess.cancels() == 1 }, "idle session cancellation")
+}
+
+func TestNewPromptResetsCompletedSessionIdleTimeout(t *testing.T) {
+	h := newHarnessWithIdleTimeout(t, 80*time.Millisecond)
+	defer h.router.Shutdown(context.Background())
+
+	stateKey := "conv-renew/agent/claude_code"
+	first := mustEnv(t, proto.TypePromptRequest, "run_first", proto.PromptRequestPayload{
+		AgentKind: "claude_code", ConversationID: "conv-renew", AgentStateKey: stateKey,
+	})
+	if err := h.router.Handle(context.Background(), first); err != nil {
+		t.Fatalf("Handle first prompt: %v", err)
+	}
+	firstSession := <-h.gotSess
+	close(firstSession.out)
+	waitFor(t, func() bool { return h.router.ActiveRuns() == 0 }, "first run cleanup")
+	time.Sleep(50 * time.Millisecond)
+
+	second := mustEnv(t, proto.TypePromptRequest, "run_second", proto.PromptRequestPayload{
+		AgentKind: "claude_code", ConversationID: "conv-renew", AgentStateKey: stateKey,
+	})
+	if err := h.router.Handle(context.Background(), second); err != nil {
+		t.Fatalf("Handle second prompt: %v", err)
+	}
+	secondSession := <-h.gotSess
+
+	time.Sleep(45 * time.Millisecond)
+	if firstSession.cancels() != 0 {
+		t.Fatal("new prompt did not renew the completed session idle timeout")
+	}
+	close(secondSession.out)
+	waitFor(t, func() bool { return firstSession.cancels() == 1 }, "renewed idle session cancellation")
 }
 
 func mustEnv(t *testing.T, typ, id string, payload any) proto.Envelope {
