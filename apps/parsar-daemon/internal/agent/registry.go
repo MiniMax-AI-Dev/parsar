@@ -6,9 +6,10 @@
 //
 //   - Factory takes an out chan<- proto.Envelope owned by the dispatch
 //     router. The agent SENDS upstream events on it and OWNS the
-//     close: it MUST close(out) exactly once when the session is
-//     fully done, AFTER emitting a terminal "done" or "error" frame.
-//     The router uses the close as the "session terminated" signal.
+//     close: it MUST close(out) exactly once after emitting the current
+//     run's terminal "done" or "error" frame. The underlying CLI may
+//     remain alive during the router's idle window and is terminated
+//     through Session.Cancel.
 //
 //   - Session.Cancel is best-effort and idempotent: a session that
 //     already finished naturally must accept a Cancel call without
@@ -36,8 +37,9 @@ import (
 // doc). ctx is cancelled by the router to wind the session down.
 type Factory func(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (Session, error)
 
-// Session is one in-flight prompt run. Completion is signalled by
-// closing the out channel passed to its Factory.
+// Session owns one prompt run and any CLI process retained after that
+// run. Run completion is signalled by closing out; process teardown is
+// signalled separately through Cancel.
 type Session interface {
 	// Cancel signals the session to abort. Idempotent. Actual teardown
 	// happens asynchronously and is signalled via the out channel close.

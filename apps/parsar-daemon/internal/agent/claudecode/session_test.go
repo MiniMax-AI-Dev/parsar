@@ -62,6 +62,19 @@ func runFakeClaude(role string) {
 			"usage":      map[string]int{"input_tokens": 5, "output_tokens": 2},
 		})
 
+	case "terminal-wait":
+		_ = enc.Encode(map[string]any{
+			"type": "system", "subtype": "init",
+			"session_id": "sess_terminal_wait",
+		})
+		_ = enc.Encode(map[string]any{
+			"type": "result", "subtype": "success",
+			"result":     "background work started",
+			"session_id": "sess_terminal_wait",
+		})
+		for stdin.Scan() {
+		}
+
 	case "echo-error":
 		_ = enc.Encode(map[string]any{
 			"type": "result", "subtype": "error_during_execution",
@@ -239,6 +252,36 @@ func TestSessionEndToEndSuccess(t *testing.T) {
 		if e.ID != "run_s" {
 			t.Errorf("env type=%s ID=%q, want run_s", e.Type, e.ID)
 		}
+	}
+}
+
+func TestTerminalResultKeepsProcessAliveUntilCancel(t *testing.T) {
+	out := make(chan proto.Envelope, 16)
+	sess, err := claudecode.NewSessionForTest(context.Background(),
+		helperReq("run_terminal_wait", "start background work", "terminal-wait"), out, helperConfig())
+	if err != nil {
+		t.Fatalf("NewSessionForTest: %v", err)
+	}
+
+	got, closed := drain(t, out, 5*time.Second)
+	if !closed {
+		t.Fatalf("out did not close, drained %d envelopes", len(got))
+	}
+	mustContain(t, envTypes(got), proto.TypeDone)
+
+	select {
+	case <-sess.ProcessDoneForTest():
+		t.Fatal("terminal result killed the CLI process before the idle timeout")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	if err := sess.Cancel(context.Background()); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	select {
+	case <-sess.ProcessDoneForTest():
+	case <-time.After(2 * time.Second):
+		t.Fatal("CLI process did not exit after explicit cancel")
 	}
 }
 

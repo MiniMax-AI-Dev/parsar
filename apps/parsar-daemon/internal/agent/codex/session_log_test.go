@@ -173,7 +173,7 @@ func TestOnTurnFailed_LogsBufferedError(t *testing.T) {
 	}
 }
 
-func TestTerminalTurnClosesRPCAndCancelsSession(t *testing.T) {
+func TestTerminalTurnKeepsRPCAliveUntilSessionCancel(t *testing.T) {
 	tests := []struct {
 		name string
 		run  func(*Session)
@@ -219,14 +219,15 @@ func TestTerminalTurnClosesRPCAndCancelsSession(t *testing.T) {
 
 			tt.run(s)
 
-			if rpc.Alive() {
-				t.Fatal("terminal turn must close the codex RPC client")
+			if !rpc.Alive() {
+				t.Fatal("terminal turn must keep the codex RPC client alive during the idle window")
 			}
 			select {
 			case <-ctx.Done():
+				t.Fatal("terminal turn must not cancel the session context")
 			default:
-				t.Fatal("terminal turn must cancel the session context")
 			}
+
 		})
 	}
 }

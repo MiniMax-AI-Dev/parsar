@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -33,13 +34,15 @@ type Router struct {
 	sender   Sender
 	log      *slog.Logger
 
-	mu         sync.Mutex
-	sessions   map[string]*sessionState // RunID → state
-	permIndex  map[string]string        // permID  → RunID
-	askIndex   map[string]string        // askID   → RunID
-	shutdownCh chan struct{}            // closed by Shutdown
-	shutdownWG sync.WaitGroup           // waits for all pump goroutines
-	closed     bool
+	mu          sync.Mutex
+	sessions    map[string]*sessionState // RunID → state
+	idle        map[string]map[*sessionState]struct{}
+	permIndex   map[string]string // permID  → RunID
+	askIndex    map[string]string // askID   → RunID
+	shutdownCh  chan struct{}     // closed by Shutdown
+	shutdownWG  sync.WaitGroup    // waits for all pump goroutines
+	idleTimeout time.Duration
+	closed      bool
 }
 
 // sessionState is the dispatcher's per-run bookkeeping. The agent
@@ -49,21 +52,28 @@ type Router struct {
 // frontend → server → daemon → agent → server attribution.
 type sessionState struct {
 	runID       string
+	stateKey    string
 	session     agent.Session
 	out         chan proto.Envelope
 	ctxCancel   context.CancelFunc
 	pendingIDs  map[string]struct{}
 	pendingAsks map[string]struct{}
 	traceparent string
+	idleTimer   *time.Timer
+	idleLease   uint64
+	retain      bool
 }
 
 // Config is the constructor input. Registry and Sender are required;
 // Log is optional (defaults to slog.Default()).
 type Config struct {
-	Registry *agent.Registry
-	Sender   Sender
-	Log      *slog.Logger
+	Registry    *agent.Registry
+	Sender      Sender
+	Log         *slog.Logger
+	IdleTimeout time.Duration
 }
+
+const defaultIdleTimeout = time.Hour
 
 // New returns a Router ready to Handle inbound frames.
 func New(cfg Config) (*Router, error) {
@@ -78,14 +88,20 @@ func New(cfg Config) (*Router, error) {
 		log = obslog.Bg()
 	}
 	log = log.With("component", "dispatch")
+	idleTimeout := cfg.IdleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = defaultIdleTimeout
+	}
 	return &Router{
-		registry:   cfg.Registry,
-		sender:     cfg.Sender,
-		log:        log,
-		sessions:   make(map[string]*sessionState),
-		permIndex:  make(map[string]string),
-		askIndex:   make(map[string]string),
-		shutdownCh: make(chan struct{}),
+		registry:    cfg.Registry,
+		sender:      cfg.Sender,
+		log:         log,
+		sessions:    make(map[string]*sessionState),
+		idle:        make(map[string]map[*sessionState]struct{}),
+		permIndex:   make(map[string]string),
+		askIndex:    make(map[string]string),
+		shutdownCh:  make(chan struct{}),
+		idleTimeout: idleTimeout,
 	}, nil
 }
 
@@ -152,8 +168,19 @@ func (r *Router) Shutdown(ctx context.Context) error {
 	close(r.shutdownCh)
 	victims := make([]*sessionState, 0, len(r.sessions))
 	for _, s := range r.sessions {
+		s.retain = false
 		victims = append(victims, s)
 	}
+	for _, states := range r.idle {
+		for s := range states {
+			s.retain = false
+			if s.idleTimer != nil {
+				s.idleTimer.Stop()
+			}
+			victims = append(victims, s)
+		}
+	}
+	r.idle = make(map[string]map[*sessionState]struct{})
 	r.mu.Unlock()
 
 	cancelSessions(ctx, victims, r.log)
@@ -236,6 +263,8 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		r.log.WarnContext(callerCtx, "ignoring duplicate prompt_request", "run_id", runID)
 		return nil
 	}
+	stateKey := sessionStateKey(req)
+	r.touchIdleLocked(stateKey)
 	sessionCtx, sessionCancel := context.WithCancel(context.Background())
 	// Re-attach the inbound trace so every log under this run shows
 	// the same trace_id as the prompt_request that started it.
@@ -245,11 +274,13 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 	out := make(chan proto.Envelope, 64)
 	state := &sessionState{
 		runID:       runID,
+		stateKey:    stateKey,
 		out:         out,
 		ctxCancel:   sessionCancel,
 		pendingIDs:  make(map[string]struct{}),
 		pendingAsks: make(map[string]struct{}),
 		traceparent: env.Trace,
+		retain:      stateKey != "",
 	}
 	r.sessions[runID] = state
 	r.mu.Unlock()
@@ -280,6 +311,9 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) error {
 	r.mu.Lock()
 	state, ok := r.sessions[env.ID]
+	if ok {
+		state.retain = false
+	}
 	r.mu.Unlock()
 	if !ok {
 		// Cancelling an unknown / already-finished run is a no-op.
@@ -337,7 +371,8 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 // inside the session don't currently call back into the router, so
 // those entries linger until cleanupSession — acceptable because they
 // can't double-fire (the session's own pendingAskTable.Take already
-// guards that) and the session is short-lived.
+// guards that); cleanupSession removes the routing entry when the run
+// stream closes, even if the underlying CLI remains in the idle pool.
 func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env proto.Envelope) error {
 	if env.ID == "" {
 		return errors.New("dispatch: prompt_for_user_choice_decision missing ask id (Envelope.ID empty)")
@@ -394,8 +429,19 @@ func (r *Router) handleDeviceShutdown(ctx context.Context, env proto.Envelope) e
 	r.mu.Lock()
 	victims := make([]*sessionState, 0, len(r.sessions))
 	for _, s := range r.sessions {
+		s.retain = false
 		victims = append(victims, s)
 	}
+	for _, states := range r.idle {
+		for s := range states {
+			s.retain = false
+			if s.idleTimer != nil {
+				s.idleTimer.Stop()
+			}
+			victims = append(victims, s)
+		}
+	}
+	r.idle = make(map[string]map[*sessionState]struct{})
 	r.mu.Unlock()
 	cancelSessions(ctx, victims, r.log)
 	return nil
@@ -473,6 +519,9 @@ func (r *Router) pump(s *sessionState) {
 				// but KEEP draining out so the agent's goroutines
 				// don't block on a full channel.
 				r.log.ErrorContext(pumpCtx, "send envelope failed", "type", env.Type, "run_id", env.ID, "err", err)
+				r.mu.Lock()
+				s.retain = false
+				r.mu.Unlock()
 				s.ctxCancel()
 				r.drain(s.out)
 				return
@@ -480,6 +529,9 @@ func (r *Router) pump(s *sessionState) {
 		case <-r.shutdownCh:
 			// Router shutdown — cancel + drain so the session's
 			// goroutines unblock and close out cleanly.
+			r.mu.Lock()
+			s.retain = false
+			r.mu.Unlock()
 			s.ctxCancel()
 			r.drain(s.out)
 			return
@@ -534,13 +586,68 @@ func (r *Router) drain(ch <-chan proto.Envelope) {
 // pump's defer so it runs exactly once.
 func (r *Router) cleanupSession(s *sessionState) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	delete(r.sessions, s.runID)
 	for permID := range s.pendingIDs {
 		delete(r.permIndex, permID)
 	}
 	for askID := range s.pendingAsks {
 		delete(r.askIndex, askID)
+	}
+	if !s.retain || s.session == nil || s.stateKey == "" || r.closed {
+		r.mu.Unlock()
+		return
+	}
+	states := r.idle[s.stateKey]
+	if states == nil {
+		states = make(map[*sessionState]struct{})
+		r.idle[s.stateKey] = states
+	}
+	states[s] = struct{}{}
+	r.scheduleIdleLocked(s)
+	r.mu.Unlock()
+}
+
+func sessionStateKey(req proto.PromptRequestPayload) string {
+	return req.AgentStateKey
+}
+
+func (r *Router) touchIdleLocked(stateKey string) {
+	if stateKey == "" {
+		return
+	}
+	for state := range r.idle[stateKey] {
+		r.scheduleIdleLocked(state)
+	}
+}
+
+func (r *Router) scheduleIdleLocked(state *sessionState) {
+	if state.idleTimer != nil {
+		state.idleTimer.Stop()
+	}
+	state.idleLease++
+	lease := state.idleLease
+	state.idleTimer = time.AfterFunc(r.idleTimeout, func() {
+		r.expireIdle(state, lease)
+	})
+}
+
+func (r *Router) expireIdle(state *sessionState, lease uint64) {
+	r.mu.Lock()
+	states := r.idle[state.stateKey]
+	if _, ok := states[state]; !ok || state.idleLease != lease {
+		r.mu.Unlock()
+		return
+	}
+	delete(states, state)
+	if len(states) == 0 {
+		delete(r.idle, state.stateKey)
+	}
+	state.retain = false
+	r.mu.Unlock()
+
+	state.ctxCancel()
+	if err := state.session.Cancel(context.Background()); err != nil {
+		r.log.Warn("idle session cancel failed", "run_id", state.runID, "state_key", state.stateKey, "err", err)
 	}
 }
 

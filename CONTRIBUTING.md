@@ -148,10 +148,11 @@ description and keep ownership on the side listed here.
 - Every subprocess must be waited/reaped. Cancellation must close stdin when
   appropriate, send a graceful signal first, and escalate to kill after a
   bounded timeout.
-- A Parsar conversation is not a long-lived OS process. Each prompt turn may
-  start a CLI process, but the adapter must either resume the upstream engine
-  session on the next turn or explicitly document why that engine cannot
-  resume.
+- A completed prompt closes its protocol stream immediately, but daemon-side
+  CLI processes and their background children stay alive until the
+  conversation has received no new prompt for one hour. A new prompt for the
+  same `AgentStateKey` renews that idle window. Explicit cancellation, device
+  shutdown, and daemon shutdown still terminate processes immediately.
 - When an engine supports resume, persist the upstream session id through
   `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
   the daemon protocol. Do not keep resume ids only in adapter memory, files

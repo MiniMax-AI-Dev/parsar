@@ -78,6 +78,8 @@ type Session struct {
 
 	out          chan<- proto.Envelope
 	closeOutOnce sync.Once
+	outMu        sync.RWMutex
+	outClosed    bool
 
 	// cancelCtx is a child of parent ctx so Session.Cancel can signal
 	// everyone without racing router shutdown.
@@ -523,7 +525,8 @@ func (s *Session) run(stdout io.Reader) {
 		}
 		if tx.Terminal {
 			terminal = true
-			s.finishAfterTerminal()
+			s.stopAllAskTimers()
+			s.closeOut()
 			break
 		}
 	}
@@ -594,6 +597,11 @@ func (s *Session) doneMetaForCancel() map[string]any {
 }
 
 func (s *Session) trySend(env proto.Envelope) {
+	s.outMu.RLock()
+	defer s.outMu.RUnlock()
+	if s.outClosed {
+		return
+	}
 	select {
 	case s.out <- env:
 	case <-time.After(2 * time.Second):
@@ -603,19 +611,12 @@ func (s *Session) trySend(env proto.Envelope) {
 }
 
 func (s *Session) closeOut() {
-	s.closeOutOnce.Do(func() { close(s.out) })
-}
-
-func (s *Session) finishAfterTerminal() {
-	s.stdinMu.Lock()
-	if s.stdin != nil {
-		_ = s.stdin.Close()
-		s.stdin = nil
-	}
-	s.stdinMu.Unlock()
-	if s.proc != nil {
-		s.proc.Cancel()
-	}
+	s.closeOutOnce.Do(func() {
+		s.outMu.Lock()
+		s.outClosed = true
+		close(s.out)
+		s.outMu.Unlock()
+	})
 }
 
 // resolveSessionWorkDir returns the directory that BOTH plugin installs
