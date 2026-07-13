@@ -373,7 +373,9 @@ func (s *Store) SweepOrphanedSandboxBindings(ctx context.Context) (int64, error)
 	return sqlc.New(s.db).SweepOrphanedSandboxBindings(ctx, timestamptz(time.Now().UTC()))
 }
 
-func sandboxBindingReadFromCreateRow(r sqlc.CreateSandboxBindingRow) SandboxBindingRead {
+type sandboxBindingRow sqlc.CreateSandboxBindingRow
+
+func sandboxBindingReadFromRow(r sandboxBindingRow) SandboxBindingRead {
 	return SandboxBindingRead{
 		ID:             r.ID,
 		WorkspaceID:    r.WorkspaceID,
@@ -388,91 +390,30 @@ func sandboxBindingReadFromCreateRow(r sqlc.CreateSandboxBindingRow) SandboxBind
 		KilledAt:       nullableTime(r.KilledAt),
 		Metadata:       unmarshalJSONOrEmpty(r.Metadata),
 	}
+}
+
+func sandboxBindingReadFromCreateRow(r sqlc.CreateSandboxBindingRow) SandboxBindingRead {
+	return sandboxBindingReadFromRow(sandboxBindingRow(r))
 }
 
 func sandboxBindingReadFromReserveRow(r sqlc.ReserveSandboxBindingSlotRow) SandboxBindingRead {
-	return SandboxBindingRead{
-		ID:             r.ID,
-		WorkspaceID:    r.WorkspaceID,
-		AgentID: nullableUUIDString(r.AgentID),
-		Name:           nullableText(r.Name),
-		CacheKey:       nullableTextValue(r.CacheKey),
-		SandboxID:      r.SandboxID,
-		TemplateID:     r.TemplateID,
-		Status:         r.Status,
-		CreatedAt:      r.CreatedAt.Time,
-		LastActiveAt:   r.LastActiveAt.Time,
-		KilledAt:       nullableTime(r.KilledAt),
-		Metadata:       unmarshalJSONOrEmpty(r.Metadata),
-	}
+	return sandboxBindingReadFromRow(sandboxBindingRow(r))
 }
 
 func sandboxBindingReadFromWaitRow(r sqlc.GetActiveSandboxBindingByAgentForWaitRow) SandboxBindingRead {
-	return SandboxBindingRead{
-		ID:             r.ID,
-		WorkspaceID:    r.WorkspaceID,
-		AgentID: nullableUUIDString(r.AgentID),
-		Name:           nullableText(r.Name),
-		CacheKey:       nullableTextValue(r.CacheKey),
-		SandboxID:      r.SandboxID,
-		TemplateID:     r.TemplateID,
-		Status:         r.Status,
-		CreatedAt:      r.CreatedAt.Time,
-		LastActiveAt:   r.LastActiveAt.Time,
-		KilledAt:       nullableTime(r.KilledAt),
-		Metadata:       unmarshalJSONOrEmpty(r.Metadata),
-	}
+	return sandboxBindingReadFromRow(sandboxBindingRow(r))
 }
 
 func sandboxBindingReadFromGetActiveRow(r sqlc.GetActiveSandboxBindingForAgentRow) SandboxBindingRead {
-	return SandboxBindingRead{
-		ID:             r.ID,
-		WorkspaceID:    r.WorkspaceID,
-		AgentID: nullableUUIDString(r.AgentID),
-		Name:           nullableText(r.Name),
-		CacheKey:       nullableTextValue(r.CacheKey),
-		SandboxID:      r.SandboxID,
-		TemplateID:     r.TemplateID,
-		Status:         r.Status,
-		CreatedAt:      r.CreatedAt.Time,
-		LastActiveAt:   r.LastActiveAt.Time,
-		KilledAt:       nullableTime(r.KilledAt),
-		Metadata:       unmarshalJSONOrEmpty(r.Metadata),
-	}
+	return sandboxBindingReadFromRow(sandboxBindingRow(r))
 }
 
 func sandboxBindingReadFromListRow(r sqlc.ListActiveSandboxBindingsForWorkspaceRow) SandboxBindingRead {
-	return SandboxBindingRead{
-		ID:             r.ID,
-		WorkspaceID:    r.WorkspaceID,
-		AgentID: nullableUUIDString(r.AgentID),
-		Name:           nullableText(r.Name),
-		CacheKey:       nullableTextValue(r.CacheKey),
-		SandboxID:      r.SandboxID,
-		TemplateID:     r.TemplateID,
-		Status:         r.Status,
-		CreatedAt:      r.CreatedAt.Time,
-		LastActiveAt:   r.LastActiveAt.Time,
-		KilledAt:       nullableTime(r.KilledAt),
-		Metadata:       unmarshalJSONOrEmpty(r.Metadata),
-	}
+	return sandboxBindingReadFromRow(sandboxBindingRow(r))
 }
 
 func sandboxBindingReadFromIdleRow(r sqlc.ListIdleSandboxBindingsRow) SandboxBindingRead {
-	return SandboxBindingRead{
-		ID:             r.ID,
-		WorkspaceID:    r.WorkspaceID,
-		AgentID: nullableUUIDString(r.AgentID),
-		Name:           nullableText(r.Name),
-		CacheKey:       nullableTextValue(r.CacheKey),
-		SandboxID:      r.SandboxID,
-		TemplateID:     r.TemplateID,
-		Status:         r.Status,
-		CreatedAt:      r.CreatedAt.Time,
-		LastActiveAt:   r.LastActiveAt.Time,
-		KilledAt:       nullableTime(r.KilledAt),
-		Metadata:       unmarshalJSONOrEmpty(r.Metadata),
-	}
+	return sandboxBindingReadFromRow(sandboxBindingRow(r))
 }
 
 // unmarshalJSONOrEmpty decodes the metadata jsonb column, degrading to an
