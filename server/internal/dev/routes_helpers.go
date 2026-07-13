@@ -167,6 +167,19 @@ func requireWorkspaceOwnerOrAdmin(r *http.Request, runtimeStore RuntimeStore, wo
 	return auth.RequireWorkspaceRole(requestContextForRBAC(r), runtimeStore, workspaceID, "owner", "admin")
 }
 
+func requireWorkspaceOwnerOrAdminRequest(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, bool) {
+	workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+	if !isUUID(workspaceID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+		return "", false
+	}
+	if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
+		writeRBACError(w, err)
+		return "", false
+	}
+	return workspaceID, true
+}
+
 // requireWorkspaceMember gates read endpoints scoped to a workspace.
 // Returns ErrNotMember when the caller is not an active member of the
 // workspace.
@@ -218,13 +231,7 @@ func gateWorkspaceOwnerOrAdmin(runtimeStore RuntimeStore, next http.HandlerFunc)
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
 			return
 		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		if _, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore); !ok {
 			return
 		}
 		next(w, r)

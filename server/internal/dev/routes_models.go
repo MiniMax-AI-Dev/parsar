@@ -92,13 +92,7 @@ func createModel(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		// Model catalog is org-global; URL workspaceID is only used
 		// for RBAC. The created model is NOT scoped to it.
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		if _, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore); !ok {
 			return
 		}
 		var req createModelBody
@@ -150,13 +144,8 @@ func disableModel(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed model registry is disabled"})
 			return
 		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
 			return
 		}
 		modelID := strings.TrimSpace(chi.URLParam(r, "modelID"))
@@ -199,13 +188,7 @@ func updateModel(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed model registry is disabled"})
 			return
 		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		if _, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore); !ok {
 			return
 		}
 		modelID := strings.TrimSpace(chi.URLParam(r, "modelID"))
@@ -316,13 +299,8 @@ func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed model registry is disabled"})
 			return
 		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
 			return
 		}
 		modelID := strings.TrimSpace(chi.URLParam(r, "modelID"))

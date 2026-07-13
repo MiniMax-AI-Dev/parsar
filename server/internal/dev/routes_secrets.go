@@ -41,13 +41,8 @@ func createSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed secret vault is disabled"})
 			return
 		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
 			return
 		}
 		var req createSecretBody
@@ -148,13 +143,8 @@ func disableSecret(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed secret vault is disabled"})
 			return
 		}
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
 			return
 		}
 		secretID := strings.TrimSpace(chi.URLParam(r, "secretID"))

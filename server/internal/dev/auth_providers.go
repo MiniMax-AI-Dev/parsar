@@ -2,9 +2,6 @@ package dev
 
 import (
 	"net/http"
-	"strings"
-
-	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -109,13 +106,8 @@ func listAuthProviders(registry AuthProviderRegistry) http.HandlerFunc {
 //	@Router			/api/v1/workspaces/{workspaceID}/auth/providers [get]
 func listWorkspaceAuthProviders(runtimeStore RuntimeStore, registry AuthProviderRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-		if !isUUID(workspaceID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
-			return
-		}
-		if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
-			writeRBACError(w, err)
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
 			return
 		}
 		writeJSON(w, http.StatusOK, workspaceAuthProvidersResponse{
