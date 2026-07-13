@@ -144,37 +144,6 @@ async function updateAgentRequest(
   )
 }
 
-/**
- * AgentVisibility encodes "who can invoke this Agent". See
- * docs/feishu-routing.md §3. `workspace` is the safe default.
- */
-export type AgentVisibility = "workspace" | "tenant" | "public"
-
-export interface AgentVisibilityChange {
-  agent_id: string
-  workspace_id: string
-  name: string
-  slug: string
-  old_visibility: AgentVisibility
-  new_visibility: AgentVisibility
-  noop?: boolean
-}
-
-interface UpdateAgentVisibilityResponse {
-  visibility: AgentVisibilityChange
-}
-
-async function updateAgentVisibilityRequest(
-  agentID: string,
-  visibility: AgentVisibility
-): Promise<AgentVisibilityChange> {
-  const res = await apiRequest<UpdateAgentVisibilityResponse>(
-    `/api/v1/agents/${encodeURIComponent(agentID)}/visibility`,
-    { method: "PATCH", body: { visibility } }
-  )
-  return res.visibility
-}
-
 async function setAgentStatus(
   agentID: string,
   enabled: boolean
@@ -365,29 +334,6 @@ export function useUpdateAgent(workspaceID: string | null) {
       body: UpdateAgentRequest
     }) => {
       return updateAgentRequest(agentID, body)
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
-    },
-  })
-}
-
-/**
- * useUpdateAgentVisibility wraps the visibility PATCH endpoint. Callers
- * should drive a confirm-dialog when switching from `public` to a stricter
- * tier — this hook does not enforce that.
- */
-export function useUpdateAgentVisibility(workspaceID: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      agentID,
-      visibility,
-    }: {
-      agentID: string
-      visibility: AgentVisibility
-    }) => {
-      return updateAgentVisibilityRequest(agentID, visibility)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
