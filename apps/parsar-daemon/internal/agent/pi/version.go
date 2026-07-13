@@ -1,12 +1,10 @@
 package pi
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"os/exec"
-	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/versionprobe"
 )
 
 // InstallURL points operators at the pi documentation when the daemon
@@ -23,34 +21,11 @@ var ErrCLINotFound = errors.New("pi CLI not found")
 // CheckCLIAvailable runs `<binary> --version` and returns the trimmed
 // first line. The empty binary name defaults to "pi".
 func CheckCLIAvailable(ctx context.Context, binary string) (string, error) {
-	if strings.TrimSpace(binary) == "" {
-		binary = defaultBinary
-	}
-	if _, lookErr := exec.LookPath(binary); lookErr != nil {
-		return "", fmt.Errorf("%w: %s", ErrCLINotFound, binary)
-	}
-
-	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, binary, "--version")
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", fmt.Errorf("pi --version failed: %s", msg)
-	}
-	out := strings.TrimSpace(stdout.String())
-	if out == "" {
-		// pi writes version to stderr
-		out = strings.TrimSpace(stderr.String())
-	}
-	if i := strings.IndexByte(out, '\n'); i >= 0 {
-		out = out[:i]
-	}
-	if out == "" {
-		return "", fmt.Errorf("pi --version returned empty output")
-	}
-	return out, nil
+	return versionprobe.Check(ctx, binary, versionprobe.Config{
+		Name:           "pi",
+		DefaultBinary:  defaultBinary,
+		MissingError:   ErrCLINotFound,
+		TrimBinary:     true,
+		StderrFallback: true,
+	})
 }
