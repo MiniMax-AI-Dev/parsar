@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
-	authinvite "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/invite"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/httprunner"
@@ -262,8 +261,6 @@ type routerConfig struct {
 	// falls back to "Please contact the administrator above to join".
 	feishuJoinURLBuilder func(workspaceID string) string
 
-	// inviteSigner mints and verifies HMAC-signed invite tokens.
-	inviteSigner *authinvite.Signer
 	// inviteSessions creates sessions for newly accepted invitees.
 	inviteSessions auth.SessionStore
 	// inviteCookieSecure mirrors the login handler's secure flag.
@@ -444,9 +441,8 @@ func WithFeishuJoinURLBuilder(builder func(workspaceID string) string) RouterOpt
 	}
 }
 
-func WithInvite(signer *authinvite.Signer, sessions auth.SessionStore, cookieSecure bool, publicURL string) RouterOption {
+func WithInvite(sessions auth.SessionStore, cookieSecure bool, publicURL string) RouterOption {
 	return func(cfg *routerConfig) {
-		cfg.inviteSigner = signer
 		cfg.inviteSessions = sessions
 		cfg.inviteCookieSecure = cookieSecure
 		cfg.publicURL = strings.TrimRight(publicURL, "/")
@@ -530,8 +526,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// browser session. Keep this public so Feishu can deliver URL
 			// challenges and message events.
 			r.Post("/feishu/events/message", createFeishuMessageEvent(runtimeStore, cfg.feishuWebhook, cfg.feishuJoinURLBuilder))
-			if cfg.inviteSigner != nil {
-				r.Post("/invite/info", getInviteInfo(runtimeStore, cfg))
+			if cfg.inviteSessions != nil {
+				r.Post("/invite/info", getInviteInfo(runtimeStore))
 				r.Group(func(r chi.Router) {
 					r.Use(httprate.LimitBy(10, time.Minute, httprate.KeyByIP))
 					r.Post("/invite/accept", acceptInvitation(runtimeStore, cfg))
@@ -660,7 +656,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/members", addWorkspaceMember(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/members/{userID}", updateWorkspaceMemberRole(runtimeStore))
 			r.Delete("/workspaces/{workspaceID}/members/{userID}", removeWorkspaceMember(runtimeStore))
-			if cfg.inviteSigner != nil {
+			if cfg.inviteSessions != nil {
 				r.Post("/workspaces/{workspaceID}/invitations", createInvitation(runtimeStore, cfg))
 				r.Get("/workspaces/{workspaceID}/invitations", listInvitations(runtimeStore))
 				r.Delete("/workspaces/{workspaceID}/invitations/{invitationID}", revokeInvitation(runtimeStore))

@@ -166,9 +166,9 @@ func createInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.Handler
 			return
 		}
 
-		token, err := cfg.inviteSigner.Sign(workspaceID, req.Email, req.Role, authinvite.MaxLifetime)
+		token, err := authinvite.NewToken()
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to sign invite token"})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create invite token"})
 			return
 		}
 
@@ -263,7 +263,7 @@ type inviteInfoResponse struct {
 	Role          string `json:"role"`
 }
 
-func getInviteInfo(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
+func getInviteInfo(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req inviteInfoRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -276,26 +276,20 @@ func getInviteInfo(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFun
 			return
 		}
 
-		claims, err := cfg.inviteSigner.Verify(token)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired token"})
-			return
-		}
-
 		inv, err := runtimeStore.GetInvitationByTokenHash(r.Context(), authinvite.TokenHash(token))
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "invitation not found"})
 			return
 		}
-		if inv.AcceptedAt != nil || inv.RevokedAt != nil || inv.ExpiresAt.Before(time.Now()) {
+		if inv.AcceptedAt != nil || inv.RevokedAt != nil || !inv.ExpiresAt.After(time.Now().UTC()) {
 			writeJSON(w, http.StatusGone, map[string]string{"error": "invitation has already been used or revoked"})
 			return
 		}
 
 		writeJSON(w, http.StatusOK, inviteInfoResponse{
 			WorkspaceName: inv.WorkspaceName,
-			Email:         claims.Email,
-			Role:          claims.Role,
+			Email:         inv.Email,
+			Role:          inv.Role,
 		})
 	}
 }
@@ -324,9 +318,14 @@ func acceptInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.Handler
 			return
 		}
 
-		claims, err := cfg.inviteSigner.Verify(req.Token)
+		inv, err := runtimeStore.GetInvitationByTokenHash(r.Context(), authinvite.TokenHash(req.Token))
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired token"})
+			writeJSON(w, http.StatusGone, map[string]string{"error": "invitation is invalid, expired, or already used"})
+			return
+		}
+		now := time.Now().UTC()
+		if inv.AcceptedAt != nil || inv.RevokedAt != nil || !inv.ExpiresAt.After(now) {
+			writeJSON(w, http.StatusGone, map[string]string{"error": "invitation is invalid, expired, or already used"})
 			return
 		}
 
@@ -341,12 +340,11 @@ func acceptInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.Handler
 			return
 		}
 
-		now := time.Now().UTC()
 		result, err := runtimeStore.AcceptInvitation(r.Context(), store.AcceptInvitationInput{
 			TokenHash:    authinvite.TokenHash(req.Token),
-			Email:        claims.Email,
-			Role:         claims.Role,
-			WorkspaceID:  claims.WorkspaceID,
+			Email:        inv.Email,
+			Role:         inv.Role,
+			WorkspaceID:  inv.WorkspaceID,
 			PasswordHash: hash,
 			Now:          now,
 		})
