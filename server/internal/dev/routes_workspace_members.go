@@ -276,6 +276,7 @@ func getInviteInfo(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 
+		// Database lookup keeps stored long-token invitations compatible.
 		inv, err := runtimeStore.GetInvitationByTokenHash(r.Context(), authinvite.TokenHash(token))
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "invitation not found"})

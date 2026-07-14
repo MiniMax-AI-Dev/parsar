@@ -12,8 +12,7 @@ const MaxLifetime = 72 * time.Hour
 
 const tokenEntropyBytes = 24
 
-// NewToken returns a 192-bit opaque bearer token. Invitation metadata and
-// expiry remain server-side; only the SHA-256 hash is persisted.
+// NewToken returns a 192-bit opaque token whose invitation data remains server-side.
 func NewToken() (string, error) {
 	var buf [tokenEntropyBytes]byte
 	if _, err := rand.Read(buf[:]); err != nil {

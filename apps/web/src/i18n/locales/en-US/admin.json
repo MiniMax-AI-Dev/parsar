@@ -1779,7 +1779,6 @@
       "copied": "Copied!",
       "pendingTitle": "Pending invitations ({{count}})",
       "pendingStatus": "Pending",
-      "revoke": "Revoke invitation",
       "credential": {
         "url": "URL",
         "email": "Email",

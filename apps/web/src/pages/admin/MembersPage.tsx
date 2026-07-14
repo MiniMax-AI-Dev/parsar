@@ -2,12 +2,10 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   Check,
-  Clock,
   Copy,
   Inbox,
   Link2,
   Loader2,
-  Mail,
   MoreHorizontal,
   Plus,
   ShieldAlert,
@@ -59,9 +57,7 @@ import {
 import {
   useCreateInvitation,
   usePendingInvitations,
-  useRevokeInvitation,
 } from "../../lib/api-invitations"
-import type { PendingInvitation } from "../../lib/api-invitations"
 import type {
   AddWorkspaceMemberRequest,
   MemberRole,
@@ -72,11 +68,14 @@ import type {
 } from "../../lib/api-types"
 import {
   useApproveJoinRequest,
+  useMyWorkspaces,
   usePendingJoinRequests,
   useRejectJoinRequest,
 } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
+import { MemberRoleBadge } from "./MemberRoleBadge"
+import { PendingInvitationsList } from "./PendingInvitationsList"
 
 type Tab = "workspace" | "pending"
 const ROLES: MemberRole[] = ["owner", "admin", "member", "viewer"]
@@ -84,23 +83,6 @@ const ROLES: MemberRole[] = ["owner", "admin", "member", "viewer"]
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function RoleBadge({ role }: { role: MemberRole }) {
-  const { t } = useTranslation("admin")
-  const variant =
-    role === "owner"
-      ? "primary"
-      : role === "admin"
-        ? "warning"
-        : role === "member"
-          ? "neutral"
-          : "neutral"
-  return (
-    <Badge variant={variant} dot>
-      {t(`members.role.${role}`)}
-    </Badge>
-  )
-}
 
 function UserStatusBadge({ status }: { status: UserStatus }) {
   const { t } = useTranslation("admin")
@@ -138,12 +120,17 @@ export function MembersPage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [removeWsTarget, setRemoveWsTarget] = useState<WorkspaceMember | null>(null)
 
+  const myWorkspacesQ = useMyWorkspaces()
   const wsQ = useWorkspaceMembers(wsId)
-  const invitationsQ = usePendingInvitations(wsId)
+  const workspaceRole = myWorkspacesQ.data?.workspaces.find(
+    (workspace) => workspace.id === wsId
+  )?.role
+  const canManageInvitations =
+    workspaceRole === "owner" || workspaceRole === "admin"
+  const invitationsQ = usePendingInvitations(canManageInvitations ? wsId : null)
   const addWsMut = useAddWorkspaceMember(wsId)
   const updateWsRoleMut = useUpdateWorkspaceMemberRole(wsId)
   const removeWsMut = useRemoveWorkspaceMember(wsId)
-  const revokeInvitationMut = useRevokeInvitation(wsId)
 
   const isMockWs = !wsId
 
@@ -222,11 +209,6 @@ export function MembersPage() {
           {invitationsQ.isError && (
             <ErrorBanner message={(invitationsQ.error as ApiError).message} />
           )}
-          {revokeInvitationMut.isError && (
-            <ErrorBanner
-              message={(revokeInvitationMut.error as ApiError).message}
-            />
-          )}
           <MembersTable
             loading={wsQ.isLoading}
             error={wsQ.isError && !isMockWs ? (wsQ.error as ApiError) : undefined}
@@ -241,14 +223,6 @@ export function MembersPage() {
           />
           <PendingInvitationsList
             invitations={invitationsQ.data ?? []}
-            revokingId={
-              revokeInvitationMut.isPending
-                ? revokeInvitationMut.variables
-                : undefined
-            }
-            onRevoke={(invitation) =>
-              revokeInvitationMut.mutate(invitation.id)
-            }
           />
         </TabsContent>
 
@@ -301,67 +275,6 @@ export function MembersPage() {
         />
       )}
     </AdminLayout>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Pending invitations                                                */
-/* ------------------------------------------------------------------ */
-
-function PendingInvitationsList({
-  invitations,
-  revokingId,
-  onRevoke,
-}: {
-  invitations: PendingInvitation[]
-  revokingId?: string
-  onRevoke: (invitation: PendingInvitation) => void
-}) {
-  const { t } = useTranslation("admin")
-
-  if (invitations.length === 0) return null
-
-  return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium text-fg">
-        {t("members.invite.pendingTitle", { count: invitations.length })}
-      </h2>
-      <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
-        {invitations.map((invitation) => (
-          <div
-            key={invitation.id}
-            className="flex items-center gap-3 px-4 py-3"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted">
-              <Mail className="h-4 w-4 text-fg-subtle" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-fg">
-                {invitation.email}
-              </div>
-              <div className="flex items-center gap-1 text-xs text-fg-subtle">
-                <Clock className="h-3 w-3" />
-                {t("members.invite.pendingStatus")}
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={revokingId === invitation.id}
-              onClick={() => onRevoke(invitation)}
-              title={t("members.invite.revoke")}
-            >
-              {revokingId === invitation.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <X className="h-3.5 w-3.5 text-fg-subtle" />
-              )}
-            </Button>
-            <RoleBadge role={invitation.role} />
-          </div>
-        ))}
-      </div>
-    </section>
   )
 }
 
@@ -480,7 +393,7 @@ function MembersTable({
                     ))}
                   </select>
                 ) : (
-                  <RoleBadge role={m.role} />
+                  <MemberRoleBadge role={m.role} />
                 )}
               </TableCell>
               <TableCell>

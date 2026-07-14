@@ -1779,7 +1779,6 @@
       "copied": "已复制!",
       "pendingTitle": "待处理邀请（{{count}}）",
       "pendingStatus": "待处理",
-      "revoke": "撤销邀请",
       "credential": {
         "url": "登录链接",
         "email": "邮箱",
