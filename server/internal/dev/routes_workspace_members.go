@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -144,10 +145,28 @@ type createInvitationResponse struct {
 	ExpiresAt    string `json:"expires_at"`
 }
 
+func invitationCallerRole(r *http.Request, runtimeStore RuntimeStore, workspaceID string) (string, string, error) {
+	ctx := requestContextForRBAC(r)
+	callerID := auth.UserIDFromContext(ctx)
+	if callerID == "" {
+		return "", "", auth.ErrUnauthenticated
+	}
+	role, err := runtimeStore.GetWorkspaceMemberRole(ctx, workspaceID, callerID)
+	if err != nil {
+		return "", "", err
+	}
+	return callerID, role, nil
+}
+
 func createInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
-		if !ok {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
+		}
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
 			return
 		}
 		var req createInvitationRequest
@@ -166,19 +185,18 @@ func createInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.Handler
 			return
 		}
 
-		token, err := authinvite.NewToken()
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create invite token"})
-			return
-		}
-
 		now := time.Now().UTC()
 		expiresAt := now.Add(authinvite.MaxLifetime)
 		invID := uuid.New().String()
+		token := invID
 
-		callerID := auth.UserIDFromContext(r.Context())
-		if callerID == "" {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing caller identity"})
+		callerID, callerRole, err := invitationCallerRole(r, runtimeStore, workspaceID)
+		if err != nil {
+			writeRBACError(w, err)
+			return
+		}
+		if callerRole == "member" && req.Role != "member" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "members can only invite new members with the member role"})
 			return
 		}
 
@@ -211,23 +229,54 @@ func createInvitation(runtimeStore RuntimeStore, cfg *routerConfig) http.Handler
 	}
 }
 
-func listInvitations(runtimeStore RuntimeStore) http.HandlerFunc {
+type pendingInvitationResponse struct {
+	store.PendingInvitationRead
+	InviteLink string `json:"invite_link,omitempty"`
+}
+
+func listInvitations(runtimeStore RuntimeStore, cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
-		if !ok {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
+		}
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+		callerID, callerRole, err := invitationCallerRole(r, runtimeStore, workspaceID)
+		if err != nil {
+			writeRBACError(w, err)
 			return
 		}
 
-		rows, err := runtimeStore.ListPendingInvitations(r.Context(), workspaceID)
+		var rows []store.PendingInvitationRead
+		if callerRole == "member" {
+			rows, err = runtimeStore.ListPendingInvitationsByInviter(r.Context(), workspaceID, callerID)
+		} else {
+			rows, err = runtimeStore.ListPendingInvitations(r.Context(), workspaceID)
+		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list invitations"})
 			return
 		}
-		writeJSON(w, http.StatusOK, rows)
+		response := make([]pendingInvitationResponse, len(rows))
+		for i, invitation := range rows {
+			response[i] = pendingInvitationResponse{PendingInvitationRead: invitation}
+			if bytes.Equal(invitation.TokenHash, authinvite.TokenHash(invitation.ID)) {
+				response[i].InviteLink = cfg.publicURL + "/invite/" + invitation.ID
+			}
+		}
+		writeJSON(w, http.StatusOK, response)
 	}
 }
 
-func revokeInvitation(runtimeStore RuntimeStore) http.HandlerFunc {
+type updateInvitationRoleRequest struct {
+	Role string `json:"role"`
+}
+
+func updateInvitationRole(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
 		invitationID := strings.TrimSpace(chi.URLParam(r, "invitationID"))
@@ -240,7 +289,54 @@ func revokeInvitation(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 
-		rows, err := runtimeStore.RevokeInvitation(r.Context(), workspaceID, invitationID)
+		var req updateInvitationRoleRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+			return
+		}
+		req.Role = strings.TrimSpace(req.Role)
+		if !store.IsValidMemberRole(req.Role) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be one of owner|admin|member|viewer"})
+			return
+		}
+
+		rows, err := runtimeStore.UpdateInvitationRole(r.Context(), workspaceID, invitationID, req.Role)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update invitation role"})
+			return
+		}
+		if rows == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "invitation not found or already consumed"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func revokeInvitation(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		invitationID := strings.TrimSpace(chi.URLParam(r, "invitationID"))
+		if !isUUID(workspaceID) || !isUUID(invitationID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id and invitation_id must be valid uuids"})
+			return
+		}
+		if err := requireWorkspaceMemberNotViewer(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+		callerID, callerRole, err := invitationCallerRole(r, runtimeStore, workspaceID)
+		if err != nil {
+			writeRBACError(w, err)
+			return
+		}
+
+		var rows int64
+		if callerRole == "member" {
+			rows, err = runtimeStore.RevokeOwnInvitation(r.Context(), workspaceID, invitationID, callerID)
+		} else {
+			rows, err = runtimeStore.RevokeInvitation(r.Context(), workspaceID, invitationID)
+		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to revoke invitation"})
 			return

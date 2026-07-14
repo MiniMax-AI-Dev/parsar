@@ -162,7 +162,10 @@ type RuntimeStore interface {
 	AcceptInvitation(ctx context.Context, input store.AcceptInvitationInput) (store.AddWorkspaceMemberResult, error)
 	CreateInvitation(ctx context.Context, input store.CreateInvitationInput) error
 	ListPendingInvitations(ctx context.Context, workspaceID string) ([]store.PendingInvitationRead, error)
+	ListPendingInvitationsByInviter(ctx context.Context, workspaceID, invitedBy string) ([]store.PendingInvitationRead, error)
+	UpdateInvitationRole(ctx context.Context, workspaceID, invitationID, role string) (int64, error)
 	RevokeInvitation(ctx context.Context, workspaceID, invitationID string) (int64, error)
+	RevokeOwnInvitation(ctx context.Context, workspaceID, invitationID, invitedBy string) (int64, error)
 	GetInvitationByTokenHash(ctx context.Context, tokenHash []byte) (store.InvitationRead, error)
 	UpdateWorkspaceMemberRole(ctx context.Context, workspaceID string, userID string, role string, now time.Time) (store.WorkspaceMemberRead, error)
 	RemoveWorkspaceMember(ctx context.Context, workspaceID string, userID string, now time.Time) (store.RemoveWorkspaceMemberResult, error)
@@ -658,7 +661,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Delete("/workspaces/{workspaceID}/members/{userID}", removeWorkspaceMember(runtimeStore))
 			if cfg.inviteSessions != nil {
 				r.Post("/workspaces/{workspaceID}/invitations", createInvitation(runtimeStore, cfg))
-				r.Get("/workspaces/{workspaceID}/invitations", listInvitations(runtimeStore))
+				r.Get("/workspaces/{workspaceID}/invitations", listInvitations(runtimeStore, cfg))
+				r.Patch("/workspaces/{workspaceID}/invitations/{invitationID}", updateInvitationRole(runtimeStore))
 				r.Delete("/workspaces/{workspaceID}/invitations/{invitationID}", revokeInvitation(runtimeStore))
 			}
 			// Workspace self-service join request:

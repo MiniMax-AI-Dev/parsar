@@ -5276,6 +5276,7 @@ type CreateInvitationInput struct {
 
 type PendingInvitationRead struct {
 	ID            string    `json:"id"`
+	TokenHash     []byte    `json:"-"`
 	Email         string    `json:"email"`
 	Role          string    `json:"role"`
 	InvitedBy     string    `json:"invited_by"`
@@ -5325,6 +5326,7 @@ func (s *Store) ListPendingInvitations(ctx context.Context, workspaceID string) 
 	for i, r := range rows {
 		out[i] = PendingInvitationRead{
 			ID:            r.ID,
+			TokenHash:     r.TokenHash,
 			Email:         r.Email,
 			Role:          r.Role,
 			InvitedBy:     r.InvitedBy,
@@ -5336,11 +5338,58 @@ func (s *Store) ListPendingInvitations(ctx context.Context, workspaceID string) 
 	return out, nil
 }
 
+func (s *Store) ListPendingInvitationsByInviter(ctx context.Context, workspaceID, invitedBy string) ([]PendingInvitationRead, error) {
+	q := sqlc.New(s.db)
+	rows, err := q.ListPendingWorkspaceInvitationsByInviter(ctx, sqlc.ListPendingWorkspaceInvitationsByInviterParams{
+		WorkspaceID: mustUUID(workspaceID),
+		InvitedBy:   mustUUID(invitedBy),
+		Now:         timestamptz(time.Now().UTC()),
+		ItemLimit:   100,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PendingInvitationRead, len(rows))
+	for i, r := range rows {
+		out[i] = PendingInvitationRead{
+			ID:            r.ID,
+			TokenHash:     r.TokenHash,
+			Email:         r.Email,
+			Role:          r.Role,
+			InvitedBy:     r.InvitedBy,
+			InvitedByName: r.InvitedByName,
+			ExpiresAt:     r.ExpiresAt.Time,
+			CreatedAt:     r.CreatedAt.Time,
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) UpdateInvitationRole(ctx context.Context, workspaceID, invitationID, role string) (int64, error) {
+	q := sqlc.New(s.db)
+	return q.UpdateWorkspaceInvitationRole(ctx, sqlc.UpdateWorkspaceInvitationRoleParams{
+		Role:        role,
+		ID:          mustUUID(invitationID),
+		WorkspaceID: mustUUID(workspaceID),
+		Now:         timestamptz(time.Now().UTC()),
+	})
+}
+
 func (s *Store) RevokeInvitation(ctx context.Context, workspaceID, invitationID string) (int64, error) {
 	q := sqlc.New(s.db)
 	return q.RevokeWorkspaceInvitation(ctx, sqlc.RevokeWorkspaceInvitationParams{
 		ID:          mustUUID(invitationID),
 		WorkspaceID: mustUUID(workspaceID),
+		Now:         timestamptz(time.Now().UTC()),
+	})
+}
+
+func (s *Store) RevokeOwnInvitation(ctx context.Context, workspaceID, invitationID, invitedBy string) (int64, error) {
+	q := sqlc.New(s.db)
+	return q.RevokeOwnWorkspaceInvitation(ctx, sqlc.RevokeOwnWorkspaceInvitationParams{
+		ID:          mustUUID(invitationID),
+		WorkspaceID: mustUUID(workspaceID),
+		InvitedBy:   mustUUID(invitedBy),
 		Now:         timestamptz(time.Now().UTC()),
 	})
 }

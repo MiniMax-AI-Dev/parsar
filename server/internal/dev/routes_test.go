@@ -2027,6 +2027,14 @@ func (stubRuntimeStore) GetWorkspaceMemberRole(ctx context.Context, workspaceID 
 	return "owner", nil
 }
 
+func (stubRuntimeStore) ListPendingInvitationsByInviter(context.Context, string, string) ([]store.PendingInvitationRead, error) {
+	return nil, nil
+}
+
+func (stubRuntimeStore) RevokeOwnInvitation(context.Context, string, string, string) (int64, error) {
+	return 0, nil
+}
+
 func (stubRuntimeStore) GetWorkspaceSettings(ctx context.Context, workspaceID string) (store.WorkspaceSettingsRead, error) {
 	return store.WorkspaceSettingsRead{WorkspaceID: workspaceID}, nil
 }
@@ -4046,6 +4054,9 @@ func (stubRuntimeStore) CreateInvitation(ctx context.Context, input store.Create
 }
 func (stubRuntimeStore) ListPendingInvitations(ctx context.Context, workspaceID string) ([]store.PendingInvitationRead, error) {
 	return nil, nil
+}
+func (stubRuntimeStore) UpdateInvitationRole(ctx context.Context, workspaceID, invitationID, role string) (int64, error) {
+	return 0, nil
 }
 func (stubRuntimeStore) RevokeInvitation(ctx context.Context, workspaceID, invitationID string) (int64, error) {
 	return 0, nil

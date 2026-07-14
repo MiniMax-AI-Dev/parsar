@@ -7996,6 +7996,7 @@ func (q *Queries) ListPendingJoinRequests(ctx context.Context, workspaceID pgtyp
 const listPendingWorkspaceInvitations = `-- name: ListPendingWorkspaceInvitations :many
 select
   wi.id::text           as id,
+  wi.token_hash,
   wi.email,
   wi.role,
   wi.invited_by::text   as invited_by,
@@ -8020,6 +8021,7 @@ type ListPendingWorkspaceInvitationsParams struct {
 
 type ListPendingWorkspaceInvitationsRow struct {
 	ID            string             `json:"id"`
+	TokenHash     []byte             `json:"token_hash"`
 	Email         string             `json:"email"`
 	Role          string             `json:"role"`
 	InvitedBy     string             `json:"invited_by"`
@@ -8039,6 +8041,80 @@ func (q *Queries) ListPendingWorkspaceInvitations(ctx context.Context, arg ListP
 		var i ListPendingWorkspaceInvitationsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.TokenHash,
+			&i.Email,
+			&i.Role,
+			&i.InvitedBy,
+			&i.InvitedByName,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingWorkspaceInvitationsByInviter = `-- name: ListPendingWorkspaceInvitationsByInviter :many
+select
+  wi.id::text           as id,
+  wi.token_hash,
+  wi.email,
+  wi.role,
+  wi.invited_by::text   as invited_by,
+  u.name                as invited_by_name,
+  wi.expires_at,
+  wi.created_at
+from workspace_invitations wi
+join users u on u.id = wi.invited_by
+where wi.workspace_id = $1::uuid
+  and wi.invited_by = $2::uuid
+  and wi.accepted_at is null
+  and wi.revoked_at is null
+  and wi.expires_at > $3
+order by wi.created_at desc
+limit $4
+`
+
+type ListPendingWorkspaceInvitationsByInviterParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	InvitedBy   pgtype.UUID        `json:"invited_by"`
+	Now         pgtype.Timestamptz `json:"now"`
+	ItemLimit   int32              `json:"item_limit"`
+}
+
+type ListPendingWorkspaceInvitationsByInviterRow struct {
+	ID            string             `json:"id"`
+	TokenHash     []byte             `json:"token_hash"`
+	Email         string             `json:"email"`
+	Role          string             `json:"role"`
+	InvitedBy     string             `json:"invited_by"`
+	InvitedByName string             `json:"invited_by_name"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListPendingWorkspaceInvitationsByInviter(ctx context.Context, arg ListPendingWorkspaceInvitationsByInviterParams) ([]ListPendingWorkspaceInvitationsByInviterRow, error) {
+	rows, err := q.db.Query(ctx, listPendingWorkspaceInvitationsByInviter,
+		arg.WorkspaceID,
+		arg.InvitedBy,
+		arg.Now,
+		arg.ItemLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingWorkspaceInvitationsByInviterRow{}
+	for rows.Next() {
+		var i ListPendingWorkspaceInvitationsByInviterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TokenHash,
 			&i.Email,
 			&i.Role,
 			&i.InvitedBy,
@@ -10158,6 +10234,36 @@ func (q *Queries) RevokeAllSessionsForUser(ctx context.Context, arg RevokeAllSes
 	return err
 }
 
+const revokeOwnWorkspaceInvitation = `-- name: RevokeOwnWorkspaceInvitation :execrows
+update workspace_invitations
+set revoked_at = $1
+where id = $2::uuid
+  and workspace_id = $3::uuid
+  and invited_by = $4::uuid
+  and accepted_at is null
+  and revoked_at is null
+`
+
+type RevokeOwnWorkspaceInvitationParams struct {
+	Now         pgtype.Timestamptz `json:"now"`
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	InvitedBy   pgtype.UUID        `json:"invited_by"`
+}
+
+func (q *Queries) RevokeOwnWorkspaceInvitation(ctx context.Context, arg RevokeOwnWorkspaceInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOwnWorkspaceInvitation,
+		arg.Now,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.InvitedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeSession = `-- name: RevokeSession :exec
 update user_sessions
 set revoked_at = $1
@@ -11570,6 +11676,36 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateWorkspaceInvitationRole = `-- name: UpdateWorkspaceInvitationRole :execrows
+update workspace_invitations
+set role = $1
+where id = $2::uuid
+  and workspace_id = $3::uuid
+  and accepted_at is null
+  and revoked_at is null
+  and expires_at > $4
+`
+
+type UpdateWorkspaceInvitationRoleParams struct {
+	Role        string             `json:"role"`
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Now         pgtype.Timestamptz `json:"now"`
+}
+
+func (q *Queries) UpdateWorkspaceInvitationRole(ctx context.Context, arg UpdateWorkspaceInvitationRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateWorkspaceInvitationRole,
+		arg.Role,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateWorkspaceMemberRole = `-- name: UpdateWorkspaceMemberRole :one

@@ -118,6 +118,8 @@ export function MembersPage() {
   const [tab, setTab] = useState<Tab>("workspace")
   const [addWsOpen, setAddWsOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [invitePermissionOpen, setInvitePermissionOpen] = useState(false)
+  const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({})
   const [removeWsTarget, setRemoveWsTarget] = useState<WorkspaceMember | null>(null)
 
   const myWorkspacesQ = useMyWorkspaces()
@@ -127,7 +129,8 @@ export function MembersPage() {
   )?.role
   const canManageInvitations =
     workspaceRole === "owner" || workspaceRole === "admin"
-  const invitationsQ = usePendingInvitations(canManageInvitations ? wsId : null)
+  const canInviteMembers = canManageInvitations || workspaceRole === "member"
+  const invitationsQ = usePendingInvitations(canInviteMembers ? wsId : null)
   const addWsMut = useAddWorkspaceMember(wsId)
   const updateWsRoleMut = useUpdateWorkspaceMemberRole(wsId)
   const removeWsMut = useRemoveWorkspaceMember(wsId)
@@ -153,22 +156,30 @@ export function MembersPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setInviteOpen(true)}
-                disabled={!wsId}
+                onClick={() => {
+                  if (!canInviteMembers) {
+                    setInvitePermissionOpen(true)
+                    return
+                  }
+                  setInviteOpen(true)
+                }}
+                disabled={!wsId || myWorkspacesQ.isLoading}
                 title={!wsId ? t("members.add.requiresWorkspace") : undefined}
               >
                 <UserPlus className="h-3.5 w-3.5" />
                 {t("members.invite.cta")}
               </Button>
-              <Button
-                size="sm"
-                onClick={() => setAddWsOpen(true)}
-                disabled={!wsId}
-                title={!wsId ? t("members.add.requiresWorkspace") : undefined}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {t("members.add.cta")}
-              </Button>
+              {canManageInvitations && (
+                <Button
+                  size="sm"
+                  onClick={() => setAddWsOpen(true)}
+                  disabled={!wsId}
+                  title={!wsId ? t("members.add.requiresWorkspace") : undefined}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {t("members.add.cta")}
+                </Button>
+              )}
             </div>
           ) : null
         }
@@ -216,14 +227,19 @@ export function MembersPage() {
             members={wsQ.data?.members ?? []}
             emptyTitle={t("members.empty.ws.title")}
             emptyDescription={t("members.empty.ws.description")}
-            writable={!isMockWs}
+            writable={!isMockWs && canManageInvitations}
             onChangeRole={(m, role) => handleWsRoleChange(m, role)}
             onRemove={(m) => setRemoveWsTarget(m)}
             roleChangePending={updateWsRoleMut.isPending}
           />
-          <PendingInvitationsList
-            invitations={invitationsQ.data ?? []}
-          />
+          {canInviteMembers && wsId && (
+            <PendingInvitationsList
+              workspaceId={wsId}
+              invitations={invitationsQ.data ?? []}
+              inviteLinks={inviteLinks}
+              canEditRole={canManageInvitations}
+            />
+          )}
         </TabsContent>
 
         {/* === Pending join requests tab ============================= */}
@@ -249,9 +265,32 @@ export function MembersPage() {
           onClose={() => {
             setInviteOpen(false)
           }}
+          onCreated={(invitationId, inviteLink) => {
+            setInviteLinks((current) => ({
+              ...current,
+              [invitationId]: inviteLink,
+            }))
+          }}
           wsId={wsId}
+          canChooseRole={canManageInvitations}
         />
       )}
+
+      <Dialog open={invitePermissionOpen} onOpenChange={setInvitePermissionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("members.invite.permission.title")}</DialogTitle>
+            <DialogDescription>
+              {t("members.invite.permission.description")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setInvitePermissionOpen(false)}>
+              {t("members.invite.close")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {removeWsTarget && (
         <ConfirmRemoveDialog
@@ -608,10 +647,14 @@ interface InviteResult {
 
 function InviteMemberDialog({
   onClose,
+  onCreated,
   wsId,
+  canChooseRole,
 }: {
   onClose: () => void
+  onCreated: (invitationId: string, inviteLink: string) => void
   wsId: string
+  canChooseRole: boolean
 }) {
   const { t } = useTranslation("admin")
   const [email, setEmail] = useState("")
@@ -634,12 +677,13 @@ function InviteMemberDialog({
       const res = await createInvitation.mutateAsync({
         email: email.trim(),
         name: name.trim() || undefined,
-        role,
+        role: canChooseRole ? role : "member",
       })
       setResult({
         email: res.email,
         inviteLink: res.invite_link,
       })
+      onCreated(res.invitation_id, res.invite_link)
     } catch (err) {
       setErrMsg(
         err instanceof ApiError
@@ -710,18 +754,24 @@ function InviteMemberDialog({
               </DialogField>
 
               <DialogField label={t("members.invite.roleLabel")} required>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as MemberRole)}
-                  disabled={pending}
-                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t(`members.role.${r}`)}
-                    </option>
-                  ))}
-                </select>
+                {canChooseRole ? (
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as MemberRole)}
+                    disabled={pending}
+                    className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {t(`members.role.${r}`)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex h-9 items-center rounded-md border border-line bg-surface-subtle px-3">
+                    <MemberRoleBadge role="member" />
+                  </div>
+                )}
               </DialogField>
 
               {errMsg && (

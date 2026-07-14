@@ -1779,6 +1779,23 @@
       "copied": "Copied!",
       "pendingTitle": "Pending invitations ({{count}})",
       "pendingStatus": "Pending",
+      "expiresAt": "Expires {{value}}",
+      "copyLink": "Copy invitation link",
+      "copyError": "Failed to copy invitation link",
+      "linkUnavailable": "The original link is unavailable in this browser session",
+      "updateRoleError": "Failed to update invitation role",
+      "permission": {
+        "title": "Unable to invite members",
+        "description": "Viewers cannot invite new members. Contact a Workspace owner or admin."
+      },
+      "revoke": {
+        "tooltip": "Cancel invitation",
+        "title": "Cancel invitation?",
+        "description": "Cancel the pending invitation for {{email}}? This link will stop working immediately.",
+        "cancel": "Keep invitation",
+        "confirm": "Cancel invitation",
+        "error": "Failed to cancel invitation"
+      },
       "credential": {
         "url": "URL",
         "email": "Email",

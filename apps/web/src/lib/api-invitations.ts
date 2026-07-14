@@ -18,6 +18,7 @@ export interface CreateInvitationResponse {
 
 export interface PendingInvitation {
   id: string
+  invite_link?: string
   email: string
   role: MemberRole
   invited_by: string
@@ -73,6 +74,25 @@ export function usePendingInvitations(wsId: string | null) {
     enabled: !!wsId,
     retry: noUnreachableRetry,
     staleTime: 30_000,
+  })
+}
+
+export function useUpdateInvitationRole(wsId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      invitationId: string
+      role: MemberRole
+    }) => {
+      if (!wsId) throw new Error("no workspace selected")
+      return apiRequest<void>(
+        `/api/v1/workspaces/${wsId}/invitations/${input.invitationId}`,
+        { method: "PATCH", body: { role: input.role } }
+      )
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: KEY_INVITATIONS(wsId ?? "_none") })
+    },
   })
 }
 
