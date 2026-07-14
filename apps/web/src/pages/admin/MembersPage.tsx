@@ -2,10 +2,12 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   Check,
+  Clock,
   Copy,
   Inbox,
   Link2,
   Loader2,
+  Mail,
   MoreHorizontal,
   Plus,
   ShieldAlert,
@@ -54,7 +56,12 @@ import {
   useUpdateWorkspaceMemberRole,
   useWorkspaceMembers,
 } from "../../lib/api-members"
-import { useCreateInvitation } from "../../lib/api-invitations"
+import {
+  useCreateInvitation,
+  usePendingInvitations,
+  useRevokeInvitation,
+} from "../../lib/api-invitations"
+import type { PendingInvitation } from "../../lib/api-invitations"
 import type {
   AddWorkspaceMemberRequest,
   MemberRole,
@@ -132,9 +139,11 @@ export function MembersPage() {
   const [removeWsTarget, setRemoveWsTarget] = useState<WorkspaceMember | null>(null)
 
   const wsQ = useWorkspaceMembers(wsId)
+  const invitationsQ = usePendingInvitations(wsId)
   const addWsMut = useAddWorkspaceMember(wsId)
   const updateWsRoleMut = useUpdateWorkspaceMemberRole(wsId)
   const removeWsMut = useRemoveWorkspaceMember(wsId)
+  const revokeInvitationMut = useRevokeInvitation(wsId)
 
   const isMockWs = !wsId
 
@@ -210,6 +219,14 @@ export function MembersPage() {
           {removeWsMut.error && (
             <ErrorBanner message={(removeWsMut.error as ApiError).message} />
           )}
+          {invitationsQ.isError && (
+            <ErrorBanner message={(invitationsQ.error as ApiError).message} />
+          )}
+          {revokeInvitationMut.isError && (
+            <ErrorBanner
+              message={(revokeInvitationMut.error as ApiError).message}
+            />
+          )}
           <MembersTable
             loading={wsQ.isLoading}
             error={wsQ.isError && !isMockWs ? (wsQ.error as ApiError) : undefined}
@@ -221,6 +238,17 @@ export function MembersPage() {
             onChangeRole={(m, role) => handleWsRoleChange(m, role)}
             onRemove={(m) => setRemoveWsTarget(m)}
             roleChangePending={updateWsRoleMut.isPending}
+          />
+          <PendingInvitationsList
+            invitations={invitationsQ.data ?? []}
+            revokingId={
+              revokeInvitationMut.isPending
+                ? revokeInvitationMut.variables
+                : undefined
+            }
+            onRevoke={(invitation) =>
+              revokeInvitationMut.mutate(invitation.id)
+            }
           />
         </TabsContent>
 
@@ -273,6 +301,67 @@ export function MembersPage() {
         />
       )}
     </AdminLayout>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pending invitations                                                */
+/* ------------------------------------------------------------------ */
+
+function PendingInvitationsList({
+  invitations,
+  revokingId,
+  onRevoke,
+}: {
+  invitations: PendingInvitation[]
+  revokingId?: string
+  onRevoke: (invitation: PendingInvitation) => void
+}) {
+  const { t } = useTranslation("admin")
+
+  if (invitations.length === 0) return null
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-medium text-fg">
+        {t("members.invite.pendingTitle", { count: invitations.length })}
+      </h2>
+      <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+        {invitations.map((invitation) => (
+          <div
+            key={invitation.id}
+            className="flex items-center gap-3 px-4 py-3"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted">
+              <Mail className="h-4 w-4 text-fg-subtle" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-fg">
+                {invitation.email}
+              </div>
+              <div className="flex items-center gap-1 text-xs text-fg-subtle">
+                <Clock className="h-3 w-3" />
+                {t("members.invite.pendingStatus")}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={revokingId === invitation.id}
+              onClick={() => onRevoke(invitation)}
+              title={t("members.invite.revoke")}
+            >
+              {revokingId === invitation.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <X className="h-3.5 w-3.5 text-fg-subtle" />
+              )}
+            </Button>
+            <RoleBadge role={invitation.role} />
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

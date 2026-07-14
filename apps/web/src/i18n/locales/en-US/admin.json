@@ -1777,6 +1777,9 @@
       "existingUserNotice": "If this email already belongs to a Parsar user, accepting the invitation adds their existing account to the workspace.",
       "copyAll": "Copy invitation",
       "copied": "Copied!",
+      "pendingTitle": "Pending invitations ({{count}})",
+      "pendingStatus": "Pending",
+      "revoke": "Revoke invitation",
       "credential": {
         "url": "URL",
         "email": "Email",
