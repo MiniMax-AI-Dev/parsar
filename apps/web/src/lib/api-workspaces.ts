@@ -83,8 +83,20 @@ export function useCreateWorkspace() {
         method: "POST",
         body,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY_MY_WORKSPACES })
+    onSuccess: (data) => {
+      // Make the new workspace selectable before the background refetch
+      // completes; otherwise WorkspaceSwitcher can restore the old id.
+      qc.setQueryData<ListMyWorkspacesResponse>(KEY_MY_WORKSPACES, (current) => {
+        const workspaces = current?.workspaces ?? []
+        if (workspaces.some((workspace) => workspace.id === data.workspace.id)) {
+          return current
+        }
+        return {
+          user_id: current?.user_id ?? data.member.user_id,
+          workspaces: [...workspaces, data.workspace],
+        }
+      })
+      return qc.invalidateQueries({ queryKey: KEY_MY_WORKSPACES })
     },
   })
 }

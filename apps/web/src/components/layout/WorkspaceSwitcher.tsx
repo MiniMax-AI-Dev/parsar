@@ -67,10 +67,10 @@ export function WorkspaceSwitcher() {
   // Self-heal: stale wsId from localStorage (archived ws or old dev seed)
   // would leave currentWorkspace undefined; auto-pick the first one.
   useEffect(() => {
-    if (workspacesQuery.isLoading || workspaces.length === 0) return
+    if (workspacesQuery.isLoading || workspacesQuery.isFetching || workspaces.length === 0) return
     if (wsId && workspaces.some((w) => w.id === wsId)) return
     setWorkspaceId(workspaces[0].id)
-  }, [wsId, workspaces, workspacesQuery.isLoading])
+  }, [wsId, workspaces, workspacesQuery.isLoading, workspacesQuery.isFetching])
 
   // Dialog state lives here so Radix Dropdown's focus trap doesn't fight
   // the dialog's focus trap.
