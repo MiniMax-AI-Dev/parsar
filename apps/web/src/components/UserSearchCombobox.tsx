@@ -89,7 +89,8 @@ export function UserSearchCombobox({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <DropdownMenu.Root>
+      {/* Nested in a dialog; non-modal lets its footer receive the first click. */}
+      <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild disabled={disabled}>
           <Button
             type="button"
