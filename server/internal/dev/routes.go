@@ -582,6 +582,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Patch("/workspaces/{workspaceID}/connector/discord", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceDiscordConnector(runtimeStore)))
 			r.Patch("/workspaces/{workspaceID}/connector/teams", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceTeamsConnector(runtimeStore)))
 			r.Patch("/workspaces/{workspaceID}/connector/feishu", gateWorkspaceOwnerOrAdmin(runtimeStore, updateWorkspaceFeishuConnector(runtimeStore)))
+			r.Post("/workspaces/{workspaceID}/connector/feishu/provision/begin", gateWorkspaceOwnerOrAdmin(runtimeStore, beginWorkspaceFeishuProvisioning(cfg.feishuRegistration)))
+			r.Post("/workspaces/{workspaceID}/connector/feishu/provision/poll", gateWorkspaceOwnerOrAdmin(runtimeStore, pollWorkspaceFeishuProvisioning(runtimeStore, cfg.feishuRegistration)))
 			r.Post("/agents/{agentID}/connector/feishu/provision/begin", beginAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Post("/agents/{agentID}/connector/feishu/provision/poll", pollAgentFeishuProvisioning(runtimeStore, cfg.feishuRegistration))
 			r.Delete("/agents/{agentID}", deleteAgent(runtimeStore))

@@ -484,16 +484,17 @@ type pollAgentFeishuProvisioningBody struct {
 }
 
 type feishuProvisioningResponse struct {
-	Status          string                                       `json:"status"`
-	Begin           *gatewaypkg.FeishuAppRegistrationBeginResult `json:"begin,omitempty"`
-	NextIntervalSec int                                          `json:"next_interval_sec,omitempty"`
-	Error           string                                       `json:"error,omitempty"`
-	Description     string                                       `json:"description,omitempty"`
-	AppID           string                                       `json:"app_id,omitempty"`
-	AppSecretRef    string                                       `json:"app_secret_ref,omitempty"`
-	BotOpenID       string                                       `json:"bot_open_id,omitempty"`
-	BotName         string                                       `json:"bot_name,omitempty"`
-	FeishuConnector *store.AgentFeishuConnectorChange            `json:"feishu_connector,omitempty"`
+	Status             string                                       `json:"status"`
+	Begin              *gatewaypkg.FeishuAppRegistrationBeginResult `json:"begin,omitempty"`
+	NextIntervalSec    int                                          `json:"next_interval_sec,omitempty"`
+	Error              string                                       `json:"error,omitempty"`
+	Description        string                                       `json:"description,omitempty"`
+	AppID              string                                       `json:"app_id,omitempty"`
+	AppSecretRef       string                                       `json:"app_secret_ref,omitempty"`
+	BotOpenID          string                                       `json:"bot_open_id,omitempty"`
+	BotName            string                                       `json:"bot_name,omitempty"`
+	FeishuConnector    *store.AgentFeishuConnectorChange            `json:"feishu_connector,omitempty"`
+	WorkspaceConnector *store.WorkspaceConnectorChange              `json:"workspace_connector,omitempty"`
 }
 
 // getAgentFeishuConnectorDiagnostics returns a read-only Feishu Bot
@@ -618,6 +619,111 @@ func updateAgentFeishuConnector(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"feishu_connector": change})
+	}
+}
+
+// beginWorkspaceFeishuProvisioning starts the async Feishu app provisioning
+// for the workspace's shared Feishu connector.
+func beginWorkspaceFeishuProvisioning(runtimeStore RuntimeStore, cfg feishuRegistrationConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.Client == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "feishu_app_registration_not_configured"})
+			return
+		}
+		begin, err := cfg.Client.Begin(r.Context())
+		if err != nil {
+			log.Bg().Warn("workspace feishu app registration begin failed", "err", err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_app_registration_begin_failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, feishuProvisioningResponse{Status: "pending", Begin: &begin, NextIntervalSec: begin.Interval})
+	}
+}
+
+// pollWorkspaceFeishuProvisioning completes the QR flow and stores a
+// WebSocket-mode connector directly on the workspace. The returned app secret
+// is encrypted with PARSAR_MASTER_KEY before the connector row is written.
+func pollWorkspaceFeishuProvisioning(runtimeStore RuntimeStore, cfg feishuRegistrationConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.Client == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "feishu_app_registration_not_configured"})
+			return
+		}
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		var req pollAgentFeishuProvisioningBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		if strings.TrimSpace(req.DeviceCode) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "device_code is required"})
+			return
+		}
+		status, err := cfg.Client.Poll(r.Context(), req.DeviceCode, req.IntervalSec, req.TenantBrand)
+		if err != nil {
+			log.Bg().Warn("workspace feishu app registration poll failed", "workspace_id", workspaceID, "err", err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_app_registration_poll_failed"})
+			return
+		}
+		switch status.Kind {
+		case gatewaypkg.FeishuAppRegistrationPollPending:
+			writeJSON(w, http.StatusOK, feishuProvisioningResponse{Status: "pending", NextIntervalSec: status.NextIntervalSec})
+			return
+		case gatewaypkg.FeishuAppRegistrationPollError:
+			writeJSON(w, http.StatusOK, feishuProvisioningResponse{Status: "error", Error: status.Error, Description: status.Description})
+			return
+		case gatewaypkg.FeishuAppRegistrationPollSuccess:
+			// Continue below.
+		default:
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_app_registration_unknown_status"})
+			return
+		}
+
+		appID := strings.TrimSpace(status.ClientID)
+		appSecret := strings.TrimSpace(status.ClientSecret)
+		if appID == "" || appSecret == "" {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_app_registration_missing_credentials"})
+			return
+		}
+		botInfo, err := validateProvisionedFeishuBot(r.Context(), appID, appSecret, feishuOpenAPIBaseURL(cfg.OpenAPIBaseURL))
+		if err != nil {
+			log.Bg().Warn("workspace feishu provisioned bot validation failed", "workspace_id", workspaceID, "app_id", appID, "err", err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "feishu_bot_validation_failed"})
+			return
+		}
+		secret, err := createFeishuAppSecretFromProvisioning(r.Context(), runtimeStore, workspaceID, "Workspace", appID, appSecret, actorIDFromRequest(r))
+		if err != nil {
+			log.Bg().Warn("workspace feishu provisioned app secret write failed", "workspace_id", workspaceID, "app_id", appID, "err", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed_to_store_feishu_app_secret"})
+			return
+		}
+		change, err := runtimeStore.UpsertWorkspaceFeishuConnector(r.Context(), store.UpsertWorkspaceFeishuConnectorInput{
+			WorkspaceID:  workspaceID,
+			Enabled:      true,
+			AppID:        appID,
+			AppSecretRef: secret.ID,
+			BotOpenID:    botInfo.OpenID,
+			EventMode:    "websocket",
+		}, actorIDFromRequest(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrFeishuAppIDInUse):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "feishu_app_id_in_use", "detail": err.Error()})
+			case errors.Is(err, store.ErrFeishuConnectorIncomplete):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "feishu_connector_incomplete", "detail": err.Error()})
+			default:
+				writeStoreAgentError(w, err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, feishuProvisioningResponse{
+			Status:             "success",
+			AppID:              appID,
+			AppSecretRef:       secret.ID,
+			BotOpenID:          botInfo.OpenID,
+			BotName:            botInfo.AppName,
+			WorkspaceConnector: &change,
+		})
 	}
 }
 

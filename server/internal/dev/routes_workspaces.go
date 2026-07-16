@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -154,7 +155,10 @@ func listWorkspaceConnectors(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeStoreAgentError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"connectors": connectors})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"connectors":            connectors,
+			"master_key_configured": strings.TrimSpace(os.Getenv("PARSAR_MASTER_KEY")) != "",
+		})
 	}
 }
 

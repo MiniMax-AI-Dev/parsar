@@ -2743,56 +2743,28 @@
       },
       "feishu": {
         "title": "Feishu connector",
-        "description": "Bind one Feishu bot for this workspace. All agents reachable from this workspace share this bot.",
-        "saved": "Feishu connector saved.",
-        "docLink": {
-          "label": "Open the Feishu Open Platform to create / manage your bot",
-          "href": "https://open.feishu.cn/app"
-        },
-        "fields": {
-          "enabled": {
-            "label": "Enabled",
-            "hint": "Turn on to route Feishu messages through this bot.",
-            "toggle": "Enable Feishu bot"
-          },
-          "appId": {
-            "label": "App ID",
-            "hint": "Credentials & Basic Info page → App ID (starts with cli_)."
-          },
-          "appSecret": {
-            "label": "App secret",
-            "hint": "Credentials & Basic Info page → App Secret. Stored encrypted.",
-            "savedHint": "A saved app secret is in place (Credentials & Basic Info → App Secret). Enter a new value to replace it."
-          },
-          "verificationToken": {
-            "label": "Verification token",
-            "hint": "Event Subscriptions page → Verification Token. Required for webhook mode. Stored encrypted.",
-            "savedHint": "A saved verification token is in place (Event Subscriptions → Verification Token). Enter a new value to replace it."
-          },
-          "encryptKey": {
-            "label": "Encrypt key",
-            "hint": "Event Subscriptions page → Encrypt Key. Optional; decrypts event payloads. Stored encrypted.",
-            "savedHint": "A saved encrypt key is in place (Event Subscriptions → Encrypt Key). Enter a new value to replace it."
-          },
-          "botOpenId": {
-            "label": "Bot open ID (optional)",
-            "hint": "Leave blank — the server auto-fetches it from the app credentials (bot/v3/info) on save. To set it manually, use the bot's open_id (ou_…). Used to recognize @mentions and skip self-sent messages.",
-            "placeholder": "Auto-fetched if blank, or ou_xxxx"
-          },
-          "eventMode": {
-            "label": "Event mode",
-            "hint": "WebSocket opens a long-lived connection (works on localhost); webhook receives HTTP callbacks.",
-            "options": {
-              "websocket": "WebSocket",
-              "webhook": "Webhook"
-            }
+        "description": "Authorize with Feishu using the QR code; the bot will be created and bound automatically.",
+        "masterKeyMissing": "The server has not completed the required security configuration, so Feishu cannot be connected yet. Contact an administrator and try again.",
+        "provision": {
+          "title": "Connect Feishu by QR",
+          "subtitle": "Click “Start QR scan” and authorize with Feishu; the bot will be created and bound automatically.",
+          "connectedSubtitle": "The bot is bound. Click “Scan again” if you need to replace it.",
+          "connected": "Feishu bot connected",
+          "start": "Start QR scan",
+          "reconnect": "Scan again",
+          "qrAlt": "QR code for connecting Feishu",
+          "openLink": "Open authorization page",
+          "pending": "Waiting for Feishu confirmation…",
+          "success": "Feishu Bot connected",
+          "successWithName": "Connected {{name}}",
+          "saved": "Feishu connector bound.",
+          "failed": "QR connection failed",
+          "expired": "QR code expired. Start again.",
+          "status": {
+            "connected": "Connected",
+            "stopped": "Stopped",
+            "waiting": "Waiting"
           }
-        },
-        "errors": {
-          "appIdInUse": "This Feishu app ID is already bound to another workspace.",
-          "incomplete": "The Feishu connector is incomplete. Fill in all required fields.",
-          "botOpenIdResolveFailed": "Couldn't auto-fetch the bot open_id. Check the App ID / App Secret, or enter it manually.",
-          "generic": "Failed to save the Feishu connector. Please try again."
         }
       },
       "slack": {

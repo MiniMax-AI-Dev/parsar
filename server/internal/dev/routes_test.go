@@ -84,6 +84,36 @@ func TestDevAuthVerification(t *testing.T) {
 	requireStatus(t, res, http.StatusOK)
 }
 
+func TestListWorkspaceConnectorsReportsMasterKeyStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		masterKey  string
+		configured bool
+	}{
+		{name: "configured", masterKey: "test-master-key", configured: true},
+		{name: "missing", masterKey: "", configured: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PARSAR_MASTER_KEY", tc.masterKey)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-0000-0000-000000000001/connectors", nil)
+			res := httptest.NewRecorder()
+			listWorkspaceConnectors(stubRuntimeStore{}).ServeHTTP(res, req)
+			if res.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+			}
+			var got struct {
+				MasterKeyConfigured bool `json:"master_key_configured"`
+			}
+			if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if got.MasterKeyConfigured != tc.configured {
+				t.Fatalf("master_key_configured = %v, want %v", got.MasterKeyConfigured, tc.configured)
+			}
+		})
+	}
+}
+
 func TestDevMeRequiresAuthCookie(t *testing.T) {
 	r := testRouterWithAuth(false, newStubSessions())
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
@@ -623,9 +653,10 @@ func (f fakeFeishuRegistrationClient) Poll(ctx context.Context, deviceCode strin
 
 type feishuProvisioningStore struct {
 	stubRuntimeStore
-	createdSecrets []store.CreateSecretInput
-	lastConnector  store.UpdateAgentFeishuConnectorInput
-	appIDInUseBy   string
+	createdSecrets         []store.CreateSecretInput
+	lastConnector          store.UpdateAgentFeishuConnectorInput
+	lastWorkspaceConnector store.UpsertWorkspaceFeishuConnectorInput
+	appIDInUseBy           string
 }
 
 func (s *feishuProvisioningStore) CreateSecret(ctx context.Context, input store.CreateSecretInput, encryptedPayload []byte) (store.SecretRead, error) {
@@ -658,6 +689,21 @@ func (s *feishuProvisioningStore) UpdateAgentFeishuConnector(ctx context.Context
 			AppSecretRef: input.AppSecretRef,
 			BotOpenID:    input.BotOpenID,
 			EventMode:    input.EventMode,
+		},
+	}, nil
+}
+
+func (s *feishuProvisioningStore) UpsertWorkspaceFeishuConnector(ctx context.Context, input store.UpsertWorkspaceFeishuConnectorInput, actorID string) (store.WorkspaceConnectorChange, error) {
+	s.lastWorkspaceConnector = input
+	return store.WorkspaceConnectorChange{
+		WorkspaceID: input.WorkspaceID,
+		Platform:    "feishu",
+		AppID:       input.AppID,
+		Enabled:     input.Enabled,
+		Config: map[string]any{
+			"app_secret_ref": input.AppSecretRef,
+			"bot_open_id":    input.BotOpenID,
+			"event_mode":     input.EventMode,
 		},
 	}, nil
 }
@@ -1315,6 +1361,34 @@ func TestFeishuProvisioningBeginReturnsQRCodeMaterial(t *testing.T) {
 	}
 }
 
+func TestWorkspaceFeishuProvisioningBeginReturnsQRCodeMaterial(t *testing.T) {
+	fs := &feishuProvisioningStore{}
+	reg := fakeFeishuRegistrationClient{begin: gatewaypkg.FeishuAppRegistrationBeginResult{
+		DeviceCode:              "dc_workspace_begin",
+		UserCode:                "WS-UC-1",
+		VerificationURI:         "https://accounts.feishu.cn/cli",
+		VerificationURIComplete: "https://open.feishu.cn/page/cli?user_code=WS-UC-1",
+		ExpiresIn:               300,
+		Interval:                5,
+	}}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, fs, WithFeishuAppRegistration(reg, ""))
+
+	workspaceID := store.DefaultDevFixtureIDs().WorkspaceID
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/"+workspaceID+"/connector/feishu/provision/begin", nil)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), `"device_code":"dc_workspace_begin"`) || !strings.Contains(res.Body.String(), `"next_interval_sec":5`) {
+		t.Fatalf("unexpected begin response: %s", res.Body.String())
+	}
+	if len(fs.createdSecrets) != 0 || fs.lastWorkspaceConnector.AppID != "" {
+		t.Fatalf("begin should not mutate store; secrets=%+v connector=%+v", fs.createdSecrets, fs.lastWorkspaceConnector)
+	}
+}
+
 func TestFeishuProvisioningPollPendingDoesNotWriteSecrets(t *testing.T) {
 	fs := &feishuProvisioningStore{}
 	reg := fakeFeishuRegistrationClient{poll: gatewaypkg.FeishuAppRegistrationPollResult{
@@ -1389,6 +1463,55 @@ func TestFeishuProvisioningPollSuccessStoresSecretAndBindsWebSocketConnector(t *
 		t.Fatalf("expected websocket connector with app secret ref and bot id, got %+v", fs.lastConnector)
 	}
 	if !strings.Contains(res.Body.String(), `"status":"success"`) || !strings.Contains(res.Body.String(), `"bot_name":"Agent Bot"`) {
+		t.Fatalf("unexpected success response: %s", res.Body.String())
+	}
+}
+
+func TestWorkspaceFeishuProvisioningPollSuccessStoresSecretAndBindsWebSocketConnector(t *testing.T) {
+	const masterKey = "test-workspace-master-key"
+	t.Setenv("PARSAR_MASTER_KEY", masterKey)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/tenant_access_token/internal"):
+			_, _ = io.WriteString(w, `{"code":0,"tenant_access_token":"workspace-tenant-token","expire":7200}`)
+		case strings.HasSuffix(r.URL.Path, "/bot/v3/info/"):
+			if got := r.Header.Get("Authorization"); got != "Bearer workspace-tenant-token" {
+				t.Fatalf("Authorization = %q, want Bearer workspace-tenant-token", got)
+			}
+			_, _ = io.WriteString(w, `{"code":0,"msg":"ok","bot":{"app_name":"Workspace Bot","open_id":"ou_workspace_bot"}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	fs := &feishuProvisioningStore{}
+	reg := fakeFeishuRegistrationClient{poll: gatewaypkg.FeishuAppRegistrationPollResult{
+		Kind:         gatewaypkg.FeishuAppRegistrationPollSuccess,
+		ClientID:     "cli_workspace_qr",
+		ClientSecret: "workspace-qr-secret",
+	}}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, fs, WithFeishuAppRegistration(reg, upstream.URL))
+
+	workspaceID := store.DefaultDevFixtureIDs().WorkspaceID
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/"+workspaceID+"/connector/feishu/provision/poll", strings.NewReader(`{"device_code":"dc_workspace","interval_sec":5}`))
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	if len(fs.createdSecrets) != 1 {
+		t.Fatalf("expected one app secret, got %+v", fs.createdSecrets)
+	}
+	if fs.lastWorkspaceConnector.WorkspaceID != workspaceID || !fs.lastWorkspaceConnector.Enabled || fs.lastWorkspaceConnector.AppID != "cli_workspace_qr" {
+		t.Fatalf("unexpected workspace connector input: %+v", fs.lastWorkspaceConnector)
+	}
+	if fs.lastWorkspaceConnector.AppSecretRef == "" || fs.lastWorkspaceConnector.VerificationTokenRef != "" || fs.lastWorkspaceConnector.EventMode != "websocket" || fs.lastWorkspaceConnector.BotOpenID != "ou_workspace_bot" {
+		t.Fatalf("expected websocket connector with app secret ref and bot id, got %+v", fs.lastWorkspaceConnector)
+	}
+	if !strings.Contains(res.Body.String(), `"status":"success"`) || !strings.Contains(res.Body.String(), `"bot_name":"Workspace Bot"`) {
 		t.Fatalf("unexpected success response: %s", res.Body.String())
 	}
 }

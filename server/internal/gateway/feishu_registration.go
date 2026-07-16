@@ -155,7 +155,11 @@ func (c *FeishuAppRegistrationClient) Poll(ctx context.Context, deviceCode strin
 		"action":      {"poll"},
 		"device_code": {deviceCode},
 	})
-	if err != nil {
+	// Feishu's device-flow endpoint returns HTTP 400 for normal OAuth
+	// states such as authorization_pending and slow_down. postForm keeps the
+	// decoded body alongside that status so those states can still be mapped
+	// below instead of terminating the browser poll loop.
+	if err != nil && body == nil {
 		return FeishuAppRegistrationPollResult{}, fmt.Errorf("%w: %v", ErrFeishuAppRegistrationPoll, err)
 	}
 	if stringField(body, "client_id") != "" {
@@ -226,7 +230,7 @@ func (c *FeishuAppRegistrationClient) postForm(ctx context.Context, base string,
 		if errStr == "" {
 			errStr = truncateForError(raw)
 		}
-		return nil, fmt.Errorf("%w: http=%d error=%s desc=%s", ErrFeishuAppRegistrationHTTP, res.StatusCode, errStr, desc)
+		return body, fmt.Errorf("%w: http=%d error=%s desc=%s", ErrFeishuAppRegistrationHTTP, res.StatusCode, errStr, desc)
 	}
 	return body, nil
 }
