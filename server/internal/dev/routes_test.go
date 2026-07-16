@@ -480,6 +480,103 @@ type feishuSecretRouteStore struct {
 	threadHistory bool
 }
 
+type feishuWebhookEvent struct {
+	Schema         string
+	AppID          string
+	Token          string
+	MessageID      string
+	ChatID         string
+	ChatType       string
+	ThreadID       string
+	Text           string
+	SenderOpenID   string
+	SenderUnionID  string
+	SenderUserID   string
+	TenantKey      string
+	MentionOpenIDs []string
+}
+
+func newFeishuWebhookRouteStore(appID, botOpenID string, member, threadHistory bool) *feishuSecretRouteStore {
+	config := map[string]any{
+		"enabled": true,
+		"app_id":  appID,
+	}
+	if botOpenID != "" {
+		config["bot_open_id"] = botOpenID
+	}
+	routeConfig, _ := json.Marshal(map[string]any{"connectors": map[string]any{"feishu": config}})
+	return &feishuSecretRouteStore{
+		appID:         appID,
+		userID:        store.DefaultDevFixtureIDs().UserID,
+		member:        member,
+		threadHistory: threadHistory,
+		route: store.FeishuAgentRoute{
+			AgentID:       "00000000-0000-0000-0000-000000000901",
+			WorkspaceID:   "00000000-0000-0000-0000-000000000002",
+			WorkspaceName: "Default Workspace",
+			AgentName:     "Agent",
+			AgentSlug:     "agent",
+			Visibility:    "workspace",
+			Config:        routeConfig,
+		},
+	}
+}
+
+func serveFeishuWebhook(t *testing.T, routeStore RuntimeStore, event feishuWebhookEvent, options ...RouterOption) *httptest.ResponseRecorder {
+	t.Helper()
+	message := map[string]any{
+		"message_id": event.MessageID,
+		"chat_id":    event.ChatID,
+		"chat_type":  event.ChatType,
+		"content":    fmt.Sprintf(`{"text":%q}`, event.Text),
+	}
+	if event.ThreadID != "" {
+		message["thread_id"] = event.ThreadID
+	}
+	if len(event.MentionOpenIDs) > 0 {
+		mentions := make([]map[string]any, 0, len(event.MentionOpenIDs))
+		for _, openID := range event.MentionOpenIDs {
+			mentions = append(mentions, map[string]any{"id": map[string]any{"open_id": openID}})
+		}
+		message["mentions"] = mentions
+	}
+	senderID := map[string]any{}
+	if event.SenderOpenID != "" {
+		senderID["open_id"] = event.SenderOpenID
+	}
+	if event.SenderUnionID != "" {
+		senderID["union_id"] = event.SenderUnionID
+	}
+	if event.SenderUserID != "" {
+		senderID["user_id"] = event.SenderUserID
+	}
+	payload := map[string]any{
+		"header": map[string]any{"app_id": event.AppID},
+		"event": map[string]any{
+			"message": message,
+			"sender": map[string]any{
+				"sender_id":  senderID,
+				"tenant_key": event.TenantKey,
+			},
+		},
+	}
+	if event.Schema != "" {
+		payload["schema"] = event.Schema
+	}
+	if event.Token != "" {
+		payload["header"].(map[string]any)["token"] = event.Token
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := chi.NewRouter()
+	RegisterRoutesWithStore(router, routeStore, options...)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", bytes.NewReader(body)))
+	return response
+}
+
 func (s *feishuSecretRouteStore) GetAgentByFeishuAppID(ctx context.Context, appID string) (store.FeishuAgentRoute, error) {
 	if appID != s.appID {
 		return store.FeishuAgentRoute{}, store.ErrUnknownFeishuAgent
@@ -977,38 +1074,11 @@ func TestFeishuWebhookRoutesByAppIDToTargetAgent(t *testing.T) {
 }
 
 func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDKnown(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:  "cli_group_bot",
-		userID: store.DefaultDevFixtureIDs().UserID,
-		member: true,
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot","bot_open_id":"ou_bot_self"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_no_mention",
-				"chat_id": "oc_group",
-				"chat_type": "group",
-				"content": "{\"text\":\"a normal group message should not trigger\"}"
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "ou_bot_self", true, false)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_no_mention", ChatID: "oc_group", ChatType: "group",
+		Text: "a normal group message should not trigger", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	})
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected ignored event to return 200, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1021,39 +1091,12 @@ func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDKnown(t *testing
 }
 
 func TestFeishuWebhookGroupMentioningBotTriggersWhenBotOpenIDKnown(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:  "cli_group_bot",
-		userID: store.DefaultDevFixtureIDs().UserID,
-		member: true,
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot","bot_open_id":"ou_bot_self"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_with_mention",
-				"chat_id": "oc_group",
-				"chat_type": "group",
-				"content": "{\"text\":\"@Bot please handle this\"}",
-				"mentions": [{"id": {"open_id": "ou_bot_self"}}]
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "ou_bot_self", true, false)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_with_mention", ChatID: "oc_group", ChatType: "group",
+		Text: "@Bot please handle this", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+		MentionOpenIDs: []string{"ou_bot_self"},
+	})
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected mentioned group event to create inbound, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1068,39 +1111,11 @@ func TestFeishuWebhookGroupMentioningBotTriggersWhenBotOpenIDKnown(t *testing.T)
 // Without this guard, the bot would respond to every group message and
 // spam the channel.
 func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDMissing(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:  "cli_group_bot",
-		userID: store.DefaultDevFixtureIDs().UserID,
-		member: true,
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		// No bot_open_id in connector config.
-		Config: []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_no_bot_open_id",
-				"chat_id": "oc_group",
-				"chat_type": "group",
-				"content": "{\"text\":\"a normal group message\"}"
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "", true, false)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_no_bot_open_id", ChatID: "oc_group", ChatType: "group",
+		Text: "a normal group message", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	})
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected ignored event to return 200, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1115,39 +1130,12 @@ func TestFeishuWebhookGroupWithoutBotMentionIgnoredWhenBotOpenIDMissing(t *testi
 // Group message mentioning a different user (not the bot): also dropped,
 // so the bot doesn't barge into a conversation aimed at someone else.
 func TestFeishuWebhookGroupMentioningOtherUserIgnored(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:  "cli_group_bot",
-		userID: store.DefaultDevFixtureIDs().UserID,
-		member: true,
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot","bot_open_id":"ou_bot_self"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_mention_other",
-				"chat_id": "oc_group",
-				"chat_type": "group",
-				"content": "{\"text\":\"@Alice let's check this together\"}",
-				"mentions": [{"id": {"open_id": "ou_alice"}}]
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "ou_bot_self", true, false)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_mention_other", ChatID: "oc_group", ChatType: "group",
+		Text: "@Alice let's check this together", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+		MentionOpenIDs: []string{"ou_alice"},
+	})
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected ignored event to return 200, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1164,40 +1152,11 @@ func TestFeishuWebhookGroupMentioningOtherUserIgnored(t *testing.T) {
 // explicit @mention. Matches the "If a Feishu thread is already open,
 // the user can reply within the same thread without @-mentioning to get a response" UX.
 func TestFeishuWebhookGroupThreadFollowupPassesWithoutMention(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:         "cli_group_bot",
-		userID:        store.DefaultDevFixtureIDs().UserID,
-		member:        true,
-		threadHistory: true, // simulate prior inbound on this thread
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot","bot_open_id":"ou_bot_self"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_thread_followup",
-				"chat_id": "oc_group",
-				"chat_type": "group",
-				"thread_id": "omt_thread_1",
-				"content": "{\"text\":\"are you still there\"}"
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "ou_bot_self", true, true)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_thread_followup", ChatID: "oc_group", ChatType: "group",
+		ThreadID: "omt_thread_1", Text: "are you still there", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	})
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected thread follow-up to create inbound, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1210,40 +1169,11 @@ func TestFeishuWebhookGroupThreadFollowupPassesWithoutMention(t *testing.T) {
 // @mention: dropped. The thread continuation rule only kicks in once
 // the bot has actually responded once.
 func TestFeishuWebhookGroupThreadWithoutHistoryAndMentionIgnored(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:         "cli_group_bot",
-		userID:        store.DefaultDevFixtureIDs().UserID,
-		member:        true,
-		threadHistory: false,
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot","bot_open_id":"ou_bot_self"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_thread_first",
-				"chat_id": "oc_group",
-				"chat_type": "group",
-				"thread_id": "omt_thread_new",
-				"content": "{\"text\":\"first message of a new thread without @\"}"
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "ou_bot_self", true, false)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_thread_first", ChatID: "oc_group", ChatType: "group",
+		ThreadID: "omt_thread_new", Text: "first message of a new thread without @", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	})
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected ignored event to return 200, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1255,39 +1185,11 @@ func TestFeishuWebhookGroupThreadWithoutHistoryAndMentionIgnored(t *testing.T) {
 // P2P direct message: always flows through regardless of mention or
 // bot_open_id configuration — matches the "In 1-on-1 chats, @-mention is not required" UX.
 func TestFeishuWebhookP2PAlwaysPassesWithoutMention(t *testing.T) {
-	fs := &feishuSecretRouteStore{
-		appID:  "cli_group_bot",
-		userID: store.DefaultDevFixtureIDs().UserID,
-		member: true,
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		// bot_open_id intentionally omitted — p2p path must not depend on it.
-		Config: []byte(`{"connectors":{"feishu":{"enabled":true,"app_id":"cli_group_bot"}}}`),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_group_bot"},
-		"event": {
-			"message": {
-				"message_id": "om_dm",
-				"chat_id": "oc_p2p",
-				"chat_type": "p2p",
-				"content": "{\"text\":\"help me check the Shanghai weather\"}"
-			},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_group_bot", "", true, false)
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_group_bot", MessageID: "om_dm", ChatID: "oc_p2p", ChatType: "p2p",
+		Text: "help me check the Shanghai weather", SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	})
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected p2p event to create inbound, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1300,37 +1202,16 @@ func TestFeishuWebhookFallsBackToPerAgentVerificationToken(t *testing.T) {
 	const masterKey = "test-master-key"
 	t.Setenv("PARSAR_MASTER_KEY", masterKey)
 
-	fs := &feishuSecretRouteStore{
-		appID:  "cli_agent_token",
-		userID: store.DefaultDevFixtureIDs().UserID,
-		member: true,
-		secrets: map[string]store.SecretPayload{
-			"verify-secret": encryptedSecretForTest(t, masterKey, map[string]any{"verification_token": "agent-token"}),
-		},
+	fs := newFeishuWebhookRouteStore("cli_agent_token", "", true, false)
+	fs.secrets = map[string]store.SecretPayload{
+		"verify-secret": encryptedSecretForTest(t, masterKey, map[string]any{"verification_token": "agent-token"}),
 	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        feishuRouteConfigForTest(t, fs.appID, "verify-secret", ""),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs, WithFeishuWebhookSecurity(false, "global-token", ""))
-
-	body := bytes.NewBufferString(`{
-		"schema": "2.0",
-		"header": {"app_id": "cli_agent_token", "token": "agent-token"},
-		"event": {
-			"message": {"message_id": "om_agent_token", "chat_id": "oc_agent_token", "chat_type": "p2p", "content": "{\"text\":\"hello\"}"},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs.route.Config = feishuRouteConfigForTest(t, fs.appID, "verify-secret", "")
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		Schema: "2.0", AppID: "cli_agent_token", Token: "agent-token",
+		MessageID: "om_agent_token", ChatID: "oc_agent_token", ChatType: "p2p", Text: "hello",
+		SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	}, WithFeishuWebhookSecurity(false, "global-token", ""))
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected per-agent token to pass after global mismatch, got %d: %s", res.Code, res.Body.String())
 	}
@@ -1367,34 +1248,13 @@ func TestFeishuWebhookRejectionSendsReplyHint(t *testing.T) {
 	defer upstream.Close()
 	t.Setenv("PARSAR_FEISHU_OPENAPI_BASE_URL", upstream.URL)
 
-	fs := &feishuSecretRouteStore{
-		appID:   "cli_reject_bot",
-		userID:  store.DefaultDevFixtureIDs().UserID,
-		member:  false,
-		secrets: map[string]store.SecretPayload{"app-secret": encryptedSecretForTest(t, masterKey, map[string]any{"app_secret": "secret-for-reject"})},
-	}
-	fs.route = store.FeishuAgentRoute{
-		AgentID:       "00000000-0000-0000-0000-000000000901",
-		WorkspaceID:   "00000000-0000-0000-0000-000000000002",
-		WorkspaceName: "Default Workspace",
-		AgentName:     "Agent",
-		AgentSlug:     "agent",
-		Visibility:    "workspace",
-		Config:        feishuRouteConfigForTest(t, fs.appID, "", "app-secret"),
-	}
-	r := chi.NewRouter()
-	RegisterRoutesWithStore(r, fs)
-
-	body := bytes.NewBufferString(`{
-		"header": {"app_id": "cli_reject_bot"},
-		"event": {
-			"message": {"message_id": "om_reject", "chat_id": "oc_reject", "chat_type": "p2p", "content": "{\"text\":\"hello\"}"},
-			"sender": {"sender_id": {"open_id": "ou_test_user", "union_id": "on_test_user"}}
-		}
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/feishu/events/message", body)
-	res := httptest.NewRecorder()
-	r.ServeHTTP(res, req)
+	fs := newFeishuWebhookRouteStore("cli_reject_bot", "", false, false)
+	fs.secrets = map[string]store.SecretPayload{"app-secret": encryptedSecretForTest(t, masterKey, map[string]any{"app_secret": "secret-for-reject"})}
+	fs.route.Config = feishuRouteConfigForTest(t, fs.appID, "", "app-secret")
+	res := serveFeishuWebhook(t, fs, feishuWebhookEvent{
+		AppID: "cli_reject_bot", MessageID: "om_reject", ChatID: "oc_reject", ChatType: "p2p", Text: "hello",
+		SenderOpenID: "ou_test_user", SenderUnionID: "on_test_user",
+	})
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected rejected event to return 200, got %d: %s", res.Code, res.Body.String())
 	}
