@@ -92,7 +92,6 @@ type feishuStartupDecision struct {
 	Mode                    feishuStartupMode
 	RegisterOAuthHandlers   bool
 	RegisterWebhookSecurity bool
-	CookieSecureWarning     bool
 }
 
 func main() {
@@ -197,9 +196,6 @@ func main() {
 		log.Bg().Info("feishu prod mode configured",
 			"oauth_handlers", feishuDecision.RegisterOAuthHandlers,
 			"webhook_security", feishuDecision.RegisterWebhookSecurity)
-		if feishuDecision.CookieSecureWarning {
-			log.Bg().Warn("running prod auth on HTTP — cookies will leak")
-		}
 	default:
 		log.Bg().Info("feishu auth/event routes disabled; email/password setup remains available")
 	}
@@ -1059,7 +1055,6 @@ func decideFeishuStartup(env func(string) string) feishuStartupDecision {
 		Mode:                    feishuStartupModeProd,
 		RegisterOAuthHandlers:   oauthConfigured,
 		RegisterWebhookSecurity: webhookConfigured,
-		CookieSecureWarning:     oauthConfigured && !strings.EqualFold(strings.TrimSpace(env("PARSAR_COOKIE_SECURE")), "true"),
 	}
 }
 

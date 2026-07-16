@@ -113,7 +113,6 @@ services:
 
       # ---------- Auth (production posture) ----------
       PARSAR_DEV_AUTH: "false"
-      PARSAR_COOKIE_SECURE: ${PARSAR_COOKIE_SECURE:-true}
 
       # ---------- Optional Feishu SSO + event subscription ----------
       # Leave empty for the default first-owner setup and email/password

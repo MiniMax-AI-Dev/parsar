@@ -39,7 +39,6 @@ const (
 	EnvDataDir        = "PARSAR_DATA_DIR"
 	EnvDatabaseURL    = "DATABASE_URL"
 	EnvDevAuth        = "PARSAR_DEV_AUTH"
-	EnvCookieSecure   = "PARSAR_COOKIE_SECURE"
 	EnvMasterKey      = "PARSAR_MASTER_KEY"
 	EnvOpenCodeBin    = "PARSAR_OPENCODE_BIN"
 	EnvOpenCodeRunner = "PARSAR_OPENCODE_RUNNER"
@@ -119,6 +118,12 @@ func Load(env EnvFunc, readFile FileReader) (LoadResult, error) {
 		}
 	}
 
+	// Production always uses secure cookies. Normalize stale false values
+	// before validation so docker/self-host startup cannot fail on it.
+	if cfg.Profile() == ProfileProd {
+		cfg.Auth.Cookie.Secure = true
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return LoadResult{}, err
 	}
@@ -165,7 +170,6 @@ func applyEnv(cfg *Config, env EnvFunc) {
 	stringSetter(EnvDatabaseURL, &cfg.Database.URL)
 
 	boolSetter(EnvDevAuth, &cfg.Auth.DevAuth)
-	boolSetter(EnvCookieSecure, &cfg.Auth.Cookie.Secure)
 	csvSetter(EnvPlatformAdminUserIDs, &cfg.Auth.PlatformAdminUserIDs)
 
 	stringSetter(EnvMasterKey, &cfg.Secret.MasterKey)
