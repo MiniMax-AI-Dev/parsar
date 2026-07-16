@@ -36,7 +36,7 @@ export interface WorkspaceConnector {
   updated_at: string
 }
 
-export interface ListWorkspaceConnectorsResponse {
+interface ListWorkspaceConnectorsResponse {
   connectors: WorkspaceConnector[]
   master_key_configured?: boolean
 }
@@ -192,10 +192,6 @@ export function useUpdateWorkspaceSlackConnector(workspaceID: string | null) {
 
 export function useUpdateWorkspaceDiscordConnector(workspaceID: string | null) {
   return useUpdateConnector<DiscordConnectorInput>(workspaceID, "discord")
-}
-
-export function useUpdateWorkspaceFeishuConnector(workspaceID: string | null) {
-  return useUpdateConnector<FeishuConnectorInput>(workspaceID, "feishu")
 }
 
 export function useBeginWorkspaceFeishuProvisioning(workspaceID: string | null) {
