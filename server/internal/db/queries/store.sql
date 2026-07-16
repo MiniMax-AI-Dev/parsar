@@ -4634,9 +4634,28 @@ where id = @id::uuid
   and accepted_at is null
   and revoked_at is null;
 
+-- name: RevokeOwnWorkspaceInvitation :execrows
+update workspace_invitations
+set revoked_at = @now
+where id = @id::uuid
+  and workspace_id = @workspace_id::uuid
+  and invited_by = @invited_by::uuid
+  and accepted_at is null
+  and revoked_at is null;
+
+-- name: UpdateWorkspaceInvitationRole :execrows
+update workspace_invitations
+set role = @role
+where id = @id::uuid
+  and workspace_id = @workspace_id::uuid
+  and accepted_at is null
+  and revoked_at is null
+  and expires_at > @now;
+
 -- name: ListPendingWorkspaceInvitations :many
 select
   wi.id::text           as id,
+  wi.token_hash,
   wi.email,
   wi.role,
   wi.invited_by::text   as invited_by,
@@ -4646,6 +4665,26 @@ select
 from workspace_invitations wi
 join users u on u.id = wi.invited_by
 where wi.workspace_id = @workspace_id::uuid
+  and wi.accepted_at is null
+  and wi.revoked_at is null
+  and wi.expires_at > @now
+order by wi.created_at desc
+limit @item_limit;
+
+-- name: ListPendingWorkspaceInvitationsByInviter :many
+select
+  wi.id::text           as id,
+  wi.token_hash,
+  wi.email,
+  wi.role,
+  wi.invited_by::text   as invited_by,
+  u.name                as invited_by_name,
+  wi.expires_at,
+  wi.created_at
+from workspace_invitations wi
+join users u on u.id = wi.invited_by
+where wi.workspace_id = @workspace_id::uuid
+  and wi.invited_by = @invited_by::uuid
   and wi.accepted_at is null
   and wi.revoked_at is null
   and wi.expires_at > @now

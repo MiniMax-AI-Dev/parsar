@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Button } from "../components/ui/button"
 import { useInviteInfo, useAcceptInvite } from "../lib/api-invitations"
 import { setWorkspaceId } from "../lib/workspace"
 
@@ -109,13 +110,14 @@ export function InviteAcceptPage({ token }: { token: string }) {
             </p>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={acceptMut.isPending}
-            className="w-full rounded-md bg-fg px-3 py-2 text-sm font-medium text-bg hover:bg-fg/90 disabled:opacity-50"
+            size="lg"
+            className="w-full"
           >
             {acceptMut.isPending ? "Joining..." : "Set Password & Join"}
-          </button>
+          </Button>
         </form>
       </div>
     </main>
