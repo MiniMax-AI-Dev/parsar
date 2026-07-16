@@ -70,6 +70,10 @@ export function useMyWorkspaces() {
     },
     retry: noUnreachableRetry,
     staleTime: 60_000,
+    // Membership can be granted from another account while this tab is open.
+    // Refresh when the user returns so the switcher shows it immediately.
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   })
 }
 
