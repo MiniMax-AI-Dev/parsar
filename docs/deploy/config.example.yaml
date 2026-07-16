@@ -49,8 +49,7 @@ auth:
   # at startup.
   dev_auth: false
   cookie:
-    # Must be true once a reverse proxy terminates TLS; otherwise the
-    # session cookie leaks over plain HTTP.
+    # Secure cookies are derived from the deployment profile.
     secure: true
 
 secret:

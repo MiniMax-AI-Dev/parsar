@@ -51,9 +51,6 @@ func (c Config) Validate() error {
 		if c.Auth.DevAuth {
 			problems = append(problems, fmt.Sprintf("auth.dev_auth must NOT be true in production (env %s)", EnvDevAuth))
 		}
-		if !c.Auth.Cookie.Secure {
-			problems = append(problems, fmt.Sprintf("auth.cookie.secure should be true in production (env %s) — HTTP cookies leak", EnvCookieSecure))
-		}
 	}
 
 	// Sandbox.Runner: empty falls back to "local"; reject anything

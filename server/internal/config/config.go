@@ -75,7 +75,7 @@ type AuthConfig struct {
 
 type CookieConfig struct {
 	// Secure controls the Secure attribute on the session cookie.
-	// MUST be true in production. Env PARSAR_COOKIE_SECURE.
+	// Load derives it from the deployment profile.
 	Secure bool `yaml:"secure"`
 }
 

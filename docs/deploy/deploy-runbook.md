@@ -74,7 +74,7 @@ Startup validation:
 - `database.url` must be non-empty in the production profile.
 - `secret.master_key` must be non-empty in the production profile.
 - `auth.dev_auth=true` is only permitted in the dev profile.
-- `auth.cookie.secure=true` is required in the production profile.
+- `auth.cookie.secure` is derived from the deployment profile.
 
 Profile inference: if either `auth.dev_auth=true` or
 `gateway.feishu.mock=true` is true, the whole process runs in dev profile;
@@ -97,7 +97,6 @@ the repo**.
 | Secret master key | `PARSAR_MASTER_KEY` | (required in production) |
 | Bootstrap token | `PARSAR_BOOTSTRAP_TOKEN` | empty (HTTP bootstrap off) |
 | Dev auth toggle | `PARSAR_DEV_AUTH` | `false` (must be false in production) |
-| HTTPS cookie | `PARSAR_COOKIE_SECURE` | `false` (must be true in production) |
 | Runtime profile | `PARSAR_RUNTIME_PROFILE` | `managed` for managed deployments where the platform manages cloud sandboxes |
 
 Feishu OAuth / event-related env vars are documented in

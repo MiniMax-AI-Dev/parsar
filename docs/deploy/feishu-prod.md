@@ -40,7 +40,6 @@ sessions all verifiable and debuggable under HTTPS.
 ```bash
 DATABASE_URL=postgres://...
 PARSAR_MASTER_KEY=<32+ chars random secret>
-PARSAR_COOKIE_SECURE=true
 
 PARSAR_FEISHU_APP_ID=cli_xxx
 PARSAR_FEISHU_APP_SECRET=xxx
@@ -77,7 +76,6 @@ PARSAR_FEISHU_MOCK_NAME="Dev Admin"
 PARSAR_FEISHU_MOCK_UNION_ID=on_mock_union_admin
 PARSAR_FEISHU_MOCK_OPEN_ID=ou_feishu_admin
 PARSAR_DEV_AUTH=true
-PARSAR_COOKIE_SECURE=false
 ```
 
 Mock mode uses MockClient and skips Feishu webhook token verification — for
@@ -205,14 +203,11 @@ the attacker. Therefore:
   command (see `bootstrap.WithPublicURL`), so header forgery does not
   compromise the pair command's correctness.
 
-Production must keep `PARSAR_COOKIE_SECURE=true`. If it is set to false in
-production, the server still starts but prints the warning `running prod
-auth on HTTP — cookies will leak`.
+Production uses secure cookies by default. Users must access over HTTPS.
 
 ## 5. Startup and health checks
 
 ```bash
-export PARSAR_COOKIE_SECURE=true
 export PARSAR_FEISHU_APP_ID=cli_xxx
 export PARSAR_FEISHU_APP_SECRET=xxx
 export PARSAR_FEISHU_REDIRECT_URI=https://parsar.example.com/api/v1/auth/feishu/callback
@@ -281,7 +276,7 @@ Expected: `401`.
 
 ### 6.4 Cookies do not stick / still 401 after login
 
-- Production must set `PARSAR_COOKIE_SECURE=true` and users must access over HTTPS.
+- Production uses secure cookies and users must access over HTTPS.
 - The domain must match the user's browser domain (avoid callback on domain A while the page is on domain B).
 - Use browser DevTools to check whether `Set-Cookie` is being blocked by Secure / SameSite / domain rules.
 

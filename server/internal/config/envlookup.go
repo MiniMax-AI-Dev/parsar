@@ -49,7 +49,6 @@ func (c Config) envSnapshot() map[string]string {
 	put(EnvDatabaseURL, c.Database.URL)
 
 	putBool(EnvDevAuth, c.Auth.DevAuth)
-	putBool(EnvCookieSecure, c.Auth.Cookie.Secure)
 
 	put(EnvMasterKey, c.Secret.MasterKey)
 

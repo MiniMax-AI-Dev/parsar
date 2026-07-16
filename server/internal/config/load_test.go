@@ -174,9 +174,8 @@ func TestLoadEmptyDatabaseURLFailsInProd(t *testing.T) {
 	// Prod (no dev knob) without DATABASE_URL must refuse to
 	// start. Dev profile treats empty as a degraded-mode warning.
 	env := envMap{
-		EnvMasterKey:    "abc",
-		EnvCookieSecure: "true",
-		EnvPublicURL:    "https://parsar.example.com",
+		EnvMasterKey: "abc",
+		EnvPublicURL: "https://parsar.example.com",
 	}
 	_, err := Load(env.get, nil)
 	if err == nil {
@@ -257,17 +256,18 @@ func TestValidateProductionRejectsDevAuth(t *testing.T) {
 	}
 }
 
-func TestValidateProductionRequiresCookieSecure(t *testing.T) {
-	cfg := Default()
-	cfg.Database.URL = "postgres://localhost/parsar"
-	cfg.Secret.MasterKey = "abc"
-	cfg.Server.PublicURL = "https://parsar.example.com"
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatalf("expected error for non-secure cookie in prod")
+func TestLoadProductionNormalizesCookieSecure(t *testing.T) {
+	env := envMap{
+		EnvDatabaseURL: "postgres://localhost/parsar",
+		EnvMasterKey:   "abc",
+		EnvPublicURL:   "https://parsar.example.com",
 	}
-	if !strings.Contains(err.Error(), "cookie.secure") {
-		t.Fatalf("error should mention cookie.secure: %v", err)
+	res, err := Load(env.get, nil)
+	if err != nil {
+		t.Fatalf("production load should succeed, got error: %v", err)
+	}
+	if !res.Config.Auth.Cookie.Secure {
+		t.Fatalf("production load should derive cookie secure true, got false")
 	}
 }
 
