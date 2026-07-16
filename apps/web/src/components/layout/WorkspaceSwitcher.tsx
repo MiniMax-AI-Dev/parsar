@@ -103,7 +103,11 @@ export function WorkspaceSwitcher() {
 
   return (
     <>
-      <DropdownMenu.Root>
+      <DropdownMenu.Root
+        onOpenChange={(open) => {
+          if (open) void workspacesQuery.refetch()
+        }}
+      >
         <DropdownMenu.Trigger asChild>
           <button
             type="button"
