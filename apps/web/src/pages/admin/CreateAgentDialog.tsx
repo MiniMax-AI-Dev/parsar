@@ -806,6 +806,11 @@ export function CreateAgentDialog({
     })
     const mergedConfig: Record<string, unknown> = {
       ...configBaseForSubmit(agent, connector),
+      // The edit flow updates the agent config twice: the main agent PATCH
+      // and, for agent_daemon rows, the profile update below. Keep the
+      // canonical model field in the second payload too, otherwise its
+      // stale value can overwrite the newly selected model.
+      ...(requiresModel ? { default_model_id: selectedModelID } : {}),
       profile: {
         ...(requiresModel ? { model_id: selectedModelID } : {}),
         capabilities: capabilityNames,
