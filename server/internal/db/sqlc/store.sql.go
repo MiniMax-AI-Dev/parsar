@@ -7875,7 +7875,6 @@ select
   created_at, updated_at
 from models
 where deleted_at is null
-  and status = 'active'
 order by created_at desc, id desc
 limit $1
 `
@@ -7898,7 +7897,7 @@ type ListModelsRow struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
-// List active, non-deleted models. Company-wide shared, no longer filtered by workspace.
+// List all active models. Company-wide shared, no longer filtered by workspace.
 func (q *Queries) ListModels(ctx context.Context, itemLimit int32) ([]ListModelsRow, error) {
 	rows, err := q.db.Query(ctx, listModels, itemLimit)
 	if err != nil {

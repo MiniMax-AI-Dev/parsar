@@ -2118,7 +2118,7 @@ where id = @id::uuid
   and deleted_at is null;
 
 -- name: ListModels :many
--- List active, non-deleted models. Company-wide shared, no longer filtered by workspace.
+-- List all active models. Company-wide shared, no longer filtered by workspace.
 select
   id::text, slug, name, provider_type, adapter, base_url, model_key,
   credential_mode,
@@ -2128,7 +2128,6 @@ select
   created_at, updated_at
 from models
 where deleted_at is null
-  and status = 'active'
 order by created_at desc, id desc
 limit @item_limit;
 
