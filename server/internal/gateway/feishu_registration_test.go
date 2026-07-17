@@ -112,6 +112,9 @@ func TestFeishuAppRegistrationPollStatusMapping(t *testing.T) {
 				if r.Form.Get("action") != "poll" || r.Form.Get("device_code") != "dc" {
 					t.Fatalf("unexpected poll form: %s", r.Form.Encode())
 				}
+				if _, ok := tc.body["error"]; ok {
+					w.WriteHeader(http.StatusBadRequest)
+				}
 				_ = json.NewEncoder(w).Encode(tc.body)
 			}))
 			defer srv.Close()

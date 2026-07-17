@@ -126,6 +126,7 @@ export function ChannelConnectorPanel({
           <FeishuConnectorFields
             workspaceID={workspaceID}
             current={feishuConfig}
+            masterKeyConfigured={data?.master_key_configured}
             canEdit={canEdit}
             onToast={onToast}
           />

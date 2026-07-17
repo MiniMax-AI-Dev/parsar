@@ -38,6 +38,7 @@ export interface WorkspaceConnector {
 
 interface ListWorkspaceConnectorsResponse {
   connectors: WorkspaceConnector[]
+  master_key_configured?: boolean
 }
 
 export interface WorkspaceConnectorChange {
@@ -93,6 +94,24 @@ export interface FeishuConnectorInput {
   event_mode: "websocket" | "webhook"
 }
 
+export interface FeishuProvisionBeginResult {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  verification_uri_complete: string
+  expires_in: number
+  interval: number
+}
+
+export interface FeishuProvisionResponse {
+  status: "pending" | "success" | "error"
+  begin?: FeishuProvisionBeginResult
+  next_interval_sec?: number
+  error?: string
+  description?: string
+  bot_name?: string
+}
+
 /* --- Network ------------------------------------------------------------ */
 
 async function listWorkspaceConnectorsRequest(
@@ -115,6 +134,25 @@ async function updateConnectorRequest<T>(
     { method: "PATCH", body },
   )
   return res.connector
+}
+
+async function beginWorkspaceFeishuProvisioningRequest(
+  workspaceID: string,
+): Promise<FeishuProvisionResponse> {
+  return apiRequest<FeishuProvisionResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/connector/feishu/provision/begin`,
+    { method: "POST" },
+  )
+}
+
+async function pollWorkspaceFeishuProvisioningRequest(
+  workspaceID: string,
+  body: { device_code: string; interval_sec?: number; tenant_brand?: string },
+): Promise<FeishuProvisionResponse> {
+  return apiRequest<FeishuProvisionResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/connector/feishu/provision/poll`,
+    { method: "POST", body },
+  )
 }
 
 /* --- Hooks -------------------------------------------------------------- */
@@ -156,8 +194,40 @@ export function useUpdateWorkspaceDiscordConnector(workspaceID: string | null) {
   return useUpdateConnector<DiscordConnectorInput>(workspaceID, "discord")
 }
 
-export function useUpdateWorkspaceFeishuConnector(workspaceID: string | null) {
-  return useUpdateConnector<FeishuConnectorInput>(workspaceID, "feishu")
+export function useBeginWorkspaceFeishuProvisioning(workspaceID: string | null) {
+  return useMutation({
+    mutationFn: async () => {
+      if (!workspaceID) throw new Error("no workspace selected")
+      return beginWorkspaceFeishuProvisioningRequest(workspaceID)
+    },
+  })
+}
+
+export function usePollWorkspaceFeishuProvisioning(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      deviceCode,
+      intervalSec,
+      tenantBrand,
+    }: {
+      deviceCode: string
+      intervalSec?: number
+      tenantBrand?: string
+    }) => {
+      if (!workspaceID) throw new Error("no workspace selected")
+      return pollWorkspaceFeishuProvisioningRequest(workspaceID, {
+        device_code: deviceCode,
+        interval_sec: intervalSec,
+        tenant_brand: tenantBrand,
+      })
+    },
+    onSuccess: (res) => {
+      if (res.status === "success") {
+        void qc.invalidateQueries({ queryKey: KEY_CONNECTORS(workspaceID ?? "_none") })
+      }
+    },
+  })
 }
 
 export function useUpdateWorkspaceTeamsConnector(workspaceID: string | null) {
