@@ -2300,6 +2300,185 @@ func TestConfigureAgentProfileChecksModelStatus(t *testing.T) {
 	}
 }
 
+func TestConfigureAgentProfilePreservesAgentPatchFields(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	store := New(db)
+	ids := mustSeedDevFixture(t, ctx, store)
+
+	model, err := store.CreateModel(ctx, CreateModelInput{
+		Name:               "Profile Merge Model",
+		ProviderType:       "openai",
+		Adapter:            "@ai-sdk/openai",
+		BaseURL:            "https://example.test/v1",
+		ModelKey:           "profile-merge-1",
+		CredentialMode:     "credential_ref",
+		CredentialKindCode: "openai_api_key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability, err := store.CreateCapability(ctx, CreateCapabilityInput{
+		WorkspaceID: ids.WorkspaceID,
+		Type:        "skill",
+		Name:        "Profile Merge Capability",
+		CreatorID:   ids.UserID,
+		InitialVersion: &CreateCapabilityVersionInput{
+			Version:             "1.0.0",
+			Content:             map[string]any{"kind": "skill"},
+			RequiredCredentials: []RequiredCredential{{Kind: "github_pat", Required: true}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `
+		update agents
+		set config = '{
+			"default_model_id":"old-model",
+			"model_id":"old-model",
+			"capabilities":["Old Capability"],
+			"credential_bindings":{"github_pat":{"source":"shared","secret_id":"00000000-0000-0000-0000-000000000101"}},
+			"model_credential_binding":{"source":"shared","secret_id":"00000000-0000-0000-0000-000000000102"},
+			"profile":{"model_id":"old-model","capabilities":["Old Capability"]},
+			"agent_kind":"claude_code",
+			"daemon_mode":"sandbox",
+			"sandbox_size":"xl",
+			"workdir":"/old/workdir",
+			"working_directory":"/older/workdir"
+		}'::jsonb
+		where id = $1::uuid
+	`, ids.BackendAgentID); err != nil {
+		t.Fatal(err)
+	}
+
+	modelID := model.ID
+	if _, _, err := store.UpdateAgent(ctx, UpdateAgentInput{
+		AgentID:         ids.BackendAgentID,
+		ActorID:         ids.UserID,
+		DefaultModelID:  &modelID,
+		Capabilities:    []string{capability.Name},
+		CapabilitiesSet: true,
+		ConfigSet:       true,
+		Config: map[string]any{
+			"credential_bindings": map[string]any{
+				"github_pat": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000201"},
+			},
+			"model_credential_binding": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000202"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.ConfigureAgentProfile(ctx, ConfigureAgentProfileInput{
+		AgentID:      ids.BackendAgentID,
+		ModelID:      model.ID,
+		SystemPrompt: "updated prompt",
+		Config: map[string]any{
+			"default_model_id": "stale-model",
+			"capabilities":     []any{"Stale Capability"},
+			"credential_bindings": map[string]any{
+				"github_pat": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000301"},
+			},
+			"model_credential_binding": map[string]any{"source": "shared", "secret_id": "00000000-0000-0000-0000-000000000302"},
+			"profile": map[string]any{
+				"model_id":     model.ID,
+				"capabilities": []any{capability.Name},
+				"skills":       []any{capability.Name},
+			},
+			"agent_kind":   "codex",
+			"daemon_mode":  "local",
+			"sandbox_size": "standard",
+			"device_id":    "00000000-0000-0000-0000-000000000401",
+			"work_dir":     nil,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := result.AgentConfig
+	if config["default_model_id"] != model.ID || config["model_id"] != model.ID {
+		t.Fatalf("model fields were not preserved: %#v", config)
+	}
+	capabilities, _ := config["capabilities"].([]any)
+	if len(capabilities) != 1 || capabilities[0] != capability.Name {
+		t.Fatalf("capabilities were overwritten: %#v", config["capabilities"])
+	}
+	bindings, _ := config["credential_bindings"].(map[string]any)
+	githubBinding, _ := bindings["github_pat"].(map[string]any)
+	if githubBinding["secret_id"] != "00000000-0000-0000-0000-000000000201" {
+		t.Fatalf("credential bindings were overwritten: %#v", config["credential_bindings"])
+	}
+	modelBinding, _ := config["model_credential_binding"].(map[string]any)
+	if modelBinding["secret_id"] != "00000000-0000-0000-0000-000000000202" {
+		t.Fatalf("model credential binding was overwritten: %#v", config["model_credential_binding"])
+	}
+	if config["agent_kind"] != "codex" || config["daemon_mode"] != "local" || config["device_id"] != "00000000-0000-0000-0000-000000000401" {
+		t.Fatalf("profile-owned daemon fields were not updated: %#v", config)
+	}
+	if config["system_prompt"] != "updated prompt" {
+		t.Fatalf("system prompt was not updated: %#v", config["system_prompt"])
+	}
+	for _, key := range []string{"sandbox_size", "work_dir", "workdir", "working_directory"} {
+		if _, ok := config[key]; ok {
+			t.Fatalf("expected %s to be cleared: %#v", key, config)
+		}
+	}
+}
+
+func TestListModelsExcludesDisabledModelsButGetModelReturnsThem(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	store := New(db)
+	ids := mustSeedDevFixture(t, ctx, store)
+
+	createModel := func(name, key string) ModelRead {
+		t.Helper()
+		model, err := store.CreateModel(ctx, CreateModelInput{
+			Name:               name,
+			ProviderType:       "openai",
+			Adapter:            "@ai-sdk/openai",
+			BaseURL:            "https://example.test/v1",
+			ModelKey:           key,
+			CredentialMode:     "credential_ref",
+			CredentialKindCode: "openai_api_key",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return model
+	}
+	active := createModel("Active Catalog Model", "active-catalog-1")
+	disabled := createModel("Disabled Catalog Model", "disabled-catalog-1")
+	if _, err := store.DisableModel(ctx, ids.WorkspaceID, disabled.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	models, err := store.ListModels(ctx, ids.WorkspaceID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foundActive bool
+	for _, model := range models {
+		if model.ID == disabled.ID {
+			t.Fatalf("disabled model remained in catalog: %#v", model)
+		}
+		if model.ID == active.ID {
+			foundActive = true
+		}
+	}
+	if !foundActive {
+		t.Fatalf("active model missing from catalog: %#v", models)
+	}
+	got, err := store.GetModel(ctx, disabled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "disabled" {
+		t.Fatalf("GetModel status = %q, want disabled", got.Status)
+	}
+}
+
 func TestCompleteAgentRunSanitizesMessageAndStoresTranscript(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

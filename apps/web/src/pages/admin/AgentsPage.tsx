@@ -99,13 +99,13 @@ import { credentialKindLabel } from "./capability-ui"
  * `default_model_id` (a UUID); falls back through legacy
  * `model_id` / `profile.model_id` shapes for older rows.
  */
-function defaultModelOf(a: Agent, models: Model[]): string {
+function defaultModelOf(a: Agent, models: Model[], unavailableLabel: string): string {
   const cfg = (a.config as Record<string, unknown> | undefined) ?? {}
   const profile = (cfg.profile ?? {}) as Record<string, unknown>
   const id = String(cfg.default_model_id ?? cfg.model_id ?? profile.model_id ?? "")
   if (!id) return "—"
   const found = models.find((m) => m.id === id)
-  if (!found) return id // model deleted or workspace mismatch — show id over silent "—"
+  if (!found) return unavailableLabel
   return found.name || found.model_key || id
 }
 
@@ -448,7 +448,7 @@ export function AgentsPage() {
                         </div>
                       </TableCell>
                       <TableCell><RuntimeCell agent={a} /></TableCell>
-                      <TableCell className="font-mono text-sm text-fg-muted">{defaultModelOf(a, modelsQ.data?.models ?? [])}</TableCell>
+                      <TableCell className="font-mono text-sm text-fg-muted">{defaultModelOf(a, modelsQ.data?.models ?? [], t("agents.modelUnavailable"))}</TableCell>
                       <TableCell className="text-sm text-fg-subtle">
                         {t(`agents.visibility.${a.visibility ?? "workspace"}`)}
                       </TableCell>
@@ -695,7 +695,7 @@ export function AgentDetailPage({ id }: { id: string }) {
     )
   }
 
-  const model = defaultModelOf(agent, modelsQ.data?.models ?? [])
+  const model = defaultModelOf(agent, modelsQ.data?.models ?? [], t("agents.modelUnavailable"))
   const connector = connectorLabel(agent.connector_type)
 
   return (
