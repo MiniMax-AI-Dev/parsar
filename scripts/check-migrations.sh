@@ -53,6 +53,30 @@ if [[ "$pg_connect_ready" -ne 1 ]]; then
   exit 1
 fi
 
+host_port_ready=0
+for _ in $(seq 1 60); do
+  if python3 - "$PARSAR_POSTGRES_HOST" "$PARSAR_POSTGRES_PORT" <<'PY'
+import socket
+import sys
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+with socket.create_connection((host, port), timeout=1):
+    pass
+PY
+  then
+    host_port_ready=1
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$host_port_ready" -ne 1 ]]; then
+  echo "Postgres host port ${PARSAR_POSTGRES_HOST}:${PARSAR_POSTGRES_PORT} did not accept TCP connections within 60s" >&2
+  docker compose -f docker-compose.dev.yml logs --tail=80 postgres >&2 || true
+  exit 1
+fi
+
 (
   cd server
   DATABASE_URL="$PARSAR_CHECK_DATABASE_URL" PARSAR_MIGRATIONS_DIR="$PWD/migrations" go run ./cmd/migrate

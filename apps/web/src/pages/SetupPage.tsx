@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 
 import { ApiError } from "../lib/api-client"
 import { useRegisterFirstOwner } from "../lib/api-bootstrap"
+import { validateNewPassword } from "../lib/password-policy"
 
 /**
  * SetupPage — first-owner registration.
@@ -13,12 +14,9 @@ import { useRegisterFirstOwner } from "../lib/api-bootstrap"
  * AuthProvider re-reads the session and drops the caller into
  * AuthedRoot.
  *
- * Field policy mirrors coder's SetupPageView (email + password with
- * name/workspace tacked on). Password strength is validated server-
- * side by password.Validate; the client just enforces "non-empty +
- * >= 12 chars" as a friendly-first-line hint. The server's error
- * envelope (bootstrap_weak_password) is surfaced inline when the
- * client hint passes but the server bcrypt policy still rejects.
+ * Password policy is validated server-side by password.Validate. The client
+ * mirrors the same simple checks so users get immediate feedback before the
+ * server's bootstrap_weak_password envelope is surfaced inline.
  */
 export function SetupPage() {
   const { t } = useTranslation("common")
@@ -30,13 +28,19 @@ export function SetupPage() {
   const [password, setPassword] = useState("")
 
   const submitting = register.isPending
-  const errorMsg = register.error instanceof ApiError
-    ? register.error.envelope.message
-    : register.error instanceof Error
-      ? register.error.message
-      : ""
+  const errorMsg =
+    register.error instanceof ApiError
+      ? register.error.envelope.message
+      : register.error instanceof Error
+        ? register.error.message
+        : ""
 
-  const invalid = email.trim() === "" || workspace.trim() === "" || password.length < 12
+  const passwordPolicyError = validateNewPassword(password)
+  const passwordPolicyErrorMsg =
+    password === "" || passwordPolicyError === null
+      ? undefined
+      : t(`passwordPolicy.errors.${passwordPolicyError}`)
+  const invalid = email.trim() === "" || workspace.trim() === "" || passwordPolicyError !== null
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -101,12 +105,13 @@ export function SetupPage() {
           <Field
             type="password"
             label={t("setup.passwordLabel")}
-            placeholder={t("setup.passwordPlaceholder")}
+            placeholder={t("passwordPolicy.placeholder")}
             value={password}
             onChange={setPassword}
             autoComplete="new-password"
             required
-            hint={t("setup.passwordHint")}
+            hint={t("passwordPolicy.hint")}
+            error={passwordPolicyErrorMsg}
           />
 
           {errorMsg && (
@@ -140,6 +145,7 @@ interface FieldProps {
   autoComplete?: string
   required?: boolean
   hint?: string
+  error?: string
 }
 
 function Field({
@@ -151,6 +157,7 @@ function Field({
   autoComplete,
   required,
   hint,
+  error,
 }: FieldProps) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -167,7 +174,11 @@ function Field({
         required={required}
         className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
       />
-      {hint && <span className="text-xs leading-4 text-fg-faint">{hint}</span>}
+      {error ? (
+        <span className="text-xs leading-4 text-danger">{error}</span>
+      ) : (
+        hint && <span className="text-xs leading-4 text-fg-faint">{hint}</span>
+      )}
     </label>
   )
 }

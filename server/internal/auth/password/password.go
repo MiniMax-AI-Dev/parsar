@@ -1,4 +1,4 @@
-// Package password wraps bcrypt and go-password-validator so the
+// Package password wraps bcrypt and password policy checks so the
 // rest of the codebase has one place to hash, verify and validate
 // local email/password credentials.
 //
@@ -11,9 +11,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"unicode/utf8"
+	"strings"
+	"unicode"
 
-	passwordvalidator "github.com/wagslane/go-password-validator"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,15 +31,45 @@ const (
 	// two-character edit if we ever want to slow attackers further.
 	bcryptCost = 12
 
-	// minEntropyBits rejects "password", "12345678", "qwertyui" etc.
-	// 60 bits ≈ "correct-horse-battery" territory. coder uses 52.
-	minEntropyBits = 60
+	// minPasswordRunes keeps the product rule easy to explain to users.
+	minPasswordRunes = 8
 
 	// maxPasswordLen is bcrypt's hard limit (72 bytes). We reject
 	// longer inputs at the door so callers get a clean 400 rather
 	// than a silently-truncated hash.
 	maxPasswordLen = 72
 )
+
+var commonWeakPasswords = map[string]struct{}{
+	"00000000":    {},
+	"11111111":    {},
+	"11223344":    {},
+	"123123123":   {},
+	"12341234":    {},
+	"12345678":    {},
+	"123456789":   {},
+	"1234567890":  {},
+	"1q2w3e4r":    {},
+	"abc12345":    {},
+	"abcdefgh":    {},
+	"admin123":    {},
+	"admin1234":   {},
+	"changeme":    {},
+	"iloveyou":    {},
+	"letmein":     {},
+	"monkey123":   {},
+	"password":    {},
+	"password1":   {},
+	"password12":  {},
+	"password123": {},
+	"passw0rd":    {},
+	"p@ssw0rd":    {},
+	"qwerty12":    {},
+	"qwerty123":   {},
+	"qwertyui":    {},
+	"welcome1":    {},
+	"welcome123":  {},
+}
 
 // dummyHash is a fixed, valid bcrypt hash used by Compare when the
 // stored hash is empty. Comparing against it burns the same CPU as
@@ -97,18 +127,94 @@ func Compare(hashed, plain string) error {
 	return nil
 }
 
-// Validate enforces our password policy: bcrypt byte-length ceiling
-// and a minimum entropy floor. Returns a plain-English error suitable
-// for surfacing to the client as a form validation message.
+// Validate enforces our password policy: at least 8 characters, bcrypt's
+// byte-length ceiling, and a small denylist of common weak passwords and
+// obvious sequences. Returns a plain-English error suitable for surfacing to
+// the client as a form validation message.
 func Validate(plain string) error {
-	if utf8.RuneCountInString(plain) == 0 {
+	runes := []rune(plain)
+	if len(runes) == 0 {
 		return errors.New("password is required")
+	}
+	if len(runes) < minPasswordRunes {
+		return errors.New("password must be at least 8 characters")
 	}
 	if len(plain) > maxPasswordLen {
 		return errors.New("password must be at most 72 bytes")
 	}
-	if err := passwordvalidator.Validate(plain, minEntropyBits); err != nil {
-		return err
+	if isCommonWeakPassword(plain) {
+		return errors.New("password is too common or easy to guess")
 	}
 	return nil
+}
+
+func isCommonWeakPassword(plain string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(plain))
+	if normalized == "" {
+		return true
+	}
+	if _, ok := commonWeakPasswords[normalized]; ok {
+		return true
+	}
+	if hasOneRepeatedRune(normalized) {
+		return true
+	}
+	if isSimpleSequence(normalized) {
+		return true
+	}
+	return false
+}
+
+func hasOneRepeatedRune(s string) bool {
+	var first rune
+	for i, r := range s {
+		if i == 0 {
+			first = r
+			continue
+		}
+		if r != first {
+			return false
+		}
+	}
+	return s != ""
+}
+
+func isSimpleSequence(s string) bool {
+	runes := []rune(s)
+	if len(runes) < minPasswordRunes {
+		return false
+	}
+	ascending := true
+	descending := true
+	for i := 1; i < len(runes); i++ {
+		if !unicode.IsDigit(runes[i-1]) || !unicode.IsDigit(runes[i]) {
+			ascending = false
+			descending = false
+			break
+		}
+		if runes[i] != runes[i-1]+1 {
+			ascending = false
+		}
+		if runes[i] != runes[i-1]-1 {
+			descending = false
+		}
+	}
+	if ascending || descending {
+		return true
+	}
+
+	for _, seq := range []string{"abcdefghijklmnopqrstuvwxyz", "qwertyuiop", "asdfghjkl", "zxcvbnm"} {
+		if strings.Contains(seq, s) || strings.Contains(reverse(seq), s) {
+			return true
+		}
+	}
+	return false
+}
+
+func reverse(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
 }
