@@ -133,6 +133,16 @@
     "ssoButton": "使用 {{provider}} 登录",
     "noAccountHint": "首次访问?请联系管理员发送邀请。"
   },
+  "passwordPolicy": {
+    "placeholder": "8 个字符或更多",
+    "hint": "至少使用 8 个字符。",
+    "errors": {
+      "required": "请输入密码",
+      "too_short": "至少使用 8 个字符",
+      "too_long": "密码过长",
+      "too_common": "请使用更难猜的密码"
+    }
+  },
   "setup": {
     "title": "欢迎使用 Parsar",
     "subtitle": "本实例尚未创建拥有者。请注册第一位账号 — 你将成为工作区 Owner。",
@@ -143,8 +153,6 @@
     "workspaceLabel": "工作区名称",
     "workspacePlaceholder": "Acme",
     "passwordLabel": "密码",
-    "passwordPlaceholder": "至少 12 位,词组 + 数字混合",
-    "passwordHint": "建议使用更长、好记的密码。4 个以上词组成的短语就很合适。",
     "submitButton": "创建管理员账号",
     "submitting": "正在创建...",
     "closedTitle": "已完成初始化",

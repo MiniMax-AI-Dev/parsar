@@ -133,6 +133,16 @@
     "ssoButton": "Sign in with {{provider}}",
     "noAccountHint": "First time here? Ask your admin for an invite."
   },
+  "passwordPolicy": {
+    "placeholder": "8 characters or more",
+    "hint": "Use at least 8 characters.",
+    "errors": {
+      "required": "Enter a password",
+      "too_short": "Use at least 8 characters",
+      "too_long": "Password is too long",
+      "too_common": "Choose a password that’s harder to guess"
+    }
+  },
   "setup": {
     "title": "Welcome to Parsar",
     "subtitle": "This install has no owner yet. Create the first account to get started — you will become the workspace owner.",
@@ -143,8 +153,6 @@
     "workspaceLabel": "Workspace name",
     "workspacePlaceholder": "Acme",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "At least 12 characters, mix words + numbers",
-    "passwordHint": "Choose a longer password. A memorable phrase with 4 or more words works well.",
     "submitButton": "Create owner account",
     "submitting": "Creating your account...",
     "closedTitle": "Setup already complete",

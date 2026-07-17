@@ -48,10 +48,17 @@ func TestCompareEmptyHashBurnsTime(t *testing.T) {
 func TestValidateRejectsWeak(t *testing.T) {
 	cases := []string{
 		"",
+		"short",
 		"password",
+		"        ",
 		"12345678",
-		"qwertyui",
+		"87654321",
 		"aaaaaaaaaaaa",
+		"abcdefghi",
+		"zyxwvuts",
+		"qwertyui",
+		"password123",
+		"P@ssw0rd",
 	}
 	for _, in := range cases {
 		if err := Validate(in); err == nil {
@@ -62,6 +69,8 @@ func TestValidateRejectsWeak(t *testing.T) {
 
 func TestValidateAcceptsStrong(t *testing.T) {
 	cases := []string{
+		"blue desk 42",
+		"OpenRoad7",
 		"correct horse battery staple",
 		"Tr0ub4dor&3-really-long-passphrase",
 		"MyP@ssw0rd!ButLonger42",

@@ -1,14 +1,22 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "../components/ui/button"
 import { useInviteInfo, useAcceptInvite } from "../lib/api-invitations"
+import { validateNewPassword } from "../lib/password-policy"
 import { setWorkspaceId } from "../lib/workspace"
 
 export function InviteAcceptPage({ token }: { token: string }) {
+  const { t } = useTranslation("common")
   const infoQ = useInviteInfo(token)
   const acceptMut = useAcceptInvite()
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [errMsg, setErrMsg] = useState<string | null>(null)
+  const passwordPolicyError = validateNewPassword(password)
+  const passwordPolicyErrorMsg =
+    password === "" || passwordPolicyError === null
+      ? null
+      : t(`passwordPolicy.errors.${passwordPolicyError}`)
 
   if (infoQ.isLoading) {
     return (
@@ -40,8 +48,8 @@ export function InviteAcceptPage({ token }: { token: string }) {
       setErrMsg("Passwords do not match")
       return
     }
-    if (password.length < 8) {
-      setErrMsg("Password must be at least 8 characters")
+    if (passwordPolicyError !== null) {
+      setErrMsg(t(`passwordPolicy.errors.${passwordPolicyError}`))
       return
     }
     try {
@@ -57,12 +65,10 @@ export function InviteAcceptPage({ token }: { token: string }) {
     <main className="grid min-h-screen place-items-center bg-surface">
       <div className="w-full max-w-sm space-y-4 rounded-lg border border-line p-6">
         <div className="space-y-1">
-          <h1 className="text-base font-semibold text-fg">
-            Join {workspace_name}
-          </h1>
+          <h1 className="text-base font-semibold text-fg">Join {workspace_name}</h1>
           <p className="text-sm text-fg-subtle">
-            You've been invited as <span className="font-medium">{role}</span>.
-            Set a password to activate your account.
+            You've been invited as <span className="font-medium">{role}</span>. Set a password to
+            activate your account.
           </p>
         </div>
 
@@ -83,12 +89,16 @@ export function InviteAcceptPage({ token }: { token: string }) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Set your password"
+              placeholder={t("passwordPolicy.placeholder")}
               required
               autoFocus
               autoComplete="new-password"
               className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200"
             />
+            <p className="text-xs leading-4 text-fg-faint">{t("passwordPolicy.hint")}</p>
+            {passwordPolicyErrorMsg && (
+              <p className="text-xs leading-4 text-danger">{passwordPolicyErrorMsg}</p>
+            )}
           </div>
 
           <div className="space-y-1">
@@ -112,7 +122,7 @@ export function InviteAcceptPage({ token }: { token: string }) {
 
           <Button
             type="submit"
-            disabled={acceptMut.isPending}
+            disabled={acceptMut.isPending || passwordPolicyError !== null}
             size="lg"
             className="w-full"
           >
