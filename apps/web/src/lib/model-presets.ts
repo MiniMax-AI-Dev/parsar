@@ -93,10 +93,6 @@ export function loadProviderCatalog(): Promise<ProviderPreset[]> {
   return providerCatalogPromise
 }
 
-export function findProvider(key: string): ProviderPreset | undefined {
-  return providerCatalogSnapshot.find((p) => p.key === key)
-}
-
 /** Short "200K · $0.14/$0.28" caption for a model, omitting null parts. */
 export function modelCaption(m: ModelPreset): string {
   const parts: string[] = []

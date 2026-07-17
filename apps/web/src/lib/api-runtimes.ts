@@ -169,9 +169,6 @@ const KEY_LIST = (workspaceID: string, type?: RuntimeType, filters?: RuntimeList
     filters?.agentKind ?? "",
   ] as const
 
-const KEY_DETAIL = (workspaceID: string, runtimeID: string) =>
-  ["admin", "runtimes", workspaceID, "detail", runtimeID] as const
-
 let cachedDevUserID: string | null | undefined
 
 async function devAuthHeaders(): Promise<Record<string, string>> {
@@ -283,8 +280,4 @@ export function useDeleteRuntime(workspaceID: string) {
       qc.invalidateQueries({ queryKey: ["admin", "runtimes", workspaceID] })
     },
   })
-}
-
-export function getRuntimeDetailKey(workspaceID: string, runtimeID: string): readonly unknown[] {
-  return KEY_DETAIL(workspaceID, runtimeID)
 }

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiRequest, noUnreachableRetry } from "./api-client"
 import { KEY_AGENT_CAPABILITIES, KEY_CAPABILITIES_WORKSPACE, KEY_CAPABILITY_VERSIONS } from "./api-capabilities"
-import type { Agent, Capability, CapabilityVersion } from "./api-types"
+import type { Capability } from "./api-types"
 
 export interface MarketplaceCapability extends Capability {
   capability_id?: string
@@ -279,22 +279,4 @@ export function useUpgrade(workspaceID: string | null, agentID: string | null) {
 
 export function marketplaceSourceName(capability: Partial<MarketplaceCapability | TargetMarketplaceInstall>): string {
   return capability.source_workspace_name ?? ""
-}
-
-export function pinnedVersionOf(capability: Partial<MarketplaceCapability | TargetMarketplaceInstall>): string | undefined {
-  return capability.pinned_version ?? capability.latest_version
-}
-
-export function latestVersionOf(capability: Partial<MarketplaceCapability | TargetMarketplaceInstall>, versions?: CapabilityVersion[]): CapabilityVersion | undefined {
-  if (capability.latest_version_id && versions) {
-    const byID = versions.find((version) => version.id === capability.latest_version_id)
-    if (byID) return byID
-  }
-  return versions?.[0]
-}
-
-export function agentDisplayID(agent: Agent | EnabledMarketplaceAgent): string {
-  if ("agent_id" in agent && agent.agent_id) return agent.agent_id
-  if ("id" in agent && agent.id) return agent.id
-  return ""
 }

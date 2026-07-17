@@ -543,10 +543,6 @@ export interface ListAgentRunEventsResponse {
   events: AgentRunEvent[]
 }
 
-export interface RequeueAgentRunResponse {
-  run: AgentRunSummary
-}
-
 export interface StartAgentRunResponse {
   run_id: string
   status: "running" | string
@@ -663,8 +659,6 @@ export interface ListConversationsResponse {
   conversations: ConversationListItem[]
 }
 
-export type ConversationVisibility = "workspace" | "private"
-
 export interface CreateConversationRequest {
   title: string
   /** Origin channel. Defaults to `web` server-side when omitted. */
@@ -681,9 +675,6 @@ export interface CreateConversationRequest {
   agent_id?: string
   metadata?: Record<string, unknown>
 }
-
-export type ConversationSummary = Conversation
-export type MessageSummary = ConversationTimelineMessage
 
 /**
  * Timeline returned by GET /api/v1/conversations/{id}/timeline.
