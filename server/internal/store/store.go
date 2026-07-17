@@ -2152,25 +2152,69 @@ func (s *Store) ConfigureAgentProfile(ctx context.Context, input ConfigureAgentP
 	if err != nil {
 		return ConfigureDevAgentConnectorResult{}, err
 	}
-	config := nonNilMap(input.Config)
+	tx, err := beginTx(ctx, s.db)
+	if err != nil {
+		return ConfigureDevAgentConnectorResult{}, err
+	}
+	defer tx.Rollback(ctx)
+	queries := sqlc.New(tx)
+	current, err := queries.GetAgentForUpdate(ctx, agentID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
+		}
+		return ConfigureDevAgentConnectorResult{}, err
+	}
+	// Agent edits call this endpoint after the main PATCH. Merge only fields
+	// owned by the profile request so its older snapshot cannot roll back model,
+	// capability, or credential changes already committed by UpdateAgent.
+	config := decodeJSONMap(current.Config)
+	profileConfig := nonNilMap(input.Config)
+	if raw, ok := profileConfig["profile"]; ok {
+		profile, ok := raw.(map[string]any)
+		if !ok || len(profile) == 0 {
+			delete(config, "profile")
+		} else {
+			config["profile"] = cloneAnyMap(profile)
+		}
+	}
+	for _, key := range []string{"agent_kind", "daemon_mode", "sandbox_size", "device_id"} {
+		raw, ok := profileConfig[key]
+		if !ok {
+			continue
+		}
+		value, _ := raw.(string)
+		if value = strings.TrimSpace(value); value == "" {
+			delete(config, key)
+		} else {
+			config[key] = value
+		}
+	}
+	var profileWorkdir any
+	var profileWorkdirSet bool
+	for _, key := range []string{"work_dir", "workdir", "working_directory"} {
+		if value, ok := profileConfig[key]; ok {
+			profileWorkdir = value
+			profileWorkdirSet = true
+			break
+		}
+	}
+	if profileWorkdirSet {
+		delete(config, "work_dir")
+		delete(config, "workdir")
+		delete(config, "working_directory")
+		if workdir, ok := profileWorkdir.(string); ok {
+			if workdir = strings.TrimSpace(workdir); workdir != "" {
+				config["work_dir"] = workdir
+			}
+		}
+	}
 	if modelID := strings.TrimSpace(input.ModelID); modelID != "" {
 		modelUUID, err := uuid(modelID)
 		if err != nil {
 			return ConfigureDevAgentConnectorResult{}, err
 		}
-		workspaceID, err := sqlc.New(s.db).GetAgentWorkspace(ctx, agentID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
-			}
-			return ConfigureDevAgentConnectorResult{}, err
-		}
-		workspaceUUID, err := uuid(workspaceID)
-		if err != nil {
-			return ConfigureDevAgentConnectorResult{}, err
-		}
-		_ = workspaceUUID
-		status, err := sqlc.New(s.db).GetModelStatus(ctx, modelUUID)
+		status, err := queries.GetModelStatus(ctx, modelUUID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
@@ -2183,20 +2227,33 @@ func (s *Store) ConfigureAgentProfile(ctx context.Context, input ConfigureAgentP
 		config["model_id"] = modelID
 	}
 	if workdir := strings.TrimSpace(input.Workdir); workdir != "" {
-		config["workdir"] = workdir
+		delete(config, "workdir")
+		delete(config, "working_directory")
+		config["work_dir"] = workdir
 	}
 	if systemPrompt := strings.TrimSpace(input.SystemPrompt); systemPrompt != "" {
 		config["system_prompt"] = systemPrompt
+	}
+	if _, daemonModeSet := profileConfig["daemon_mode"]; daemonModeSet {
+		switch stringFromMap(config, "daemon_mode") {
+		case "sandbox":
+			delete(config, "device_id")
+		case "local":
+			delete(config, "sandbox_size")
+		}
 	}
 	encoded, err := json.Marshal(config)
 	if err != nil {
 		return ConfigureDevAgentConnectorResult{}, err
 	}
-	row, err := sqlc.New(s.db).ConfigureAgentProfile(ctx, sqlc.ConfigureAgentProfileParams{AgentID: agentID, AgentConfig: encoded, Now: timestamptz(time.Now().UTC())})
+	row, err := queries.ConfigureAgentProfile(ctx, sqlc.ConfigureAgentProfileParams{AgentID: agentID, AgentConfig: encoded, Now: timestamptz(time.Now().UTC())})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: %s", ErrUnknownAgent, input.AgentID)
 		}
+		return ConfigureDevAgentConnectorResult{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return ConfigureDevAgentConnectorResult{}, err
 	}
 	return ConfigureDevAgentConnectorResult{AgentID: row.AgentID, Name: row.Name, Slug: row.Slug, ConnectorType: row.ConnectorType, AgentConfig: decodeJSONMap(row.AgentConfig)}, nil

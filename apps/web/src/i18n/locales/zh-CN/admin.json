@@ -962,6 +962,7 @@
       "unbound": "未绑定 Runtime",
       "pending": "待分配"
     },
+    "modelUnavailable": "模型不可用",
     "sandbox": {
       "running": "运行中"
     },
@@ -1419,6 +1420,7 @@
         "nameConflict": "已有同名 Agent，请换一个",
         "slugConflict": "内部标识已被占用，请换一个名称。",
         "modelRequired": "请选择一个模型",
+        "modelUnavailable": "当前模型已不可用，请重新选择一个可用模型。",
         "generatedIdConflict": "这个名称生成的内部标识已被占用，请换一个名称。",
         "generatedIdInvalid": "名称需要包含至少一个字母、数字或中文。",
         "deviceRequired": "请选择一台本地设备。",

@@ -695,7 +695,8 @@ export function CreateAgentDialog({
   const connector = mode === "edit" && agent ? agent.connector_type : connectorForExecutionMode(executionMode)
   const hasModel = activeModels.length > 0
   const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
-  const hasRequiredModel = !requiresModel || (hasModel && selectedModelID !== "")
+  const selectedModelUnavailable = mode === "edit" && requiresModel && selectedModelID !== "" && selectedModel === null
+  const hasRequiredModel = !requiresModel || (selectedModel !== null && !incompatibleModelIDs.has(selectedModel.id))
   // Create opens model binding on a pending "shared" pick because secrets may
   // still be loading; once they land, resolve to the first existing one. Gated
   // on the credential_ref UI so no-credential models stay untouched; with zero
@@ -774,7 +775,7 @@ export function CreateAgentDialog({
 
   async function submit() {
     setSubmitAttempted(true)
-    if (requiresModel && (!hasModel || !selectedModelID)) {
+    if (!hasRequiredModel) {
       modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
       return
     }
@@ -804,18 +805,14 @@ export function CreateAgentDialog({
         : (cap.latest_version_id as string)
       return { capability_version_id: versionID, pinning_mode: pinningMode }
     })
+    const profile = {
+      ...(requiresModel ? { model_id: selectedModelID } : {}),
+      capabilities: capabilityNames,
+      skills: capabilityNames,
+    }
     const mergedConfig: Record<string, unknown> = {
       ...configBaseForSubmit(agent, connector),
-      // The edit flow updates the agent config twice: the main agent PATCH
-      // and, for agent_daemon rows, the profile update below. Keep the
-      // canonical model field in the second payload too, otherwise its
-      // stale value can overwrite the newly selected model.
-      ...(requiresModel ? { default_model_id: selectedModelID } : {}),
-      profile: {
-        ...(requiresModel ? { model_id: selectedModelID } : {}),
-        capabilities: capabilityNames,
-        skills: capabilityNames,
-      },
+      profile,
       ...(connector === "agent_daemon" ? {
         agent_kind: agentEngine,
         ...(executionMode === "sandbox" ? { daemon_mode: "sandbox", sandbox_size: sandboxSize } : {}),
@@ -825,6 +822,14 @@ export function CreateAgentDialog({
         // per-conversation scratch dir on the daemon side.
         ...(trimmedWorkDir !== "" ? { work_dir: trimmedWorkDir } : {}),
       } : {}),
+    }
+    const agentProfileConfig: Record<string, unknown> = {
+      profile,
+      agent_kind: agentEngine,
+      daemon_mode: executionMode === "sandbox" ? "sandbox" : "local",
+      sandbox_size: executionMode === "sandbox" ? sandboxSize : null,
+      device_id: executionMode === "local_device" ? deviceID : null,
+      work_dir: trimmedWorkDir || null,
     }
     // Embed credential_bindings + model_credential_binding into the agent
     // config so the runtime resolver and visibility-bindings validator
@@ -875,7 +880,7 @@ export function CreateAgentDialog({
       ? {
           ...(requiresModel ? { model_id: selectedModelID } : {}),
           system_prompt: systemPrompt.trim() || undefined,
-          config: mergedConfig,
+          config: agentProfileConfig,
         } satisfies UpdateAgentProfileRequest
       : undefined
     // In edit mode, sync per-binding pinning_mode / version against the
@@ -976,7 +981,7 @@ export function CreateAgentDialog({
     }
     setSubmitAttempted(true)
     if (step === 1 && !step1Valid) {
-      if (requiresModel && !selectedModelID) {
+      if (!hasRequiredModel) {
         modelFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
       }
       return
@@ -1154,7 +1159,16 @@ export function CreateAgentDialog({
                 </Field>
               )}
               {requiresModel && (
-                <Field ref={modelFieldRef} label={t("agents.form.fields.model")} required error={submitAttempted && !selectedModelID ? t("agents.form.errors.modelRequired") : undefined}>
+                <Field
+                  ref={modelFieldRef}
+                  label={t("agents.form.fields.model")}
+                  required
+                  error={selectedModelUnavailable
+                    ? t("agents.form.errors.modelUnavailable")
+                    : submitAttempted && !hasRequiredModel
+                      ? t("agents.form.errors.modelRequired")
+                      : undefined}
+                >
                 {hasModel ? (
                   <div ref={modelComboboxRef} className="relative">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" />

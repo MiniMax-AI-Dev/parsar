@@ -962,6 +962,7 @@
       "unbound": "No runtime bound",
       "pending": "Not allocated"
     },
+    "modelUnavailable": "Unavailable model",
     "sandbox": {
       "running": "Running"
     },
@@ -1419,6 +1420,7 @@
         "nameConflict": "An Agent with this name already exists. Pick another name.",
         "slugConflict": "The internal identifier is already taken. Pick another name.",
         "modelRequired": "Pick a model first.",
+        "modelUnavailable": "The current model is unavailable. Select an active model.",
         "generatedIdConflict": "This name generates an internal identifier that is already taken. Pick another name.",
         "generatedIdInvalid": "Name needs at least one letter, number, or Chinese character.",
         "deviceRequired": "Select a local device.",
