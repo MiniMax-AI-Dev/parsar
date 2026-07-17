@@ -69,6 +69,10 @@ export function useModels(workspaceID: string | null) {
     queryFn: () => listModels(workspaceID),
     retry: noUnreachableRetry,
     staleTime: 30_000,
+    // The model catalog can be changed from another admin session. Refresh
+    // when the Agents/Models page mounts so the picker does not keep an old
+    // cached inventory after navigation.
+    refetchOnMount: "always",
   })
 }
 
