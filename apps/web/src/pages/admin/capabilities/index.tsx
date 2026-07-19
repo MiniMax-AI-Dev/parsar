@@ -153,12 +153,15 @@ export function CapabilitiesPage() {
     window.history.pushState({}, "", url.toString())
     window.dispatchEvent(new Event("admin:navigate"))
   }
-  const ownCapabilities = capsQ.data?.capabilities ?? []
+  const ownCapabilities = useMemo(() => capsQ.data?.capabilities ?? [], [capsQ.data?.capabilities])
   // In paginated mode the server returns the page-sliced marketplace installs
   // alongside the page-sliced own capabilities, so we use those instead of
   // the separate full-list endpoint. The standalone endpoint stays mounted to
   // compute totals (and as a fallback if paginated mode is off).
-  const pageInstalls = (capsQ.data?.marketplace_installs ?? []) as TargetMarketplaceInstall[]
+  const pageInstalls = useMemo(
+    () => (capsQ.data?.marketplace_installs ?? []) as TargetMarketplaceInstall[],
+    [capsQ.data?.marketplace_installs],
+  )
   const allInstalls = marketplaceInstallsQ.data ?? []
   const usingServerPage = capsQ.data?.total !== undefined
   const allCapabilities = useMemo(

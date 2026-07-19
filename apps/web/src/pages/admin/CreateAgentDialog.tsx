@@ -542,7 +542,7 @@ export function CreateAgentDialog({
     setPairDialogOpen(false)
     setStep(1)
     setCapabilityTypeFilter("all")
-  }, [open, mode, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID])
+  }, [open, mode, agent, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID])
 
   function selectExecutionMode(nextMode: ExecutionMode) {
     setExecutionMode(nextMode)

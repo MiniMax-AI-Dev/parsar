@@ -3,10 +3,8 @@ import { useTranslation } from "react-i18next"
 import { AdminRouter } from "./pages/admin/AdminRouter"
 import { LoginPage } from "./pages/LoginPage"
 import { OnboardingPage } from "./pages/OnboardingPage"
-import {
-  JoinWorkspaceLanding,
-  popPendingJoinIntent,
-} from "./pages/JoinWorkspaceLanding"
+import { JoinWorkspaceLanding } from "./pages/JoinWorkspaceLanding"
+import { popPendingJoinIntent } from "./lib/join-intent"
 import { InviteAcceptPage } from "./pages/InviteAcceptPage"
 import { AuthProvider, useAuth } from "./lib/auth-context"
 import { ThemeProvider } from "./lib/theme-provider"
@@ -87,4 +85,3 @@ export function App() {
     </ThemeProvider>
   )
 }
-

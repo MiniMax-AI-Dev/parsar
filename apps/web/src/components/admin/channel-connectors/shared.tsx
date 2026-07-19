@@ -2,7 +2,7 @@
  * Shared UI primitives + tiny helpers for all channel-connector panels
  * (Feishu / Slack / Discord). Each platform-specific fields module owns its
  * own SecretFieldSpec + config-equal logic, but the visual shell — Card,
- * Field, SecretInput, randomHex — lives here so all three panels look the
+ * Field and SecretInput live here so all three panels look the
  * same and any tweak to spacing/colors applies uniformly.
  */
 import type { ReactNode } from "react"
@@ -125,12 +125,6 @@ export function SecretInput({
       />
     </Field>
   )
-}
-
-export function randomHex(bytes: number): string {
-  const values = new Uint8Array(bytes)
-  crypto.getRandomValues(values)
-  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
 }
 
 export function ProvisionStatusIcon({

@@ -27,7 +27,7 @@ interface Props {
 
 export function SkillFileTree({ skill }: Props) {
   const { t } = useTranslation("admin")
-  const files = skill.files ?? []
+  const files = useMemo(() => skill.files ?? [], [skill.files])
 
   const grouped = useMemo(() => groupFiles(files), [files])
 
