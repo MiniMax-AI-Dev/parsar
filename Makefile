@@ -29,7 +29,7 @@ help:
 	@echo '  ./install.sh --no-sandbox          Skip the sandbox container'
 	@echo
 	@echo 'Dev (run from this checkout):'
-	@echo '  make dev-db           Start the development Postgres (scripts/dev-stack.sh)'
+	@echo '  make dev-db           Start the development Postgres (scripts/dev-stack.sh, parses scripts/dev-env.sh)'
 	@echo '  make server           Run the Go API in the foreground'
 	@echo '  make server-up        Start the API in a tmux session (macOS-friendly)'
 	@echo '  make server-down      Stop that tmux session'

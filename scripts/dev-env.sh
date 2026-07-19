@@ -60,3 +60,50 @@ parsar_dev_database_url() {
     "$PARSAR_PG_USER" "$PARSAR_PG_PASSWORD" \
     "$host" "$port" "$PARSAR_PG_DB"
 }
+
+# Start (or attach to) the development Postgres container defined by
+# docker-compose.dev.yml and wait for it to accept SQL connections.
+# Used by `make dev-db` and the `check-store` CI job. Keeping the
+# orchestration in this file means `scripts/dev-stack.sh` can stay a
+# thin shim and other Makefile targets can call the same code path.
+parsar_dev_start_db() {
+  ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+  PARSAR_HOME="${PARSAR_HOME:-$HOME/.parsar}"
+  PARSAR_LOG_DIR="$PARSAR_HOME/logs"
+  PARSAR_STATE_DIR="$PARSAR_HOME/state"
+  PARSAR_DEV_DIR="$PARSAR_HOME/dev"
+
+  "$ROOT_DIR/scripts/setup.sh" >/dev/null
+  mkdir -p "$PARSAR_LOG_DIR" "$PARSAR_STATE_DIR" "$PARSAR_DEV_DIR"
+
+  "$ROOT_DIR/scripts/dev-compose.sh" up -d postgres
+
+  printf 'Waiting for Postgres'
+  for _ in {1..30}; do
+    if "$ROOT_DIR/scripts/dev-compose.sh" exec -T postgres \
+      pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
+      printf ' ready\n'
+      break
+    fi
+    printf '.'
+    sleep 1
+  done
+
+  if ! "$ROOT_DIR/scripts/dev-compose.sh" exec -T postgres \
+    pg_isready -U "$PARSAR_PG_USER" -d "$PARSAR_PG_DB" >/dev/null 2>&1; then
+    printf '\nPostgres did not become ready; inspect logs with:\n' >&2
+    printf '  ./scripts/dev-compose.sh logs postgres\n' >&2
+    return 1
+  fi
+
+  cat <<INFO
+Parsar dev stack started.
+
+Postgres: ${PARSAR_POSTGRES_HOST}:${PARSAR_POSTGRES_PORT} (db=${PARSAR_PG_DB} user=${PARSAR_PG_USER} password=${PARSAR_PG_PASSWORD})
+Migrate:  make migrate-dev
+Server:   make server             # http://127.0.0.1:${PARSAR_DEV_SERVER_PORT}/api/v1/health
+Web:      make web                # http://127.0.0.1:${PARSAR_WEB_PORT}
+Runner:   make http-runner-loop   # bounded local HTTP Agent runner
+Logs:     $PARSAR_LOG_DIR
+INFO
+}
