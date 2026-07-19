@@ -1415,7 +1415,8 @@
       "defaults": {
         "workspaceName": "当前 Workspace",
         "name": "{{workspace}} 的 Agent",
-        "description": "{{workspace}} 的通用助手。"
+        "description": "{{workspace}} 的通用助手。",
+        "systemPrompt": "你是这个团队的 AI 助手。请保持简洁、准确，并优先提供可执行的建议。"
       },
       "errors": {
         "nameConflict": "已有同名 Agent，请换一个",

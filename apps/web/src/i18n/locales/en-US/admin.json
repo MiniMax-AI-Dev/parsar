@@ -1415,7 +1415,8 @@
       "defaults": {
         "workspaceName": "My Workspace",
         "name": "{{workspace}}'s agent",
-        "description": "General-purpose assistant for {{workspace}}."
+        "description": "General-purpose assistant for {{workspace}}.",
+        "systemPrompt": "You are a helpful AI assistant for this team. Be concise and accurate."
       },
       "errors": {
         "nameConflict": "An Agent with this name already exists. Pick another name.",

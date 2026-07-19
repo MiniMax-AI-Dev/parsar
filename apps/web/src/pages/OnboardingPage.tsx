@@ -6,7 +6,9 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ApiError } from "../lib/api-client"
 import { useCreateWorkspace } from "../lib/api-workspaces"
+import { useAuth } from "../lib/auth-context"
 import { setWorkspaceId } from "../lib/workspace"
+import { workspaceOwnerName } from "../lib/workspace-defaults"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 
@@ -21,7 +23,13 @@ function extractErrorMessage(err: unknown): string | null {
 
 export function OnboardingPage() {
   const { t } = useTranslation("common")
-  const [name, setName] = useState("")
+  const { user } = useAuth()
+  const owner = workspaceOwnerName(user)
+  const [name, setName] = useState(() =>
+    owner
+      ? t("workspaceDefaults.personal", { name: owner })
+      : t("workspaceDefaults.generic")
+  )
   const create = useCreateWorkspace()
   const errMsg = extractErrorMessage(create.error)
 

@@ -37,7 +37,6 @@ import type {
   UserWorkspace,
 } from "../../lib/api-types"
 
-const DEFAULT_PROMPT = "You are a helpful AI assistant for this team. Be concise and accurate."
 const DEFAULT_WORK_DIR = "/workspace"
 
 type ExecutionMode = "sandbox" | "local_device" | "external"
@@ -134,9 +133,13 @@ function modelIDFromAgent(a?: Agent | null): string {
   return String(cfg.default_model_id ?? cfg.model_id ?? profile.model_id ?? "")
 }
 
-function promptFromAgent(a?: Agent | null): string {
+function promptFromAgent(a: Agent | null | undefined, fallback: string): string {
   const cfg = agentConfig(a)
-  return String(cfg.system_prompt ?? DEFAULT_PROMPT)
+  return String(cfg.system_prompt ?? fallback)
+}
+
+function defaultWorkDir(executionMode: ExecutionMode): string {
+  return executionMode === "sandbox" ? DEFAULT_WORK_DIR : ""
 }
 
 function capabilitiesFromAgent(a?: Agent | null): string[] {
@@ -208,6 +211,7 @@ export function CreateAgentDialog({
   const workspaceDisplayName = (workspaceName ?? "").trim() || t("agents.form.defaults.workspaceName")
   const defaultAgentName = t("agents.form.defaults.name", { workspace: workspaceDisplayName })
   const defaultAgentDescription = t("agents.form.defaults.description", { workspace: workspaceDisplayName })
+  const defaultSystemPrompt = t("agents.form.defaults.systemPrompt")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("local_device")
@@ -217,7 +221,7 @@ export function CreateAgentDialog({
   const [modelSearch, setModelSearch] = useState("")
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const [highlightedModelID, setHighlightedModelID] = useState<string | null>(null)
-  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_PROMPT)
+  const [systemPrompt, setSystemPrompt] = useState(defaultSystemPrompt)
   const [capabilities, setCapabilities] = useState<string[]>([])
   const [selectedCapabilityIDs, setSelectedCapabilityIDs] = useState<string[]>([])
   // capabilityVersionChoices keys on capability_id and stores the user's
@@ -456,14 +460,15 @@ export function CreateAgentDialog({
       const cloneSuffix = cloneSource?.name ? " (Copy)" : ""
       setName(params.get("agent_name") ?? (cloneSource ? `${cloneSource.name}${cloneSuffix}` : defaultAgentName))
       setDescription(params.get("agent_description") ?? cloneSource?.description ?? defaultAgentDescription)
-      setExecutionMode(cloneSource ? executionModeFromAgent(cloneSource) : "local_device")
+      const initialExecutionMode = cloneSource ? executionModeFromAgent(cloneSource) : "local_device"
+      setExecutionMode(initialExecutionMode)
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
       setSandboxSize(cloneSource ? sandboxSizeFromAgent(cloneSource) : "standard")
       setModelID(cloneSource ? modelIDFromAgent(cloneSource) : "")
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
-      setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource) : DEFAULT_PROMPT))
+      setSystemPrompt(params.get("agent_prompt") ?? (cloneSource ? promptFromAgent(cloneSource, defaultSystemPrompt) : defaultSystemPrompt))
       setCapabilities(cloneSource ? capabilitiesFromAgent(cloneSource) : [])
       // Capability IDs aren't prefilled on clone: mapping installed names back
       // to IDs needs an extra round-trip, so users re-pick from the marketplace.
@@ -473,7 +478,7 @@ export function CreateAgentDialog({
       // Creation is locked to public; the visibility selector is hidden.
       setVisibility("public")
       setDeviceID(cloneSource ? deviceIDFromAgent(cloneSource) : "")
-      setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || DEFAULT_WORK_DIR : DEFAULT_WORK_DIR)
+      setWorkDir(cloneSource ? workDirFromAgent(cloneSource) || defaultWorkDir(initialExecutionMode) : defaultWorkDir(initialExecutionMode))
       // Clones explicitly drop the source agent's credential bindings: the
       // copy is a fresh agent and the user re-picks. Without these resets a
       // previous clone's bindings would leak across dialog opens.
@@ -494,7 +499,7 @@ export function CreateAgentDialog({
       setModelSearch("")
       setModelDropdownOpen(false)
       setHighlightedModelID(null)
-      setSystemPrompt(promptFromAgent(agent))
+      setSystemPrompt(promptFromAgent(agent, defaultSystemPrompt))
       setCapabilities(capabilitiesFromAgent(agent))
       setSelectedCapabilityIDs([])
       // capabilityVersionChoices for edit mode is hydrated by a separate
@@ -537,7 +542,14 @@ export function CreateAgentDialog({
     setPairDialogOpen(false)
     setStep(1)
     setCapabilityTypeFilter("all")
-  }, [open, mode, agent?.id, defaultAgentDescription, defaultAgentName, firstModelID])
+  }, [open, mode, agent?.id, defaultAgentDescription, defaultAgentName, defaultSystemPrompt, firstModelID])
+
+  function selectExecutionMode(nextMode: ExecutionMode) {
+    setExecutionMode(nextMode)
+    setWorkDir((current) =>
+      current === defaultWorkDir(executionMode) ? defaultWorkDir(nextMode) : current
+    )
+  }
 
   // Hydrate edit-mode binding choices when the listAgentCapabilities
   // response lands. We only seed entries the user hasn't touched (i.e.
@@ -987,14 +999,14 @@ export function CreateAgentDialog({
                         title={t("agents.execution.localDevice.title")}
                         description={t("agents.execution.localDevice.description")}
                         selected={executionMode === "local_device"}
-                        onSelect={() => setExecutionMode("local_device")}
+                        onSelect={() => selectExecutionMode("local_device")}
                       />
                       <ChoiceCard
                         icon={<Cloud className="h-4 w-4" />}
                         title={t("agents.execution.sandbox.title")}
                         description={t("agents.execution.sandbox.description")}
                         selected={executionMode === "sandbox"}
-                        onSelect={() => setExecutionMode("sandbox")}
+                        onSelect={() => selectExecutionMode("sandbox")}
                       />
                       {mode === "create" && (
                         <ChoiceCard
@@ -1002,7 +1014,7 @@ export function CreateAgentDialog({
                           title={t("agents.execution.external.title")}
                           description={t("agents.execution.external.description")}
                           selected={executionMode === "external"}
-                          onSelect={() => setExecutionMode("external")}
+                          onSelect={() => selectExecutionMode("external")}
                           disabled
                         />
                       )}
