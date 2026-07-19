@@ -194,6 +194,43 @@ description and keep ownership on the side listed here.
   are committed artifacts, but never the source of truth. Change annotations
   or SQL first, then regenerate.
 
+### Auth Provider Configuration
+
+- Email/password login is always available after bootstrap.
+- Feishu login remains the Feishu-specific adapter because its token exchange
+  needs a Feishu app access token and is not a generic OAuth/OIDC exchange.
+- Generic third-party SSO uses env-driven OIDC providers. List enabled
+  provider ids with `PARSAR_AUTH_OIDC_PROVIDERS`, for example
+  `PARSAR_AUTH_OIDC_PROVIDERS=google,company`.
+- Provider ids must match `^[a-z][a-z0-9_-]{0,62}$`. The id becomes part of
+  the login routes and identity key:
+  `/api/v1/auth/oidc/{providerID}/start`,
+  `/api/v1/auth/oidc/{providerID}/callback`, and
+  `auth_identities.provider = "oidc:{providerID}"`.
+- Per-provider env names use the uppercased provider id with non-alphanumeric
+  characters converted to `_`: `company-sso` uses
+  `PARSAR_AUTH_OIDC_COMPANY_SSO_*`.
+- Required per-provider env:
+  `PARSAR_AUTH_OIDC_<ID>_ISSUER_URL`,
+  `PARSAR_AUTH_OIDC_<ID>_CLIENT_ID`,
+  `PARSAR_AUTH_OIDC_<ID>_CLIENT_SECRET`.
+- Optional per-provider env:
+  `PARSAR_AUTH_OIDC_<ID>_LABEL`,
+  `PARSAR_AUTH_OIDC_<ID>_REDIRECT_URI`,
+  `PARSAR_AUTH_OIDC_<ID>_SCOPES`,
+  `PARSAR_AUTH_OIDC_<ID>_ALLOWED_DOMAINS`,
+  `PARSAR_AUTH_OIDC_<ID>_TOKEN_AUTH_METHOD`,
+  `PARSAR_AUTH_OIDC_<ID>_REQUIRE_VERIFIED_EMAIL`.
+- If `REDIRECT_URI` is omitted, Parsar derives it from `PARSAR_PUBLIC_URL` as
+  `{public_url}/api/v1/auth/oidc/{providerID}/callback` (or the dev loopback
+  public URL when running in dev profile).
+- `TOKEN_AUTH_METHOD` may be `client_secret_basic` or `client_secret_post`.
+  When omitted, Parsar follows discovery metadata and falls back to
+  `client_secret_basic`.
+- OIDC login must validate discovery metadata, ID token signature, issuer,
+  audience, expiration, nonce, verified email by default, and allowed email
+  domains when configured.
+
 ## Code quality & architecture
 
 Parsar favors small, single-purpose files and reused helpers over growing

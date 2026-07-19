@@ -542,6 +542,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 				// session cookie; logout → revoke + clear cookie.
 				r.Get("/auth/feishu/start", feishuStartHandler(*cfg.oauthDeps))
 				r.Get("/auth/feishu/callback", feishuCallbackHandler(*cfg.oauthDeps))
+				r.Get("/auth/oidc/{providerID}/start", oidcStartHandler(*cfg.oauthDeps))
+				r.Get("/auth/oidc/{providerID}/callback", oidcCallbackHandler(*cfg.oauthDeps))
 				r.Post("/auth/logout", authLogoutHandler(*cfg.oauthDeps))
 			}
 			r.Get("/auth/providers", listAuthProviders(cfg.authProviders))

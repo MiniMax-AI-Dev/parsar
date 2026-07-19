@@ -2694,6 +2694,91 @@ paths:
       summary: Log out the current session
       tags:
       - auth
+  /api/v1/auth/oidc/{providerID}/callback:
+    get:
+      description: Verifies CSRF state and OIDC nonce, exchanges the authorization
+        code, upserts the user identity, creates a session cookie, and redirects to
+        the login-success URL.
+      operationId: callbackOIDCOAuth
+      parameters:
+      - description: OIDC provider ID
+        in: path
+        name: providerID
+        required: true
+        type: string
+      - description: CSRF state minted at /start
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth authorization code returned by the OIDC provider
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to login-success URL
+        "400":
+          description: Missing state/code or state/nonce mismatch
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: OIDC provider is not configured
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: User upsert or session creation failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: OIDC exchange failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Handle generic OIDC callback
+      tags:
+      - auth
+  /api/v1/auth/oidc/{providerID}/start:
+    get:
+      description: Mints CSRF and nonce cookies and redirects the browser to the configured
+        OIDC provider authorize URL.
+      operationId: startOIDCOAuth
+      parameters:
+      - description: OIDC provider ID
+        in: path
+        name: providerID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to OIDC authorize URL
+        "404":
+          description: OIDC provider is not configured
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: State minting or discovery failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start generic OIDC login
+      tags:
+      - auth
   /api/v1/auth/providers:
     get:
       description: Returns the login providers the public login page may render. Sensitive
