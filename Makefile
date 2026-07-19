@@ -18,32 +18,57 @@ endif
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: help setup node-deps dev dev-db check check-setup check-sqlc check-go check-store check-web check-cli check-hygiene test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
+.PHONY: help install setup node-deps dev dev-db dev-up server-up server-down server-log check check-setup check-sqlc check-go check-store check-web check-cli check-hygiene test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
 
 help:
-	@printf '%s\n' \
-	  'Local development:' \
-	  '  make dev-all          Start Postgres, API, web, and HTTP runner' \
-	  '  make dev-db           Start the development Postgres only' \
-	  '  make server           Run the API in the foreground' \
-	  '  make web              Run the web app in the foreground' \
-	  '' \
-	  'Fast feedback:' \
-	  '  make test-fast        Run Go tests plus frontend/CLI checks' \
-	  '  make test-go          Run all Go tests without integration DB packages' \
-	  '  make test-go GO_TEST_PACKAGE=./server/internal/api/...' \
-	  '  make test-go GO_TEST_PACKAGE=./server/internal/api GO_TEST_RUN=TestHealth' \
-	  '  make test-web         Typecheck web and check design-system lint' \
-	  '  make lint-web         Run the full web lint (existing debt may fail)' \
-	  '  make test-cli         Run CLI unit tests' \
-	  '  make typecheck        Typecheck all TypeScript packages' \
-	  '' \
-	  'Before review:' \
-	  '  make check            Run the required full repository gate' \
-	  '  make check-go         Run sqlc drift check and non-store Go tests' \
-	  '  make check-store      Run migration and store integration tests' \
-	  '  make check-web        Run web typecheck and design lint' \
-	  '  make check-cli        Typecheck CLI/plugin packages'
+	@echo 'Operator (mirror install.sh):'
+	@echo '  make install                       One-command install or upgrade'
+	@echo '  make install PARSAR_LOCAL_PORT=19000  Install on a custom port'
+	@echo '  ./install.sh --status              Print current stack status'
+	@echo '  ./install.sh --restart             Recycle the stack, keep secrets'
+	@echo '  ./install.sh --no-sandbox          Skip the sandbox container'
+	@echo
+	@echo 'Dev (run from this checkout):'
+	@echo '  make dev-db           Start the development Postgres (scripts/dev-stack.sh)'
+	@echo '  make server           Run the Go API in the foreground'
+	@echo '  make server-up        Start the API in a tmux session (macOS-friendly)'
+	@echo '  make server-down      Stop that tmux session'
+	@echo '  make server-log       Tail the server log'
+	@echo '  make web              Run the Vite dev server'
+	@echo '  make cli              @parsar/cli --help'
+	@echo '  make dev-up           Postgres + API + web + HTTP runner in one shot'
+	@echo
+	@echo 'Fast feedback (no sqlc drift, no DB):'
+	@echo '  make test-fast        Go tests + web + CLI checks'
+	@echo '  make test-go          Non-store Go tests only'
+	@echo '  make test-web         Typecheck + design-lint web'
+	@echo '  make test-cli         @parsar/cli unit tests'
+	@echo
+	@echo 'Before review (full CI gate):'
+	@echo '  make check            Runs all check-* subtargets'
+	@echo '  make check-go         sqlc drift + non-store Go tests'
+	@echo '  make check-store      migration + store integration tests'
+	@echo '  make check-web        web typecheck + design lint'
+	@echo '  make check-cli        CLI plugin typechecks'
+	@echo '  make check-hygiene    repo pollution / runtime-path guard'
+	@echo
+	@echo 'Images:'
+	@echo '  make docker-build           Build parsar:dev for `./install.sh --image parsar:dev`'
+	@echo '  make docker-build-no-cache  Same, but bypass Docker cache'
+	@echo
+	@echo 'Misc (codegen / cleanup):'
+	@echo '  make sqlc-generate          Regenerate server/internal/db/sqlc/*'
+	@echo '  make openapi                Regenerate docs/openapi/openapi.yaml'
+	@echo '  make reset-dev              Stop dev stack (keep volumes)'
+	@echo '  make clean-dev              Stop dev stack and delete volumes'
+	@echo '  make bootstrap              Provision the first owner'
+	@echo '  make smoke                  Self-hosted smoke test against $$PARSAR_API_URL'
+
+# Operator entry point. Mirrors `curl -fsSL ... install.sh | bash` so
+# operators never hand-type ./install.sh from a checkout. Extra flags
+# pass through `ARGS`, env vars (PARSAR_LOCAL_PORT etc.) also work.
+install:
+	@if [[ -n "$$ARGS" ]]; then ./install.sh $$ARGS; else ./install.sh; fi
 
 setup:
 	./scripts/setup.sh
@@ -165,13 +190,16 @@ server:
 # and runs inside a tmux session that survives sandbox bash exits and
 # launchctl plist evictions. See scripts/dev-server-up.sh for the
 # full rationale.
-dev-server-up:
+# Aliases: server-up/down/log are the tmux-managed long-running dev
+# server, distinct from `server` which runs the binary in the
+# foreground for hot-reload development.
+dev-server-up server-up:
 	./scripts/dev-server-up.sh
 
-dev-server-down:
+dev-server-down server-down:
 	./scripts/dev-server-down.sh
 
-dev-server-log:
+dev-server-log server-log:
 	./scripts/dev-server-log.sh
 
 web:
@@ -189,7 +217,7 @@ http-runner-once:
 http-runner-loop:
 	cd server && go run ./cmd/httprunner --interval $${PARSAR_HTTP_RUNNER_INTERVAL:-2s} --max-runs $${PARSAR_HTTP_RUNNER_MAX_RUNS:-100}
 
-dev-all:
+dev-all dev-up:
 	./scripts/dev-all.sh
 
 # Self-hosted smoke test. Pass PARSAR_API_URL to point at a
