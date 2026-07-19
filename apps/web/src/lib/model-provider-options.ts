@@ -100,6 +100,19 @@ export function protocolDisplayLabel(id: string): string {
   }
 }
 
+export function endpointTypeForProtocol(id: string): string | null {
+  switch (id) {
+    case "anthropic":
+      return "anthropic"
+    case "openai":
+      return "openai"
+    case "google":
+      return "google_generative_ai"
+    default:
+      return null
+  }
+}
+
 export function findProviderModel(
   provider: ProviderTypeOption | undefined,
   modelKey: string,

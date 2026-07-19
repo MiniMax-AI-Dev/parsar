@@ -145,8 +145,9 @@ type importProviderModelsBody struct {
 }
 
 type discoveredProviderModel struct {
-	ID     string `json:"id"`
-	Exists bool   `json:"exists"`
+	ID                     string   `json:"id"`
+	Exists                 bool     `json:"exists"`
+	SupportedEndpointTypes []string `json:"supported_endpoint_types"`
 }
 
 type importProviderModelFailure struct {
@@ -163,8 +164,85 @@ type importProviderModelsResponse struct {
 
 var importProviderModelsHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+type providerModelDiscovery struct {
+	ID                     string
+	SupportedEndpointTypes []string
+}
+
 func modelImportSkipExisting(req importProviderModelsBody) bool {
 	return req.SkipExisting == nil || *req.SkipExisting
+}
+
+func normalizeEndpointType(raw string) string {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	v = strings.ReplaceAll(v, "-", "_")
+	v = strings.ReplaceAll(v, ".", "_")
+	v = strings.ReplaceAll(v, "/", "_")
+	switch v {
+	case "openai", "chat", "chat_completion", "chat_completions", "openai_chat", "openai_chat_completions":
+		return "openai"
+	case "openai_response", "openai_responses", "response", "responses":
+		return "openai-response"
+	case "anthropic", "message", "messages", "anthropic_message", "anthropic_messages":
+		return "anthropic"
+	case "google", "google_generative_ai", "gemini":
+		return "google_generative_ai"
+	default:
+		return v
+	}
+}
+
+func normalizeEndpointTypes(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, item := range raw {
+		normalized := normalizeEndpointType(item)
+		if normalized == "" || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		out = append(out, normalized)
+	}
+	return out
+}
+
+func endpointTypesFromAny(value any) []string {
+	switch typed := value.(type) {
+	case []any:
+		raw := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				raw = append(raw, s)
+			}
+		}
+		return normalizeEndpointTypes(raw)
+	case []string:
+		return normalizeEndpointTypes(typed)
+	default:
+		return nil
+	}
+}
+
+func configWithSupportedEndpointTypes(config map[string]any, endpointTypes []string) map[string]any {
+	merged := map[string]any{}
+	for k, v := range config {
+		merged[k] = v
+	}
+	normalized := normalizeEndpointTypes(endpointTypes)
+	if len(normalized) > 0 {
+		merged["supported_endpoint_types"] = normalized
+	}
+	return merged
+}
+
+func modelSupportsEndpointType(config map[string]any, endpointType string) bool {
+	want := normalizeEndpointType(endpointType)
+	for _, got := range endpointTypesFromAny(config["supported_endpoint_types"]) {
+		if got == want {
+			return true
+		}
+	}
+	return false
 }
 
 func providerModelsURL(baseURL string) string {
@@ -207,7 +285,7 @@ func apiKeyFromPayload(payload map[string]any) string {
 	return strings.TrimSpace(apiKey)
 }
 
-func importProviderModelIDs(ctx context.Context, req importProviderModelsBody, apiKey string) ([]string, error) {
+func importProviderModelIDs(ctx context.Context, req importProviderModelsBody, apiKey string) ([]providerModelDiscovery, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, providerModelsURL(req.BaseURL), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build upstream request: %w", err)
@@ -238,23 +316,27 @@ func importProviderModelIDs(ctx context.Context, req importProviderModelsBody, a
 	}
 	var body struct {
 		Data []struct {
-			ID string `json:"id"`
+			ID                     string   `json:"id"`
+			SupportedEndpointTypes []string `json:"supported_endpoint_types"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &body); err != nil {
 		return nil, fmt.Errorf("failed to parse upstream /models response: %w", err)
 	}
 	seen := map[string]bool{}
-	ids := make([]string, 0, len(body.Data))
+	models := make([]providerModelDiscovery, 0, len(body.Data))
 	for _, item := range body.Data {
 		id := strings.TrimSpace(item.ID)
 		if id == "" || seen[id] {
 			continue
 		}
 		seen[id] = true
-		ids = append(ids, id)
+		models = append(models, providerModelDiscovery{
+			ID:                     id,
+			SupportedEndpointTypes: normalizeEndpointTypes(item.SupportedEndpointTypes),
+		})
 	}
-	return ids, nil
+	return models, nil
 }
 
 func existingModelKeys(models []store.ModelRead) map[string]bool {
@@ -277,13 +359,17 @@ func emptyImportProviderModelsResponse(models []discoveredProviderModel) importP
 	}
 }
 
-func selectedImportModelKeys(discovered []string, selected []string) []string {
+func selectedImportModelKeys(discovered []providerModelDiscovery, selected []string) []string {
 	if len(selected) == 0 {
-		return discovered
+		out := make([]string, 0, len(discovered))
+		for _, model := range discovered {
+			out = append(out, model.ID)
+		}
+		return out
 	}
 	discoveredSet := map[string]bool{}
-	for _, id := range discovered {
-		discoveredSet[id] = true
+	for _, model := range discovered {
+		discoveredSet[model.ID] = true
 	}
 	out := make([]string, 0, len(selected))
 	seen := map[string]bool{}
@@ -294,6 +380,14 @@ func selectedImportModelKeys(discovered []string, selected []string) []string {
 		}
 		seen[id] = true
 		out = append(out, id)
+	}
+	return out
+}
+
+func discoveredEndpointTypesByID(discovered []providerModelDiscovery) map[string][]string {
+	out := map[string][]string{}
+	for _, model := range discovered {
+		out[model.ID] = model.SupportedEndpointTypes
 	}
 	return out
 }
@@ -412,7 +506,7 @@ func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		discoveredIDs, err := importProviderModelIDs(r.Context(), req, apiKey)
+		discoveredModels, err := importProviderModelIDs(r.Context(), req, apiKey)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
@@ -423,9 +517,13 @@ func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		existingKeys := existingModelKeys(existing)
-		discovered := make([]discoveredProviderModel, 0, len(discoveredIDs))
-		for _, id := range discoveredIDs {
-			discovered = append(discovered, discoveredProviderModel{ID: id, Exists: existingKeys[id]})
+		discovered := make([]discoveredProviderModel, 0, len(discoveredModels))
+		for _, model := range discoveredModels {
+			discovered = append(discovered, discoveredProviderModel{
+				ID:                     model.ID,
+				Exists:                 existingKeys[model.ID],
+				SupportedEndpointTypes: model.SupportedEndpointTypes,
+			})
 		}
 		if req.DryRun {
 			writeJSON(w, http.StatusOK, emptyImportProviderModelsResponse(discovered))
@@ -433,8 +531,9 @@ func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 
 		response := emptyImportProviderModelsResponse(discovered)
-		modelKeys := make([]string, 0, len(discoveredIDs))
-		for _, modelKey := range selectedImportModelKeys(discoveredIDs, req.ModelIDs) {
+		endpointTypesByID := discoveredEndpointTypesByID(discoveredModels)
+		modelKeys := make([]string, 0, len(discoveredModels))
+		for _, modelKey := range selectedImportModelKeys(discoveredModels, req.ModelIDs) {
 			if modelImportSkipExisting(req) && existingKeys[modelKey] {
 				response.Skipped = append(response.Skipped, modelKey)
 				continue
@@ -467,7 +566,7 @@ func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
 				CredentialMode:     mode,
 				SecretID:           secretID,
 				CredentialKindCode: strings.TrimSpace(req.CredentialKindCode),
-				Config:             foldModelConfig(req.Config, req.Capabilities, req.Limits),
+				Config:             foldModelConfig(configWithSupportedEndpointTypes(req.Config, endpointTypesByID[modelKey]), req.Capabilities, req.Limits),
 				CreatedBy:          actorIDFromRequest(r),
 			})
 			if err != nil {
@@ -481,6 +580,149 @@ func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
 			existingKeys[modelKey] = true
 		}
 		writeJSON(w, http.StatusOK, response)
+	}
+}
+
+type detectProviderModelEndpointsBody struct {
+	BaseURL            string         `json:"base_url"`
+	ModelKey           string         `json:"model_key"`
+	APIKey             string         `json:"api_key"`
+	SecretID           string         `json:"secret_id"`
+	Config             map[string]any `json:"config"`
+	CredentialKindCode string         `json:"credential_kind_code"`
+}
+
+type detectProviderModelEndpointsResponse struct {
+	SupportedEndpointTypes []string `json:"supported_endpoint_types"`
+}
+
+func endpointProbeRequest(ctx context.Context, baseURL, modelKey, apiKey, endpointType string, config map[string]any) (*http.Request, error) {
+	body := map[string]any{}
+	url := ""
+	switch normalizeEndpointType(endpointType) {
+	case "anthropic":
+		url = anthropicMessagesURL(baseURL)
+		body = map[string]any{
+			"model":      modelKey,
+			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
+			"max_tokens": 1,
+		}
+	case "openai":
+		url = strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/chat/completions"
+		body = map[string]any{
+			"model":      modelKey,
+			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
+			"max_tokens": 1,
+		}
+	case "openai-response":
+		url = strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/responses"
+		body = map[string]any{
+			"model": modelKey,
+			"input": "ping",
+		}
+	default:
+		return nil, fmt.Errorf("unsupported endpoint probe type %q", endpointType)
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if normalizeEndpointType(endpointType) == "anthropic" {
+		req.Header.Set("x-api-key", apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	} else {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	for k, v := range stringHeaders(config) {
+		req.Header.Set(k, v)
+	}
+	return req, nil
+}
+
+func probeProviderEndpoint(ctx context.Context, baseURL, modelKey, apiKey, endpointType string, config map[string]any) bool {
+	req, err := endpointProbeRequest(ctx, baseURL, modelKey, apiKey, endpointType, config)
+	if err != nil {
+		return false
+	}
+	resp, err := testModelHTTPClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var parsed map[string]any
+	_ = json.Unmarshal(bodyBytes, &parsed)
+	return resp.StatusCode >= 200 && resp.StatusCode < 300 && parsed["error"] == nil
+}
+
+func detectEndpointTypes(ctx context.Context, baseURL, modelKey, apiKey string, config map[string]any) []string {
+	if strings.TrimSpace(baseURL) == "" || strings.TrimSpace(modelKey) == "" || strings.TrimSpace(apiKey) == "" {
+		return nil
+	}
+	candidates := []string{"anthropic", "openai", "openai-response"}
+	supported := make([]string, 0, len(candidates))
+	for _, endpointType := range candidates {
+		if probeProviderEndpoint(ctx, baseURL, modelKey, apiKey, endpointType, config) {
+			supported = append(supported, endpointType)
+		}
+	}
+	return supported
+}
+
+// detectProviderModelEndpoints probes common provider endpoint families for a
+// model key so manual model creation can store all supported protocols instead
+// of asking the user to choose one.
+//
+//	@Summary		Detect supported model endpoint types
+//	@Description	Probes common OpenAI/Anthropic endpoint families for a base URL and model key. Owner/admin only.
+//	@Tags			models
+//	@ID				detectDevModelEndpoints
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string								true	"Workspace UUID"
+//	@Param			body		body	detectProviderModelEndpointsBody	true	"Endpoint detection payload"
+//	@Success		200 {object} detectProviderModelEndpointsResponse "Detected endpoint families"
+//	@Failure		400 {object} map[string]string "Invalid body, UUID, or credentials"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/models/detect-endpoints [post]
+func detectProviderModelEndpoints(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if runtimeStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed model registry is disabled"})
+			return
+		}
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
+			return
+		}
+		var req detectProviderModelEndpointsBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		req.BaseURL = strings.TrimSpace(req.BaseURL)
+		req.ModelKey = strings.TrimSpace(req.ModelKey)
+		if req.BaseURL == "" || req.ModelKey == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "base_url and model_key are required"})
+			return
+		}
+		apiKey, err := importDiscoveryAPIKey(runtimeStore, r, workspaceID, importProviderModelsBody{
+			APIKey:   req.APIKey,
+			SecretID: req.SecretID,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if strings.TrimSpace(apiKey) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "api_key or secret_id is required to detect endpoint types"})
+			return
+		}
+		writeJSON(w, http.StatusOK, detectProviderModelEndpointsResponse{
+			SupportedEndpointTypes: detectEndpointTypes(r.Context(), req.BaseURL, req.ModelKey, apiKey, req.Config),
+		})
 	}
 }
 
@@ -694,8 +936,8 @@ func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 
-		isOpenAICompatible := isOpenAIChatCompletionsAdapter(mr.Adapter)
-		isAnthropicCompatible := isAnthropicMessagesAdapter(mr.Adapter)
+		isOpenAICompatible := isOpenAIChatCompletionsAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "openai") || modelSupportsEndpointType(mr.ProviderConfig, "openai-response")
+		isAnthropicCompatible := isAnthropicMessagesAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "anthropic")
 
 		if !isOpenAICompatible && !isAnthropicCompatible {
 			writeJSON(w, http.StatusOK, connectivityTestResponse{

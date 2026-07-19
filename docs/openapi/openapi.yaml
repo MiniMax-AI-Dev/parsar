@@ -424,12 +424,39 @@ definitions:
       plaintext_value:
         type: string
     type: object
+  dev.detectProviderModelEndpointsBody:
+    properties:
+      api_key:
+        type: string
+      base_url:
+        type: string
+      config:
+        additionalProperties: {}
+        type: object
+      credential_kind_code:
+        type: string
+      model_key:
+        type: string
+      secret_id:
+        type: string
+    type: object
+  dev.detectProviderModelEndpointsResponse:
+    properties:
+      supported_endpoint_types:
+        items:
+          type: string
+        type: array
+    type: object
   dev.discoveredProviderModel:
     properties:
       exists:
         type: boolean
       id:
         type: string
+      supported_endpoint_types:
+        items:
+          type: string
+        type: array
     type: object
   dev.gatewayActor:
     properties:
@@ -6944,6 +6971,47 @@ paths:
               type: string
             type: object
       summary: Test a model's connectivity
+      tags:
+      - models
+  /api/v1/workspaces/{workspaceID}/models/detect-endpoints:
+    post:
+      consumes:
+      - application/json
+      description: Probes common OpenAI/Anthropic endpoint families for a base URL
+        and model key. Owner/admin only.
+      operationId: detectDevModelEndpoints
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Endpoint detection payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.detectProviderModelEndpointsBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Detected endpoint families
+          schema:
+            $ref: '#/definitions/dev.detectProviderModelEndpointsResponse'
+        "400":
+          description: Invalid body, UUID, or credentials
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not workspace owner/admin
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Detect supported model endpoint types
       tags:
       - models
   /api/v1/workspaces/{workspaceID}/models/import:

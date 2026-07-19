@@ -55,7 +55,7 @@ import {
   TabsTrigger,
 } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { modelProtocol, protocolLabel } from "../../lib/model-protocol"
+import { modelProtocols, protocolListLabel } from "../../lib/model-protocol"
 import {
   useCreateModel,
   useDisableModel,
@@ -158,10 +158,9 @@ function ProviderCompatibilityCell({ type }: { type: string }) {
 
 function ModelProtocolCell({ model }: { model: Model }) {
   const { t } = useTranslation("admin")
-  const protocol = modelProtocol(model)
   return (
     <Badge variant="neutral" title={t("models.createProvider.fields.protocol")}>
-      {protocolLabel(protocol)}
+      {protocolListLabel(modelProtocols(model))}
     </Badge>
   )
 }

@@ -242,6 +242,7 @@ export interface ImportProviderModelsInput {
 export interface ImportProviderModelPreview {
   id: string
   exists: boolean
+  supported_endpoint_types?: string[]
 }
 
 export interface ImportProviderModelFailure {
@@ -278,6 +279,45 @@ export function useImportProviderModels(workspaceID: string | null) {
         void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
         void qc.invalidateQueries({ queryKey: KEY_SECRETS(workspaceID ?? "_none") })
       }
+    },
+  })
+}
+
+export interface DetectModelEndpointsInput {
+  base_url: string
+  model_key: string
+  api_key?: string
+  secret_id?: string
+  credential_kind_code?: string
+  config?: Record<string, unknown>
+}
+
+export interface DetectModelEndpointsResponse {
+  supported_endpoint_types: string[]
+}
+
+async function detectModelEndpointsRequest(
+  workspaceID: string,
+  body: DetectModelEndpointsInput,
+): Promise<DetectModelEndpointsResponse> {
+  return apiRequest<DetectModelEndpointsResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models/detect-endpoints`,
+    { method: "POST", body },
+  )
+}
+
+export function useDetectModelEndpoints(workspaceID: string | null) {
+  return useMutation({
+    mutationFn: async (input: DetectModelEndpointsInput): Promise<DetectModelEndpointsResponse> => {
+      if (!workspaceID) {
+        throw new ApiError({
+          status: 0,
+          code: "no_workspace",
+          message: "no workspace selected — pick a workspace first",
+          unreachable: false,
+        })
+      }
+      return detectModelEndpointsRequest(workspaceID, input)
     },
   })
 }

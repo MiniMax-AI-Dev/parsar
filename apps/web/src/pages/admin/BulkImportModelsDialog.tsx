@@ -23,9 +23,7 @@ import {
 import {
   FALLBACK_PROVIDER_TYPES,
   isKnownProviderURL,
-  protocolDisplayLabel,
   providerTypesFromCatalog,
-  resolveProtocol,
 } from "../../lib/model-provider-options"
 import { getProviderCatalogSnapshot, loadProviderCatalog } from "../../lib/model-presets"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
@@ -74,7 +72,6 @@ export function BulkImportModelsDialog({
   const defaultProviderType = providerTypes[0] ?? FALLBACK_PROVIDER_TYPES[0]
 
   const [providerType, setProviderType] = useState(defaultProviderType.key)
-  const [protocolID, setProtocolID] = useState(defaultProviderType.protocols[0].id)
   const [baseURL, setBaseURL] = useState(defaultProviderType.defaultBaseURL)
   const [credentialMode, setCredentialMode] = useState<ModelCredentialMode>("inline_secret")
   const [apiKey, setApiKey] = useState("")
@@ -102,7 +99,6 @@ export function BulkImportModelsDialog({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       setProviderType(defaultProviderType.key)
-      setProtocolID(defaultProviderType.protocols[0].id)
       setBaseURL(defaultProviderType.defaultBaseURL)
       setCredentialMode("inline_secret")
       setApiKey("")
@@ -119,9 +115,7 @@ export function BulkImportModelsDialog({
   }, [open, defaultProviderType, previewMut, importMut])
 
   const cfg = providerTypes.find((p) => p.key === providerType)
-  const activeProtocol = resolveProtocol(cfg, protocolID)
-  const adapter = activeProtocol?.adapter ?? cfg?.adapter ?? "@ai-sdk/openai-compatible"
-  const protocolChoices = cfg?.protocols ?? []
+  const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
   const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
   const pending = previewMut.isPending || importMut.isPending
   const errMsg = errorMessage(previewMut.error) ?? errorMessage(importMut.error)
@@ -149,23 +143,9 @@ export function BulkImportModelsDialog({
     const nextCfg = providerTypes.find((p) => p.key === next)
     if (!nextCfg) return
     const previousCfg = providerTypes.find((p) => p.key === providerType)
-    const nextProtocol = nextCfg.protocols[0]
     setProviderType(next)
-    setProtocolID(nextProtocol.id)
     if (baseURL === "" || isKnownProviderURL(previousCfg, baseURL)) {
-      setBaseURL(nextProtocol.baseURL)
-    }
-    setPreviewModels([])
-    setSelected(new Set())
-    setImportResult(null)
-  }
-
-  function handleProtocolChange(nextID: string) {
-    const nextProtocol = resolveProtocol(cfg, nextID)
-    if (!nextProtocol) return
-    setProtocolID(nextProtocol.id)
-    if (baseURL === "" || isKnownProviderURL(cfg, baseURL)) {
-      setBaseURL(nextProtocol.baseURL)
+      setBaseURL(nextCfg.defaultBaseURL)
     }
     setPreviewModels([])
     setSelected(new Set())
@@ -262,36 +242,6 @@ export function BulkImportModelsDialog({
               />
             </div>
           </div>
-
-          {protocolChoices.length > 0 && (
-            <div className="grid gap-1.5">
-              <span className="text-sm font-medium text-fg-muted">
-                {t("models.createProvider.fields.protocol")}
-              </span>
-              {protocolChoices.length > 1 ? (
-                <div className="inline-flex w-fit gap-0.5 rounded-md border border-line bg-surface-subtle p-0.5">
-                  {protocolChoices.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleProtocolChange(p.id)}
-                      className={
-                        p.id === protocolID
-                          ? "rounded bg-surface px-2.5 py-1 text-xs font-medium text-fg shadow-sm"
-                          : "rounded px-2.5 py-1 text-xs font-medium text-fg-subtle transition-colors hover:text-fg"
-                      }
-                    >
-                      {protocolDisplayLabel(p.id)}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <span className="w-fit rounded border border-line-muted px-2 py-0.5 text-xs text-fg-subtle">
-                  {protocolDisplayLabel(protocolChoices[0].id)}
-                </span>
-              )}
-            </div>
-          )}
 
           <fieldset className="rounded-md border border-line p-3">
             <legend className="px-1 text-sm font-medium text-fg-muted">
@@ -444,6 +394,18 @@ export function BulkImportModelsDialog({
                         <span className="block truncate font-mono text-xs text-fg-faint" title={model.id}>
                           {model.id}
                         </span>
+                        {model.supported_endpoint_types && model.supported_endpoint_types.length > 0 && (
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {model.supported_endpoint_types.map((endpointType) => (
+                              <span
+                                key={endpointType}
+                                className="rounded border border-line-muted px-1.5 py-0.5 font-mono text-xs text-fg-subtle"
+                              >
+                                {endpointType}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </span>
                       {model.exists && (
                         <span className="shrink-0 rounded border border-line-muted px-1.5 py-0.5 text-xs text-fg-subtle">
