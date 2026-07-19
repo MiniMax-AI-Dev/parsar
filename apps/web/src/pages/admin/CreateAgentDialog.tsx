@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server, Sparkles } from "lucide-react"
+import { ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server, Sparkles } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -17,6 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
+import { modelProtocol, protocolLabel, type WireProtocol } from "../../lib/model-protocol"
 import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery, useEnableAgentCapabilityMutation } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
@@ -28,7 +29,6 @@ import type {
   Capability,
   CapabilityType,
   CreateAgentRequest,
-  MarketplaceCapability,
   Model,
   Agent,
   RequiredCredential,
@@ -68,41 +68,6 @@ function agentEngineFromAgent(a?: Agent | null): AgentEngine {
   return "claude_code"
 }
 
-type WireProtocol = "anthropic" | "openai" | "google"
-
-/** Classify a model's wire protocol from its provider_type / adapter.
- * Mirrors the allow-lists in
- * server/internal/connector/agentdaemon/model_injection.go
- * (isAnthropicRuntime / isOpenAICompatibleRuntime / piAPIProtocol) — keep the
- * case values in sync so the UI filter matches what the daemon will accept. */
-function modelProtocol(m: Pick<Model, "provider_type" | "adapter">): WireProtocol | null {
-  for (const v of [m.provider_type, m.adapter]) {
-    switch (v.trim().toLowerCase()) {
-      case "anthropic":
-      case "anthropic-compatible":
-      case "anthropic_compatible":
-      case "@ai-sdk/anthropic":
-        return "anthropic"
-      case "openai":
-      case "openai-compatible":
-      case "openai_compatible":
-      case "azure-openai":
-      case "azure_openai":
-      case "@ai-sdk/openai":
-      case "@ai-sdk/openai-compatible":
-      case "@ai-sdk/azure":
-        return "openai"
-      case "google":
-      case "gemini":
-      case "google-generative-ai":
-      case "google_generative_ai":
-      case "@ai-sdk/google":
-        return "google"
-    }
-  }
-  return null
-}
-
 /** Which wire protocols an agent engine can drive. Mirrors the per-engine
  * injector gating in model_injection.go: claude_code→Anthropic only,
  * codex→OpenAI only, pi→any of the three, opencode→any adapter. */
@@ -116,22 +81,6 @@ function engineSupportsProtocol(engine: AgentEngine, protocol: WireProtocol | nu
       return protocol === "anthropic" || protocol === "openai" || protocol === "google"
     case "opencode":
       return true
-  }
-}
-
-/** Display label for a model's own wire protocol, shown on every model row so
- * the user sees each model's protocol (and, on greyed-out rows, WHY it's
- * unavailable). null protocol = unknown adapter, shown as a dash. */
-function protocolLabel(protocol: WireProtocol | null): string {
-  switch (protocol) {
-    case "anthropic":
-      return "Anthropic"
-    case "openai":
-      return "OpenAI"
-    case "google":
-      return "Google"
-    default:
-      return "—"
   }
 }
 

@@ -54,6 +54,7 @@ import {
   TabsTrigger,
 } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
+import { modelProtocol, protocolLabel } from "../../lib/model-protocol"
 import {
   useCreateModel,
   useDisableModel,
@@ -150,6 +151,16 @@ function ProviderCompatibilityCell({ type }: { type: string }) {
       <Icon className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
       <span className="truncate">{label}</span>
     </span>
+  )
+}
+
+function ModelProtocolCell({ model }: { model: Model }) {
+  const { t } = useTranslation("admin")
+  const protocol = modelProtocol(model)
+  return (
+    <Badge variant="neutral" title={t("models.createProvider.fields.protocol")}>
+      {protocolLabel(protocol)}
+    </Badge>
   )
 }
 
@@ -309,23 +320,25 @@ function ModelsTable({
     <div className="overflow-hidden rounded-lg border border-line bg-surface">
       <Table className="table-fixed">
         <colgroup>
-          {/* name | model_key | compatibility | credential | status | actions
-             Actions column gets 14% because it now hosts four icon-only
+          {/* name | model_key | compatibility | protocol | credential | status | actions
+             Actions column gets 12% because it now hosts four icon-only
              buttons inline (test / edit / copy / disable). With the old
              10% the row contents would push the table past its container
              and trigger horizontal scroll on a regular laptop width. */}
+          <col className="w-[20%]" />
           <col className="w-[22%]" />
-          <col className="w-[26%]" />
-          <col className="w-[16%]" />
+          <col className="w-[15%]" />
           <col className="w-[12%]" />
-          <col className="w-[10%]" />
-          <col className="w-[14%]" />
+          <col className="w-[11%]" />
+          <col className="w-[8%]" />
+          <col className="w-[12%]" />
         </colgroup>
         <TableHeader>
           <TableRow>
             <TableHead>{t("models.table.model")}</TableHead>
             <TableHead>{t("models.table.modelKey")}</TableHead>
             <TableHead>{t("models.table.compatibility")}</TableHead>
+            <TableHead>{t("models.createProvider.fields.protocol")}</TableHead>
             <TableHead>{t("models.table.credentialMode")}</TableHead>
             <TableHead>{t("models.table.status")}</TableHead>
             <TableHead className="pr-3 text-right">{t("models.table.actions")}</TableHead>
@@ -357,6 +370,9 @@ function ModelsTable({
                 </TableCell>
                 <TableCell className="overflow-hidden">
                   <ProviderCompatibilityCell type={m.provider_type} />
+                </TableCell>
+                <TableCell>
+                  <ModelProtocolCell model={m} />
                 </TableCell>
                 <TableCell>
                   <CredentialModeBadge mode={m.credential_mode} />

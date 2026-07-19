@@ -77,6 +77,7 @@
         "providerType": "供应商类型",
         "providerSearch": "搜索供应商…",
         "providerEmpty": "无匹配的供应商",
+        "protocol": "API 协议",
         "baseURL": "服务地址",
         "adapterHint": "Adapter 包: {{adapter}}",
         "apiKey": "API Key",
