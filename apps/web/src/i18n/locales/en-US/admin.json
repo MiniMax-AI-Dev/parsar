@@ -77,6 +77,7 @@
         "providerType": "Provider type",
         "providerSearch": "Search providers…",
         "providerEmpty": "No matching providers",
+        "protocol": "API protocol",
         "baseURL": "Base URL",
         "adapterHint": "Adapter package: {{adapter}}",
         "apiKey": "API key",
