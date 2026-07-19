@@ -206,7 +206,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "mockBanner": {
@@ -304,7 +304,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "stream": {
@@ -387,7 +387,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`. Retrying just sends the request again; it does not fix the server."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`. Retrying just sends the request again; it does not fix the server."
       }
     },
     "mockBanner": {
@@ -749,7 +749,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "marketplace": {
@@ -1108,7 +1108,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "mockBanner": {
@@ -1626,7 +1626,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "mockBanner": {
@@ -1722,7 +1722,7 @@
       "unreachable": {
         "title": "Cannot reach Parsar server",
         "description": "The frontend cannot reach the backend API.",
-        "hint": "Check that the backend is running on port 18080."
+        "hint": "Check that the backend is running on port 18081."
       }
     }
   },
@@ -1858,7 +1858,7 @@
       "unreachable": {
         "title": "Cannot reach Parsar server",
         "description": "The frontend can't reach the backend API (/api/v1/...). The server may be down, the port occupied, or the Vite proxy misconfigured.",
-        "hint": "Make sure the backend is up on port 18080: `make server` or `make dev`."
+        "hint": "Make sure the backend is up on port 18081: `make server` or `make dev`."
       }
     },
     "mockBanner": {
@@ -2069,7 +2069,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "mockBanner": {
@@ -2126,7 +2126,7 @@
       "unreachable": {
         "title": "Cannot reach the Parsar server",
         "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is running on port 18081: `make server` or `make dev`."
       }
     },
     "mockBanner": {
@@ -2182,7 +2182,7 @@
       "unreachable": {
         "title": "Cannot reach Parsar server",
         "description": "The frontend cannot reach the backend API (/api/v1/...). The server may be down, the port may be occupied, or the Vite proxy may be misconfigured.",
-        "hint": "Check that the backend is listening on port 18080: `make server` or `make dev`."
+        "hint": "Check that the backend is listening on port 18081: `make server` or `make dev`."
       }
     },
     "dialog": {

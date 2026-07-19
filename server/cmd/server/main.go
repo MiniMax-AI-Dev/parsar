@@ -247,7 +247,7 @@ func main() {
 				log.Bg().Warn("capability blob backend pg: master key empty; proxy tokens cannot be signed (set PARSAR_MASTER_KEY)")
 			}
 			// baseURL must be daemon-reachable; reuse the public-URL builder
-			// (dev fallback http://127.0.0.1:18080; prod requires PublicURL).
+			// (dev fallback http://127.0.0.1:18081; prod requires PublicURL).
 			baseURL := strings.TrimSuffix(cfg.BuildPublicURL("/"), "/")
 			pgStore := blob.NewPGStore(sqlc.New(pool), signer, baseURL)
 			blobStore = pgStore
@@ -399,7 +399,7 @@ func main() {
 		// daemon reconnects via persisted runner_credential.
 
 		// PublicWSURL derives from cfg.Server.PublicURL by swapping the
-		// scheme (http→ws, https→wss). Dev falls back to 127.0.0.1:18080;
+		// scheme (http→ws, https→wss). Dev falls back to 127.0.0.1:18081;
 		// prod boots without public_url fail config validate.go.
 		agentDaemonBinder := agentdaemonbinding.NewPgBinder(pool, func(format string, args ...any) {
 			log.Bg().Warn("agentdaemon binder", "msg", fmt.Sprintf(format, args...))
@@ -1256,14 +1256,14 @@ func buildScheduler(env func(string) string, st scheduler.Store) *scheduler.Sche
 
 // buildAgentDaemonWSURL returns the wss://.../agent-daemon/ws URL the
 // daemon dials after bootstrap. Derives from cfg.Server.PublicURL by
-// swapping http→ws / https→wss; dev falls back to 127.0.0.1:18080.
+// swapping http→ws / https→wss; dev falls back to 127.0.0.1:18081.
 // Production boot without public_url aborts in config.validate.go.
 func buildAgentDaemonWSURL(cfg config.Config) string {
 	const path = "/agent-daemon/ws"
 	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
 	publicURL = strings.TrimRight(publicURL, "/")
 	if publicURL == "" {
-		return "ws://127.0.0.1:18080" + path
+		return "ws://127.0.0.1:18081" + path
 	}
 	parsed, err := url.Parse(publicURL)
 	if err != nil || parsed.Host == "" {
@@ -1432,7 +1432,7 @@ func buildAgentDaemonSandboxProvider(
 	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
 	if publicURL == "" {
 		// Dev fallback mirrors buildAgentDaemonWSURL.
-		publicURL = "http://127.0.0.1:18080"
+		publicURL = "http://127.0.0.1:18081"
 	}
 	apiBaseURL := strings.TrimSpace(env("PARSAR_E2B_API_BASE_URL"))
 	client := &e2bsandbox.Client{

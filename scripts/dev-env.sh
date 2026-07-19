@@ -29,8 +29,9 @@ export PARSAR_PG_DB="${PARSAR_PG_DB:-parsar_dev}"
 # Host the dev Postgres container publishes its 5432 on.
 export PARSAR_POSTGRES_HOST="${PARSAR_POSTGRES_HOST:-127.0.0.1}"
 export PARSAR_POSTGRES_PORT="${PARSAR_POSTGRES_PORT:-15432}"
-# Default listen port for the persistent dev server (dev-server-up.sh).
-export PARSAR_DEV_SERVER_PORT="${PARSAR_DEV_SERVER_PORT:-18080}"
+# Dev server uses port+1 (18081) so an operator install on 18080 can
+# run side-by-side. Override with PARSAR_DEV_SERVER_PORT.
+export PARSAR_DEV_SERVER_PORT="${PARSAR_DEV_SERVER_PORT:-18081}"
 # Vite web dev server port.
 export PARSAR_WEB_PORT="${PARSAR_WEB_PORT:-5173}"
 

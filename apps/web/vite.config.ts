@@ -2,7 +2,7 @@ import { defineConfig, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const devAPIURL = process.env.PARSAR_DEV_API_URL ?? process.env.VITE_PARSAR_API_URL ?? 'http://127.0.0.1:18080'
+const devAPIURL = process.env.PARSAR_DEV_API_URL ?? process.env.VITE_PARSAR_API_URL ?? 'http://127.0.0.1:18081'
 
 const devProxy: ProxyOptions = {
   target: devAPIURL,
