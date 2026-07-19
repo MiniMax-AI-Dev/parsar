@@ -368,6 +368,13 @@ Before reporting completion, you must run:
 make check
 ```
 
+`make check` is the full local gate. It is composed of narrower targets that
+CI may run independently based on the changed paths: `make check-go` for sqlc
+drift plus non-store Go tests, `make check-store` for migration/store
+integration tests, `make check-web` for web typecheck plus design lint, and
+`make check-cli` for CLI/plugin typechecks. Keep the subtargets aligned with
+the full gate whenever the required checks change.
+
 - Any DB change must ship with a migration. Migrations are immutable
   the moment they land on `main` — prod has already applied them, so
   editing an existing file only mutates fresh installs. To change
@@ -405,7 +412,11 @@ Before pushing, run these locally so you don't burn a round-trip on
 GitHub Actions:
 
 ```
-make check                    # go vet + go test ./...
+make check                    # full required repository gate
+make check-go                 # sqlc drift + non-store Go tests
+make check-store              # migration + store integration tests
+make check-web                # web typecheck + design lint
+make check-cli                # CLI/plugin typechecks
 make openapi                  # regenerate docs/openapi/openapi.yaml
 make sqlc-generate            # regenerate internal/db/sqlc/*.go
 cd apps/web && pnpm typecheck # TS type-check web

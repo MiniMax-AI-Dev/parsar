@@ -1,9 +1,6 @@
-# The single source of truth for "what does CI run" lives in the Makefile
-# (`make check`). That target chains sqlc generate, go test, the migration
-# drift check (which spins up postgres via docker compose), and the pnpm
-# typecheck. Re-expressing those steps in YAML would inevitably drift from
-# the Makefile and break local/CI parity, so this workflow deliberately
-# stays thin: install toolchains, then delegate to `make check`.
+# The single source of truth for each check lives in the Makefile. CI maps
+# changed paths to those Make targets so frontend-only PRs do not spend time on
+# Go, Docker, and Postgres work, while `make check` remains the full local gate.
 name: check
 
 on:
@@ -57,9 +54,94 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      store: ${{ steps.filter.outputs.store }}
+      web: ${{ steps.filter.outputs.web }}
+      cli: ${{ steps.filter.outputs.cli }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: filter
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+            if [[ "$base" =~ ^0+$ ]]; then
+              base="$(git rev-parse "${GITHUB_SHA}^")"
+            fi
+          fi
+
+          git diff --name-only "$base" "$GITHUB_SHA" > changed-files.txt
+
+          go=false
+          store=false
+          web=false
+          cli=false
+          all=false
+
+          while IFS= read -r path; do
+            case "$path" in
+              ".github/workflows/check.yml"|Makefile|scripts/check.sh|scripts/check-migrations.sh|scripts/dev-env.sh|docker-compose.dev.yml|go.mod|go.sum|go.work|go.work.sum|package.json|pnpm-workspace.yaml|pnpm-lock.yaml)
+                all=true
+                ;;
+              scripts/*)
+                all=true
+                ;;
+              server/internal/db/*|server/internal/store/*|server/migrations/*)
+                go=true
+                store=true
+                ;;
+              server/*|internal/*)
+                go=true
+                ;;
+              apps/web/*)
+                web=true
+                ;;
+              packages/cli/*|packages/opencode-plugin/*)
+                cli=true
+                ;;
+              packages/eslint-config/*)
+                web=true
+                ;;
+              packages/tsconfig/*)
+                web=true
+                cli=true
+                ;;
+            esac
+          done < changed-files.txt
+
+          if [[ "$all" == "true" ]]; then
+            go=true
+            store=true
+            web=true
+            cli=true
+          fi
+
+          {
+            echo "go=$go"
+            echo "store=$store"
+            echo "web=$web"
+            echo "cli=$cli"
+          } >> "$GITHUB_OUTPUT"
+
+          printf 'Changed files:\n'
+          sed 's/^/  /' changed-files.txt
+          printf 'Selected checks: go=%s store=%s web=%s cli=%s\n' "$go" "$store" "$web" "$cli"
+
+  check-go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -68,6 +150,32 @@ jobs:
           go-version: "1.25.12"
           cache: true
           cache-dependency-path: go.sum
+
+      - run: make check-go
+
+  check-store:
+    needs: changes
+    if: needs.changes.outputs.store == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.12"
+          cache: true
+          cache-dependency-path: go.sum
+
+      - run: make check-store
+
+  check-web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:
@@ -80,4 +188,65 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: make check
+      - run: make check-web
+
+  check-cli:
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: make check-cli
+
+  check-gate:
+    needs: [changes, check-go, check-store, check-web, check-cli]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify selected checks
+        env:
+          GO_SELECTED: ${{ needs.changes.outputs.go }}
+          STORE_SELECTED: ${{ needs.changes.outputs.store }}
+          WEB_SELECTED: ${{ needs.changes.outputs.web }}
+          CLI_SELECTED: ${{ needs.changes.outputs.cli }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          GO_RESULT: ${{ needs.check-go.result }}
+          STORE_RESULT: ${{ needs.check-store.result }}
+          WEB_RESULT: ${{ needs.check-web.result }}
+          CLI_RESULT: ${{ needs.check-cli.result }}
+        run: |
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Path classification failed: $CHANGES_RESULT" >&2
+            exit 1
+          fi
+
+          if [[ "$GO_SELECTED$STORE_SELECTED$WEB_SELECTED$CLI_SELECTED" != *true* ]]; then
+            echo "No checks were selected for this change set." >&2
+            exit 1
+          fi
+
+          for result in "$GO_RESULT" "$STORE_RESULT" "$WEB_RESULT" "$CLI_RESULT"; do
+            case "$result" in
+              success|skipped)
+                ;;
+              *)
+                echo "A selected check failed or was cancelled." >&2
+                printf 'go=%s store=%s web=%s cli=%s\n' "$GO_RESULT" "$STORE_RESULT" "$WEB_RESULT" "$CLI_RESULT" >&2
+                exit 1
+                ;;
+            esac
+          done

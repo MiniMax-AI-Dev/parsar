@@ -16,7 +16,7 @@ endif
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: help setup node-deps dev dev-db check test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
+.PHONY: help setup node-deps dev dev-db check check-setup check-sqlc check-go check-store check-web check-cli check-hygiene test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi
 
 help:
 	@printf '%s\n' \
@@ -37,7 +37,11 @@ help:
 	  '  make typecheck        Typecheck all TypeScript packages' \
 	  '' \
 	  'Before review:' \
-	  '  make check            Run the required full repository gate'
+	  '  make check            Run the required full repository gate' \
+	  '  make check-go         Run sqlc drift check and non-store Go tests' \
+	  '  make check-store      Run migration and store integration tests' \
+	  '  make check-web        Run web typecheck and design lint' \
+	  '  make check-cli        Typecheck CLI/plugin packages'
 
 setup:
 	./scripts/setup.sh
@@ -76,8 +80,45 @@ dev-db:
 # Backward-compatible alias. Prefer `make dev-db` for the DB-only dev stack.
 dev: dev-db
 
-check:
-	./scripts/check.sh
+check: check-go check-store check-web check-cli check-hygiene
+	@printf 'Parsar harness checks passed.\n'
+
+check-setup:
+	./scripts/setup.sh >/dev/null
+
+check-sqlc:
+	@set -e; \
+	before_sqlc_status="$$(cd server && git status --short -- internal/db/sqlc)"; \
+	(cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate); \
+	after_sqlc_status="$$(cd server && git status --short -- internal/db/sqlc)"; \
+	if [[ "$$before_sqlc_status" != "$$after_sqlc_status" ]]; then \
+	  echo "sqlc generated files are out of date" >&2; \
+	  printf '%s\n' "$$after_sqlc_status" >&2; \
+	  exit 1; \
+	fi
+
+check-go: check-setup check-sqlc test-go
+
+check-store: check-setup
+	./scripts/check-migrations.sh
+
+check-web: check-setup typecheck-web lint-web-design
+
+check-cli: check-setup node-deps
+	pnpm --filter @parsar/cli typecheck
+	pnpm --filter @parsar/opencode-plugin typecheck
+
+check-hygiene: check-setup
+	@for polluted in .parsar logs state cache config; do \
+	  if [[ -e "$$polluted" ]]; then \
+	    echo "CWD pollution detected: $$polluted" >&2; \
+	    exit 1; \
+	  fi; \
+	done
+	@if grep -R "[>/]tmp/parsar" scripts server --exclude='check.sh' >/dev/null 2>&1; then \
+	  echo "Runtime logs/state must live under ~/.parsar, not /tmp/parsar*" >&2; \
+	  exit 1; \
+	fi
 
 # Fast local feedback. Unlike `make check`, these targets skip setup,
 # code-generation drift checks, and database-backed migration tests.
