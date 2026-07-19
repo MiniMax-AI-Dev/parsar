@@ -376,9 +376,8 @@ make check
   landed files and numeric regressions.
 - After editing `server/internal/db/queries/*.sql`, run
   `make sqlc-generate` and commit the regenerated
-  `server/internal/db/sqlc/*.go` alongside the SQL. CI
-  (`.github/workflows/sqlc.yml`) reruns the generator and fails the
-  build on any drift.
+  `server/internal/db/sqlc/*.go` alongside the SQL. `make check` reruns
+  the generator in CI and fails the build on any drift.
 - API contracts live on the handler: every `http.HandlerFunc` factory
   must carry a swaggo annotation block (`@Summary`, `@Tags`, `@Param`,
   `@Success/@Failure`, `@Router`) directly above the `func`. After

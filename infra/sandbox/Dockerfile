@@ -63,7 +63,8 @@ RUN go mod download
 # parsar-daemon depends on the repo-root internal/ packages (single
 # go.work module graph, no separate go.mod under apps/).
 COPY internal ./internal
-COPY apps ./apps
+COPY apps/parsar ./apps/parsar
+COPY apps/parsar-daemon ./apps/parsar-daemon
 
 # Hook scripts call `parsar inject snapshot/incremental` to fetch
 # spec+memory from the server — without this binary, hooks fail open and
