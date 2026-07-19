@@ -17,6 +17,7 @@ import {
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
 import { ThemeMenu } from "./ThemeMenu"
 import { UserMenu } from "./UserMenu"
+import { useTheme } from "../../lib/theme"
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -77,6 +78,7 @@ export function AdminLayout({
 }: AdminLayoutProps) {
   const { t } = useTranslation("common")
   const { navigate } = useAdminView()
+  const { resolvedTheme } = useTheme()
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-subtle text-fg antialiased">
@@ -88,12 +90,11 @@ export function AdminLayout({
       </a>
       <header className="flex h-16 shrink-0 items-center gap-4 border-b border-line/70 bg-surface/95 px-5 shadow-sm backdrop-blur">
         <div className="flex items-center gap-2.5" translate="no">
-          <span className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface shadow-sm">
-            <img src="/favicon.png" alt="" width="28" height="28" className="h-7 w-7" />
-          </span>
-          <span className="font-display text-lg font-semibold tracking-display text-fg">
-            Parsar
-          </span>
+          <img
+            src={resolvedTheme === "dark" ? "/parsar-logo-dark.png" : "/parsar-logo-light.png"}
+            alt="Parsar"
+            className="h-10 w-auto"
+          />
         </div>
 
         <WorkspaceSwitcher />
