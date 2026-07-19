@@ -14,6 +14,7 @@
     },
     "actions": {
       "addModel": "Add model",
+      "importModels": "Import models",
       "test": "Test",
       "edit": "Edit",
       "copy": "Duplicate",
@@ -122,6 +123,18 @@
         }
       },
       "submit": "Create model"
+    },
+    "bulkImport": {
+      "title": "Import models from /v1/models",
+      "description": "Discover model ids from the provider endpoint, select the ones to add, then import them into the shared catalog.",
+      "apiKeyHintInline": "Used to discover models and stored as one shared Secret for all imported models unless you reuse an existing Secret.",
+      "apiKeyHintPersonal": "Used only to discover models. Imported models will use the selected personal credential kind.",
+      "discover": "Discover models",
+      "search": "Search discovered models…",
+      "exists": "Already added",
+      "selectedCount": "{{count}} selected",
+      "importSelected": "Import selected",
+      "resultSummary": "{{created}} created, {{skipped}} skipped, {{failed}} failed"
     },
     "editModel": {
       "title": "Edit \"{{name}}\"",

@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -121,6 +122,365 @@ func createModel(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusCreated, model)
+	}
+}
+
+// importProviderModelsBody is a backend-mediated batch import from an
+// OpenAI-shaped GET {base_url}/v1/models endpoint. Dry-run returns the
+// discovered ids and existing status without creating rows.
+type importProviderModelsBody struct {
+	ProviderType       string         `json:"provider_type"`
+	Adapter            string         `json:"adapter"`
+	BaseURL            string         `json:"base_url"`
+	CredentialMode     string         `json:"credential_mode"`
+	SecretID           string         `json:"secret_id"`
+	CredentialKindCode string         `json:"credential_kind_code"`
+	APIKey             string         `json:"api_key"`
+	ModelIDs           []string       `json:"model_ids"`
+	DryRun             bool           `json:"dry_run"`
+	SkipExisting       *bool          `json:"skip_existing"`
+	Capabilities       map[string]any `json:"capabilities"`
+	Limits             map[string]any `json:"limits"`
+	Config             map[string]any `json:"config"`
+}
+
+type discoveredProviderModel struct {
+	ID     string `json:"id"`
+	Exists bool   `json:"exists"`
+}
+
+type importProviderModelFailure struct {
+	ModelKey string `json:"model_key"`
+	Error    string `json:"error"`
+}
+
+type importProviderModelsResponse struct {
+	Models  []discoveredProviderModel    `json:"models"`
+	Created []store.ModelRead            `json:"created"`
+	Skipped []string                     `json:"skipped"`
+	Failed  []importProviderModelFailure `json:"failed"`
+}
+
+var importProviderModelsHTTPClient = &http.Client{Timeout: 15 * time.Second}
+
+func modelImportSkipExisting(req importProviderModelsBody) bool {
+	return req.SkipExisting == nil || *req.SkipExisting
+}
+
+func providerModelsURL(baseURL string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(base, "/v1") {
+		return base + "/models"
+	}
+	return base + "/v1/models"
+}
+
+func stringHeaders(raw map[string]any) map[string]string {
+	out := map[string]string{}
+	if hdrs, ok := raw["headers"].(map[string]any); ok {
+		for k, v := range hdrs {
+			if s, ok := v.(string); ok && strings.TrimSpace(k) != "" && s != "" {
+				out[k] = s
+			}
+		}
+	}
+	return out
+}
+
+func modelImportAuthScheme(req importProviderModelsBody) string {
+	if s, ok := req.Config["auth_scheme"].(string); ok && strings.TrimSpace(s) != "" {
+		return strings.TrimSpace(s)
+	}
+	if isAnthropicMessagesAdapter(req.Adapter) {
+		return "api-key"
+	}
+	return "bearer"
+}
+
+func apiKeyFromPayload(payload map[string]any) string {
+	apiKey, _ := payload["api_key"].(string)
+	if strings.TrimSpace(apiKey) == "" {
+		if v, _ := payload["value"].(string); strings.TrimSpace(v) != "" {
+			apiKey = v
+		}
+	}
+	return strings.TrimSpace(apiKey)
+}
+
+func importProviderModelIDs(ctx context.Context, req importProviderModelsBody, apiKey string) ([]string, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, providerModelsURL(req.BaseURL), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build upstream request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	for k, v := range stringHeaders(req.Config) {
+		httpReq.Header.Set(k, v)
+	}
+	if apiKey != "" {
+		if modelImportAuthScheme(req) == "api-key" {
+			httpReq.Header.Set("x-api-key", apiKey)
+		} else {
+			httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+	}
+	resp, err := importProviderModelsHTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("upstream /models request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := strings.TrimSpace(string(bodyBytes))
+		if len(msg) > 500 {
+			msg = msg[:500] + "..."
+		}
+		return nil, fmt.Errorf("upstream /models returned %d: %s", resp.StatusCode, msg)
+	}
+	var body struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return nil, fmt.Errorf("failed to parse upstream /models response: %w", err)
+	}
+	seen := map[string]bool{}
+	ids := make([]string, 0, len(body.Data))
+	for _, item := range body.Data {
+		id := strings.TrimSpace(item.ID)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func existingModelKeys(models []store.ModelRead) map[string]bool {
+	out := map[string]bool{}
+	for _, model := range models {
+		key := strings.TrimSpace(model.ModelKey)
+		if key != "" {
+			out[key] = true
+		}
+	}
+	return out
+}
+
+func emptyImportProviderModelsResponse(models []discoveredProviderModel) importProviderModelsResponse {
+	return importProviderModelsResponse{
+		Models:  models,
+		Created: []store.ModelRead{},
+		Skipped: []string{},
+		Failed:  []importProviderModelFailure{},
+	}
+}
+
+func selectedImportModelKeys(discovered []string, selected []string) []string {
+	if len(selected) == 0 {
+		return discovered
+	}
+	discoveredSet := map[string]bool{}
+	for _, id := range discovered {
+		discoveredSet[id] = true
+	}
+	out := make([]string, 0, len(selected))
+	seen := map[string]bool{}
+	for _, raw := range selected {
+		id := strings.TrimSpace(raw)
+		if id == "" || seen[id] || !discoveredSet[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+func importSecretID(runtimeStore RuntimeStore, r *http.Request, workspaceID string, req importProviderModelsBody) (string, error) {
+	if strings.TrimSpace(req.SecretID) != "" {
+		return strings.TrimSpace(req.SecretID), nil
+	}
+	apiKey := strings.TrimSpace(req.APIKey)
+	if apiKey == "" {
+		return "", errors.New("api_key or secret_id is required for inline_secret mode")
+	}
+	serverMasterKey := os.Getenv("PARSAR_MASTER_KEY")
+	if serverMasterKey == "" {
+		return "", errors.New("server has no PARSAR_MASTER_KEY configured; refusing to create a secret")
+	}
+	secretService, err := secrets.New(serverMasterKey)
+	if err != nil {
+		return "", err
+	}
+	payload := map[string]any{"api_key": apiKey}
+	encrypted, err := secretService.Encrypt(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to encrypt secret: %w", err)
+	}
+	secret, err := runtimeStore.CreateSecret(r.Context(), store.CreateSecretInput{
+		WorkspaceID: workspaceID,
+		Name:        "model-key-" + time.Now().UTC().Format("20060102150405"),
+		Kind:        "model_provider",
+		Provider:    req.ProviderType,
+		AuthType:    "api_key",
+		Payload:     payload,
+		Masked:      secrets.MaskPayload(payload),
+	}, encrypted)
+	if err != nil {
+		return "", err
+	}
+	return secret.ID, nil
+}
+
+func importDiscoveryAPIKey(runtimeStore RuntimeStore, r *http.Request, workspaceID string, req importProviderModelsBody) (string, error) {
+	if apiKey := strings.TrimSpace(req.APIKey); apiKey != "" {
+		return apiKey, nil
+	}
+	if strings.TrimSpace(req.SecretID) == "" {
+		return "", nil
+	}
+	serverMasterKey := os.Getenv("PARSAR_MASTER_KEY")
+	if serverMasterKey == "" {
+		return "", errors.New("server has no PARSAR_MASTER_KEY configured; refusing to decrypt the selected secret")
+	}
+	secretPayload, err := runtimeStore.GetSecretPayload(r.Context(), workspaceID, strings.TrimSpace(req.SecretID))
+	if err != nil {
+		return "", err
+	}
+	secretService, err := secrets.New(serverMasterKey)
+	if err != nil {
+		return "", err
+	}
+	payload, err := secretService.Decrypt(secretPayload.EncryptedPayload)
+	if err != nil {
+		return "", err
+	}
+	return apiKeyFromPayload(payload), nil
+}
+
+// importProviderModels discovers model ids from an upstream /v1/models endpoint
+// and optionally creates model rows for selected ids.
+//
+//	@Summary		Import models from provider /models
+//	@Description	Fetches model ids from base_url + /v1/models and batch-creates model rows using the existing model catalog schema. Owner/admin only.
+//	@Tags			models
+//	@ID				importDevProviderModels
+//	@Accept			json
+//	@Produce		json
+//	@Param			workspaceID	path	string						true	"Workspace UUID"
+//	@Param			body		body	importProviderModelsBody	true	"Model import payload"
+//	@Success		200 {object} importProviderModelsResponse "Import preview or result"
+//	@Failure		400 {object} map[string]string "Invalid body, UUID, provider response, or credentials"
+//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
+//	@Router			/api/v1/workspaces/{workspaceID}/models/import [post]
+func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if runtimeStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed model registry is disabled"})
+			return
+		}
+		workspaceID, ok := requireWorkspaceOwnerOrAdminRequest(w, r, runtimeStore)
+		if !ok {
+			return
+		}
+		var req importProviderModelsBody
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		req.ProviderType = strings.TrimSpace(req.ProviderType)
+		req.Adapter = strings.TrimSpace(req.Adapter)
+		req.BaseURL = strings.TrimSpace(req.BaseURL)
+		if req.ProviderType == "" || req.Adapter == "" || req.BaseURL == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider_type, adapter, and base_url are required"})
+			return
+		}
+		mode := strings.TrimSpace(req.CredentialMode)
+		if mode == "" {
+			mode = "inline_secret"
+		}
+		if mode != "inline_secret" && mode != "credential_ref" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "credential_mode must be inline_secret or credential_ref"})
+			return
+		}
+		req.CredentialMode = mode
+
+		apiKey, err := importDiscoveryAPIKey(runtimeStore, r, workspaceID, req)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		discoveredIDs, err := importProviderModelIDs(r.Context(), req, apiKey)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		existing, err := runtimeStore.ListModels(r.Context(), workspaceID, 1000)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list existing models"})
+			return
+		}
+		existingKeys := existingModelKeys(existing)
+		discovered := make([]discoveredProviderModel, 0, len(discoveredIDs))
+		for _, id := range discoveredIDs {
+			discovered = append(discovered, discoveredProviderModel{ID: id, Exists: existingKeys[id]})
+		}
+		if req.DryRun {
+			writeJSON(w, http.StatusOK, emptyImportProviderModelsResponse(discovered))
+			return
+		}
+
+		response := emptyImportProviderModelsResponse(discovered)
+		modelKeys := make([]string, 0, len(discoveredIDs))
+		for _, modelKey := range selectedImportModelKeys(discoveredIDs, req.ModelIDs) {
+			if modelImportSkipExisting(req) && existingKeys[modelKey] {
+				response.Skipped = append(response.Skipped, modelKey)
+				continue
+			}
+			modelKeys = append(modelKeys, modelKey)
+		}
+		if len(modelKeys) == 0 {
+			writeJSON(w, http.StatusOK, response)
+			return
+		}
+		if mode == "credential_ref" && strings.TrimSpace(req.CredentialKindCode) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "credential_kind_code is required for credential_ref mode"})
+			return
+		}
+		secretID := ""
+		if mode == "inline_secret" {
+			secretID, err = importSecretID(runtimeStore, r, workspaceID, req)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+				return
+			}
+		}
+		for _, modelKey := range modelKeys {
+			model, err := runtimeStore.CreateModel(r.Context(), store.CreateModelInput{
+				Name:               modelKey,
+				ProviderType:       req.ProviderType,
+				Adapter:            req.Adapter,
+				BaseURL:            req.BaseURL,
+				ModelKey:           modelKey,
+				CredentialMode:     mode,
+				SecretID:           secretID,
+				CredentialKindCode: strings.TrimSpace(req.CredentialKindCode),
+				Config:             foldModelConfig(req.Config, req.Capabilities, req.Limits),
+				CreatedBy:          actorIDFromRequest(r),
+			})
+			if err != nil {
+				response.Failed = append(response.Failed, importProviderModelFailure{
+					ModelKey: modelKey,
+					Error:    err.Error(),
+				})
+				continue
+			}
+			response.Created = append(response.Created, model)
+			existingKeys[modelKey] = true
+		}
+		writeJSON(w, http.StatusOK, response)
 	}
 }
 

@@ -424,6 +424,13 @@ definitions:
       plaintext_value:
         type: string
     type: object
+  dev.discoveredProviderModel:
+    properties:
+      exists:
+        type: boolean
+      id:
+        type: string
+    type: object
   dev.gatewayActor:
     properties:
       email:
@@ -489,6 +496,66 @@ definitions:
         additionalProperties:
           type: string
         type: object
+    type: object
+  dev.importProviderModelFailure:
+    properties:
+      error:
+        type: string
+      model_key:
+        type: string
+    type: object
+  dev.importProviderModelsBody:
+    properties:
+      adapter:
+        type: string
+      api_key:
+        type: string
+      base_url:
+        type: string
+      capabilities:
+        additionalProperties: {}
+        type: object
+      config:
+        additionalProperties: {}
+        type: object
+      credential_kind_code:
+        type: string
+      credential_mode:
+        type: string
+      dry_run:
+        type: boolean
+      limits:
+        additionalProperties: {}
+        type: object
+      model_ids:
+        items:
+          type: string
+        type: array
+      provider_type:
+        type: string
+      secret_id:
+        type: string
+      skip_existing:
+        type: boolean
+    type: object
+  dev.importProviderModelsResponse:
+    properties:
+      created:
+        items:
+          $ref: '#/definitions/store.ModelRead'
+        type: array
+      failed:
+        items:
+          $ref: '#/definitions/dev.importProviderModelFailure'
+        type: array
+      models:
+        items:
+          $ref: '#/definitions/dev.discoveredProviderModel'
+        type: array
+      skipped:
+        items:
+          type: string
+        type: array
     type: object
   dev.listCredentialKindsResponse:
     properties:
@@ -1343,6 +1410,40 @@ definitions:
           Size is the byte count before base64 expansion. Cached so
           observability surfaces don't have to decode.
         type: integer
+    type: object
+  store.ModelRead:
+    properties:
+      adapter:
+        type: string
+      base_url:
+        type: string
+      config:
+        additionalProperties: {}
+        type: object
+      created_at:
+        type: string
+      created_by:
+        type: string
+      credential_kind_code:
+        type: string
+      credential_mode:
+        type: string
+      id:
+        type: string
+      model_key:
+        type: string
+      name:
+        type: string
+      provider_type:
+        type: string
+      secret_id:
+        type: string
+      slug:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
     type: object
   store.RequiredCredential:
     properties:
@@ -6843,6 +6944,47 @@ paths:
               type: string
             type: object
       summary: Test a model's connectivity
+      tags:
+      - models
+  /api/v1/workspaces/{workspaceID}/models/import:
+    post:
+      consumes:
+      - application/json
+      description: Fetches model ids from base_url + /v1/models and batch-creates
+        model rows using the existing model catalog schema. Owner/admin only.
+      operationId: importDevProviderModels
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Model import payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.importProviderModelsBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Import preview or result
+          schema:
+            $ref: '#/definitions/dev.importProviderModelsResponse'
+        "400":
+          description: Invalid body, UUID, provider response, or credentials
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not workspace owner/admin
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Import models from provider /models
       tags:
       - models
   /api/v1/workspaces/{workspaceID}/runtime/credential:

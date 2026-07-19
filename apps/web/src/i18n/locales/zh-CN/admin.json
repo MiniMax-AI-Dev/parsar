@@ -14,6 +14,7 @@
     },
     "actions": {
       "addModel": "新建模型",
+      "importModels": "导入模型",
       "test": "测试连接",
       "edit": "编辑",
       "copy": "复制为新模型",
@@ -122,6 +123,18 @@
         }
       },
       "submit": "创建模型"
+    },
+    "bulkImport": {
+      "title": "从 /v1/models 导入模型",
+      "description": "从供应商接口发现模型 id，选择要添加的模型后批量导入共享 catalog。",
+      "apiKeyHintInline": "用于发现模型；如果不复用已有 Secret，导入时会存成一条共享 Secret 并给所有导入模型共用。",
+      "apiKeyHintPersonal": "仅用于发现模型。导入后的模型会使用所选个人凭据类型。",
+      "discover": "发现模型",
+      "search": "搜索已发现模型…",
+      "exists": "已添加",
+      "selectedCount": "已选 {{count}} 个",
+      "importSelected": "导入所选",
+      "resultSummary": "已创建 {{created}} 个，已跳过 {{skipped}} 个，失败 {{failed}} 个"
     },
     "editModel": {
       "title": "编辑「{{name}}」",

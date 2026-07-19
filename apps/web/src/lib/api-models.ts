@@ -141,6 +141,25 @@ export interface InlineCreateModelInput {
   config?: Record<string, unknown>
 }
 
+function createModelBodyFromInput(
+  input: InlineCreateModelInput,
+  credential: { secretID?: string; credentialKindCode?: string },
+): CreateModelRequest {
+  return {
+    name: input.name,
+    provider_type: input.provider_type,
+    adapter: input.adapter,
+    base_url: input.base_url,
+    model_key: input.model_key,
+    credential_mode: input.credential_mode,
+    secret_id: credential.secretID,
+    credential_kind_code: credential.credentialKindCode,
+    capabilities: input.capabilities,
+    limits: input.limits,
+    config: input.config,
+  }
+}
+
 export function useCreateModel(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
@@ -190,19 +209,7 @@ export function useCreateModel(workspaceID: string | null) {
         }
       }
 
-      const body: CreateModelRequest = {
-        name: input.name,
-        provider_type: input.provider_type,
-        adapter: input.adapter,
-        base_url: input.base_url,
-        model_key: input.model_key,
-        credential_mode: input.credential_mode,
-        secret_id: secretID,
-        credential_kind_code: credentialKindCode,
-        capabilities: input.capabilities,
-        limits: input.limits,
-        config: input.config,
-      }
+      const body = createModelBodyFromInput(input, { secretID, credentialKindCode })
 
       return apiRequest<Model>(
         `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models`,
@@ -212,6 +219,65 @@ export function useCreateModel(workspaceID: string | null) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
       void qc.invalidateQueries({ queryKey: KEY_SECRETS(workspaceID ?? "_none") })
+    },
+  })
+}
+
+export interface ImportProviderModelsInput {
+  provider_type: string
+  adapter: string
+  base_url: string
+  credential_mode: "inline_secret" | "credential_ref"
+  api_key?: string
+  secret_id?: string
+  credential_kind_code?: string
+  model_ids?: string[]
+  dry_run?: boolean
+  skip_existing?: boolean
+  capabilities?: Record<string, unknown>
+  limits?: Record<string, unknown>
+  config?: Record<string, unknown>
+}
+
+export interface ImportProviderModelPreview {
+  id: string
+  exists: boolean
+}
+
+export interface ImportProviderModelFailure {
+  model_key: string
+  error: string
+}
+
+export interface ImportProviderModelsResponse {
+  models: ImportProviderModelPreview[]
+  created: Model[]
+  skipped: string[]
+  failed: ImportProviderModelFailure[]
+}
+
+export function useImportProviderModels(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: ImportProviderModelsInput): Promise<ImportProviderModelsResponse> => {
+      if (!workspaceID) {
+        throw new ApiError({
+          status: 0,
+          code: "no_workspace",
+          message: "no workspace selected — pick a workspace first",
+          unreachable: false,
+        })
+      }
+      return apiRequest<ImportProviderModelsResponse>(
+        `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models/import`,
+        { method: "POST", body: input },
+      )
+    },
+    onSuccess: (_data, variables) => {
+      if (!variables.dry_run) {
+        void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
+        void qc.invalidateQueries({ queryKey: KEY_SECRETS(workspaceID ?? "_none") })
+      }
     },
   })
 }
