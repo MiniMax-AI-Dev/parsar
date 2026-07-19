@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/larksuite/oapi-sdk-go/v3/ws"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // Logger is the small logging surface Manager uses. *slog.Logger satisfies it.
@@ -39,7 +39,7 @@ type Storer interface {
 	ListFeishuWebSocketAgents(ctx context.Context) ([]store.FeishuAgentRoute, error)
 	GetAgentByFeishuAppID(ctx context.Context, appID string) (store.FeishuAgentRoute, error)
 	GetAgentByID(ctx context.Context, agentID string) (store.FeishuAgentRoute, error)
-	ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error)
+	ListFeishuSharedBotAgents(ctx context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error)
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	ClearGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) error

@@ -14,9 +14,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
 
 func strptr(s string) *string { return &s }
@@ -277,12 +277,12 @@ type replaceUserCredentialsCall struct {
 
 func newInboundFakeStore() *inboundFakeStore {
 	return &inboundFakeStore{
-		agentsByAppID:  make(map[string]store.FeishuAgentRoute),
-		agentsByID:     make(map[string]store.FeishuAgentRoute),
-		selections:     make(map[string]string),
-		users:          make(map[string]string),
-		secrets:        make(map[string]store.SecretPayload),
-		cardsByPermReq: make(map[string]store.ConversationInflightCards),
+		agentsByAppID:                 make(map[string]store.FeishuAgentRoute),
+		agentsByID:                    make(map[string]store.FeishuAgentRoute),
+		selections:                    make(map[string]string),
+		users:                         make(map[string]string),
+		secrets:                       make(map[string]store.SecretPayload),
+		cardsByPermReq:                make(map[string]store.ConversationInflightCards),
 		cardsByPromptForUserChoiceReq: make(map[string]store.ConversationInflightCards),
 		inflightByConv:                make(map[string]store.ConversationInflightCards),
 		pendingAskByChat:              make(map[string]inboundFakeChatAsk),
@@ -316,7 +316,7 @@ func (f *inboundFakeStore) GetAgentByID(_ context.Context, agentID string) (stor
 	return route, nil
 }
 
-func (f *inboundFakeStore) ListFeishuSharedBotAgents(_ context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
+func (f *inboundFakeStore) ListFeishuSharedBotAgents(_ context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sharedListCalls++
@@ -1598,7 +1598,7 @@ func TestQuotedChainText_MergeForwardChatListFallback(t *testing.T) {
 				chatID:  "oc_chat",
 				// No inline subs — forces fallback.
 			},
-			"om_c1": {msgType: "text", content: `{"text":"fallback line"}`, upperID: "om_mf"},
+			"om_c1":        {msgType: "text", content: `{"text":"fallback line"}`, upperID: "om_mf"},
 			"om_unrelated": {msgType: "text", content: `{"text":"noise"}`, upperID: "om_other_mf"},
 		},
 		map[string][]string{

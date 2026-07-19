@@ -2325,7 +2325,7 @@ func (stubRuntimeStore) GetAgentByID(ctx context.Context, agentID string) (store
 	}
 }
 
-func (stubRuntimeStore) ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
+func (stubRuntimeStore) ListFeishuSharedBotAgents(ctx context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
 	return []store.FeishuSharedBotAgent{{
 		AgentID:       "00000000-0000-0000-0000-000000000902",
 		WorkspaceID:   "00000000-0000-0000-0000-000000000002",

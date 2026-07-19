@@ -269,7 +269,7 @@ func TestListFeishuSharedBotAgentsRespectsVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	registered, err := st.ListFeishuSharedBotAgents(ctx, ids.UserID, ids.ProductAgentID, 20)
+	registered, err := st.ListFeishuSharedBotAgents(ctx, ids.WorkspaceID, ids.UserID, ids.ProductAgentID, 20)
 	if err != nil {
 		t.Fatalf("ListFeishuSharedBotAgents registered: %v", err)
 	}
@@ -281,7 +281,15 @@ func TestListFeishuSharedBotAgentsRespectsVisibility(t *testing.T) {
 		t.Fatalf("registered workspace member should see backend+test, got %+v", registered)
 	}
 
-	guest, err := st.ListFeishuSharedBotAgents(ctx, "", ids.ProductAgentID, 20)
+	otherWorkspace, err := st.ListFeishuSharedBotAgents(ctx, "00000000-0000-0000-0000-000000000099", ids.UserID, ids.ProductAgentID, 20)
+	if err != nil {
+		t.Fatalf("ListFeishuSharedBotAgents other workspace: %v", err)
+	}
+	if len(otherWorkspace) != 0 {
+		t.Fatalf("agent list leaked rows outside the requested workspace: %+v", otherWorkspace)
+	}
+
+	guest, err := st.ListFeishuSharedBotAgents(ctx, ids.WorkspaceID, "", ids.ProductAgentID, 20)
 	if err != nil {
 		t.Fatalf("ListFeishuSharedBotAgents guest: %v", err)
 	}
@@ -314,7 +322,7 @@ func TestListFeishuSharedBotAgentsExcludesDedicatedBotBindings(t *testing.T) {
 		t.Fatalf("UpdateAgentFeishuConnector direct: %v", err)
 	}
 
-	agents, err := st.ListFeishuSharedBotAgents(ctx, ids.UserID, ids.ProductAgentID, 20)
+	agents, err := st.ListFeishuSharedBotAgents(ctx, ids.WorkspaceID, ids.UserID, ids.ProductAgentID, 20)
 	if err != nil {
 		t.Fatalf("ListFeishuSharedBotAgents: %v", err)
 	}

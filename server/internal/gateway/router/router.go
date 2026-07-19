@@ -13,7 +13,7 @@ import (
 
 type Store interface {
 	CreateInboundIMMessage(ctx context.Context, input store.CreateInboundIMMessageInput) (store.CreateInboundIMMessageResult, error)
-	ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error)
+	ListFeishuSharedBotAgents(ctx context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error)
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	// Wipes the stored selection so the next inbound has to /select again;

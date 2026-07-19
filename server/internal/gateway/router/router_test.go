@@ -11,14 +11,15 @@ import (
 )
 
 type fakeSharedStore struct {
-	agents       []store.FeishuSharedBotAgent
-	routes       map[string]store.FeishuAgentRoute
-	userByUnion  map[string]string
-	memberships  map[string]bool
-	selections   map[string]string
-	created      []store.CreateInboundIMMessageInput
-	lastListUser string
-	lastExclude  string
+	agents            []store.FeishuSharedBotAgent
+	routes            map[string]store.FeishuAgentRoute
+	userByUnion       map[string]string
+	memberships       map[string]bool
+	selections        map[string]string
+	created           []store.CreateInboundIMMessageInput
+	lastListWorkspace string
+	lastListUser      string
+	lastExclude       string
 	// createErr forces CreateInboundIMMessage to return this error
 	// instead of the success path. Tests covering the binding-loss
 	// degrade branch set this to store.ErrUnknownMention.
@@ -59,6 +60,15 @@ func newFakeSharedStore() *fakeSharedStore {
 				WorkspaceSlug: "demo",
 				AgentName:     "Backend Agent",
 				AgentSlug:     "backend-agent",
+				Visibility:    "workspace",
+			},
+			{
+				AgentID:       "agent-other-workspace",
+				WorkspaceID:   "workspace-2",
+				WorkspaceName: "Other Workspace",
+				WorkspaceSlug: "other",
+				AgentName:     "Other Agent",
+				AgentSlug:     "other-agent",
 				Visibility:    "workspace",
 			},
 		},
@@ -109,12 +119,13 @@ func (f *fakeSharedStore) CreateInboundIMMessage(ctx context.Context, input stor
 	return store.CreateInboundIMMessageResult{MessageID: "message-1", RunIDs: []string{"run-1"}}, nil
 }
 
-func (f *fakeSharedStore) ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
+func (f *fakeSharedStore) ListFeishuSharedBotAgents(ctx context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error) {
+	f.lastListWorkspace = workspaceID
 	f.lastListUser = senderUserID
 	f.lastExclude = excludeAgentID
 	out := make([]store.FeishuSharedBotAgent, 0, len(f.agents))
 	for _, agent := range f.agents {
-		if agent.AgentID == excludeAgentID {
+		if agent.WorkspaceID != workspaceID || agent.AgentID == excludeAgentID {
 			continue
 		}
 		out = append(out, agent)
@@ -209,8 +220,8 @@ func TestHandleInboundListRepliesWithSelectableAgents(t *testing.T) {
 	if !outcome.Handled || outcome.Accepted || !outcome.Replied || outcome.Reason != "list" {
 		t.Fatalf("unexpected outcome: %+v", outcome)
 	}
-	if st.lastListUser != "user-1" || st.lastExclude != "agent-host" {
-		t.Fatalf("list did not use sender/host exclusion: user=%q exclude=%q", st.lastListUser, st.lastExclude)
+	if st.lastListWorkspace != "workspace-1" || st.lastListUser != "user-1" || st.lastExclude != "agent-host" {
+		t.Fatalf("list did not use workspace/sender/host exclusion: workspace=%q user=%q exclude=%q", st.lastListWorkspace, st.lastListUser, st.lastExclude)
 	}
 	if len(replies) != 1 {
 		t.Fatalf("expected one /list reply, got %#v", replies)
@@ -224,6 +235,9 @@ func TestHandleInboundListRepliesWithSelectableAgents(t *testing.T) {
 	}
 	if !strings.Contains(reply, "backend-agent (Backend Agent — demo)") {
 		t.Fatalf("/list reply missing backend-agent row: %q", reply)
+	}
+	if strings.Contains(reply, "other-agent") {
+		t.Fatalf("/list reply leaked an agent from another workspace: %q", reply)
 	}
 	if !strings.Contains(reply, "/select <agent-slug>") {
 		t.Fatalf("/list reply missing select hint: %q", reply)

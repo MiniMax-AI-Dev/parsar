@@ -1306,13 +1306,17 @@ func (s *Store) GetAgentByID(ctx context.Context, agentID string) (FeishuAgentRo
 	return route, nil
 }
 
-// ListFeishuSharedBotAgents returns active Agents the Feishu sender may
-// select from a shared Bot. Guests see public Agents only; registered users
-// also see tenant Agents + Agents in workspaces they belong to. Agents with
-// their own active Feishu Bot binding are excluded.
-func (s *Store) ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]FeishuSharedBotAgent, error) {
+// ListFeishuSharedBotAgents returns active Agents in the host workspace that
+// the Feishu sender may select from a shared Bot. Guests see public Agents
+// only; registered users also see tenant Agents and workspace members see
+// workspace Agents. Agents with their own active Feishu Bot binding are excluded.
+func (s *Store) ListFeishuSharedBotAgents(ctx context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]FeishuSharedBotAgent, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
+	}
+	workspaceUUID, err := uuid(workspaceID)
+	if err != nil {
+		return nil, err
 	}
 	var senderParam any
 	if strings.TrimSpace(senderUserID) != "" {
@@ -1342,23 +1346,24 @@ func (s *Store) ListFeishuSharedBotAgents(ctx context.Context, senderUserID stri
 		from agents a
 		join workspaces w on w.id = a.workspace_id
 		left join workspace_members wm on wm.workspace_id = a.workspace_id
-		  and wm.user_id = $1::uuid
+		  and wm.user_id = $2::uuid
 		  and wm.deleted_at is null
 		where a.status = 'active'
 		  and a.deleted_at is null
 		  and w.deleted_at is null
-		  and ($2::uuid is null or a.id <> $2::uuid)
+		  and a.workspace_id = $1::uuid
+		  and ($3::uuid is null or a.id <> $3::uuid)
 		  and not (
 		    coalesce((a.config->'connectors'->'feishu'->>'enabled')::boolean, false) = true
 		    and coalesce(a.config->'connectors'->'feishu'->>'app_id', '') <> ''
 		  )
 		  and (
-		    ($1::uuid is null and a.visibility = 'public')
-		    or ($1::uuid is not null and (a.visibility in ('tenant', 'public') or wm.user_id is not null))
+		    ($2::uuid is null and a.visibility = 'public')
+		    or ($2::uuid is not null and (a.visibility in ('tenant', 'public') or wm.user_id is not null))
 		  )
 		order by a.id, w.name asc, a.name asc
-		limit $3
-	`, senderParam, excludeParam, limit)
+		limit $4
+	`, workspaceUUID, senderParam, excludeParam, limit)
 	if err != nil {
 		return nil, err
 	}

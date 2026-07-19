@@ -90,7 +90,7 @@ type RuntimeStore interface {
 	UpdateAgentFeishuConnector(ctx context.Context, input store.UpdateAgentFeishuConnectorInput, actorID string) (store.AgentFeishuConnectorChange, error)
 	GetAgentByFeishuAppID(ctx context.Context, appID string) (store.FeishuAgentRoute, error)
 	GetAgentByID(ctx context.Context, agentID string) (store.FeishuAgentRoute, error)
-	ListFeishuSharedBotAgents(ctx context.Context, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error)
+	ListFeishuSharedBotAgents(ctx context.Context, workspaceID string, senderUserID string, excludeAgentID string, limit int32) ([]store.FeishuSharedBotAgent, error)
 	UpsertGatewaySessionSelection(ctx context.Context, input store.GatewaySessionSelectionInput) error
 	GetGatewaySessionSelection(ctx context.Context, platform, externalID, externalThreadID string) (string, error)
 	// ClearGatewaySessionSelection wipes a stored selection — see the

@@ -12,7 +12,7 @@ import (
 
 func handleList(ctx context.Context, st Store, host gateway.FeishuRouteAgent, event gateway.InboundEvent, reply ReplyFunc, senderUserID string) (Outcome, error) {
 	current, _ := st.GetGatewaySessionSelection(ctx, eventPlatform(event), event.ExternalChatID, "")
-	agents, err := st.ListFeishuSharedBotAgents(ctx, senderUserID, host.AgentID, 20)
+	agents, err := st.ListFeishuSharedBotAgents(ctx, host.WorkspaceID, senderUserID, host.AgentID, 20)
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -23,7 +23,7 @@ func handleSelect(ctx context.Context, st Store, host gateway.FeishuRouteAgent, 
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return replyAndStop(ctx, reply, host, event, "Usage: /select <agent-slug>", "select_usage")
 	}
-	agents, err := st.ListFeishuSharedBotAgents(ctx, senderUserID, host.AgentID, 50)
+	agents, err := st.ListFeishuSharedBotAgents(ctx, host.WorkspaceID, senderUserID, host.AgentID, 50)
 	if err != nil {
 		return Outcome{}, err
 	}
