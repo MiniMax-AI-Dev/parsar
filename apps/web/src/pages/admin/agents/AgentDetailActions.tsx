@@ -13,7 +13,7 @@ import {
 } from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
 import { useSetAgentStatus, useUpdateAgent, useUpdateAgentProfile } from "../../../lib/api-agents"
-import { createConversation } from "../../../lib/api-conversations"
+import { createAgentConversation } from "../../../lib/api-conversations"
 import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { useAdminView } from "../../../lib/admin-router"
 import { CreateAgentDialog } from "../CreateAgentDialog"
@@ -46,12 +46,7 @@ export function AgentDetailActions({
     if (!workspaceID || chatPending) return
     setChatPending(true)
     try {
-      const conversation = await createConversation(workspaceID, {
-        title: conversationTitle(agent.name, i18n.language),
-        surface: "web",
-        form: "thread",
-        agent_id: agent.id,
-      })
+      const conversation = await createAgentConversation(workspaceID, agent, i18n.language)
       navigate("conversations", { id: conversation.id, focus: "compose" })
     } finally {
       setChatPending(false)
@@ -179,10 +174,4 @@ export function AgentDetailActions({
       </AlertDialog>
     </>
   )
-}
-
-function conversationTitle(agentName: string, language: string): string {
-  const name = agentName.trim()
-  if (!name) return ""
-  return language.startsWith("zh") ? `和 ${name} 对话` : `Chat with ${name}`
 }
