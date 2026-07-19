@@ -428,10 +428,11 @@ any drift.
 
 **sqlc pinned to v1.29.0.** v1.30+ declares `go >= 1.26` in its
 go.mod, which would force `go run` to fetch a newer toolchain than
-this repo builds under (go 1.25.12). If you bump sqlc, update **both**
-`Makefile:sqlc-generate` AND `scripts/check.sh` in the same commit —
-CI runs the latter, dev loops run the former, and mismatch produces
-drift that only shows up on the runner.
+this repo builds under (go 1.25.12). If you bump sqlc, update
+`SQLC_VERSION` in both `Makefile` and `.github/workflows/check.yml` in
+the same commit. CI caches a small sqlc binary for `make check-go` and
+passes it via the `SQLC` make override; local development defaults to
+`go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)`.
 
 ## Report language
 

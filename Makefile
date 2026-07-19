@@ -3,6 +3,8 @@ SHELL := /bin/bash
 GO_TEST_PACKAGE ?= $(shell cd server && go list ./... | grep -Ev 'internal/(store|seed)$$')
 GO_TEST_RUN ?=
 GO_TEST_ARGS ?=
+SQLC_VERSION ?= v1.29.0
+SQLC ?= go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
 
 ifneq ($(strip $(GO_TEST_RUN)),)
 GO_TEST_RUN_FLAG := -run '$(GO_TEST_RUN)'
@@ -72,7 +74,7 @@ bootstrap:
 		--name=$${PARSAR_BOOTSTRAP_NAME:-}
 
 sqlc-generate:
-	cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
+	cd server && $(SQLC) generate
 
 dev-db:
 	./scripts/dev-stack.sh
@@ -89,7 +91,7 @@ check-setup:
 check-sqlc:
 	@set -e; \
 	before_sqlc_status="$$(cd server && git status --short -- internal/db/sqlc)"; \
-	(cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate); \
+	(cd server && $(SQLC) generate); \
 	after_sqlc_status="$$(cd server && git status --short -- internal/db/sqlc)"; \
 	if [[ "$$before_sqlc_status" != "$$after_sqlc_status" ]]; then \
 	  echo "sqlc generated files are out of date" >&2; \

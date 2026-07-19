@@ -142,6 +142,8 @@ jobs:
     if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SQLC_VERSION: v1.29.0
     steps:
       - uses: actions/checkout@v7
 
@@ -151,7 +153,23 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - run: make check-go
+      - name: Restore sqlc binary
+        id: cache-sqlc
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/parsar-tools/sqlc/${{ env.SQLC_VERSION }}
+          key: ${{ runner.os }}-${{ runner.arch }}-sqlc-${{ env.SQLC_VERSION }}
+
+      - name: Install sqlc
+        if: steps.cache-sqlc.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.cache/parsar-tools/sqlc/${SQLC_VERSION}"
+          GOBIN="$HOME/.cache/parsar-tools/sqlc/${SQLC_VERSION}" go install github.com/sqlc-dev/sqlc/cmd/sqlc@"${SQLC_VERSION}"
+
+      - name: Run Go checks
+        env:
+          SQLC: /home/runner/.cache/parsar-tools/sqlc/${{ env.SQLC_VERSION }}/sqlc
+        run: make check-go
 
   check-store:
     needs: changes
