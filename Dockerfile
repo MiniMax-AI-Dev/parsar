@@ -46,22 +46,15 @@ WORKDIR /src
 
 # Workspace + lockfile.
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-# Per-package manifests so pnpm can resolve the workspace graph
-# without the source tree. Listing them explicitly keeps the install
-# layer cache stable; adding/removing a workspace package requires
-# updating this list AND the lockfile.
 COPY apps/web/package.json apps/web/
-COPY packages/cli/package.json packages/cli/
-COPY packages/eslint-config/package.json packages/eslint-config/
-COPY packages/opencode-plugin/package.json packages/opencode-plugin/
 
 # Install only the deps the web app actually needs.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --store-dir /pnpm/store --filter @parsar/web... --frozen-lockfile
 
-# Source for the web app (and any workspace packages it imports).
+# Source for the web app.
+COPY packages/tsconfig ./packages/tsconfig
 COPY apps/web ./apps/web
-COPY packages ./packages
 
 RUN pnpm --filter @parsar/web build
 
