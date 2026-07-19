@@ -363,7 +363,7 @@ export interface MarketplaceCapability {
   self_published: boolean
 }
 
-export interface GetCapabilityResponse extends Capability {}
+export type GetCapabilityResponse = Capability
 
 export interface ListCapabilityVersionsResponse {
   capability_id: string

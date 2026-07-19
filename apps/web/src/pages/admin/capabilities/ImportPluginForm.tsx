@@ -25,9 +25,6 @@ import type {
 
 interface Props {
   workspaceID: string | null
-  /** The spec passed through to the dialog's commit payload. Null until
-   *  preview succeeds; null also when the user clears the upload. */
-  value: CanonicalSpec | null
   onChange: (spec: CanonicalSpec | null) => void
   /** Called with the ossKey when upload + preview succeed; the dialog
    *  attaches it to the commit body so the server can re-fetch and
@@ -51,7 +48,6 @@ const MAX_BYTES = 32 * 1024 * 1024 // mirror server-side cap
 
 export function ImportPluginForm({
   workspaceID,
-  value,
   onChange,
   onUploadStateChange,
   onSuggestedName,

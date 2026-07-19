@@ -156,7 +156,7 @@ export function AddCapabilityVersionDialog({
   const pluginHasUsableArtifact =
     kind !== "plugin"
       ? true
-      : !!pluginUpload.ossKey
+      : pluginUpload.ossKey
         ? pluginUpload.validation?.valid ?? false
         : !!inheritedOssLabel
 
@@ -370,7 +370,6 @@ export function AddCapabilityVersionDialog({
           ) : (
             <ImportPluginForm
               workspaceID={workspaceID}
-              value={spec}
               onChange={setSpec}
               onUploadStateChange={setPluginUpload}
               onSuggestedName={() => {}}
