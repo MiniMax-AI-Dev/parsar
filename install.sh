@@ -11,16 +11,25 @@ Usage:
   ./install.sh [options]
   curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
 
+Modes:
+  Default                   Install or upgrade the stack at ~/.parsar.
+  --status                  Report current stack status and exit (no changes).
+  --restart                 Stop, then start, the stack. Secrets and data
+                            under ~/.parsar/ are preserved.
+  --dry-run                 Prepare and validate without starting containers.
+
 Options:
-  --home PATH          Install directory. Default: ~/.parsar
-  --port PORT          Web UI port. Default: 18080
-  --bind ADDRESS       Web UI bind address. Default: 127.0.0.1
-  --image IMAGE        Override the server image.
-  --sandbox-image IMAGE
-                       Override the sandbox image.
-  --compose-file PATH  Use an existing Compose file.
-  --dry-run            Prepare and validate without starting containers.
-  --help               Show this help.
+  --home PATH               Install directory. Default: ~/.parsar
+  --port PORT               Web UI port. Default: 18080
+  --bind ADDRESS            Web UI bind address. Default: 127.0.0.1
+  --image IMAGE             Override the server image.
+  --sandbox-image IMAGE     Override the sandbox image.
+  --compose-file PATH       Use an existing Compose file.
+  --no-sandbox              Skip the parsar-runtime service (Linux-only sandbox
+                            container). Postgres and parsar-server still come
+                            up; the admin UI marks runtimes as "unscheduled"
+                            until you provide a real runtime.
+  --help                    Show this help.
 
 Advanced Compose settings can be added directly to ~/.parsar/.env.
 USAGE
@@ -111,6 +120,8 @@ server_image="${PARSAR_SERVER_IMAGE:-}"
 sandbox_image="${PARSAR_SANDBOX_IMAGE:-}"
 compose_source="${PARSAR_COMPOSE_FILE:-}"
 dry_run=false
+mode="install"
+no_sandbox=false
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -121,6 +132,9 @@ while [ "$#" -gt 0 ]; do
     --sandbox-image) sandbox_image="${2:?missing value for --sandbox-image}"; shift 2 ;;
     --compose-file) compose_source="${2:?missing value for --compose-file}"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
+    --status) mode="status"; shift ;;
+    --restart) mode="restart"; shift ;;
+    --no-sandbox) no_sandbox=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
@@ -134,6 +148,11 @@ umask 077
 env_file="$home/.env"
 touch "$env_file"
 
+# --status / --restart require an existing install.
+if [[ "$mode" != "install" && ! -f "$env_file" ]]; then
+  die "--${mode} requires an existing install at $home (no .env found). Run install.sh once first."
+fi
+
 if [ -n "$compose_source" ]; then
   compose_file="$(expand_path "$compose_source")"
   [ -f "$compose_file" ] || die "compose file does not exist: $compose_file"
@@ -141,13 +160,22 @@ elif [ -f "$PWD/docker-compose.yml" ]; then
   compose_file="$PWD/docker-compose.yml"
 else
   compose_file="$home/docker-compose.yml"
-  download_compose
+  # Skip re-downloading on --status when an existing file is present,
+  # so a checkout that ships a newer docker-compose.yml is honored as-is.
+  if [[ "$mode" == "status" && -f "$compose_file" ]]; then
+    :
+  else
+    download_compose
+  fi
 fi
 
 set_env PARSAR_LOCAL_PORT "$port"
 set_env PARSAR_BIND_ADDR "$bind"
 set_env PARSAR_PG_DATA_DIR "$home/postgres"
 set_env PARSAR_DATA_DIR "$home/data"
+if [ "$no_sandbox" = true ]; then
+  ensure_env PARSAR_COMPOSE_PROFILES "no_sandbox"
+fi
 [ -z "$server_image" ] || set_env PARSAR_SERVER_IMAGE "$server_image"
 [ -z "$sandbox_image" ] || set_env PARSAR_SANDBOX_IMAGE "$sandbox_image"
 ensure_env PARSAR_PG_PASSWORD "$(random_hex 24)"
@@ -157,6 +185,19 @@ ensure_env PARSAR_SHARED_RUNTIME_TOKEN "$(random_hex 32)"
 detect_docker
 log "Using $compose_file"
 log "Using $env_file"
+
+# --status exits before pulling images or starting anything.
+if [[ "$mode" == "status" ]]; then
+  compose config --quiet
+  compose ps || true
+  cat <<STATUS
+
+Run `./install.sh --restart` to recycle the stack.
+Run `./install.sh` (default) to upgrade images in place.
+STATUS
+  exit 0
+fi
+
 compose config --quiet
 
 if [ "$dry_run" = true ]; then
@@ -164,10 +205,29 @@ if [ "$dry_run" = true ]; then
   exit 0
 fi
 
-log "Pulling images"
-compose pull parsar-server parsar-runtime
+pull_targets=(parsar-server)
+if [[ "$no_sandbox" != true ]]; then
+  pull_targets+=(parsar-runtime)
+fi
+
+log "Pulling images: ${pull_targets[*]}"
+# shellcheck disable=SC2068
+compose pull ${pull_targets[@]}
+
+if [[ "$mode" == "restart" ]]; then
+  log "Stopping stack"
+  compose down --remove-orphans
+fi
+
+profile_args=()
+if [[ "$no_sandbox" == true ]]; then
+  profile_args+=(--profile no_sandbox)
+  log "Sandbox service is disabled (--no-sandbox)."
+fi
+
 log "Starting Parsar"
-compose up -d --remove-orphans
+# shellcheck disable=SC2068
+compose up -d --remove-orphans ${profile_args[@]}
 
 if ! wait_for_health; then
   compose ps >&2 || true
@@ -182,8 +242,8 @@ Parsar is running at http://${bind}:${port}
 Create the first owner account in the web setup flow.
 
 Manage the stack:
-  ${DOCKER[*]} compose -f "$compose_file" --env-file "$env_file" ps
+  ./install.sh --status
+  ./install.sh --restart
   ${DOCKER[*]} compose -f "$compose_file" --env-file "$env_file" logs -f
-  ${DOCKER[*]} compose -f "$compose_file" --env-file "$env_file" down
 
 EOF
