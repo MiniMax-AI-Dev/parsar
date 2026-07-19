@@ -12,6 +12,7 @@ import {
   Copy,
   Cpu,
   Database,
+  Download,
   Globe,
   KeyRound,
   Loader2,
@@ -54,7 +55,7 @@ import {
   TabsTrigger,
 } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { modelProtocol, protocolLabel } from "../../lib/model-protocol"
+import { modelProtocols, protocolListLabel } from "../../lib/model-protocol"
 import {
   useCreateModel,
   useDisableModel,
@@ -67,6 +68,7 @@ import type {
   ModelConnectivityResult,
 } from "../../lib/api-models"
 import { CreateModelDialog, EditModelDialog } from "./ModelCrudDialogs"
+import { BulkImportModelsDialog } from "./BulkImportModelsDialog"
 import type { Model } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useSecrets } from "../../lib/api-secrets"
@@ -156,10 +158,9 @@ function ProviderCompatibilityCell({ type }: { type: string }) {
 
 function ModelProtocolCell({ model }: { model: Model }) {
   const { t } = useTranslation("admin")
-  const protocol = modelProtocol(model)
   return (
     <Badge variant="neutral" title={t("models.createProvider.fields.protocol")}>
-      {protocolLabel(protocol)}
+      {protocolListLabel(modelProtocols(model))}
     </Badge>
   )
 }
@@ -486,6 +487,7 @@ export function ModelsPage() {
   const testMut = useTestModel(wsId)
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
   // Pre-filled values from "duplicate"; null = empty Create dialog.
   const [duplicateInitial, setDuplicateInitial] =
     useState<InlineCreateModelInput | null>(null)
@@ -614,9 +616,14 @@ export function ModelsPage() {
           title={t("models.empty.title")}
           description={t("models.empty.description")}
           action={
-            <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> {t("models.actions.addModel")}
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> {t("models.actions.addModel")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setBulkImportOpen(true)}>
+                <Download className="h-3.5 w-3.5" /> {t("models.actions.importModels")}
+              </Button>
+            </div>
           }
         />
       ) : (
@@ -657,6 +664,15 @@ export function ModelsPage() {
                   <RefreshCw className="h-3.5 w-3.5" />
                 )}
                 {tc("actions.refresh")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBulkImportOpen(true)}
+                disabled={!wsId}
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("models.actions.importModels")}
               </Button>
               <Button
                 size="sm"
@@ -706,6 +722,13 @@ export function ModelsPage() {
             },
           })
         }}
+      />
+
+      <BulkImportModelsDialog
+        open={bulkImportOpen}
+        secrets={secrets}
+        workspaceID={wsId}
+        onOpenChange={setBulkImportOpen}
       />
 
       <EditModelDialog

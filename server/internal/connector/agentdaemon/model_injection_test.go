@@ -854,6 +854,8 @@ func TestIsOpenAICompatibleRuntime(t *testing.T) {
 		{"azure-openai provider", store.ModelRuntime{ProviderType: "azure-openai"}, true},
 		{"@ai-sdk/openai adapter only", store.ModelRuntime{Adapter: "@ai-sdk/openai"}, true},
 		{"@ai-sdk/azure adapter only", store.ModelRuntime{Adapter: "@ai-sdk/azure"}, true},
+		{"endpoint types openai", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai"}}}, true},
+		{"endpoint types openai response", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai-response"}}}, true},
 		{"whitespace + case-insensitive", store.ModelRuntime{ProviderType: " Openai "}, true},
 		{"anthropic provider rejected", store.ModelRuntime{ProviderType: "anthropic", Adapter: "@ai-sdk/anthropic"}, false},
 		{"empty", store.ModelRuntime{}, false},
@@ -865,6 +867,15 @@ func TestIsOpenAICompatibleRuntime(t *testing.T) {
 				t.Fatalf("isOpenAICompatibleRuntime(%+v) = %v, want %v", tc.mr, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestIsAnthropicRuntimeSupportsEndpointTypes(t *testing.T) {
+	if !isAnthropicRuntime(store.ModelRuntime{
+		Adapter:        "@ai-sdk/openai-compatible",
+		ProviderConfig: map[string]any{"supported_endpoint_types": []any{"anthropic", "openai"}},
+	}) {
+		t.Fatalf("expected supported_endpoint_types to allow anthropic runtime")
 	}
 }
 

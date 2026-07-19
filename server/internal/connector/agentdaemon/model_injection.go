@@ -440,6 +440,9 @@ func flattenStringMap(providerConfig map[string]any, key string) map[string]stri
 // hosts as a first-class provider — we route that through the same
 // codex_provider TOML block but a future change might split it out.
 func isOpenAICompatibleRuntime(mr store.ModelRuntime) bool {
+	if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai") || modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response") {
+		return true
+	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "openai", "openai-compatible", "openai_compatible",
@@ -540,6 +543,15 @@ func injectPiManagedModel(opts map[string]any, modelID string, mr store.ModelRun
 // `api` wire protocol the materialised provider speaks. Empty string means
 // unsupported (rejected upstream as ErrManagedModelUnsupported).
 func piAPIProtocol(mr store.ModelRuntime) string {
+	if modelConfigSupportsEndpointType(mr.ProviderConfig, "anthropic") {
+		return "anthropic-messages"
+	}
+	if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai") || modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response") {
+		return "openai-completions"
+	}
+	if modelConfigSupportsEndpointType(mr.ProviderConfig, "google_generative_ai") {
+		return "google-generative-ai"
+	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "anthropic", "anthropic-compatible", "anthropic_compatible", "@ai-sdk/anthropic":
@@ -659,6 +671,9 @@ func resolveModelID(in connector.PromptInput) string {
 }
 
 func isAnthropicRuntime(mr store.ModelRuntime) bool {
+	if modelConfigSupportsEndpointType(mr.ProviderConfig, "anthropic") {
+		return true
+	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		n := strings.ToLower(strings.TrimSpace(v))
 		switch n {
@@ -667,6 +682,36 @@ func isAnthropicRuntime(mr store.ModelRuntime) bool {
 		}
 	}
 	return false
+}
+
+func modelConfigSupportsEndpointType(config map[string]any, endpointType string) bool {
+	want := normalizeModelEndpointType(endpointType)
+	values, _ := config["supported_endpoint_types"].([]any)
+	for _, value := range values {
+		if s, ok := value.(string); ok && normalizeModelEndpointType(s) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeModelEndpointType(raw string) string {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	v = strings.ReplaceAll(v, "-", "_")
+	v = strings.ReplaceAll(v, ".", "_")
+	v = strings.ReplaceAll(v, "/", "_")
+	switch v {
+	case "openai", "chat", "chat_completion", "chat_completions", "openai_chat", "openai_chat_completions":
+		return "openai"
+	case "openai_response", "openai_responses", "response", "responses":
+		return "openai-response"
+	case "anthropic", "message", "messages", "anthropic_message", "anthropic_messages":
+		return "anthropic"
+	case "google", "google_generative_ai", "gemini":
+		return "google_generative_ai"
+	default:
+		return v
+	}
 }
 
 func anthropicCustomHeaders(providerConfig map[string]any) string {

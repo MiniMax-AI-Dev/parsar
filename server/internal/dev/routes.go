@@ -645,6 +645,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/secrets", listSecrets(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/secrets/{secretID}/disable", disableSecret(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/models", createModel(runtimeStore))
+			r.Post("/workspaces/{workspaceID}/models/detect-endpoints", detectProviderModelEndpoints(runtimeStore))
+			r.Post("/workspaces/{workspaceID}/models/import", importProviderModels(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/models", listModels(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/models/{modelID}/disable", disableModel(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/models/{modelID}", updateModel(runtimeStore))

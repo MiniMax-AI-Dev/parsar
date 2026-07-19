@@ -478,6 +478,232 @@ func TestUpdateModelAPIErrors(t *testing.T) {
 	requireStatus(t, res, http.StatusNotFound)
 }
 
+type modelImportStore struct {
+	stubRuntimeStore
+	createdModels  []store.CreateModelInput
+	createdSecrets []store.CreateSecretInput
+}
+
+func (s *modelImportStore) ListModels(ctx context.Context, workspaceID string, limit int32) ([]store.ModelRead, error) {
+	return []store.ModelRead{{
+		ID:             "00000000-0000-0000-0000-000000000702",
+		Slug:           "model-test",
+		Name:           "GPT 5.4",
+		ProviderType:   "openai",
+		Adapter:        "@ai-sdk/openai",
+		BaseURL:        "https://platform-api.example.com/v1",
+		ModelKey:       "gpt-5.4",
+		CredentialMode: "inline_secret",
+		SecretID:       "00000000-0000-0000-0000-000000000601",
+		Status:         "active",
+		Config:         map[string]any{},
+		CreatedAt:      time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+		UpdatedAt:      time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+	}}, nil
+}
+
+func (s *modelImportStore) CreateSecret(ctx context.Context, input store.CreateSecretInput, encryptedPayload []byte) (store.SecretRead, error) {
+	s.createdSecrets = append(s.createdSecrets, input)
+	return store.SecretRead{
+		ID:        "00000000-0000-0000-0000-000000000777",
+		Name:      input.Name,
+		Kind:      input.Kind,
+		Provider:  input.Provider,
+		AuthType:  input.AuthType,
+		Status:    "active",
+		Masked:    input.Masked,
+		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+	}, nil
+}
+
+func (s *modelImportStore) CreateModel(ctx context.Context, input store.CreateModelInput) (store.ModelRead, error) {
+	s.createdModels = append(s.createdModels, input)
+	return store.ModelRead{
+		ID:             fmt.Sprintf("created-%d", len(s.createdModels)),
+		Slug:           fmt.Sprintf("created-%d", len(s.createdModels)),
+		Name:           input.Name,
+		ProviderType:   input.ProviderType,
+		Adapter:        input.Adapter,
+		BaseURL:        input.BaseURL,
+		ModelKey:       input.ModelKey,
+		CredentialMode: input.CredentialMode,
+		SecretID:       input.SecretID,
+		Status:         "active",
+		Config:         input.Config,
+		CreatedAt:      time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+		UpdatedAt:      time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+	}, nil
+}
+
+func TestImportProviderModelsDryRunListsDiscoveredIDs(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/models" {
+			t.Fatalf("unexpected upstream request %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-import" {
+			t.Fatalf("expected bearer auth, got %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+			{"id": "gpt-5.4", "supported_endpoint_types": []string{"openai"}},
+			{"id": "gpt-5.5", "supported_endpoint_types": []string{"anthropic", "openai-response"}},
+		}})
+	}))
+	defer upstream.Close()
+
+	store := &modelImportStore{}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	body := fmt.Sprintf(`{
+		"provider_type":"openai",
+		"adapter":"@ai-sdk/openai",
+		"base_url":%q,
+		"api_key":"sk-import",
+		"dry_run":true
+	}`, upstream.URL+"/v1")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/import", strings.NewReader(body))
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+	if !strings.Contains(res.Body.String(), `"id":"gpt-5.4","exists":true`) {
+		t.Fatalf("expected existing model marker, got %s", res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), `"supported_endpoint_types":["anthropic","openai-response"]`) {
+		t.Fatalf("expected supported endpoint types in preview, got %s", res.Body.String())
+	}
+	if len(store.createdSecrets) != 0 || len(store.createdModels) != 0 {
+		t.Fatalf("dry run should not create secrets/models, got secrets=%d models=%d", len(store.createdSecrets), len(store.createdModels))
+	}
+}
+
+func TestImportProviderModelsAppendsV1BeforeModels(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/anthropic/v1/models" {
+			t.Fatalf("expected /anthropic/v1/models, got %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{
+			{"id": "MiniMax-M1"},
+		}})
+	}))
+	defer upstream.Close()
+
+	store := &modelImportStore{}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	body := fmt.Sprintf(`{
+		"provider_type":"minimax-en",
+		"adapter":"@ai-sdk/anthropic",
+		"base_url":%q,
+		"api_key":"sk-import",
+		"dry_run":true
+	}`, upstream.URL+"/anthropic")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/import", strings.NewReader(body))
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+	if !strings.Contains(res.Body.String(), `"id":"MiniMax-M1"`) {
+		t.Fatalf("expected discovered model, got %s", res.Body.String())
+	}
+}
+
+func TestImportProviderModelsCreatesSelectedModelsWithOneSecret(t *testing.T) {
+	t.Setenv("PARSAR_MASTER_KEY", "test-master-key")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+			{"id": "gpt-5.4", "supported_endpoint_types": []string{"openai"}},
+			{"id": "gpt-5.5", "supported_endpoint_types": []string{"anthropic", "openai-response"}},
+			{"id": "gpt-5.6", "supported_endpoint_types": []string{"chat_completions"}},
+		}})
+	}))
+	defer upstream.Close()
+
+	store := &modelImportStore{}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	body := fmt.Sprintf(`{
+		"provider_type":"openai",
+		"adapter":"@ai-sdk/openai",
+		"base_url":%q,
+		"credential_mode":"inline_secret",
+		"api_key":"sk-import",
+		"model_ids":["gpt-5.4","gpt-5.5","gpt-5.6"]
+	}`, upstream.URL+"/v1")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/import", strings.NewReader(body))
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+	if len(store.createdSecrets) != 1 {
+		t.Fatalf("expected one shared secret, got %d", len(store.createdSecrets))
+	}
+	if len(store.createdModels) != 2 {
+		t.Fatalf("expected two created models (existing skipped), got %d", len(store.createdModels))
+	}
+	if store.createdModels[0].SecretID != "00000000-0000-0000-0000-000000000777" || store.createdModels[1].SecretID != "00000000-0000-0000-0000-000000000777" {
+		t.Fatalf("expected imported models to reuse created secret, got %+v", store.createdModels)
+	}
+	if got := fmt.Sprint(store.createdModels[0].Config["supported_endpoint_types"]); got != "[anthropic openai-response]" {
+		t.Fatalf("expected endpoint types stored for gpt-5.5, got %s", got)
+	}
+	if got := fmt.Sprint(store.createdModels[1].Config["supported_endpoint_types"]); got != "[openai]" {
+		t.Fatalf("expected chat_completions alias normalized for gpt-5.6, got %s", got)
+	}
+	if !strings.Contains(res.Body.String(), `"skipped":["gpt-5.4"]`) {
+		t.Fatalf("expected existing model to be skipped, got %s", res.Body.String())
+	}
+}
+
+func TestDetectProviderModelEndpointsFindsSharedBaseURLFamilies(t *testing.T) {
+	var sawAnthropic, sawOpenAI bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		switch r.URL.Path {
+		case "/v1/messages":
+			sawAnthropic = true
+			if got := r.Header.Get("x-api-key"); got != "sk-detect" {
+				t.Fatalf("expected anthropic x-api-key, got %q", got)
+			}
+			if !strings.Contains(string(bodyBytes), `"model":"shared-model"`) {
+				t.Fatalf("expected model in anthropic probe body, got %s", string(bodyBytes))
+			}
+			_, _ = w.Write([]byte(`{"content":[{"type":"text","text":"pong"}]}`))
+		case "/v1/chat/completions":
+			sawOpenAI = true
+			if got := r.Header.Get("Authorization"); got != "Bearer sk-detect" {
+				t.Fatalf("expected bearer auth, got %q", got)
+			}
+			if !strings.Contains(string(bodyBytes), `"model":"shared-model"`) {
+				t.Fatalf("expected model in openai probe body, got %s", string(bodyBytes))
+			}
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"pong"}}]}`))
+		case "/v1/responses":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"message":"not found"}}`))
+		default:
+			t.Fatalf("unexpected probe path %s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+
+	store := &modelImportStore{}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	body := fmt.Sprintf(`{
+		"base_url":%q,
+		"model_key":"shared-model",
+		"api_key":"sk-detect"
+	}`, upstream.URL+"/v1")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/detect-endpoints", strings.NewReader(body))
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+	if !sawAnthropic || !sawOpenAI {
+		t.Fatalf("expected both anthropic and openai probes, got anthropic=%v openai=%v", sawAnthropic, sawOpenAI)
+	}
+	if got := res.Body.String(); !strings.Contains(got, `"supported_endpoint_types":["anthropic","openai"]`) {
+		t.Fatalf("expected detected endpoint types, got %s", got)
+	}
+}
+
 // connectivityStubStore overrides ResolveModelRuntime + GetSecretPayload
 // so the tests can point the connectivity check at a httptest.Server and
 // inject a real encrypted secret.

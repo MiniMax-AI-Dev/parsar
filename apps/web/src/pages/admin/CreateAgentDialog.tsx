@@ -17,7 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { modelProtocol, protocolLabel, type WireProtocol } from "../../lib/model-protocol"
+import { modelProtocols, protocolListLabel, type WireProtocol } from "../../lib/model-protocol"
 import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery, useEnableAgentCapabilityMutation } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
@@ -81,6 +81,10 @@ function engineSupportsProtocol(engine: AgentEngine, protocol: WireProtocol | nu
     case "opencode":
       return true
   }
+}
+
+function engineSupportsModel(engine: AgentEngine, model: Model): boolean {
+  return modelProtocols(model).some((protocol) => engineSupportsProtocol(engine, protocol))
 }
 
 function sandboxSizeFromAgent(a?: Agent | null): SandboxSize {
@@ -285,7 +289,7 @@ export function CreateAgentDialog({
   // fresh create (and any engine switch) never lands on a greyed-out model
   // that the daemon would reject at run time.
   const firstModelID =
-    activeModels.find((m) => engineSupportsProtocol(agentEngine, modelProtocol(m)))?.id ??
+    activeModels.find((m) => engineSupportsModel(agentEngine, m))?.id ??
     activeModels[0]?.id ??
     ""
   const selectedModelID = modelID || (mode === "create" ? firstModelID : "")
@@ -383,7 +387,7 @@ export function CreateAgentDialog({
   const incompatibleModelIDs = useMemo(() => {
     const out = new Set<string>()
     for (const m of activeModels) {
-      if (!engineSupportsProtocol(agentEngine, modelProtocol(m))) out.add(m.id)
+      if (!engineSupportsModel(agentEngine, m)) out.add(m.id)
     }
     return out
   }, [activeModels, agentEngine])
@@ -1201,7 +1205,7 @@ export function CreateAgentDialog({
                                     not) so the user can see each model's wire
                                     protocol at a glance. */}
                                 <span className="text-xs text-fg-faint">
-                                  {protocolLabel(modelProtocol(m))}
+                                  {protocolListLabel(modelProtocols(m))}
                                 </span>
                                 {selected && !incompatible && (
                                   <span className="inline-flex items-center gap-1 text-xs text-fg-subtle">
