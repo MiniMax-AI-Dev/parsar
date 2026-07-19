@@ -1,4 +1,4 @@
-import type { Agent, AgentDetail } from "./api-types"
+import type { Agent, AgentDetail, Model } from "./api-types"
 
 export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode"
 
@@ -137,4 +137,12 @@ export function agentDefaultModelIDOf(agent: AgentSource): string {
     profile.default_model_id,
     profile.model_id,
   )
+}
+
+export function defaultModelOf(agent: AgentSource, models: Model[], unavailableLabel: string): string {
+  const id = agentDefaultModelIDOf(agent)
+  if (!id) return "—"
+  const found = models.find((model) => model.id === id)
+  if (!found) return unavailableLabel
+  return found.name || found.model_key || id
 }
