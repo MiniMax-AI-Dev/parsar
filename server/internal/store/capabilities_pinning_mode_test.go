@@ -234,6 +234,9 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 		t.Fatalf("ListCapabilityVersions: %v", err)
 	}
 	v1ID := v1Versions[0].ID
+	if _, err := db.Exec(ctx, `update capability_version set created_at = timestamptz '2026-01-01 00:00:00+00' where id = $1::uuid`, v1ID); err != nil {
+		t.Fatalf("pin v1 created_at: %v", err)
+	}
 
 	// Bind an agent with pinning_mode=latest, sanity-check pre-deprecation.
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
@@ -263,7 +266,7 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 	}
 
 	// Mark capability deprecated.
-	if _, err := db.Exec(ctx, `update capability set deprecated_at = now() where id = $1::uuid`, capability.ID); err != nil {
+	if _, err := db.Exec(ctx, `update capability set deprecated_at = timestamptz '2026-01-01 00:01:00+00' where id = $1::uuid`, capability.ID); err != nil {
 		t.Fatalf("set deprecated_at: %v", err)
 	}
 
@@ -276,7 +279,7 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 		"kind":           "skill",
 		"skill":          map[string]any{"slug": "freeze-skill", "title": "Post", "instruction": "post"},
 	})
-	if _, err := st.CreateCapabilityVersion(ctx, CreateCapabilityVersionInput{
+	newerVersion, err := st.CreateCapabilityVersion(ctx, CreateCapabilityVersionInput{
 		CapabilityID:  capability.ID,
 		Version:       "2.0.0",
 		CreatorID:     ids.UserID,
@@ -284,8 +287,12 @@ func TestGetEnabledCapabilitiesForAgent_LatestFreezesOnDeprecation(t *testing.T)
 		CanonicalSpec: canonicalNewer,
 		OssKey:        "capabilities/skills/freeze/v2.zip",
 		SHA256:        newerSHA,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("CreateCapabilityVersion v2 (post-deprecation): %v", err)
+	}
+	if _, err := db.Exec(ctx, `update capability_version set created_at = timestamptz '2026-01-01 00:02:00+00' where id = $1::uuid`, newerVersion.ID); err != nil {
+		t.Fatalf("pin v2 created_at: %v", err)
 	}
 
 	enabled, err = st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)

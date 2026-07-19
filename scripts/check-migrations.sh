@@ -55,7 +55,7 @@ fi
 
 host_port_ready=0
 for _ in $(seq 1 60); do
-  if python3 - "$PARSAR_POSTGRES_HOST" "$PARSAR_POSTGRES_PORT" <<'PY'
+  if python3 - "$PARSAR_POSTGRES_HOST" "$PARSAR_POSTGRES_PORT" 2>/dev/null <<'PY'
 import socket
 import sys
 
