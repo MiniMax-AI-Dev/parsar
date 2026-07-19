@@ -320,18 +320,14 @@ function ModelsTable({
     <div className="overflow-hidden rounded-lg border border-line bg-surface">
       <Table className="table-fixed">
         <colgroup>
-          {/* name | model_key | compatibility | protocol | credential | status | actions
-             Actions column gets 12% because it now hosts four icon-only
-             buttons inline (test / edit / copy / disable). With the old
-             10% the row contents would push the table past its container
-             and trigger horizontal scroll on a regular laptop width. */}
-          <col className="w-[20%]" />
-          <col className="w-[22%]" />
-          <col className="w-[15%]" />
+          {/* name | model_key | compatibility | protocol | credential | status | actions */}
+          <col className="w-[16%]" />
+          <col className="w-[18%]" />
+          <col className="w-[14%]" />
           <col className="w-[12%]" />
-          <col className="w-[11%]" />
-          <col className="w-[8%]" />
+          <col className="w-[14%]" />
           <col className="w-[12%]" />
+          <col className="w-[14%]" />
         </colgroup>
         <TableHeader>
           <TableRow>
