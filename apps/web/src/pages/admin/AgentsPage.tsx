@@ -4,12 +4,8 @@ import * as Tooltip from "@radix-ui/react-tooltip"
 import {
   ArrowUpRight,
   Bot,
-  Copy,
   Loader2,
-  MessageSquare,
-  Pencil,
   Plus,
-  Trash2,
   Search,
 } from "lucide-react"
 
@@ -18,7 +14,6 @@ import { PageHeader } from "../../components/layout/PageHeader"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimeline"
 import { SandboxPanel } from "../../components/admin/SandboxPanel"
-import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
@@ -61,6 +56,7 @@ import { ApiError } from "../../lib/api-client"
 import { createConversation } from "../../lib/api-conversations"
 import {
   useCreateAgent,
+  useAgentDetail,
   useAgents,
   useSetAgentStatus,
   useUpdateAgent,
@@ -82,13 +78,18 @@ import { useMyCredentials } from "../../lib/api-credentials"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useMarketplaceList } from "../../lib/api-marketplace"
 import { agentExecutionPlacement } from "../../lib/agent-runtime"
-import type { Agent, AgentCapability, AgentRunStatus, AgentRunSummary, Capability, CapabilityVersion, Model, UserCredential } from "../../lib/api-types"
+import { agentDefaultModelIDOf, agentEngineLabel, agentEngineOf } from "../../lib/agent-view-model"
+import type { Agent, AgentCapability, AgentDetail, AgentRunStatus, AgentRunSummary, Capability, CapabilityVersion, Model, UserCredential } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
 import { CapabilityTypeBadge } from "./CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "./capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "./capability-ui"
+import { AgentConfigSummary } from "./agents/AgentConfigSummary"
+import { AgentDetailActions } from "./agents/AgentDetailActions"
+import { AgentRowActions } from "./agents/AgentRowActions"
+import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 
 /* ------------------------------------------------------------------ */
 /*  View-model derived from Agent                              */
@@ -100,9 +101,7 @@ import { credentialKindLabel } from "./capability-ui"
  * `model_id` / `profile.model_id` shapes for older rows.
  */
 function defaultModelOf(a: Agent, models: Model[], unavailableLabel: string): string {
-  const cfg = (a.config as Record<string, unknown> | undefined) ?? {}
-  const profile = (cfg.profile ?? {}) as Record<string, unknown>
-  const id = String(cfg.default_model_id ?? cfg.model_id ?? profile.model_id ?? "")
+  const id = agentDefaultModelIDOf(a)
   if (!id) return "—"
   const found = models.find((m) => m.id === id)
   if (!found) return unavailableLabel
@@ -133,13 +132,6 @@ function starterConversationTitle(agentName: string, language: string): string {
 /* ------------------------------------------------------------------ */
 /*  Status badge                                                       */
 /* ------------------------------------------------------------------ */
-
-function AgentStatusBadge({ status }: { status: Agent["status"] }) {
-  const { t } = useTranslation("admin")
-  if (status === "active") return <Badge variant="success" dot>{t("agents.status.active")}</Badge>
-  if (status === "error") return <Badge variant="destructive" dot>{t("agents.status.error")}</Badge>
-  return <Badge variant="neutral">{t("agents.status.disabled")}</Badge>
-}
 
 /* ------------------------------------------------------------------ */
 /*  Runtime cell                                                       */
@@ -291,10 +283,11 @@ export function AgentsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
+  const [disableTarget, setDisableTarget] = useState<Agent | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   // Spinning row icon + double-click guard for the Chat button.
   const [chatPendingID, setChatPendingID] = useState<string | null>(null)
+  const fmtAgo = useRelativeTime()
 
   const query = useAgents(wid)
   const createMut = useCreateAgent(wid)
@@ -318,7 +311,13 @@ export function AgentsPage() {
   const filtered = agents.filter((a) => {
     if (!keyword) return true
     const q = keyword.toLowerCase()
-    return a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
+    const engine = t(agentEngineLabel(agentEngineOf(a))).toLowerCase()
+    const model = defaultModelOf(a, modelsQ.data?.models ?? [], t("agents.modelUnavailable")).toLowerCase()
+    return a.name.toLowerCase().includes(q)
+      || a.description.toLowerCase().includes(q)
+      || a.slug.toLowerCase().includes(q)
+      || engine.includes(q)
+      || model.includes(q)
   })
 
   // Spawns a fresh conversation rather than grafting onto unrelated
@@ -427,10 +426,11 @@ export function AgentsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("agents.table.agent")}</TableHead>
-                    <TableHead>{t("agents.table.runtime")}</TableHead>
+                    <TableHead>{t("agents.table.engine")}</TableHead>
                     <TableHead>{t("agents.table.model")}</TableHead>
-                    <TableHead>{t("agents.table.visibility")}</TableHead>
-                    <TableHead>{t("agents.table.creator")}</TableHead>
+                    <TableHead>{t("agents.table.execution")}</TableHead>
+                    <TableHead>{t("agents.table.status")}</TableHead>
+                    <TableHead>{t("agents.table.updated")}</TableHead>
                     <TableHead className="text-right pr-4">{t("agents.table.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -442,45 +442,41 @@ export function AgentsPage() {
                       onClick={() => navigate("agents", { id: a.id })}
                     >
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Bot className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
-                          <span className="text-base font-medium text-fg">{a.name}</span>
+                        <div className="flex min-w-0 items-start gap-2">
+                          <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-base font-medium text-fg">{a.name}</span>
+                              <Badge variant="neutral">{t(`agents.visibility.${a.visibility ?? "workspace"}`)}</Badge>
+                            </div>
+                            <p className="mt-0.5 max-w-md truncate text-sm text-fg-subtle">{a.description || a.slug}</p>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell><RuntimeCell agent={a} /></TableCell>
+                      <TableCell className="text-sm font-medium text-fg-muted">{t(agentEngineLabel(agentEngineOf(a)))}</TableCell>
                       <TableCell className="font-mono text-sm text-fg-muted">{defaultModelOf(a, modelsQ.data?.models ?? [], t("agents.modelUnavailable"))}</TableCell>
-                      <TableCell className="text-sm text-fg-subtle">
-                        {t(`agents.visibility.${a.visibility ?? "workspace"}`)}
-                      </TableCell>
-                      <TableCell className="text-sm text-fg-muted">{a.created_by_name || "—"}</TableCell>
+                      <TableCell><RuntimeCell agent={a} /></TableCell>
+                      <TableCell><AgentStatusBadge status={a.status} /></TableCell>
+                      <TableCell className="whitespace-nowrap text-sm text-fg-subtle">{a.enabled_at ? fmtAgo(a.enabled_at) : "—"}</TableCell>
                       <TableCell className="pr-4">
-                        <RowActions>
-                          <ActionIconButton
-                            icon={MessageSquare}
-                            label={t("agents.actions.chat")}
-                            tone="primary"
-                            disabled={a.status !== "active" || !wid}
-                            busy={chatPendingID === a.id}
-                            onClick={() => void startChatWith(a)}
-                          />
-                          <ActionIconButton
-                            icon={Pencil}
-                            label={t("agents.actions.edit")}
-                            onClick={() => setEditAgent(a)}
-                          />
-                          <ActionIconButton
-                            icon={Copy}
-                            label={t("agents.actions.clone")}
-                            onClick={() => setCloneAgent(a)}
-                          />
-                          <ActionIconButton
-                            icon={Trash2}
-                            label={t("agents.actions.delete")}
-                            tone="danger"
-                            disabled={a.status !== "active"}
-                            onClick={() => setDeleteTarget(a)}
-                          />
-                        </RowActions>
+                        <AgentRowActions
+                          agent={a}
+                          chatPending={chatPendingID === a.id}
+                          statusPending={statusMut.isPending}
+                          onChat={() => void startChatWith(a)}
+                          onEdit={() => setEditAgent(a)}
+                          onClone={() => setCloneAgent(a)}
+                          onStatusChange={(enabled) => {
+                            if (!enabled) {
+                              setDisableTarget(a)
+                              return
+                            }
+                            statusMut.mutate(
+                              { agentID: a.id, enabled: true },
+                              { onSuccess: () => setToast(t("agents.listActions.enabledToast", { name: a.name })) },
+                            )
+                          }}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -590,13 +586,13 @@ export function AgentsPage() {
         }}
       />
 
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => {
-        if (!open && !statusMut.isPending) setDeleteTarget(null)
+      <AlertDialog open={disableTarget !== null} onOpenChange={(open) => {
+        if (!open && !statusMut.isPending) setDisableTarget(null)
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("agents.listActions.deleteConfirmTitle", { name: deleteTarget?.name ?? "" })}</AlertDialogTitle>
-            <AlertDialogDescription>{t("agents.listActions.deleteConfirmDescription")}</AlertDialogDescription>
+            <AlertDialogTitle>{t("agents.listActions.disableConfirmTitle", { name: disableTarget?.name ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("agents.listActions.disableConfirmDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
@@ -605,22 +601,22 @@ export function AgentsPage() {
             <Button
               variant="destructive"
               size="sm"
-              disabled={!deleteTarget || statusMut.isPending}
+              disabled={!disableTarget || statusMut.isPending}
               onClick={() => {
-                if (!deleteTarget) return
+                if (!disableTarget) return
                 statusMut.mutate(
-                  { agentID: deleteTarget.id, enabled: false },
+                  { agentID: disableTarget.id, enabled: false },
                   {
                     onSuccess: () => {
-                      setToast(t("agents.listActions.deletedToast", { name: deleteTarget.name }))
-                      setDeleteTarget(null)
+                      setToast(t("agents.listActions.disabledToast", { name: disableTarget.name }))
+                      setDisableTarget(null)
                     },
                   },
                 )
               }}
             >
               {statusMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {t("agents.listActions.deleteConfirm")}
+              {t("agents.listActions.disableConfirm")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -662,14 +658,12 @@ export function AgentDetailPage({ id }: { id: string }) {
   const [toast, setToast] = useState<string | null>(null)
   const pendingCapabilityID = new URLSearchParams(window.location.search).get("pendingCapability")
 
-  // Detail reads from the cached list; no per-agent endpoint surfaced
-  // in admin scope yet.
-  const query = useAgents(wid)
+  const query = useAgentDetail(wid, id)
   const modelsQ = useModels(wid)
   const workspacesQ = useMyWorkspaces()
-  const agents = query.data?.agents ?? []
-  const agent = agents.find((a) => a.id === id) ?? agents[0]
-  const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
+  const agent = query.data
+  const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
+  const workspaceRole = currentWorkspace?.role
 
   const agentCapabilitiesQ = useAgentCapabilitiesQuery(wid, agent?.id ?? null)
   const workspaceCapabilitiesQ = useCapabilitiesQuery(wid)
@@ -679,6 +673,18 @@ export function AgentDetailPage({ id }: { id: string }) {
     return (
       <AdminLayout activeMenu="agents">
         <AgentsLoadingSkeleton />
+      </AdminLayout>
+    )
+  }
+
+  if (query.error) {
+    return (
+      <AdminLayout activeMenu="agents">
+        <ErrorState
+          title={t("agents.detail.loadError.title")}
+          description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
+          onRetry={() => void query.refetch()}
+        />
       </AdminLayout>
     )
   }
@@ -711,7 +717,19 @@ export function AgentDetailPage({ id }: { id: string }) {
         }
         title={agent.name}
         description={agent.description}
-        action={<AgentStatusBadge status={agent.status} />}
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <AgentStatusBadge status={agent.status} />
+            <AgentDetailActions
+              agent={agent}
+              workspaceID={wid}
+              workspaceName={currentWorkspace?.name}
+              workspaceRole={workspaceRole}
+              models={modelsQ.data?.models ?? []}
+              onToast={setToast}
+            />
+          </div>
+        }
       />
 
       {toast && (
@@ -726,7 +744,10 @@ export function AgentDetailPage({ id }: { id: string }) {
         </div>
       )}
 
-      <Tabs defaultValue={requestedTab ?? "dynamics"}>
+      <Tabs
+        value={requestedTab ?? "dynamics"}
+        onValueChange={(tab) => navigate("agents", { id: agent.id, tab })}
+      >
         <TabsList>
           <TabsTrigger value="dynamics">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.detail.tabs.config")}</TabsTrigger>
@@ -763,15 +784,6 @@ export function AgentDetailPage({ id }: { id: string }) {
         </TabsContent>
       </Tabs>
     </AdminLayout>
-  )
-}
-
-function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className={`text-sm text-fg-emphasis ${mono ? "font-mono" : ""}`}>{value}</dd>
-    </div>
   )
 }
 
@@ -1573,7 +1585,7 @@ function AgentConfigTab({
   capabilitiesError,
   onToast,
 }: {
-  agent: Agent
+  agent: AgentDetail
   workspaceID: string | null
   workspaceRole?: string
   modelLabel: string
@@ -1584,7 +1596,7 @@ function AgentConfigTab({
   capabilitiesError: unknown
   onToast: (message: string) => void
 }) {
-  const { t, i18n } = useTranslation("admin")
+  const { i18n } = useTranslation("admin")
   const credentialsQ = useMyCredentials()
   const credentials = credentialsQ.data?.credentials ?? []
   const installedIDs = new Set(installedCapabilities.map((item) => item.capability_id))
@@ -1604,26 +1616,7 @@ function AgentConfigTab({
 
   return (
     <div className="space-y-4">
-      <Card title={t("agents.detail.config.runtime.title")}>
-        <Field label={t("agents.detail.config.runtime.model")} value={modelLabel} mono />
-        <Field
-          label={t("agents.detail.config.runtime.runtime")}
-          value={
-            <Badge variant={runtimeOf(agent) === "sandbox" ? "success" : "neutral"} dot>
-              {t(`agents.runtime.${runtimeOf(agent)}`)}
-            </Badge>
-          }
-        />
-        <Field
-          label={t("agents.detail.config.runtime.connector")}
-          value={
-            <span>
-              {connectorLabel}
-              <span className="ml-1 text-sm text-fg-subtle">· {agent.connector_type}</span>
-            </span>
-          }
-        />
-      </Card>
+      <AgentConfigSummary agent={agent} modelLabel={modelLabel} connectorLabel={connectorLabel} />
 
       {/* Sandbox panel lives under the runtime card because for      */}
       {/* sandbox-mode agents it IS the runtime surface. Skipped for  */}

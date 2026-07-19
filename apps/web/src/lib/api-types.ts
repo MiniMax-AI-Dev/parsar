@@ -152,6 +152,15 @@ export interface Agent {
   sandbox_status?: string
 }
 
+export interface AgentDetail extends Agent {
+  agent_id?: string
+  profile?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type AgentDetailResponse = AgentDetail | { agent: AgentDetail }
+
 export interface ListAgentsResponse {
   agents: Agent[]
 }

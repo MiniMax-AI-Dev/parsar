@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ApiError, apiRequest, noUnreachableRetry } from "./api-client"
 import type {
   Agent,
+  AgentDetail,
+  AgentDetailResponse,
   AgentRunEvent,
   AgentRunDetail,
   AgentRunStatus,
@@ -18,6 +20,7 @@ import type {
 /* --- Query keys --------------------------------------------------------- */
 
 const KEY_AGENTS = (workspaceID: string) => ["admin", "agents", workspaceID] as const
+const KEY_AGENT_DETAIL = (workspaceID: string, agentID: string) => ["admin", "agent", workspaceID, agentID] as const
 // Statuses are sorted + joined to a stable string (nil/empty → "_all") so the
 // "in progress" union tab and pagination produce distinct cache entries.
 const KEY_RUNS = (
@@ -56,6 +59,18 @@ async function listAgents(workspaceID: string | null): Promise<ListAgentsRespons
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents`
   )
   return { ...res, agents: (res.agents ?? []).map(normalizeAgentId) }
+}
+
+export async function getAgentDetailRequest(
+  workspaceID: string | null,
+  agentID: string | null,
+): Promise<AgentDetail | null> {
+  if (!workspaceID || !agentID) return null
+  const response = await apiRequest<AgentDetailResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}`,
+  )
+  const detail = "agent" in response ? response.agent : response
+  return normalizeAgentId(detail) as AgentDetail
 }
 
 async function listAgentRuns(
@@ -229,6 +244,16 @@ export function useAgents(workspaceID: string | null) {
   })
 }
 
+export function useAgentDetail(workspaceID: string | null, agentID: string | null) {
+  return useQuery({
+    queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", agentID ?? "_none"),
+    queryFn: () => getAgentDetailRequest(workspaceID, agentID),
+    enabled: Boolean(workspaceID && agentID),
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
 export interface UseAgentRunsOptions {
   // admin "in progress" tab passes ["running","queued"]; null/undefined/empty = no filter.
   statuses?: AgentRunStatus[] | null
@@ -397,8 +422,9 @@ export function useUpdateAgent(workspaceID: string | null) {
     }) => {
       return updateAgentRequest(agentID, body)
     },
-    onSuccess: () => {
+    onSuccess: (_change, variables) => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
     },
   })
 }
@@ -420,8 +446,9 @@ export function useUpdateAgentVisibility(workspaceID: string | null) {
     }) => {
       return updateAgentVisibilityRequest(agentID, visibility)
     },
-    onSuccess: () => {
+    onSuccess: (_agent, variables) => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
     },
   })
 }
@@ -633,8 +660,9 @@ export function useSetAgentStatus(workspaceID: string | null) {
       agentID: string
       enabled: boolean
     }) => setAgentStatus(agentID, enabled),
-    onSuccess: () => {
+    onSuccess: (_agent, variables) => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
     },
   })
 }
@@ -649,8 +677,9 @@ export function useUpdateAgentProfile(workspaceID: string | null) {
       agentID: string
       body: UpdateAgentProfileRequest
     }) => updateAgentProfileRequest(agentID, body),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
     },
   })
 }
