@@ -10,6 +10,7 @@ Audience: any self-hosted open-source deployment — every deployment profile
 
 > **Related documents**
 > - [feishu-prod.md](./feishu-prod.md) — Feishu OIDC + event-subscription production config.
+> - [oidc-sso.md](./oidc-sso.md) — generic OIDC SSO for Google, Microsoft Entra ID, Okta, Auth0, Keycloak, or internal IdPs.
 > - [feishu-bot-per-agent.md](./feishu-bot-per-agent.md) — expose a single Agent as a Feishu bot (one per Feishu-connected Agent).
 > - [health-and-smoke.md](./health-and-smoke.md) — `/healthz`, `/readyz`, `smoke.sh` checks.
 > - [config.example.yaml](./config.example.yaml) — the fully-commented YAML template.
@@ -245,7 +246,8 @@ layer**. To make a deployment truly production-ready you still need:
 | Sandbox runner (E2B) | Phase 4 in progress | Another session |
 | Admin UI (installer step-by-step) | Phase 4 follow-up | Another session |
 | Real auth (Feishu OIDC production config) | Landed; see `feishu-prod.md` | — |
-| Real auth (other OAuth providers: GitHub / Google / email magic link) | Not implemented | Later phase |
+| Real auth (generic OIDC: Google / Entra / Okta / Auth0 / Keycloak / internal IdP) | Landed; see `oidc-sso.md` | — |
+| Real auth (GitHub login / email magic link) | Not implemented | Later phase |
 | Smoke — post-deploy liveness (/healthz, /readyz, /api/v1/health) | Landed; see the lite mode in `health-and-smoke.md` | — |
 | Smoke — bootstrap path (status / dev_auth shim / provision / idempotency) | Landed; see the core mode in `health-and-smoke.md` | — |
 | Smoke — end-to-end AgentRun / audit / usage | Missing `/api/v1/workspaces/{wid}/{agent-runs,audit-records,usage}` and other cookie-session entry points; smoke-core marks this SKIP/TODO | Later phase |

@@ -13,6 +13,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
+	authoidc "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/oidc"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -89,9 +90,33 @@ func buildOAuthRouter(t *testing.T, deps OAuthHandlerDeps) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/auth/feishu/start", feishuStartHandler(deps))
 		r.Get("/auth/feishu/callback", feishuCallbackHandler(deps))
+		r.Get("/auth/oidc/{providerID}/start", oidcStartHandler(deps))
+		r.Get("/auth/oidc/{providerID}/callback", oidcCallbackHandler(deps))
 		r.Post("/auth/logout", authLogoutHandler(deps))
 	})
 	return r
+}
+
+type stubOIDCClient struct {
+	authURL string
+	profile authoidc.UserProfile
+	seen    struct {
+		state string
+		nonce string
+		code  string
+	}
+}
+
+func (c *stubOIDCClient) AuthorizeURL(_ context.Context, state, nonce string) (string, error) {
+	c.seen.state = state
+	c.seen.nonce = nonce
+	return c.authURL + "?state=" + state + "&nonce=" + nonce, nil
+}
+
+func (c *stubOIDCClient) ExchangeCode(_ context.Context, code, nonce string) (authoidc.UserProfile, error) {
+	c.seen.code = code
+	c.seen.nonce = nonce
+	return c.profile, nil
 }
 
 func TestFeishuStartRedirectsAndSetsStateCookie(t *testing.T) {
@@ -115,6 +140,31 @@ func TestFeishuStartRedirectsAndSetsStateCookie(t *testing.T) {
 	setCookie := rec.Header().Get("Set-Cookie")
 	if !strings.HasPrefix(setCookie, CookieStateName+"=") || !strings.Contains(setCookie, "HttpOnly") {
 		t.Fatalf("state cookie missing or unsafe: %q", setCookie)
+	}
+}
+
+func TestOIDCStartRedirectsAndSetsStateAndNonceCookies(t *testing.T) {
+	client := &stubOIDCClient{authURL: "https://idp.example/authorize"}
+	r := buildOAuthRouter(t, OAuthHandlerDeps{
+		OIDC:     map[string]authoidc.Client{"company": client},
+		Sessions: newStubSessions(),
+		Store:    &stubOAuthStore{},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/company/start", nil)
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "https://idp.example/authorize?") {
+		t.Fatalf("Location = %q, want OIDC authorize URL", loc)
+	}
+	cookies := rec.Header().Values("Set-Cookie")
+	if len(cookies) != 2 {
+		t.Fatalf("cookies = %v, want state and nonce cookies", cookies)
+	}
+	if client.seen.state == "" || client.seen.nonce == "" {
+		t.Fatalf("state/nonce not passed to client: %+v", client.seen)
 	}
 }
 
@@ -174,6 +224,66 @@ func TestFeishuCallbackHappyPath(t *testing.T) {
 	}
 	if st.lastIn.Provider != "feishu" || st.lastIn.Email != "admin@example.com" {
 		t.Fatalf("upsert input wrong: %+v", st.lastIn)
+	}
+}
+
+func TestOIDCCallbackHappyPath(t *testing.T) {
+	client := &stubOIDCClient{
+		authURL: "https://idp.example/authorize",
+		profile: authoidc.UserProfile{
+			Provider:   "oidc:company",
+			ProviderID: "company",
+			Subject:    "sub-123",
+			Email:      "admin@example.com",
+			Name:       "Admin User",
+			AvatarURL:  "https://idp.example/avatar.png",
+			Issuer:     "https://idp.example",
+			Claims: map[string]any{
+				"sub":            "sub-123",
+				"email":          "admin@example.com",
+				"email_verified": true,
+			},
+		},
+	}
+	sessions := newStubSessions()
+	st := &stubOAuthStore{userID: "00000000-0000-0000-0000-0000deadbeef"}
+	r := buildOAuthRouter(t, OAuthHandlerDeps{
+		OIDC:     map[string]authoidc.Client{"company": client},
+		Sessions: sessions,
+		Store:    st,
+	})
+
+	rec1 := httptest.NewRecorder()
+	r.ServeHTTP(rec1, httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/company/start", nil))
+	var state, nonce string
+	for _, rawCookie := range rec1.Header().Values("Set-Cookie") {
+		if strings.HasPrefix(rawCookie, CookieStateName+"=") {
+			state = strings.SplitN(strings.TrimPrefix(rawCookie, CookieStateName+"="), ";", 2)[0]
+		}
+		if strings.HasPrefix(rawCookie, CookieNonceName+"=") {
+			nonce = strings.SplitN(strings.TrimPrefix(rawCookie, CookieNonceName+"="), ";", 2)[0]
+		}
+	}
+	if state == "" || nonce == "" {
+		t.Fatalf("missing start cookies: %v", rec1.Header().Values("Set-Cookie"))
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/company/callback?code=oidc-code&state="+state, nil)
+	req.AddCookie(&http.Cookie{Name: CookieStateName, Value: state})
+	req.AddCookie(&http.Cookie{Name: CookieNonceName, Value: nonce})
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302 redirect to /", rec.Code)
+	}
+	if client.seen.code != "oidc-code" || client.seen.nonce != nonce {
+		t.Fatalf("exchange input = %+v, want code and nonce", client.seen)
+	}
+	if st.lastIn.Provider != "oidc:company" || st.lastIn.Subject != "sub-123" || st.lastIn.Email != "admin@example.com" {
+		t.Fatalf("upsert input wrong: %+v", st.lastIn)
+	}
+	if got := st.lastIn.Metadata["issuer"]; got != "https://idp.example" {
+		t.Fatalf("metadata issuer = %#v", got)
 	}
 }
 
@@ -300,5 +410,3 @@ func TestLogoutIdempotentWithoutCookie(t *testing.T) {
 		t.Fatalf("status = %d, want 204 (idempotent)", rec.Code)
 	}
 }
-
-

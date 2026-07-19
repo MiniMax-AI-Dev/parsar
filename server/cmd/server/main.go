@@ -46,6 +46,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
+	authoidc "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/oidc"
 	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
@@ -346,10 +347,15 @@ func main() {
 	// must publish into the same broker the UI /stream is subscribing
 	// to, otherwise events land in a per-call broker and the UI hangs.
 	runStreamBroker := runstream.NewBroker(runstream.DefaultBufferSize)
+	oidcPublicURL := strings.TrimRight(cfg.BuildPublicURL("/"), "/")
+	oidcClients, oidcStatuses, oidcErr := authoidc.NewClientsFromEnv(authoidc.EnvFunc(envLookup), oidcPublicURL)
+	if oidcErr != nil {
+		log.Bg().Warn("OIDC auth providers disabled", "error", oidcErr)
+	}
 	opts := []dev.RouterOption{
 		dev.WithDispatchContext(serverRootCtx),
 		dev.WithRunStreamBroker(runStreamBroker),
-		dev.WithAuthProviders(buildAuthProviderRegistry(envLookup, cfg, feishuDecision)),
+		dev.WithAuthProviders(buildAuthProviderRegistry(envLookup, cfg, feishuDecision, oidcStatuses)),
 	}
 	if shouldRegisterFeishuAppProvisioning(cfg) {
 		if regClient, err := gatewaypkg.NewFeishuAppRegistrationClient(gatewaypkg.FeishuAppRegistrationClientOptions{
@@ -635,27 +641,32 @@ func main() {
 			CookieSecure: cfg.Auth.Cookie.Secure,
 		}))
 
-		if feishuDecision.RegisterOAuthHandlers {
+		if feishuDecision.RegisterOAuthHandlers || len(oidcClients) > 0 {
+			loginRedirect := strings.TrimSpace(cfg.Gateway.Feishu.LoginRedirectURL)
+			cookieSecure := cfg.Auth.Cookie.Secure
+			deps := dev.OAuthHandlerDeps{
+				OIDC:             oidcClients,
+				Sessions:         sessionStore,
+				Store:            dbStore,
+				CookieSecure:     cookieSecure,
+				LoginRedirectURL: loginRedirect,
+			}
 			feishuClient, err := feishu.NewClientFromEnv(envLookup)
-			if err != nil {
+			if feishuDecision.RegisterOAuthHandlers && err != nil {
 				log.Bg().Warn("feishu OIDC client not registered", "error", err)
-			} else {
-				// CookieSecure driven by Config.Auth.Cookie.Secure; we
-				// do not sniff request scheme because proxies lie.
-				cookieSecure := cfg.Auth.Cookie.Secure
-				// loginRedirect: default "/" for prod / single-origin
-				// where the server serves the SPA; `make dev` points
-				// at the Vite origin (e.g. http://127.0.0.1:5173/).
-				loginRedirect := strings.TrimSpace(cfg.Gateway.Feishu.LoginRedirectURL)
-				opts = append(opts, dev.WithOAuthHandlers(dev.OAuthHandlerDeps{
-					Feishu:           feishuClient,
-					Sessions:         sessionStore,
-					Store:            dbStore,
-					CookieSecure:     cookieSecure,
-					LoginRedirectURL: loginRedirect,
-				}))
+			}
+			if err == nil {
+				deps.Feishu = feishuClient
+			}
+			opts = append(opts, dev.WithOAuthHandlers(deps))
+			if deps.Feishu != nil {
 				log.Bg().Info("feishu OIDC handlers registered",
 					"mode", feishuDecision.Mode, "mock", feishuClient.IsMock(), "cookie_secure", cookieSecure,
+					"login_redirect", loginRedirect)
+			}
+			if len(oidcClients) > 0 {
+				log.Bg().Info("OIDC auth handlers registered",
+					"providers", len(oidcClients), "cookie_secure", cookieSecure,
 					"login_redirect", loginRedirect)
 			}
 		}
@@ -1062,7 +1073,7 @@ func decideFeishuStartup(env func(string) string) feishuStartupDecision {
 	}
 }
 
-func buildAuthProviderRegistry(env func(string) string, cfg config.Config, feishuDecision feishuStartupDecision) dev.AuthProviderRegistry {
+func buildAuthProviderRegistry(env func(string) string, cfg config.Config, feishuDecision feishuStartupDecision, oidcStatuses []authoidc.ProviderEnvStatus) dev.AuthProviderRegistry {
 	if env == nil {
 		env = os.Getenv
 	}
@@ -1105,6 +1116,26 @@ func buildAuthProviderRegistry(env func(string) string, cfg config.Config, feish
 		feishuProvider.LoginURL = "/api/v1/auth/feishu/start"
 	}
 	providers = append(providers, feishuProvider)
+
+	for _, status := range oidcStatuses {
+		providerID := status.Config.ID
+		enabled := len(status.MissingEnv) == 0
+		provider := dev.AuthProvider{
+			ID:          "oidc:" + providerID,
+			Type:        dev.AuthProviderTypeOIDC,
+			Label:       status.Config.Label,
+			Enabled:     enabled,
+			Configured:  enabled,
+			CallbackURL: status.Config.RedirectURI,
+			RequiredEnv: status.RequiredEnv,
+			MissingEnv:  status.MissingEnv,
+			DocsURL:     "docs/deploy/oidc-sso.md",
+		}
+		if provider.Enabled {
+			provider.LoginURL = "/api/v1/auth/oidc/" + providerID + "/start"
+		}
+		providers = append(providers, provider)
+	}
 
 	return dev.AuthProviderRegistry{Providers: providers}
 }

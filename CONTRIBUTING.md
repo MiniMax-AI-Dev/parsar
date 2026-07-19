@@ -194,6 +194,40 @@ description and keep ownership on the side listed here.
   are committed artifacts, but never the source of truth. Change annotations
   or SQL first, then regenerate.
 
+### Auth provider configuration
+
+- Email/password login is always available after bootstrap.
+- Feishu login remains the Feishu-specific adapter because its token exchange
+  needs a Feishu app access token and is not a generic OAuth/OIDC exchange.
+- Generic third-party SSO uses env-driven OIDC providers backed by
+  `github.com/coreos/go-oidc/v3/oidc` and `golang.org/x/oauth2`; do not
+  hand-roll discovery, JWKS parsing, or ID token verification.
+- List provider ids with `PARSAR_AUTH_OIDC_PROVIDERS`, for example
+  `PARSAR_AUTH_OIDC_PROVIDERS=google,company`.
+- Provider ids must match `^[a-z][a-z0-9_-]{0,62}$`. The id becomes part of
+  the login routes and identity key:
+  `/api/v1/auth/oidc/{providerID}/start`,
+  `/api/v1/auth/oidc/{providerID}/callback`, and
+  `auth_identities.provider = "oidc:{providerID}"`.
+- Per-provider env names use the uppercased provider id with non-alphanumeric
+  characters converted to `_`: `company-sso` uses
+  `PARSAR_AUTH_OIDC_COMPANY_SSO_*`.
+- Required per-provider env:
+  `PARSAR_AUTH_OIDC_<ID>_ISSUER_URL`,
+  `PARSAR_AUTH_OIDC_<ID>_CLIENT_ID`,
+  `PARSAR_AUTH_OIDC_<ID>_CLIENT_SECRET`.
+- Optional per-provider env:
+  `PARSAR_AUTH_OIDC_<ID>_LABEL`,
+  `PARSAR_AUTH_OIDC_<ID>_REDIRECT_URI`,
+  `PARSAR_AUTH_OIDC_<ID>_SCOPES`,
+  `PARSAR_AUTH_OIDC_<ID>_ALLOWED_DOMAINS`,
+  `PARSAR_AUTH_OIDC_<ID>_REQUIRE_VERIFIED_EMAIL`.
+- If `REDIRECT_URI` is omitted, Parsar derives it from `PARSAR_PUBLIC_URL` as
+  `{public_url}/api/v1/auth/oidc/{providerID}/callback` (or the dev loopback
+  public URL when running in dev profile).
+- Parsar-owned OIDC logic is limited to state/nonce cookies, verified email,
+  allowed-domain policy, local user/session creation, and provider id mapping.
+
 ## Code quality & architecture
 
 Parsar favors small, single-purpose files and reused helpers over growing
