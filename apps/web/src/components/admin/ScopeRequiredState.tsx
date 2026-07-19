@@ -6,7 +6,9 @@ import {
   useCreateWorkspace,
   useMyWorkspaces,
 } from "../../lib/api-workspaces"
+import { useAuth } from "../../lib/auth-context"
 import { setWorkspaceId } from "../../lib/workspace"
+import { workspaceOwnerName } from "../../lib/workspace-defaults"
 import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
 import { WorkspaceFormDialog } from "../layout/WorkspaceCrudDialogs"
@@ -18,8 +20,13 @@ interface ScopeRequiredStateProps {
 
 export function ScopeRequiredState({ resourceName }: ScopeRequiredStateProps) {
   const { t } = useTranslation("admin")
+  const { user } = useAuth()
   const workspacesQ = useMyWorkspaces()
   const workspaces = workspacesQ.data?.workspaces ?? []
+  const workspaceOwner = workspaceOwnerName(user)
+  const defaultWorkspaceName = workspaceOwner
+    ? t("workspaceDefaults.personal", { ns: "common", name: workspaceOwner })
+    : t("workspaceDefaults.generic", { ns: "common" })
 
   const [createWsOpen, setCreateWsOpen] = useState(false)
   const createWorkspaceMut = useCreateWorkspace()
@@ -55,6 +62,7 @@ export function ScopeRequiredState({ resourceName }: ScopeRequiredStateProps) {
           setCreateWsOpen(open)
         }}
         mode="create"
+        initialName={defaultWorkspaceName}
         pending={createWorkspaceMut.isPending}
         error={createWorkspaceMut.error}
         onSubmit={({ name }) => {

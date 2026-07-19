@@ -159,6 +159,10 @@
     "closedBody": "This install already has an owner. Sign in with your existing account.",
     "goToLogin": "Go to sign in"
   },
+  "workspaceDefaults": {
+    "personal": "{{name}}'s workspace",
+    "generic": "My workspace"
+  },
   "onboarding": {
     "title": "Create your first workspace",
     "subtitle": "A workspace is a shared space where your team collaborates on agents. You'll be its Owner.",

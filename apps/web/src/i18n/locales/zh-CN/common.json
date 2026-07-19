@@ -159,6 +159,10 @@
     "closedBody": "本实例已经存在拥有者。请使用已有账号登录。",
     "goToLogin": "前往登录"
   },
+  "workspaceDefaults": {
+    "personal": "{{name}}的工作区",
+    "generic": "我的工作区"
+  },
   "onboarding": {
     "title": "创建你的第一个工作区",
     "subtitle": "工作区是团队协作处理 Agent 的共享空间。你将自动成为它的 Owner。",

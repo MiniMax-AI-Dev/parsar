@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { ApiError } from "../lib/api-client"
 import { useRegisterFirstOwner } from "../lib/api-bootstrap"
 import { validateNewPassword } from "../lib/password-policy"
+import { workspaceOwnerName } from "../lib/workspace-defaults"
 
 /**
  * SetupPage — first-owner registration.
@@ -24,8 +25,30 @@ export function SetupPage() {
 
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
-  const [workspace, setWorkspace] = useState("My Workspace")
+  const [workspace, setWorkspace] = useState(() => t("workspaceDefaults.generic"))
+  const [workspaceEdited, setWorkspaceEdited] = useState(false)
   const [password, setPassword] = useState("")
+
+  function suggestedWorkspaceName(nextName: string, nextEmail: string): string {
+    const owner = workspaceOwnerName({ name: nextName, email: nextEmail })
+    return owner
+      ? t("workspaceDefaults.personal", { name: owner })
+      : t("workspaceDefaults.generic")
+  }
+
+  function updateName(nextName: string) {
+    setName(nextName)
+    if (!workspaceEdited) {
+      setWorkspace(suggestedWorkspaceName(nextName, email))
+    }
+  }
+
+  function updateEmail(nextEmail: string) {
+    setEmail(nextEmail)
+    if (!workspaceEdited) {
+      setWorkspace(suggestedWorkspaceName(name, nextEmail))
+    }
+  }
 
   const submitting = register.isPending
   const errorMsg =
@@ -81,7 +104,7 @@ export function SetupPage() {
             label={t("setup.nameLabel")}
             placeholder={t("setup.namePlaceholder")}
             value={name}
-            onChange={setName}
+            onChange={updateName}
             autoComplete="name"
             required={false}
           />
@@ -90,7 +113,7 @@ export function SetupPage() {
             label={t("setup.emailLabel")}
             placeholder={t("setup.emailPlaceholder")}
             value={email}
-            onChange={setEmail}
+            onChange={updateEmail}
             autoComplete="email"
             required
           />
@@ -98,7 +121,10 @@ export function SetupPage() {
             label={t("setup.workspaceLabel")}
             placeholder={t("setup.workspacePlaceholder")}
             value={workspace}
-            onChange={setWorkspace}
+            onChange={(value) => {
+              setWorkspaceEdited(true)
+              setWorkspace(value)
+            }}
             autoComplete="organization"
             required
           />
