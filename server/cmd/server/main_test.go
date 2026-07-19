@@ -256,6 +256,27 @@ func TestWorkspaceFeishuWorkersFollowStoredConnectorConfiguration(t *testing.T) 
 	})
 }
 
+func TestFeishuAppRegistrationFollowsMasterKey(t *testing.T) {
+	cases := []struct {
+		name      string
+		masterKey string
+		want      bool
+	}{
+		{name: "missing master key", want: false},
+		{name: "blank master key", masterKey: "  ", want: false},
+		{name: "configured master key", masterKey: "test-master-key", want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Config{}
+			cfg.Secret.MasterKey = tc.masterKey
+			if got := shouldRegisterFeishuAppProvisioning(cfg); got != tc.want {
+				t.Fatalf("shouldRegisterFeishuAppProvisioning() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestWorkspaceChatManagersFollowStoredConnectorConfiguration(t *testing.T) {
 	dbStore := store.New(nil)
 

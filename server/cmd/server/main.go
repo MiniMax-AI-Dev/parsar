@@ -351,7 +351,7 @@ func main() {
 		dev.WithRunStreamBroker(runStreamBroker),
 		dev.WithAuthProviders(buildAuthProviderRegistry(envLookup, cfg, feishuDecision)),
 	}
-	if truthy(envLookup("PARSAR_FEISHU_APP_REGISTRATION")) {
+	if shouldRegisterFeishuAppProvisioning(cfg) {
 		if regClient, err := gatewaypkg.NewFeishuAppRegistrationClient(gatewaypkg.FeishuAppRegistrationClientOptions{
 			AccountsBaseURL: strings.TrimSpace(envLookup(feishu.EnvAuthorizeBase)),
 			OpenBaseURL:     strings.TrimSpace(envLookup(feishu.EnvAPIBase)),
@@ -1033,6 +1033,10 @@ func main() {
 		drainOTLPReceiver(otlpReceiver)
 		drainAudit(auditIngester)
 	}
+}
+
+func shouldRegisterFeishuAppProvisioning(cfg config.Config) bool {
+	return strings.TrimSpace(cfg.Secret.MasterKey) != ""
 }
 
 func decideFeishuStartup(env func(string) string) feishuStartupDecision {
