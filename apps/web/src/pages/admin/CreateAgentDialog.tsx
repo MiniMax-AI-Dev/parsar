@@ -952,8 +952,23 @@ export function CreateAgentDialog({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[86vh] flex-col overflow-hidden sm:max-w-2xl">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Keep the Agent form open while the nested pairing modal is active.
+        if (!next && pairDialogOpen) return
+        onOpenChange(next)
+      }}
+    >
+      <DialogContent
+        className="flex max-h-[86vh] flex-col overflow-hidden sm:max-w-2xl"
+        onPointerDownOutside={(event) => {
+          if (pairDialogOpen) event.preventDefault()
+        }}
+        onInteractOutside={(event) => {
+          if (pairDialogOpen) event.preventDefault()
+        }}
+      >
         <DialogHeader className="shrink-0">
           <DialogTitle>{mode === "edit" ? t("agents.form.title.edit") : t("agents.form.title.create")}</DialogTitle>
         </DialogHeader>
@@ -1537,21 +1552,21 @@ export function CreateAgentDialog({
             </Button>
           )}
         </DialogFooter>
+        {workspaceID && (
+          <PairDaemonDialog
+            open={pairDialogOpen}
+            onClose={() => setPairDialogOpen(false)}
+            workspaceID={workspaceID}
+            onPaired={(runtimeID) => {
+              setDeviceID(runtimeID)
+              // DevicePicker's list query doesn't poll; nudge it so the freshly
+              // paired daemon shows up without waiting for the next mount.
+              void queryClient.invalidateQueries({ queryKey: ["admin", "runtimes", workspaceID] })
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
-    {workspaceID && (
-      <PairDaemonDialog
-        open={pairDialogOpen}
-        onClose={() => setPairDialogOpen(false)}
-        workspaceID={workspaceID}
-        onPaired={(runtimeID) => {
-          setDeviceID(runtimeID)
-          // DevicePicker's list query doesn't poll; nudge it so the freshly
-          // paired daemon shows up without waiting for the next mount.
-          void queryClient.invalidateQueries({ queryKey: ["admin", "runtimes", workspaceID] })
-        }}
-      />
-    )}
     </>
   )
 }
