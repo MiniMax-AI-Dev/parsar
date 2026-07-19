@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import * as Tooltip from "@radix-ui/react-tooltip"
 import {
-  ArrowUpRight,
   Bot,
   Loader2,
   Plus,
@@ -43,14 +41,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { createConversation } from "../../lib/api-conversations"
@@ -61,9 +51,6 @@ import {
   useSetAgentStatus,
   useUpdateAgent,
   useUpdateAgentProfile,
-  useAgentMetrics,
-  useAgentRuns,
-  type AgentMetrics,
 } from "../../lib/api-agents"
 import { useModels } from "../../lib/api-models"
 import {
@@ -78,8 +65,8 @@ import { useMyCredentials } from "../../lib/api-credentials"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useMarketplaceList } from "../../lib/api-marketplace"
 import { agentExecutionPlacement } from "../../lib/agent-runtime"
-import { agentDefaultModelIDOf, agentEngineLabel, agentEngineOf } from "../../lib/agent-view-model"
-import type { Agent, AgentCapability, AgentDetail, AgentRunStatus, AgentRunSummary, Capability, CapabilityVersion, Model, UserCredential } from "../../lib/api-types"
+import { defaultModelOf } from "../../lib/agent-view-model"
+import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, UserCredential } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
@@ -88,25 +75,13 @@ import { UpgradeCapabilityDialog } from "./capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "./capability-ui"
 import { AgentConfigSummary } from "./agents/AgentConfigSummary"
 import { AgentDetailActions } from "./agents/AgentDetailActions"
-import { AgentRowActions } from "./agents/AgentRowActions"
+import { AgentDynamicsTab } from "./agents/AgentDynamicsTab"
+import { AgentsListTable } from "./agents/AgentsListTable"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 
 /* ------------------------------------------------------------------ */
 /*  View-model derived from Agent                              */
 /* ------------------------------------------------------------------ */
-
-/**
- * Resolve the default-model display label. The agent stores only
- * `default_model_id` (a UUID); falls back through legacy
- * `model_id` / `profile.model_id` shapes for older rows.
- */
-function defaultModelOf(a: Agent, models: Model[], unavailableLabel: string): string {
-  const id = agentDefaultModelIDOf(a)
-  if (!id) return "—"
-  const found = models.find((m) => m.id === id)
-  if (!found) return unavailableLabel
-  return found.name || found.model_key || id
-}
 
 function connectorLabel(t: string): string {
   if (t === "agent_daemon") return "Agent Daemon"
@@ -127,148 +102,6 @@ function starterConversationTitle(agentName: string, language: string): string {
   const name = agentName.trim()
   if (!name) return ""
   return language.startsWith("zh") ? `和 ${name} 对话` : `Chat with ${name}`
-}
-
-/* ------------------------------------------------------------------ */
-/*  Status badge                                                       */
-/* ------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------ */
-/*  Runtime cell                                                       */
-/* ------------------------------------------------------------------ */
-
-/**
- * Maps `runtimes.liveness` + `runtime_id` presence onto a 3-state pill.
- * Returns null when there's no runtime (e.g. managed sandbox provider).
- */
-type LivenessTone = "online" | "offline" | "pending"
-
-function runtimeLivenessTone(agent: Agent): LivenessTone | null {
-  if (!agent.runtime_id) return null
-  const lv = (agent.runtime_liveness ?? "").toLowerCase()
-  if (lv === "online" || lv === "live") return "online"
-  if (lv === "pending_pairing" || lv === "pending") return "pending"
-  return "offline"
-}
-
-function StatusDot({ tone, title }: { tone: LivenessTone; title?: string }) {
-  const color = tone === "online"
-    ? "bg-success"
-    : tone === "pending"
-      ? "bg-warning"
-      : "bg-surface-muted"
-  return (
-    <span
-      className={`inline-block h-1.5 w-1.5 rounded-full ${color}`}
-      title={title}
-      aria-hidden="true"
-    />
-  )
-}
-
-// Hover the truncated name to see the full string. Same tooltip styling as
-// ManagedBadge so the popovers feel consistent across the admin pages.
-function TruncatedName({
-  display,
-  full,
-  className,
-  maxWidthClass = "max-w-[160px]",
-}: {
-  display: string
-  full?: string
-  className?: string
-  maxWidthClass?: string
-}) {
-  const tip = full ?? display
-  return (
-    <Tooltip.Provider delayDuration={150}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <span className={`${maxWidthClass} cursor-help truncate ${className ?? ""}`}>
-            {display}
-          </span>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            side="top"
-            className="z-50 max-w-sm break-all rounded-md border border-line bg-surface px-3 py-2 text-sm leading-relaxed text-fg-muted shadow-lg"
-          >
-            {tip}
-            <Tooltip.Arrow className="fill-white" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  )
-}
-
-/**
- * "{kind} · {label}" cell. Sandbox dot follows
- * `sandboxes.lifecycle_status` (running → green; spawning/renewing →
- * amber); Local dot follows `runtimes.liveness`.
- */
-function RuntimeCell({ agent }: { agent: Agent }) {
-  const { t } = useTranslation("admin")
-  const placement = agentExecutionPlacement(agent)
-
-  // Prefer the active sandbox's E2B id over runtime_name (which is the
-  // synthetic "sandbox <pa-shortid>" — meaningless to the user).
-  if (placement === "sandbox") {
-    const fullId = (agent.sandbox_external_id ?? "").trim()
-    if (fullId) {
-      const status = (agent.sandbox_status ?? "").toLowerCase()
-      const tone: LivenessTone =
-        status === "running"
-          ? "online"
-          : status === "spawning" || status === "renewing"
-            ? "pending"
-            : "offline"
-      return (
-        <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-          <span className="font-medium text-fg-subtle">Sandbox</span>
-          <span className="text-fg-faint">·</span>
-          <TruncatedName
-            display={fullId}
-            className="font-mono text-fg-muted"
-            maxWidthClass="max-w-[260px]"
-          />
-          <StatusDot tone={tone} title={status || undefined} />
-        </span>
-      )
-    }
-    // Sandbox placement, no live binding (not yet dispatched, or reaped).
-    // Neutral placeholder so users don't mistake it for misconfiguration.
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-subtle">
-        <span className="font-medium">Sandbox</span>
-        <span className="text-fg-faint">·</span>
-        <span>{t("agents.runtimeCell.pending")}</span>
-        <StatusDot tone="offline" />
-      </span>
-    )
-  }
-
-  // Local placement: device name + liveness dot.
-  const name = (agent.runtime_name ?? "").trim()
-  const runtimeID = (agent.runtime_id ?? "").trim()
-  if (placement === "local" && runtimeID && name) {
-    const tone = runtimeLivenessTone(agent) ?? "offline"
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-        <span className="font-medium text-fg-subtle">Local</span>
-        <span className="text-fg-faint">·</span>
-        <TruncatedName display={name} />
-        <StatusDot tone={tone} title={agent.runtime_liveness || undefined} />
-      </span>
-    )
-  }
-
-  // No runtime row → dispatch is blocked until the user binds one.
-  return (
-    <Badge variant="warning" dot className="font-normal">
-      {t("agents.runtimeCell.unbound")}
-    </Badge>
-  )
 }
 
 /* ------------------------------------------------------------------ */
@@ -307,18 +140,6 @@ export function AgentsPage() {
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
-
-  const filtered = agents.filter((a) => {
-    if (!keyword) return true
-    const q = keyword.toLowerCase()
-    const engine = t(agentEngineLabel(agentEngineOf(a))).toLowerCase()
-    const model = defaultModelOf(a, modelsQ.data?.models ?? [], t("agents.modelUnavailable")).toLowerCase()
-    return a.name.toLowerCase().includes(q)
-      || a.description.toLowerCase().includes(q)
-      || a.slug.toLowerCase().includes(q)
-      || engine.includes(q)
-      || model.includes(q)
-  })
 
   // Spawns a fresh conversation rather than grafting onto unrelated
   // history; mirrors the post-create flow.
@@ -401,90 +222,29 @@ export function AgentsPage() {
           }
         />
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-end gap-3">
-            <div className="relative w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" strokeWidth={1.75} />
-              <Input
-                placeholder={t("agents.search.placeholder")}
-                className="pl-8 text-xs"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={Bot}
-              title={t("agents.emptyFiltered.title")}
-              description={t("agents.emptyFiltered.description")}
-            />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("agents.table.agent")}</TableHead>
-                    <TableHead>{t("agents.table.engine")}</TableHead>
-                    <TableHead>{t("agents.table.model")}</TableHead>
-                    <TableHead>{t("agents.table.execution")}</TableHead>
-                    <TableHead>{t("agents.table.status")}</TableHead>
-                    <TableHead>{t("agents.table.updated")}</TableHead>
-                    <TableHead className="text-right pr-4">{t("agents.table.actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((a) => (
-                    <TableRow
-                      key={a.id}
-                      className="cursor-pointer"
-                      onClick={() => navigate("agents", { id: a.id })}
-                    >
-                      <TableCell>
-                        <div className="flex min-w-0 items-start gap-2">
-                          <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-base font-medium text-fg">{a.name}</span>
-                              <Badge variant="neutral">{t(`agents.visibility.${a.visibility ?? "workspace"}`)}</Badge>
-                            </div>
-                            <p className="mt-0.5 max-w-md truncate text-sm text-fg-subtle">{a.description || a.slug}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm font-medium text-fg-muted">{t(agentEngineLabel(agentEngineOf(a)))}</TableCell>
-                      <TableCell className="font-mono text-sm text-fg-muted">{defaultModelOf(a, modelsQ.data?.models ?? [], t("agents.modelUnavailable"))}</TableCell>
-                      <TableCell><RuntimeCell agent={a} /></TableCell>
-                      <TableCell><AgentStatusBadge status={a.status} /></TableCell>
-                      <TableCell className="whitespace-nowrap text-sm text-fg-subtle">{a.enabled_at ? fmtAgo(a.enabled_at) : "—"}</TableCell>
-                      <TableCell className="pr-4">
-                        <AgentRowActions
-                          agent={a}
-                          chatPending={chatPendingID === a.id}
-                          statusPending={statusMut.isPending}
-                          onChat={() => void startChatWith(a)}
-                          onEdit={() => setEditAgent(a)}
-                          onClone={() => setCloneAgent(a)}
-                          onStatusChange={(enabled) => {
-                            if (!enabled) {
-                              setDisableTarget(a)
-                              return
-                            }
-                            statusMut.mutate(
-                              { agentID: a.id, enabled: true },
-                              { onSuccess: () => setToast(t("agents.listActions.enabledToast", { name: a.name })) },
-                            )
-                          }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
+        <AgentsListTable
+          agents={agents}
+          models={modelsQ.data?.models ?? []}
+          keyword={keyword}
+          chatPendingID={chatPendingID}
+          statusPending={statusMut.isPending}
+          formatRelativeTime={fmtAgo}
+          onKeywordChange={setKeyword}
+          onOpenAgent={(agent) => navigate("agents", { id: agent.id })}
+          onChat={(agent) => void startChatWith(agent)}
+          onEdit={setEditAgent}
+          onClone={setCloneAgent}
+          onStatusChange={(agent, enabled) => {
+            if (!enabled) {
+              setDisableTarget(agent)
+              return
+            }
+            statusMut.mutate(
+              { agentID: agent.id, enabled: true },
+              { onSuccess: () => setToast(t("agents.listActions.enabledToast", { name: agent.name })) },
+            )
+          }}
+        />
       )}
 
       <CreateAgentDialog
@@ -1167,21 +927,13 @@ function EnableCapabilityDialog({
       capability.created_at,
     ],
   )
-  const selectedVersion = versions.find((version) => version.id === selected) ?? latestVersion(versions) ?? marketplaceFallbackVersion
+  const selectedVersion = selected
+    ? versions.find((version) => version.id === selected) ?? marketplaceFallbackVersion
+    : latestVersion(versions) ?? marketplaceFallbackVersion
   const canEnable = !!selectedVersion && (requiredKinds.length === 0 || allCredentialsSatisfied) && !mut.isPending
 
   void credentials
   void language
-
-  useEffect(() => {
-    if (!open) return
-    setAllCredentialsSatisfied(requiredKinds.length === 0)
-  }, [open, requiredKinds.length])
-
-  useEffect(() => {
-    if (open && versions.length > 0 && !selected) setSelected(versions[0].id)
-    if (open && versions.length === 0 && marketplaceFallbackVersion && !selected) setSelected(marketplaceFallbackVersion.id)
-  }, [open, selected, versions, marketplaceFallbackVersion])
 
   const submit = () => {
     if (!selectedVersion) return
@@ -1194,7 +946,13 @@ function EnableCapabilityDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) setAllCredentialsSatisfied(requiredKinds.length === 0)
+        setOpen(nextOpen)
+      }}
+    >
       <Button variant="default" size="sm" onClick={() => setOpen(true)}>{t("agents.detail.capabilities.actions.enable")}</Button>
       <DialogContent>
         <DialogHeader>
@@ -1250,13 +1008,8 @@ function SwitchVersionDialog({
   const versionsQ = useCapabilityVersionsQuery(workspaceID, open ? capability.id : null)
   const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
   const versions = useMemo(() => versionsQ.data?.versions ?? [], [versionsQ.data?.versions])
-  const selectedVersion = versions.find((version) => version.id === selected)
-  const canSwitch = !!selectedVersion && selected !== binding.capability_version_id && !mut.isPending
-
-  useEffect(() => {
-    if (!open || versions.length === 0) return
-    if (!versions.some((version) => version.id === selected)) setSelected(versions[0].id)
-  }, [open, selected, versions])
+  const selectedVersion = versions.find((version) => version.id === selected) ?? versions[0]
+  const canSwitch = !!selectedVersion && selectedVersion.id !== binding.capability_version_id && !mut.isPending
 
   const submit = () => {
     if (!selectedVersion) return
@@ -1350,223 +1103,6 @@ function Card({ title, className, children }: { title: string; className?: strin
       {children}
     </section>
   )
-}
-
-/* ------------------------------------------------------------------ */
-/*  AgentDynamicsTab — "Activity" tab.                                 */
-/* ------------------------------------------------------------------ */
-
-const RECENT_RUNS_LIMIT = 10
-
-function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string | null; agent: Agent }) {
-  // Filter client-side: list-runs takes only workspace + status, no
-  // per-agent query option yet.
-  const inflightQ = useAgentRuns(workspaceID, { statuses: ["running", "queued"], limit: 50 })
-  const recentQ = useAgentRuns(workspaceID, { limit: 50 })
-  const metricsQ = useAgentMetrics(workspaceID, agent.id, 30)
-
-  const inflight = (inflightQ.data?.agent_runs ?? []).filter(
-    (r) => r.agent_id === agent.id,
-  )
-  const recent = (recentQ.data?.agent_runs ?? [])
-    .filter((r) => r.agent_id === agent.id)
-    .slice(0, RECENT_RUNS_LIMIT)
-
-  return (
-    <div className="space-y-4">
-      <CurrentWorkCard
-        runs={inflight}
-        loading={inflightQ.isLoading}
-      />
-      <MetricsCard
-        metrics={metricsQ.data}
-        loading={metricsQ.isLoading}
-      />
-      <RecentRunsCard
-        runs={recent}
-        loading={recentQ.isLoading}
-        showCount={recent.length}
-      />
-    </div>
-  )
-}
-
-function CurrentWorkCard({ runs, loading }: { runs: AgentRunSummary[]; loading: boolean }) {
-  const { t } = useTranslation("admin")
-  return (
-    <DynamicsCard
-      title={t("agents.detail.dynamics.current.title")}
-      subtitle={t("agents.detail.dynamics.current.subtitle")}
-    >
-      {loading ? (
-        <Skeleton className="h-5 w-2/3" />
-      ) : runs.length === 0 ? (
-        <p className="text-sm text-fg-faint">{t("agents.detail.dynamics.current.empty")}</p>
-      ) : (
-        <ul className="space-y-2">
-          {runs.map((run) => (
-            <li key={run.id} className="flex items-center justify-between rounded-md border border-line px-3 py-2">
-              <div className="flex items-center gap-2 text-sm">
-                <RunStatusDot status={run.status} />
-                <code className="font-mono text-sm text-fg-muted">{shortRunId(run.id)}</code>
-                <span className="text-fg-subtle">·</span>
-                <span className="text-fg-muted">{run.agent_name ?? "—"}</span>
-              </div>
-              <span className="text-sm text-fg-subtle">{run.status}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DynamicsCard>
-  )
-}
-
-function MetricsCard({ metrics, loading }: { metrics?: AgentMetrics; loading: boolean }) {
-  const { t } = useTranslation("admin")
-  return (
-    <DynamicsCard
-      title={t("agents.detail.dynamics.metrics.title")}
-      subtitle={t("agents.detail.dynamics.metrics.subtitle")}
-    >
-      {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-        </div>
-      ) : !metrics || metrics.completed_count + metrics.failed_count === 0 ? (
-        <p className="text-sm text-fg-faint">{t("agents.detail.dynamics.metrics.empty")}</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <MetricStat
-            label={t("agents.detail.dynamics.metrics.completed")}
-            value={metrics.completed_count.toString()}
-          />
-          <MetricStat
-            label={t("agents.detail.dynamics.metrics.successRate")}
-            value={formatPercent(metrics.success_rate)}
-          />
-          <MetricStat
-            label={t("agents.detail.dynamics.metrics.avgDuration")}
-            value={formatDurationMs(metrics.avg_duration_ms)}
-          />
-        </div>
-      )}
-    </DynamicsCard>
-  )
-}
-
-function MetricStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-surface-subtle/40 px-3 py-2">
-      <div className="text-xs font-medium text-fg-faint">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold tabular-nums text-fg">{value}</div>
-    </div>
-  )
-}
-
-function RecentRunsCard({
-  runs,
-  loading,
-  showCount,
-}: {
-  runs: AgentRunSummary[]
-  loading: boolean
-  showCount: number
-}) {
-  const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
-  const fmtAgo = useRelativeTime()
-  return (
-    <DynamicsCard
-      title={t("agents.detail.dynamics.recent.title")}
-      subtitle={t("agents.detail.dynamics.recent.subtitle", { count: showCount })}
-    >
-      {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-        </div>
-      ) : runs.length === 0 ? (
-        <p className="text-sm text-fg-faint">{t("agents.detail.dynamics.recent.empty")}</p>
-      ) : (
-        <ul className="space-y-2">
-          {runs.map((run) => (
-            <li key={run.id}>
-              <button
-                type="button"
-                onClick={() => navigate("runs", { id: run.id })}
-                className="flex w-full items-center gap-3 rounded-md border border-line px-3 py-2 text-left hover:bg-surface-subtle"
-              >
-                <RunStatusDot status={run.status} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-sm">
-                    <code className="font-mono text-sm text-fg-muted">{shortRunId(run.id)}</code>
-                    <span className="truncate text-fg-muted">{run.agent_name ?? t("agents.detail.dynamics.recent.untitled")}</span>
-                  </div>
-                  <div className="mt-0.5 text-xs text-fg-subtle">
-                    {fmtAgo(run.created_at)}
-                    {run.started_at && run.finished_at && (
-                      <> · {formatDurationMs(durationMs(run.started_at, run.finished_at))}</>
-                    )}
-                  </div>
-                </div>
-                <ArrowUpRight className="h-3 w-3 text-fg-faint" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DynamicsCard>
-  )
-}
-
-function DynamicsCard({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <div className="mb-3 flex items-baseline gap-2">
-        <h3 className="text-base font-semibold text-fg">{title}</h3>
-        {subtitle && <span className="text-sm text-fg-subtle">{subtitle}</span>}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function RunStatusDot({ status }: { status: AgentRunStatus }) {
-  const tone =
-    status === "completed" ? "bg-success"
-      : status === "running" || status === "queued" ? "bg-info"
-      : status === "failed" ? "bg-danger"
-      : "bg-surface-muted"
-  return <span className={`h-2 w-2 shrink-0 rounded-full ${tone}`} />
-}
-
-function shortRunId(id: string): string {
-  return id.length <= 8 ? id : id.slice(0, 8)
-}
-
-function durationMs(startISO: string, endISO: string): number {
-  return Math.max(0, Date.parse(endISO) - Date.parse(startISO))
-}
-
-function formatPercent(rate: number): string {
-  return `${(rate * 100).toFixed(rate >= 0.995 ? 0 : 1)}%`
-}
-
-function formatDurationMs(ms: number): string {
-  if (!ms || ms <= 0) return "—"
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  const seconds = ms / 1000
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
-  const minutes = Math.floor(seconds / 60)
-  const remainder = Math.round(seconds - minutes * 60)
-  return remainder === 0 ? `${minutes}m` : `${minutes}m${remainder}s`
 }
 
 /* ------------------------------------------------------------------ */
