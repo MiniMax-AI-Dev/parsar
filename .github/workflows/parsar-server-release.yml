@@ -44,6 +44,16 @@ on:
       - ".dockerignore"
       - "Dockerfile"
       - ".github/workflows/parsar-server-release.yml"
+      # Test-only edits must not rebuild + republish the multi-arch image.
+      # `make check-go` already runs the Go test suite and enforces sqlc
+      # drift, so a push that changes only *_test.go files still has its
+      # signal covered by `check`. GitHub forbids mixing `paths` with
+      # `paths-ignore`, so we negate these patterns inline.
+      - "!server/**/*_test.go"
+      - "!internal/**/*_test.go"
+      - "!apps/**/*_test.go"
+      - "!packages/**/*_test.go"
+      - "!**/testdata/**"
     tags:
       - "parsar-server-v*"
   pull_request:
@@ -63,6 +73,13 @@ on:
       - ".dockerignore"
       - "Dockerfile"
       - ".github/workflows/parsar-server-release.yml"
+      # See push trigger above for why these are negated rather than
+      # split into a separate paths-ignore block.
+      - "!server/**/*_test.go"
+      - "!internal/**/*_test.go"
+      - "!apps/**/*_test.go"
+      - "!packages/**/*_test.go"
+      - "!**/testdata/**"
   workflow_dispatch:
 
 permissions:

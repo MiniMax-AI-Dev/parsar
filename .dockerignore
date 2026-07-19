@@ -70,6 +70,16 @@ tests/.playwright-report/
 tests/playwright-report/
 tests/playwright/.cache/
 
+# Test files never enter the image. Excludes Go *_test.go and web
+# *.test.ts/.tsx plus any testdata directories, with the runtime
+# crypto wire fixture re-allowed because parsar-server reads it from
+# disk at runtime.
+**/*_test.go
+**/*.test.ts
+**/*.test.tsx
+**/testdata/**
+!internal/runtimecrypto/testdata/**
+
 # Lockfile we DO want: pnpm-lock.yaml stays in the context so the
 # web builder can `pnpm install --frozen-lockfile`. (Don't add it to
 # this ignore list.)
