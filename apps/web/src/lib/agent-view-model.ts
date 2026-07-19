@@ -146,3 +146,9 @@ export function defaultModelOf(agent: AgentSource, models: Model[], unavailableL
   if (!found) return unavailableLabel
   return found.name || found.model_key || id
 }
+
+export function agentConnectorLabel(connectorType: string): string {
+  if (connectorType === "agent_daemon") return "Agent Daemon"
+  if (connectorType === "http-agent" || connectorType === "http") return "HTTP Agent"
+  return connectorType
+}

@@ -12,6 +12,11 @@ import type {
   StartAgentRunResponse,
 } from "./api-types"
 
+interface AgentConversationSource {
+  id: string
+  name: string
+}
+
 /* --- Query keys --------------------------------------------------------- */
 
 const KEY_LIST = (wsId: string, agentID: string) =>
@@ -53,6 +58,16 @@ export async function createConversation(
     `/api/v1/workspaces/${encodeURIComponent(wsId)}/conversations`,
     { method: "POST", body }
   )
+}
+
+export function createAgentConversation(wsId: string, agent: AgentConversationSource, language: string): Promise<Conversation> {
+  const name = agent.name.trim()
+  return createConversation(wsId, {
+    title: name && language.startsWith("zh") ? `和 ${name} 对话` : name ? `Chat with ${name}` : "",
+    surface: "web",
+    form: "thread",
+    agent_id: agent.id,
+  })
 }
 
 export async function sendUserMessage(

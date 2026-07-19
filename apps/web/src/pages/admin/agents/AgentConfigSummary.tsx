@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 
 import { Badge } from "../../../components/ui/badge"
 import {
+  agentConnectorLabel,
   agentEngineLabel,
   agentEngineOf,
   agentExecutionModeOf,
@@ -13,11 +14,9 @@ import type { AgentDetail } from "../../../lib/api-types"
 export function AgentConfigSummary({
   agent,
   modelLabel,
-  connectorLabel,
 }: {
   agent: AgentDetail
   modelLabel: string
-  connectorLabel: string
 }) {
   const { t, i18n } = useTranslation("admin")
   const config = agent.config ?? {}
@@ -77,7 +76,7 @@ export function AgentConfigSummary({
           label={t("agents.detail.config.runtime.connector")}
           value={
             <span>
-              {connectorLabel}
+              {agentConnectorLabel(agent.connector_type)}
               <span className="ml-1 text-sm text-fg-subtle">· {agent.connector_type}</span>
             </span>
           }
