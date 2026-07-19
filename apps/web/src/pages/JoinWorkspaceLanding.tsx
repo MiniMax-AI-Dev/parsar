@@ -12,6 +12,7 @@ import {
   useWithdrawJoinRequest,
 } from "../lib/api-workspaces"
 import type { DiscoverableWorkspace } from "../lib/api-types"
+import { JOIN_INTENT_KEY } from "../lib/join-intent"
 
 /**
  * Landing page for the Feishu rejection card's "Join" link. Reads
@@ -60,24 +61,6 @@ export function JoinWorkspaceLanding({ workspaceId }: { workspaceId: string }) {
   }
 
   return <Authenticated workspaceId={workspaceId} />
-}
-
-const JOIN_INTENT_KEY = "parsar.joinWorkspaceIntent"
-
-/**
- * Returns and clears the URL stashed during the unauthenticated → OAuth
- * bounce. Used by main.tsx's `Root` post-OAuth callback.
- */
-export function popPendingJoinIntent(): string | null {
-  try {
-    const stash = sessionStorage.getItem(JOIN_INTENT_KEY)
-    if (!stash) return null
-    sessionStorage.removeItem(JOIN_INTENT_KEY)
-    if (!stash.startsWith("/join-workspace")) return null
-    return stash
-  } catch {
-    return null
-  }
 }
 
 function Authenticated({ workspaceId }: { workspaceId: string }) {

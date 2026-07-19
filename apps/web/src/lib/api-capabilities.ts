@@ -50,17 +50,6 @@ export interface UpdateCapabilityRequest {
   status?: "active" | "disabled"
 }
 
-export interface CreateCapabilityVersionRequest {
-  version: string
-  git_repo_url?: string
-  git_ref?: string
-  path?: string
-  content?: Record<string, unknown>
-  required_credentials?: RequiredCredential[]
-  schema_version?: number
-  canonical_spec?: CanonicalSpec
-}
-
 export function systemPromptCapabilityPayload(input: {
   name: string
   description: string
@@ -169,17 +158,6 @@ async function updateCapability(
   return apiRequest<Capability>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}`,
     { method: "PATCH", body }
-  )
-}
-
-async function createCapabilityVersion(
-  workspaceID: string,
-  capabilityID: string,
-  body: CreateCapabilityVersionRequest
-): Promise<CapabilityVersion> {
-  return apiRequest<CapabilityVersion>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/versions`,
-    { method: "POST", body }
   )
 }
 

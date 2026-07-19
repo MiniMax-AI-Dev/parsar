@@ -13,6 +13,7 @@ import {
 } from "../../lib/api-agents"
 import { useCreateSecret } from "../../lib/api-secrets"
 import type { CreateSecretRequest } from "../../lib/api-types"
+import { randomHex } from "../../lib/random"
 
 function Card({
   title,
@@ -806,12 +807,6 @@ function createFeishuSecretBody(spec: FeishuSecretFieldSpec, plaintext: string):
   }
 }
 
-function randomHex(bytes: number): string {
-  const values = new Uint8Array(bytes)
-  crypto.getRandomValues(values)
-  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
-}
-
 function configEqual(a: FeishuConnectorConfig, b: FeishuConnectorConfig): boolean {
   return (
     a.enabled === b.enabled &&
@@ -823,25 +818,4 @@ function configEqual(a: FeishuConnectorConfig, b: FeishuConnectorConfig): boolea
     a.event_mode === b.event_mode &&
     a.routing_mode === b.routing_mode
   )
-}
-
-/** Extract the current Feishu connector config from an Agent's
- *  config jsonb; undefined when never wired. */
-export function readFeishuConfigFromAgent(
-  agentConfig: Record<string, unknown> | undefined,
-): FeishuConnectorConfig | undefined {
-  if (!agentConfig) return undefined
-  const connectors = agentConfig["connectors"] as Record<string, unknown> | undefined
-  const feishu = connectors?.["feishu"] as Record<string, unknown> | undefined
-  if (!feishu) return undefined
-  return {
-    enabled: Boolean(feishu["enabled"]),
-    app_id: (feishu["app_id"] as string) ?? "",
-    app_secret_ref: (feishu["app_secret_ref"] as string) ?? "",
-    verification_token_ref: (feishu["verification_token_ref"] as string) ?? "",
-    encrypt_key_ref: (feishu["encrypt_key_ref"] as string) ?? "",
-    bot_open_id: (feishu["bot_open_id"] as string) ?? "",
-    event_mode: feishu["event_mode"] === "websocket" ? "websocket" : "webhook",
-    routing_mode: feishu["routing_mode"] === "shared" ? "shared" : "direct",
-  }
 }

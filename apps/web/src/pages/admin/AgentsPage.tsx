@@ -885,7 +885,7 @@ function CapabilityCard({
     .filter((rc) => rc.required && !credentials.some((cred) => cred.kind === rc.kind))
     .map((rc) => rc.kind)
   const versionsQ = useCapabilityVersionsQuery(workspaceID, capability?.id ?? null)
-  const versions = versionsQ.data?.versions ?? []
+  const versions = useMemo(() => versionsQ.data?.versions ?? [], [versionsQ.data?.versions])
   const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
   const marketplaceLatest = capability?.latest_version_id ? { id: capability.latest_version_id, capability_id: capability.id, version: capability.latest_version ?? capability.latest_published_version ?? "—", created_at: capability.latest_version_created_at ?? capability.created_at ?? new Date().toISOString() } as CapabilityVersion : undefined
   const latest = latestVersion(versions) ?? marketplaceLatest
@@ -1134,10 +1134,27 @@ function EnableCapabilityDialog({
   const [allCredentialsSatisfied, setAllCredentialsSatisfied] = useState(true)
   const versionsQ = useCapabilityVersionsQuery(workspaceID, open ? capability.id : null)
   const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
-  const versions = versionsQ.data?.versions ?? []
+  const versions = useMemo(() => versionsQ.data?.versions ?? [], [versionsQ.data?.versions])
   const requiredCreds = capability.required_credentials ?? []
   const requiredKinds = requiredCreds.filter((rc) => rc.required)
-  const marketplaceFallbackVersion = capability.latest_version_id ? { id: capability.latest_version_id, capability_id: capability.id, version: capability.latest_version ?? "—", created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined
+  const marketplaceFallbackVersion = useMemo(
+    () =>
+      capability.latest_version_id
+        ? ({
+            id: capability.latest_version_id,
+            capability_id: capability.id,
+            version: capability.latest_version ?? "—",
+            created_at: capability.latest_version_created_at ?? capability.created_at,
+          } as CapabilityVersion)
+        : undefined,
+    [
+      capability.id,
+      capability.latest_version,
+      capability.latest_version_created_at,
+      capability.latest_version_id,
+      capability.created_at,
+    ],
+  )
   const selectedVersion = versions.find((version) => version.id === selected) ?? latestVersion(versions) ?? marketplaceFallbackVersion
   const canEnable = !!selectedVersion && (requiredKinds.length === 0 || allCredentialsSatisfied) && !mut.isPending
 
@@ -1220,7 +1237,7 @@ function SwitchVersionDialog({
   const [selected, setSelected] = useState(binding.capability_version_id)
   const versionsQ = useCapabilityVersionsQuery(workspaceID, open ? capability.id : null)
   const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
-  const versions = versionsQ.data?.versions ?? []
+  const versions = useMemo(() => versionsQ.data?.versions ?? [], [versionsQ.data?.versions])
   const selectedVersion = versions.find((version) => version.id === selected)
   const canSwitch = !!selectedVersion && selected !== binding.capability_version_id && !mut.isPending
 

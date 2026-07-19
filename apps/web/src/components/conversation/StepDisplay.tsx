@@ -35,7 +35,7 @@ const SUMMARY_MAX = 80
 
 /** Picks the most informative single field from a tool's args payload.
  *  Returns "" when nothing usable; callers hide the detail line then. */
-export function summarizeArgs(name: string, args?: Record<string, unknown>): string {
+function summarizeArgs(name: string, args?: Record<string, unknown>): string {
   if (!args) return ""
   const key = name.toLowerCase()
   const FIELDS: Record<string, string[]> = {

@@ -8,17 +8,12 @@ import type {
   UpdateModelRequest,
   Secret,
 } from "./api-types"
+import { randomHex } from "./random"
 
 const KEY_MODELS = (workspaceID: string) =>
   ["admin", "models", workspaceID] as const
 const KEY_SECRETS = (workspaceID: string) =>
   ["admin", "secrets", workspaceID] as const
-
-function randomHex(bytes: number): string {
-  const values = new Uint8Array(bytes)
-  crypto.getRandomValues(values)
-  return Array.from(values, (v) => v.toString(16).padStart(2, "0")).join("")
-}
 
 /**
  * Model catalog is org-global; `workspaceID` only scopes the URL for RBAC.

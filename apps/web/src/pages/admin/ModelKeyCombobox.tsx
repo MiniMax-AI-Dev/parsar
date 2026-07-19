@@ -32,8 +32,6 @@ export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: P
   const listRef = useRef<HTMLDivElement>(null)
   useWheelScroll(listRef)
 
-  const selected = useMemo(() => models.find((m) => m.id === value), [models, value])
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return models

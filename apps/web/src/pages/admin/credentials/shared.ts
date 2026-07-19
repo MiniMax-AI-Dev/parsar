@@ -121,6 +121,7 @@ export function useCapabilitiesPerWorkspace(workspaces: UserWorkspace[]): {
     })),
   })
 
+  const queryStateKey = queries.map((q) => `${q.dataUpdatedAt}:${q.isLoading}:${q.isError}`).join("|")
   return useMemo(() => {
     const byWorkspace: Record<string, Capability[] | undefined> = {}
     let isLoading = false
@@ -135,10 +136,7 @@ export function useCapabilitiesPerWorkspace(workspaces: UserWorkspace[]): {
     return { byWorkspace, isLoading, isError }
     // Memo key tracks per-query state; workspaces identity is memoized by parent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    queries.map((q) => `${q.dataUpdatedAt}:${q.isLoading}:${q.isError}`).join("|"),
-    workspaces,
-  ])
+  }, [queryStateKey, workspaces])
 }
 
 /**

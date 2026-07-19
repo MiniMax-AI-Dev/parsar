@@ -9,7 +9,8 @@ import {
 } from "../../../lib/api-connectors"
 import { useCreateSecret } from "../../../lib/api-secrets"
 import type { CreateSecretRequest } from "../../../lib/api-types"
-import { Card, Field, SecretInput, randomHex } from "./shared"
+import { Card, Field, SecretInput } from "./shared"
+import { randomHex } from "../../../lib/random"
 
 const EMPTY_CONFIG: TeamsConnectorInput = {
   enabled: false,

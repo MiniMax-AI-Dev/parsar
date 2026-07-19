@@ -64,7 +64,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
   const wsId = useWorkspaceId()
   const credentialsQ = useMyCredentials()
   const workspacesQ = useMyWorkspaces()
-  const workspaces = workspacesQ.data?.workspaces ?? []
+  const workspaces = useMemo(() => workspacesQ.data?.workspaces ?? [], [workspacesQ.data?.workspaces])
   const capabilitiesScan = useCapabilitiesPerWorkspace(workspaces)
   // Model catalog is org-global; the endpoint still needs a workspace in
   // the URL for RBAC but the response shape is workspace-independent.
@@ -82,7 +82,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
   const [pendingKind, setPendingKind] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
-  const credentials = credentialsQ.data?.credentials ?? []
+  const credentials = useMemo(() => credentialsQ.data?.credentials ?? [], [credentialsQ.data?.credentials])
 
   const requestedKind = standalone ? route.credentialKind : null
   const initialPrefill = standalone ? route.credentialPrefill : null
@@ -125,7 +125,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
     return () => window.clearTimeout(timer)
   }, [highlightedID])
 
-  const models = modelsQ.data?.models ?? []
+  const models = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data?.models])
   const missing = useMemo(
     () => computeMissingCredentials(workspaces, capabilitiesScan.byWorkspace, models, credentials),
     [workspaces, capabilitiesScan.byWorkspace, models, credentials],

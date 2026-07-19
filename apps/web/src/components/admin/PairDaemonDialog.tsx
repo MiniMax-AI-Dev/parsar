@@ -11,11 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog"
-import {
-  useCreateRuntimePairing,
-  useWorkspaceRuntimes,
-  type Runtime,
-} from "../../lib/api-runtimes"
+import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
 
 interface PairDaemonDialogProps {

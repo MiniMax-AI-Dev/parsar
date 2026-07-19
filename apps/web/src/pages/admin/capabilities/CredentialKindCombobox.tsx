@@ -43,7 +43,7 @@ export function CredentialKindCombobox({
   const listRef = useRef<HTMLDivElement>(null)
   useWheelScroll(listRef)
 
-  const items = kindsQ.data?.items ?? []
+  const items = useMemo(() => kindsQ.data?.items ?? [], [kindsQ.data?.items])
   const selected = useMemo(() => items.find((k) => k.code === value), [items, value])
 
   // Server already returns built-ins first (ORDER BY built_in DESC).

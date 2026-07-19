@@ -504,7 +504,7 @@ export function ModelsPage() {
     void kindsQ.refetch()
   }
 
-  const allModels = modelsQ.data?.models ?? []
+  const allModels = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data?.models])
   const filteredModels = useMemo(() => {
     if (ownership === "all") return allModels
     if (!currentUserID) return allModels

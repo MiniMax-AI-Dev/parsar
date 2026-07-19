@@ -355,7 +355,6 @@ export function ImportCapabilityDialog({
             {kind === "plugin" && (
               <ImportPluginForm
                 workspaceID={workspaceID}
-                value={spec}
                 onChange={setSpec}
                 onUploadStateChange={setPluginUpload}
                 onSuggestedName={onSuggestedName}

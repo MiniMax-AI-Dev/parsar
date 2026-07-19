@@ -30,7 +30,7 @@ export function MarketplaceTab({ itemID, onSelectItem, onInstall }: MarketplaceT
   const [query, setQuery] = useState("")
   const [hideInstalled, setHideInstalled] = useState(true)
 
-  const items = marketplaceQ.data ?? []
+  const items = useMemo(() => marketplaceQ.data ?? [], [marketplaceQ.data])
   const selected = items.find((item) => item.id === itemID) ?? null
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()

@@ -931,8 +931,11 @@ function Card({ title, actions, className, children }: { title: string; actions?
 function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boolean }) {
   const { t } = useTranslation("admin")
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
-  const translateStep = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
-  const steps = useMemo(() => buildSteps(events, translateStep), [events, translateStep])
+  const steps = useMemo(() => {
+    const translateStep = (key: string, options?: Record<string, unknown>) =>
+      t(key as never, options as never) as unknown as string
+    return buildSteps(events, translateStep)
+  }, [events, t])
   const expandable = useMemo(() => steps.filter((s) => s.rawEvents.length > 0), [steps])
   const allOpen = expandable.length > 0 && expandable.every((s) => expandedKeys.has(s.key))
   const toggle = (key: string) => {
@@ -1125,5 +1128,3 @@ function ArtifactRow({ medium, kind, name, meta }: { medium: string; kind: strin
     </button>
   )
 }
-
-export const _runsRefs = { Wrench }

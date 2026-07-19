@@ -70,7 +70,7 @@ export function OrgSecretsTab({ workspaceID }: OrgSecretsTabProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [confirmTarget, setConfirmTarget] = useState<Secret | null>(null)
 
-  const secrets = secretsQ.data?.secrets ?? []
+  const secrets = useMemo(() => secretsQ.data?.secrets ?? [], [secretsQ.data?.secrets])
   const modelKeys = useMemo(() => secrets.filter((s) => s.kind === "model_provider"), [secrets])
   const runtimeKeys = useMemo(() => secrets.filter((s) => s.kind === "runtime" || s.provider === "e2b"), [secrets])
   const otherKeys = useMemo(() => secrets.filter((s) => s.kind !== "model_provider" && s.kind !== "runtime" && s.provider !== "e2b"), [secrets])
