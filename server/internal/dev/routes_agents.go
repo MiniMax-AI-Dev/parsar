@@ -849,6 +849,57 @@ func listWorkspaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+// getWorkspaceAgent returns one Agent after workspace membership and ownership checks.
+//
+//	@Summary		Get an agent in a workspace
+//	@Description	Returns the complete agent summary and persisted config. The caller must be an active member of the workspace, and the agent must belong to that workspace.
+//	@Tags			agents
+//	@ID			getDevAgent
+//	@Produce		json
+//	@Param			workspaceID	path	string	true	"Workspace UUID"
+//	@Param			agentID		path	string	true	"Agent UUID"
+//	@Success		200 {object} store.AgentSummary "Complete agent summary and config"
+//	@Failure		400 {object} map[string]string "Invalid UUID"
+//	@Failure		403 {object} map[string]string "Caller is forbidden from accessing the workspace"
+//	@Failure		404 {object} map[string]string "Workspace membership or agent not found"
+//	@Failure		503 {object} map[string]string "Database-backed read APIs are disabled"
+//	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID} [get]
+func getWorkspaceAgent(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if runtimeStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed read APIs are disabled"})
+			return
+		}
+
+		workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
+		}
+		agentID := strings.TrimSpace(chi.URLParam(r, "agentID"))
+		if !isUUID(agentID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent_id must be a valid uuid"})
+			return
+		}
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+
+		agent, err := runtimeStore.GetAgent(r.Context(), agentID)
+		if err != nil {
+			writeStoreAgentError(w, err)
+			return
+		}
+		if agent.WorkspaceID != workspaceID {
+			writeStoreAgentError(w, fmt.Errorf("%w: %s", store.ErrUnknownAgent, agentID))
+			return
+		}
+
+		writeJSON(w, http.StatusOK, agent)
+	}
+}
+
 // getAgentMetrics returns aggregated run-history counters for
 // a single agent over a sliding window. Powers the agent-detail
 // "Last N days performance" panel: completion count, success rate, average duration.

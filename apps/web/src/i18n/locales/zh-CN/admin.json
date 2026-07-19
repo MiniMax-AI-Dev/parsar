@@ -936,7 +936,8 @@
       "clone": "复制",
       "disable": "禁用",
       "enable": "启用",
-      "delete": "删除"
+      "delete": "删除",
+      "more": "更多操作"
     },
     "tabs": {
       "all": "全部",
@@ -944,10 +945,13 @@
       "issues": "有异常"
     },
     "search": {
-      "placeholder": "搜索 Agent 名称 / 描述…"
+      "placeholder": "搜索名称、描述、Slug、引擎或模型…"
     },
     "table": {
       "agent": "Agent",
+      "engine": "引擎",
+      "execution": "运行方式",
+      "updated": "最近启用",
       "status": "状态",
       "connector": "连接器",
       "sandbox": "沙盒",
@@ -969,7 +973,7 @@
     },
     "status": {
       "active": "已启用",
-      "disabled": "已删除",
+      "disabled": "已停用",
       "error": "异常"
     },
     "visibility": {
@@ -1151,11 +1155,29 @@
         }
       },
       "config": {
+        "saved": "Agent 配置已保存。",
+        "identity": {
+          "title": "身份",
+          "slug": "内部标识",
+          "visibility": "可见性",
+          "agentId": "Agent ID",
+          "created": "创建时间",
+          "updated": "更新时间"
+        },
+        "intelligence": {
+          "title": "智能配置",
+          "engine": "Agent 引擎",
+          "systemPrompt": "系统提示词"
+        },
         "runtime": {
           "title": "运行环境",
           "model": "模型",
           "runtime": "Runtime",
-          "connector": "Connector"
+          "execution": "运行方式",
+          "connector": "连接器",
+          "workdir": "工作目录",
+          "sandboxSize": "沙盒规格",
+          "binding": "Runtime 绑定"
         },
         "capabilities": {
           "title": "Capabilities",
@@ -1166,6 +1188,10 @@
       },
       "audit": {
         "title": "审计日志"
+      },
+      "loadError": {
+        "title": "无法加载 Agent",
+        "description": "Agent 可能不存在，或当前用户没有访问权限。"
       },
       "overview": {
         "summary": "基本信息",
@@ -1523,10 +1549,11 @@
     },
     "listActions": {
       "cancel": "取消",
-      "deleteConfirmTitle": "删除「{{name}}」？",
-      "deleteConfirmDescription": "删除后，这个 Agent 将不再可用，也不会继续接收新的运行请求；历史对话、运行和审计记录会保留。",
-      "deleteConfirm": "删除",
-      "deletedToast": "已删除 {{name}}",
+      "disableConfirmTitle": "停用「{{name}}」？",
+      "disableConfirmDescription": "这个 Agent 将停止接收新的运行请求。历史对话、运行和审计记录会保留，之后仍可重新启用。",
+      "disableConfirm": "停用",
+      "disabledToast": "已停用 {{name}}",
+      "enabledToast": "已启用 {{name}}",
       "clonedToast": "已复制为「{{name}}」"
     },
     "execution": {

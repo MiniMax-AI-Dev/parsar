@@ -651,6 +651,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/models/{modelID}/test", testModelConnectivity(runtimeStore))
 			r.Post("/conversations/{conversationID}/external-ref", configureConversationExternalRef(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agents", listWorkspaceEnabledAgents(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/agents/{agentID}", getWorkspaceAgent(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agent-runs", listWorkspaceAgentRuns(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}/metrics", getAgentMetrics(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agent-runs/{runID}/events", listAgentRunEvents(runtimeStore))

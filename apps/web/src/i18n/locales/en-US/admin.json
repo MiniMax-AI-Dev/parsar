@@ -936,7 +936,8 @@
       "clone": "Clone",
       "disable": "Disable",
       "enable": "Enable",
-      "delete": "Delete"
+      "delete": "Delete",
+      "more": "More actions"
     },
     "tabs": {
       "all": "All",
@@ -944,10 +945,13 @@
       "issues": "With issues"
     },
     "search": {
-      "placeholder": "Search agent name / description…"
+      "placeholder": "Search name, description, slug, engine, or model…"
     },
     "table": {
       "agent": "Agent",
+      "engine": "Engine",
+      "execution": "Execution",
+      "updated": "Last enabled",
       "status": "Status",
       "connector": "Connector",
       "sandbox": "Sandbox",
@@ -969,7 +973,7 @@
     },
     "status": {
       "active": "Active",
-      "disabled": "Deleted",
+      "disabled": "Disabled",
       "error": "Error"
     },
     "visibility": {
@@ -1151,11 +1155,29 @@
         }
       },
       "config": {
+        "saved": "Agent configuration saved.",
+        "identity": {
+          "title": "Identity",
+          "slug": "Internal ID",
+          "visibility": "Visibility",
+          "agentId": "Agent ID",
+          "created": "Created",
+          "updated": "Updated"
+        },
+        "intelligence": {
+          "title": "Intelligence",
+          "engine": "Agent engine",
+          "systemPrompt": "System prompt"
+        },
         "runtime": {
           "title": "Runtime",
           "model": "Model",
           "runtime": "Runtime",
-          "connector": "Connector"
+          "execution": "Execution",
+          "connector": "Connector",
+          "workdir": "Working directory",
+          "sandboxSize": "Sandbox size",
+          "binding": "Runtime binding"
         },
         "capabilities": {
           "title": "Capabilities",
@@ -1166,6 +1188,10 @@
       },
       "audit": {
         "title": "Audit log"
+      },
+      "loadError": {
+        "title": "Failed to load Agent",
+        "description": "The Agent may not exist or you may not have access."
       },
       "overview": {
         "summary": "Basics",
@@ -1523,10 +1549,11 @@
     },
     "listActions": {
       "cancel": "Cancel",
-      "deleteConfirmTitle": "Delete \"{{name}}\"?",
-      "deleteConfirmDescription": "After deletion, this Agent is no longer available and will not receive new run requests. Historical conversations, runs, and audit records are kept.",
-      "deleteConfirm": "Delete",
-      "deletedToast": "Deleted {{name}}",
+      "disableConfirmTitle": "Disable \"{{name}}\"?",
+      "disableConfirmDescription": "This Agent will stop receiving new run requests. Historical conversations, runs, and audit records are preserved, and you can enable it again later.",
+      "disableConfirm": "Disable",
+      "disabledToast": "Disabled {{name}}",
+      "enabledToast": "Enabled {{name}}",
       "clonedToast": "Cloned as \"{{name}}\""
     },
     "execution": {
