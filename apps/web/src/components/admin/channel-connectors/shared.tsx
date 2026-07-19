@@ -6,7 +6,7 @@
  * same and any tweak to spacing/colors applies uniformly.
  */
 import type { ReactNode } from "react"
-import { CheckCircle2, ExternalLink } from "lucide-react"
+import { CheckCircle2, ExternalLink, Loader2, QrCode, XCircle } from "lucide-react"
 
 export function Card({
   title,
@@ -131,4 +131,37 @@ export function randomHex(bytes: number): string {
   const values = new Uint8Array(bytes)
   crypto.getRandomValues(values)
   return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
+}
+
+export function ProvisionStatusIcon({
+  status,
+  loading,
+  labels,
+}: {
+  status: "pending" | "success" | "error" | "expired"
+  loading: boolean
+  labels: { waiting: string; connected: string; stopped: string }
+}) {
+  if (status === "success") {
+    return (
+      <p className="inline-flex items-center gap-1 text-success">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        <span>{labels.connected}</span>
+      </p>
+    )
+  }
+  if (status === "error" || status === "expired") {
+    return (
+      <p className="inline-flex items-center gap-1 text-danger">
+        <XCircle className="h-3.5 w-3.5" />
+        <span>{labels.stopped}</span>
+      </p>
+    )
+  }
+  return (
+    <p className="inline-flex items-center gap-1 text-fg-subtle">
+      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <QrCode className="h-3.5 w-3.5" />}
+      <span>{labels.waiting}</span>
+    </p>
+  )
 }
