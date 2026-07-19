@@ -1,5 +1,3 @@
-
-
 <p align="center">
   <img src=".github/assets/parsar-banner.png" alt="Parsar" width="520" />
 </p>
@@ -28,14 +26,15 @@ Supported agent runtimes:
 ### Why Parsar
 
 - **Team-first.** Shared queues, run history, and permissions — not single-player agent loops.
-- **Pluggable runtimes.** Claude Code today, Codex tomorrow, your in-house agent next week.
+- **Pluggable runtimes.** Claude Code today, Codex tomorrow, your in-house agent next.
 - **Pluggable surfaces.** Feishu / Lark ships today; Slack, Discord, and webhooks on the roadmap.
 - **Auditable.** Every run is persisted: prompt, diff, logs, exit code.
 - **Self-hosted.** Your code, your secrets, your machine. No telemetry.
 
 ## Quick Start
 
-Requires Docker with Docker Compose v2.
+Install Parsar in one command — see [`INSTALL.md`](./INSTALL.md) for the full
+guide, upgrade steps, and configuration knobs.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
@@ -44,22 +43,12 @@ curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.
 Open <http://127.0.0.1:18080> and create the first owner account in the web
 setup flow. The first registered user is the administrator.
 
-The installer writes generated config, secrets, database files, and runtime
-state under `~/.parsar/`.
-
-For local development from a checkout:
-
-```bash
-make docker-build
-./install.sh --image parsar:dev
-```
-
-> **Platform.** Docker-managed agent sandboxes require Linux. Non-Linux hosts
-> can start the web control plane with `--no-sandbox`.
-
 ## Contributing
 
-Architecture, tech stack, development setup, and coding conventions are all in [CONTRIBUTING.md](CONTRIBUTING.md).
+- Operator / install / upgrade: see [`INSTALL.md`](./INSTALL.md).
+- Architecture, tech stack, development setup, and coding conventions: see
+  [`CONTRIBUTING.md`](./CONTRIBUTING.md). The dev workflow lives under
+  `make help`.
 
 ## Security
 
