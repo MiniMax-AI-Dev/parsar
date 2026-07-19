@@ -1028,7 +1028,7 @@ export function CreateAgentDialog({
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
                 </Field>
               </section>
-              <section className="space-y-3">
+              <section className="flex flex-col space-y-3">
               {showExecutionChoices ? (
                 <>
                   <Field label={t("agents.form.fields.executionMode")} required>
@@ -1159,16 +1159,17 @@ export function CreateAgentDialog({
                 </Field>
               )}
               {requiresModel && (
-                <Field
-                  ref={modelFieldRef}
-                  label={t("agents.form.fields.model")}
-                  required
-                  error={selectedModelUnavailable
-                    ? t("agents.form.errors.modelUnavailable")
-                    : submitAttempted && !hasRequiredModel
-                      ? t("agents.form.errors.modelRequired")
-                      : undefined}
-                >
+                <div className="order-first">
+                  <Field
+                    ref={modelFieldRef}
+                    label={t("agents.form.fields.model")}
+                    required
+                    error={selectedModelUnavailable
+                      ? t("agents.form.errors.modelUnavailable")
+                      : submitAttempted && !hasRequiredModel
+                        ? t("agents.form.errors.modelRequired")
+                        : undefined}
+                  >
                 {hasModel ? (
                   <div ref={modelComboboxRef} className="relative">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" />
@@ -1242,7 +1243,8 @@ export function CreateAgentDialog({
                 ) : (
                   <DependencyCard title={t("agents.form.emptyModel.title")} description={t("agents.form.emptyModel.description")} href={prefillQuery("models")} cta={t("agents.form.emptyModel.cta")} />
                 )}
-                </Field>
+                  </Field>
+                </div>
               )}
               {requiresModel && selectedModel && selectedModel.credential_mode === "credential_ref" && (
                 <Field label={t("credentialCheck.modelBindingTitle")}>
