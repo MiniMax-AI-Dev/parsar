@@ -7,6 +7,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    profiles:
+      - default
     environment:
       POSTGRES_USER: parsar
       POSTGRES_PASSWORD: ${PARSAR_PG_PASSWORD:-parsar}
@@ -20,6 +22,8 @@ services:
     image: ${PARSAR_SERVER_IMAGE:-ghcr.io/minimax-ai-dev/parsar-server:latest}
     pull_policy: ${PARSAR_IMAGE_PULL_POLICY:-always}
     restart: unless-stopped
+    profiles:
+      - default
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +49,8 @@ services:
     image: ${PARSAR_SANDBOX_IMAGE:-ghcr.io/minimax-ai-dev/parsar-sandbox:latest}
     pull_policy: ${PARSAR_IMAGE_PULL_POLICY:-always}
     restart: unless-stopped
+    profiles:
+      - sandbox
     depends_on:
       parsar-server:
         condition: service_healthy

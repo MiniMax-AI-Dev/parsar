@@ -173,9 +173,7 @@ set_env PARSAR_LOCAL_PORT "$port"
 set_env PARSAR_BIND_ADDR "$bind"
 set_env PARSAR_PG_DATA_DIR "$home/postgres"
 set_env PARSAR_DATA_DIR "$home/data"
-if [ "$no_sandbox" = true ]; then
-  ensure_env PARSAR_COMPOSE_PROFILES "no_sandbox"
-fi
+# PARSAR_COMPOSE_PROFILES is removed; `compose --profile` is the wire.
 [ -z "$server_image" ] || set_env PARSAR_SERVER_IMAGE "$server_image"
 [ -z "$sandbox_image" ] || set_env PARSAR_SANDBOX_IMAGE "$sandbox_image"
 ensure_env PARSAR_PG_PASSWORD "$(random_hex 24)"
@@ -223,6 +221,11 @@ profile_args=()
 if [[ "$no_sandbox" == true ]]; then
   profile_args+=(--profile no_sandbox)
   log "Sandbox service is disabled (--no-sandbox)."
+else
+  # The sandbox container lives in the `sandbox` profile so that
+  # `--no-sandbox` is a one-flag opt-out; otherwise activate it
+  # explicitly.
+  profile_args+=(--profile sandbox)
 fi
 
 log "Starting Parsar"
