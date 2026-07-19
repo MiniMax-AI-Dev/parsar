@@ -2,23 +2,25 @@
 set -euo pipefail
 
 # Usage:
-#   setup.sh          create ~/.parsar dirs, then print resolved paths
-#   setup.sh paths     print resolved paths only, no directory creation
+#   setup.sh         create ~/.parsar dirs, then print resolved paths
+#   setup.sh paths   print resolved paths only, no directory creation
 MODE="${1:-setup}"
 
-PARSAR_HOME="${PARSAR_HOME:-$HOME/.parsar}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/paths.sh
+source "$SCRIPT_DIR/lib/paths.sh"
 
 if [[ "$MODE" == "setup" ]]; then
   mkdir -p \
-    "$PARSAR_HOME/config" \
-    "$PARSAR_HOME/logs" \
-    "$PARSAR_HOME/state" \
-    "$PARSAR_HOME/cache" \
-    "$PARSAR_HOME/dev/tasks" \
-    "$PARSAR_HOME/dev/opencode/config" \
-    "$PARSAR_HOME/dev/opencode/data" \
-    "$PARSAR_HOME/dev/opencode/logs" \
-    "$PARSAR_HOME/dev/workdirs"
+    "$PARSAR_CONFIG_DIR" \
+    "$PARSAR_LOG_DIR" \
+    "$PARSAR_STATE_DIR" \
+    "$PARSAR_CACHE_DIR" \
+    "$PARSAR_DEV_DIR/tasks" \
+    "$PARSAR_DEV_DIR/opencode/config" \
+    "$PARSAR_DEV_DIR/opencode/data" \
+    "$PARSAR_DEV_DIR/opencode/logs" \
+    "$PARSAR_DEV_DIR/workdirs"
 
   printf 'Parsar directories are ready under %s\n' "$PARSAR_HOME"
 elif [[ "$MODE" != "paths" ]]; then
@@ -28,9 +30,9 @@ fi
 
 cat <<PATHS
 PARSAR_HOME=$PARSAR_HOME
-PARSAR_CONFIG_DIR=$PARSAR_HOME/config
-PARSAR_LOG_DIR=$PARSAR_HOME/logs
-PARSAR_STATE_DIR=$PARSAR_HOME/state
-PARSAR_CACHE_DIR=$PARSAR_HOME/cache
-PARSAR_DEV_DIR=$PARSAR_HOME/dev
+PARSAR_CONFIG_DIR=$PARSAR_CONFIG_DIR
+PARSAR_LOG_DIR=$PARSAR_LOG_DIR
+PARSAR_STATE_DIR=$PARSAR_STATE_DIR
+PARSAR_CACHE_DIR=$PARSAR_CACHE_DIR
+PARSAR_DEV_DIR=$PARSAR_DEV_DIR
 PATHS
