@@ -962,11 +962,11 @@
           "paste": "Paste Markdown",
           "zip": "Upload zip"
         },
-        "dropHint": "Drag or click to upload a .zip (SKILL.md + references / scripts)",
+        "dropHint": "Drag or click to upload a Skill .zip",
         "dropActive": "Drop to import",
         "sizeHint": "Up to 8 MiB",
         "zipLabel": "Upload Skill zip",
-        "zipHelp": "The zip must include a SKILL.md (at the root or one subdirectory deep). references/ and scripts/ folders are imported alongside it.",
+        "zipHelp": "The zip must include a SKILL.md at the root or one subdirectory deep. Any supporting files and directories are optional and imported alongside it.",
         "uploading": "Uploading…",
         "parsing": "Parsing…",
         "errors": {

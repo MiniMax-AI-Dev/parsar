@@ -247,8 +247,8 @@ export function ImportSkillForm({
        *     the right, side-by-side comparison is the point).
        *   zip mode  → single column. The dropzone is a small target that
        *     looks lonely in a half-width column, and the preview wants
-       *     every pixel it can get (SKILL.md source, references/, scripts/
-       *     all stack vertically). Stack input above preview instead. */}
+       *     every pixel it can get (SKILL.md and supporting files all stack
+       *     vertically). Stack input above preview instead. */}
       <div
         className={
           source === "paste"
@@ -310,7 +310,7 @@ export function ImportSkillForm({
               <p className="text-xs text-fg-subtle">
                 {t(
                   "capabilities.import.skill.zipHelp",
-                  "The zip must contain a SKILL.md (at the root or one level deep). references/ and scripts/ subdirectories are imported alongside it.",
+                  "The zip must contain a SKILL.md at the root or one level deep. Any supporting files and directories are optional and imported alongside it.",
                 )}
               </p>
             </>

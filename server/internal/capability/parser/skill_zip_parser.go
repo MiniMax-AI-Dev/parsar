@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 
@@ -41,16 +40,10 @@ var ErrInvalidSkillZip = errors.New("parser: invalid skill zip")
 // always emit "SKILL.md" downstream so storage stays predictable.
 const skillRootName = "SKILL.md"
 
-// allowedSkillSubdirs is the closed ingest set. Anything else is dropped
-// with a warning — silent inclusion of arbitrary blobs would inflate
-// canonical_spec for no consumer benefit.
-var allowedSkillSubdirs = []string{"references/", "scripts/"}
-
 // ParseSkillZip extracts a multi-file skill. Layout:
 //
 //	SKILL.md (or one-level wrapping: my-skill/SKILL.md)
-//	references/*.md, references/*.txt, ...
-//	scripts/*.{py,sh,js,ts,json,...}
+//	any additional files or directories used by the Skill
 //
 // SKILL.md goes through ParseSkill so the frontmatter contract is identical
 // between paste and zip imports. Pure: no I/O beyond buf.
@@ -93,6 +86,9 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		if p == "" {
 			continue
 		}
+		if path.IsAbs(p) || hasWindowsDrivePrefix(p) {
+			return SkillParseResult{}, fmt.Errorf("%w: zip entry %q uses an absolute path", ErrInvalidSkillZip, zr.File[i].Name)
+		}
 		// Reject the whole zip on traversal: a `..` hint means it was crafted
 		// in a way we don't understand; sanitising could mask intent.
 		if hasParentTraversal(p) {
@@ -124,7 +120,6 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 
 	warnings := append([]string(nil), skillRes.Warnings...)
 	files := make([]canonical.SkillFile, 0)
-	ignored := make([]string, 0)
 
 	// SKILL.md counts against the cumulative budget too — otherwise a near-
 	// 1 MiB SKILL.md plus 32 MiB of references could slip past since the
@@ -138,15 +133,7 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 		if strings.EqualFold(se.rel, skillRootName) {
 			continue
 		}
-		// Filter directory markers BEFORE the allowlist check — otherwise
-		// legitimate `references/` / `scripts/` markers (no trailing slash
-		// after normalize) get reported as "ignored files outside SKILL.md
-		// / references/ / scripts/", which is exactly where they live.
 		if se.entry.FileInfo().IsDir() {
-			continue
-		}
-		if !pathHasAllowedSkillPrefix(se.rel) {
-			ignored = append(ignored, se.rel)
 			continue
 		}
 		content, err := readZipEntryDirect(se.entry)
@@ -170,17 +157,6 @@ func ParseSkillZip(buf []byte) (SkillParseResult, error) {
 	// Stable order so re-importing the same zip produces byte-for-byte
 	// identical canonical_spec → capability_version rows.
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
-
-	if len(ignored) > 0 {
-		sort.Strings(ignored)
-		preview := ignored
-		more := ""
-		if len(preview) > 8 {
-			more = fmt.Sprintf(" and %d more", len(ignored)-8)
-			preview = preview[:8]
-		}
-		warnings = append(warnings, fmt.Sprintf("ignored %d files: %s%s", len(ignored), strings.Join(preview, ", "), more))
-	}
 
 	if skillRes.Spec.Skill == nil {
 		// Defensive — ParseSkill always populates Skill on nil error.
@@ -210,16 +186,6 @@ func readZipEntryDirect(f *zip.File) ([]byte, error) {
 	return buf, nil
 }
 
-// pathHasAllowedSkillPrefix is case-sensitive on the prefix segment because
-// skill consumers resolve `[link](references/foo.md)` case-sensitively at
-// read time — accepting `References/foo.md` here would land at a path
-// runtime won't find.
-func pathHasAllowedSkillPrefix(rel string) bool {
-	return slices.ContainsFunc(allowedSkillSubdirs, func(prefix string) bool {
-		return strings.HasPrefix(rel, prefix)
-	})
-}
-
 // inferSkillFileKind: only known script/markdown extensions get a specific
 // Kind; everything else (images, json, yaml, opaque blobs) is Asset.
 func inferSkillFileKind(rel string) canonical.SkillFileKind {
@@ -241,6 +207,10 @@ func hasParentTraversal(p string) bool {
 		}
 	}
 	return false
+}
+
+func hasWindowsDrivePrefix(p string) bool {
+	return len(p) >= 3 && p[1] == ':' && p[2] == '/'
 }
 
 // isMacOSMetadata catches Finder's `__MACOSX/` and `.DS_Store` noise.
