@@ -519,6 +519,61 @@ export interface ModelConnectivityHTTPResponse {
   truncated?: boolean
 }
 
+function modelHealthFromConnectivityResult(result: ModelConnectivityResult): Record<string, unknown> {
+  const status = result.success ? "healthy" : result.supported ? "failed" : "unsupported"
+  const health: Record<string, unknown> = {
+    status,
+    checked_at: new Date().toISOString(),
+    latency_ms: result.latency_ms,
+    supported: result.supported,
+    healthy_count: result.healthy_count,
+    total_count: result.total_count,
+  }
+  if (result.http_status) health.http_status = result.http_status
+  if (result.endpoint_type) health.endpoint_type = result.endpoint_type
+  if (result.error) health.error = result.error
+  if (result.sample) health.sample = result.sample
+  if (result.results?.length) {
+    health.results_summary = result.results.map((item) => {
+      const summary: Record<string, unknown> = {
+        endpoint_type: item.endpoint_type,
+        supported: item.supported,
+        success: item.success,
+        latency_ms: item.latency_ms,
+      }
+      if (item.http_status) summary.http_status = item.http_status
+      if (item.failure_stage) summary.failure_stage = item.failure_stage
+      if (item.error) summary.error = item.error
+      return summary
+    })
+  }
+  return health
+}
+
+function updateCachedModelHealth(
+  qc: ReturnType<typeof useQueryClient>,
+  workspaceID: string,
+  modelID: string,
+  result: ModelConnectivityResult,
+) {
+  qc.setQueryData<ListModelsResponse>(KEY_MODELS(workspaceID), (current) => {
+    if (!current) return current
+    return {
+      ...current,
+      models: current.models.map((model) => {
+        if (model.id !== modelID) return model
+        return {
+          ...model,
+          config: {
+            ...model.config,
+            health: modelHealthFromConnectivityResult(result),
+          },
+        }
+      }),
+    }
+  })
+}
+
 async function testModelRequest(
   workspaceID: string,
   modelID: string,
@@ -549,10 +604,15 @@ export function useTestModel(workspaceID: string | null) {
   })
 }
 
+export interface BackgroundTestModelsInput {
+  modelIDs: string[]
+  onModelSettled?: (modelID: string) => void
+}
+
 export function useBackgroundTestModels(workspaceID: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (modelIDs: string[]) => {
+    mutationFn: async (input: BackgroundTestModelsInput) => {
       if (!workspaceID) {
         throw new ApiError({
           status: 0,
@@ -562,7 +622,7 @@ export function useBackgroundTestModels(workspaceID: string | null) {
         })
       }
       const ws = workspaceID
-      const ids = Array.from(new Set(modelIDs.filter(Boolean)))
+      const ids = Array.from(new Set(input.modelIDs.filter(Boolean)))
       const results: PromiseSettledResult<ModelConnectivityResult>[] = []
       let next = 0
       async function worker() {
@@ -571,8 +631,16 @@ export function useBackgroundTestModels(workspaceID: string | null) {
           next += 1
           const modelID = ids[index]
           if (!modelID) return
-          const result = await Promise.allSettled([testModelRequest(ws, modelID)])
-          results[index] = result[0]
+          try {
+            const result = await testModelRequest(ws, modelID)
+            results[index] = { status: "fulfilled", value: result }
+            updateCachedModelHealth(qc, ws, modelID, result)
+          } catch (reason) {
+            results[index] = { status: "rejected", reason }
+          } finally {
+            input.onModelSettled?.(modelID)
+            void qc.invalidateQueries({ queryKey: KEY_MODELS(ws) })
+          }
         }
       }
       await Promise.all(Array.from({ length: Math.min(3, ids.length) }, () => worker()))

@@ -322,7 +322,16 @@ export function ModelsPage() {
     const ids = models.map((model) => model.id).filter(Boolean)
     if (ids.length === 0) return
     setBackgroundTestingIDs(new Set(ids))
-    backgroundTestMut.mutate(ids, {
+    backgroundTestMut.mutate({
+      modelIDs: ids,
+      onModelSettled: (modelID) => {
+        setBackgroundTestingIDs((current) => {
+          const next = new Set(current)
+          next.delete(modelID)
+          return next
+        })
+      },
+    }, {
       onSettled: () => setBackgroundTestingIDs(new Set()),
     })
   }
