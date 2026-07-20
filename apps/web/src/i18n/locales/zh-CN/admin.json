@@ -10,7 +10,7 @@
   "models": {
     "page": {
       "title": "模型",
-      "description": "公司共享的模型 catalog。任何人都可以新建模型，只有创建者(或超管)可以编辑/禁用。"
+      "description": "公司共享的模型 catalog。任何人都可以新建模型，只有创建者(或超管)可以编辑/删除。"
     },
     "actions": {
       "addModel": "新建模型",
@@ -19,9 +19,11 @@
       "edit": "编辑",
       "copy": "复制为新模型",
       "disable": "禁用",
+      "delete": "删除",
       "menu": "更多操作",
       "editForbidden": "只有创建者或超管可以编辑此模型。",
-      "disableForbidden": "只有创建者或超管可以禁用此模型。"
+      "disableForbidden": "只有创建者或超管可以禁用此模型。",
+      "deleteForbidden": "只有创建者或超管可以删除此模型。"
     },
     "copy": {
       "nameSuffix": " (副本)",
@@ -47,6 +49,7 @@
       "compatibility": "接口兼容性",
       "credentialMode": "凭据模式",
       "status": "状态",
+      "health": "健康状态",
       "actions": "操作"
     },
     "loadError": {
@@ -67,6 +70,26 @@
     "disable": {
       "title": "禁用模型「{{name}}」?",
       "description": "禁用后新的请求会失败，已在跑的运行不受影响。可以之后再启用。"
+    },
+    "delete": {
+      "title": "删除模型「{{name}}」?",
+      "description": "这会永久删除该模型。仍被活跃 Agent 引用的模型会被后端拒绝删除。"
+    },
+    "bulkDelete": {
+      "selectAll": "选择当前可见的全部模型",
+      "selectOne": "选择 {{name}}",
+      "selectedCount": "已选 {{count}} 个",
+      "deleteSelected": "删除所选",
+      "title": "删除 {{count}} 个模型?",
+      "description": "这会永久删除所选模型。仍被活跃 Agent 引用的模型会被跳过。",
+      "resultSummary": "已删除 {{deleted}} 个，失败 {{failed}} 个"
+    },
+    "health": {
+      "healthy": "健康",
+      "failed": "失败",
+      "unsupported": "不支持",
+      "untested": "未测试",
+      "checking": "测试中"
     },
     "test": {
       "success": "{{ms}}ms 内联通上游",

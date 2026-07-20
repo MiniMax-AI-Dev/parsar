@@ -778,6 +778,24 @@ type ModelRead struct {
 	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
+type ModelReference struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ModelInUseError struct {
+	ModelID    string
+	References []ModelReference
+}
+
+func (e *ModelInUseError) Error() string {
+	return fmt.Sprintf("%v: %s", ErrModelInUse, e.ModelID)
+}
+
+func (e *ModelInUseError) Unwrap() error {
+	return ErrModelInUse
+}
+
 // ModelRuntime is the flattened runtime view consumed by the agentdaemon /
 // opencode connector model_injection paths. Provider info is now inlined.
 // CredentialMode determines which secret-source is populated:
@@ -1954,6 +1972,7 @@ var ErrUnknownSecret = errors.New("unknown secret")
 var ErrUnknownModelProvider = errors.New("unknown model provider")
 var ErrUnknownModel = errors.New("unknown model")
 var ErrModelDisabled = errors.New("model or provider disabled")
+var ErrModelInUse = errors.New("model is referenced by active agents")
 
 const defaultReadLimit int32 = 100
 const defaultMaxAgentChainDepth int32 = 3
@@ -6111,6 +6130,81 @@ func (s *Store) SoftDeleteModel(ctx context.Context, modelID, actorID string) er
 	return nil
 }
 
+func (s *Store) DeleteModel(ctx context.Context, modelID, actorID string) error {
+	now := time.Now().UTC()
+	modelUUID, err := uuid(modelID)
+	if err != nil {
+		return err
+	}
+	queries := sqlc.New(s.db)
+	refRows, err := queries.ListModelAgentReferences(ctx, sqlc.ListModelAgentReferencesParams{
+		ModelID:   modelID,
+		ItemLimit: 20,
+	})
+	if err != nil {
+		return err
+	}
+	if len(refRows) > 0 {
+		refs := make([]ModelReference, 0, len(refRows))
+		for _, row := range refRows {
+			refs = append(refs, ModelReference{ID: row.ID, Name: row.Name})
+		}
+		return &ModelInUseError{ModelID: modelID, References: refs}
+	}
+	rows, err := queries.DeleteModel(ctx, modelUUID)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
+	}
+	s.emitAuditEvent(audit.Event{
+		OccurredAt: now,
+		Source:     audit.SourceAdmin,
+		EventType:  auditModelDeleted,
+		ActorType:  audit.ActorTypeSystem,
+		ActorID:    actorID,
+		TargetType: "model",
+		TargetID:   modelID,
+		Payload:    map[string]any{"source": auditSourceDevModelRegistryWrite, "delete_mode": "hard"},
+	})
+	return nil
+}
+
+func (s *Store) UpdateModelHealth(ctx context.Context, modelID string, health map[string]any) (ModelRead, error) {
+	now := time.Now().UTC()
+	modelUUID, err := uuid(modelID)
+	if err != nil {
+		return ModelRead{}, err
+	}
+	queries := sqlc.New(s.db)
+	current, err := queries.GetModel(ctx, modelUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ModelRead{}, fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
+		}
+		return ModelRead{}, err
+	}
+	config := cloneAnyMap(decodeJSONMap(current.Config))
+	config["health"] = nonNilMap(health)
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		return ModelRead{}, err
+	}
+	row, err := queries.UpdateModelConfig(ctx, sqlc.UpdateModelConfigParams{
+		ID:     modelUUID,
+		Config: configBytes,
+		Now:    timestamptz(now),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ModelRead{}, fmt.Errorf("%w: %s", ErrUnknownModel, modelID)
+		}
+		return ModelRead{}, err
+	}
+	return modelReadFromUpdateConfigRow(row), nil
+}
+
 type AgentStatusRead struct {
 	WorkspaceID   string         `json:"workspace_id"`
 	AgentID       string         `json:"agent_id"`
@@ -8273,6 +8367,10 @@ func modelReadFromDisableRow(row sqlc.DisableModelRow) ModelRead {
 }
 
 func modelReadFromUpdateRow(row sqlc.UpdateModelRow) ModelRead {
+	return ModelRead{ID: row.ID, Slug: row.Slug, Name: row.Name, ProviderType: row.ProviderType, Adapter: row.Adapter, BaseURL: row.BaseUrl, ModelKey: row.ModelKey, CredentialMode: row.CredentialMode, SecretID: row.SecretID, CredentialKindCode: row.CredentialKindCode, Status: row.Status, Config: decodeJSONMap(row.Config), CreatedBy: row.CreatedBy, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
+}
+
+func modelReadFromUpdateConfigRow(row sqlc.UpdateModelConfigRow) ModelRead {
 	return ModelRead{ID: row.ID, Slug: row.Slug, Name: row.Name, ProviderType: row.ProviderType, Adapter: row.Adapter, BaseURL: row.BaseUrl, ModelKey: row.ModelKey, CredentialMode: row.CredentialMode, SecretID: row.SecretID, CredentialKindCode: row.CredentialKindCode, Status: row.Status, Config: decodeJSONMap(row.Config), CreatedBy: row.CreatedBy, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt)}
 }
 
