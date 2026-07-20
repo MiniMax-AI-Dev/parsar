@@ -613,7 +613,6 @@ func importProviderModels(runtimeStore RuntimeStore) http.HandlerFunc {
 				})
 				continue
 			}
-			model = persistModelHealth(r.Context(), runtimeStore, workspaceID, model, actorIDFromRequest(r))
 			response.Created = append(response.Created, model)
 			existingKeys[modelKey] = true
 		}

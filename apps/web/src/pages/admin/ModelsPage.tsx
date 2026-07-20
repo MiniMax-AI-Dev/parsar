@@ -39,6 +39,7 @@ import {
 } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import {
+  useBackgroundTestModels,
   useBulkDeleteModels,
   useCreateModel,
   useDeleteModel,
@@ -215,6 +216,7 @@ export function ModelsPage() {
   const deleteMut = useDeleteModel(wsId)
   const bulkDeleteMut = useBulkDeleteModels(wsId)
   const testMut = useTestModel(wsId)
+  const backgroundTestMut = useBackgroundTestModels(wsId)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
@@ -226,6 +228,7 @@ export function ModelsPage() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [selectedModelIDs, setSelectedModelIDs] = useState<Set<string>>(() => new Set())
   const [bulkDeleteResult, setBulkDeleteResult] = useState<BulkDeleteModelsResponse | null>(null)
+  const [backgroundTestingIDs, setBackgroundTestingIDs] = useState<Set<string>>(() => new Set())
   const [testResult, setTestResult] = useState<{
     modelID: string
     data: ModelConnectivityResult
@@ -257,6 +260,13 @@ export function ModelsPage() {
 
   const err = modelsQ.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
+  const testingModelIDs = useMemo(() => {
+    const ids = new Set(backgroundTestingIDs)
+    if (testMut.isPending && typeof testMut.variables === "string") {
+      ids.add(testMut.variables)
+    }
+    return ids
+  }, [backgroundTestingIDs, testMut.isPending, testMut.variables])
 
   function performTest(m: Model) {
     testMut.mutate(m.id, {
@@ -273,6 +283,15 @@ export function ModelsPage() {
           },
         })
       },
+    })
+  }
+
+  function startBackgroundTests(models: Model[]) {
+    const ids = models.map((model) => model.id).filter(Boolean)
+    if (ids.length === 0) return
+    setBackgroundTestingIDs(new Set(ids))
+    backgroundTestMut.mutate(ids, {
+      onSettled: () => setBackgroundTestingIDs(new Set()),
     })
   }
 
@@ -499,7 +518,7 @@ export function ModelsPage() {
           <ModelsTable
             data={filteredModels}
             selectedIDs={selectedModelIDs}
-            testingModelID={testMut.isPending ? (testMut.variables as string) : null}
+            testingModelIDs={testingModelIDs}
             currentUserID={currentUserID}
             isAdmin={isAdmin}
             onToggleModel={toggleModelSelection}
@@ -543,6 +562,7 @@ export function ModelsPage() {
         secrets={secrets}
         workspaceID={wsId}
         onOpenChange={setBulkImportOpen}
+        onImported={startBackgroundTests}
       />
 
       <EditModelDialog
