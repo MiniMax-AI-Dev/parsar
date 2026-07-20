@@ -20,15 +20,18 @@ import {
   type ImportProviderModelsInput,
   type ImportProviderModelsResponse,
 } from "../../lib/api-models"
-import {
-  FALLBACK_PROVIDER_TYPES,
-  endpointBaseURLsForProvider,
-  isKnownProviderURL,
-  providerTypesFromCatalog,
-} from "../../lib/model-provider-options"
-import { getProviderCatalogSnapshot, loadProviderCatalog } from "../../lib/model-presets"
-import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
+import { endpointBaseURLsForProvider, type ProviderTypeOption } from "../../lib/model-provider-options"
 import { CredentialKindCombobox } from "./capabilities/CredentialKindCombobox"
+
+const IMPORT_PROVIDER: ProviderTypeOption = {
+  key: "openai-compatible",
+  adapter: "@ai-sdk/openai-compatible",
+  defaultBaseURL: "",
+  customHeaders: true,
+  authSchemeSelector: false,
+  labelKey: "models.createProvider.providerTypeLabel.openaiCompatible",
+  protocols: [{ id: "openai", adapter: "@ai-sdk/openai-compatible", baseURL: "" }],
+}
 
 function errorMessage(err: unknown): string | null {
   if (!err) return null
@@ -70,12 +73,8 @@ export function BulkImportModelsDialog({
 }: BulkImportModelsDialogProps) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
-  const [providerCatalog, setProviderCatalog] = useState(getProviderCatalogSnapshot)
-  const providerTypes = useMemo(() => providerTypesFromCatalog(providerCatalog), [providerCatalog])
-  const defaultProviderType = providerTypes[0] ?? FALLBACK_PROVIDER_TYPES[0]
 
-  const [providerType, setProviderType] = useState(defaultProviderType.key)
-  const [baseURL, setBaseURL] = useState(defaultProviderType.defaultBaseURL)
+  const [baseURL, setBaseURL] = useState("")
   const [credentialMode, setCredentialMode] = useState<ModelCredentialMode>("inline_secret")
   const [apiKey, setApiKey] = useState("")
   const [existingSecretID, setExistingSecretID] = useState("")
@@ -90,19 +89,8 @@ export function BulkImportModelsDialog({
   const importMut = useImportProviderModels(workspaceID)
 
   useEffect(() => {
-    let cancelled = false
-    loadProviderCatalog().then((catalog) => {
-      if (!cancelled) setProviderCatalog(catalog)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
     if (open && !wasOpenRef.current) {
-      setProviderType(defaultProviderType.key)
-      setBaseURL(defaultProviderType.defaultBaseURL)
+      setBaseURL("")
       setCredentialMode("inline_secret")
       setApiKey("")
       setExistingSecretID("")
@@ -115,26 +103,12 @@ export function BulkImportModelsDialog({
       importMut.reset()
     }
     wasOpenRef.current = open
-  }, [open, defaultProviderType, previewMut, importMut])
+  }, [open, previewMut, importMut])
 
-  const cfg = providerTypes.find((p) => p.key === providerType)
-  const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
   const activeSecrets = secrets.filter((s) => s.status === "active" && s.kind === "model_provider")
   const pending = previewMut.isPending || importMut.isPending
   const errMsg = errorMessage(previewMut.error) ?? errorMessage(importMut.error)
   const count = selectedCount(previewModels, selected)
-
-  const providerChoices = useMemo(
-    () =>
-      providerTypes.map((p) => ({
-        key: p.key,
-        label: p.label ?? (p.labelKey ? t(p.labelKey as never) : p.key),
-        adapter: p.adapter,
-        modelCount: p.models?.length ?? 0,
-        protocols: p.protocols.map((proto) => proto.id),
-      })),
-    [providerTypes, t],
-  )
 
   const visibleModels = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -142,31 +116,23 @@ export function BulkImportModelsDialog({
     return previewModels.filter((model) => model.id.toLowerCase().includes(q))
   }, [previewModels, search])
 
-  function handleProviderTypeChange(next: string) {
-    const nextCfg = providerTypes.find((p) => p.key === next)
-    if (!nextCfg) return
-    const previousCfg = providerTypes.find((p) => p.key === providerType)
-    setProviderType(next)
-    if (baseURL === "" || isKnownProviderURL(previousCfg, baseURL)) {
-      setBaseURL(nextCfg.defaultBaseURL)
-    }
+  function resetDiscovery() {
     setPreviewModels([])
     setSelected(new Set())
     setImportResult(null)
+    previewMut.reset()
+    importMut.reset()
   }
 
   function payload(dryRun: boolean): ImportProviderModelsInput {
     const config: Record<string, unknown> = {}
-    if (cfg?.authSchemeSelector) {
-      config.auth_scheme = "api-key"
-    }
-    const endpointBaseURLs = endpointBaseURLsForProvider(cfg, baseURL)
+    const endpointBaseURLs = endpointBaseURLsForProvider(IMPORT_PROVIDER, baseURL)
     if (Object.keys(endpointBaseURLs).length > 0) {
       config.endpoint_base_urls = endpointBaseURLs
     }
     const body: ImportProviderModelsInput = {
-      provider_type: providerType,
-      adapter,
+      provider_type: IMPORT_PROVIDER.key,
+      adapter: IMPORT_PROVIDER.adapter,
       base_url: baseURL.trim(),
       credential_mode: credentialMode,
       dry_run: dryRun,
@@ -187,7 +153,14 @@ export function BulkImportModelsDialog({
     return body
   }
 
+  const canDiscover =
+    !!workspaceID &&
+    baseURL.trim() !== "" &&
+    !pending &&
+    (apiKey.trim() !== "" || existingSecretID !== "")
+
   function discover() {
+    if (!canDiscover) return
     previewMut.mutate(payload(true), {
       onSuccess: (data) => {
         setPreviewModels(data.models ?? [])
@@ -196,6 +169,14 @@ export function BulkImportModelsDialog({
       },
     })
   }
+
+  useEffect(() => {
+    if (!open || !canDiscover) return
+    const timer = window.setTimeout(() => {
+      discover()
+    }, 650)
+    return () => window.clearTimeout(timer)
+  }, [open, baseURL, apiKey, existingSecretID])
 
   function importSelected() {
     importMut.mutate(payload(false), {
@@ -211,7 +192,6 @@ export function BulkImportModelsDialog({
     })
   }
 
-  const canDiscover = !!workspaceID && baseURL.trim() !== "" && providerType !== "" && adapter !== "" && !pending
   const canImport =
     count > 0 &&
     !pending &&
@@ -228,18 +208,7 @@ export function BulkImportModelsDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5 min-w-0">
-              <label className="text-sm font-medium text-fg-muted" htmlFor="bulk-model-provider">
-                {t("models.createProvider.fields.providerType")}
-              </label>
-              <ProviderTypeCombobox
-                id="bulk-model-provider"
-                value={providerType}
-                onChange={handleProviderTypeChange}
-                options={providerChoices}
-              />
-            </div>
+          <div className="grid gap-3">
             <div className="grid gap-1.5 min-w-0">
               <label className="text-sm font-medium text-fg-muted" htmlFor="bulk-model-base-url">
                 {t("models.createProvider.fields.baseURL")}
@@ -247,7 +216,10 @@ export function BulkImportModelsDialog({
               <Input
                 id="bulk-model-base-url"
                 value={baseURL}
-                onChange={(event) => setBaseURL(event.target.value)}
+                onChange={(event) => {
+                  setBaseURL(event.target.value)
+                  resetDiscovery()
+                }}
                 placeholder="https://api.example.com/v1"
                 className="font-mono text-sm"
               />
@@ -298,6 +270,7 @@ export function BulkImportModelsDialog({
                 onChange={(event) => {
                   setApiKey(event.target.value)
                   if (event.target.value.trim() !== "") setExistingSecretID("")
+                  resetDiscovery()
                 }}
                 placeholder="sk-..."
               />
@@ -319,6 +292,7 @@ export function BulkImportModelsDialog({
                   onChange={(event) => {
                     setExistingSecretID(event.target.value)
                     if (event.target.value !== "") setApiKey("")
+                    resetDiscovery()
                   }}
                   className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                 >
@@ -356,7 +330,7 @@ export function BulkImportModelsDialog({
               ) : (
                 <Search className="h-3.5 w-3.5" />
               )}
-              {t("models.bulkImport.discover")}
+              {previewMut.isPending ? t("models.bulkImport.discovering") : t("models.bulkImport.discover")}
             </Button>
             {previewModels.length > 0 && (
               <span className="text-xs text-fg-faint">
