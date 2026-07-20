@@ -928,6 +928,51 @@ func TestInjectCodexManagedModel_UsesOpenAIEndpointBaseURLFallback(t *testing.T)
 	}
 }
 
+func TestInjectCodexManagedModel_NormalizesOpenAIEndpointRootBaseURL(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-openai-root",
+		ModelKey:     "glm-5.2",
+		ProviderType: "openai-compatible",
+		Adapter:      "@ai-sdk/openai-compatible",
+		BaseURL:      "https://api.appintheloop.com",
+		ProviderConfig: map[string]any{
+			"supported_endpoint_types": []any{"openai"},
+			"endpoint_base_urls": map[string]any{
+				"openai": "https://api.appintheloop.com",
+			},
+		},
+	}
+	if err := injectCodexManagedModel(opts, mr.ModelID, mr, "sk-platform"); err != nil {
+		t.Fatalf("injectCodexManagedModel: %v", err)
+	}
+	provider := opts["codex_provider"].(map[string]any)
+	if got := provider["base_url"]; got != "https://api.appintheloop.com/v1" {
+		t.Fatalf("codex_provider.base_url = %v, want normalized /v1 base URL", got)
+	}
+}
+
+func TestInjectCodexManagedModel_NormalizesOpenAIModelRootBaseURL(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-openai-root-fallback",
+		ModelKey:     "glm-5.2",
+		ProviderType: "openai-compatible",
+		Adapter:      "@ai-sdk/openai-compatible",
+		BaseURL:      "https://api.appintheloop.com",
+		ProviderConfig: map[string]any{
+			"supported_endpoint_types": []any{"openai"},
+		},
+	}
+	if err := injectCodexManagedModel(opts, mr.ModelID, mr, "sk-platform"); err != nil {
+		t.Fatalf("injectCodexManagedModel: %v", err)
+	}
+	provider := opts["codex_provider"].(map[string]any)
+	if got := provider["base_url"]; got != "https://api.appintheloop.com/v1" {
+		t.Fatalf("codex_provider.base_url = %v, want normalized /v1 fallback base URL", got)
+	}
+}
+
 func TestInjectCodexManagedModel_InfersResponsesBaseURLForLegacyAnthropicRows(t *testing.T) {
 	opts := map[string]any{}
 	mr := store.ModelRuntime{
