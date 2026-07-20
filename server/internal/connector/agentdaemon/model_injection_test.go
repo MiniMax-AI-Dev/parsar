@@ -854,7 +854,7 @@ func TestIsOpenAICompatibleRuntime(t *testing.T) {
 		{"azure-openai provider", store.ModelRuntime{ProviderType: "azure-openai"}, true},
 		{"@ai-sdk/openai adapter only", store.ModelRuntime{Adapter: "@ai-sdk/openai"}, true},
 		{"@ai-sdk/azure adapter only", store.ModelRuntime{Adapter: "@ai-sdk/azure"}, true},
-		{"endpoint types openai chat only", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai"}}}, false},
+		{"endpoint types openai chat only", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai"}}}, true},
 		{"endpoint types openai response", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai-response"}}}, true},
 		{"whitespace + case-insensitive", store.ModelRuntime{ProviderType: " Openai "}, true},
 		{"anthropic provider rejected", store.ModelRuntime{ProviderType: "anthropic", Adapter: "@ai-sdk/anthropic"}, false},
@@ -901,6 +901,30 @@ func TestInjectCodexManagedModel_UsesResponsesEndpointBaseURL(t *testing.T) {
 	provider := opts["codex_provider"].(map[string]any)
 	if got := provider["base_url"]; got != "https://api.minimaxi.com/v1" {
 		t.Fatalf("codex_provider.base_url = %v, want /v1 base for /v1/responses", got)
+	}
+}
+
+func TestInjectCodexManagedModel_UsesOpenAIEndpointBaseURLFallback(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-openai-only",
+		ModelKey:     "gpt-5.6",
+		ProviderType: "openai-compatible",
+		Adapter:      "@ai-sdk/openai-compatible",
+		BaseURL:      "https://api.example.com/chat",
+		ProviderConfig: map[string]any{
+			"supported_endpoint_types": []any{"openai"},
+			"endpoint_base_urls": map[string]any{
+				"openai": "https://api.example.com/v1",
+			},
+		},
+	}
+	if err := injectCodexManagedModel(opts, mr.ModelID, mr, "sk-platform"); err != nil {
+		t.Fatalf("injectCodexManagedModel: %v", err)
+	}
+	provider := opts["codex_provider"].(map[string]any)
+	if got := provider["base_url"]; got != "https://api.example.com/v1" {
+		t.Fatalf("codex_provider.base_url = %v, want openai endpoint base URL fallback", got)
 	}
 }
 
