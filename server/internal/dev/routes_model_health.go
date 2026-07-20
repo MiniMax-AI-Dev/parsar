@@ -92,6 +92,7 @@ type connectivityHTTPResponse struct {
 }
 
 const connectivityResponseBodyLimit = 8 * 1024
+const modelProbeMaxTokens = 2
 
 // testModelConnectivity sends a minimal request to the upstream provider so the
 // admin can verify base_url + api_key + custom headers + model_key without
@@ -422,18 +423,19 @@ func modelProbeRequestSpec(mr store.ModelRuntime, endpointType string) (string, 
 		return anthropicMessagesURL(endpointBaseURLFromConfig(mr.ProviderConfig, "anthropic", mr.BaseURL)), map[string]any{
 			"model":      mr.ModelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
-			"max_tokens": 16,
+			"max_tokens": modelProbeMaxTokens,
 		}
 	case "openai-response":
 		return strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai-response", mr.BaseURL), "/") + "/responses", map[string]any{
-			"model": mr.ModelKey,
-			"input": "ping",
+			"model":             mr.ModelKey,
+			"input":             "ping",
+			"max_output_tokens": modelProbeMaxTokens,
 		}
 	default:
 		return strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai", mr.BaseURL), "/") + "/chat/completions", map[string]any{
 			"model":      mr.ModelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
-			"max_tokens": 16,
+			"max_tokens": modelProbeMaxTokens,
 		}
 	}
 }

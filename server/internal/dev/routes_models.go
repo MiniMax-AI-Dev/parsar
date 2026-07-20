@@ -652,20 +652,21 @@ func endpointProbeRequest(ctx context.Context, baseURL, modelKey, apiKey, endpoi
 		body = map[string]any{
 			"model":      modelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
-			"max_tokens": 1,
+			"max_tokens": modelProbeMaxTokens,
 		}
 	case "openai":
 		url = strings.TrimRight(endpointBaseURLFromConfig(config, "openai", baseURL), "/") + "/chat/completions"
 		body = map[string]any{
 			"model":      modelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
-			"max_tokens": 1,
+			"max_tokens": modelProbeMaxTokens,
 		}
 	case "openai-response":
 		url = strings.TrimRight(endpointBaseURLFromConfig(config, "openai-response", baseURL), "/") + "/responses"
 		body = map[string]any{
-			"model": modelKey,
-			"input": "ping",
+			"model":             modelKey,
+			"input":             "ping",
+			"max_output_tokens": modelProbeMaxTokens,
 		}
 	default:
 		return nil, fmt.Errorf("unsupported endpoint probe type %q", endpointType)

@@ -719,6 +719,9 @@ func TestDetectProviderModelEndpointsFindsSharedBaseURLFamilies(t *testing.T) {
 			if !strings.Contains(string(bodyBytes), `"model":"shared-model"`) {
 				t.Fatalf("expected model in anthropic probe body, got %s", string(bodyBytes))
 			}
+			if !strings.Contains(string(bodyBytes), `"max_tokens":2`) {
+				t.Fatalf("expected anthropic probe max_tokens=2, got %s", string(bodyBytes))
+			}
 			_, _ = w.Write([]byte(`{"content":[{"type":"text","text":"pong"}]}`))
 		case "/v1/chat/completions":
 			sawOpenAI = true
@@ -728,8 +731,14 @@ func TestDetectProviderModelEndpointsFindsSharedBaseURLFamilies(t *testing.T) {
 			if !strings.Contains(string(bodyBytes), `"model":"shared-model"`) {
 				t.Fatalf("expected model in openai probe body, got %s", string(bodyBytes))
 			}
+			if !strings.Contains(string(bodyBytes), `"max_tokens":2`) {
+				t.Fatalf("expected openai probe max_tokens=2, got %s", string(bodyBytes))
+			}
 			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"pong"}}]}`))
 		case "/v1/responses":
+			if !strings.Contains(string(bodyBytes), `"max_output_tokens":2`) {
+				t.Fatalf("expected responses probe max_output_tokens=2, got %s", string(bodyBytes))
+			}
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":{"message":"not found"}}`))
 		default:
@@ -1152,7 +1161,7 @@ func TestModelConnectivityAnthropicSuccess(t *testing.T) {
 	if gotSub != "claude-code-internal" {
 		t.Fatalf("upstream got wrong X-Sub-Module: %q", gotSub)
 	}
-	if gotBody["model"] != "claude-opus-4-7" || gotBody["max_tokens"].(float64) != 16 {
+	if gotBody["model"] != "claude-opus-4-7" || gotBody["max_tokens"].(float64) != modelProbeMaxTokens {
 		t.Fatalf("upstream got wrong body: %+v", gotBody)
 	}
 }
@@ -1225,8 +1234,13 @@ func TestModelConnectivityTestsAllSupportedEndpointTypes(t *testing.T) {
 	}
 
 	seenPaths := map[string]bool{}
+	seenBodies := map[string]map[string]any{}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		seenPaths[req.URL.Path] = true
+		var gotBody map[string]any
+		bodyBytes, _ := io.ReadAll(req.Body)
+		_ = json.Unmarshal(bodyBytes, &gotBody)
+		seenBodies[req.URL.Path] = gotBody
 		if got := req.Header.Get("Authorization"); got != "" && got != "Bearer sk-test-12345" {
 			t.Fatalf("upstream got wrong Authorization: %q", got)
 		}
@@ -1286,6 +1300,15 @@ func TestModelConnectivityTestsAllSupportedEndpointTypes(t *testing.T) {
 		if !seenPaths[path] {
 			t.Fatalf("expected upstream path %s to be tested; seen=%+v", path, seenPaths)
 		}
+	}
+	if got := seenBodies["/openai/v1/chat/completions"]["max_tokens"]; got != float64(modelProbeMaxTokens) {
+		t.Fatalf("expected openai max_tokens=%d, got %+v", modelProbeMaxTokens, seenBodies["/openai/v1/chat/completions"])
+	}
+	if got := seenBodies["/anthropic/v1/messages"]["max_tokens"]; got != float64(modelProbeMaxTokens) {
+		t.Fatalf("expected anthropic max_tokens=%d, got %+v", modelProbeMaxTokens, seenBodies["/anthropic/v1/messages"])
+	}
+	if got := seenBodies["/responses/v1/responses"]["max_output_tokens"]; got != float64(modelProbeMaxTokens) {
+		t.Fatalf("expected responses max_output_tokens=%d, got %+v", modelProbeMaxTokens, seenBodies["/responses/v1/responses"])
 	}
 	for _, endpoint := range result.Results {
 		if endpoint.Request.Method != http.MethodPost || endpoint.Request.URL == "" {
