@@ -219,7 +219,7 @@ export interface ImportCommitResponse {
  * we lock kind in the UI but the server enforces it as a 422 anyway.
  */
 export interface ImportCapabilityVersionCommitRequest {
-  /** Defaults server-side to "1.0.0" when empty. */
+  /** Optional compatibility override; omitted values advance from the latest version. */
   version?: string
   /** Opaque blob the server writes verbatim to capability_version.source_payload. */
   source_payload?: unknown

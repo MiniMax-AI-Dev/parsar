@@ -6031,7 +6031,8 @@ paths:
       consumes:
       - application/json
       description: Adds a new version to an existing capability, sharing the parse/rebuild
-        pipeline with capability import commit. Spec.kind must match capability.type.
+        pipeline with capability import commit. When version is omitted, the server
+        advances the latest version automatically. Spec.kind must match capability.type.
         When oss_key is omitted for plugin or skill-zip kinds, the previous version's
         bytes are reused. Owner/admin only.
       operationId: commitDevCapabilityVersionImport

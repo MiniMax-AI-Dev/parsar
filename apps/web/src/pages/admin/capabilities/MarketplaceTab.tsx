@@ -15,7 +15,7 @@ import type { Capability } from "../../../lib/api-types"
 interface MarketplaceTabProps {
   itemID: string | null
   query: string
-  typeFilter: "all" | "mcp" | "skill"
+  typeFilter: "mcp" | "skill"
   onSelectItem: (id: string | null) => void
   onInstall: (capability: MarketplaceCapability) => void
 }
@@ -31,7 +31,7 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return items.filter((item) => {
-      if (typeFilter !== "all" && item.type !== typeFilter) return false
+      if (item.type !== typeFilter) return false
       // "Hide what's already in this workspace" — both rows you published
       // and rows you installed from elsewhere are available locally.
       if (hideInstalled && (item.installed || item.self_published)) return false

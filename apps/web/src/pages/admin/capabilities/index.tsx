@@ -84,7 +84,7 @@ interface AgentInstallation {
   latest: boolean
 }
 
-type CapabilityTypeFilter = "all" | "mcp" | "skill"
+type CapabilityTypeFilter = "mcp" | "skill"
 type PageTab = "workspace" | "marketplace"
 
 export function CapabilitiesPage() {
@@ -92,11 +92,11 @@ export function CapabilitiesPage() {
   const wid = useWorkspaceId()
   const { navigate } = useAdminView()
   const [query, setQuery] = useState("")
-  const [typeFilter, setTypeFilter] = useState<CapabilityTypeFilter>("all")
+  const [typeFilter, setTypeFilter] = useState<CapabilityTypeFilter>("mcp")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const debouncedQuery = useDebouncedValue(query, 250)
-  const typeParam = typeFilter === "all" ? "" : typeFilter
+  const typeParam = typeFilter
   // Reset to page 1 whenever the user changes filters / page size.
   useEffect(() => {
     setPage(1)
@@ -174,7 +174,7 @@ export function CapabilitiesPage() {
   const visibleTotal = usingServerPage
     ? capsQ.data?.total ?? 0
     : ownCapabilities.length + allInstalls.length
-  const filtersActive = !!debouncedQuery.trim() || typeFilter !== "all"
+  const filtersActive = !!debouncedQuery.trim()
   const versionSummary = useCapabilityVersionSummary(wid, ownCapabilities)
   const latestVersions = versionSummary.latest
   const selectedLatestVersion = addVersionCapability ? latestVersions.get(addVersionCapability.id) : undefined
@@ -313,7 +313,6 @@ export function CapabilitiesPage() {
                       variant="outline"
                       onClick={() => {
                         setQuery("")
-                        setTypeFilter("all")
                       }}
                     >
                       {t("capabilities.emptyFiltered.reset")}
@@ -527,7 +526,6 @@ function CapabilitiesFilterBar({
     <div className="flex flex-wrap items-center gap-3">
       <Tabs value={typeFilter} onValueChange={(value) => onTypeFilterChange(value as CapabilityTypeFilter)}>
         <TabsList>
-          <TabsTrigger value="all">{t("capabilities.filters.all")}</TabsTrigger>
           <TabsTrigger value="mcp">MCP</TabsTrigger>
           <TabsTrigger value="skill">Skill</TabsTrigger>
         </TabsList>

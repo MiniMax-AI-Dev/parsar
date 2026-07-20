@@ -745,7 +745,7 @@
       },
       "add": {
         "title": "{{name}} — 添加新版本",
-        "description": "新版本不会影响已启用旧版本的 Agent；他们需要在 Agent 详情手动切换。",
+        "description": "保存时会自动生成下一个版本。已启用旧版本的 Agent 不受影响，需在 Agent 详情中手动切换。",
         "prefillFromLatest": "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
         "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。"
       },

@@ -575,7 +575,7 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, bl
 // capability.type or the store returns ErrCapabilityKindMismatch.
 //
 //	@Summary		Commit a new version of an existing capability
-//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
+//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. When version is omitted, the server advances the latest version automatically. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityVersionImport
 //	@Accept			json
