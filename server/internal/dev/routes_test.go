@@ -1212,6 +1212,103 @@ func TestModelConnectivitySuccess(t *testing.T) {
 	}
 }
 
+func TestModelConnectivityTestsAllSupportedEndpointTypes(t *testing.T) {
+	const masterKey = "test-master-key"
+	t.Setenv("PARSAR_MASTER_KEY", masterKey)
+	svc, err := secrets.New(masterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := svc.Encrypt(map[string]any{"api_key": "sk-test-12345"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seenPaths := map[string]bool{}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		seenPaths[req.URL.Path] = true
+		if got := req.Header.Get("Authorization"); got != "" && got != "Bearer sk-test-12345" {
+			t.Fatalf("upstream got wrong Authorization: %q", got)
+		}
+		if got := req.Header.Get("x-api-key"); got != "" && got != "sk-test-12345" {
+			t.Fatalf("upstream got wrong x-api-key: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Request-Id", "req_test")
+		switch req.URL.Path {
+		case "/openai/v1/chat/completions":
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong chat"}}]}`))
+		case "/responses/v1/responses":
+			_, _ = w.Write([]byte(`{"output_text":"pong responses"}`))
+		case "/anthropic/v1/messages":
+			_, _ = w.Write([]byte(`{"id":"msg_test","type":"message","role":"assistant","content":[{"type":"text","text":"pong anthropic"}]}`))
+		default:
+			t.Fatalf("unexpected upstream path %s", req.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+
+	store := connectivityStubStore{
+		runtime: store.ModelRuntime{
+			ModelID:  "00000000-0000-0000-0000-000000000702",
+			ModelKey: "gpt-5.5",
+			Adapter:  "@ai-sdk/openai-compatible",
+			BaseURL:  upstream.URL + "/v1",
+			SecretID: "00000000-0000-0000-0000-000000000601",
+			ProviderConfig: map[string]any{
+				"supported_endpoint_types": []any{"openai", "openai-response", "anthropic"},
+				"endpoint_base_urls": map[string]any{
+					"openai":          upstream.URL + "/openai/v1",
+					"openai-response": upstream.URL + "/responses/v1",
+					"anthropic":       upstream.URL + "/anthropic",
+				},
+				"headers": map[string]any{"X-Sub-Module": "model-test"},
+			},
+		},
+		payload:       store.SecretPayload{EncryptedPayload: enc},
+		updatedHealth: map[string]any{},
+	}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/test", nil)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+
+	var result connectivityTestResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode connectivity result: %v; body=%s", err, res.Body.String())
+	}
+	if !result.Success || result.HealthyCount != 3 || result.TotalCount != 3 || len(result.Results) != 3 {
+		t.Fatalf("expected all three endpoints healthy, got %+v", result)
+	}
+	for _, path := range []string{"/openai/v1/chat/completions", "/responses/v1/responses", "/anthropic/v1/messages"} {
+		if !seenPaths[path] {
+			t.Fatalf("expected upstream path %s to be tested; seen=%+v", path, seenPaths)
+		}
+	}
+	for _, endpoint := range result.Results {
+		if endpoint.Request.Method != http.MethodPost || endpoint.Request.URL == "" {
+			t.Fatalf("expected request diagnostics for %s, got %+v", endpoint.EndpointType, endpoint.Request)
+		}
+		if strings.Contains(fmt.Sprint(endpoint.Request.Headers), "sk-test-12345") {
+			t.Fatalf("expected sensitive request header masked, got %+v", endpoint.Request.Headers)
+		}
+		if endpoint.Response.Status != http.StatusOK || endpoint.Response.Headers["X-Request-Id"] != "req_test" || endpoint.Response.RawBody == "" {
+			t.Fatalf("expected response diagnostics for %s, got %+v", endpoint.EndpointType, endpoint.Response)
+		}
+	}
+	if store.updatedHealth["healthy_count"] != 3 || store.updatedHealth["total_count"] != 3 {
+		t.Fatalf("expected aggregate health counts, got %+v", store.updatedHealth)
+	}
+	if _, ok := store.updatedHealth["results"]; ok {
+		t.Fatalf("persisted health must not keep full diagnostics: %+v", store.updatedHealth)
+	}
+	if _, ok := store.updatedHealth["results_summary"]; !ok {
+		t.Fatalf("expected persisted health summary, got %+v", store.updatedHealth)
+	}
+}
+
 func TestModelConnectivityPersistsHealth(t *testing.T) {
 	const masterKey = "test-master-key"
 	t.Setenv("PARSAR_MASTER_KEY", masterKey)
