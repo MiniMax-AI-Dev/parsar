@@ -109,6 +109,25 @@ function engineSupportsModel(engine: AgentEngine, model: Model): boolean {
   return modelProtocols(model).some((protocol) => engineSupportsProtocol(engine, protocol))
 }
 
+function preferredAgentEngineForModel(model: Model): AgentEngine | null {
+  const endpointTypes = modelSupportedEndpointTypes(model)
+  if (endpointTypes.includes("openai") || endpointTypes.includes("openai-response")) return "codex"
+  if (endpointTypes.includes("anthropic")) return "claude_code"
+  if (endpointTypes.includes("google_generative_ai")) return "pi"
+
+  const protocols = modelProtocols(model)
+  if (protocols.includes("openai")) return "codex"
+  if (protocols.includes("anthropic")) return "claude_code"
+  if (protocols.includes("google")) return "pi"
+  return null
+}
+
+function compatibleAgentEngineForModel(current: AgentEngine, model: Model): AgentEngine | null {
+  if (engineSupportsModel(current, model)) return current
+  const preferred = preferredAgentEngineForModel(model)
+  return preferred && engineSupportsModel(preferred, model) ? preferred : null
+}
+
 function sandboxSizeFromAgent(a?: Agent | null): SandboxSize {
   // The server reads sandbox_size from the same merged config map at sandbox
   // cold-start time, so we keep the UI and the runtime view in sync.
@@ -425,11 +444,23 @@ export function CreateAgentDialog({
     )
   }, [activeModels, modelSearch, incompatibleModelIDs])
   // If the user had hand-picked a model and then switched to an engine that
-  // can't drive it, clear the pick so it falls back to firstModelID (a
-  // compatible default) instead of submitting an incompatible model_id.
+  // can't drive it, first move to the model's natural engine. Existing rows
+  // can arrive with a stale claude_code + OpenAI model pairing; correcting the
+  // engine is less surprising than silently clearing the user's model.
   useEffect(() => {
-    if (modelID && incompatibleModelIDs.has(modelID)) setModelID("")
-  }, [modelID, incompatibleModelIDs])
+    if (!modelID || !incompatibleModelIDs.has(modelID)) return
+    const model = activeModels.find((m) => m.id === modelID)
+    if (!model) {
+      setModelID("")
+      return
+    }
+    const nextEngine = compatibleAgentEngineForModel(agentEngine, model)
+    if (nextEngine && nextEngine !== agentEngine) {
+      setAgentEngine(nextEngine)
+      return
+    }
+    setModelID("")
+  }, [activeModels, agentEngine, modelID, incompatibleModelIDs])
   const allCapabilitiesPool = useMemo<Capability[]>(() => {
     const data = allCapabilitiesQ.data
     const own = data?.capabilities ?? []
@@ -634,8 +665,9 @@ export function CreateAgentDialog({
   }
 
   function selectModel(nextModel: Model) {
-    // Incompatible with the current engine — ignore clicks/enter on it.
-    if (incompatibleModelIDs.has(nextModel.id)) return
+    const nextEngine = compatibleAgentEngineForModel(agentEngine, nextModel)
+    if (!nextEngine) return
+    if (nextEngine !== agentEngine) setAgentEngine(nextEngine)
     setModelID(nextModel.id)
     setModelSearch("")
     setHighlightedModelID(nextModel.id)
@@ -665,9 +697,7 @@ export function CreateAgentDialog({
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault()
-      // Only step across selectable (engine-compatible) models so arrow keys
-      // skip greyed-out rows entirely.
-      const selectable = filteredModels.filter((m) => !incompatibleModelIDs.has(m.id))
+      const selectable = filteredModels.filter((m) => compatibleAgentEngineForModel(agentEngine, m) !== null)
       if (selectable.length === 0) return
       const currentIndex = selectable.findIndex((m) => m.id === highlightedModelID)
       const fallbackIndex = event.key === "ArrowDown" ? -1 : 0
@@ -1207,6 +1237,7 @@ export function CreateAgentDialog({
                           const selected = selectedModelID === m.id
                           const highlighted = highlightedModelID === m.id
                           const incompatible = incompatibleModelIDs.has(m.id)
+                          const selectable = compatibleAgentEngineForModel(agentEngine, m) !== null
                           return (
                             <button
                               id={`model-option-${m.id}`}
@@ -1214,12 +1245,12 @@ export function CreateAgentDialog({
                               type="button"
                               role="option"
                               aria-selected={selected}
-                              aria-disabled={incompatible}
-                              disabled={incompatible}
-                              title={incompatible ? t("agents.form.modelProtocolMismatch", { engine: agentEngine }) : undefined}
-                              onMouseEnter={() => { if (!incompatible) setHighlightedModelID(m.id) }}
+                              aria-disabled={!selectable}
+                              disabled={!selectable}
+                              title={!selectable ? t("agents.form.modelProtocolMismatch", { engine: agentEngine }) : undefined}
+                              onMouseEnter={() => { if (selectable) setHighlightedModelID(m.id) }}
                               onClick={() => selectModel(m)}
-                              className={"flex w-full items-center justify-between gap-3 px-3 py-2 text-left " + (incompatible ? "cursor-not-allowed opacity-40" : highlighted ? "bg-surface-muted text-fg" : selected ? "bg-surface-subtle text-fg" : "text-fg-muted hover:bg-surface-subtle")}
+                              className={"flex w-full items-center justify-between gap-3 px-3 py-2 text-left " + (!selectable ? "cursor-not-allowed opacity-40" : highlighted ? "bg-surface-muted text-fg" : selected ? "bg-surface-subtle text-fg" : "text-fg-muted hover:bg-surface-subtle")}
                             >
                               <span className="min-w-0 flex-1 truncate">{modelLabel(m)}</span>
                               <span className="flex shrink-0 items-center gap-2">
