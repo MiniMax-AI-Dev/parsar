@@ -256,13 +256,13 @@ func endpointBaseURLFromConfig(config map[string]any, endpointType, fallback str
 				continue
 			}
 			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return strings.TrimSpace(s)
+				return inferredEndpointBaseURL(want, s)
 			}
 		}
 	case map[string]string:
 		for k, s := range raw {
 			if normalizeEndpointType(k) == want && strings.TrimSpace(s) != "" {
-				return strings.TrimSpace(s)
+				return inferredEndpointBaseURL(want, s)
 			}
 		}
 	}
@@ -272,12 +272,22 @@ func endpointBaseURLFromConfig(config map[string]any, endpointType, fallback str
 func inferredEndpointBaseURL(endpointType, fallback string) string {
 	base := strings.TrimRight(strings.TrimSpace(fallback), "/")
 	if endpointType == "openai" || endpointType == "openai-response" {
+		if strings.HasSuffix(base, "/chat/completions") {
+			base = strings.TrimSuffix(base, "/chat/completions")
+		}
+		if strings.HasSuffix(base, "/responses") {
+			base = strings.TrimSuffix(base, "/responses")
+		}
 		if strings.HasSuffix(base, "/anthropic/v1") {
 			return strings.TrimSuffix(base, "/anthropic/v1") + "/v1"
 		}
 		if strings.HasSuffix(base, "/anthropic") {
 			return strings.TrimSuffix(base, "/anthropic") + "/v1"
 		}
+		if strings.HasSuffix(base, "/v1") {
+			return base
+		}
+		return base + "/v1"
 	}
 	return base
 }
