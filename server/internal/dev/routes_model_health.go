@@ -51,14 +51,47 @@ func anthropicMessagesURL(baseURL string) string {
 }
 
 type connectivityTestResponse struct {
-	Supported    bool   `json:"supported"`
-	Success      bool   `json:"success"`
-	LatencyMS    int64  `json:"latency_ms"`
-	Status       int    `json:"http_status,omitempty"`
-	EndpointType string `json:"endpoint_type,omitempty"`
-	Error        string `json:"error,omitempty"`
-	Sample       string `json:"sample,omitempty"`
+	Supported    bool                       `json:"supported"`
+	Success      bool                       `json:"success"`
+	LatencyMS    int64                      `json:"latency_ms"`
+	Status       int                        `json:"http_status,omitempty"`
+	EndpointType string                     `json:"endpoint_type,omitempty"`
+	Error        string                     `json:"error,omitempty"`
+	Sample       string                     `json:"sample,omitempty"`
+	HealthyCount int                        `json:"healthy_count"`
+	TotalCount   int                        `json:"total_count"`
+	Results      []connectivityEndpointTest `json:"results"`
 }
+
+type connectivityEndpointTest struct {
+	EndpointType string                   `json:"endpoint_type"`
+	Supported    bool                     `json:"supported"`
+	Success      bool                     `json:"success"`
+	LatencyMS    int64                    `json:"latency_ms"`
+	Status       int                      `json:"http_status,omitempty"`
+	FailureStage string                   `json:"failure_stage,omitempty"`
+	Error        string                   `json:"error,omitempty"`
+	Sample       string                   `json:"sample,omitempty"`
+	Request      connectivityHTTPRequest  `json:"request"`
+	Response     connectivityHTTPResponse `json:"response,omitempty"`
+}
+
+type connectivityHTTPRequest struct {
+	Method  string            `json:"method"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Body    map[string]any    `json:"body,omitempty"`
+}
+
+type connectivityHTTPResponse struct {
+	Status    int               `json:"status"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Body      any               `json:"body,omitempty"`
+	RawBody   string            `json:"raw_body,omitempty"`
+	Truncated bool              `json:"truncated,omitempty"`
+}
+
+const connectivityResponseBodyLimit = 8 * 1024
 
 // testModelConnectivity sends a minimal request to the upstream provider so the
 // admin can verify base_url + api_key + custom headers + model_key without
@@ -128,10 +161,12 @@ func modelHealthFromProbe(result connectivityTestResponse) map[string]any {
 		status = "unsupported"
 	}
 	health := map[string]any{
-		"status":     status,
-		"checked_at": time.Now().UTC().Format(time.RFC3339),
-		"latency_ms": result.LatencyMS,
-		"supported":  result.Supported,
+		"status":        status,
+		"checked_at":    time.Now().UTC().Format(time.RFC3339),
+		"latency_ms":    result.LatencyMS,
+		"supported":     result.Supported,
+		"healthy_count": result.HealthyCount,
+		"total_count":   result.TotalCount,
 	}
 	if result.Status != 0 {
 		health["http_status"] = result.Status
@@ -145,6 +180,28 @@ func modelHealthFromProbe(result connectivityTestResponse) map[string]any {
 	if result.Sample != "" {
 		health["sample"] = result.Sample
 	}
+	if len(result.Results) > 0 {
+		summaries := make([]map[string]any, 0, len(result.Results))
+		for _, item := range result.Results {
+			summary := map[string]any{
+				"endpoint_type": item.EndpointType,
+				"supported":     item.Supported,
+				"success":       item.Success,
+				"latency_ms":    item.LatencyMS,
+			}
+			if item.Status != 0 {
+				summary["http_status"] = item.Status
+			}
+			if item.FailureStage != "" {
+				summary["failure_stage"] = item.FailureStage
+			}
+			if item.Error != "" {
+				summary["error"] = item.Error
+			}
+			summaries = append(summaries, summary)
+		}
+		health["results_summary"] = summaries
+	}
 	return health
 }
 
@@ -152,7 +209,12 @@ func probeModelConnectivity(ctx context.Context, runtimeStore RuntimeStore, work
 	mr, err := runtimeStore.ResolveModelRuntimeForUser(ctx, modelID, callerUserID)
 	if err != nil {
 		if errors.Is(err, store.ErrModelDisabled) {
-			return connectivityTestResponse{Supported: true, Success: false, Error: err.Error()}, nil
+			return aggregateConnectivityResults([]connectivityEndpointTest{{
+				Supported:    true,
+				Success:      false,
+				FailureStage: "credential",
+				Error:        err.Error(),
+			}}), nil
 		}
 		if errors.Is(err, store.ErrUnknownModel) {
 			return connectivityTestResponse{}, err
@@ -160,14 +222,14 @@ func probeModelConnectivity(ctx context.Context, runtimeStore RuntimeStore, work
 		return connectivityTestResponse{}, errors.New("failed to resolve model")
 	}
 
-	isOpenAIChatCompatible := isOpenAIChatCompletionsAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "openai")
-	isOpenAIResponsesCompatible := modelSupportsEndpointType(mr.ProviderConfig, "openai-response")
-	isAnthropicCompatible := isAnthropicMessagesAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "anthropic")
-	if !isOpenAIChatCompatible && !isOpenAIResponsesCompatible && !isAnthropicCompatible {
-		return connectivityTestResponse{
-			Supported: false,
-			Error:     "connectivity test only supports OpenAI chat-completions, OpenAI responses, and Anthropic messages compatible providers",
-		}, nil
+	endpointTypes := modelProbeEndpointTypes(mr)
+	if len(endpointTypes) == 0 {
+		return aggregateConnectivityResults([]connectivityEndpointTest{{
+			Supported:    false,
+			Success:      false,
+			FailureStage: "unsupported",
+			Error:        "connectivity test only supports OpenAI chat-completions, OpenAI responses, and Anthropic messages compatible providers",
+		}}), nil
 	}
 
 	var encryptedPayload []byte
@@ -175,11 +237,11 @@ func probeModelConnectivity(ctx context.Context, runtimeStore RuntimeStore, work
 		encryptedPayload = mr.EncryptedPayload
 	} else {
 		if mr.SecretID == "" {
-			return connectivityTestResponse{Supported: true, Success: false, Error: "no API key bound to this model"}, nil
+			return aggregateCredentialFailure(endpointTypes, "no API key bound to this model"), nil
 		}
 		sp, err := runtimeStore.GetSecretPayload(ctx, workspaceID, mr.SecretID)
 		if err != nil {
-			return connectivityTestResponse{Supported: true, Success: false, Error: fmt.Sprintf("failed to fetch secret: %v", err)}, nil
+			return aggregateCredentialFailure(endpointTypes, fmt.Sprintf("failed to fetch secret: %v", err)), nil
 		}
 		encryptedPayload = sp.EncryptedPayload
 	}
@@ -190,7 +252,7 @@ func probeModelConnectivity(ctx context.Context, runtimeStore RuntimeStore, work
 	}
 	payload, err := secretService.Decrypt(encryptedPayload)
 	if err != nil {
-		return connectivityTestResponse{Supported: true, Success: false, Error: "failed to decrypt credential: " + err.Error()}, nil
+		return aggregateCredentialFailure(endpointTypes, "failed to decrypt credential: "+err.Error()), nil
 	}
 	apiKey, _ := payload["api_key"].(string)
 	if strings.TrimSpace(apiKey) == "" {
@@ -199,39 +261,103 @@ func probeModelConnectivity(ctx context.Context, runtimeStore RuntimeStore, work
 		}
 	}
 	if strings.TrimSpace(apiKey) == "" {
-		return connectivityTestResponse{Supported: true, Success: false, Error: "credential payload missing api_key / value field"}, nil
+		return aggregateCredentialFailure(endpointTypes, "credential payload missing api_key / value field"), nil
 	}
 
-	endpointType := "openai"
-	url := ""
-	body := map[string]any{}
-	if isAnthropicCompatible {
-		endpointType = "anthropic"
-		url = anthropicMessagesURL(endpointBaseURLFromConfig(mr.ProviderConfig, "anthropic", mr.BaseURL))
-		body = map[string]any{
-			"model":      mr.ModelKey,
-			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
-			"max_tokens": 16,
+	results := make([]connectivityEndpointTest, 0, len(endpointTypes))
+	for _, endpointType := range endpointTypes {
+		results = append(results, probeModelEndpoint(ctx, mr, endpointType, apiKey))
+	}
+	return aggregateConnectivityResults(results), nil
+}
+
+func modelProbeEndpointTypes(mr store.ModelRuntime) []string {
+	raw := endpointTypesFromAny(mr.ProviderConfig["supported_endpoint_types"])
+	if len(raw) == 0 {
+		switch {
+		case isAnthropicMessagesAdapter(mr.Adapter):
+			raw = []string{"anthropic"}
+		case isOpenAIChatCompletionsAdapter(mr.Adapter):
+			raw = []string{"openai"}
 		}
-	} else if isOpenAIResponsesCompatible {
-		endpointType = "openai-response"
-		url = strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai-response", mr.BaseURL), "/") + "/responses"
-		body = map[string]any{
-			"model": mr.ModelKey,
-			"input": "ping",
+	}
+	out := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, endpointType := range raw {
+		normalized := normalizeEndpointType(endpointType)
+		switch normalized {
+		case "openai", "openai-response", "anthropic":
+			if !seen[normalized] {
+				seen[normalized] = true
+				out = append(out, normalized)
+			}
 		}
-	} else {
-		url = strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai", mr.BaseURL), "/") + "/chat/completions"
-		body = map[string]any{
-			"model":      mr.ModelKey,
-			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
-			"max_tokens": 16,
+	}
+	return out
+}
+
+func aggregateCredentialFailure(endpointTypes []string, msg string) connectivityTestResponse {
+	results := make([]connectivityEndpointTest, 0, len(endpointTypes))
+	for _, endpointType := range endpointTypes {
+		results = append(results, connectivityEndpointTest{
+			EndpointType: endpointType,
+			Supported:    true,
+			Success:      false,
+			FailureStage: "credential",
+			Error:        msg,
+		})
+	}
+	return aggregateConnectivityResults(results)
+}
+
+func aggregateConnectivityResults(results []connectivityEndpointTest) connectivityTestResponse {
+	out := connectivityTestResponse{Results: results, TotalCount: len(results)}
+	for _, result := range results {
+		out.LatencyMS += result.LatencyMS
+		if result.Supported {
+			out.Supported = true
 		}
+		if result.Success {
+			out.Success = true
+			out.HealthyCount++
+			if out.EndpointType == "" {
+				out.EndpointType = result.EndpointType
+				out.Status = result.Status
+				out.Sample = result.Sample
+			}
+			continue
+		}
+		if out.Error == "" && result.Error != "" {
+			out.EndpointType = result.EndpointType
+			out.Status = result.Status
+			out.Error = result.Error
+		}
+	}
+	if out.Error == "" && !out.Success && len(results) > 0 {
+		out.Error = results[0].Error
+		out.EndpointType = results[0].EndpointType
+		out.Status = results[0].Status
+	}
+	return out
+}
+
+func probeModelEndpoint(ctx context.Context, mr store.ModelRuntime, endpointType, apiKey string) connectivityEndpointTest {
+	url, body := modelProbeRequestSpec(mr, endpointType)
+	result := connectivityEndpointTest{
+		EndpointType: endpointType,
+		Supported:    true,
+		Request: connectivityHTTPRequest{
+			Method: http.MethodPost,
+			URL:    url,
+			Body:   body,
+		},
 	}
 	bodyBytes, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(bodyBytes)))
 	if err != nil {
-		return connectivityTestResponse{Supported: true, Success: false, EndpointType: endpointType, Error: "failed to build request: " + err.Error()}, nil
+		result.FailureStage = "request_build"
+		result.Error = "failed to build request: " + err.Error()
+		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if endpointType == "anthropic" {
@@ -247,33 +373,149 @@ func probeModelConnectivity(ctx context.Context, runtimeStore RuntimeStore, work
 			}
 		}
 	}
+	result.Request.Headers = maskedHeaderMap(req.Header)
 
 	start := time.Now()
 	resp, err := testModelHTTPClient.Do(req)
-	latency := time.Since(start).Milliseconds()
+	result.LatencyMS = time.Since(start).Milliseconds()
 	if err != nil {
-		return connectivityTestResponse{Supported: true, Success: false, LatencyMS: latency, EndpointType: endpointType, Error: "request failed: " + err.Error()}, nil
+		result.FailureStage = "network"
+		result.Error = "request failed: " + err.Error()
+		return result
 	}
 	defer resp.Body.Close()
-	respBytes, _ := io.ReadAll(resp.Body)
 
-	var parsed map[string]any
-	_ = json.Unmarshal(respBytes, &parsed)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 || parsed["error"] != nil {
-		msg := strings.TrimSpace(string(respBytes))
-		if eo, ok := parsed["error"].(map[string]any); ok {
-			if m, ok := eo["message"].(string); ok {
-				msg = m
-			}
-		}
-		if len(msg) > 500 {
-			msg = msg[:500] + "…"
-		}
-		return connectivityTestResponse{Supported: true, Success: false, LatencyMS: latency, Status: resp.StatusCode, EndpointType: endpointType, Error: msg}, nil
+	respBytes, truncated := readLimitedResponseBody(resp.Body)
+	parsed, parsedOK := parseJSONBody(respBytes)
+	result.Status = resp.StatusCode
+	result.Response = connectivityHTTPResponse{
+		Status:    resp.StatusCode,
+		Headers:   selectedResponseHeaders(resp.Header),
+		RawBody:   string(respBytes),
+		Truncated: truncated,
+	}
+	if parsedOK {
+		result.Response.Body = parsed
 	}
 
-	sample := modelProbeSample(parsed, endpointType)
-	return connectivityTestResponse{Supported: true, Success: true, LatencyMS: latency, Status: resp.StatusCode, EndpointType: endpointType, Sample: sample}, nil
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || parsed["error"] != nil {
+		msg := responseErrorMessage(respBytes, parsed)
+		if truncated {
+			msg += "…"
+		}
+		result.FailureStage = "upstream_http"
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			result.FailureStage = "upstream_body"
+		}
+		result.Error = msg
+		return result
+	}
+
+	result.Success = true
+	result.Sample = modelProbeSample(parsed, endpointType)
+	return result
+}
+
+func modelProbeRequestSpec(mr store.ModelRuntime, endpointType string) (string, map[string]any) {
+	switch endpointType {
+	case "anthropic":
+		return anthropicMessagesURL(endpointBaseURLFromConfig(mr.ProviderConfig, "anthropic", mr.BaseURL)), map[string]any{
+			"model":      mr.ModelKey,
+			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
+			"max_tokens": 16,
+		}
+	case "openai-response":
+		return strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai-response", mr.BaseURL), "/") + "/responses", map[string]any{
+			"model": mr.ModelKey,
+			"input": "ping",
+		}
+	default:
+		return strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai", mr.BaseURL), "/") + "/chat/completions", map[string]any{
+			"model":      mr.ModelKey,
+			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
+			"max_tokens": 16,
+		}
+	}
+}
+
+func readLimitedResponseBody(body io.Reader) ([]byte, bool) {
+	respBytes, _ := io.ReadAll(io.LimitReader(body, connectivityResponseBodyLimit+1))
+	if len(respBytes) > connectivityResponseBodyLimit {
+		return respBytes[:connectivityResponseBodyLimit], true
+	}
+	return respBytes, false
+}
+
+func parseJSONBody(body []byte) (map[string]any, bool) {
+	var parsed map[string]any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return map[string]any{}, false
+	}
+	return parsed, true
+}
+
+func responseErrorMessage(respBytes []byte, parsed map[string]any) string {
+	msg := strings.TrimSpace(string(respBytes))
+	if eo, ok := parsed["error"].(map[string]any); ok {
+		if m, ok := eo["message"].(string); ok {
+			msg = m
+		}
+	}
+	if msg == "" {
+		msg = "upstream returned an empty response body"
+	}
+	if len(msg) > 500 {
+		msg = msg[:500] + "…"
+	}
+	return msg
+}
+
+func maskedHeaderMap(headers http.Header) map[string]string {
+	out := map[string]string{}
+	for key, values := range headers {
+		if len(values) == 0 {
+			continue
+		}
+		if isSensitiveHeader(key) {
+			out[key] = maskSecret(values[0])
+			continue
+		}
+		out[key] = values[0]
+	}
+	return out
+}
+
+func selectedResponseHeaders(headers http.Header) map[string]string {
+	out := map[string]string{}
+	for _, key := range []string{"Content-Type", "X-Request-Id", "Request-Id"} {
+		if value := headers.Get(key); value != "" {
+			out[key] = value
+		}
+	}
+	return out
+}
+
+func isSensitiveHeader(key string) bool {
+	k := strings.ToLower(key)
+	return strings.Contains(k, "authorization") ||
+		strings.Contains(k, "api-key") ||
+		strings.Contains(k, "token") ||
+		strings.Contains(k, "secret") ||
+		k == "x-api-key"
+}
+
+func maskSecret(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(value), "bearer ") {
+		return "Bearer " + maskSecret(strings.TrimSpace(value[7:]))
+	}
+	if len(value) <= 8 {
+		return "****"
+	}
+	return value[:4] + "..." + value[len(value)-4:]
 }
 
 func modelProbeSample(parsed map[string]any, endpointType string) string {

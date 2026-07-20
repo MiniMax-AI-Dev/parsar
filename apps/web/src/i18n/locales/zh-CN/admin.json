@@ -93,8 +93,24 @@
     },
     "test": {
       "success": "{{ms}}ms 内联通上游",
+      "successWithEndpoints": "{{healthy}}/{{total}} 个接口在 {{ms}}ms 内联通上游",
       "failure": "上游拒绝了测试请求",
-      "unsupported": "暂不支持 (仅 OpenAI / Anthropic 协议)"
+      "failureWithEndpoints": "{{healthy}}/{{total}} 个接口通过测试",
+      "unsupported": "暂不支持 (仅 OpenAI / Anthropic 协议)",
+      "details": {
+        "title": "模型测试诊断",
+        "open": "详情",
+        "summary": "{{healthy}}/{{total}} 个接口健康",
+        "primaryEndpoint": "主结果：{{endpoint}} · {{ms}}ms",
+        "noEndpoint": "没有测试任何接口",
+        "unknownEndpoint": "未知接口",
+        "latency": "{{ms}}ms",
+        "httpStatus": "HTTP {{status}}",
+        "request": "请求",
+        "response": "响应",
+        "noResponse": "无响应",
+        "copy": "复制"
+      }
     },
     "createProvider": {
       "fields": {
