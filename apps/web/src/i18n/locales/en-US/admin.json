@@ -10,7 +10,7 @@
   "models": {
     "page": {
       "title": "Models",
-      "description": "Org-shared model catalog. Anyone can add a model; only the creator (or an admin) can edit or disable it."
+      "description": "Org-shared model catalog. Anyone can add a model; only the creator (or an admin) can edit or delete it."
     },
     "actions": {
       "addModel": "Add model",
@@ -19,9 +19,11 @@
       "edit": "Edit",
       "copy": "Duplicate",
       "disable": "Disable",
+      "delete": "Delete",
       "menu": "More actions",
       "editForbidden": "Only the creator or an admin can edit this model.",
-      "disableForbidden": "Only the creator or an admin can disable this model."
+      "disableForbidden": "Only the creator or an admin can disable this model.",
+      "deleteForbidden": "Only the creator or an admin can delete this model."
     },
     "copy": {
       "nameSuffix": " (copy)",
@@ -47,6 +49,7 @@
       "compatibility": "Compatibility",
       "credentialMode": "Credential mode",
       "status": "Status",
+      "health": "Health",
       "actions": "Actions"
     },
     "loadError": {
@@ -67,6 +70,26 @@
     "disable": {
       "title": "Disable model \"{{name}}\"?",
       "description": "Disabling marks the model unusable for new requests. In-flight runs continue. Re-enable from the catalog later."
+    },
+    "delete": {
+      "title": "Delete model \"{{name}}\"?",
+      "description": "This permanently deletes the model. Models still referenced by active agents will be rejected by the server."
+    },
+    "bulkDelete": {
+      "selectAll": "Select all visible models",
+      "selectOne": "Select {{name}}",
+      "selectedCount": "{{count}} selected",
+      "deleteSelected": "Delete selected",
+      "title": "Delete {{count}} models?",
+      "description": "This permanently deletes the selected models. Models still referenced by active agents will be skipped.",
+      "resultSummary": "{{deleted}} deleted, {{failed}} failed"
+    },
+    "health": {
+      "healthy": "Healthy",
+      "failed": "Failed",
+      "unsupported": "Unsupported",
+      "untested": "Untested",
+      "checking": "Checking"
     },
     "test": {
       "success": "Reached upstream in {{ms}}ms",

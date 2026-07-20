@@ -35,6 +35,34 @@ async function disableModelRequest(workspaceID: string, modelID: string) {
   )
 }
 
+async function deleteModelRequest(workspaceID: string, modelID: string): Promise<void> {
+  await apiRequest<void>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models/${encodeURIComponent(modelID)}`,
+    { method: "DELETE" }
+  )
+}
+
+export interface BulkDeleteModelFailure {
+  model_id: string
+  error: string
+  references?: { id: string; name: string }[]
+}
+
+export interface BulkDeleteModelsResponse {
+  deleted: string[]
+  failed: BulkDeleteModelFailure[]
+}
+
+async function bulkDeleteModelsRequest(
+  workspaceID: string,
+  modelIDs: string[],
+): Promise<BulkDeleteModelsResponse> {
+  return apiRequest<BulkDeleteModelsResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models/bulk-delete`,
+    { method: "POST", body: { model_ids: modelIDs } }
+  )
+}
+
 async function updateModelRequest(
   workspaceID: string,
   modelID: string,
@@ -84,6 +112,46 @@ export function useDisableModel(workspaceID: string | null) {
         })
       }
       return disableModelRequest(workspaceID, modelID)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
+    },
+  })
+}
+
+export function useDeleteModel(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (modelID: string) => {
+      if (!workspaceID) {
+        throw new ApiError({
+          status: 0,
+          code: "no_workspace",
+          message: "no workspace selected — pick a workspace first",
+          unreachable: false,
+        })
+      }
+      return deleteModelRequest(workspaceID, modelID)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
+    },
+  })
+}
+
+export function useBulkDeleteModels(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (modelIDs: string[]) => {
+      if (!workspaceID) {
+        throw new ApiError({
+          status: 0,
+          code: "no_workspace",
+          message: "no workspace selected — pick a workspace first",
+          unreachable: false,
+        })
+      }
+      return bulkDeleteModelsRequest(workspaceID, modelIDs)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
@@ -415,11 +483,23 @@ export interface ModelConnectivityResult {
   success: boolean
   latency_ms: number
   http_status?: number
+  endpoint_type?: string
   error?: string
   sample?: string
 }
 
+async function testModelRequest(
+  workspaceID: string,
+  modelID: string,
+): Promise<ModelConnectivityResult> {
+  return apiRequest<ModelConnectivityResult>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models/${encodeURIComponent(modelID)}/test`,
+    { method: "POST" },
+  )
+}
+
 export function useTestModel(workspaceID: string | null) {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async (modelID: string) => {
       if (!workspaceID) {
@@ -430,10 +510,45 @@ export function useTestModel(workspaceID: string | null) {
           unreachable: false,
         })
       }
-      return apiRequest<ModelConnectivityResult>(
-        `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/models/${encodeURIComponent(modelID)}/test`,
-        { method: "POST" }
-      )
+      return testModelRequest(workspaceID, modelID)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
+    },
+  })
+}
+
+export function useBackgroundTestModels(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (modelIDs: string[]) => {
+      if (!workspaceID) {
+        throw new ApiError({
+          status: 0,
+          code: "no_workspace",
+          message: "no workspace selected — pick a workspace first",
+          unreachable: false,
+        })
+      }
+      const ws = workspaceID
+      const ids = Array.from(new Set(modelIDs.filter(Boolean)))
+      const results: PromiseSettledResult<ModelConnectivityResult>[] = []
+      let next = 0
+      async function worker() {
+        for (;;) {
+          const index = next
+          next += 1
+          const modelID = ids[index]
+          if (!modelID) return
+          const result = await Promise.allSettled([testModelRequest(ws, modelID)])
+          results[index] = result[0]
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(3, ids.length) }, () => worker()))
+      return results
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: KEY_MODELS(workspaceID ?? "_none") })
     },
   })
 }

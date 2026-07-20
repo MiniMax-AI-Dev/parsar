@@ -2092,9 +2092,39 @@ set deleted_at = @now, updated_at = @now
 where id = @id::uuid
   and deleted_at is null;
 
+-- name: DeleteModel :execrows
+delete from models
+where id = @id::uuid
+  and deleted_at is null;
+
+-- name: ListModelAgentReferences :many
+select id::text, name
+from agents
+where deleted_at is null
+  and (
+    config->>'default_model_id' = @model_id::text
+    or config->>'model_id' = @model_id::text
+    or config->'profile'->>'model_id' = @model_id::text
+  )
+order by updated_at desc, id desc
+limit @item_limit;
+
 -- name: DisableModel :one
 update models
 set status = 'disabled', updated_at = @now
+where id = @id::uuid
+  and deleted_at is null
+returning
+  id::text, slug, name, provider_type, adapter, base_url, model_key,
+  credential_mode,
+  coalesce(secret_id::text, '')::text as secret_id,
+  coalesce(credential_kind_code, '')::text as credential_kind_code,
+  status, config, coalesce(created_by::text, '')::text as created_by,
+  created_at, updated_at;
+
+-- name: UpdateModelConfig :one
+update models
+set config = @config::jsonb, updated_at = @now
 where id = @id::uuid
   and deleted_at is null
 returning

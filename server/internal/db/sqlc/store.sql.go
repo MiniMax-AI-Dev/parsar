@@ -2978,6 +2978,20 @@ func (q *Queries) DeleteConnectorSessionBindingsByUpstreamSession(ctx context.Co
 	return err
 }
 
+const deleteModel = `-- name: DeleteModel :execrows
+delete from models
+where id = $1::uuid
+  and deleted_at is null
+`
+
+func (q *Queries) DeleteModel(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteModel, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const disableAgent = `-- name: DisableAgent :one
 update agents
 set status = 'disabled', updated_at = $1
@@ -7865,6 +7879,49 @@ func (q *Queries) ListMarketplaceCapabilities(ctx context.Context, targetWorkspa
 	return items, nil
 }
 
+const listModelAgentReferences = `-- name: ListModelAgentReferences :many
+select id::text, name
+from agents
+where deleted_at is null
+  and (
+    config->>'default_model_id' = $1::text
+    or config->>'model_id' = $1::text
+    or config->'profile'->>'model_id' = $1::text
+  )
+order by updated_at desc, id desc
+limit $2
+`
+
+type ListModelAgentReferencesParams struct {
+	ModelID   string `json:"model_id"`
+	ItemLimit int32  `json:"item_limit"`
+}
+
+type ListModelAgentReferencesRow struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) ListModelAgentReferences(ctx context.Context, arg ListModelAgentReferencesParams) ([]ListModelAgentReferencesRow, error) {
+	rows, err := q.db.Query(ctx, listModelAgentReferences, arg.ModelID, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListModelAgentReferencesRow{}
+	for rows.Next() {
+		var i ListModelAgentReferencesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listModels = `-- name: ListModels :many
 select
   id::text, slug, name, provider_type, adapter, base_url, model_key,
@@ -11440,6 +11497,67 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Updat
 		arg.ID,
 	)
 	var i UpdateModelRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.ProviderType,
+		&i.Adapter,
+		&i.BaseUrl,
+		&i.ModelKey,
+		&i.CredentialMode,
+		&i.SecretID,
+		&i.CredentialKindCode,
+		&i.Status,
+		&i.Config,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateModelConfig = `-- name: UpdateModelConfig :one
+update models
+set config = $1::jsonb, updated_at = $2
+where id = $3::uuid
+  and deleted_at is null
+returning
+  id::text, slug, name, provider_type, adapter, base_url, model_key,
+  credential_mode,
+  coalesce(secret_id::text, '')::text as secret_id,
+  coalesce(credential_kind_code, '')::text as credential_kind_code,
+  status, config, coalesce(created_by::text, '')::text as created_by,
+  created_at, updated_at
+`
+
+type UpdateModelConfigParams struct {
+	Config []byte             `json:"config"`
+	Now    pgtype.Timestamptz `json:"now"`
+	ID     pgtype.UUID        `json:"id"`
+}
+
+type UpdateModelConfigRow struct {
+	ID                 string             `json:"id"`
+	Slug               string             `json:"slug"`
+	Name               string             `json:"name"`
+	ProviderType       string             `json:"provider_type"`
+	Adapter            string             `json:"adapter"`
+	BaseUrl            string             `json:"base_url"`
+	ModelKey           string             `json:"model_key"`
+	CredentialMode     string             `json:"credential_mode"`
+	SecretID           string             `json:"secret_id"`
+	CredentialKindCode string             `json:"credential_kind_code"`
+	Status             string             `json:"status"`
+	Config             []byte             `json:"config"`
+	CreatedBy          string             `json:"created_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateModelConfig(ctx context.Context, arg UpdateModelConfigParams) (UpdateModelConfigRow, error) {
+	row := q.db.QueryRow(ctx, updateModelConfig, arg.Config, arg.Now, arg.ID)
+	var i UpdateModelConfigRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,

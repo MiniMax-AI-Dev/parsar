@@ -407,6 +407,55 @@ func TestDisableModelAPIErrors(t *testing.T) {
 	requireStatus(t, res, http.StatusNotFound)
 }
 
+func TestDeleteModelAPI(t *testing.T) {
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, stubRuntimeStore{})
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702", nil)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusNoContent)
+}
+
+func TestDeleteModelAPIErrors(t *testing.T) {
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, stubRuntimeStore{})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/not-a-uuid", nil)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusBadRequest)
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000099999", nil)
+	res = httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusNotFound)
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000703", nil)
+	res = httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusConflict)
+	if !strings.Contains(res.Body.String(), "model_in_use") || !strings.Contains(res.Body.String(), "Product Agent") {
+		t.Fatalf("expected model_in_use with refs, got %s", res.Body.String())
+	}
+}
+
+func TestBulkDeleteModelsAPI(t *testing.T) {
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, stubRuntimeStore{})
+	body := strings.NewReader(`{"model_ids":["00000000-0000-0000-0000-000000000702","00000000-0000-0000-0000-000000000703","not-a-uuid"]}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/bulk-delete", body)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+	got := res.Body.String()
+	if !strings.Contains(got, `"deleted":["00000000-0000-0000-0000-000000000702"]`) {
+		t.Fatalf("expected one deleted model, got %s", got)
+	}
+	if !strings.Contains(got, "model_in_use") || !strings.Contains(got, "model_id must be a valid uuid") {
+		t.Fatalf("expected per-model failures, got %s", got)
+	}
+}
+
 func TestUpdateModelAPI(t *testing.T) {
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, stubRuntimeStore{})
@@ -715,8 +764,9 @@ func TestDetectProviderModelEndpointsFindsSharedBaseURLFamilies(t *testing.T) {
 // inject a real encrypted secret.
 type connectivityStubStore struct {
 	stubRuntimeStore
-	runtime store.ModelRuntime
-	payload store.SecretPayload
+	runtime       store.ModelRuntime
+	payload       store.SecretPayload
+	updatedHealth map[string]any
 }
 
 func (c connectivityStubStore) ResolveModelRuntime(ctx context.Context, workspaceID, modelID string) (store.ModelRuntime, error) {
@@ -727,6 +777,14 @@ func (c connectivityStubStore) ResolveModelRuntimeForUser(ctx context.Context, m
 }
 func (c connectivityStubStore) GetSecretPayload(ctx context.Context, workspaceID, secretID string) (store.SecretPayload, error) {
 	return c.payload, nil
+}
+func (c connectivityStubStore) UpdateModelHealth(ctx context.Context, modelID string, health map[string]any) (store.ModelRead, error) {
+	if c.updatedHealth != nil {
+		for key, value := range health {
+			c.updatedHealth[key] = value
+		}
+	}
+	return store.ModelRead{ID: modelID, Status: "active", Config: map[string]any{"health": health}}, nil
 }
 
 type feishuSecretRouteStore struct {
@@ -1069,7 +1127,8 @@ func TestModelConnectivityAnthropicSuccess(t *testing.T) {
 			SecretID:       "00000000-0000-0000-0000-000000000601",
 			ProviderConfig: map[string]any{"headers": map[string]any{"X-Sub-Module": "claude-code-internal"}},
 		},
-		payload: store.SecretPayload{EncryptedPayload: enc},
+		payload:       store.SecretPayload{EncryptedPayload: enc},
+		updatedHealth: map[string]any{},
 	}
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, store)
@@ -1132,7 +1191,8 @@ func TestModelConnectivitySuccess(t *testing.T) {
 			SecretID:       "00000000-0000-0000-0000-000000000601",
 			ProviderConfig: map[string]any{"headers": map[string]any{"X-Sub-Module": "claude-code-internal"}},
 		},
-		payload: store.SecretPayload{EncryptedPayload: enc},
+		payload:       store.SecretPayload{EncryptedPayload: enc},
+		updatedHealth: map[string]any{},
 	}
 	r := chi.NewRouter()
 	RegisterRoutesWithStore(r, store)
@@ -1149,6 +1209,50 @@ func TestModelConnectivitySuccess(t *testing.T) {
 	}
 	if gotSub != "claude-code-internal" {
 		t.Fatalf("upstream got wrong X-Sub-Module: %q", gotSub)
+	}
+}
+
+func TestModelConnectivityPersistsHealth(t *testing.T) {
+	const masterKey = "test-master-key"
+	t.Setenv("PARSAR_MASTER_KEY", masterKey)
+	svc, err := secrets.New(masterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := svc.Encrypt(map[string]any{"api_key": "sk-test-12345"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/v1/responses" {
+			t.Fatalf("expected responses endpoint, got %s", req.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"pong"}`))
+	}))
+	defer upstream.Close()
+
+	store := &connectivityStubStore{
+		runtime: store.ModelRuntime{
+			ModelID:        "00000000-0000-0000-0000-000000000702",
+			ModelKey:       "gpt-5.5",
+			Adapter:        "@ai-sdk/openai-compatible",
+			BaseURL:        upstream.URL + "/v1",
+			SecretID:       "00000000-0000-0000-0000-000000000601",
+			ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai-response"}},
+		},
+		payload:       store.SecretPayload{EncryptedPayload: enc},
+		updatedHealth: map[string]any{},
+	}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/test", nil)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+	if store.updatedHealth["status"] != "healthy" || store.updatedHealth["endpoint_type"] != "openai-response" {
+		t.Fatalf("expected persisted healthy openai-response health, got %+v", store.updatedHealth)
 	}
 }
 
@@ -2941,11 +3045,31 @@ func (stubRuntimeStore) DisableModel(ctx context.Context, workspaceID string, mo
 	return store.ModelRead{ID: modelID, Slug: "model-test", Name: "GPT 5.4", ProviderType: "openai", Adapter: "@ai-sdk/openai", BaseURL: "https://platform-api.example.com/v1", ModelKey: "gpt-5.4", CredentialMode: "inline_secret", SecretID: "00000000-0000-0000-0000-000000000601", Status: "disabled", Config: map[string]any{"capabilities": map[string]any{"tool_call": true}, "limits": map[string]any{"context": 1000}}, CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)}, nil
 }
 
+func (stubRuntimeStore) DeleteModel(ctx context.Context, modelID string, actorID string) error {
+	if modelID == "00000000-0000-0000-0000-000000099999" {
+		return store.ErrUnknownModel
+	}
+	if modelID == "00000000-0000-0000-0000-000000000703" {
+		return &store.ModelInUseError{
+			ModelID: modelID,
+			References: []store.ModelReference{{
+				ID:   "00000000-0000-0000-0000-000000000801",
+				Name: "Product Agent",
+			}},
+		}
+	}
+	return nil
+}
+
 func (stubRuntimeStore) UpdateModel(ctx context.Context, input store.UpdateModelInput) (store.ModelRead, error) {
 	if input.ModelID == "00000000-0000-0000-0000-000000099999" {
 		return store.ModelRead{}, store.ErrUnknownModel
 	}
 	return store.ModelRead{ID: input.ModelID, Slug: "model-test", Name: input.Name, ProviderType: "openai", Adapter: "@ai-sdk/openai", BaseURL: input.BaseURL, ModelKey: input.ModelKey, CredentialMode: "inline_secret", SecretID: input.SecretID, CredentialKindCode: input.CredentialKindCode, Status: "active", Config: input.Config, CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)}, nil
+}
+
+func (stubRuntimeStore) UpdateModelHealth(ctx context.Context, modelID string, health map[string]any) (store.ModelRead, error) {
+	return store.ModelRead{ID: modelID, Slug: "model-test", Name: "GPT 5.4", ProviderType: "openai", Adapter: "@ai-sdk/openai", BaseURL: "https://platform-api.example.com/v1", ModelKey: "gpt-5.4", CredentialMode: "inline_secret", SecretID: "00000000-0000-0000-0000-000000000601", Status: "active", Config: map[string]any{"health": health}, CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)}, nil
 }
 
 func (stubRuntimeStore) ListWorkspaceEnabledAgents(ctx context.Context, workspaceID string) ([]store.AgentRead, error) {

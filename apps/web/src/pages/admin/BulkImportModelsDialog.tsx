@@ -13,7 +13,7 @@ import {
 } from "../../components/ui/dialog"
 import { Input } from "../../components/ui/input"
 import { ApiError } from "../../lib/api-client"
-import type { ModelCredentialMode, Secret } from "../../lib/api-types"
+import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
 import {
   useImportProviderModels,
   type ImportProviderModelPreview,
@@ -58,6 +58,7 @@ interface BulkImportModelsDialogProps {
   onOpenChange: (open: boolean) => void
   secrets: Secret[]
   workspaceID: string | null
+  onImported?: (models: Model[]) => void
 }
 
 export function BulkImportModelsDialog({
@@ -65,6 +66,7 @@ export function BulkImportModelsDialog({
   onOpenChange,
   secrets,
   workspaceID,
+  onImported,
 }: BulkImportModelsDialogProps) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
@@ -201,6 +203,10 @@ export function BulkImportModelsDialog({
         setImportResult(data)
         setPreviewModels(data.models ?? [])
         setSelected(new Set())
+        if ((data.created?.length ?? 0) > 0) {
+          onImported?.(data.created)
+          onOpenChange(false)
+        }
       },
     })
   }
