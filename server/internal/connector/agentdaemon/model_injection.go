@@ -370,7 +370,11 @@ func injectOpenCodeManagedModel(opts map[string]any, modelID string, mr store.Mo
 //	  query_params      — flattened from mr.ProviderConfig.query_params
 //	                      (Azure uses api-version=...)
 //
-// Provider gating: codex-rs only speaks OpenAI's Responses API.
+// Provider gating: codex-rs speaks OpenAI-compatible providers through
+// its Responses wire API. Catalog rows may advertise either
+// "openai-response" or the broader "openai" endpoint type depending on the
+// provider's /v1/models metadata; accept both and prefer the responses-specific
+// base URL when present.
 // ProviderType must be "openai" / "openai-compatible" / "azure-openai"
 // or carry an @ai-sdk/openai* adapter slug. Anything else surfaces
 // ErrManagedModelUnsupported so the caller emits a credential-form
@@ -380,7 +384,7 @@ func injectCodexManagedModel(opts map[string]any, modelID string, mr store.Model
 		return fmt.Errorf("%w: model_id=%s provider_type=%q adapter=%q",
 			ErrManagedModelUnsupported, modelID, mr.ProviderType, mr.Adapter)
 	}
-	codexBaseURL := modelEndpointBaseURL(mr, "openai-response")
+	codexBaseURL := modelEndpointBaseURL(mr, codexEndpointBaseURLType(mr))
 	if codexBaseURL == "" {
 		// Without a base_url the only sensible target is api.openai.com;
 		// codex's builtin "openai" provider already covers that. But the
@@ -442,7 +446,8 @@ func flattenStringMap(providerConfig map[string]any, key string) map[string]stri
 // codex_provider TOML block but a future change might split it out.
 func isOpenAICompatibleRuntime(mr store.ModelRuntime) bool {
 	if modelConfigHasEndpointTypes(mr.ProviderConfig) {
-		return modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response")
+		return modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response") ||
+			modelConfigSupportsEndpointType(mr.ProviderConfig, "openai")
 	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		switch strings.ToLower(strings.TrimSpace(v)) {
@@ -453,6 +458,18 @@ func isOpenAICompatibleRuntime(mr store.ModelRuntime) bool {
 		}
 	}
 	return false
+}
+
+func codexEndpointBaseURLType(mr store.ModelRuntime) string {
+	if modelConfigHasEndpointTypes(mr.ProviderConfig) {
+		if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response") {
+			return "openai-response"
+		}
+		if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai") {
+			return "openai"
+		}
+	}
+	return "openai-response"
 }
 
 // piAPIKeyEnv is the env var the daemon sets to the decrypted secret and
