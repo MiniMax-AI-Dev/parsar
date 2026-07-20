@@ -127,7 +127,7 @@ function ModelProtocolCell({ model }: { model: Model }) {
 export function ModelsTable({
   data,
   selectedIDs,
-  testingModelID,
+  testingModelIDs,
   onToggleModel,
   onToggleAllVisible,
   onRequestEdit,
@@ -139,7 +139,7 @@ export function ModelsTable({
 }: {
   data: Model[]
   selectedIDs: Set<string>
-  testingModelID: string | null
+  testingModelIDs: Set<string>
   onToggleModel: (modelID: string, selected: boolean) => void
   onToggleAllVisible: (selected: boolean) => void
   onRequestEdit: (m: Model) => void
@@ -202,7 +202,7 @@ export function ModelsTable({
         <TableBody>
           {data.map((m) => {
             const canEdit = isAdmin || (currentUserID && m.created_by === currentUserID)
-            const isTesting = testingModelID === m.id
+            const isTesting = testingModelIDs.has(m.id)
             const canTest = !isTesting && m.status === "active"
             const health = modelHealth(m)
             return (
