@@ -29,10 +29,16 @@ import { Input } from "../../components/ui/input"
 import { CredentialKindCombobox } from "./capabilities/CredentialKindCombobox"
 import { ModelKeyCombobox } from "./ModelKeyCombobox"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
+import { ModelEndpointBaseURLsEditor } from "./ModelEndpointBaseURLsEditor"
 import {
   getProviderCatalogSnapshot,
   loadProviderCatalog,
 } from "../../lib/model-presets"
+import {
+  endpointBaseURLRowsForModel,
+  endpointBaseURLsFromRows,
+  type EndpointBaseURLRow,
+} from "../../lib/model-endpoint-base-urls"
 import {
   FALLBACK_PROVIDER_TYPES,
   defaultModelFor,
@@ -774,6 +780,7 @@ export function EditModelDialog({
   const [modelKey, setModelKey] = useState("")
   const [baseURL, setBaseURL] = useState("")
   const [headers, setHeaders] = useState<Record<string, string>>({})
+  const [endpointBaseURLRows, setEndpointBaseURLRows] = useState<EndpointBaseURLRow[]>([])
   const [newAPIKey, setNewAPIKey] = useState("")
   const [secretID, setSecretID] = useState<string>("")
   const [credentialKindCode, setCredentialKindCode] = useState<string>("")
@@ -784,10 +791,11 @@ export function EditModelDialog({
     setModelKey(model.model_key)
     setBaseURL(model.base_url)
     setHeaders((model.config as { headers?: Record<string, string> })?.headers ?? {})
+    setEndpointBaseURLRows(endpointBaseURLRowsForModel(model, providerTypeMeta))
     setNewAPIKey("")
     setSecretID(model.secret_id ?? "")
     setCredentialKindCode(model.credential_kind_code ?? "")
-  }, [open, model])
+  }, [open, model, providerTypeMeta])
 
   if (!model) return null
   const errMsg = extractErrorMessage(error)
@@ -816,6 +824,14 @@ export function EditModelDialog({
       config = Object.keys(headers).length > 0 ? { ...rest, headers } : rest
     } else {
       config = model.config as Record<string, unknown>
+    }
+    const endpointBaseURLs = endpointBaseURLsFromRows(endpointBaseURLRows)
+    if (Object.keys(endpointBaseURLs).length > 0) {
+      config = { ...config, endpoint_base_urls: endpointBaseURLs }
+    } else {
+      const { endpoint_base_urls: _endpointBaseURLs, ...rest } = config
+      void _endpointBaseURLs
+      config = rest
     }
 
     const values: InlineUpdateModelInput = {
@@ -894,6 +910,13 @@ export function EditModelDialog({
             value={baseURL}
             onChange={setBaseURL}
             mono
+          />
+
+          <ModelEndpointBaseURLsEditor
+            rows={endpointBaseURLRows}
+            onChange={setEndpointBaseURLRows}
+            title={t("models.editModel.endpointBaseURLs.title")}
+            description={t("models.editModel.endpointBaseURLs.description")}
           />
 
           {supportsCustomHeaders && (

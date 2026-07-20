@@ -190,6 +190,10 @@
         "baseURL": "服务地址",
         "customHeaders": "自定义 HTTP Headers"
       },
+      "endpointBaseURLs": {
+        "title": "接口服务地址",
+        "description": "按协议保存的最终 Base URL，用于运行时请求和模型测试。"
+      },
       "credentialBinding": {
         "boundSecret": "当前绑定的 Secret",
         "boundSecretNone": "(没有绑 Secret — 当前不可用)",
