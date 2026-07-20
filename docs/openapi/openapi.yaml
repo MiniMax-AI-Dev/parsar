@@ -716,7 +716,7 @@ definitions:
       github_repo:
         type: string
       kind:
-        description: '"mcp" | "skill" | "plugin"'
+        description: '"mcp" | "skill"'
         type: string
       oss_key:
         description: |-
@@ -2938,9 +2938,9 @@ paths:
       - bootstrap
   /api/v1/capabilities/marketplace:
     get:
-      description: Lists public capabilities offered on the marketplace, filtered
-        to items visible to the caller's workspace. Workspace is taken from ?workspace_id
-        or the X-Parsar-Workspace-ID header.
+      description: Lists public MCP and Skill capabilities offered on the marketplace,
+        filtered to items visible to the caller's workspace. Workspace is taken from
+        ?workspace_id or the X-Parsar-Workspace-ID header.
       operationId: listDevMarketplaceCapabilities
       parameters:
       - description: Workspace UUID (falls back to X-Parsar-Workspace-ID header)
@@ -5343,9 +5343,9 @@ paths:
       - auth
   /api/v1/workspaces/{workspaceID}/capabilities:
     get:
-      description: Returns the workspace's own capabilities plus its marketplace installs
-        and available marketplace items. Optional pagination via page + page_size
-        opts into a paged shape.
+      description: Returns MCP and Skill capabilities from the workspace plus its
+        marketplace installs and available marketplace items. Optional pagination
+        via page + page_size opts into a paged shape.
       operationId: listDevWorkspaceCapabilities
       parameters:
       - description: Workspace UUID
@@ -5361,7 +5361,7 @@ paths:
         in: query
         name: scope
         type: string
-      - description: Filter by capability type (mcp/skill/plugin/system_prompt)
+      - description: Filter by capability type (mcp/skill)
         in: query
         name: type
         type: string
@@ -5409,8 +5409,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a capability in the workspace. Owner/admin only. When body.version
-        is set, an initial capability_version is created in the same call.
+      description: Creates an MCP or Skill capability in the workspace. Owner/admin
+        only. When body.version is set, an initial capability_version is created in
+        the same call.
       operationId: createDevWorkspaceCapability
       parameters:
       - description: Workspace UUID
@@ -6103,10 +6104,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Encrypts inline_secrets then runs the whole import (capability
-        + capability_version + secrets) in a single transaction. For kind=plugin (and
-        skill zip) the canonical_spec is rebuilt from OSS bytes; the client-supplied
-        spec is discarded. Owner/admin only.
+      description: Encrypts inline_secrets then runs the whole MCP or Skill import
+        (capability + capability_version + secrets) in a single transaction. For Skill
+        zip imports the canonical_spec is rebuilt from OSS bytes. Owner/admin only.
       operationId: commitDevCapabilityImport
       parameters:
       - description: Workspace UUID
@@ -6166,9 +6166,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Pure parse for mcp/skill (no DB writes). For plugin (and skill
-        zip) the just-uploaded zip is downloaded from OSS and validated. Owner/admin
-        only.
+      description: Pure parse for MCP or Skill imports. Skill zip uploads are downloaded
+        from object storage and validated. Owner/admin only.
       operationId: previewDevCapabilityImport
       parameters:
       - description: Workspace UUID

@@ -84,7 +84,7 @@ interface AgentInstallation {
   latest: boolean
 }
 
-type CapabilityTypeFilter = "all" | "mcp" | "skill" | "plugin" | "system_prompt"
+type CapabilityTypeFilter = "all" | "mcp" | "skill"
 type PageTab = "workspace" | "marketplace"
 
 export function CapabilitiesPage() {
@@ -258,7 +258,16 @@ export function CapabilitiesPage() {
       {toast && <ToastBanner message={toast} />}
       {marketClientError && <ErrorBanner message={marketClientError} />}
 
-      <Tabs value={pageTab} onValueChange={(value) => setPageTab(value as PageTab)} className="mb-4">
+      {!marketplaceItem && (
+        <CapabilitiesFilterBar
+          query={query}
+          onQueryChange={setQuery}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+        />
+      )}
+
+      <Tabs value={pageTab} onValueChange={(value) => setPageTab(value as PageTab)} className="mb-4 mt-3">
         <TabsList>
           <TabsTrigger value="workspace">{t("capabilities.tabs.workspace")}</TabsTrigger>
           <TabsTrigger value="marketplace">{t("capabilities.tabs.marketplace")}</TabsTrigger>
@@ -268,6 +277,8 @@ export function CapabilitiesPage() {
       {pageTab === "marketplace" ? (
         <MarketplaceTab
           itemID={marketplaceItem}
+          query={query}
+          typeFilter={typeFilter}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
           onInstall={goToAgentsForCapability}
         />
@@ -288,13 +299,6 @@ export function CapabilitiesPage() {
       ) : (
         <Tooltip.Provider delayDuration={150}>
           <div className="space-y-3">
-            <CapabilitiesFilterBar
-              query={query}
-              onQueryChange={setQuery}
-              typeFilter={typeFilter}
-              onTypeFilterChange={setTypeFilter}
-            />
-
             {capsQ.isLoading ? (
               <CapabilitiesLoading />
             ) : allCapabilities.length === 0 ? (
@@ -526,8 +530,6 @@ function CapabilitiesFilterBar({
           <TabsTrigger value="all">{t("capabilities.filters.all")}</TabsTrigger>
           <TabsTrigger value="mcp">MCP</TabsTrigger>
           <TabsTrigger value="skill">Skill</TabsTrigger>
-          <TabsTrigger value="plugin">Plugin</TabsTrigger>
-          <TabsTrigger value="system_prompt">{t("capabilities.filters.systemPrompt", "System Prompt")}</TabsTrigger>
         </TabsList>
       </Tabs>
       <div className="relative ml-auto w-full max-w-[280px]">

@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowRight, PackageCheck, Search } from "lucide-react"
+import { ArrowLeft, ArrowRight, PackageCheck } from "lucide-react"
 
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
-import { Input } from "../../../components/ui/input"
 import { Skeleton } from "../../../components/ui/skeleton"
-import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { useMarketplaceList, type MarketplaceCapability, marketplaceSourceName } from "../../../lib/api-marketplace"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
@@ -16,18 +14,16 @@ import type { Capability } from "../../../lib/api-types"
 
 interface MarketplaceTabProps {
   itemID: string | null
+  query: string
+  typeFilter: "all" | "mcp" | "skill"
   onSelectItem: (id: string | null) => void
   onInstall: (capability: MarketplaceCapability) => void
 }
 
-type TypeFilter = "all" | "mcp" | "skill" | "plugin" | "system_prompt"
-
-export function MarketplaceTab({ itemID, onSelectItem, onInstall }: MarketplaceTabProps) {
+export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInstall }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all")
-  const [query, setQuery] = useState("")
   const [hideInstalled, setHideInstalled] = useState(true)
 
   const items = useMemo(() => marketplaceQ.data ?? [], [marketplaceQ.data])
@@ -57,16 +53,7 @@ export function MarketplaceTab({ itemID, onSelectItem, onInstall }: MarketplaceT
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={typeFilter} onValueChange={(value) => setTypeFilter(value as TypeFilter)}>
-          <TabsList>
-            <TabsTrigger value="all">{t("capabilities.marketplace.filters.all")}</TabsTrigger>
-            <TabsTrigger value="mcp">MCP</TabsTrigger>
-            <TabsTrigger value="skill">Skill</TabsTrigger>
-            <TabsTrigger value="plugin">Plugin</TabsTrigger>
-            <TabsTrigger value="system_prompt">System Prompt</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="flex justify-end">
         <label className="inline-flex select-none items-center gap-1.5 text-sm text-fg-muted">
           <input
             type="checkbox"
@@ -76,15 +63,6 @@ export function MarketplaceTab({ itemID, onSelectItem, onInstall }: MarketplaceT
           />
           {t("capabilities.marketplace.filters.hideInstalled")}
         </label>
-        <div className="relative ml-auto w-full max-w-[280px]">
-          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-fg-faint" />
-          <Input
-            className="pl-8"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("capabilities.marketplace.filters.search")}
-          />
-        </div>
       </div>
 
       {marketplaceQ.isLoading ? (

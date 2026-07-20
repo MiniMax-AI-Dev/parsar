@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -34,6 +34,32 @@ func TestCapabilityAdminCreatesCapabilityAndVersion(t *testing.T) {
 	}
 }
 
+func TestCapabilityCreationRejectsHiddenTypes(t *testing.T) {
+	r, _ := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
+	wid := store.DefaultDevFixtureIDs().WorkspaceID
+	uid := store.DefaultDevFixtureIDs().UserID
+
+	for _, capabilityType := range []string{"plugin", "system_prompt"} {
+		t.Run("create "+capabilityType, func(t *testing.T) {
+			body := `{"type":"` + capabilityType + `","name":"Hidden capability"}`
+			res := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+wid+"/capabilities", body, uid)
+			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "type must be mcp or skill") {
+				t.Fatalf("hidden create expected 400, got %d: %s", res.Code, res.Body.String())
+			}
+		})
+	}
+
+	for _, endpoint := range []string{"preview", "commit"} {
+		t.Run("import plugin "+endpoint, func(t *testing.T) {
+			body := `{"kind":"plugin","name":"Hidden plugin"}`
+			res := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+wid+"/capabilities/import/"+endpoint, body, uid)
+			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "want mcp|skill") {
+				t.Fatalf("hidden import expected 400, got %d: %s", res.Code, res.Body.String())
+			}
+		})
+	}
+}
+
 func TestCapabilityRejectsUnknownCredentialKind(t *testing.T) {
 	r, _ := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	res := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities", `{"type":"mcp","name":"Unknown Credential","required_credentials":[{"kind":"github_token","required":true}],"version":"v1.0.0","content":{"mcpServers":{"github":{"command":"npx"}}}}`, store.DefaultDevFixtureIDs().UserID)
@@ -51,10 +77,9 @@ func TestCapabilityCreateRequiresWorkspaceAdmin(t *testing.T) {
 }
 
 // TestCapabilityListFiltersByTypeAndName exercises the ?type and ?name query
-// params plumbed from the frontend "All / MCP / Skill / Plugin" tabs and the
-// search box. Backend filter logic lives in store.ListCapabilities; this test
-// guards the HTTP layer wiring so a future refactor doesn't silently drop the
-// query parameter parsing.
+// params plumbed from the frontend "All / MCP / Skill" tabs and the search
+// box. Plugin and system-prompt rows remain stored but are intentionally not
+// exposed by this product surface.
 func TestCapabilityListFiltersByTypeAndName(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
@@ -62,6 +87,7 @@ func TestCapabilityListFiltersByTypeAndName(t *testing.T) {
 	insertCapabilityOfType(t, db, wid, uid, "mcp", "GitHub MCP filter")
 	insertCapabilityOfType(t, db, wid, uid, "skill", "Codereview Skill filter")
 	insertCapabilityOfType(t, db, wid, uid, "plugin", "Browser Plugin filter")
+	insertCapabilityOfType(t, db, wid, uid, "system_prompt", "Review System Prompt filter")
 	base := "/api/v1/workspaces/" + wid + "/capabilities"
 	cases := []struct {
 		name     string
@@ -69,12 +95,11 @@ func TestCapabilityListFiltersByTypeAndName(t *testing.T) {
 		mustHave []string
 		mustMiss []string
 	}{
-		{"no filter returns all", "", []string{"GitHub MCP filter", "Codereview Skill filter", "Browser Plugin filter"}, nil},
-		{"type=mcp", "?type=mcp", []string{"GitHub MCP filter"}, []string{"Codereview Skill filter", "Browser Plugin filter"}},
-		{"type=skill", "?type=skill", []string{"Codereview Skill filter"}, []string{"GitHub MCP filter", "Browser Plugin filter"}},
-		{"type=plugin", "?type=plugin", []string{"Browser Plugin filter"}, []string{"GitHub MCP filter", "Codereview Skill filter"}},
-		{"name substring case-insensitive", "?name=codereview", []string{"Codereview Skill filter"}, []string{"GitHub MCP filter", "Browser Plugin filter"}},
-		{"type and name combined", "?type=mcp&name=github", []string{"GitHub MCP filter"}, []string{"Codereview Skill filter", "Browser Plugin filter"}},
+		{"no filter returns listed types", "", []string{"GitHub MCP filter", "Codereview Skill filter"}, []string{"Browser Plugin filter", "Review System Prompt filter"}},
+		{"type=mcp", "?type=mcp", []string{"GitHub MCP filter"}, []string{"Codereview Skill filter", "Browser Plugin filter", "Review System Prompt filter"}},
+		{"type=skill", "?type=skill", []string{"Codereview Skill filter"}, []string{"GitHub MCP filter", "Browser Plugin filter", "Review System Prompt filter"}},
+		{"name substring case-insensitive", "?name=codereview", []string{"Codereview Skill filter"}, []string{"GitHub MCP filter", "Browser Plugin filter", "Review System Prompt filter"}},
+		{"type and name combined", "?type=mcp&name=github", []string{"GitHub MCP filter"}, []string{"Codereview Skill filter", "Browser Plugin filter", "Review System Prompt filter"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,6 +117,15 @@ func TestCapabilityListFiltersByTypeAndName(t *testing.T) {
 				if strings.Contains(body, miss) {
 					t.Fatalf("%s: expected response NOT to contain %q, got: %s", tc.name, miss, body)
 				}
+			}
+		})
+	}
+
+	for _, hiddenType := range []string{"plugin", "system_prompt"} {
+		t.Run("reject type="+hiddenType, func(t *testing.T) {
+			res := serveCapabilityRoute(t, r, http.MethodGet, base+"?type="+hiddenType, "", uid)
+			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), "type must be mcp or skill") {
+				t.Fatalf("hidden type expected 400, got %d: %s", res.Code, res.Body.String())
 			}
 		})
 	}
@@ -204,6 +238,11 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
 	capID, v1, v2 := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP")
 	publishForeignCapability(t, db, capID)
+	hiddenPluginID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public Plugin")
+	if _, err := db.Exec(context.Background(), `update capability set type = 'plugin' where id = $1`, hiddenPluginID); err != nil {
+		t.Fatal(err)
+	}
+	publishForeignCapability(t, db, hiddenPluginID)
 	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-a")
 	agentB := insertAgentForOwner(t, db, testUserAID, "market-agent-b")
 
@@ -220,7 +259,7 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 		t.Fatalf("reverse marketplace list expected count=2, got %d: %s", list.Code, list.Body.String())
 	}
 	market := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, ``, testUserAID)
-	if market.Code != http.StatusOK || !strings.Contains(market.Body.String(), `"installed":true`) || strings.Contains(market.Body.String(), foreignWorkspaceID) {
+	if market.Code != http.StatusOK || !strings.Contains(market.Body.String(), `"installed":true`) || strings.Contains(market.Body.String(), foreignWorkspaceID) || strings.Contains(market.Body.String(), "Foreign Public Plugin") {
 		t.Fatalf("marketplace list expected installed without source workspace id leak, got %d: %s", market.Code, market.Body.String())
 	}
 	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
