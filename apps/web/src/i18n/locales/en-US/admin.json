@@ -190,6 +190,10 @@
         "baseURL": "Base URL",
         "customHeaders": "Custom HTTP headers"
       },
+      "endpointBaseURLs": {
+        "title": "Endpoint base URLs",
+        "description": "Final per-protocol base URL saved for runtime calls and model tests."
+      },
       "credentialBinding": {
         "boundSecret": "Bound Secret",
         "boundSecretNone": "(no Secret bound — model is unusable)",
