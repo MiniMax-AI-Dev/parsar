@@ -128,7 +128,9 @@ type RuntimeStore interface {
 	DisableSecret(ctx context.Context, workspaceID string, secretID string) (store.SecretRead, error)
 	CreateModel(ctx context.Context, input store.CreateModelInput) (store.ModelRead, error)
 	DisableModel(ctx context.Context, workspaceID string, modelID string) (store.ModelRead, error)
+	DeleteModel(ctx context.Context, modelID string, actorID string) error
 	UpdateModel(ctx context.Context, input store.UpdateModelInput) (store.ModelRead, error)
+	UpdateModelHealth(ctx context.Context, modelID string, health map[string]any) (store.ModelRead, error)
 	ResolveModelRuntime(ctx context.Context, workspaceID string, modelID string) (store.ModelRuntime, error)
 	ResolveModelRuntimeForUser(ctx context.Context, modelID, userID string) (store.ModelRuntime, error)
 	ListModels(ctx context.Context, workspaceID string, limit int32) ([]store.ModelRead, error)
@@ -649,6 +651,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/models/import", importProviderModels(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/models", listModels(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/models/{modelID}/disable", disableModel(runtimeStore))
+			r.Delete("/workspaces/{workspaceID}/models/{modelID}", deleteModel(runtimeStore))
+			r.Post("/workspaces/{workspaceID}/models/bulk-delete", bulkDeleteModels(runtimeStore))
 			r.Patch("/workspaces/{workspaceID}/models/{modelID}", updateModel(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/models/{modelID}/test", testModelConnectivity(runtimeStore))
 			r.Post("/conversations/{conversationID}/external-ref", configureConversationExternalRef(runtimeStore))

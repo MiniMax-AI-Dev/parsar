@@ -40,6 +40,18 @@ export interface Model {
   updated_at: string
 }
 
+export type ModelHealthStatus = "healthy" | "failed" | "unsupported" | "untested"
+
+export interface ModelHealth {
+  status: ModelHealthStatus
+  checked_at?: string
+  endpoint_type?: string
+  latency_ms?: number
+  http_status?: number
+  error?: string
+  sample?: string
+}
+
 export interface ListModelsResponse {
   models: Model[]
 }
