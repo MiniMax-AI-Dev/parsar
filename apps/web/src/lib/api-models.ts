@@ -486,6 +486,37 @@ export interface ModelConnectivityResult {
   endpoint_type?: string
   error?: string
   sample?: string
+  healthy_count?: number
+  total_count?: number
+  results?: ModelConnectivityEndpointResult[]
+}
+
+export interface ModelConnectivityEndpointResult {
+  endpoint_type: string
+  supported: boolean
+  success: boolean
+  latency_ms: number
+  http_status?: number
+  failure_stage?: string
+  error?: string
+  sample?: string
+  request?: ModelConnectivityHTTPRequest
+  response?: ModelConnectivityHTTPResponse
+}
+
+export interface ModelConnectivityHTTPRequest {
+  method: string
+  url: string
+  headers?: Record<string, string>
+  body?: Record<string, unknown>
+}
+
+export interface ModelConnectivityHTTPResponse {
+  status: number
+  headers?: Record<string, string>
+  body?: unknown
+  raw_body?: string
+  truncated?: boolean
 }
 
 async function testModelRequest(

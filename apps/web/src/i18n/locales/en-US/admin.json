@@ -93,8 +93,24 @@
     },
     "test": {
       "success": "Reached upstream in {{ms}}ms",
+      "successWithEndpoints": "{{healthy}}/{{total}} endpoints reached upstream in {{ms}}ms",
       "failure": "Upstream rejected the test call",
-      "unsupported": "Connectivity test only supports OpenAI / Anthropic-compatible providers"
+      "failureWithEndpoints": "{{healthy}}/{{total}} endpoints passed",
+      "unsupported": "Connectivity test only supports OpenAI / Anthropic-compatible providers",
+      "details": {
+        "title": "Model test diagnostics",
+        "open": "Details",
+        "summary": "{{healthy}}/{{total}} endpoints healthy",
+        "primaryEndpoint": "Primary result: {{endpoint}} · {{ms}}ms",
+        "noEndpoint": "No endpoint was tested",
+        "unknownEndpoint": "unknown",
+        "latency": "{{ms}}ms",
+        "httpStatus": "HTTP {{status}}",
+        "request": "Request",
+        "response": "Response",
+        "noResponse": "No response",
+        "copy": "Copy"
+      }
     },
     "createProvider": {
       "fields": {

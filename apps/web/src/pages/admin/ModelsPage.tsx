@@ -54,6 +54,7 @@ import type {
 } from "../../lib/api-models"
 import { CreateModelDialog, EditModelDialog } from "./ModelCrudDialogs"
 import { BulkImportModelsDialog } from "./BulkImportModelsDialog"
+import { ModelTestDiagnosticsDialog } from "./ModelTestDiagnosticsDialog"
 import { ModelsTable } from "./ModelsTable"
 import type { Model } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
@@ -126,15 +127,19 @@ function ConfirmDialog({
 
 function TestResultBanner({
   result,
+  onDetails,
   onClose,
 }: {
   result: { modelID: string; data: ModelConnectivityResult } | null
+  onDetails: () => void
   onClose: () => void
 }) {
   const { t } = useTranslation("admin")
   if (!result) return null
   const { data } = result
   const ok = data.success
+  const healthyCount = data.healthy_count ?? data.results?.filter((item) => item.success).length
+  const totalCount = data.total_count ?? data.results?.length
   return (
     <div className={`fixed bottom-4 right-4 z-50 max-w-md rounded-md border shadow-md ${
       ok ? "border-success-border bg-success-subtle" : "border-danger-border bg-danger-subtle"
@@ -149,7 +154,13 @@ function TestResultBanner({
           {ok ? (
             <>
               <div className="font-medium text-success-emphasis">
-                {t("models.test.success", { ms: data.latency_ms })}
+                {totalCount
+                  ? t("models.test.successWithEndpoints", {
+                      healthy: healthyCount ?? 0,
+                      total: totalCount,
+                      ms: data.latency_ms,
+                    })
+                  : t("models.test.success", { ms: data.latency_ms })}
               </div>
               {data.sample && (
                 <div className="mt-1 text-xs text-success-emphasis/80 line-clamp-2">
@@ -160,7 +171,14 @@ function TestResultBanner({
           ) : (
             <>
               <div className="font-medium text-danger-emphasis">
-                {data.supported ? t("models.test.failure") : t("models.test.unsupported")}
+                {totalCount
+                  ? t("models.test.failureWithEndpoints", {
+                      healthy: healthyCount ?? 0,
+                      total: totalCount,
+                    })
+                  : data.supported
+                    ? t("models.test.failure")
+                    : t("models.test.unsupported")}
               </div>
               {data.error && (
                 <div className="mt-1 text-xs text-danger-emphasis/80 line-clamp-3">
@@ -169,6 +187,15 @@ function TestResultBanner({
               )}
             </>
           )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 h-7 px-2"
+            onClick={onDetails}
+          >
+            {t("models.test.details.open")}
+          </Button>
         </div>
         <button
           type="button"
@@ -233,6 +260,7 @@ export function ModelsPage() {
     modelID: string
     data: ModelConnectivityResult
   } | null>(null)
+  const [testDiagnosticsOpen, setTestDiagnosticsOpen] = useState(false)
   const [ownership, setOwnership] = useState<OwnershipFilter>("all")
 
   const refreshing = modelsQ.isFetching || secretsQ.isFetching || kindsQ.isFetching
@@ -270,7 +298,10 @@ export function ModelsPage() {
 
   function performTest(m: Model) {
     testMut.mutate(m.id, {
-      onSuccess: (data) => setTestResult({ modelID: m.id, data }),
+      onSuccess: (data) => {
+        setTestResult({ modelID: m.id, data })
+        setTestDiagnosticsOpen(true)
+      },
       onError: (e) => {
         const message = e instanceof Error ? e.message : String(e)
         setTestResult({
@@ -282,6 +313,7 @@ export function ModelsPage() {
             error: message,
           },
         })
+        setTestDiagnosticsOpen(true)
       },
     })
   }
@@ -619,10 +651,17 @@ export function ModelsPage() {
 
       <TestResultBanner
         result={testResult}
+        onDetails={() => setTestDiagnosticsOpen(true)}
         onClose={() => {
           setTestResult(null)
           testMut.reset()
         }}
+      />
+
+      <ModelTestDiagnosticsDialog
+        open={testDiagnosticsOpen && !!testResult}
+        result={testResult}
+        onOpenChange={setTestDiagnosticsOpen}
       />
 
       {bulkDeleteResult && (
