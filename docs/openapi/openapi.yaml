@@ -2976,6 +2976,50 @@ paths:
       summary: List marketplace capabilities
       tags:
       - capabilities
+  /api/v1/capabilities/marketplace/{capabilityID}:
+    get:
+      description: Returns the latest public MCP or Skill definition. Inline secret
+        IDs are redacted.
+      operationId: getDevMarketplaceCapabilityDetail
+      parameters:
+      - description: Capability UUID
+        in: path
+        name: capabilityID
+        required: true
+        type: string
+      - description: Workspace UUID (falls back to X-Parsar-Workspace-ID header)
+        in: query
+        name: workspace_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Marketplace capability detail
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: workspace_id or capabilityID is invalid
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not an active workspace member
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Capability is not available in the Marketplace
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get marketplace capability detail
+      tags:
+      - capabilities
   /api/v1/connections/github/callback:
     get:
       description: Verifies CSRF state, exchanges the code for a GitHub access token,

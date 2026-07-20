@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 type capabilityBody struct {
@@ -109,6 +109,37 @@ func lookupBuiltinCapability(key string) (builtinCapability, bool) {
 
 type uninstallMarketplaceBody struct {
 	SourceCapabilityID string `json:"source_capability_id"`
+}
+
+type marketplaceCapabilityDetail struct {
+	CapabilityID string                 `json:"capability_id"`
+	Type         string                 `json:"type"`
+	VersionID    string                 `json:"version_id"`
+	Version      string                 `json:"version"`
+	GitRepoURL   string                 `json:"git_repo_url,omitempty"`
+	GitRef       string                 `json:"git_ref,omitempty"`
+	Path         string                 `json:"path,omitempty"`
+	Skill        *canonical.SkillSpec   `json:"skill,omitempty"`
+	MCP          *marketplaceMCPPreview `json:"mcp,omitempty"`
+}
+
+type marketplaceMCPPreview struct {
+	Servers []marketplaceMCPServerPreview `json:"servers"`
+}
+
+type marketplaceMCPServerPreview struct {
+	Name              string                            `json:"name"`
+	Command           string                            `json:"command"`
+	Args              []string                          `json:"args,omitempty"`
+	Env               map[string]marketplaceMCPEnvValue `json:"env,omitempty"`
+	StartupTimeoutSec int                               `json:"startup_timeout_sec,omitempty"`
+}
+
+type marketplaceMCPEnvValue struct {
+	Mode               canonical.EnvMode `json:"mode"`
+	Value              string            `json:"value,omitempty"`
+	CredentialKindCode string            `json:"credential_kind_code,omitempty"`
+	Redacted           bool              `json:"redacted,omitempty"`
 }
 
 type upgradeAgentCapabilityBody struct {
@@ -246,11 +277,11 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 
 		type mergedRow struct {
-			OwnIndex     int // -1 when this row is a marketplace install
-			MarketIndex  int // -1 when this row is an own capability
-			Name         string
-			CreatedAt    time.Time
-			IsInstall    bool
+			OwnIndex    int // -1 when this row is a marketplace install
+			MarketIndex int // -1 when this row is an own capability
+			Name        string
+			CreatedAt   time.Time
+			IsInstall   bool
 		}
 		merged := make([]mergedRow, 0, len(caps)+len(marketplaceInstalls))
 		for i, c := range caps {
@@ -339,6 +370,152 @@ func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "capabilities": capabilities})
 	}
+}
+
+// getMarketplaceCapabilityDetail returns the latest public MCP/Skill body on
+// demand so list responses stay lightweight.
+//
+//	@Summary		Get marketplace capability detail
+//	@Description	Returns the latest public MCP or Skill definition. Inline secret IDs are redacted.
+//	@Tags			capabilities
+//	@ID			getDevMarketplaceCapabilityDetail
+//	@Produce		json
+//	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Param			workspace_id	query	string	false	"Workspace UUID (falls back to X-Parsar-Workspace-ID header)"
+//	@Success		200 {object} map[string]interface{} "Marketplace capability detail"
+//	@Failure		400 {object} map[string]string "workspace_id or capabilityID is invalid"
+//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
+//	@Failure		404 {object} map[string]string "Capability is not available in the Marketplace"
+//	@Router			/api/v1/capabilities/marketplace/{capabilityID} [get]
+func getMarketplaceCapabilityDetail(runtimeStore RuntimeStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		if workspaceID == "" {
+			workspaceID = strings.TrimSpace(r.Header.Get("X-Parsar-Workspace-ID"))
+		}
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
+		}
+		capabilityID := strings.TrimSpace(chi.URLParam(r, "capabilityID"))
+		if !isUUID(capabilityID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "capabilityID must be a valid uuid"})
+			return
+		}
+		if runtimeStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
+			return
+		}
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
+			return
+		}
+
+		capabilities, err := runtimeStore.ListMarketplaceCapabilities(r.Context(), workspaceID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to load marketplace capability")
+			return
+		}
+		var capability *store.MarketplaceCapabilityRead
+		for i := range capabilities {
+			if capabilities[i].CapabilityID == capabilityID {
+				capability = &capabilities[i]
+				break
+			}
+		}
+		if capability == nil || capability.Visibility != "public" || capability.Status != "active" || capability.DeprecatedAt != nil || !isPreviewableMarketplaceType(capability.Type) {
+			writeCapabilityError(w, fmt.Errorf("%w: %s", store.ErrUnknownCapability, capabilityID), "failed to load marketplace capability")
+			return
+		}
+
+		version, err := runtimeStore.GetCapabilityVersion(r.Context(), capability.LatestVersionID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to load marketplace capability version")
+			return
+		}
+		detail, err := buildMarketplaceCapabilityDetail(*capability, version)
+		if err != nil {
+			writeCapabilityError(w, err, "marketplace capability detail is invalid")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"capability": detail})
+	}
+}
+
+func isPreviewableMarketplaceType(capabilityType string) bool {
+	switch strings.ToLower(strings.TrimSpace(capabilityType)) {
+	case string(canonical.KindMCP), string(canonical.KindSkill):
+		return true
+	default:
+		return false
+	}
+}
+
+func buildMarketplaceCapabilityDetail(capability store.MarketplaceCapabilityRead, version store.CapabilityVersionRead) (marketplaceCapabilityDetail, error) {
+	detail := marketplaceCapabilityDetail{
+		CapabilityID: capability.CapabilityID,
+		Type:         capability.Type,
+		VersionID:    version.ID,
+		Version:      version.Version,
+		GitRepoURL:   version.GitRepoURL,
+		GitRef:       version.GitRef,
+		Path:         version.Path,
+	}
+	if len(version.CanonicalSpec) == 0 {
+		return detail, nil
+	}
+	var spec canonical.Spec
+	if err := json.Unmarshal(version.CanonicalSpec, &spec); err != nil {
+		return detail, fmt.Errorf("decode marketplace canonical spec: %w", err)
+	}
+	if err := spec.Validate(); err != nil {
+		return detail, fmt.Errorf("validate marketplace canonical spec: %w", err)
+	}
+	if string(spec.Kind) != strings.ToLower(strings.TrimSpace(capability.Type)) {
+		return detail, fmt.Errorf("marketplace capability type %q does not match canonical kind %q", capability.Type, spec.Kind)
+	}
+
+	switch spec.Kind {
+	case canonical.KindSkill:
+		detail.Skill = spec.Skill
+	case canonical.KindMCP:
+		detail.MCP = previewMarketplaceMCP(spec.MCP)
+	default:
+		return detail, fmt.Errorf("marketplace capability type %q is not previewable", spec.Kind)
+	}
+	return detail, nil
+}
+
+func previewMarketplaceMCP(spec *canonical.MCPSpec) *marketplaceMCPPreview {
+	if spec == nil {
+		return nil
+	}
+	preview := &marketplaceMCPPreview{Servers: make([]marketplaceMCPServerPreview, 0, len(spec.Servers))}
+	for _, server := range spec.Servers {
+		item := marketplaceMCPServerPreview{
+			Name:              server.Name,
+			Command:           server.Command,
+			Args:              append([]string(nil), server.Args...),
+			StartupTimeoutSec: server.StartupTimeoutSec,
+		}
+		if len(server.Env) > 0 {
+			item.Env = make(map[string]marketplaceMCPEnvValue, len(server.Env))
+			for name, value := range server.Env {
+				previewValue := marketplaceMCPEnvValue{Mode: value.Mode}
+				switch value.Mode {
+				case canonical.EnvModeLiteral:
+					previewValue.Value = value.Literal
+				case canonical.EnvModeCredentialRef:
+					previewValue.CredentialKindCode = value.CredentialKindCode
+				case canonical.EnvModeInlineSecret:
+					previewValue.Redacted = true
+				}
+				item.Env[name] = previewValue
+			}
+		}
+		preview.Servers = append(preview.Servers, item)
+	}
+	return preview
 }
 
 // listWorkspaceMarketplaceInstalls returns the marketplace capabilities the

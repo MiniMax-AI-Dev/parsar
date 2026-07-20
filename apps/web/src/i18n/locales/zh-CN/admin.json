@@ -837,7 +837,22 @@
       },
       "detail": {
         "back": "返回市场列表",
-        "addedCount": "已添加工作区数"
+        "addedCount": "已添加工作区数",
+        "contentTitle": "能力内容",
+        "contentDescription": "添加到 Agent 前，可查看完整的 Skill 文件或 MCP 启动配置。",
+        "loadErrorTitle": "无法加载能力内容",
+        "loadErrorDescription": "无法读取最新发布版本。",
+        "contentUnavailable": "该旧版本未保存可预览的 Skill 或 MCP 内容。",
+        "sourceRepository": "来源仓库",
+        "sourceCommit": "来源提交",
+        "sourcePath": "来源路径",
+        "skillBadge": "Skill 文件",
+        "files": "文件",
+        "command": "启动命令",
+        "environment": "环境变量",
+        "noEnvironment": "不需要环境变量。",
+        "redactedSecret": "已配置 Secret（内容已隐藏）",
+        "timeout": "启动超时：{{seconds}} 秒"
       },
       "empty": {
         "title": "市场暂时没有可用的能力",

@@ -25,6 +25,52 @@ export interface MarketplaceCapability extends Capability {
   pinned_version?: string
 }
 
+export interface MarketplaceCapabilityDetail {
+  capability_id: string
+  type: Capability["type"]
+  version_id: string
+  version: string
+  git_repo_url?: string
+  git_ref?: string
+  path?: string
+  skill?: MarketplaceSkillDetail
+  mcp?: MarketplaceMCPDetail
+}
+
+export interface MarketplaceSkillDetail {
+  slug: string
+  title: string
+  description?: string
+  instruction: string
+  trigger?: string
+  files?: MarketplaceSkillFile[]
+}
+
+export interface MarketplaceSkillFile {
+  path: string
+  content: string
+  kind: "markdown" | "script" | "asset"
+}
+
+export interface MarketplaceMCPDetail {
+  servers: MarketplaceMCPServer[]
+}
+
+export interface MarketplaceMCPServer {
+  name: string
+  command: string
+  args?: string[]
+  env?: Record<string, MarketplaceMCPEnvValue>
+  startup_timeout_sec?: number
+}
+
+export interface MarketplaceMCPEnvValue {
+  mode: "literal" | "inline_secret" | "credential_ref"
+  value?: string
+  credential_kind_code?: string
+  redacted?: boolean
+}
+
 export interface TargetMarketplaceInstall extends MarketplaceCapability {
   source_workspace_id: string
   source_workspace_name: string
@@ -51,6 +97,10 @@ interface MarketplaceListResponse {
   items?: MarketplaceCapability[]
 }
 
+interface MarketplaceDetailResponse {
+  capability: MarketplaceCapabilityDetail
+}
+
 interface TargetInstallsResponse {
   capabilities?: TargetMarketplaceInstall[]
   installs?: TargetMarketplaceInstall[]
@@ -69,6 +119,8 @@ interface EnabledAgentsResponse {
 }
 
 export const KEY_MARKETPLACE_LIST = (workspaceID: string) => ["admin", "capabilityMarketplace", workspaceID] as const
+export const KEY_MARKETPLACE_DETAIL = (workspaceID: string, capabilityID: string) =>
+  ["admin", "capabilityMarketplaceDetail", workspaceID, capabilityID] as const
 export const KEY_TARGET_MARKETPLACE_INSTALLS = (workspaceID: string) => ["admin", "targetMarketplaceInstalls", workspaceID] as const
 export const KEY_INSTALL_COUNT = (workspaceID: string, capabilityID: string) => ["admin", "capabilityInstallCount", workspaceID, capabilityID] as const
 export const KEY_MARKETPLACE_ENABLED_AGENTS = (workspaceID: string, capabilityID: string) => ["admin", "marketplaceEnabledAgents", workspaceID, capabilityID] as const
@@ -81,6 +133,18 @@ async function listMarketplace(workspaceID: string | null): Promise<MarketplaceC
   )
   if (Array.isArray(data)) return data
   return (data.capabilities ?? data.marketplace ?? data.items ?? []).map(normalizeMarketplaceCapability)
+}
+
+async function getMarketplaceDetail(
+  workspaceID: string | null,
+  capabilityID: string | null,
+): Promise<MarketplaceCapabilityDetail> {
+  if (!workspaceID || !capabilityID) throw new Error("workspace and capability are required")
+  const data = await apiRequest<MarketplaceDetailResponse>(
+    `/api/v1/capabilities/marketplace/${encodeURIComponent(capabilityID)}`,
+    { query: { workspace_id: workspaceID } },
+  )
+  return data.capability
 }
 
 async function listTargetInstalls(workspaceID: string | null): Promise<TargetMarketplaceInstall[]> {
@@ -154,6 +218,16 @@ export function useMarketplaceList(workspaceID: string | null) {
   return useQuery({
     queryKey: KEY_MARKETPLACE_LIST(workspaceID ?? "_none"),
     queryFn: () => listMarketplace(workspaceID),
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
+export function useMarketplaceDetail(workspaceID: string | null, capabilityID: string | null) {
+  return useQuery({
+    queryKey: KEY_MARKETPLACE_DETAIL(workspaceID ?? "_none", capabilityID ?? "_none"),
+    queryFn: () => getMarketplaceDetail(workspaceID, capabilityID),
+    enabled: !!workspaceID && !!capabilityID,
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })
