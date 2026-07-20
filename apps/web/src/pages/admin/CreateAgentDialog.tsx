@@ -95,7 +95,7 @@ function engineSupportsModel(engine: AgentEngine, model: Model): boolean {
       case "claude_code":
         return endpointTypes.includes("anthropic")
       case "codex":
-        return endpointTypes.includes("openai-response")
+        return endpointTypes.includes("openai") || endpointTypes.includes("openai-response")
       case "pi":
         return (
           endpointTypes.includes("anthropic") ||
