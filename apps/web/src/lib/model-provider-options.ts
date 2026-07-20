@@ -113,6 +113,29 @@ export function endpointTypeForProtocol(id: string): string | null {
   }
 }
 
+export function endpointBaseURLsForProvider(
+  provider: ProviderTypeOption | undefined,
+  fallbackBaseURL: string,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const protocol of provider?.protocols ?? []) {
+    const endpointType = endpointTypeForProtocol(protocol.id)
+    const baseURL = protocol.baseURL.trim()
+    if (!endpointType || !baseURL) continue
+    out[endpointType] = baseURL
+    if (endpointType === "openai") {
+      out["openai-response"] = baseURL
+    }
+  }
+  if (Object.keys(out).length > 0) return out
+  const trimmed = fallbackBaseURL.trim()
+  if (!trimmed) return out
+  for (const endpointType of ["anthropic", "openai", "openai-response"]) {
+    out[endpointType] = trimmed
+  }
+  return out
+}
+
 export function findProviderModel(
   provider: ProviderTypeOption | undefined,
   modelKey: string,

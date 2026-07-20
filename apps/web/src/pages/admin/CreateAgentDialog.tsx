@@ -17,7 +17,12 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { modelProtocols, protocolListLabel, type WireProtocol } from "../../lib/model-protocol"
+import {
+  modelProtocols,
+  modelSupportedEndpointTypes,
+  protocolListLabel,
+  type WireProtocol,
+} from "../../lib/model-protocol"
 import { useCapabilitiesQuery, aggregateRequiredCredentials, aggregateRequiredCredentialsByID, useCapabilityVersionsQuery, useAgentCapabilitiesQuery, useEnableAgentCapabilityMutation } from "../../lib/api-capabilities"
 import { CredentialCheckPanel } from "../../components/admin/CredentialCheckPanel"
 import { useSecrets } from "../../lib/api-secrets"
@@ -84,6 +89,23 @@ function engineSupportsProtocol(engine: AgentEngine, protocol: WireProtocol | nu
 }
 
 function engineSupportsModel(engine: AgentEngine, model: Model): boolean {
+  const endpointTypes = modelSupportedEndpointTypes(model)
+  if (endpointTypes.length > 0) {
+    switch (engine) {
+      case "claude_code":
+        return endpointTypes.includes("anthropic")
+      case "codex":
+        return endpointTypes.includes("openai-response")
+      case "pi":
+        return (
+          endpointTypes.includes("anthropic") ||
+          endpointTypes.includes("openai") ||
+          endpointTypes.includes("google_generative_ai")
+        )
+      case "opencode":
+        return true
+    }
+  }
   return modelProtocols(model).some((protocol) => engineSupportsProtocol(engine, protocol))
 }
 

@@ -626,8 +626,9 @@ func TestImportProviderModelsCreatesSelectedModelsWithOneSecret(t *testing.T) {
 		"base_url":%q,
 		"credential_mode":"inline_secret",
 		"api_key":"sk-import",
-		"model_ids":["gpt-5.4","gpt-5.5","gpt-5.6"]
-	}`, upstream.URL+"/v1")
+		"model_ids":["gpt-5.4","gpt-5.5","gpt-5.6"],
+		"config":{"endpoint_base_urls":{"anthropic":%q,"openai-response":%q}}
+	}`, upstream.URL+"/v1", upstream.URL+"/anthropic", upstream.URL+"/v1")
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/import", strings.NewReader(body))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)
@@ -643,6 +644,10 @@ func TestImportProviderModelsCreatesSelectedModelsWithOneSecret(t *testing.T) {
 	}
 	if got := fmt.Sprint(store.createdModels[0].Config["supported_endpoint_types"]); got != "[anthropic openai-response]" {
 		t.Fatalf("expected endpoint types stored for gpt-5.5, got %s", got)
+	}
+	baseURLs, _ := store.createdModels[0].Config["endpoint_base_urls"].(map[string]any)
+	if got := baseURLs["openai-response"]; got != upstream.URL+"/v1" {
+		t.Fatalf("expected openai-response endpoint base URL to survive import config, got %v", got)
 	}
 	if got := fmt.Sprint(store.createdModels[1].Config["supported_endpoint_types"]); got != "[openai]" {
 		t.Fatalf("expected chat_completions alias normalized for gpt-5.6, got %s", got)
@@ -690,8 +695,9 @@ func TestDetectProviderModelEndpointsFindsSharedBaseURLFamilies(t *testing.T) {
 	body := fmt.Sprintf(`{
 		"base_url":%q,
 		"model_key":"shared-model",
-		"api_key":"sk-detect"
-	}`, upstream.URL+"/v1")
+		"api_key":"sk-detect",
+		"config":{"endpoint_base_urls":{"anthropic":%q,"openai":%q,"openai-response":%q}}
+	}`, upstream.URL+"/anthropic", upstream.URL, upstream.URL+"/v1", upstream.URL+"/v1")
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/detect-endpoints", strings.NewReader(body))
 	res := httptest.NewRecorder()
 	r.ServeHTTP(res, req)

@@ -36,6 +36,7 @@ import {
 import {
   FALLBACK_PROVIDER_TYPES,
   defaultModelFor,
+  endpointBaseURLsForProvider,
   endpointTypeForProtocol,
   findProviderModel,
   isKnownProviderURL,
@@ -464,6 +465,10 @@ export function CreateModelDialog({
     }
     if (showAuthSchemeSelector) {
       config.auth_scheme = authScheme
+    }
+    const endpointBaseURLs = endpointBaseURLsForProvider(cfg, baseURL)
+    if (Object.keys(endpointBaseURLs).length > 0) {
+      config.endpoint_base_urls = endpointBaseURLs
     }
     config.supported_endpoint_types = await detectedEndpointTypes(config)
 

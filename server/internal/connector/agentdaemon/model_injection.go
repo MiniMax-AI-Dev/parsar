@@ -313,7 +313,7 @@ func injectClaudeManagedModel(opts map[string]any, modelID string, mr store.Mode
 		env["ANTHROPIC_API_KEY"] = apiKey
 	}
 	if strings.TrimSpace(mr.BaseURL) != "" {
-		env["ANTHROPIC_BASE_URL"] = strings.TrimSpace(mr.BaseURL)
+		env["ANTHROPIC_BASE_URL"] = modelEndpointBaseURL(mr, "anthropic")
 	}
 	if customHeaders := anthropicCustomHeaders(mr.ProviderConfig); customHeaders != "" {
 		env["ANTHROPIC_CUSTOM_HEADERS"] = customHeaders
@@ -380,7 +380,8 @@ func injectCodexManagedModel(opts map[string]any, modelID string, mr store.Model
 		return fmt.Errorf("%w: model_id=%s provider_type=%q adapter=%q",
 			ErrManagedModelUnsupported, modelID, mr.ProviderType, mr.Adapter)
 	}
-	if strings.TrimSpace(mr.BaseURL) == "" {
+	codexBaseURL := modelEndpointBaseURL(mr, "openai-response")
+	if codexBaseURL == "" {
 		// Without a base_url the only sensible target is api.openai.com;
 		// codex's builtin "openai" provider already covers that. But the
 		// daemon's TOML path needs an explicit base_url to write into
@@ -392,7 +393,7 @@ func injectCodexManagedModel(opts map[string]any, modelID string, mr store.Model
 	opts["model"] = mr.ModelKey
 
 	provider := map[string]any{
-		"base_url":     strings.TrimSpace(mr.BaseURL),
+		"base_url":     codexBaseURL,
 		"bearer_token": apiKey,
 		"wire_api":     "responses",
 	}
@@ -440,8 +441,8 @@ func flattenStringMap(providerConfig map[string]any, key string) map[string]stri
 // hosts as a first-class provider — we route that through the same
 // codex_provider TOML block but a future change might split it out.
 func isOpenAICompatibleRuntime(mr store.ModelRuntime) bool {
-	if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai") || modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response") {
-		return true
+	if modelConfigHasEndpointTypes(mr.ProviderConfig) {
+		return modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response")
 	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		switch strings.ToLower(strings.TrimSpace(v)) {
@@ -508,7 +509,7 @@ func injectPiManagedModel(opts map[string]any, modelID string, mr store.ModelRun
 		return fmt.Errorf("%w: model_id=%s pi requires a model_key",
 			ErrManagedModelConfigInvalid, modelID)
 	}
-	baseURL := strings.TrimSpace(mr.BaseURL)
+	baseURL := modelEndpointBaseURL(mr, piAPIEndpointType(mr))
 	if baseURL == "" {
 		return fmt.Errorf("%w: model_id=%s base_url is required for pi provider injection",
 			ErrManagedModelConfigInvalid, modelID)
@@ -546,11 +547,14 @@ func piAPIProtocol(mr store.ModelRuntime) string {
 	if modelConfigSupportsEndpointType(mr.ProviderConfig, "anthropic") {
 		return "anthropic-messages"
 	}
-	if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai") || modelConfigSupportsEndpointType(mr.ProviderConfig, "openai-response") {
+	if modelConfigSupportsEndpointType(mr.ProviderConfig, "openai") {
 		return "openai-completions"
 	}
 	if modelConfigSupportsEndpointType(mr.ProviderConfig, "google_generative_ai") {
 		return "google-generative-ai"
+	}
+	if modelConfigHasEndpointTypes(mr.ProviderConfig) {
+		return ""
 	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		switch strings.ToLower(strings.TrimSpace(v)) {
@@ -564,6 +568,19 @@ func piAPIProtocol(mr store.ModelRuntime) string {
 		}
 	}
 	return ""
+}
+
+func piAPIEndpointType(mr store.ModelRuntime) string {
+	switch piAPIProtocol(mr) {
+	case "anthropic-messages":
+		return "anthropic"
+	case "openai-completions":
+		return "openai"
+	case "google-generative-ai":
+		return "google_generative_ai"
+	default:
+		return ""
+	}
 }
 
 // applySpecMemoryInjection appends the SessionStart spec/memory bundle
@@ -671,8 +688,8 @@ func resolveModelID(in connector.PromptInput) string {
 }
 
 func isAnthropicRuntime(mr store.ModelRuntime) bool {
-	if modelConfigSupportsEndpointType(mr.ProviderConfig, "anthropic") {
-		return true
+	if modelConfigHasEndpointTypes(mr.ProviderConfig) {
+		return modelConfigSupportsEndpointType(mr.ProviderConfig, "anthropic")
 	}
 	for _, v := range []string{mr.ProviderType, mr.Adapter} {
 		n := strings.ToLower(strings.TrimSpace(v))
@@ -684,11 +701,72 @@ func isAnthropicRuntime(mr store.ModelRuntime) bool {
 	return false
 }
 
+func modelConfigHasEndpointTypes(config map[string]any) bool {
+	return len(modelConfigEndpointTypes(config)) > 0
+}
+
+func modelConfigEndpointTypes(config map[string]any) []string {
+	switch values := config["supported_endpoint_types"].(type) {
+	case []any:
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, normalizeModelEndpointType(s))
+			}
+		}
+		return out
+	case []string:
+		out := make([]string, 0, len(values))
+		for _, s := range values {
+			if strings.TrimSpace(s) != "" {
+				out = append(out, normalizeModelEndpointType(s))
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func modelEndpointBaseURL(mr store.ModelRuntime, endpointType string) string {
+	want := normalizeModelEndpointType(endpointType)
+	switch raw := mr.ProviderConfig["endpoint_base_urls"].(type) {
+	case map[string]any:
+		for k, v := range raw {
+			if normalizeModelEndpointType(k) != want {
+				continue
+			}
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	case map[string]string:
+		for k, s := range raw {
+			if normalizeModelEndpointType(k) == want && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return inferModelEndpointBaseURL(want, mr.BaseURL)
+}
+
+func inferModelEndpointBaseURL(endpointType, fallback string) string {
+	base := strings.TrimRight(strings.TrimSpace(fallback), "/")
+	if endpointType == "openai" || endpointType == "openai-response" {
+		if strings.HasSuffix(base, "/anthropic/v1") {
+			return strings.TrimSuffix(base, "/anthropic/v1") + "/v1"
+		}
+		if strings.HasSuffix(base, "/anthropic") {
+			return strings.TrimSuffix(base, "/anthropic") + "/v1"
+		}
+	}
+	return base
+}
+
 func modelConfigSupportsEndpointType(config map[string]any, endpointType string) bool {
 	want := normalizeModelEndpointType(endpointType)
-	values, _ := config["supported_endpoint_types"].([]any)
-	for _, value := range values {
-		if s, ok := value.(string); ok && normalizeModelEndpointType(s) == want {
+	for _, got := range modelConfigEndpointTypes(config) {
+		if got == want {
 			return true
 		}
 	}
@@ -735,7 +813,6 @@ func anthropicCustomHeaders(providerConfig map[string]any) string {
 	}
 	return strings.Join(lines, "\n")
 }
-
 func copyStringAnyMap(v any) map[string]any {
 	out := map[string]any{}
 	if m, ok := v.(map[string]any); ok {
