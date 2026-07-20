@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react"
+import { Check, Copy, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -38,13 +38,26 @@ export function DeleteAgentDialog({
 }) {
   const { t } = useTranslation("admin")
   const [confirmation, setConfirmation] = useState("")
+  const [copied, setCopied] = useState(false)
   const expected = agent?.name ?? ""
   const canDelete = Boolean(agent) && confirmation === expected && !pending
   const msg = errorMessage(error)
 
   useEffect(() => {
     setConfirmation("")
+    setCopied(false)
   }, [agent?.id])
+
+  async function copyAgentName() {
+    if (!expected || pending) return
+    try {
+      await navigator.clipboard?.writeText(expected)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1200)
+    } catch {
+      setCopied(false)
+    }
+  }
 
   return (
     <AlertDialog
@@ -62,8 +75,22 @@ export function DeleteAgentDialog({
           <AlertDialogDescription>{t("agents.delete.description")}</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-fg" htmlFor="delete-agent-confirmation">
-            {t("agents.delete.confirmNameLabel", { name: expected })}
+          <label className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-fg" htmlFor="delete-agent-confirmation">
+            <span>{t("agents.delete.confirmNamePrefix")}</span>
+            <span className="rounded border border-danger-border bg-danger-subtle px-1.5 py-0.5 font-mono text-xs font-semibold text-danger-emphasis">
+              {expected}
+            </span>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!expected || pending}
+              title={t("agents.delete.copyName")}
+              aria-label={t("agents.delete.copyName")}
+              onClick={() => void copyAgentName()}
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+            <span>{t("agents.delete.confirmNameSuffix")}</span>
           </label>
           <Input
             id="delete-agent-confirmation"

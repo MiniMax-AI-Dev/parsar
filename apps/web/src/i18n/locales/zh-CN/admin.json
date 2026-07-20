@@ -1618,6 +1618,9 @@
       "title": "删除「{{name}}」？",
       "description": "这会从当前工作区永久删除该 Agent。历史对话、运行和审计记录会保留。",
       "confirmNameLabel": "输入 {{name}} 以确认删除。",
+      "confirmNamePrefix": "输入",
+      "confirmNameSuffix": "以确认删除。",
+      "copyName": "复制 Agent 名称",
       "confirm": "删除 Agent",
       "deletedToast": "已删除 {{name}}"
     },

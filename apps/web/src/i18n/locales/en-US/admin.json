@@ -1618,6 +1618,9 @@
       "title": "Delete \"{{name}}\"?",
       "description": "This permanently removes the Agent from the workspace. Historical conversations, runs, and audit records are preserved.",
       "confirmNameLabel": "Type {{name}} to confirm.",
+      "confirmNamePrefix": "Type",
+      "confirmNameSuffix": "to confirm.",
+      "copyName": "Copy Agent name",
       "confirm": "Delete Agent",
       "deletedToast": "Deleted {{name}}"
     },
