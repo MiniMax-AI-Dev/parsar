@@ -3,8 +3,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Copy,
-  Cpu,
-  Database,
   Globe,
   KeyRound,
   Loader2,
@@ -27,6 +25,7 @@ import {
 import { cn } from "../../lib/utils"
 import { modelHealth } from "../../lib/model-health"
 import { modelProtocols, protocolListLabel } from "../../lib/model-protocol"
+import { hostFromBaseURL } from "../../lib/model-base-url"
 import type { Model, ModelHealthStatus } from "../../lib/api-types"
 
 function ModelHealthBadge({ model, isTesting }: { model: Model; isTesting: boolean }) {
@@ -74,44 +73,22 @@ function CredentialModeBadge({ mode }: { mode: Model["credential_mode"] }) {
   )
 }
 
-function ProviderCompatibilityCell({ type }: { type: string }) {
-  const { t } = useTranslation("admin")
-  let label: string
-  switch (type) {
-    case "openai":
-      label = t("models.createProvider.providerTypeLabel.openai")
-      break
-    case "anthropic":
-      label = t("models.createProvider.providerTypeLabel.anthropic")
-      break
-    case "anthropic-compatible":
-      label = t("models.createProvider.providerTypeLabel.anthropicCompatible")
-      break
-    case "google":
-      label = t("models.createProvider.providerTypeLabel.google")
-      break
-    case "openai-compatible":
-      label = t("models.createProvider.providerTypeLabel.openaiCompatible")
-      break
-    default:
-      label = type
-  }
-
-  const Icon =
-    type === "openai" || type === "openai-compatible"
-      ? Globe
-      : type === "anthropic" || type === "anthropic-compatible"
-        ? Cpu
-        : Database
-
+function ModelBaseURLCell({ baseURL }: { baseURL: string }) {
+  const host = hostFromBaseURL(baseURL)
   return (
-    <span
-      className="inline-flex max-w-full items-center gap-1.5 text-sm text-fg-muted"
-      title={label}
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
-      <span className="truncate">{label}</span>
-    </span>
+    <div className="flex min-w-0 items-start gap-1.5" title={baseURL}>
+      <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-faint" />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium text-fg-muted">
+          {host || "-"}
+        </span>
+        {baseURL && (
+          <span className="block truncate font-mono text-xs text-fg-faint">
+            {baseURL}
+          </span>
+        )}
+      </span>
+    </div>
   )
 }
 
@@ -168,11 +145,11 @@ export function ModelsTable({
       <Table className="table-fixed">
         <colgroup>
           <col className="w-[4%]" />
-          <col className="w-[15%]" />
-          <col className="w-[17%]" />
-          <col className="w-[13%]" />
-          <col className="w-[12%]" />
           <col className="w-[14%]" />
+          <col className="w-[16%]" />
+          <col className="w-[18%]" />
+          <col className="w-[10%]" />
+          <col className="w-[13%]" />
           <col className="w-[11%]" />
           <col className="w-[14%]" />
         </colgroup>
@@ -192,7 +169,7 @@ export function ModelsTable({
             </TableHead>
             <TableHead>{t("models.table.model")}</TableHead>
             <TableHead>{t("models.table.modelKey")}</TableHead>
-            <TableHead>{t("models.table.compatibility")}</TableHead>
+            <TableHead>{t("models.table.baseURL")}</TableHead>
             <TableHead>{t("models.createProvider.fields.protocol")}</TableHead>
             <TableHead>{t("models.table.credentialMode")}</TableHead>
             <TableHead>{t("models.table.health")}</TableHead>
@@ -239,7 +216,7 @@ export function ModelsTable({
                   </span>
                 </TableCell>
                 <TableCell className="overflow-hidden">
-                  <ProviderCompatibilityCell type={m.provider_type} />
+                  <ModelBaseURLCell baseURL={m.base_url} />
                 </TableCell>
                 <TableCell>
                   <ModelProtocolCell model={m} />

@@ -300,7 +300,7 @@ export function CreateModelDialog({
           headers?: Record<string, string>
           auth_scheme?: "api-key" | "bearer"
         }
-        setHeaders(providerCfg?.customHeaders ? (cfg.headers ?? {}) : {})
+        setHeaders(cfg.headers ?? {})
         setAuthScheme(providerCfg?.authSchemeSelector ? (cfg.auth_scheme ?? "api-key") : "api-key")
         // Stash every config key the form does NOT have a dedicated field
         // for — capabilities / limits / modalities / etc. — so submit can
@@ -358,7 +358,7 @@ export function CreateModelDialog({
   const cfg = providerTypes.find((p) => p.key === providerType)
   const adapter = cfg?.adapter ?? "@ai-sdk/openai-compatible"
   const protocolChoices = cfg?.protocols ?? []
-  const showHeadersEditor = !!cfg?.customHeaders
+  const showHeadersEditor = true
   const showAuthSchemeSelector = !!cfg?.authSchemeSelector
   const providerModels = cfg?.models ?? []
   const errMsg = extractErrorMessage(error)
@@ -774,7 +774,7 @@ export function EditModelDialog({
     if (!model) return undefined
     return FALLBACK_PROVIDER_TYPES.find((p) => p.key === model.provider_type)
   }, [model])
-  const supportsCustomHeaders = providerTypeMeta?.customHeaders ?? false
+  const supportsCustomHeaders = true
 
   const [name, setName] = useState("")
   const [modelKey, setModelKey] = useState("")
