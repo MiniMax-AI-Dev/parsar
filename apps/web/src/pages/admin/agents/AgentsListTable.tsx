@@ -27,27 +27,27 @@ export function AgentsListTable({
   models,
   keyword,
   chatPendingID,
-  statusPending,
+  deletePending,
   formatRelativeTime,
   onKeywordChange,
   onOpenAgent,
   onChat,
   onEdit,
   onClone,
-  onStatusChange,
+  onDelete,
 }: {
   agents: Agent[]
   models: Model[]
   keyword: string
   chatPendingID: string | null
-  statusPending: boolean
+  deletePending: boolean
   formatRelativeTime: (value: string) => string
   onKeywordChange: (value: string) => void
   onOpenAgent: (agent: Agent) => void
   onChat: (agent: Agent) => void
   onEdit: (agent: Agent) => void
   onClone: (agent: Agent) => void
-  onStatusChange: (agent: Agent, enabled: boolean) => void
+  onDelete: (agent: Agent) => void
 }) {
   const { t } = useTranslation("admin")
   const filtered = agents.filter((agent) => {
@@ -124,11 +124,11 @@ export function AgentsListTable({
                     <AgentRowActions
                       agent={agent}
                       chatPending={chatPendingID === agent.id}
-                      statusPending={statusPending}
+                      deletePending={deletePending}
                       onChat={() => onChat(agent)}
                       onEdit={() => onEdit(agent)}
                       onClone={() => onClone(agent)}
-                      onStatusChange={(enabled) => onStatusChange(agent, enabled)}
+                      onDelete={() => onDelete(agent)}
                     />
                   </TableCell>
                 </TableRow>
