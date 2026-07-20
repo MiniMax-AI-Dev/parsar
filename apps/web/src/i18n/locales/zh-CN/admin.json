@@ -1614,6 +1614,13 @@
       "enabledToast": "已启用 {{name}}",
       "clonedToast": "已复制为「{{name}}」"
     },
+    "delete": {
+      "title": "删除「{{name}}」？",
+      "description": "这会从当前工作区永久删除该 Agent。历史对话、运行和审计记录会保留。",
+      "confirmNameLabel": "输入 {{name}} 以确认删除。",
+      "confirm": "删除 Agent",
+      "deletedToast": "已删除 {{name}}"
+    },
     "execution": {
       "sandbox": {
         "title": "云端隔离",

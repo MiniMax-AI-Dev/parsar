@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import { Copy, Loader2, MessageSquare, MoreHorizontal, Pencil, Power, PowerOff } from "lucide-react"
+import { Copy, Loader2, MessageSquare, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "../../../components/ui/button"
@@ -8,19 +8,19 @@ import type { Agent } from "../../../lib/api-types"
 export function AgentRowActions({
   agent,
   chatPending,
-  statusPending,
+  deletePending,
   onChat,
   onEdit,
   onClone,
-  onStatusChange,
+  onDelete,
 }: {
   agent: Agent
   chatPending: boolean
-  statusPending: boolean
+  deletePending: boolean
   onChat: () => void
   onEdit: () => void
   onClone: () => void
-  onStatusChange: (enabled: boolean) => void
+  onDelete: () => void
 }) {
   const { t } = useTranslation("admin")
   const enabled = agent.status === "active"
@@ -58,11 +58,11 @@ export function AgentRowActions({
             <MenuItem icon={Copy} label={t("agents.actions.clone")} onSelect={onClone} />
             <DropdownMenu.Separator className="my-1 h-px bg-line" />
             <MenuItem
-              icon={enabled ? PowerOff : Power}
-              label={t(enabled ? "agents.actions.disable" : "agents.actions.enable")}
-              tone={enabled ? "danger" : "success"}
-              disabled={statusPending}
-              onSelect={() => onStatusChange(!enabled)}
+              icon={Trash2}
+              label={t("agents.actions.delete")}
+              tone="danger"
+              disabled={deletePending}
+              onSelect={onDelete}
             />
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

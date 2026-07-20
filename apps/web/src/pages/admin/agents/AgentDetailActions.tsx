@@ -1,22 +1,14 @@
 import { useState } from "react"
-import { Loader2, MessageSquare, Pencil, Power, PowerOff } from "lucide-react"
+import { Loader2, MessageSquare, Pencil, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
-import { useSetAgentStatus, useUpdateAgent, useUpdateAgentProfile } from "../../../lib/api-agents"
+import { useDeleteAgent, useUpdateAgent, useUpdateAgentProfile } from "../../../lib/api-agents"
 import { createAgentConversation } from "../../../lib/api-conversations"
 import type { Agent, Model, UserWorkspace } from "../../../lib/api-types"
 import { useAdminView } from "../../../lib/admin-router"
 import { CreateAgentDialog } from "../CreateAgentDialog"
+import { DeleteAgentDialog } from "./DeleteAgentDialog"
 
 export function AgentDetailActions({
   agent,
@@ -36,11 +28,11 @@ export function AgentDetailActions({
   const { t, i18n } = useTranslation("admin")
   const { navigate } = useAdminView()
   const [editOpen, setEditOpen] = useState(false)
-  const [disableOpen, setDisableOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [chatPending, setChatPending] = useState(false)
   const updateMut = useUpdateAgent(workspaceID)
   const updateProfileMut = useUpdateAgentProfile(workspaceID)
-  const statusMut = useSetAgentStatus(workspaceID)
+  const deleteMut = useDeleteAgent(workspaceID)
 
   async function startChat() {
     if (!workspaceID || chatPending) return
@@ -75,26 +67,11 @@ export function AgentDetailActions({
       <Button
         variant="outline"
         size="sm"
-        disabled={statusMut.isPending}
-        onClick={() => {
-          if (agent.status === "active") {
-            setDisableOpen(true)
-            return
-          }
-          statusMut.mutate(
-            { agentID: agent.id, enabled: true },
-            {
-              onSuccess: () => onToast(t("agents.listActions.enabledToast", { name: agent.name })),
-            },
-          )
-        }}
+        disabled={deleteMut.isPending}
+        onClick={() => setDeleteOpen(true)}
       >
-        {agent.status === "active" ? (
-          <PowerOff className="h-3.5 w-3.5" />
-        ) : (
-          <Power className="h-3.5 w-3.5" />
-        )}
-        {t(agent.status === "active" ? "agents.actions.disable" : "agents.actions.enable")}
+        {deleteMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+        {t("agents.actions.delete")}
       </Button>
 
       <CreateAgentDialog
@@ -129,49 +106,25 @@ export function AgentDetailActions({
         }}
       />
 
-      <AlertDialog
-        open={disableOpen}
-        onOpenChange={(open) => {
-          if (!statusMut.isPending) setDisableOpen(open)
+      <DeleteAgentDialog
+        agent={deleteOpen ? agent : null}
+        pending={deleteMut.isPending}
+        error={deleteMut.error}
+        onCancel={() => {
+          setDeleteOpen(false)
+          deleteMut.reset()
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("agents.listActions.disableConfirmTitle", { name: agent.name })}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("agents.listActions.disableConfirmDescription")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="outline" size="sm" disabled={statusMut.isPending}>
-                {t("agents.listActions.cancel")}
-              </Button>
-            </AlertDialogCancel>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={statusMut.isPending}
-              onClick={() =>
-                statusMut.mutate(
-                  { agentID: agent.id, enabled: false },
-                  {
-                    onSuccess: () => {
-                      setDisableOpen(false)
-                      onToast(t("agents.listActions.disabledToast", { name: agent.name }))
-                    },
-                  },
-                )
-              }
-            >
-              {statusMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {t("agents.listActions.disableConfirm")}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={() => {
+          const name = agent.name
+          deleteMut.mutate(agent.id, {
+            onSuccess: () => {
+              setDeleteOpen(false)
+              onToast(t("agents.delete.deletedToast", { name }))
+              navigate("agents")
+            },
+          })
+        }}
+      />
     </>
   )
 }
