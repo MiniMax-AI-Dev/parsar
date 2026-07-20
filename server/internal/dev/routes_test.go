@@ -1309,6 +1309,73 @@ func TestModelConnectivityTestsAllSupportedEndpointTypes(t *testing.T) {
 	}
 }
 
+func TestModelConnectivityInfersOpenAIV1BaseURL(t *testing.T) {
+	const masterKey = "test-master-key"
+	t.Setenv("PARSAR_MASTER_KEY", masterKey)
+	svc, err := secrets.New(masterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := svc.Encrypt(map[string]any{"api_key": "sk-test-12345"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seenPaths := map[string]bool{}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		seenPaths[req.URL.Path] = true
+		w.Header().Set("Content-Type", "application/json")
+		switch req.URL.Path {
+		case "/v1/chat/completions":
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong chat"}}]}`))
+		case "/v1/responses":
+			_, _ = w.Write([]byte(`{"output_text":"pong responses"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`404 page not found`))
+		}
+	}))
+	defer upstream.Close()
+
+	store := connectivityStubStore{
+		runtime: store.ModelRuntime{
+			ModelID:  "00000000-0000-0000-0000-000000000702",
+			ModelKey: "grok-4.3",
+			Adapter:  "@ai-sdk/openai-compatible",
+			BaseURL:  upstream.URL,
+			SecretID: "00000000-0000-0000-0000-000000000601",
+			ProviderConfig: map[string]any{
+				"supported_endpoint_types": []any{"openai", "openai-response"},
+			},
+		},
+		payload: store.SecretPayload{EncryptedPayload: enc},
+	}
+	r := chi.NewRouter()
+	RegisterRoutesWithStore(r, store)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/models/00000000-0000-0000-0000-000000000702/test", nil)
+	res := httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	requireStatus(t, res, http.StatusOK)
+
+	var result connectivityTestResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode connectivity result: %v; body=%s", err, res.Body.String())
+	}
+	if !result.Success || result.HealthyCount != 2 || result.TotalCount != 2 {
+		t.Fatalf("expected both OpenAI endpoints healthy, got %+v", result)
+	}
+	for _, path := range []string{"/v1/chat/completions", "/v1/responses"} {
+		if !seenPaths[path] {
+			t.Fatalf("expected upstream path %s to be tested; seen=%+v", path, seenPaths)
+		}
+	}
+	for _, endpoint := range result.Results {
+		if !strings.Contains(endpoint.Request.URL, "/v1/") {
+			t.Fatalf("expected request URL to include /v1, got %s", endpoint.Request.URL)
+		}
+	}
+}
+
 func TestModelConnectivityPersistsHealth(t *testing.T) {
 	const masterKey = "test-master-key"
 	t.Setenv("PARSAR_MASTER_KEY", masterKey)
