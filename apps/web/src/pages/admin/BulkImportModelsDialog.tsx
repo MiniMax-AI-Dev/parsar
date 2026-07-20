@@ -22,6 +22,7 @@ import {
 } from "../../lib/api-models"
 import {
   FALLBACK_PROVIDER_TYPES,
+  endpointBaseURLsForProvider,
   isKnownProviderURL,
   providerTypesFromCatalog,
 } from "../../lib/model-provider-options"
@@ -156,6 +157,10 @@ export function BulkImportModelsDialog({
     const config: Record<string, unknown> = {}
     if (cfg?.authSchemeSelector) {
       config.auth_scheme = "api-key"
+    }
+    const endpointBaseURLs = endpointBaseURLsForProvider(cfg, baseURL)
+    if (Object.keys(endpointBaseURLs).length > 0) {
+      config.endpoint_base_urls = endpointBaseURLs
     }
     const body: ImportProviderModelsInput = {
       provider_type: providerType,

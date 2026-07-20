@@ -190,6 +190,11 @@ description and keep ownership on the side listed here.
 - Frontend API shape mirrors must live in `apps/web/src/lib/` next to the API
   client/hook that owns them. Page components should receive typed values, not
   parse runtime/provider/config JSON themselves.
+- Multi-endpoint model rows keep the default/legacy `models.base_url`, but
+  protocol-specific runtime URLs belong in `models.config.endpoint_base_urls`
+  keyed by `supported_endpoint_types` values such as `anthropic`, `openai`, and
+  `openai-response`. Runtime injectors must consult the endpoint map before
+  falling back to `models.base_url`.
 - Generated files (`docs/openapi/openapi.yaml`, `server/internal/db/sqlc/*`)
   are committed artifacts, but never the source of truth. Change annotations
   or SQL first, then regenerate.

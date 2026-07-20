@@ -245,6 +245,41 @@ func modelSupportsEndpointType(config map[string]any, endpointType string) bool 
 	return false
 }
 
+func endpointBaseURLFromConfig(config map[string]any, endpointType, fallback string) string {
+	want := normalizeEndpointType(endpointType)
+	switch raw := config["endpoint_base_urls"].(type) {
+	case map[string]any:
+		for k, v := range raw {
+			if normalizeEndpointType(k) != want {
+				continue
+			}
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	case map[string]string:
+		for k, s := range raw {
+			if normalizeEndpointType(k) == want && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return inferredEndpointBaseURL(want, fallback)
+}
+
+func inferredEndpointBaseURL(endpointType, fallback string) string {
+	base := strings.TrimRight(strings.TrimSpace(fallback), "/")
+	if endpointType == "openai" || endpointType == "openai-response" {
+		if strings.HasSuffix(base, "/anthropic/v1") {
+			return strings.TrimSuffix(base, "/anthropic/v1") + "/v1"
+		}
+		if strings.HasSuffix(base, "/anthropic") {
+			return strings.TrimSuffix(base, "/anthropic") + "/v1"
+		}
+	}
+	return base
+}
+
 func providerModelsURL(baseURL string) string {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if strings.HasSuffix(base, "/v1") {
@@ -601,21 +636,21 @@ func endpointProbeRequest(ctx context.Context, baseURL, modelKey, apiKey, endpoi
 	url := ""
 	switch normalizeEndpointType(endpointType) {
 	case "anthropic":
-		url = anthropicMessagesURL(baseURL)
+		url = anthropicMessagesURL(endpointBaseURLFromConfig(config, "anthropic", baseURL))
 		body = map[string]any{
 			"model":      modelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
 			"max_tokens": 1,
 		}
 	case "openai":
-		url = strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/chat/completions"
+		url = strings.TrimRight(endpointBaseURLFromConfig(config, "openai", baseURL), "/") + "/chat/completions"
 		body = map[string]any{
 			"model":      modelKey,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
 			"max_tokens": 1,
 		}
 	case "openai-response":
-		url = strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/responses"
+		url = strings.TrimRight(endpointBaseURLFromConfig(config, "openai-response", baseURL), "/") + "/responses"
 		body = map[string]any{
 			"model": modelKey,
 			"input": "ping",
@@ -936,7 +971,9 @@ func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 
-		isOpenAICompatible := isOpenAIChatCompletionsAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "openai") || modelSupportsEndpointType(mr.ProviderConfig, "openai-response")
+		isOpenAIChatCompatible := isOpenAIChatCompletionsAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "openai")
+		isOpenAIResponsesCompatible := modelSupportsEndpointType(mr.ProviderConfig, "openai-response")
+		isOpenAICompatible := isOpenAIChatCompatible || isOpenAIResponsesCompatible
 		isAnthropicCompatible := isAnthropicMessagesAdapter(mr.Adapter) || modelSupportsEndpointType(mr.ProviderConfig, "anthropic")
 
 		if !isOpenAICompatible && !isAnthropicCompatible {
@@ -1011,14 +1048,20 @@ func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 		url := ""
 		body := map[string]any{}
 		if isAnthropicCompatible {
-			url = anthropicMessagesURL(mr.BaseURL)
+			url = anthropicMessagesURL(endpointBaseURLFromConfig(mr.ProviderConfig, "anthropic", mr.BaseURL))
 			body = map[string]any{
 				"model":      mr.ModelKey,
 				"messages":   []map[string]any{{"role": "user", "content": "ping"}},
 				"max_tokens": 16,
 			}
+		} else if isOpenAIResponsesCompatible {
+			url = strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai-response", mr.BaseURL), "/") + "/responses"
+			body = map[string]any{
+				"model": mr.ModelKey,
+				"input": "ping",
+			}
 		} else {
-			url = strings.TrimRight(mr.BaseURL, "/") + "/chat/completions"
+			url = strings.TrimRight(endpointBaseURLFromConfig(mr.ProviderConfig, "openai", mr.BaseURL), "/") + "/chat/completions"
 			body = map[string]any{
 				"model":      mr.ModelKey,
 				"messages":   []map[string]any{{"role": "user", "content": "ping"}},
@@ -1115,6 +1158,8 @@ func testModelConnectivity(runtimeStore RuntimeStore) http.HandlerFunc {
 					}
 				}
 			}
+		} else if output, ok := parsed["output_text"].(string); ok {
+			sample = strings.TrimSpace(output)
 		}
 		if len(sample) > 200 {
 			sample = sample[:200] + "…"

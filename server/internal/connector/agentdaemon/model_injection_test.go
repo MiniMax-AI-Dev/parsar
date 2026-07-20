@@ -854,7 +854,7 @@ func TestIsOpenAICompatibleRuntime(t *testing.T) {
 		{"azure-openai provider", store.ModelRuntime{ProviderType: "azure-openai"}, true},
 		{"@ai-sdk/openai adapter only", store.ModelRuntime{Adapter: "@ai-sdk/openai"}, true},
 		{"@ai-sdk/azure adapter only", store.ModelRuntime{Adapter: "@ai-sdk/azure"}, true},
-		{"endpoint types openai", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai"}}}, true},
+		{"endpoint types openai chat only", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai"}}}, false},
 		{"endpoint types openai response", store.ModelRuntime{ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai-response"}}}, true},
 		{"whitespace + case-insensitive", store.ModelRuntime{ProviderType: " Openai "}, true},
 		{"anthropic provider rejected", store.ModelRuntime{ProviderType: "anthropic", Adapter: "@ai-sdk/anthropic"}, false},
@@ -876,6 +876,52 @@ func TestIsAnthropicRuntimeSupportsEndpointTypes(t *testing.T) {
 		ProviderConfig: map[string]any{"supported_endpoint_types": []any{"anthropic", "openai"}},
 	}) {
 		t.Fatalf("expected supported_endpoint_types to allow anthropic runtime")
+	}
+}
+
+func TestInjectCodexManagedModel_UsesResponsesEndpointBaseURL(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-multi",
+		ModelKey:     "MiniMax-M3",
+		ProviderType: "minimax-cn",
+		Adapter:      "@ai-sdk/anthropic",
+		BaseURL:      "https://api.minimaxi.com/anthropic",
+		ProviderConfig: map[string]any{
+			"supported_endpoint_types": []any{"anthropic", "openai-response"},
+			"endpoint_base_urls": map[string]any{
+				"anthropic":       "https://api.minimaxi.com/anthropic",
+				"openai-response": "https://api.minimaxi.com/v1",
+			},
+		},
+	}
+	if err := injectCodexManagedModel(opts, mr.ModelID, mr, "sk-platform"); err != nil {
+		t.Fatalf("injectCodexManagedModel: %v", err)
+	}
+	provider := opts["codex_provider"].(map[string]any)
+	if got := provider["base_url"]; got != "https://api.minimaxi.com/v1" {
+		t.Fatalf("codex_provider.base_url = %v, want /v1 base for /v1/responses", got)
+	}
+}
+
+func TestInjectCodexManagedModel_InfersResponsesBaseURLForLegacyAnthropicRows(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-legacy-multi",
+		ModelKey:     "MiniMax-M3",
+		ProviderType: "minimax-cn",
+		Adapter:      "@ai-sdk/anthropic",
+		BaseURL:      "https://api.minimaxi.com/anthropic",
+		ProviderConfig: map[string]any{
+			"supported_endpoint_types": []any{"anthropic", "openai-response"},
+		},
+	}
+	if err := injectCodexManagedModel(opts, mr.ModelID, mr, "sk-platform"); err != nil {
+		t.Fatalf("injectCodexManagedModel: %v", err)
+	}
+	provider := opts["codex_provider"].(map[string]any)
+	if got := provider["base_url"]; got != "https://api.minimaxi.com/v1" {
+		t.Fatalf("codex_provider.base_url = %v, want inferred /v1 base for /v1/responses", got)
 	}
 }
 
@@ -1117,6 +1163,7 @@ func TestInjectPiManagedModel_ProviderMapping(t *testing.T) {
 	}{
 		{"openai", store.ModelRuntime{ModelKey: "gpt-4o", ProviderType: "openai", BaseURL: "https://x/v1"}, "openai-completions"},
 		{"openai-compatible adapter", store.ModelRuntime{ModelKey: "gpt-4o-mini", Adapter: "@ai-sdk/openai", BaseURL: "https://x/v1"}, "openai-completions"},
+		{"endpoint mapped openai", store.ModelRuntime{ModelKey: "gpt-4o-mini", BaseURL: "https://x/anthropic", ProviderConfig: map[string]any{"supported_endpoint_types": []any{"openai"}, "endpoint_base_urls": map[string]any{"openai": "https://x/v1"}}}, "openai-completions"},
 		{"anthropic", store.ModelRuntime{ModelKey: "claude-sonnet-4-5", ProviderType: "anthropic", BaseURL: "https://x"}, "anthropic-messages"},
 		{"google", store.ModelRuntime{ModelKey: "gemini-2.5-pro", ProviderType: "google", BaseURL: "https://x"}, "google-generative-ai"},
 		{"gemini alias", store.ModelRuntime{ModelKey: "gemini-2.5-flash", ProviderType: "gemini", BaseURL: "https://x"}, "google-generative-ai"},
@@ -1138,6 +1185,23 @@ func TestInjectPiManagedModel_ProviderMapping(t *testing.T) {
 				t.Fatalf("pi_provider.api = %v, want %v", got, tc.wantAPI)
 			}
 		})
+	}
+}
+
+func TestInjectPiManagedModel_RejectsResponsesOnlyEndpointType(t *testing.T) {
+	opts := map[string]any{}
+	mr := store.ModelRuntime{
+		ModelID:      "model-responses",
+		ModelKey:     "gpt-5",
+		ProviderType: "openai",
+		BaseURL:      "https://x/v1",
+		ProviderConfig: map[string]any{
+			"supported_endpoint_types": []any{"openai-response"},
+		},
+	}
+	err := injectPiManagedModel(opts, mr.ModelID, mr, "sk-x")
+	if !errors.Is(err, ErrManagedModelUnsupported) {
+		t.Fatalf("expected responses-only model to be unsupported by pi openai-completions, got %v", err)
 	}
 }
 
