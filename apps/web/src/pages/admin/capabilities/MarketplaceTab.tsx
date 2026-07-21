@@ -333,7 +333,7 @@ function SkillPreview({ skill }: { skill: MarketplaceSkillDetail }) {
       </div>
       <div className="grid min-h-[300px] md:grid-cols-[200px_minmax(0,1fr)]">
         <div className="border-b border-line bg-surface-muted/20 p-2 md:border-b-0 md:border-r">
-          <p className="px-2 pb-1.5 pt-0.5 text-xs font-medium uppercase tracking-wider text-fg-faint">
+          <p className="px-2 pb-1.5 pt-0.5 text-2xs font-medium uppercase tracking-wider text-fg-faint">
             {t("capabilities.marketplace.detail.files")}
           </p>
           <SkillFileTree
@@ -437,12 +437,12 @@ function SkillFileTreeItem({ node, selectedPath, onSelect, depth = 0 }: {
           aria-expanded={expanded}
           title={node.path}
           onClick={() => setExpanded((value) => !value)}
-          className="flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left text-xs text-fg-subtle transition-colors hover:bg-surface-muted/70 hover:text-fg"
+          className="flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left text-fg-subtle transition-colors hover:bg-surface-muted/70 hover:text-fg"
           style={{ paddingLeft: depth * 12 + 8 }}
         >
           <ChevronIcon className="h-3 w-3 shrink-0 text-fg-faint" />
           <FolderIcon className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
-          <span className="truncate">{node.name}</span>
+          <span className="truncate text-2xs">{node.name}</span>
         </button>
         {expanded && node.children.map((child) => (
           <SkillFileTreeItem
@@ -465,7 +465,7 @@ function SkillFileTreeItem({ node, selectedPath, onSelect, depth = 0 }: {
       aria-pressed={selected}
       title={node.path}
       onClick={() => onSelect(node.path)}
-      className={`flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left text-xs transition-colors ${
+      className={`flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left transition-colors ${
         selected
           ? "bg-surface-muted text-fg"
           : "text-fg-subtle hover:bg-surface-muted/70 hover:text-fg"
@@ -473,7 +473,7 @@ function SkillFileTreeItem({ node, selectedPath, onSelect, depth = 0 }: {
       style={{ paddingLeft: depth * 12 + 24 }}
     >
       <Icon className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
-      <span className="truncate">{node.name}</span>
+      <span className="truncate text-2xs">{node.name}</span>
     </button>
   )
 }

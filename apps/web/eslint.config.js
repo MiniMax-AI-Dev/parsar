@@ -43,14 +43,14 @@ export default tseslint.config(
           selector:
             "Literal[value=/(?:^|\\s)text-\\[\\d+px\\](?:\\s|$)/]",
           message:
-            "Arbitrary font sizes are banned. Use one of: text-xs, text-sm, text-base, text-lg, text-xl, text-2xl, text-3xl.",
+            "Arbitrary font sizes are banned. Use one of: text-2xs, text-xs, text-sm, text-base, text-lg, text-xl, text-2xl, text-3xl.",
         },
         {
           // Same, inside template literals.
           selector:
             "TemplateElement[value.cooked=/(?:^|\\s)text-\\[\\d+px\\](?:\\s|$)/]",
           message:
-            "Arbitrary font sizes are banned. Use one of: text-xs, text-sm, text-base, text-lg, text-xl, text-2xl, text-3xl.",
+            "Arbitrary font sizes are banned. Use one of: text-2xs, text-xs, text-sm, text-base, text-lg, text-xl, text-2xl, text-3xl.",
         },
         {
           // Raw palette: text-slate-500, bg-red-50, border-emerald-200, …
