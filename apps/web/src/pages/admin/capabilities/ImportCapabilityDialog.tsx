@@ -1,7 +1,6 @@
 /**
- * Top-level dialog shell. Per-kind subforms (ImportMCPForm /
- * ImportSkillForm / ImportPluginForm) are controlled children; this
- * dialog owns the draft and POSTs /import/commit.
+ * Top-level dialog shell. ImportMCPForm and ImportSkillForm are controlled
+ * children; this dialog owns the draft and POSTs /import/commit.
  *
  * Contract: the Name input is NEVER auto-overwritten by re-parses.
  * suggested_name applies only while nameTouched is false.
@@ -26,13 +25,8 @@ import { ApiError } from "../../../lib/api-client"
 import { useImportCommitMutation } from "./api"
 import { ImportMCPForm } from "./ImportMCPForm"
 import { ImportSkillForm } from "./ImportSkillForm"
-import { ImportPluginForm, type PluginUploadState } from "./ImportPluginForm"
-import { ImportSystemPromptForm, type SystemPromptDraft } from "./ImportSystemPromptForm"
 import { isImportSpecReady } from "./importValidation"
-import { systemPromptCapabilityPayload } from "../../../lib/api-capabilities"
-import { useCreateCapability } from "../../../lib/api-capabilities"
 import type {
-  CanonicalKind,
   CanonicalSpec,
   ImportCommitRequest,
   ImportInlineSecretInput,
@@ -48,6 +42,8 @@ interface Props {
   onCreated?: (capabilityID: string) => void
 }
 
+type AddCapabilityKind = "mcp" | "skill"
+
 export function ImportCapabilityDialog({
   workspaceID,
   open,
@@ -56,35 +52,20 @@ export function ImportCapabilityDialog({
 }: Props) {
   const { t } = useTranslation("admin")
   const commitMut = useImportCommitMutation(workspaceID)
-  const createMut = useCreateCapability(workspaceID)
 
   // Draft is preserved across tab flips, but the spec itself is dropped
   // on kind change (an MCP spec is meaningless as a Skill spec).
-  const [kind, setKind] = useState<CanonicalKind>("mcp")
+  const [kind, setKind] = useState<AddCapabilityKind>("mcp")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [spec, setSpec] = useState<CanonicalSpec | null>(null)
   const [inlineSecrets, setInlineSecrets] = useState<ImportInlineSecretInput[]>([])
   const [rawText, setRawText] = useState("")
   const [sourceFormat, setSourceFormat] = useState<SourceFormat>("json")
-  /** Plugin-only: ossKey + validation result. Tracked separately
-   *  because plugin's commit payload differs from mcp/skill — it
-   *  needs to reference an OSS object rather than carry a spec body. */
-  const [pluginUpload, setPluginUpload] = useState<PluginUploadState>({
-    ossKey: null,
-    uploadSource: null,
-    validation: null,
-  })
   /** Skill-only: ossKey of an uploaded zip (null when paste mode or
    *  when the user hasn't picked a zip yet). Threaded into the commit
    *  payload so the server can re-fetch + re-parse the same bytes. */
   const [skillOssKey, setSkillOssKey] = useState<string | null>(null)
-  /** system_prompt-only: prompt body + append/override + version label. */
-  const [systemPromptDraft, setSystemPromptDraft] = useState<SystemPromptDraft>({
-    prompt: "",
-    mode: "append",
-    version: "1.0.0",
-  })
 
   /** Tracks whether the user typed in the Name input. Once true we stop
    *  letting the preview's suggested_name overwrite their value.
@@ -103,18 +84,15 @@ export function ImportCapabilityDialog({
     setInlineSecrets([])
     setRawText("")
     setSourceFormat("json")
-    setPluginUpload({ ossKey: null, uploadSource: null, validation: null })
     setSkillOssKey(null)
-    setSystemPromptDraft({ prompt: "", mode: "append", version: "1.0.0" })
     nameTouched.current = false
     commitMut.reset()
-    createMut.reset()
     // intentionally only on the open transition
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const onTabChange = (next: string) => {
-    const nextKind = next as CanonicalKind
+    const nextKind = next as AddCapabilityKind
     if (nextKind === kind) return
     setKind(nextKind)
     // Cross-kind drafts don't make sense — drop the parsed spec and
@@ -122,12 +100,10 @@ export function ImportCapabilityDialog({
     setSpec(null)
     setInlineSecrets([])
     setRawText("")
-    setPluginUpload({ ossKey: null, uploadSource: null, validation: null })
     setSkillOssKey(null)
-    setSystemPromptDraft({ prompt: "", mode: "append", version: "1.0.0" })
     setSourceFormat(nextKind === "skill" ? "markdown" : "json")
     // For Skill, frontmatter is the source of truth — reset name/desc
-    // on a fresh tab. MCP/Plugin keep user input across tab flips.
+    // on a fresh tab. MCP keeps user input across tab flips.
     if (nextKind === "skill") {
       nameTouched.current = false
       setName("")
@@ -137,8 +113,8 @@ export function ImportCapabilityDialog({
   }
 
   const onSuggestedName = (suggested: string) => {
-    // Skill always overrides (frontmatter is the truth). MCP/Plugin
-    // only fill on first preview to avoid clobbering user edits.
+    // Skill always overrides (frontmatter is the truth). MCP only fills on
+    // first preview to avoid clobbering user edits.
     if (kind !== "skill" && nameTouched.current) return
     if (!suggested) return
     setName(suggested)
@@ -156,70 +132,31 @@ export function ImportCapabilityDialog({
     ? commitMut.error.envelope.message
     : commitMut.error instanceof Error
       ? commitMut.error.message
-      : createMut.error instanceof ApiError
-        ? createMut.error.envelope.message
-        : createMut.error instanceof Error
-          ? createMut.error.message
-          : null
+      : null
 
   const canSubmit =
     !commitMut.isPending &&
-    !createMut.isPending &&
     !!workspaceID &&
     name.trim().length > 0 &&
-    (kind === "system_prompt"
-      ? systemPromptDraft.prompt.trim().length > 0 && systemPromptDraft.version.trim().length > 0
-      : !!spec &&
-        (kind === "plugin"
-          ? !!pluginUpload.ossKey && (pluginUpload.validation?.valid ?? false)
-          : isImportSpecReady(kind, spec, inlineSecrets)))
+    !!spec &&
+    isImportSpecReady(kind, spec, inlineSecrets)
 
   const submit = () => {
     if (!canSubmit) return
-    if (kind === "system_prompt") {
-      createMut.mutate(
-        systemPromptCapabilityPayload({
-          name: name.trim(),
-          description: description.trim(),
-          version: systemPromptDraft.version.trim(),
-          prompt: systemPromptDraft.prompt,
-          mode: systemPromptDraft.mode,
-        }),
-        {
-          onSuccess: (cap) => {
-            onOpenChange(false)
-            onCreated?.(cap.id)
-          },
-        },
-      )
-      return
-    }
     if (!spec) return
     const payload: ImportCommitRequest = {
       kind,
       name: name.trim(),
       description: description.trim() || undefined,
       canonical_spec: spec,
-      inline_secrets: kind === "plugin" || inlineSecrets.length === 0 ? undefined : inlineSecrets,
+      inline_secrets: inlineSecrets.length === 0 ? undefined : inlineSecrets,
       source_payload: rawText
         ? { raw_text: rawText, source_format: sourceFormat }
         : undefined,
-      // Plugin commits: server rebuilds canonical_spec from oss_key +
-      // upload_source, ignoring the client spec body.
       // Skill zip commits: server uses oss_key to re-fetch the zip and
       // re-parse files[] into canonical_spec.skill.files.
-      oss_key:
-        kind === "plugin"
-          ? pluginUpload.ossKey ?? undefined
-          : kind === "skill"
-            ? skillOssKey ?? undefined
-            : undefined,
-      upload_source:
-        kind === "plugin"
-          ? pluginUpload.uploadSource ?? undefined
-          : kind === "skill" && skillOssKey
-            ? "zip"
-            : undefined,
+      oss_key: kind === "skill" ? skillOssKey ?? undefined : undefined,
+      upload_source: kind === "skill" && skillOssKey ? "zip" : undefined,
     }
     commitMut.mutate(payload, {
       onSuccess: (res) => {
@@ -235,7 +172,7 @@ export function ImportCapabilityDialog({
         className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl overflow-x-hidden overflow-y-auto"
         // Keep typing in the textareas from triggering submit on Enter etc.
         onInteractOutside={(e) => {
-          if (commitMut.isPending || createMut.isPending) e.preventDefault()
+          if (commitMut.isPending) e.preventDefault()
         }}
       >
         <DialogHeader>
@@ -248,20 +185,10 @@ export function ImportCapabilityDialog({
                   "capabilities.import.dialog.descriptionSkill",
                   "Paste a SKILL.md or upload a zip. The Skill name and description come from the frontmatter; the body is injected into the model as the instruction.",
                 )
-              : kind === "plugin"
-                ? t(
-                    "capabilities.import.dialog.descriptionPlugin",
-                    "Upload a .claude-plugin zip. The server validates the manifest and parses it.",
-                  )
-                : kind === "system_prompt"
-                  ? t(
-                      "capabilities.import.dialog.descriptionSystemPrompt",
-                      "Register a system prompt as a reusable capability. Append prepends to the user system prompt; Override replaces it entirely.",
-                    )
-                  : t(
-                      "capabilities.import.dialog.description",
-                      "Paste a third-party MCP config (JSON / TOML); we parse and preview it. Plain env values are imported as-is; only env values starting with $ trigger the credential prompt.",
-                    )}
+              : t(
+                  "capabilities.import.dialog.description",
+                  "Paste a third-party MCP config (JSON / TOML); we parse and preview it. Plain env values are imported as-is; only env values starting with $ trigger the credential prompt.",
+                )}
           </DialogDescription>
         </DialogHeader>
 
@@ -273,15 +200,9 @@ export function ImportCapabilityDialog({
             <TabsTrigger value="skill">
               {t("capabilities.import.tab.skill", "Skill")}
             </TabsTrigger>
-            <TabsTrigger value="plugin">
-              {t("capabilities.import.tab.plugin", "Plugin")}
-            </TabsTrigger>
-            <TabsTrigger value="system_prompt">
-              {t("capabilities.import.tab.systemPrompt", "System Prompt")}
-            </TabsTrigger>
           </TabsList>
 
-          {/* ---- shared meta fields (MCP/Plugin only) ----------------
+          {/* ---- shared meta fields (MCP only) -----------------------
               Skill imports derive name + description from frontmatter;
               showing manual inputs would let the form value drift from
               the source-of-truth markdown and silently overwrite it. */}
@@ -351,24 +272,6 @@ export function ImportCapabilityDialog({
               />
             )}
           </TabsContent>
-          <TabsContent value="plugin" className="mt-3">
-            {kind === "plugin" && (
-              <ImportPluginForm
-                workspaceID={workspaceID}
-                onChange={setSpec}
-                onUploadStateChange={setPluginUpload}
-                onSuggestedName={onSuggestedName}
-              />
-            )}
-          </TabsContent>
-          <TabsContent value="system_prompt" className="mt-3">
-            {kind === "system_prompt" && (
-              <ImportSystemPromptForm
-                value={systemPromptDraft}
-                onChange={setSystemPromptDraft}
-              />
-            )}
-          </TabsContent>
         </Tabs>
 
         {errMsg && (
@@ -384,13 +287,13 @@ export function ImportCapabilityDialog({
           <Button
             variant="outline"
             size="sm"
-            disabled={commitMut.isPending || createMut.isPending}
+            disabled={commitMut.isPending}
             onClick={() => onOpenChange(false)}
           >
             {t("capabilities.actions.cancel", "Cancel")}
           </Button>
           <Button size="sm" disabled={!canSubmit} onClick={submit}>
-            {(commitMut.isPending || createMut.isPending) && (
+            {commitMut.isPending && (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             )}
             {t("capabilities.import.dialog.submit", "Import")}

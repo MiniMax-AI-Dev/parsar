@@ -745,7 +745,7 @@
       },
       "add": {
         "title": "{{name}} — add version",
-        "description": "A new version does not affect Agents already using older versions; they switch manually from Agent detail.",
+        "description": "Saving assigns the next version automatically. Agents using older versions are unaffected until they switch from Agent detail.",
         "prefillFromLatest": "Prefilled from the previous version ({{version}}). Edits become the new version on submit.",
         "inlineSecretLostWarning": "Inline secret(s) from the previous version ({{keys}}) are hidden. Re-enter the plaintext to keep them, or switch to a managed credential."
       },

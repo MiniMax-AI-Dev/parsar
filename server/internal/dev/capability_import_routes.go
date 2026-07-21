@@ -31,7 +31,7 @@ import (
 // For plugins the zip is already in OSS (PUT via presign-upload), so callers
 // pass OssKey instead of RawText.
 type previewCapabilityImportBody struct {
-	Kind         string `json:"kind"`          // "mcp" | "skill" | "plugin"
+	Kind         string `json:"kind"`          // "mcp" | "skill"
 	RawText      string `json:"raw_text"`      // user paste (mcp / skill)
 	SourceFormat string `json:"source_format"` // matches parser.SourceFormat (mcp / skill)
 
@@ -68,12 +68,12 @@ type commitInlineSecretBody struct {
 // may have empty SecretID (server fills them); credential_ref entries must
 // already have a valid credential_kind_code.
 type commitCapabilityImportBody struct {
-	Kind          string                   `json:"kind"`        // "mcp" | "skill" | "plugin"
+	Kind          string                   `json:"kind"`        // "mcp" | "skill"
 	Name          string                   `json:"name"`        // capability display name
 	Description   string                   `json:"description"` // optional
 	Visibility    string                   `json:"visibility"`  // "private" | "public" | …
 	Version       string                   `json:"version"`     // capability_version.version; "1.0.0" default
-	Type          string                   `json:"type"`        // capability.type column ("mcp" | "skill" | "plugin")
+	Type          string                   `json:"type"`        // capability.type column ("mcp" | "skill")
 	SourcePayload json.RawMessage          `json:"source_payload,omitempty"`
 	CanonicalSpec canonical.Spec           `json:"canonical_spec"`
 	InlineSecrets []commitInlineSecretBody `json:"inline_secrets,omitempty"`
@@ -96,12 +96,10 @@ type commitCapabilityImportResponse struct {
 }
 
 // previewCapabilityImport handles POST .../capabilities/import/preview.
-// Pure parse for mcp/skill (no DB writes). The plugin branch downloads
-// the just-uploaded zip from OSS so ValidatePluginZip can run against
-// the actual bytes.
+// Pure parse for mcp/skill (no DB writes).
 //
 //	@Summary		Preview a capability import
-//	@Description	Pure parse for mcp/skill (no DB writes). For plugin (and skill zip) the just-uploaded zip is downloaded from OSS and validated. Owner/admin only.
+//	@Description	Pure parse for MCP or Skill imports. Skill zip uploads are downloaded from object storage and validated. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				previewDevCapabilityImport
 //	@Accept			json
@@ -127,7 +125,7 @@ func previewCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) ht
 		}
 		kind := strings.ToLower(strings.TrimSpace(body.Kind))
 		if kind == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind is required (mcp|skill|plugin)"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind is required (mcp|skill)"})
 			return
 		}
 		switch kind {
@@ -135,10 +133,8 @@ func previewCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) ht
 			previewMCPOrSkillImport(w, body, parseAsMCP)
 		case "skill":
 			previewSkillImport(r.Context(), w, workspaceID, body, blobStore)
-		case "plugin":
-			previewPluginImport(r.Context(), w, workspaceID, body, blobStore)
 		default:
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill|plugin)", kind)})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill)", kind)})
 		}
 	}
 }
@@ -328,7 +324,7 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 // is rebuilt from OSS bytes (the on-disk zip is authoritative).
 //
 //	@Summary		Commit a capability import
-//	@Description	Encrypts inline_secrets then runs the whole import (capability + capability_version + secrets) in a single transaction. For kind=plugin (and skill zip) the canonical_spec is rebuilt from OSS bytes; the client-supplied spec is discarded. Owner/admin only.
+//	@Description	Encrypts inline_secrets then runs the whole MCP or Skill import (capability + capability_version + secrets) in a single transaction. For Skill zip imports the canonical_spec is rebuilt from OSS bytes. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityImport
 //	@Accept			json
@@ -365,14 +361,14 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 		if kind == "" {
 			kind = string(body.CanonicalSpec.Kind)
 		}
-		if kind != string(canonical.KindMCP) && kind != string(canonical.KindSkill) && kind != string(canonical.KindPlugin) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill|plugin)", kind)})
+		if kind != string(canonical.KindMCP) && kind != string(canonical.KindSkill) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill)", kind)})
 			return
 		}
 
-		// Plugin and Skill-zip imports rebuild canonical_spec server-side
-		// from the OSS zip; the client-supplied spec is discarded so a
-		// forged files/oss_key/sha256 cannot reach the DB.
+		// Skill-zip imports rebuild canonical_spec server-side from the OSS
+		// zip; the client-supplied spec is discarded so forged file metadata
+		// cannot reach the DB.
 		//
 		// Gate ordering: skill is matched first so kind=skill + OssKey +
 		// UploadSource (confused client) doesn't accidentally satisfy the
@@ -380,8 +376,6 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 		spec := body.CanonicalSpec
 		var skillSHA256 string
 		skillZipShaped := kind == string(canonical.KindSkill) && strings.TrimSpace(body.OssKey) != ""
-		pluginShaped := kind == string(canonical.KindPlugin) ||
-			(strings.TrimSpace(body.OssKey) != "" && strings.TrimSpace(body.UploadSource) != "")
 		switch {
 		case skillZipShaped:
 			rebuilt, sum, httpErr := rebuildSkillSpecFromOSS(r.Context(), workspaceID, body.OssKey, blobStore)
@@ -391,24 +385,14 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 			}
 			spec = rebuilt
 			skillSHA256 = sum
-		case pluginShaped:
-			// Lock kind to plugin so any later read sees the real shape.
-			kind = string(canonical.KindPlugin)
-			rebuilt, httpErr := rebuildPluginSpecFromOSS(r.Context(), workspaceID, body, blobStore)
-			if httpErr != nil {
-				writeJSON(w, httpErr.status, map[string]string{"error": httpErr.message})
-				return
-			}
-			spec = rebuilt
 		default:
-			if strings.TrimSpace(body.UploadSource) != "" {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "upload_source / github_* fields are only allowed for kind=plugin"})
+			if strings.TrimSpace(body.OssKey) != "" || strings.TrimSpace(body.UploadSource) != "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "oss_key and upload_source are only allowed for Skill zip imports"})
 				return
 			}
 		}
 
-		// inline_secrets only make sense for mcp (skill / plugin have
-		// no env map).
+		// inline_secrets only make sense for mcp (skill has no env map).
 		if kind != string(canonical.KindMCP) && len(body.InlineSecrets) > 0 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("inline_secrets is only allowed for kind=mcp (got kind=%q)", kind)})
 			return
@@ -591,7 +575,7 @@ func rebuildSkillSpecFromOSS(ctx context.Context, workspaceID, ossKey string, bl
 // capability.type or the store returns ErrCapabilityKindMismatch.
 //
 //	@Summary		Commit a new version of an existing capability
-//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
+//	@Description	Adds a new version to an existing capability, sharing the parse/rebuild pipeline with capability import commit. When version is omitted, the server advances the latest version automatically. Spec.kind must match capability.type. When oss_key is omitted for plugin or skill-zip kinds, the previous version's bytes are reused. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityVersionImport
 //	@Accept			json

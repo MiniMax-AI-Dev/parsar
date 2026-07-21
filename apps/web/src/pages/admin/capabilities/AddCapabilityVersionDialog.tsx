@@ -4,7 +4,7 @@
  *   - Name + description fields ARE editable here (PATCH'd before the version
  *     commit). The standalone "edit metadata only" dialog was removed in
  *     favor of this single surface.
- *   - Version field is REQUIRED to differ from the current latest version.
+ *   - The server assigns the next version automatically on save.
  *   - When the previous version was imported, prefill rawText + format so the
  *     user can tweak. inline_secret plaintexts CANNOT carry forward (server
  *     only stores ciphertext).
@@ -72,7 +72,6 @@ export function AddCapabilityVersionDialog({
 
   const [name, setName] = useState(capability.name)
   const [description, setDescription] = useState(capability.description ?? "")
-  const [version, setVersion] = useState("")
   const [spec, setSpec] = useState<CanonicalSpec | null>(null)
   const [inlineSecrets, setInlineSecrets] = useState<ImportInlineSecretInput[]>([])
   const [rawText, setRawText] = useState("")
@@ -106,7 +105,6 @@ export function AddCapabilityVersionDialog({
     if (!open) return
     setName(capability.name)
     setDescription(capability.description ?? "")
-    setVersion("")
     setSpec(null)
     setInlineSecrets([])
     setRawText(prefill.rawText)
@@ -130,26 +128,12 @@ export function AddCapabilityVersionDialog({
           : null
 
   const trimmedName = name.trim()
-  const trimmedVersion = version.trim()
-  // Version-uniqueness guard: the user is always required to bump the version
-  // even when only name/description changed (see plan: "always require a new version").
-  const versionConflict =
-    !!trimmedVersion && !!latestVersion && trimmedVersion === latestVersion.version
   const nameError =
     !trimmedName
       ? t("capabilities.errors.nameRequired")
       : trimmedName.length > 50
         ? t("capabilities.errors.nameTooLong")
         : null
-  const versionError = !trimmedVersion
-    ? t("capabilities.errors.versionRequired", { defaultValue: "Please enter a new version" })
-    : versionConflict
-      ? t("capabilities.errors.versionMustBump", {
-          version: latestVersion?.version ?? "",
-          defaultValue: "The new version must differ from the current latest ({{version}}).",
-        })
-      : null
-
   // For plugin / skill-zip kinds we accept "no new upload" and let the server
   // reuse the previous OSS blob. So the canSubmit guard relaxes when an
   // inherited blob exists.
@@ -172,7 +156,6 @@ export function AddCapabilityVersionDialog({
     !updateMut.isPending &&
     !!workspaceID &&
     !nameError &&
-    !versionError &&
     pluginHasUsableArtifact &&
     skillSpecReady &&
     mcpSpecReady
@@ -223,7 +206,6 @@ export function AddCapabilityVersionDialog({
           : undefined
 
     const payload: ImportCapabilityVersionCommitRequest = {
-      version: trimmedVersion,
       canonical_spec: fallbackSpec,
       inline_secrets: kind === "plugin" || inlineSecrets.length === 0 ? undefined : inlineSecrets,
       source_payload: rawText
@@ -301,20 +283,6 @@ export function AddCapabilityVersionDialog({
               placeholder={t("capabilities.fields.name.placeholder")}
             />
           </Field>
-          <Field label={t("capabilities.fields.version.label")} required>
-            <Input
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder={
-                latestVersion?.version
-                  ? t("capabilities.fields.version.placeholderBump", {
-                      version: latestVersion.version,
-                      defaultValue: "> {{version}}",
-                    })
-                  : "1.0.3"
-              }
-            />
-          </Field>
           <Field label={t("capabilities.fields.description.label")}>
             <Input
               value={description}
@@ -324,12 +292,12 @@ export function AddCapabilityVersionDialog({
           </Field>
         </div>
 
-        {(nameError || versionError) && (
+        {nameError && (
           <div
             role="alert"
             className="mt-2 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
           >
-            {nameError ?? versionError}
+            {nameError}
           </div>
         )}
 

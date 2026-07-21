@@ -36,9 +36,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestCapabilityImportPreview_DefaultsEnvToLiteral pins Decision #8:
@@ -474,6 +474,41 @@ func TestCapabilityVersionImportCommit_HappyPath(t *testing.T) {
 	}
 	if capIDFromVersion != capabilityID {
 		t.Fatalf("version's capability_id = %q, want %q", capIDFromVersion, capabilityID)
+	}
+}
+
+func TestCapabilityVersionImportCommit_AssignsNextVersionWhenOmitted(t *testing.T) {
+	r, _ := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
+	ids := store.DefaultDevFixtureIDs()
+	capabilityID := bootstrapMCPCapabilityForVersionTest(t, r, ids, "Automatic Version", "automatic", "AUTOMATIC_TOKEN")
+
+	spec := canonical.Spec{
+		SchemaVersion: canonical.SchemaVersionCurrent,
+		Kind:          canonical.KindMCP,
+		MCP: &canonical.MCPSpec{
+			Servers: []canonical.MCPServer{{
+				Name:    "automatic",
+				Command: "echo",
+				Env:     map[string]canonical.EnvValue{},
+			}},
+		},
+	}
+	body := mustJSON(t, map[string]any{"canonical_spec": spec})
+	res := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/"+capabilityID+"/versions/import/commit",
+		body, ids.UserID)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("automatic version import expected 201, got %d: %s", res.Code, res.Body.String())
+	}
+
+	var response struct {
+		CapabilityVersion store.CapabilityVersionRead `json:"capability_version"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.CapabilityVersion.Version != "1.0.1" {
+		t.Fatalf("automatic version = %q, want 1.0.1", response.CapabilityVersion.Version)
 	}
 }
 

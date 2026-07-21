@@ -7,6 +7,22 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 )
 
+func TestNextAutomaticCapabilityVersion(t *testing.T) {
+	tests := map[string]string{
+		"":           "1.0.0",
+		"1.0.0":      "1.0.1",
+		"v1.2.9":     "v1.2.10",
+		"2026.07.20": "2026.07.21",
+		"release":    "release.1",
+		"build.009":  "build.010",
+	}
+	for current, want := range tests {
+		if got := nextAutomaticCapabilityVersion(current); got != want {
+			t.Errorf("nextAutomaticCapabilityVersion(%q) = %q, want %q", current, got, want)
+		}
+	}
+}
+
 func TestPatchInlineSecretID_HappyPath(t *testing.T) {
 	spec := canonical.Spec{
 		Kind: canonical.KindMCP,
