@@ -745,7 +745,7 @@
       },
       "add": {
         "title": "{{name}} — 添加新版本",
-        "description": "新版本不会影响已启用旧版本的 Agent；他们需要在 Agent 详情手动切换。",
+        "description": "保存时会自动生成下一个版本。已启用旧版本的 Agent 不受影响，需在 Agent 详情中手动切换。",
         "prefillFromLatest": "已用上一版（{{version}}）的内容预填。修改后会作为新版本提交。",
         "inlineSecretLostWarning": "上一版的 inline secret（{{keys}}）已隐藏。如需保留，请重新输入明文；或改成已托管的凭据。"
       },
@@ -977,11 +977,11 @@
           "paste": "粘贴 Markdown",
           "zip": "上传 zip"
         },
-        "dropHint": "拖拽或点击上传 .zip(SKILL.md + references / scripts)",
+        "dropHint": "拖拽或点击上传 Skill .zip",
         "dropActive": "松开导入 .zip",
         "sizeHint": "最大 8 MiB",
         "zipLabel": "上传 Skill zip",
-        "zipHelp": "zip 内需包含 SKILL.md(可在根目录或一层子目录)。references/、scripts/ 等子目录会一并导入。",
+        "zipHelp": "zip 内需包含 SKILL.md(可在根目录或一层子目录)。其它文件和目录均为可选内容,会一并导入。",
         "uploading": "上传中…",
         "parsing": "解析中…",
         "errors": {

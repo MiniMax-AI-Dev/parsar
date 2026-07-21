@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -340,6 +341,17 @@ func (s *Store) ImportCapabilityVersion(ctx context.Context, input ImportCapabil
 	if !capabilityKindMatchesType(input.Spec.Kind, existing.Type) {
 		return ImportCapabilityResult{}, fmt.Errorf("%w: spec kind %q vs capability type %q", ErrCapabilityKindMismatch, input.Spec.Kind, existing.Type)
 	}
+	if strings.TrimSpace(input.Version) == "" {
+		versions, listErr := s.ListCapabilityVersions(ctx, input.CapabilityID)
+		if listErr != nil {
+			return ImportCapabilityResult{}, fmt.Errorf("import_capability_version: list versions: %w", listErr)
+		}
+		latest := ""
+		if len(versions) > 0 {
+			latest = versions[0].Version
+		}
+		input.Version = nextAutomaticCapabilityVersion(latest)
+	}
 
 	credentialKinds, err := s.collectAndValidateCredentialRefs(ctx, input.Spec)
 	if err != nil {
@@ -383,6 +395,36 @@ func (s *Store) ImportCapabilityVersion(ctx context.Context, input ImportCapabil
 		CapabilityVersion: versionRead,
 		CreatedSecretIDs:  createdSecretIDs,
 	}, nil
+}
+
+func nextAutomaticCapabilityVersion(current string) string {
+	current = strings.TrimSpace(current)
+	if current == "" {
+		return "1.0.0"
+	}
+
+	digitStart := len(current)
+	for digitStart > 0 {
+		char := current[digitStart-1]
+		if char < '0' || char > '9' {
+			break
+		}
+		digitStart--
+	}
+	if digitStart == len(current) {
+		return current + ".1"
+	}
+
+	suffix := current[digitStart:]
+	number, err := strconv.ParseUint(suffix, 10, 64)
+	if err != nil || number == ^uint64(0) {
+		return current + ".1"
+	}
+	next := strconv.FormatUint(number+1, 10)
+	if len(next) < len(suffix) {
+		next = strings.Repeat("0", len(suffix)-len(next)) + next
+	}
+	return current[:digitStart] + next
 }
 
 // commitVersionParams bundles inputs for commitCapabilityVersionInTx. Spec is

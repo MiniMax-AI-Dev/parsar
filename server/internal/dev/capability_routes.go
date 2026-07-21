@@ -176,14 +176,14 @@ var plaintextSecretPatterns = []struct {
 // and available marketplace items for the workspace.
 //
 //	@Summary		List workspace capabilities
-//	@Description	Returns the workspace's own capabilities plus its marketplace installs and available marketplace items. Optional pagination via page + page_size opts into a paged shape.
+//	@Description	Returns MCP and Skill capabilities from the workspace plus its marketplace installs and available marketplace items. Optional pagination via page + page_size opts into a paged shape.
 //	@Tags			capabilities
 //	@ID				listDevWorkspaceCapabilities
 //	@Produce		json
 //	@Param			workspaceID	path	string	true	"Workspace UUID"
 //	@Param			visibility	query	string	false	"Filter by capability visibility (private/public)"
 //	@Param			scope		query	string	false	"Alias of visibility (legacy)"
-//	@Param			type		query	string	false	"Filter by capability type (mcp/skill/plugin/system_prompt)"
+//	@Param			type		query	string	false	"Filter by capability type (mcp/skill)"
 //	@Param			name		query	string	false	"Case-insensitive substring match on name/description"
 //	@Param			page		query	int		false	"1-based page number (opts into paged shape)"
 //	@Param			page_size	query	int		false	"Page size, 1..100 (defaults to 20)"
@@ -202,13 +202,24 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 		if visibility == "" {
 			visibility = r.URL.Query().Get("scope")
 		}
-		typeFilter := strings.TrimSpace(r.URL.Query().Get("type"))
+		typeFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+		if typeFilter != "" && !isListedCapabilityType(typeFilter) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp or skill"})
+			return
+		}
 		nameFilter := strings.TrimSpace(r.URL.Query().Get("name"))
 		caps, err := runtimeStore.ListCapabilities(r.Context(), workspaceID, store.ListCapabilityFilter{Type: typeFilter, Visibility: visibility, Name: nameFilter})
 		if err != nil {
 			writeCapabilityError(w, err, "failed to list capabilities")
 			return
 		}
+		filteredCaps := caps[:0]
+		for _, item := range caps {
+			if isListedCapabilityType(item.Type) {
+				filteredCaps = append(filteredCaps, item)
+			}
+		}
+		caps = filteredCaps
 		marketplaceInstalls, err := runtimeStore.ListWorkspaceMarketplaceInstalls(r.Context(), workspaceID)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to list marketplace installs")
@@ -224,6 +235,9 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 		nameNeedle := strings.ToLower(nameFilter)
 		filteredInstalls := marketplaceInstalls[:0]
 		for _, item := range marketplaceInstalls {
+			if !isListedCapabilityType(item.Type) {
+				continue
+			}
 			if typeFilter != "" && item.Type != typeFilter {
 				continue
 			}
@@ -237,6 +251,9 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 		// already-installed so they don't double up with the workspace section.
 		filteredAvailable := marketplaceAvailable[:0]
 		for _, item := range marketplaceAvailable {
+			if !isListedCapabilityType(item.Type) {
+				continue
+			}
 			if item.Installed || item.SelfPublished {
 				continue
 			}
@@ -335,7 +352,7 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 // marketplace, filtered to items the caller's workspace can install.
 //
 //	@Summary		List marketplace capabilities
-//	@Description	Lists public capabilities offered on the marketplace, filtered to items visible to the caller's workspace. Workspace is taken from ?workspace_id or the X-Parsar-Workspace-ID header.
+//	@Description	Lists public MCP and Skill capabilities offered on the marketplace, filtered to items visible to the caller's workspace. Workspace is taken from ?workspace_id or the X-Parsar-Workspace-ID header.
 //	@Tags			capabilities
 //	@ID				listDevMarketplaceCapabilities
 //	@Produce		json
@@ -368,7 +385,22 @@ func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeCapabilityError(w, err, "failed to list marketplace capabilities")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "capabilities": capabilities})
+		filtered := capabilities[:0]
+		for _, capability := range capabilities {
+			if isListedCapabilityType(capability.Type) {
+				filtered = append(filtered, capability)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"workspace_id": workspaceID, "capabilities": filtered})
+	}
+}
+
+func isListedCapabilityType(capabilityType string) bool {
+	switch strings.ToLower(strings.TrimSpace(capabilityType)) {
+	case "mcp", "skill":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -617,7 +649,7 @@ func listMarketplaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 // version) in the given workspace. Owner/admin only.
 //
 //	@Summary		Create a workspace capability
-//	@Description	Creates a capability in the workspace. Owner/admin only. When body.version is set, an initial capability_version is created in the same call.
+//	@Description	Creates an MCP or Skill capability in the workspace. Owner/admin only. When body.version is set, an initial capability_version is created in the same call.
 //	@Tags			capabilities
 //	@ID				createDevWorkspaceCapability
 //	@Accept			json
@@ -646,6 +678,11 @@ func createWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		if strings.TrimSpace(body.Name) == "" || strings.TrimSpace(body.Type) == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and type are required"})
+			return
+		}
+		body.Type = strings.ToLower(strings.TrimSpace(body.Type))
+		if !isListedCapabilityType(body.Type) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp or skill"})
 			return
 		}
 		input := store.CreateCapabilityInput{WorkspaceID: workspaceID, Type: body.Type, Name: body.Name, Description: body.Description, Visibility: capabilityVisibility(body.Visibility, body.Scope), CreatorID: actorID}
