@@ -48,6 +48,24 @@ func (p *pendingTable) Resolve(permID string) (pendingEntry, bool) {
 	return e, ok
 }
 
+// Take atomically returns and removes one permission. Human submissions and
+// the timeout watchdog race through this method so only one control_response
+// can reach Claude Code.
+func (p *pendingTable) Take(permID string) (pendingEntry, bool) {
+	if permID == "" {
+		return pendingEntry{}, false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	e, ok := p.byPerm[permID]
+	if !ok {
+		return pendingEntry{}, false
+	}
+	delete(p.byPerm, permID)
+	delete(p.byCCReq, e.CCRequestID)
+	return e, true
+}
+
 // LookupByCC reverses the mapping for control_cancel_request handling.
 func (p *pendingTable) LookupByCC(ccRequestID string) (string, bool) {
 	if ccRequestID == "" {

@@ -25,12 +25,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel"
 	feishuchannel "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/channel/feishu"
 	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 // errCardActionUnrouted signals RouteAction does not (yet) handle a kind, so
@@ -149,6 +151,7 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 		return channel.ActionAck{ToastKind: "info", ToastContent: "Received"}, nil
 	}
 	approved := action.Kind == channel.CardActionPermissionAllow
+	resolvedCanonically := false
 
 	conv, err := m.store.FindConversationByPermissionRequestID(ctx, requestID)
 	if err != nil {
@@ -173,23 +176,32 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 		return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}, nil
 	}
 
-	if m.permRouter == nil {
-		m.logger.Warn("feishu permission callback: permission router not configured",
-			"permission_request_id", requestID,
-		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "Service not configured; contact an administrator"}, nil
-	}
-	if err := m.permRouter.SubmitPermission(ctx, PermissionDecision{
-		RequestID:  requestID,
-		Approved:   approved,
-		OperatorID: action.OperatorID,
-	}); err != nil {
-		m.logger.Warn("feishu permission callback: SubmitPermission failed",
-			"permission_request_id", requestID,
-			"approved", approved,
-			"err", err.Error(),
-		)
-		return channel.ActionAck{ToastKind: "error", ToastContent: "Update failed, please retry later"}, nil
+	if m.interactionResolver != nil {
+		result, err := m.interactionResolver.Resolve(ctx, interaction.ResolveRequest{
+			Kind: store.AgentInteractionKindPermission, RequestID: requestID, AgentRunID: conv.Permission.AgentRunID,
+			Actor:    interaction.Actor{ActorID: action.OperatorID, Source: interactionSource(action.Platform), ActorType: audit.ActorTypeExternal},
+			Decision: interaction.Decision{Approved: &approved},
+		})
+		if err != nil {
+			return interactionActionAck(err), nil
+		}
+		resolvedCanonically = true
+		if result.Interaction.Status == store.AgentInteractionStatusApproved {
+			approved = true
+		} else if result.Interaction.Status == store.AgentInteractionStatusDenied {
+			approved = false
+		}
+	} else {
+		if m.permRouter == nil {
+			m.logger.Warn("feishu permission callback: permission router not configured", "permission_request_id", requestID)
+			return channel.ActionAck{ToastKind: "error", ToastContent: "Service not configured; contact an administrator"}, nil
+		}
+		if err := m.permRouter.SubmitPermission(ctx, PermissionDecision{
+			RequestID: requestID, Approved: approved, OperatorID: action.OperatorID,
+		}); err != nil {
+			m.logger.Warn("feishu permission callback: SubmitPermission failed", "permission_request_id", requestID, "approved", approved, "err", err.Error())
+			return channel.ActionAck{ToastKind: "error", ToastContent: "Update failed, please retry later"}, nil
+		}
 	}
 
 	// Patch the card into its green / red result shape under the bot that
@@ -207,12 +219,14 @@ func (m *Manager) routePermissionDecision(ctx context.Context, action channel.Ca
 			)
 		}
 	}
-	if err := m.store.ClearConversationInflightSlot(ctx, conv.ConversationID, store.InflightSlotPermission, conv.Permission.AgentRunID); err != nil {
-		m.logger.Warn("feishu permission callback: clear slot failed",
-			"permission_request_id", requestID,
-			"conversation_id", conv.ConversationID,
-			"err", err.Error(),
-		)
+	if !resolvedCanonically {
+		if err := m.store.ClearConversationInflightSlot(ctx, conv.ConversationID, store.InflightSlotPermission, conv.Permission.AgentRunID); err != nil {
+			m.logger.Warn("feishu permission callback: clear slot failed",
+				"permission_request_id", requestID,
+				"conversation_id", conv.ConversationID,
+				"err", err.Error(),
+			)
+		}
 	}
 	toastKind, toastContent := "info", "Rejected"
 	if approved {
@@ -572,7 +586,7 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 		return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}, nil
 	}
 
-	if m.pfucRouter == nil {
+	if m.pfucRouter == nil && m.interactionResolver == nil {
 		m.logger.Warn("feishu prompt_for_user_choice callback: router not configured",
 			"request_id", requestID)
 		return channel.ActionAck{ToastKind: "error", ToastContent: "Service not configured; contact an administrator"}, nil
@@ -580,6 +594,7 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 
 	questions := conv.PromptForUserChoice.EffectiveQuestions()
 	answers := make([]PromptForUserChoiceQuestionAnswer, 0, len(questions))
+	canonicalAnswers := make([]interaction.QuestionAnswer, 0, len(questions))
 	anyAnswer := false
 	for idx, q := range questions {
 		answer := extractPromptForUserChoiceFormAnswer(action.FormValues, idx)
@@ -590,6 +605,13 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 			Header: q.Header,
 			Answer: answer,
 		})
+		questionID := strings.TrimSpace(q.ID)
+		if questionID == "" {
+			questionID = fmt.Sprintf("q%d", idx)
+		}
+		canonicalAnswers = append(canonicalAnswers, interaction.QuestionAnswer{
+			QuestionID: questionID, Answers: interactionAnswerValues(answer, q.MultiSelect),
+		})
 	}
 
 	decision := PromptForUserChoiceDecision{
@@ -597,13 +619,26 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 		QuestionAnswers: answers,
 		OperatorID:      action.OperatorID,
 	}
+	resolvedCanonically := false
 	if !anyAnswer {
 		decision.Cancelled = true
 		decision.Reason = "cancelled"
 	}
-	if err := m.pfucRouter.SubmitPromptForUserChoice(ctx, decision); err != nil {
-		m.logger.Warn("feishu prompt_for_user_choice callback: SubmitPromptForUserChoice failed",
-			"request_id", requestID, "err", err.Error())
+	if m.interactionResolver != nil {
+		if decision.Cancelled {
+			canonicalAnswers = nil
+		}
+		_, err := m.interactionResolver.Resolve(ctx, interaction.ResolveRequest{
+			Kind: store.AgentInteractionKindUserChoice, RequestID: requestID, AgentRunID: conv.PromptForUserChoice.AgentRunID,
+			Actor:    interaction.Actor{ActorID: action.OperatorID, Source: interactionSource(action.Platform), ActorType: audit.ActorTypeExternal},
+			Decision: interaction.Decision{QuestionAnswers: canonicalAnswers, Cancelled: decision.Cancelled, Note: decision.Reason},
+		})
+		if err != nil {
+			return interactionActionAck(err), nil
+		}
+		resolvedCanonically = true
+	} else if err := m.pfucRouter.SubmitPromptForUserChoice(ctx, decision); err != nil {
+		m.logger.Warn("feishu prompt_for_user_choice callback: SubmitPromptForUserChoice failed", "request_id", requestID, "err", err.Error())
 		return channel.ActionAck{ToastKind: "error", ToastContent: "Update failed, please retry later"}, nil
 	}
 
@@ -617,9 +652,11 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 		replaceCard = m.replaceCardJSON(doneCard, "prompt_for_user_choice done")
 	}
 
-	if err := m.store.ClearConversationInflightSlot(ctx, conv.ConversationID, store.InflightSlotPromptForUserChoice, conv.PromptForUserChoice.AgentRunID); err != nil {
-		m.logger.Warn("feishu prompt_for_user_choice callback: clear slot failed",
-			"request_id", requestID, "conversation_id", conv.ConversationID, "err", err.Error())
+	if !resolvedCanonically {
+		if err := m.store.ClearConversationInflightSlot(ctx, conv.ConversationID, store.InflightSlotPromptForUserChoice, conv.PromptForUserChoice.AgentRunID); err != nil {
+			m.logger.Warn("feishu prompt_for_user_choice callback: clear slot failed",
+				"request_id", requestID, "conversation_id", conv.ConversationID, "err", err.Error())
+		}
 	}
 
 	toastKind, toastContent := "success", "Recorded: "+summarizePromptForUserChoiceAnswers(answers)
@@ -637,4 +674,43 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 		}
 	}
 	return ack, nil
+}
+
+func interactionSource(platform channel.Platform) string {
+	source := strings.TrimSpace(string(platform))
+	if source == "" {
+		return store.AgentInteractionSourceFeishu
+	}
+	return source
+}
+
+func interactionActionAck(err error) channel.ActionAck {
+	switch {
+	case errors.Is(err, interaction.ErrNotFound), errors.Is(err, interaction.ErrExpired), errors.Is(err, interaction.ErrRuntimeGone):
+		return channel.ActionAck{ToastKind: "info", ToastContent: "This request has already been handled or expired"}
+	case errors.Is(err, interaction.ErrAlreadyResolving):
+		return channel.ActionAck{ToastKind: "info", ToastContent: "This request is being handled"}
+	case errors.Is(err, interaction.ErrInvalidDecision):
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Please answer every question before submitting"}
+	default:
+		return channel.ActionAck{ToastKind: "error", ToastContent: "Update failed, please retry later"}
+	}
+}
+
+func interactionAnswerValues(answer string, multi bool) []string {
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		return nil
+	}
+	if !multi {
+		return []string{answer}
+	}
+	parts := strings.FieldsFunc(answer, func(r rune) bool { return r == ',' || r == '，' || r == '、' })
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := strings.TrimSpace(part); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }

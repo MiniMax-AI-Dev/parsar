@@ -2904,6 +2904,242 @@ where agent_run_id = @agent_run_id::uuid
   and sequence > @after_sequence::bigint
 order by sequence asc;
 
+-- name: InsertAgentInteractionFromRun :exec
+insert into agent_interactions(
+  workspace_id, conversation_id, agent_run_id,
+  request_id, kind, request, device_id,
+  created_at, expires_at, updated_at
+)
+select
+  r.workspace_id,
+  r.conversation_id,
+  r.id,
+  @request_id,
+  @kind,
+  @request::jsonb,
+  @device_id,
+  @created_at,
+  @expires_at,
+  @created_at
+from agent_runs r
+where r.id = @agent_run_id::uuid
+on conflict (workspace_id, device_id, kind, request_id) do nothing;
+
+-- name: ReleaseStaleResolvingAgentInteractions :execrows
+update agent_interactions
+set status = 'pending',
+    claim_token = null,
+    claimed_at = null,
+    resolution_source = null,
+    resolved_actor = null,
+    resolved_by = null,
+    updated_at = @now
+where status = 'resolving'
+  and claimed_at < @stale_before;
+
+-- name: ListWorkspaceAgentInteractions :many
+select
+  ai.id::text,
+  ai.workspace_id::text,
+  ai.conversation_id::text,
+  ai.agent_run_id::text,
+  ai.request_id,
+  ai.kind,
+  ai.status,
+  ai.request,
+  ai.response,
+  ai.device_id,
+  coalesce(ai.resolution_source, '')::text as resolution_source,
+  coalesce(ai.resolved_actor, '')::text as resolved_actor,
+  coalesce(ai.resolved_by::text, '')::text as resolved_by,
+  ai.created_at,
+  ai.expires_at,
+  ai.resolved_at,
+  ai.updated_at,
+  coalesce(a.name, '')::text as agent_name,
+  coalesce(c.title, '')::text as conversation_title
+from agent_interactions ai
+join conversations c on c.id = ai.conversation_id
+left join agent_runs r on r.id = ai.agent_run_id
+left join agents a on a.id = r.agent_id
+where ai.workspace_id = @workspace_id::uuid
+  and (
+    @status_group::text = ''
+    or (@status_group::text = 'pending' and ai.status in ('pending', 'resolving'))
+    or (@status_group::text = 'decided' and ai.status in ('approved', 'denied', 'answered'))
+    or (@status_group::text = 'expired' and ai.status in ('cancelled', 'expired'))
+  )
+order by ai.created_at desc
+limit @item_limit;
+
+-- name: GetAgentInteraction :one
+select
+  ai.id::text,
+  ai.workspace_id::text,
+  ai.conversation_id::text,
+  ai.agent_run_id::text,
+  ai.request_id,
+  ai.kind,
+  ai.status,
+  ai.request,
+  ai.response,
+  ai.device_id,
+  coalesce(ai.resolution_source, '')::text as resolution_source,
+  coalesce(ai.resolved_actor, '')::text as resolved_actor,
+  coalesce(ai.resolved_by::text, '')::text as resolved_by,
+  ai.created_at,
+  ai.expires_at,
+  ai.resolved_at,
+  ai.updated_at,
+  coalesce(a.name, '')::text as agent_name,
+  coalesce(c.title, '')::text as conversation_title
+from agent_interactions ai
+join conversations c on c.id = ai.conversation_id
+left join agent_runs r on r.id = ai.agent_run_id
+left join agents a on a.id = r.agent_id
+where ai.id = @interaction_id::uuid;
+
+-- name: GetAgentInteractionByRequestID :one
+select
+  ai.id::text,
+  ai.workspace_id::text,
+  ai.conversation_id::text,
+  ai.agent_run_id::text,
+  ai.request_id,
+  ai.kind,
+  ai.status,
+  ai.request,
+  ai.response,
+  ai.device_id,
+  coalesce(ai.resolution_source, '')::text as resolution_source,
+  coalesce(ai.resolved_actor, '')::text as resolved_actor,
+  coalesce(ai.resolved_by::text, '')::text as resolved_by,
+  ai.created_at,
+  ai.expires_at,
+  ai.resolved_at,
+  ai.updated_at,
+  coalesce(a.name, '')::text as agent_name,
+  coalesce(c.title, '')::text as conversation_title
+from agent_interactions ai
+join conversations c on c.id = ai.conversation_id
+left join agent_runs r on r.id = ai.agent_run_id
+left join agents a on a.id = r.agent_id
+where ai.kind = @kind
+  and ai.request_id = @request_id
+  and ai.agent_run_id = @agent_run_id::uuid
+order by ai.created_at desc
+limit 1;
+
+-- name: ClaimAgentInteraction :one
+update agent_interactions
+set status = 'resolving',
+    claim_token = gen_random_uuid(),
+    claimed_at = @now,
+    resolution_source = @resolution_source,
+    resolved_actor = nullif(@resolved_actor::text, ''),
+    resolved_by = nullif(@resolved_by::text, '')::uuid,
+    updated_at = @now
+where id = @interaction_id::uuid
+  and workspace_id = @workspace_id::uuid
+  and status = 'pending'
+  and expires_at > @now
+returning id::text, workspace_id::text, request_id, kind, agent_run_id::text,
+  conversation_id::text, request, device_id, claim_token::text;
+
+-- name: ClaimAgentInteractionByRequestID :one
+update agent_interactions
+set status = 'resolving',
+    claim_token = gen_random_uuid(),
+    claimed_at = @now,
+    resolution_source = @resolution_source,
+    resolved_actor = nullif(@resolved_actor::text, ''),
+    resolved_by = nullif(@resolved_by::text, '')::uuid,
+    updated_at = @now
+where kind = @kind
+  and request_id = @request_id
+  and agent_run_id = @agent_run_id::uuid
+  and status = 'pending'
+  and expires_at > @now
+returning id::text, workspace_id::text, request_id, kind, agent_run_id::text,
+  conversation_id::text, request, device_id, claim_token::text;
+
+-- name: ClaimExpiredAgentInteraction :one
+update agent_interactions
+set status = 'resolving',
+    claim_token = gen_random_uuid(),
+    claimed_at = @now,
+    resolution_source = 'system_timeout',
+    resolved_actor = 'system_timeout',
+    resolved_by = null,
+    updated_at = @now
+where id = @interaction_id::uuid
+  and status = 'pending'
+  and expires_at <= @now
+returning id::text, workspace_id::text, request_id, kind, agent_run_id::text,
+  conversation_id::text, request, device_id, claim_token::text;
+
+-- name: ListExpiredPendingAgentInteractionIDs :many
+select id::text
+from agent_interactions
+where status = 'pending'
+  and expires_at <= @now
+order by expires_at asc
+limit @item_limit;
+
+-- name: CompleteAgentInteraction :one
+update agent_interactions
+set status = @status,
+    response = @response::jsonb,
+    claim_token = null,
+    resolved_at = @now,
+    updated_at = @now
+where id = @interaction_id::uuid
+  and status = 'resolving'
+  and claim_token = @claim_token::uuid
+returning id::text;
+
+-- name: ReleaseAgentInteractionClaim :exec
+update agent_interactions
+set status = 'pending',
+    claim_token = null,
+    claimed_at = null,
+    resolution_source = null,
+    resolved_actor = null,
+    resolved_by = null,
+    updated_at = @now
+where id = @interaction_id::uuid
+  and status = 'resolving'
+  and claim_token = @claim_token::uuid;
+
+-- name: ResolveAgentInteractionByRequestID :execrows
+update agent_interactions
+set status = @status,
+    response = @response::jsonb,
+    claim_token = null,
+    resolved_at = @now,
+    updated_at = @now
+where kind = @kind
+  and request_id = @request_id
+  and status in ('pending', 'resolving');
+
+-- name: CancelOpenAgentInteractionsByRunID :execrows
+update agent_interactions
+set status = 'cancelled',
+    response = jsonb_build_object('reason', @reason::text),
+    claim_token = null,
+    resolved_at = @now,
+    updated_at = @now,
+    resolution_source = 'runtime',
+    resolved_actor = 'runtime'
+where agent_run_id = @agent_run_id::uuid
+  and status in ('pending', 'resolving');
+
+-- name: GetAgentInteractionDeviceByRequestID :one
+select device_id
+from agent_interactions
+where kind = @kind
+  and request_id = @request_id;
+
 -- name: ListToolEventsForRuns :many
 select id::text, agent_run_id::text, sequence, event_kind, payload, occurred_at
 from agent_run_events

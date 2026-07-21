@@ -120,6 +120,7 @@ export interface AgentRunStreamState {
   steps: StreamingStep[]
   final: string | null
   error: string | null
+  pendingInteraction: { kind: "permission" | "user_choice"; requestId: string } | null
 }
 
 const idleStreamState: AgentRunStreamState = {
@@ -128,6 +129,7 @@ const idleStreamState: AgentRunStreamState = {
   steps: [],
   final: null,
   error: null,
+  pendingInteraction: null,
 }
 
 function parseStreamEvent(type: AgentRunStreamEvent["type"], raw: string): AgentRunStreamEvent | null {
@@ -211,7 +213,7 @@ export function useAgentRunStream(
     const source = new EventSource(
       `/api/v1/conversations/${encodeURIComponent(cid)}/runs/${encodeURIComponent(runId)}/stream`
     )
-    setState({ status: "streaming", deltaText: "", steps: [], final: null, error: null })
+    setState({ status: "streaming", deltaText: "", steps: [], final: null, error: null, pendingInteraction: null })
 
     const onDelta = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("delta", ev.data)
@@ -220,6 +222,7 @@ export function useAgentRunStream(
         ...prev,
         status: prev.status === "done" ? prev.status : "streaming",
         deltaText: prev.deltaText + (parsed.delta ?? ""),
+        pendingInteraction: null,
       }))
     }
 
@@ -257,7 +260,7 @@ export function useAgentRunStream(
             })
           }
         }
-        return { ...prev, steps }
+        return { ...prev, steps, pendingInteraction: null }
       })
     }
 
@@ -269,8 +272,21 @@ export function useAgentRunStream(
         status: "done",
         final: parsed.final?.content ?? "",
         error: null,
+        pendingInteraction: null,
       }))
       source.close()
+    }
+
+    const onPermission = (ev: MessageEvent<string>) => {
+      const parsed = parseStreamEvent("permission", ev.data)
+      if (!parsed || parsed.type !== "permission" || !parsed.permission?.id) return
+      setState((prev) => ({ ...prev, pendingInteraction: { kind: "permission", requestId: parsed.permission.id } }))
+    }
+
+    const onUserChoice = (ev: MessageEvent<string>) => {
+      const parsed = parseStreamEvent("prompt_for_user_choice", ev.data)
+      if (!parsed || parsed.type !== "prompt_for_user_choice" || !parsed.prompt_for_user_choice?.id) return
+      setState((prev) => ({ ...prev, pendingInteraction: { kind: "user_choice", requestId: parsed.prompt_for_user_choice.id } }))
     }
 
     const onError = (ev: Event) => {
@@ -278,7 +294,7 @@ export function useAgentRunStream(
       const parsed = data ? parseStreamEvent("error", data) : null
       const message = parsed?.type === "error" ? parsed.error : "stream connection failed"
       if (isCompletedBeforeSubscribeError(message)) {
-        setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null }))
+        setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null, pendingInteraction: null }))
         source.close()
         return
       }
@@ -287,7 +303,7 @@ export function useAgentRunStream(
       // abort took effect. Collapse to status='done' so the red stream-interrupted
       // banner stays hidden.
       if (isUserCancelledError(message)) {
-        setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null }))
+        setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null, pendingInteraction: null }))
         source.close()
         return
       }
@@ -302,15 +318,17 @@ export function useAgentRunStream(
           prev.steps.length > 0 ||
           prev.final !== null
         if (sawContent) {
-          return { ...prev, status: "done", error: null }
+          return { ...prev, status: "done", error: null, pendingInteraction: null }
         }
-        return { ...prev, status: "error", error: message || "stream connection failed" }
+        return { ...prev, status: "error", error: message || "stream connection failed", pendingInteraction: null }
       })
       source.close()
     }
 
     source.addEventListener("delta", onDelta)
     source.addEventListener("tool", onTool)
+    source.addEventListener("permission", onPermission)
+    source.addEventListener("prompt_for_user_choice", onUserChoice)
     source.addEventListener("done", onDone)
     source.addEventListener("error", onError)
 

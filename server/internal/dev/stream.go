@@ -32,25 +32,28 @@ import (
 //
 // HTTP behaviour
 // --------------
+//
 //   - 503 if no OpenCode AgentConnector is wired.
+//
 //   - 400 on body parse / required-field errors.
+//
 //   - 200 + Content-Type: text/event-stream once streaming starts.
 //     Errors AFTER the stream is open are surfaced as an SSE EventError +
 //     EventDone pair before the connection closes.
 //
-//	@Summary		Stream a raw connector prompt (dev SSE)
-//	@Description	Dev-only Server-Sent Events endpoint that forwards the OpenCode connector's StreamPrompt output. Does NOT manage agent_run state — callers drive lifecycle via the regular dev endpoints.
-//	@Tags			gateway
-//	@ID				streamDevConnectorPrompt
-//	@Accept			json
-//	@Produce		json-stream
-//	@Param			body	body		connector.PromptInput	true	"Prompt input (workspace_id, conversation_id, run_id, agent_config required)"
-//	@Success		200		"SSE stream opened"
-//	@Failure		400		{object}	map[string]string	"Body decode or validation error"
-//	@Failure		500		{object}	map[string]string	"ResponseWriter does not support flushing or connector failure"
-//	@Failure		501		{object}	map[string]string	"Connector does not support streaming"
-//	@Failure		503		{object}	map[string]string	"OpenCode AgentConnector is not registered"
-//	@Router			/dev/connectors/opencode/stream [post]
+//     @Summary		Stream a raw connector prompt (dev SSE)
+//     @Description	Dev-only Server-Sent Events endpoint that forwards the OpenCode connector's StreamPrompt output. Does NOT manage agent_run state — callers drive lifecycle via the regular dev endpoints.
+//     @Tags			gateway
+//     @ID				streamDevConnectorPrompt
+//     @Accept			json
+//     @Produce		json-stream
+//     @Param			body	body		connector.PromptInput	true	"Prompt input (workspace_id, conversation_id, run_id, agent_config required)"
+//     @Success		200		"SSE stream opened"
+//     @Failure		400		{object}	map[string]string	"Body decode or validation error"
+//     @Failure		500		{object}	map[string]string	"ResponseWriter does not support flushing or connector failure"
+//     @Failure		501		{object}	map[string]string	"Connector does not support streaming"
+//     @Failure		503		{object}	map[string]string	"OpenCode AgentConnector is not registered"
+//     @Router			/dev/connectors/opencode/stream [post]
 func streamConnectorPrompt(cfg *routerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil || cfg.openCodeConnector == nil {
@@ -199,14 +202,15 @@ type streamEventWire struct {
 }
 
 type wireEvent struct {
-	Type     string        `json:"type"`
-	Sequence uint64        `json:"sequence,omitempty"`
-	Delta    string        `json:"delta,omitempty"`
-	Thinking string        `json:"thinking,omitempty"`
-	Error    string        `json:"error,omitempty"`
-	Final    *wireFinal    `json:"final,omitempty"`
-	Tool     *wireToolCall `json:"tool,omitempty"`
-	Perm     *wirePermReq  `json:"permission,omitempty"`
+	Type     string             `json:"type"`
+	Sequence uint64             `json:"sequence,omitempty"`
+	Delta    string             `json:"delta,omitempty"`
+	Thinking string             `json:"thinking,omitempty"`
+	Error    string             `json:"error,omitempty"`
+	Final    *wireFinal         `json:"final,omitempty"`
+	Tool     *wireToolCall      `json:"tool,omitempty"`
+	Perm     *wirePermReq       `json:"permission,omitempty"`
+	Choice   *wireUserChoiceReq `json:"prompt_for_user_choice,omitempty"`
 }
 
 type wireFinal struct {
@@ -236,6 +240,24 @@ type wirePermReq struct {
 	Payload map[string]any `json:"payload,omitempty"`
 }
 
+type wireUserChoiceOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+type wireUserChoiceQuestion struct {
+	ID          string                 `json:"id"`
+	Header      string                 `json:"header,omitempty"`
+	Question    string                 `json:"question"`
+	MultiSelect bool                   `json:"multi_select,omitempty"`
+	Options     []wireUserChoiceOption `json:"options"`
+}
+
+type wireUserChoiceReq struct {
+	ID        string                   `json:"id"`
+	Questions []wireUserChoiceQuestion `json:"questions"`
+}
+
 func toWireToolCall(t *connector.ToolCallEvent) *wireToolCall {
 	if t == nil {
 		return nil
@@ -262,6 +284,24 @@ func toWirePermReq(p *connector.PermissionRequest) *wirePermReq {
 	}
 }
 
+func toWireUserChoiceReq(request *connector.PromptForUserChoiceRequest) *wireUserChoiceReq {
+	if request == nil {
+		return nil
+	}
+	questions := make([]wireUserChoiceQuestion, 0, len(request.EffectiveQuestions()))
+	for _, question := range request.EffectiveQuestions() {
+		options := make([]wireUserChoiceOption, 0, len(question.Options))
+		for _, option := range question.Options {
+			options = append(options, wireUserChoiceOption{Label: option.Label, Description: option.Description})
+		}
+		questions = append(questions, wireUserChoiceQuestion{
+			ID: question.ID, Header: question.Header, Question: question.Question,
+			MultiSelect: question.MultiSelect, Options: options,
+		})
+	}
+	return &wireUserChoiceReq{ID: request.ID, Questions: questions}
+}
+
 func newStreamEventWire(ev connector.PromptEvent) streamEventWire {
 	w := streamEventWire{
 		wireEvent: wireEvent{
@@ -272,6 +312,7 @@ func newStreamEventWire(ev connector.PromptEvent) streamEventWire {
 			Error:    ev.Error,
 			Tool:     toWireToolCall(ev.Tool),
 			Perm:     toWirePermReq(ev.Permission),
+			Choice:   toWireUserChoiceReq(ev.PromptForUserChoice),
 		},
 		EmittedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}

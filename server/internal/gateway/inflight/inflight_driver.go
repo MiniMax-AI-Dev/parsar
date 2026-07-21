@@ -1101,6 +1101,7 @@ func decodePromptForUserChoiceQuestionList(raw any) []store.PromptForUserChoiceQ
 			continue
 		}
 		q, _ := m["question"].(string)
+		id, _ := m["id"].(string)
 		header, _ := m["header"].(string)
 		multiSelect, _ := m["multi_select"].(bool)
 		opts := decodePromptForUserChoiceOptionList(m["options"])
@@ -1108,6 +1109,7 @@ func decodePromptForUserChoiceQuestionList(raw any) []store.PromptForUserChoiceQ
 			continue
 		}
 		out = append(out, store.PromptForUserChoiceQuestion{
+			ID:          strings.TrimSpace(id),
 			Header:      strings.TrimSpace(header),
 			Question:    strings.TrimSpace(q),
 			MultiSelect: multiSelect,

@@ -224,7 +224,12 @@
     "justNow": "just now",
     "minutesAgo": "{{count}} min ago",
     "hoursAgo": "{{count}}h ago",
-    "daysAgo": "{{count}}d ago"
+    "daysAgo": "{{count}}d ago",
+    "lessThanMinute": "less than a minute",
+    "minutesRemaining": "{{count}} min",
+    "hoursRemaining": "{{count}}h",
+    "daysRemaining": "{{count}}d",
+    "expired": "expired"
   },
   "scopeRequired": {
     "workspace": {

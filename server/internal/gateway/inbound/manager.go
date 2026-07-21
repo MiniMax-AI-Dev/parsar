@@ -14,13 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/larksuite/oapi-sdk-go/v3/ws"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // Logger is the small logging surface Manager uses. *slog.Logger satisfies it.
@@ -128,6 +129,10 @@ type PromptForUserChoiceRouter interface {
 	SubmitPromptForUserChoice(ctx context.Context, decision PromptForUserChoiceDecision) error
 }
 
+type InteractionResolver interface {
+	Resolve(ctx context.Context, request interaction.ResolveRequest) (interaction.ResolveResult, error)
+}
+
 // PromptForUserChoiceQuestionAnswer mirrors
 // connector.PromptForUserChoiceQuestionAnswer; gateway-side so this
 // package stays free of the connector import.
@@ -210,6 +215,7 @@ type Options struct {
 	// PromptForUserChoiceRouter wires the AskUserQuestion card
 	// callback. Same nil-tolerance: missing router → toast.
 	PromptForUserChoiceRouter PromptForUserChoiceRouter
+	InteractionResolver       InteractionResolver
 
 	// JoinURLBuilder, when non-nil, mints the absolute URL the
 	// visibility=workspace rejection card surfaces as a "Request to join" link.
@@ -241,7 +247,8 @@ type Manager struct {
 	permRouter PermissionRouter
 
 	// pfucRouter is the ask-flow twin. Same nil-tolerance.
-	pfucRouter PromptForUserChoiceRouter
+	pfucRouter          PromptForUserChoiceRouter
+	interactionResolver InteractionResolver
 
 	joinURLBuilder func(workspaceID string) string
 
@@ -296,19 +303,20 @@ func NewManager(opts Options) (*Manager, error) {
 		return nil, errors.New("inbound: DefaultSharedBot requires both AppID and AppSecret")
 	}
 	return &Manager{
-		store:          opts.Store,
-		secrets:        opts.Secrets,
-		logger:         logger,
-		refresh:        refresh,
-		domain:         domain,
-		openAPIBaseURL: openAPIBaseURL,
-		secretKeys:     append([]string(nil), secretKeys...),
-		defaultBot:     defaultBot,
-		permRouter:     opts.PermissionRouter,
-		pfucRouter:     opts.PromptForUserChoiceRouter,
-		joinURLBuilder: opts.JoinURLBuilder,
-		connectors:     opts.Connectors,
-		clients:        make(map[string]*clientHandle),
+		store:               opts.Store,
+		secrets:             opts.Secrets,
+		logger:              logger,
+		refresh:             refresh,
+		domain:              domain,
+		openAPIBaseURL:      openAPIBaseURL,
+		secretKeys:          append([]string(nil), secretKeys...),
+		defaultBot:          defaultBot,
+		permRouter:          opts.PermissionRouter,
+		pfucRouter:          opts.PromptForUserChoiceRouter,
+		interactionResolver: opts.InteractionResolver,
+		joinURLBuilder:      opts.JoinURLBuilder,
+		connectors:          opts.Connectors,
+		clients:             make(map[string]*clientHandle),
 	}, nil
 }
 

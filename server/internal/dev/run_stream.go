@@ -11,11 +11,11 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 type runStreamStore interface {
@@ -470,7 +470,7 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 		if ev.Permission == nil {
 			return "permission.asked", map[string]any{"sequence": ev.Sequence}, true
 		}
-		return "permission.asked", map[string]any{"request_id": ev.Permission.ID, "action": ev.Permission.Tool, "resource": ev.Permission.Title, "detail": ev.Permission.Detail, "payload": ev.Permission.Payload, "sequence": ev.Sequence}, true
+		return "permission.asked", map[string]any{"request_id": ev.Permission.ID, "device_id": ev.Permission.DeviceID, "action": ev.Permission.Tool, "resource": ev.Permission.Title, "detail": ev.Permission.Detail, "payload": ev.Permission.Payload, "sequence": ev.Sequence}, true
 	case connector.EventPromptForUserChoice:
 		if ev.PromptForUserChoice == nil {
 			return "prompt_for_user_choice.asked", map[string]any{"sequence": ev.Sequence}, true
@@ -486,6 +486,7 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 				opts = append(opts, map[string]any{"label": opt.Label, "description": opt.Description})
 			}
 			questionsOut = append(questionsOut, map[string]any{
+				"id":           q.ID,
 				"header":       q.Header,
 				"question":     q.Question,
 				"multi_select": q.MultiSelect,
@@ -494,6 +495,7 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 		}
 		payload := map[string]any{
 			"request_id":  ev.PromptForUserChoice.ID,
+			"device_id":   ev.PromptForUserChoice.DeviceID,
 			"questions":   questionsOut,
 			"tool_use_id": ev.PromptForUserChoice.ToolUseID,
 			"sequence":    ev.Sequence,

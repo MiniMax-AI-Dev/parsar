@@ -112,6 +112,37 @@ type AgentEngineSession struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Durable human interaction requests shared by Web and IM surfaces
+type AgentInteraction struct {
+	ID             pgtype.UUID `json:"id"`
+	WorkspaceID    pgtype.UUID `json:"workspace_id"`
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	AgentRunID     pgtype.UUID `json:"agent_run_id"`
+	RequestID      string      `json:"request_id"`
+	// permission = approve or deny a tool action; user_choice = answer an AskUserQuestion request
+	Kind string `json:"kind"`
+	// Lifecycle: pending, transient resolving, or terminal approved/denied/answered/cancelled/expired
+	Status string `json:"status"`
+	// Immutable request snapshot rendered by Web and IM clients
+	Request []byte `json:"request"`
+	// Human decision snapshot, populated only after resolution
+	Response []byte `json:"response"`
+	// Agent-daemon device used to route a response to the pod owning the runtime WebSocket
+	DeviceID string `json:"device_id"`
+	// CAS token held by the single resolver currently delivering a decision
+	ClaimToken pgtype.UUID        `json:"claim_token"`
+	ClaimedAt  pgtype.Timestamptz `json:"claimed_at"`
+	// web, IM platform, system_timeout, or runtime
+	ResolutionSource pgtype.Text `json:"resolution_source"`
+	// User UUID or external platform subject that submitted the decision
+	ResolvedActor pgtype.Text        `json:"resolved_actor"`
+	ResolvedBy    pgtype.UUID        `json:"resolved_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	ResolvedAt    pgtype.Timestamptz `json:"resolved_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Agent execution records
 type AgentRun struct {
 	// Run ID

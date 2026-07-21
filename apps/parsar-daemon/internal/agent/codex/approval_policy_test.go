@@ -19,6 +19,20 @@ func TestSilentGranularPolicy_AllFalse(t *testing.T) {
 	}
 }
 
+func TestHumanApprovalPolicy_AllGatesEnabled(t *testing.T) {
+	p := HumanApprovalPolicy()
+	if p.Granular == nil {
+		t.Fatal("HumanApprovalPolicy must populate Granular")
+	}
+	g := *p.Granular
+	if !g.SandboxApproval || !g.Rules || !g.SkillApproval || !g.RequestPermissions || !g.MCPElicitations {
+		t.Fatalf("human policy must enable every approval gate, got %+v", g)
+	}
+	if IsSilent(&p) {
+		t.Fatal("HumanApprovalPolicy must surface app-server requests")
+	}
+}
+
 func TestIsSilent_NilIsSilent(t *testing.T) {
 	if !IsSilent(nil) {
 		t.Fatal("nil policy must be treated as silent (safe default)")

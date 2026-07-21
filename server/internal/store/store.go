@@ -1988,6 +1988,8 @@ const (
 	auditAgentRunClaimed  = "agent_run.claimed"
 	// AuditAgentRunCancelled is exported so dev package emit calls share it.
 	AuditAgentRunCancelled           = "agent_run.cancelled"
+	AuditPermissionResolved          = "permission.resolved"
+	AuditUserChoiceResolved          = "user_choice.resolved"
 	auditAgentRunCompleted           = "agent_run.completed"
 	auditAgentRunFailed              = "agent_run.failed"
 	auditHTTPAgentCompleted          = "http_agent.completed"

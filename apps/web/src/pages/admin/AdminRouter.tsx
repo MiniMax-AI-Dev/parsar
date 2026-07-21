@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next"
 import {
   Bot,
   HelpCircle,
-  Inbox,
 } from "lucide-react"
 
 import { useAdminView, useAppRoute } from "../../lib/admin-router"
@@ -22,7 +21,7 @@ import { CredentialsPage } from "./credentials/CredentialsPage"
 import { MembersPage } from "./MembersPage"
 import { RuntimePage } from "./RuntimePage"
 import { RuntimeDetailPage } from "./RuntimeDetailPage"
-import { StubPage } from "./StubPage"
+import { ApprovalsPage } from "./ApprovalsPage"
 import { CapabilitiesPage, CapabilityDetailPage } from "./CapabilitiesPage"
 import { ConnectionsPage } from "./ConnectionsPage"
 import { MyCredentialsPage } from "./MyCredentialsPage"
@@ -71,7 +70,7 @@ export function AdminRouter() {
 
   switch (v) {
     case "approvals":
-      return <StubPage view={v} itemKey="approvals" icon={Inbox} />
+      return <ApprovalsPage />
     case "members":
       return <MembersPage />
     case "secrets":

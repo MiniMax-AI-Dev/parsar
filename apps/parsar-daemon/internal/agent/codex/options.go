@@ -49,10 +49,8 @@ type SessionPlan struct {
 	// SystemPrompt is forwarded as developerInstructions on thread/start.
 	SystemPrompt string
 
-	// ApprovalPolicy + Sandbox steer thread/start. Defaults are
-	// SilentGranularPolicy() and SandboxDangerFullAcces — match the
-	// user's "sandbox runs full-open" decision and equivalent to
-	// claudecode's bypassPermissions.
+	// ApprovalPolicy + Sandbox steer thread/start. Defaults surface human
+	// approvals and confine writes to the workspace.
 	ApprovalPolicy AskForApproval
 	Sandbox        SandboxMode
 
@@ -100,14 +98,13 @@ type SessionPlan struct {
 // location, set it via the daemon's process environment (PATH /
 // codexBinary in sessionConfig) rather than per-call.
 //
-// Approval / sandbox keys are not exposed to admin yet — the daemon
-// always runs silent + full-access. Wire them through once a UI to flip
-// them lands.
+// Approval / sandbox keys are not exposed to admin yet. Parsar's Inbox is
+// the default decision surface; per-agent overrides can be added later.
 func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any) (SessionPlan, error) {
 	cleanup := func() {}
 	plan := SessionPlan{
-		ApprovalPolicy: SilentGranularPolicy(),
-		Sandbox:        SandboxDangerFullAcces,
+		ApprovalPolicy: HumanApprovalPolicy(),
+		Sandbox:        SandboxWorkspaceWrite,
 		Cleanup:        cleanup,
 	}
 

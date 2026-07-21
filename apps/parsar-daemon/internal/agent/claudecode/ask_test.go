@@ -337,6 +337,35 @@ func TestBuildAskUserToolResultMultiQuestionPositional(t *testing.T) {
 	}
 }
 
+func TestBuildAskUserToolResultMatchesStableQuestionIDs(t *testing.T) {
+	body, err := claudecode.BuildAskUserToolResultForTest(
+		claudecode.PendingAskEntry{
+			ToolUseID: "toolu_ids",
+			Questions: []proto.PromptForUserChoiceQuestion{
+				{ID: "environment", Header: "Environment"},
+				{ID: "checks", Header: "Checks"},
+			},
+		},
+		proto.PromptForUserChoiceDecisionPayload{
+			QuestionAnswers: []proto.PromptForUserChoiceQuestionAnswer{
+				{QuestionID: "checks", Answers: []string{"Unit", "Integration"}},
+				{QuestionID: "environment", Answers: []string{"Staging"}},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("buildAskUserToolResult: %v", err)
+	}
+	v := decodeAskResult(t, body)
+	text := v.Message.Content[0].Content[0].Text
+	if !strings.Contains(text, `"answer":"Staging","header":"Environment"`) {
+		t.Fatalf("stable environment answer missing: %s", text)
+	}
+	if !strings.Contains(text, `"answer":"Unit、Integration","header":"Checks"`) {
+		t.Fatalf("stable multi-select answer missing: %s", text)
+	}
+}
+
 // TestBuildAskUserToolResultTimeoutKeepsSuccessShape is the contract
 // "don't trigger a retry": even on timeout we set is_error=false and
 // rely on the body text to redirect the agent.

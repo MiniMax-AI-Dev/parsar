@@ -425,6 +425,34 @@ func TestSessionPermissionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSessionPermissionTimeoutDeniesInsteadOfHanging(t *testing.T) {
+	out := make(chan proto.Envelope, 32)
+	cfg := helperConfig()
+	cfg.AskTimeout = 150 * time.Millisecond
+	sess, err := claudecode.NewSessionForTest(context.Background(),
+		helperReq("run_permission_timeout", "approve me", "permission"), out, cfg)
+	if err != nil {
+		t.Fatalf("NewSessionForTest: %v", err)
+	}
+	defer sess.Cancel(context.Background())
+
+	envs, closed := drain(t, out, 5*time.Second)
+	if !closed {
+		t.Fatal("out did not close after permission timeout")
+	}
+	final := envs[len(envs)-1]
+	if final.Type != proto.TypeDone {
+		t.Fatalf("final env type = %q, want done; types=%v", final.Type, envTypes(envs))
+	}
+	var done proto.DonePayload
+	if err := final.DecodePayload(&done); err != nil {
+		t.Fatalf("decode done: %v", err)
+	}
+	if !strings.Contains(done.Content, "denied for req_cc_42") {
+		t.Fatalf("timeout did not deny the request: %q", done.Content)
+	}
+}
+
 func TestSessionRejectsEmptyPrompt(t *testing.T) {
 	// Pure-image inbound (empty Prompt, non-empty Attachments) is a
 	// valid prompt today and must NOT be rejected.

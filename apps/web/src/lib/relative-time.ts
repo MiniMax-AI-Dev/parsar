@@ -32,3 +32,31 @@ export function useRelativeTime() {
     return t("relativeTime.daysAgo", { count: days })
   }
 }
+
+/**
+ * Locale-aware future duration formatter for deadline fields whose label
+ * already supplies the "expires in" context.
+ */
+export function useTimeUntil() {
+  const { t } = useTranslation("common")
+
+  return (iso: string | null | undefined): string => {
+    if (!iso) return "—"
+    const ms = Date.parse(iso)
+    if (isNaN(ms)) return "—"
+    const diff = ms - Date.now()
+
+    if (diff <= 0) return t("relativeTime.expired")
+    if (diff < MINUTE) return t("relativeTime.lessThanMinute")
+    if (diff < HOUR) {
+      const minutes = Math.ceil(diff / MINUTE)
+      return t("relativeTime.minutesRemaining", { count: minutes })
+    }
+    if (diff < DAY) {
+      const hours = Math.ceil(diff / HOUR)
+      return t("relativeTime.hoursRemaining", { count: hours })
+    }
+    const days = Math.ceil(diff / DAY)
+    return t("relativeTime.daysRemaining", { count: days })
+  }
+}

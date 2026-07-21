@@ -667,7 +667,7 @@ func (c *Connector) handleUpstream(
 			return
 		}
 		out <- connector.PromptEvent{Type: connector.EventPermissionRequest, Permission: &connector.PermissionRequest{
-			ID: env.ID, Tool: p.Tool, Title: p.Title, Detail: p.Detail, Payload: p.Payload,
+			ID: env.ID, DeviceID: bind.DeviceID, Tool: p.Tool, Title: p.Title, Detail: p.Detail, Payload: p.Payload,
 		}}
 
 	case proto.TypePromptForUserChoice:
@@ -687,6 +687,7 @@ func (c *Connector) handleUpstream(
 				opts = append(opts, connector.PromptForUserChoiceOption{Label: opt.Label, Description: opt.Description})
 			}
 			questions = append(questions, connector.PromptForUserChoiceQuestion{
+				ID:          q.ID,
 				Header:      q.Header,
 				Question:    q.Question,
 				MultiSelect: q.MultiSelect,
@@ -700,6 +701,7 @@ func (c *Connector) handleUpstream(
 		// gateway registry's byAsk index.
 		out <- connector.PromptEvent{Type: connector.EventPromptForUserChoice, PromptForUserChoice: &connector.PromptForUserChoiceRequest{
 			ID:        p.AskID,
+			DeviceID:  bind.DeviceID,
 			Questions: questions,
 			ToolUseID: p.ToolUseID,
 		}}
@@ -801,15 +803,20 @@ func (c *Connector) SubmitPermission(ctx context.Context, decision connector.Per
 	if decision.RequestID == "" {
 		return fmt.Errorf("agent_daemon: SubmitPermission requires RequestID")
 	}
-	if c.submitSlots != nil && c.ownerResolver != nil {
-		deviceID, err := c.submitSlots.DeviceIDForPermissionRequest(ctx, decision.RequestID)
-		if err != nil {
-			// Slot already cleared or DB transient — fall through to
-			// local lookup; the in-process registry will reject with a
-			// clear "not pending" error if appropriate.
-			c.log.Warn("agent_daemon: SubmitPermission slot lookup failed; trying local",
-				"request_id", decision.RequestID, "err", err.Error())
-		} else if strings.TrimSpace(deviceID) != "" {
+	if c.ownerResolver != nil {
+		deviceID := strings.TrimSpace(decision.DeviceID)
+		if deviceID == "" && c.submitSlots != nil {
+			resolved, err := c.submitSlots.DeviceIDForPermissionRequest(ctx, decision.RequestID)
+			if err != nil {
+				// Legacy direct callers have no canonical device id. Fall
+				// through to the local registry when their slot lookup fails.
+				c.log.Warn("agent_daemon: SubmitPermission slot lookup failed; trying local",
+					"request_id", decision.RequestID, "err", err.Error())
+			} else {
+				deviceID = strings.TrimSpace(resolved)
+			}
+		}
+		if deviceID != "" {
 			outcome, err := c.resolveOwnerForSubmit(ctx, decision.RequestID, deviceID, "permission")
 			if err != nil {
 				return err
@@ -835,6 +842,9 @@ func (c *Connector) SubmitPermissionLocal(ctx context.Context, decision connecto
 	}
 	sess, err := c.registry.LookupPermission(decision.RequestID)
 	if err != nil {
+		if errors.Is(err, gateway.ErrPermissionNotRegistered) {
+			return fmt.Errorf("agent_daemon: %w: %v", connector.ErrInteractionNoLongerPending, err)
+		}
 		return fmt.Errorf("agent_daemon: %w", err)
 	}
 	env, err := proto.NewEnvelope(proto.TypePermissionDecision, decision.RequestID, proto.PermissionDecisionPayload{
@@ -845,7 +855,7 @@ func (c *Connector) SubmitPermissionLocal(ctx context.Context, decision connecto
 		return fmt.Errorf("agent_daemon: build permission_decision: %w", err)
 	}
 	if err := sess.Send(ctx, env); err != nil {
-		return fmt.Errorf("agent_daemon: send permission_decision: %w", err)
+		return fmt.Errorf("agent_daemon: %w: send permission_decision: %v", connector.ErrInteractionRuntimeUnavailable, err)
 	}
 	// Clear the perm mapping so a duplicate SubmitPermission for the
 	// same id returns ErrPermissionNotRegistered rather than silently
@@ -863,12 +873,18 @@ func (c *Connector) SubmitPromptForUserChoice(ctx context.Context, decision conn
 	if decision.RequestID == "" {
 		return fmt.Errorf("agent_daemon: SubmitPromptForUserChoice requires RequestID")
 	}
-	if c.submitSlots != nil && c.ownerResolver != nil {
-		deviceID, err := c.submitSlots.DeviceIDForPromptForUserChoiceRequest(ctx, decision.RequestID)
-		if err != nil {
-			c.log.Warn("agent_daemon: SubmitPromptForUserChoice slot lookup failed; trying local",
-				"request_id", decision.RequestID, "err", err.Error())
-		} else if strings.TrimSpace(deviceID) != "" {
+	if c.ownerResolver != nil {
+		deviceID := strings.TrimSpace(decision.DeviceID)
+		if deviceID == "" && c.submitSlots != nil {
+			resolved, err := c.submitSlots.DeviceIDForPromptForUserChoiceRequest(ctx, decision.RequestID)
+			if err != nil {
+				c.log.Warn("agent_daemon: SubmitPromptForUserChoice slot lookup failed; trying local",
+					"request_id", decision.RequestID, "err", err.Error())
+			} else {
+				deviceID = strings.TrimSpace(resolved)
+			}
+		}
+		if deviceID != "" {
 			outcome, err := c.resolveOwnerForSubmit(ctx, decision.RequestID, deviceID, "prompt_for_user_choice")
 			if err != nil {
 				return err
@@ -893,11 +909,16 @@ func (c *Connector) SubmitPromptForUserChoiceLocal(ctx context.Context, decision
 	}
 	sess, err := c.registry.LookupPromptForUserChoice(decision.RequestID)
 	if err != nil {
+		if errors.Is(err, gateway.ErrPromptForUserChoiceNotRegistered) {
+			return fmt.Errorf("agent_daemon: %w: %v", connector.ErrInteractionNoLongerPending, err)
+		}
 		return fmt.Errorf("agent_daemon: %w", err)
 	}
 	qas := make([]proto.PromptForUserChoiceQuestionAnswer, 0, len(decision.QuestionAnswers))
 	for _, qa := range decision.QuestionAnswers {
-		qas = append(qas, proto.PromptForUserChoiceQuestionAnswer{Header: qa.Header, Answer: qa.Answer})
+		qas = append(qas, proto.PromptForUserChoiceQuestionAnswer{
+			QuestionID: qa.QuestionID, Answers: qa.Answers, Header: qa.Header, Answer: qa.Answer,
+		})
 	}
 	env, err := proto.NewEnvelope(proto.TypePromptForUserChoiceDecision, decision.RequestID, proto.PromptForUserChoiceDecisionPayload{
 		QuestionAnswers: qas,
@@ -909,7 +930,7 @@ func (c *Connector) SubmitPromptForUserChoiceLocal(ctx context.Context, decision
 		return fmt.Errorf("agent_daemon: build prompt_for_user_choice_decision: %w", err)
 	}
 	if err := sess.Send(ctx, env); err != nil {
-		return fmt.Errorf("agent_daemon: send prompt_for_user_choice_decision: %w", err)
+		return fmt.Errorf("agent_daemon: %w: send prompt_for_user_choice_decision: %v", connector.ErrInteractionRuntimeUnavailable, err)
 	}
 	c.registry.DetachPromptForUserChoice(decision.RequestID)
 	return nil

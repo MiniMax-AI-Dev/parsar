@@ -344,9 +344,9 @@ type ErrorNotification struct {
 }
 
 // ---------------------------------------------------------------------------
-// Approval ServerRequest params (suppressed by the all-false granular
-// policy today; left here so server_requests.go can compile against
-// these shapes when surfaceApprovals is later flipped on).
+// Approval and user-input ServerRequest params. Daemon sessions use a
+// human approval policy, so server_requests.go defers each matching JSON-RPC
+// response until Web or IM submits the decision.
 // ---------------------------------------------------------------------------
 
 type CommandExecutionRequestApprovalParams struct {
@@ -384,4 +384,34 @@ type CommandExecutionApprovalDecision = string
 // any of the three approval requests.
 type ApprovalDecisionResult struct {
 	Decision CommandExecutionApprovalDecision `json:"decision"`
+}
+
+type ToolRequestUserInputOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+type ToolRequestUserInputQuestion struct {
+	ID       string                       `json:"id"`
+	Header   string                       `json:"header"`
+	Question string                       `json:"question"`
+	Options  []ToolRequestUserInputOption `json:"options,omitempty"`
+	IsOther  bool                         `json:"isOther,omitempty"`
+	IsSecret bool                         `json:"isSecret,omitempty"`
+}
+
+type ToolRequestUserInputParams struct {
+	ThreadID         string                         `json:"threadId"`
+	TurnID           string                         `json:"turnId"`
+	ItemID           string                         `json:"itemId"`
+	Questions        []ToolRequestUserInputQuestion `json:"questions"`
+	AutoResolutionMs *uint64                        `json:"autoResolutionMs,omitempty"`
+}
+
+type ToolRequestUserInputAnswer struct {
+	Answers []string `json:"answers"`
+}
+
+type ToolRequestUserInputResponse struct {
+	Answers map[string]ToolRequestUserInputAnswer `json:"answers"`
 }

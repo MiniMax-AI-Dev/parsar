@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
+	"github.com/go-chi/chi/v5"
 )
 
 // fakeStreamConnector lets the stream-handler tests drive a
@@ -314,6 +314,7 @@ func TestWireEventNameMapsConnectorEnumsToShortNames(t *testing.T) {
 		{connector.EventError, "error"},
 		{connector.EventToolCall, "tool"},
 		{connector.EventPermissionRequest, "permission"},
+		{connector.EventPromptForUserChoice, "prompt_for_user_choice"},
 		{"", "message"},
 		{"unknown_future_type", "unknown_future_type"},
 	}
@@ -329,7 +330,7 @@ func TestWireEventNameMapsConnectorEnumsToShortNames(t *testing.T) {
 // the SSE `event:` header AND the payload `type` field both use the
 // short names, not the connector enum strings. A regression that
 // only fixes one of the two surfaces would still ship a broken UI.
-func TestWriteSSEEventUsesWireNamesForToolAndPermission(t *testing.T) {
+func TestWriteSSEEventUsesWireNamesForInteractiveEvents(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		ev   connector.PromptEvent
@@ -342,6 +343,14 @@ func TestWriteSSEEventUsesWireNamesForToolAndPermission(t *testing.T) {
 		{
 			ev:   connector.PromptEvent{Type: connector.EventPermissionRequest, Permission: &connector.PermissionRequest{ID: "p1", Tool: "bash"}},
 			want: "permission",
+		},
+		{
+			ev: connector.PromptEvent{Type: connector.EventPromptForUserChoice, PromptForUserChoice: &connector.PromptForUserChoiceRequest{
+				ID: "ask1", Questions: []connector.PromptForUserChoiceQuestion{{
+					Header: "Deploy", Question: "Where?", Options: []connector.PromptForUserChoiceOption{{Label: "Staging"}},
+				}},
+			}},
+			want: "prompt_for_user_choice",
 		},
 	} {
 		buf := &bytes.Buffer{}
@@ -357,6 +366,37 @@ func TestWriteSSEEventUsesWireNamesForToolAndPermission(t *testing.T) {
 		if !strings.Contains(out, `"type":"`+tc.want+`"`) {
 			t.Errorf("SSE payload missing `\"type\":\"%s\"`: %q", tc.want, out)
 		}
+	}
+}
+
+func TestWriteSSEEventSerializesUserChoiceQuestions(t *testing.T) {
+	t.Parallel()
+	buf := &bytes.Buffer{}
+	rec := &writeFlusherRecorder{ResponseRecorder: httptest.NewRecorder(), buf: buf}
+	ev := connector.PromptEvent{Type: connector.EventPromptForUserChoice, PromptForUserChoice: &connector.PromptForUserChoiceRequest{
+		ID: "ask1", Questions: []connector.PromptForUserChoiceQuestion{{
+			ID: "checks", Header: "Checks", Question: "Which checks?", MultiSelect: true,
+			Options: []connector.PromptForUserChoiceOption{{Label: "Unit"}, {Label: "E2E", Description: "Browser flow"}},
+		}},
+	}}
+	if err := writeSSEEvent(rec, ev); err != nil {
+		t.Fatalf("writeSSEEvent: %v", err)
+	}
+	frames := parseSSEFrames(t, buf)
+	if len(frames) != 1 {
+		t.Fatalf("frames = %d, want 1", len(frames))
+	}
+	choice, ok := frames[0]["prompt_for_user_choice"].(map[string]any)
+	if !ok || choice["id"] != "ask1" {
+		t.Fatalf("choice payload = %#v", frames[0]["prompt_for_user_choice"])
+	}
+	questions, ok := choice["questions"].([]any)
+	if !ok || len(questions) != 1 {
+		t.Fatalf("questions = %#v", choice["questions"])
+	}
+	question, _ := questions[0].(map[string]any)
+	if question["id"] != "checks" || question["header"] != "Checks" || question["multi_select"] != true {
+		t.Fatalf("question = %#v", question)
 	}
 }
 

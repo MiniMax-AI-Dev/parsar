@@ -233,7 +233,25 @@
     },
     "actions": {
       "allowOnce": "Allow once",
-      "deny": "Deny"
+      "deny": "Deny",
+      "submitAnswers": "Submit answers",
+      "cancel": "Cancel request"
+    },
+    "kind": {
+      "permission": "Approval",
+      "userChoice": "Question"
+    },
+    "status": {
+      "pending": "Pending",
+      "resolving": "Submitting",
+      "approved": "Approved",
+      "denied": "Denied",
+      "answered": "Answered",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "questions": {
+      "customAnswer": "Optional custom answer"
     },
     "detail": {
       "agent": "Agent",
@@ -372,7 +390,14 @@
       "error": "Streaming interrupted: {{error}}",
       "retry": "Retry",
       "queued": "Queued",
-      "queuedWithPosition": "Queued (position {{position}})"
+      "queuedWithPosition": "Queued (position {{position}})",
+      "waitingForHuman": "The Agent is waiting for your approval or answer.",
+      "openInbox": "Open Inbox",
+      "interactionTitle": "Agent needs your input",
+      "interactionDescription": "Review this request here to let the run continue.",
+      "viewAllInteractions": "View all in Inbox",
+      "loadingInteraction": "Loading the approval request…",
+      "interactionLoadError": "The request could not be loaded here. Open Inbox to retry."
     },
     "permission": {
       "header": "Agent requests approval",

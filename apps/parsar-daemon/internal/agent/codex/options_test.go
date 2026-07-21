@@ -7,16 +7,16 @@ import (
 	"testing"
 )
 
-func TestBuildSessionPlan_DefaultsSilentAndFullAccess(t *testing.T) {
+func TestBuildSessionPlan_DefaultsToHumanApprovalAndWorkspaceWrite(t *testing.T) {
 	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", nil)
 	if err != nil {
 		t.Fatalf("BuildSessionPlan: %v", err)
 	}
-	if !IsSilent(&plan.ApprovalPolicy) {
-		t.Fatalf("default policy must be silent, got %+v", plan.ApprovalPolicy)
+	if IsSilent(&plan.ApprovalPolicy) {
+		t.Fatalf("default policy must surface approvals, got %+v", plan.ApprovalPolicy)
 	}
-	if plan.Sandbox != SandboxDangerFullAcces {
-		t.Fatalf("default sandbox = %s, want danger-full-access", plan.Sandbox)
+	if plan.Sandbox != SandboxWorkspaceWrite {
+		t.Fatalf("default sandbox = %s, want workspace-write", plan.Sandbox)
 	}
 	if plan.Cleanup == nil {
 		t.Fatal("Cleanup must be non-nil")

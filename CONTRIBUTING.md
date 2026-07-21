@@ -161,6 +161,42 @@ description and keep ownership on the side listed here.
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.
 
+### Human interaction lifecycle
+
+- `agent_interactions` is the canonical durable record for permission prompts
+  and `AskUserQuestion` / `requestUserInput` requests. The Web approval inbox,
+  conversation SSE notices, and IM cards are presentation surfaces over that
+  record.
+- The active Web conversation renders its pending durable interactions as full
+  decision cards. SSE request IDs may prioritize a newly emitted card, but the
+  workspace interaction query must restore the card after refresh. The inbox
+  remains the workspace-wide queue, and both surfaces reuse the same decision
+  component and resolution API.
+- `conversations.metadata.gateway_inflight.permission` and
+  `prompt_for_user_choice` remain channel delivery slots only. Do not make a
+  runtime response depend on an IM card having been rendered first.
+- A daemon adapter that supports approval or user input must emit the shared
+  protocol request and defer the engine response until
+  `SubmitPermission` / `SubmitPromptForUserChoice` arrives. Adapters must not
+  silently approve, deny, or synthesize empty answers as a fallback.
+- Web and IM responders must call the same interaction resolution service.
+  Routes and card callbacks must not implement their own status transition or
+  deliver to the runtime before the canonical compare-and-swap claim succeeds.
+- Question answers use the stable question ID from the adapter and preserve
+  selected values as an array. Headers and positional answers are compatibility
+  fields only; they are not durable identity.
+- Every deferred request has a bounded lifetime. The server expiry worker is
+  authoritative: it explicitly denies a permission or cancels user input,
+  unblocks the runtime, and leaves an `expired` terminal record. Daemon timers
+  are a safety net and must make the same deny/cancel choice. Neither path may
+  silently continue the requested action.
+- Human responses are workspace-scoped, reject viewer writes, claim a single
+  winner before contacting the runtime, persist a terminal state, clear the
+  matching inflight slot, and emit an approval audit event. A terminal run
+  cancels any still-open interactions. Multi-pod daemon routing resolves
+  `request_id` through the canonical interaction's `device_id`; IM slots are
+  only a legacy fallback.
+
 ### Sandbox and local runtime lifecycle
 
 - The default local install path provides one ready-to-use sandbox runtime.

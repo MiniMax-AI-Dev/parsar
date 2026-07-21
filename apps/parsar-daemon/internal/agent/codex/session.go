@@ -86,6 +86,8 @@ type Session struct {
 	finalTextMu sync.Mutex
 	finalText   string
 	lastErrText string
+
+	interactions *pendingCodexInteractions
 }
 
 var _ agent.Session = (*Session)(nil)
@@ -137,6 +139,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cleanup:       plan.Cleanup,
 		bufs:          NewItemBuffers(),
 		resolvedModel: plan.Model,
+		interactions:  newPendingCodexInteractions(),
 	}
 	s.registerHandlers()
 
@@ -160,6 +163,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 
 func (s *Session) Cancel(_ context.Context) error {
 	s.cancelOnce.Do(func() {
+		s.stopCodexInteractionTimers()
 		// Best-effort turn/interrupt — codex will translate this into
 		// a graceful turn termination. If the RPC is already dead the
 		// kill path below cleans up.
@@ -175,18 +179,16 @@ func (s *Session) Cancel(_ context.Context) error {
 	return nil
 }
 
-// SubmitPermission is not wired today: the daemon runs codex under the
-// silent granular policy, so codex never raises an approval ServerRequest.
-// Returns agent.ErrUnknownPermission so the router knows it's a benign
-// pass-through, matching the opencode adapter.
-func (s *Session) SubmitPermission(_ context.Context, _ string, _ proto.PermissionDecisionPayload) error {
-	return agent.ErrUnknownPermission
+// SubmitPermission completes the deferred Codex app-server request that
+// produced the Parsar permission envelope.
+func (s *Session) SubmitPermission(_ context.Context, permID string, decision proto.PermissionDecisionPayload) error {
+	return s.submitCodexPermission(permID, decision)
 }
 
-// SubmitPromptForUserChoice: codex has no AskUserQuestion equivalent
-// today, so this is a no-op the dispatcher logs and moves on.
-func (s *Session) SubmitPromptForUserChoice(_ context.Context, _ string, _ proto.PromptForUserChoiceDecisionPayload) error {
-	return agent.ErrUnknownAsk
+// SubmitPromptForUserChoice maps Parsar's header/answer pairs back to
+// Codex's question-id keyed requestUserInput response.
+func (s *Session) SubmitPromptForUserChoice(_ context.Context, askID string, decision proto.PromptForUserChoiceDecisionPayload) error {
+	return s.submitCodexUserInput(askID, decision)
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +197,7 @@ func (s *Session) SubmitPromptForUserChoice(_ context.Context, _ string, _ proto
 
 func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 	defer close(s.waitDone)
+	defer s.stopCodexInteractionTimers()
 	defer s.cleanup()
 	defer s.closeOut()
 
@@ -317,21 +320,12 @@ func (s *Session) registerHandlers() {
 	rpc.OnNotification("thread/tokenUsage/updated", s.onUsageUpdated)
 	rpc.OnNotification("error", s.onErrorNotif)
 
-	// Approval ServerRequests under silent granular policy should not
-	// fire; if codex sends one anyway, auto-accept so the turn proceeds
-	// rather than dangling. (TODO: surface as PermissionRequest when
-	// the agent admin opts surface_approvals on.)
-	autoAccept := func(_ json.RawMessage, _ any) (any, error) {
-		return ApprovalDecisionResult{Decision: "accept"}, nil
-	}
-	rpc.OnServerRequest("item/commandExecution/requestApproval", autoAccept)
-	rpc.OnServerRequest("item/fileChange/requestApproval", autoAccept)
-	rpc.OnServerRequest("item/permissionsRequestApproval", autoAccept)
-	// item/tool/requestUserInput (ARC) under silent policy: decline so
-	// codex doesn't block waiting for an answer we can't supply.
-	rpc.OnServerRequest("item/tool/requestUserInput", func(_ json.RawMessage, _ any) (any, error) {
-		return map[string]any{"answers": map[string]any{}}, nil
-	})
+	rpc.OnServerRequest("item/commandExecution/requestApproval", s.handleCodexCommandApproval)
+	rpc.OnServerRequest("item/fileChange/requestApproval", s.handleCodexFileApproval)
+	rpc.OnServerRequest("item/permissions/requestApproval", s.handleCodexPermissionsApproval)
+	// Older app-server releases used this unseparated method name.
+	rpc.OnServerRequest("item/permissionsRequestApproval", s.handleCodexPermissionsApproval)
+	rpc.OnServerRequest("item/tool/requestUserInput", s.handleCodexUserInput)
 }
 
 func (s *Session) onThreadStarted(raw json.RawMessage) {

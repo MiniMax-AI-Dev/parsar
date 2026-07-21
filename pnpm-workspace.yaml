@@ -1,3 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+allowBuilds:
+  # Vite requires esbuild's platform-binary installer. Keep the allowlist
+  # explicit so supply-chain-enforcing pnpm runtimes can run project checks.
+  esbuild: true

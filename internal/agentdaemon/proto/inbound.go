@@ -102,6 +102,7 @@ type PromptForUserChoiceOption struct {
 // question) AskUserQuestion call. Mirrors the Claude Code built-in
 // schema verbatim so the daemon doesn't translate the shape twice.
 type PromptForUserChoiceQuestion struct {
+	ID          string                      `json:"id"`
 	Header      string                      `json:"header,omitempty"`
 	Question    string                      `json:"question"`
 	MultiSelect bool                        `json:"multi_select,omitempty"`

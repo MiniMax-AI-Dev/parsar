@@ -1364,6 +1364,23 @@ func TestSubmitPermission_ForwardsToRemoteOwnerPod(t *testing.T) {
 	}
 }
 
+func TestSubmitPermission_UsesCanonicalDeviceWithoutIMSlot(t *testing.T) {
+	remote := &fakeRemoteSubmitter{}
+	c := New(Config{
+		Registry: gateway.NewRegistry(), Binder: binding.NewInMemoryBinder(),
+		OwnerResolver: fakeOwnerResolver{owner: remoteOwner("dev-canonical"), ok: true},
+		OwnerPodID:    "pod-a", RemoteSubmit: remote,
+	})
+	if err := c.SubmitPermission(context.Background(), connector.PermissionDecision{
+		RequestID: "perm-canonical", DeviceID: "dev-canonical", Approved: true,
+	}); err != nil {
+		t.Fatalf("SubmitPermission: %v", err)
+	}
+	if !remote.permCalled || remote.permOwner.DeviceID != "dev-canonical" || remote.permDec.DeviceID != "dev-canonical" {
+		t.Fatalf("remote submission = called:%v owner:%+v decision:%+v", remote.permCalled, remote.permOwner, remote.permDec)
+	}
+}
+
 // TestSubmitPermission_ThisPodHandlesLocally covers the "I am the
 // owner" branch — owner check passes, so we must NOT POST out, we must
 // fall into the registry lookup path. A missing perm registration
@@ -1442,6 +1459,23 @@ func TestSubmitPromptForUserChoice_ForwardsToRemoteOwnerPod(t *testing.T) {
 	}
 	if remote.askDec.RequestID != "ask-y" || len(remote.askDec.Answers) != 1 || remote.askDec.Answers[0] != "yes" {
 		t.Fatalf("decision payload mismatch: %+v", remote.askDec)
+	}
+}
+
+func TestSubmitPromptForUserChoice_UsesCanonicalDeviceWithoutIMSlot(t *testing.T) {
+	remote := &fakeRemoteSubmitter{}
+	c := New(Config{
+		Registry: gateway.NewRegistry(), Binder: binding.NewInMemoryBinder(),
+		OwnerResolver: fakeOwnerResolver{owner: remoteOwner("dev-canonical"), ok: true},
+		OwnerPodID:    "pod-a", RemoteSubmit: remote,
+	})
+	if err := c.SubmitPromptForUserChoice(context.Background(), connector.PromptForUserChoiceDecision{
+		RequestID: "ask-canonical", DeviceID: "dev-canonical", Answers: []string{"yes"},
+	}); err != nil {
+		t.Fatalf("SubmitPromptForUserChoice: %v", err)
+	}
+	if !remote.askCalled || remote.askOwner.DeviceID != "dev-canonical" || remote.askDec.DeviceID != "dev-canonical" {
+		t.Fatalf("remote submission = called:%v owner:%+v decision:%+v", remote.askCalled, remote.askOwner, remote.askDec)
 	}
 }
 

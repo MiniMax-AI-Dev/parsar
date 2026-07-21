@@ -181,17 +181,19 @@ type ToolCallEvent struct {
 // Connectors with Capabilities.Permissions=true emit one of these and
 // wait (inside the connector) for the matching SubmitPermission call.
 type PermissionRequest struct {
-	ID      string
-	Tool    string
-	Title   string
-	Detail  string
-	Payload map[string]any
+	ID       string
+	DeviceID string
+	Tool     string
+	Title    string
+	Detail   string
+	Payload  map[string]any
 }
 
 // PermissionDecision is the human verdict for a PermissionRequest,
 // submitted via AgentConnector.SubmitPermission.
 type PermissionDecision struct {
 	RequestID string
+	DeviceID  string
 	Approved  bool
 	Note      string
 	By        string // user id
@@ -208,6 +210,7 @@ type PromptForUserChoiceOption struct {
 // PromptForUserChoiceQuestion is one question in a (possibly multi-
 // question) AskUserQuestion call. Mirrors proto.PromptForUserChoiceQuestion.
 type PromptForUserChoiceQuestion struct {
+	ID          string
 	Header      string
 	Question    string
 	MultiSelect bool
@@ -224,6 +227,7 @@ type PromptForUserChoiceQuestion struct {
 // have a uniform read path via EffectiveQuestions.
 type PromptForUserChoiceRequest struct {
 	ID        string
+	DeviceID  string
 	Questions []PromptForUserChoiceQuestion
 
 	// Legacy single-question fields. New daemons leave these empty.
@@ -255,12 +259,14 @@ func (r PromptForUserChoiceRequest) EffectiveQuestions() []PromptForUserChoiceQu
 	}}
 }
 
-// PromptForUserChoiceQuestionAnswer carries one (question, answer)
-// pair from a multi-question submit. Header matches the question's
-// Header field; the daemon falls back to "q<i>" when Header is blank.
+// PromptForUserChoiceQuestionAnswer carries one structured response.
+// QuestionID is canonical and Answers preserves multi-select values;
+// Header and Answer remain compatibility fields for older peers.
 type PromptForUserChoiceQuestionAnswer struct {
-	Header string
-	Answer string
+	QuestionID string
+	Answers    []string
+	Header     string
+	Answer     string
 }
 
 // PromptForUserChoiceDecision is the human's answer, submitted via
@@ -274,6 +280,7 @@ type PromptForUserChoiceQuestionAnswer struct {
 //     daemon can emit a "stop, don't retry" tool_result.
 type PromptForUserChoiceDecision struct {
 	RequestID       string
+	DeviceID        string
 	QuestionAnswers []PromptForUserChoiceQuestionAnswer
 	Answers         []string
 	Cancelled       bool

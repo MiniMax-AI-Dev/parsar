@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	sqlc "github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	sqlc "github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 // Wrappers around the inflight-card jsonb slots, keyed at
@@ -98,6 +98,7 @@ type PromptForUserChoiceOption struct {
 // — kept here so server callers don't have to import the daemon proto
 // package just to render a card.
 type PromptForUserChoiceQuestion struct {
+	ID          string                      `json:"id"`
 	Header      string                      `json:"header,omitempty"`
 	Question    string                      `json:"question"`
 	MultiSelect bool                        `json:"multi_select,omitempty"`
@@ -163,11 +164,11 @@ func (s PromptForUserChoiceInflightSlot) EffectiveQuestions() []PromptForUserCho
 // the full conversations.metadata jsonb; consume via the typed
 // WorkingInflightSlot / PermissionInflightSlot helpers.
 type FeishuInflightConversation struct {
-	ConversationID       string
-	WorkspaceID          string
-	ExternalChatID       string
-	ExternalThreadID     string
-	SourceAppID          string
+	ConversationID   string
+	WorkspaceID      string
+	ExternalChatID   string
+	ExternalThreadID string
+	SourceAppID      string
 	// Platform is the IM platform the conversation belongs to
 	// (conversations.platform: "feishu", "slack", ...). The outbound
 	// driver dispatches by this field — Feishu rows take the legacy
@@ -223,11 +224,11 @@ func (s *Store) ListActiveFeishuInflightConversations(ctx context.Context, cutof
 	out := make([]FeishuInflightConversation, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, FeishuInflightConversation{
-			ConversationID:       row.ConversationID,
-			WorkspaceID:          row.WorkspaceID,
-			ExternalChatID:       row.ExternalChatID,
-			ExternalThreadID:     row.ExternalThreadID,
-			SourceAppID:          row.SourceAppID,
+			ConversationID:   row.ConversationID,
+			WorkspaceID:      row.WorkspaceID,
+			ExternalChatID:   row.ExternalChatID,
+			ExternalThreadID: row.ExternalThreadID,
+			SourceAppID:      row.SourceAppID,
 			// List query is not platform-parameterized (feishu-only debug
 			// path), so the row carries no platform column — literal here.
 			Platform:             "feishu",
@@ -655,6 +656,9 @@ func (s *Store) FindConversationByPermissionRequestID(ctx context.Context, permi
 // treats that as "single-pod / no owner routing". Returns
 // ErrUnknownConversation if no matching slot exists.
 func (s *Store) DeviceIDForPermissionRequest(ctx context.Context, requestID string) (string, error) {
+	if deviceID, err := s.interactionDeviceID(ctx, AgentInteractionKindPermission, requestID); err == nil {
+		return strings.TrimSpace(deviceID), nil
+	}
 	conv, err := s.FindConversationByPermissionRequestID(ctx, requestID)
 	if err != nil {
 		return "", err
@@ -665,6 +669,9 @@ func (s *Store) DeviceIDForPermissionRequest(ctx context.Context, requestID stri
 // DeviceIDForPromptForUserChoiceRequest mirrors DeviceIDForPermissionRequest
 // for AskUserQuestion slots.
 func (s *Store) DeviceIDForPromptForUserChoiceRequest(ctx context.Context, requestID string) (string, error) {
+	if deviceID, err := s.interactionDeviceID(ctx, AgentInteractionKindUserChoice, requestID); err == nil {
+		return strings.TrimSpace(deviceID), nil
+	}
 	conv, err := s.FindConversationByPromptForUserChoiceRequestID(ctx, requestID)
 	if err != nil {
 		return "", err

@@ -65,6 +65,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/slackrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/teamsrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/scheduler"
@@ -373,6 +374,11 @@ func main() {
 	// below can wrap the agent_daemon AgentConnector as a
 	// PermissionRouter. Stays empty when dbStore is nil.
 	connectorReg := connector.NewRegistry()
+	var interactionService *interaction.Service
+	if dbStore != nil {
+		interactionService = interaction.NewService(dbStore, interaction.RegistryDelivery{Runs: dbStore, Registry: connectorReg}, log.Bg())
+		opts = append(opts, dev.WithInteractionService(interactionService))
+	}
 	// Shared signer for the auto-mounted fetch_chat_history tool. Hoisted to
 	// function scope so both the agent_daemon connector (mints per-conversation
 	// tokens) and the internal history endpoint (verifies them) share one
@@ -796,6 +802,14 @@ func main() {
 	if auditIngester != nil {
 		auditIngester.Start(ctx)
 	}
+	if interactionService != nil {
+		worker := interaction.NewWorker(interactionService, dbStore, interaction.WorkerOptions{})
+		go func() {
+			if err := worker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				log.Bg().Error("interaction expiry worker exited", "error", err)
+			}
+		}()
+	}
 
 	// Optional embedded OTLP/HTTP receiver so sandbox sidecars / OTel-
 	// SDK producers can ship tool-lifecycle events into the same
@@ -874,7 +888,7 @@ func main() {
 	// event_mode=websocket and need this manager to turn Feishu
 	// events into Parsar gateway messages.
 	if dbStore != nil {
-		if manager, err := buildFeishuWebSocketManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+		if manager, err := buildFeishuWebSocketManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL, interactionService); err != nil {
 			log.Bg().Error("feishu websocket inbound manager init failed", "error", err)
 			os.Exit(1)
 		} else if manager != nil {
@@ -891,7 +905,7 @@ func main() {
 	// only (agent async answers don't return to Slack until a neutral outbound
 	// worker lands). Shares the router store; no DDL.
 	if dbStore != nil {
-		if runner, err := buildSlackRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+		if runner, err := buildSlackRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL, interactionService); err != nil {
 			log.Bg().Error("slack socket mode runner init failed", "error", err)
 			os.Exit(1)
 		} else if runner != nil {
@@ -909,7 +923,7 @@ func main() {
 	// MESSAGE_CONTENT is a privileged gateway intent — enable it in the Discord
 	// Developer Portal or message bodies arrive empty.
 	if dbStore != nil {
-		if runner, err := buildDiscordRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+		if runner, err := buildDiscordRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL, interactionService); err != nil {
 			log.Bg().Error("discord gateway runner init failed", "error", err)
 			os.Exit(1)
 		} else if runner != nil {
@@ -927,7 +941,7 @@ func main() {
 	// on the chi router rather than a goroutine. Feeds the same neutral
 	// router.HandleInbound pipeline; inbound only. Shares the router store; no DDL.
 	if dbStore != nil {
-		if runner, err := buildTeamsRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+		if runner, err := buildTeamsRunner(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL, interactionService); err != nil {
 			log.Bg().Error("teams webhook runner init failed", "error", err)
 			os.Exit(1)
 		} else if runner != nil {
@@ -941,7 +955,7 @@ func main() {
 	// workspace|app_id, hot-reloading on token rotation — the DB-driven twin of
 	// the env-gated buildSlackRunner above.
 	if dbStore != nil {
-		if mgr, err := buildSlackInboundManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+		if mgr, err := buildSlackInboundManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL, interactionService); err != nil {
 			log.Bg().Error("slack connectors reconciler init failed", "error", err)
 			os.Exit(1)
 		} else if mgr != nil {
@@ -957,7 +971,7 @@ func main() {
 	// true. Reads workspace_im_connectors and keeps one Gateway WebSocket runner
 	// per workspace|app_id — the DB-driven twin of buildDiscordRunner.
 	if dbStore != nil {
-		if mgr, err := buildDiscordInboundManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL); err != nil {
+		if mgr, err := buildDiscordInboundManager(os.Getenv, dbStore, connectorReg, cfg.Server.PublicURL, interactionService); err != nil {
 			log.Bg().Error("discord connectors reconciler init failed", "error", err)
 			os.Exit(1)
 		} else if mgr != nil {
@@ -1610,6 +1624,15 @@ func defaultFeishuSharedBotEnv(env func(string) string) feishuSharedBotEnv {
 	}
 }
 
+func firstInteractionResolver(resolvers []inbound.InteractionResolver) inbound.InteractionResolver {
+	for _, resolver := range resolvers {
+		if resolver != nil {
+			return resolver
+		}
+	}
+	return nil
+}
+
 // buildFeishuWebSocketManager constructs the Feishu event-websocket inbound
 // manager for DB-driven workspace connectors and optional legacy env bots.
 //
@@ -1620,7 +1643,7 @@ func defaultFeishuSharedBotEnv(env func(string) string) feishuSharedBotEnv {
 //   - PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET   (optional; falls back to PARSAR_FEISHU_APP_SECRET)
 //   - PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID      (optional; self-message dedup)
 //   - PARSAR_MASTER_KEY                      (REQUIRED when enabled)
-func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*inbound.Manager, error) {
+func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string, resolvers ...inbound.InteractionResolver) (*inbound.Manager, error) {
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
 		return nil, nil
@@ -1667,6 +1690,7 @@ func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, 
 		},
 		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		InteractionResolver:       firstInteractionResolver(resolvers),
 		JoinURLBuilder:            feishuJoinURLBuilder,
 		Connectors:                dbStore,
 	})
@@ -1701,7 +1725,7 @@ func buildFeishuWebSocketManager(env func(string) string, dbStore *store.Store, 
 // as Feishu) and inject its CardActionRouter so Slack button clicks resolve
 // permissions / choices / credential forms. Without a master key the adapter
 // runs router-less and a click just echoes a neutral "received" reply.
-func buildSlackRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*slackrunner.Runner, error) {
+func buildSlackRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string, resolvers ...inbound.InteractionResolver) (*slackrunner.Runner, error) {
 	if !truthy(env("PARSAR_SLACK_SOCKET")) {
 		return nil, nil
 	}
@@ -1739,6 +1763,7 @@ func buildSlackRunner(env func(string) string, dbStore *store.Store, connectorRe
 			JoinURLBuilder:            slackJoinURLBuilder,
 			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+			InteractionResolver:       firstInteractionResolver(resolvers),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("slack socket mode: init action manager: %w", err)
@@ -1801,7 +1826,7 @@ func buildSlackRunner(env func(string) string, dbStore *store.Store, connectorRe
 // neutral "received" reply. A MemoryPickStore is always injected so the
 // per-interaction select-pick accumulation (Discord fires one interaction per
 // select change) folds into the Submit click.
-func buildDiscordRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*discordrunner.Runner, error) {
+func buildDiscordRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string, resolvers ...inbound.InteractionResolver) (*discordrunner.Runner, error) {
 	if !truthy(env("PARSAR_DISCORD_GATEWAY")) {
 		return nil, nil
 	}
@@ -1835,6 +1860,7 @@ func buildDiscordRunner(env func(string) string, dbStore *store.Store, connector
 			JoinURLBuilder:            discordJoinURLBuilder,
 			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+			InteractionResolver:       firstInteractionResolver(resolvers),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("discord gateway: init action manager: %w", err)
@@ -1906,7 +1932,7 @@ func buildDiscordRunner(env func(string) string, dbStore *store.Store, connector
 // Adaptive Card button clicks resolve permissions / choices / credential forms;
 // without it the adapter runs router-less and a click just echoes a neutral
 // "received" ack.
-func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*teamsrunner.Runner, error) {
+func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string, resolvers ...inbound.InteractionResolver) (*teamsrunner.Runner, error) {
 	connectorsMode := truthy(env("PARSAR_TEAMS_CONNECTORS"))
 	if !truthy(env("PARSAR_TEAMS_WEBHOOK")) && !connectorsMode {
 		return nil, nil
@@ -1978,6 +2004,7 @@ func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorRe
 			JoinURLBuilder:            teamsJoinURLBuilder,
 			PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 			PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+			InteractionResolver:       firstInteractionResolver(resolvers),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("teams webhook: init action manager: %w", err)
@@ -2018,7 +2045,7 @@ func buildTeamsRunner(env func(string) string, dbStore *store.Store, connectorRe
 // shared across every per-bot adapter the NewAdapter factory mints — both
 // resolve by store lookup (card payload / app_id), not by a captured token, so a
 // single instance serves all workspace bots.
-func buildSlackInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*slackrunner.Manager, error) {
+func buildSlackInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string, resolvers ...inbound.InteractionResolver) (*slackrunner.Manager, error) {
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
 		return nil, nil
@@ -2043,6 +2070,7 @@ func buildSlackInboundManager(env func(string) string, dbStore *store.Store, con
 		JoinURLBuilder:            slackJoinURLBuilder,
 		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		InteractionResolver:       firstInteractionResolver(resolvers),
 		Connectors:                dbStore,
 	})
 	if err != nil {
@@ -2090,7 +2118,7 @@ func buildSlackInboundManager(env func(string) string, dbStore *store.Store, con
 // WebSocket runner per workspace|app_id. Discord uses one bot token (no app token),
 // so the NewAdapter factory takes only (appID, botToken). A MemoryPickStore is
 // injected per adapter so select-change interactions fold into the Submit click.
-func buildDiscordInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string) (*discordrunner.Manager, error) {
+func buildDiscordInboundManager(env func(string) string, dbStore *store.Store, connectorReg *connector.Registry, publicURL string, resolvers ...inbound.InteractionResolver) (*discordrunner.Manager, error) {
 	masterKey := strings.TrimSpace(env("PARSAR_MASTER_KEY"))
 	if masterKey == "" {
 		return nil, nil
@@ -2115,6 +2143,7 @@ func buildDiscordInboundManager(env func(string) string, dbStore *store.Store, c
 		JoinURLBuilder:            discordJoinURLBuilder,
 		PermissionRouter:          inboundPermissionRouter{registry: connectorReg},
 		PromptForUserChoiceRouter: inboundPromptForUserChoiceRouter{registry: connectorReg},
+		InteractionResolver:       firstInteractionResolver(resolvers),
 		Connectors:                dbStore,
 	})
 	if err != nil {

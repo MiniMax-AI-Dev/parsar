@@ -5,19 +5,29 @@ import (
 	"fmt"
 )
 
-// SilentGranularPolicy is the default policy daemon-managed codex sessions
-// run under: every gate set to false, so codex auto-accepts every
-// command / file / permission server-request without surfacing it.
-// Equivalent to claude_code's --allow-dangerously-skip-permissions.
+// SilentGranularPolicy disables every Codex approval surface. It is retained
+// for wire-compatibility tests and explicit callers; daemon sessions default
+// to HumanApprovalPolicy so normal runs never auto-accept requests.
 func SilentGranularPolicy() AskForApproval {
 	g := GranularAskForApproval{} // zero value = every gate false
 	return AskForApproval{Granular: &g}
 }
 
+// HumanApprovalPolicy surfaces every Codex approval gate to Parsar. The
+// daemon turns those server requests into the same permission envelopes used
+// by Claude Code, so Web and IM users make the decision explicitly.
+func HumanApprovalPolicy() AskForApproval {
+	g := GranularAskForApproval{
+		SandboxApproval: true, Rules: true, SkillApproval: true,
+		RequestPermissions: true, MCPElicitations: true,
+	}
+	return AskForApproval{Granular: &g}
+}
+
 // IsSilent reports whether p suppresses every approval surface. The
-// daemon uses this to decide whether to register a server-request
-// handler that auto-accepts (silent) versus one that turns the request
-// into a proto.PermissionRequest envelope (loud).
+// daemon logs this distinction when it starts a thread. Server-request
+// handlers are always registered so explicit policy overrides cannot leave
+// Codex waiting on an unhandled request.
 //
 // A nil pointer is treated as silent — the safe default when callers
 // forget to wire a policy.
@@ -53,9 +63,9 @@ func (a AskForApproval) MarshalJSON() ([]byte, error) {
 			Granular *GranularAskForApproval `json:"granular"`
 		}{Granular: a.Granular})
 	}
-	// Neither set — default to silent granular to keep daemon sessions
-	// non-interactive. An empty marshal would produce `null` which
-	// codex-rs rejects.
+	// Neither set — preserve the historical zero-value encoding. Production
+	// plans always set HumanApprovalPolicy explicitly; an empty marshal would
+	// produce `null`, which codex-rs rejects.
 	return json.Marshal(struct {
 		Granular GranularAskForApproval `json:"granular"`
 	}{})
