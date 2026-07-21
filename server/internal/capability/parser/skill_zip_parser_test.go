@@ -38,6 +38,22 @@ const minimalSkillMd = "---\n" +
 	"---\n" +
 	"You are a careful code reviewer.\n"
 
+func TestParseSkillZip_HappyPath_SkillMdOnly(t *testing.T) {
+	buf := buildZip(t, []struct{ name, content string }{
+		{"SKILL.md", minimalSkillMd},
+	})
+	res, err := ParseSkillZip(buf)
+	if err != nil {
+		t.Fatalf("ParseSkillZip: %v", err)
+	}
+	if res.Spec.Skill == nil {
+		t.Fatal("spec.Skill nil")
+	}
+	if len(res.Spec.Skill.Files) != 0 {
+		t.Fatalf("SKILL.md-only zip should not require supporting files, got %+v", res.Spec.Skill.Files)
+	}
+}
+
 // TestParseSkillZip_HappyPath_RootLayout: SKILL.md + references/ + scripts/
 // at the zip root. Output has stable sort order and correct Kind.
 func TestParseSkillZip_HappyPath_RootLayout(t *testing.T) {
@@ -127,50 +143,22 @@ func TestParseSkillZip_HappyPath_WrappingRootDirWithDirEntries(t *testing.T) {
 	}
 }
 
-// TestParseSkillZip_DirEntriesNotReportedAsIgnored: directory markers used
-// to slip past pathHasAllowedSkillPrefix (normalizeZipPath stripped their
-// slash) and got reported as "ignored outside references/" — confusing
-// because their location IS one of the allowed dirs. IsDir() filter now
-// runs before the allowlist check.
-func TestParseSkillZip_DirEntriesNotReportedAsIgnored(t *testing.T) {
+func TestParseSkillZip_DirectoryEntriesAreNotImported(t *testing.T) {
 	buf := buildZip(t, []struct{ name, content string }{
 		{"SKILL.md", minimalSkillMd},
 		{"references/", ""},
 		{"references/foo.md", "# foo\n"},
-		{".claude-plugin/", ""},
-		{".claude-plugin/plugin.json", "{}\n"},
+		{"docs/", ""},
 	})
 	res, err := ParseSkillZip(buf)
 	if err != nil {
 		t.Fatalf("ParseSkillZip: %v", err)
 	}
-	// references/foo.md is the only legitimate sibling — confirm import succeeded.
 	if got := len(res.Spec.Skill.Files); got != 1 {
 		t.Fatalf("want 1 imported file, got %d: %+v", got, res.Spec.Skill.Files)
 	}
-	// Exactly one ignored-files warning, listing only the genuine stray.
-	var ignoredWarning string
-	for _, w := range res.Warnings {
-		if strings.HasPrefix(w, "ignored ") {
-			ignoredWarning = w
-			break
-		}
-	}
-	if ignoredWarning == "" {
-		t.Fatalf("expected an ignored-files warning, got warnings=%v", res.Warnings)
-	}
-	// Bare "references" / ".claude-plugin" (no slash) here would mean a
-	// dir marker leaked through — the bug we're guarding against.
-	for _, leak := range []string{"references,", "references ", ".claude-plugin,", ".claude-plugin "} {
-		if strings.Contains(ignoredWarning+" ", leak) {
-			t.Fatalf("dir marker leaked into ignored list: %q", ignoredWarning)
-		}
-	}
-	if !strings.Contains(ignoredWarning, ".claude-plugin/plugin.json") {
-		t.Fatalf("expected .claude-plugin/plugin.json in ignored list, got %q", ignoredWarning)
-	}
-	if !strings.Contains(ignoredWarning, "ignored 1 files") {
-		t.Fatalf("expected exactly 1 ignored file, got %q", ignoredWarning)
+	if res.Spec.Skill.Files[0].Path != "references/foo.md" {
+		t.Fatalf("directory marker was imported: %+v", res.Spec.Skill.Files)
 	}
 }
 
@@ -231,34 +219,49 @@ func TestParseSkillZip_PathTraversal_Rejected(t *testing.T) {
 	}
 }
 
-// TestParseSkillZip_IgnoresUnknownDirs_WithWarning: files outside
-// references/ and scripts/ are dropped from canonical_spec with a warning.
-func TestParseSkillZip_IgnoresUnknownDirs_WithWarning(t *testing.T) {
+func TestParseSkillZip_AbsolutePathRejected(t *testing.T) {
+	for _, name := range []string{"/etc/passwd", `C:\\Windows\\system.ini`} {
+		t.Run(name, func(t *testing.T) {
+			buf := buildZip(t, []struct{ name, content string }{
+				{"SKILL.md", minimalSkillMd},
+				{name, "evil"},
+			})
+			_, err := ParseSkillZip(buf)
+			if !errors.Is(err, ErrInvalidSkillZip) {
+				t.Fatalf("want ErrInvalidSkillZip, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "absolute path") {
+				t.Fatalf("error should mention absolute path, got %v", err)
+			}
+		})
+	}
+}
+
+func TestParseSkillZip_ImportsArbitrarySupportingDirectories(t *testing.T) {
 	buf := buildZip(t, []struct{ name, content string }{
 		{"SKILL.md", minimalSkillMd},
 		{"references/foo.md", "ref\n"},
 		{"assets/screenshot.png", "binary blob"},
-		{"docs/readme.md", "not a reference dir we ingest"},
+		{"docs/readme.md", "supporting documentation"},
 	})
 	res, err := ParseSkillZip(buf)
 	if err != nil {
 		t.Fatalf("ParseSkillZip: %v", err)
 	}
 	sk := res.Spec.Skill
-	if len(sk.Files) != 1 {
-		t.Fatalf("want 1 file (only references/foo.md), got %d: %+v", len(sk.Files), sk.Files)
+	if len(sk.Files) != 3 {
+		t.Fatalf("want all 3 supporting files, got %d: %+v", len(sk.Files), sk.Files)
 	}
-	if sk.Files[0].Path != "references/foo.md" {
-		t.Fatalf("kept wrong file: %q", sk.Files[0].Path)
-	}
-	hasIgnoreWarn := false
-	for _, w := range res.Warnings {
-		if strings.Contains(w, "ignored") && strings.Contains(w, "assets/screenshot.png") {
-			hasIgnoreWarn = true
+	wantPaths := []string{"assets/screenshot.png", "docs/readme.md", "references/foo.md"}
+	for i, want := range wantPaths {
+		if sk.Files[i].Path != want {
+			t.Fatalf("files[%d].Path: want %q, got %q", i, want, sk.Files[i].Path)
 		}
 	}
-	if !hasIgnoreWarn {
-		t.Fatalf("missing ignored-files warning; got warnings=%v", res.Warnings)
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "ignored") {
+			t.Fatalf("arbitrary supporting directories should not be ignored: %q", w)
+		}
 	}
 }
 

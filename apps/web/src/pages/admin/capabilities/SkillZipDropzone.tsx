@@ -73,7 +73,7 @@ export function SkillZipDropzone({
           <span className="text-sm text-fg-muted">
             {isDragActive
               ? t("capabilities.import.skill.dropActive", "Release to import the .zip")
-              : t("capabilities.import.skill.dropHint", "Drag or click to upload a .zip (SKILL.md + references / scripts)")}
+              : t("capabilities.import.skill.dropHint", "Drag or click to upload a Skill .zip")}
           </span>
           <span className="text-xs text-fg-subtle">
             {t("capabilities.import.skill.sizeHint", "Up to 8 MiB")}
