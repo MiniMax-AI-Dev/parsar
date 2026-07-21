@@ -535,7 +535,7 @@ export function CreateModelDialog({
             </span>
           </div>
 
-          {/* --- Protocol row ---
+          {/* --- Protocol row --- */}
           <Field
             id="model-base-url"
             label={t("models.createProvider.fields.baseURL")}
