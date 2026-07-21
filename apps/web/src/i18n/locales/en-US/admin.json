@@ -837,7 +837,22 @@
       },
       "detail": {
         "back": "Back to market list",
-        "addedCount": "Workspaces added"
+        "addedCount": "Workspaces added",
+        "contentTitle": "Capability contents",
+        "contentDescription": "Review the exact Skill files or MCP launch configuration before adding it to an Agent.",
+        "loadErrorTitle": "Failed to load capability contents",
+        "loadErrorDescription": "The latest published version could not be loaded.",
+        "contentUnavailable": "This older version does not contain previewable Skill or MCP content.",
+        "sourceRepository": "Source repository",
+        "sourceCommit": "Source commit",
+        "sourcePath": "Source path",
+        "skillBadge": "Skill files",
+        "files": "Files",
+        "command": "Launch command",
+        "environment": "Environment variables",
+        "noEnvironment": "No environment variables required.",
+        "redactedSecret": "Configured secret (hidden)",
+        "timeout": "Startup timeout: {{seconds}} seconds"
       },
       "empty": {
         "title": "No capabilities are available in the market yet",

@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Tailwind v4 does not emit a utility for this custom scale entry unless it
+   is declared explicitly. Keep the compact file-tree size in the design
+   system while making `text-2xs` usable by components. */
+@utility text-2xs {
+  font-size: var(--text-2xs);
+  line-height: var(--text-2xs--line-height);
+}
+
 /* Geist + Geist Mono are loaded via <link> in index.html (see note there) —
    not here, because Tailwind v4 inlines its own @import above this point,
    which would make a CSS @import spec-invalid and silently dropped. */
@@ -8,10 +16,11 @@
   --animate-fade-out: fade-out 2s ease-out forwards;
 
   /* ------------------------------------------------------------
-   * Type scale — 7 ticks. Every value maps to a Tailwind utility
-   * (`text-xs` … `text-3xl`). Arbitrary sizes (`text-[13px]`)
+   * Type scale — 8 ticks. Every value maps to a Tailwind utility
+   * (`text-2xs` … `text-3xl`). Arbitrary sizes (`text-[13px]`)
    * are forbidden by ESLint and will fail `make check`.
    * ---------------------------------------------------------- */
+  --text-2xs: 0.6875rem;  /* 11px — compact file trees and dense labels */
   --text-xs:   0.75rem;    /* 12px — badges, micro-meta, table footnotes */
   --text-sm:   0.8125rem;  /* 13px — default body in dense admin UI */
   --text-base: 0.875rem;   /* 14px — form labels, buttons, inputs */
@@ -21,6 +30,7 @@
   --text-3xl:  1.75rem;    /* 28px — page titles (display) */
 
   /* Line heights pinned per step so we don't fight `leading-*`. */
+  --text-2xs--line-height: 0.875rem;
   --text-xs--line-height:   1rem;
   --text-sm--line-height:   1.125rem;
   --text-base--line-height: 1.25rem;

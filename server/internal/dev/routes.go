@@ -609,6 +609,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// whether the provider is reachable.
 			r.Get("/workspaces/{workspaceID}/runtime/status", gateWorkspaceMember(runtimeStore, runtimeStatus(cfg.runtimeStatus)))
 			r.Get("/capabilities/marketplace", listMarketplaceCapabilities(runtimeStore))
+			r.Get("/capabilities/marketplace/{capabilityID}", getMarketplaceCapabilityDetail(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/capabilities", listWorkspaceCapabilities(runtimeStore))
 			r.Post("/workspaces/{workspaceID}/capabilities", createWorkspaceCapability(runtimeStore))
 			// Capability import — preview is a pure parse; commit runs

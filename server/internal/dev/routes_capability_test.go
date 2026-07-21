@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -262,6 +263,13 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	if market.Code != http.StatusOK || !strings.Contains(market.Body.String(), `"installed":true`) || strings.Contains(market.Body.String(), foreignWorkspaceID) || strings.Contains(market.Body.String(), "Foreign Public Plugin") {
 		t.Fatalf("marketplace list expected installed without source workspace id leak, got %d: %s", market.Code, market.Body.String())
 	}
+	if _, err := db.Exec(context.Background(), `update capability_version set creator_id = null where id = $1`, v2); err != nil {
+		t.Fatal(err)
+	}
+	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capID+"?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, ``, testUserAID)
+	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), `"version":"v2"`) {
+		t.Fatalf("marketplace detail with nullable creator expected 200/v2, got %d: %s", detail.Code, detail.Body.String())
+	}
 	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
 	if upgraded.Code != http.StatusOK || !strings.Contains(upgraded.Body.String(), v2) {
 		t.Fatalf("upgrade expected 200/v2, got %d: %s", upgraded.Code, upgraded.Body.String())
@@ -278,6 +286,113 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	if uninstalled.Code != http.StatusOK || !strings.Contains(uninstalled.Body.String(), `"removed_agent_count":2`) {
 		t.Fatalf("uninstall expected remove 2, got %d: %s", uninstalled.Code, uninstalled.Body.String())
 	}
+}
+
+type marketplaceDetailStore struct {
+	stubRuntimeStore
+	capability store.MarketplaceCapabilityRead
+	version    store.CapabilityVersionRead
+}
+
+func (s marketplaceDetailStore) ListMarketplaceCapabilities(context.Context, string) ([]store.MarketplaceCapabilityRead, error) {
+	return []store.MarketplaceCapabilityRead{s.capability}, nil
+}
+
+func (s marketplaceDetailStore) GetCapabilityVersion(context.Context, string) (store.CapabilityVersionRead, error) {
+	return s.version, nil
+}
+
+func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) {
+	const (
+		workspaceID  = "00000000-0000-0000-0000-000000000001"
+		capabilityID = "00000000-0000-0000-0000-000000000099"
+		versionID    = "00000000-0000-0000-0000-000000000098"
+		secretID     = "00000000-0000-0000-0000-000000000097"
+	)
+
+	t.Run("skill", func(t *testing.T) {
+		spec, err := json.Marshal(canonical.Spec{
+			SchemaVersion: canonical.SchemaVersionCurrent,
+			Kind:          canonical.KindSkill,
+			Skill: &canonical.SkillSpec{
+				Slug:        "diagram-maker",
+				Title:       "Diagram Maker",
+				Description: "Draw diagrams",
+				Instruction: "# Diagram Maker\nRender a clear SVG.",
+				Files:       []canonical.SkillFile{{Path: "references/svg.md", Content: "SVG reference", Kind: canonical.SkillFileKindMarkdown}},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtimeStore := marketplaceDetailStore{
+			capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "skill", Visibility: "public", Status: "active", LatestVersionID: versionID},
+			version:    store.CapabilityVersionRead{ID: versionID, CapabilityID: capabilityID, Version: "v1", GitRepoURL: "https://example.com/skills", GitRef: "abc123", Path: "skills/diagram-maker", CanonicalSpec: spec},
+		}
+		r := chi.NewRouter()
+		RegisterRoutesWithStore(r, runtimeStore)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "Render a clear SVG") || !strings.Contains(res.Body.String(), "references/svg.md") {
+			t.Fatalf("skill detail expected content, got %d: %s", res.Code, res.Body.String())
+		}
+	})
+
+	t.Run("mcp redacts inline secret id", func(t *testing.T) {
+		spec, err := json.Marshal(canonical.Spec{
+			SchemaVersion: canonical.SchemaVersionCurrent,
+			Kind:          canonical.KindMCP,
+			MCP: &canonical.MCPSpec{Servers: []canonical.MCPServer{{
+				Name:    "github",
+				Command: "npx",
+				Args:    []string{"-y", "server"},
+				Env: map[string]canonical.EnvValue{
+					"HOST":  {Mode: canonical.EnvModeLiteral, Literal: "https://api.example.com"},
+					"TOKEN": {Mode: canonical.EnvModeInlineSecret, SecretID: secretID},
+					"PAT":   {Mode: canonical.EnvModeCredentialRef, CredentialKindCode: "github_pat"},
+				},
+			}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtimeStore := marketplaceDetailStore{
+			capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "mcp", Visibility: "public", Status: "active", LatestVersionID: versionID},
+			version:    store.CapabilityVersionRead{ID: versionID, CapabilityID: capabilityID, Version: "v1", CanonicalSpec: spec},
+		}
+		r := chi.NewRouter()
+		RegisterRoutesWithStore(r, runtimeStore)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		body := res.Body.String()
+		if res.Code != http.StatusOK || !strings.Contains(body, `"redacted":true`) || !strings.Contains(body, `"credential_kind_code":"github_pat"`) || !strings.Contains(body, "https://api.example.com") {
+			t.Fatalf("MCP detail expected sanitized config, got %d: %s", res.Code, body)
+		}
+		if strings.Contains(body, secretID) {
+			t.Fatalf("MCP detail leaked inline secret id: %s", body)
+		}
+	})
+
+	t.Run("private capability is hidden", func(t *testing.T) {
+		runtimeStore := marketplaceDetailStore{capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "skill", Visibility: "workspace", Status: "active", LatestVersionID: versionID}}
+		r := chi.NewRouter()
+		RegisterRoutesWithStore(r, runtimeStore)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		if res.Code != http.StatusNotFound {
+			t.Fatalf("private capability expected 404, got %d: %s", res.Code, res.Body.String())
+		}
+	})
+
+	t.Run("legacy version returns source metadata without failing", func(t *testing.T) {
+		runtimeStore := marketplaceDetailStore{
+			capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "skill", Visibility: "public", Status: "active", LatestVersionID: versionID},
+			version:    store.CapabilityVersionRead{ID: versionID, CapabilityID: capabilityID, Version: "legacy", GitRepoURL: "https://example.com/legacy", Path: "skills/legacy"},
+		}
+		r := chi.NewRouter()
+		RegisterRoutesWithStore(r, runtimeStore)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"git_repo_url":"https://example.com/legacy"`) {
+			t.Fatalf("legacy detail expected source metadata, got %d: %s", res.Code, res.Body.String())
+		}
+	})
 }
 
 // TestInstallCountRejectsCrossWorkspace verifies that GET

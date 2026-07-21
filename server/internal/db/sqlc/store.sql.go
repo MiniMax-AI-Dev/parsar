@@ -4535,7 +4535,7 @@ select id::text as id, capability_id::text as capability_id, version,
   git_repo_url, git_ref, path, content,
   source_payload, schema_version, canonical_spec,
   required_credentials, oss_key, sha256,
-  creator_id::text as creator_id, created_at
+  (case when creator_id is null then ''::text else creator_id::text end)::text as creator_id, created_at
 from capability_version
 where id = $1::uuid
 `
