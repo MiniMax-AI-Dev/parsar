@@ -179,17 +179,41 @@ description and keep ownership on the side listed here.
   protocol request and defer the engine response until
   `SubmitPermission` / `SubmitPromptForUserChoice` arrives. Adapters must not
   silently approve, deny, or synthesize empty answers as a fallback.
+- Persist the run event and its derived `agent_interactions` row in one
+  transaction before publishing an approval or question to SSE/IM surfaces.
+  If that canonical write fails, abort the run instead of exposing an
+  actionable card that cannot be claimed or recovered.
 - Web and IM responders must call the same interaction resolution service.
   Routes and card callbacks must not implement their own status transition or
   deliver to the runtime before the canonical compare-and-swap claim succeeds.
 - Question answers use the stable question ID from the adapter and preserve
   selected values as an array. Headers and positional answers are compatibility
   fields only; they are not durable identity.
+- Preserve adapter question metadata end to end. `is_other=false` forbids a
+  free-text answer, `is_secret=true` uses a masked input wherever that surface
+  collects free text, and secret answer values may travel to the waiting
+  runtime but must be redacted from
+  `agent_interactions.response`, interaction-resolution run and audit events,
+  logs, API reads, and rendered chat receipts or callback summaries.
 - Every deferred request has a bounded lifetime. The server expiry worker is
   authoritative: it explicitly denies a permission or cancels user input,
   unblocks the runtime, and leaves an `expired` terminal record. Daemon timers
   are a safety net and must make the same deny/cancel choice. Neither path may
   silently continue the requested action.
+- A server-to-daemon WebSocket write is not proof that the engine accepted a
+  decision. The daemon must return an application-level decision ack after
+  `SubmitPermission` / `SubmitPromptForUserChoice` succeeds; only then may the
+  server persist the terminal interaction state. Missing or negative acks keep
+  the canonical interaction retryable (except a definitive `not_pending` or
+  replay `decision_conflict`, which closes it as runtime-gone).
+- Every transport attempt uses a unique delivery ID so a late ack cannot
+  satisfy a newer resolver. Daemon replay is keyed by runtime request plus the
+  decision payload with that delivery ID excluded: identical retries are
+  acknowledged without a second apply, while changed retries conflict.
+- The decision-ack wire contract starts at agent-daemon protocol `0.2`.
+  Server and daemon keep the existing strict major/minor handshake so a `0.1`
+  peer fails closed and must be upgraded instead of applying an unacknowledged
+  decision during a rolling-version mismatch.
 - Human responses are workspace-scoped, reject viewer writes, claim a single
   winner before contacting the runtime, persist a terminal state, clear the
   matching inflight slot, and emit an approval audit event. A terminal run

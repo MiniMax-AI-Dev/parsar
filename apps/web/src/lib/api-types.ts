@@ -427,12 +427,7 @@ export interface UserCredentialPatchRequest {
 /* --- Agent Runs --------------------------------------------------------- */
 
 export type AgentRunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "interrupted"
+  "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted"
 
 export interface AgentRunSummary {
   id: string
@@ -602,23 +597,20 @@ export interface AgentInteractionQuestion {
   header?: string
   question: string
   multi_select?: boolean
+  is_other?: boolean
+  is_secret?: boolean
   options: AgentInteractionOption[]
 }
 
 export interface StreamUserChoiceRequest {
   id: string
   questions: AgentInteractionQuestion[]
+  auto_resolution_ms?: number
 }
 
 export type AgentInteractionKind = "permission" | "user_choice"
 export type AgentInteractionStatus =
-  | "pending"
-  | "resolving"
-  | "approved"
-  | "denied"
-  | "answered"
-  | "cancelled"
-  | "expired"
+  "pending" | "resolving" | "approved" | "denied" | "answered" | "cancelled" | "expired"
 
 export interface AgentInteraction {
   id: string
@@ -657,7 +649,6 @@ export interface ResolveAgentInteractionResponse {
   applied: boolean
   already_resolved: boolean
 }
-
 
 /* --- Audit Records ------------------------------------------------------ */
 

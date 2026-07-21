@@ -32,6 +32,10 @@ var (
 	// Past this we treat the peer as wedged and close the session.
 	WriteTimeout = 10 * time.Second
 
+	// InteractionAckTimeout bounds the application-level round trip for a
+	// permission or user-input decision after it is written to the daemon.
+	InteractionAckTimeout = 15 * time.Second
+
 	// ReadLimit caps a single inbound frame at 4 MiB. tool_call
 	// results can be large but anything past this is almost certainly
 	// a misbehaving daemon (or hostile input).
@@ -99,6 +103,9 @@ type Session struct {
 	subsMu sync.Mutex
 	subs   map[string]chan proto.Envelope
 
+	ackMu      sync.Mutex
+	ackWaiters map[string]chan proto.InteractionDecisionAckPayload
+
 	// sendCh feeds the WS write loop. Capacity is bounded so a slow
 	// peer can't queue unbounded outbound frames; once full, Send
 	// blocks up to WriteTimeout then returns an error.
@@ -139,6 +146,7 @@ func NewSessionWithOwner(conn WSConn, deviceID, workspaceID, daemonVersion strin
 		owner:         owner,
 		lastSeenAt:    now,
 		subs:          map[string]chan proto.Envelope{},
+		ackWaiters:    map[string]chan proto.InteractionDecisionAckPayload{},
 		sendCh:        make(chan proto.Envelope, 64),
 		closed:        make(chan struct{}),
 	}
@@ -298,6 +306,52 @@ func (s *Session) Send(ctx context.Context, env proto.Envelope) error {
 		return ErrSessionClosed
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// SendAndWaitInteractionAck sends a decision and waits until the daemon
+// confirms that its agent session applied it. Queueing or writing the
+// WebSocket frame alone is not success: without this receipt the canonical
+// database interaction must remain retryable.
+func (s *Session) SendAndWaitInteractionAck(ctx context.Context, env proto.Envelope, deliveryID string) (proto.InteractionDecisionAckPayload, error) {
+	deliveryID = strings.TrimSpace(deliveryID)
+	if deliveryID == "" {
+		return proto.InteractionDecisionAckPayload{}, errors.New("agentdaemon gateway: interaction delivery id is required")
+	}
+	waiter := make(chan proto.InteractionDecisionAckPayload, 1)
+	s.ackMu.Lock()
+	if _, exists := s.ackWaiters[deliveryID]; exists {
+		s.ackMu.Unlock()
+		return proto.InteractionDecisionAckPayload{}, fmt.Errorf("agentdaemon gateway: duplicate interaction delivery id %q", deliveryID)
+	}
+	s.ackWaiters[deliveryID] = waiter
+	s.ackMu.Unlock()
+	defer func() {
+		s.ackMu.Lock()
+		delete(s.ackWaiters, deliveryID)
+		s.ackMu.Unlock()
+	}()
+
+	if err := s.Send(ctx, env); err != nil {
+		return proto.InteractionDecisionAckPayload{}, err
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, InteractionAckTimeout)
+	defer cancel()
+	select {
+	case ack := <-waiter:
+		return ack, nil
+	case <-s.closed:
+		return proto.InteractionDecisionAckPayload{}, ErrSessionClosed
+	case <-waitCtx.Done():
+		// If the ack raced the deadline, prefer the application receipt;
+		// treating an already-applied decision as retryable can trigger a
+		// contradictory second human response.
+		select {
+		case ack := <-waiter:
+			return ack, nil
+		default:
+			return proto.InteractionDecisionAckPayload{}, waitCtx.Err()
+		}
 	}
 }
 
@@ -544,6 +598,24 @@ func (s *Session) dispatch(env proto.Envelope) {
 		if err := env.DecodePayload(&p); err == nil && p.AskID != "" {
 			s.reg.AttachPromptForUserChoice(p.AskID, s)
 		}
+	case proto.TypeInteractionDecisionAck:
+		var ack proto.InteractionDecisionAckPayload
+		if err := env.DecodePayload(&ack); err != nil {
+			s.log("agentdaemon gateway: decode interaction decision ack: %v", err)
+			return
+		}
+		s.ackMu.Lock()
+		waiter := s.ackWaiters[ack.DeliveryID]
+		s.ackMu.Unlock()
+		if waiter == nil {
+			s.log("agentdaemon gateway: interaction decision ack has no waiter delivery=%s request=%s", ack.DeliveryID, env.ID)
+			return
+		}
+		select {
+		case waiter <- ack:
+		default:
+		}
+		return
 	}
 
 	// All run-correlated frames fan to the matching subscriber.

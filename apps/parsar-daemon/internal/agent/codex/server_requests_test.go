@@ -67,16 +67,68 @@ func TestCodexPermissionRequestWaitsForHumanDecision(t *testing.T) {
 	}
 }
 
+func TestCodexPermissionsApprovalUsesDedicatedResponseSchema(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		approved   bool
+		wantGrants bool
+	}{
+		{name: "approve echoes requested grants", approved: true, wantGrants: true},
+		{name: "deny grants nothing", approved: false, wantGrants: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tc, srv, cleanup := NewTestClient()
+			defer cleanup()
+			s, out := newInteractionTestSession(tc.JSONRPCClient)
+			requested := map[string]any{
+				"network":    map[string]any{"enabled": true},
+				"fileSystem": map[string]any{"write": []any{"/workspace"}},
+			}
+			if err := SendServerRequest(srv, "rpc-permissions", "item/permissions/requestApproval", PermissionsRequestApprovalParams{
+				Cwd: "/workspace", Permissions: requested,
+			}); err != nil {
+				t.Fatalf("send permissions request: %v", err)
+			}
+			env := <-out
+			done := make(chan error, 1)
+			go func() {
+				done <- s.SubmitPermission(context.Background(), env.ID, proto.PermissionDecisionPayload{Approved: tt.approved})
+			}()
+			var reply struct {
+				ID     string `json:"id"`
+				Result struct {
+					Permissions map[string]any `json:"permissions"`
+					Scope       string         `json:"scope"`
+					Decision    string         `json:"decision"`
+				} `json:"result"`
+			}
+			decodeCodexReply(t, srv, &reply)
+			if err := <-done; err != nil {
+				t.Fatalf("submit permissions: %v", err)
+			}
+			if reply.Result.Scope != "turn" || reply.Result.Decision != "" {
+				t.Fatalf("permissions reply = %+v", reply.Result)
+			}
+			_, granted := reply.Result.Permissions["network"]
+			if granted != tt.wantGrants {
+				t.Fatalf("permissions = %+v, want grants=%v", reply.Result.Permissions, tt.wantGrants)
+			}
+		})
+	}
+}
+
 func TestCodexUserInputMapsAnswersByQuestionID(t *testing.T) {
 	tc, srv, cleanup := NewTestClient()
 	defer cleanup()
 	s, out := newInteractionTestSession(tc.JSONRPCClient)
 
+	autoResolutionMs := uint64(120_000)
 	if err := SendServerRequest(srv, "rpc-ask-1", "item/tool/requestUserInput", ToolRequestUserInputParams{
 		ThreadID: "thread-1", TurnID: "turn-1", ItemID: "item-ask",
+		AutoResolutionMs: &autoResolutionMs,
 		Questions: []ToolRequestUserInputQuestion{
-			{ID: "deployment", Header: "Deploy", Question: "Where?", Options: []ToolRequestUserInputOption{{Label: "Staging"}, {Label: "Production"}}},
-			{ID: "checks", Header: "Checks", Question: "Which checks?", Options: []ToolRequestUserInputOption{{Label: "Unit"}, {Label: "E2E"}}},
+			{ID: "deployment", Header: "Deploy", Question: "Where?", IsOther: true, Options: []ToolRequestUserInputOption{{Label: "Staging"}, {Label: "Production"}}},
+			{ID: "checks", Header: "Checks", Question: "Which checks?", IsSecret: true, Options: []ToolRequestUserInputOption{{Label: "Unit"}, {Label: "E2E"}}},
 		},
 	}); err != nil {
 		t.Fatalf("send server request: %v", err)
@@ -97,6 +149,15 @@ func TestCodexUserInputMapsAnswersByQuestionID(t *testing.T) {
 	}
 	if len(request.Questions) != 2 || request.Questions[0].ID != "deployment" || request.Questions[1].ID != "checks" || request.Questions[0].Header != "Deploy" {
 		t.Fatalf("user input payload = %+v", request)
+	}
+	if !request.Questions[0].IsOther || !request.Questions[1].IsSecret || request.AutoResolutionMs == nil || *request.AutoResolutionMs != autoResolutionMs {
+		t.Fatalf("user input metadata = %+v", request)
+	}
+	s.interactions.mu.Lock()
+	pending := s.interactions.asks[request.AskID]
+	s.interactions.mu.Unlock()
+	if pending.timeout != 2*time.Minute {
+		t.Fatalf("ask timeout = %v, want 2m", pending.timeout)
 	}
 
 	submitDone := make(chan error, 1)
@@ -190,6 +251,28 @@ func TestCodexInteractionExpiryUnblocksRuntime(t *testing.T) {
 		}
 		if err := s.SubmitPermission(context.Background(), env.ID, proto.PermissionDecisionPayload{Approved: true}); !errors.Is(err, agent.ErrUnknownPermission) {
 			t.Fatalf("late permission error = %v, want ErrUnknownPermission", err)
+		}
+	})
+
+	t.Run("permission profile grants nothing", func(t *testing.T) {
+		tc, srv, cleanup := NewTestClient()
+		defer cleanup()
+		s, out := newInteractionTestSession(tc.JSONRPCClient)
+		if err := SendServerRequest(srv, "rpc-profile-timeout", "item/permissions/requestApproval", PermissionsRequestApprovalParams{
+			Permissions: map[string]any{"network": map[string]any{"enabled": true}},
+		}); err != nil {
+			t.Fatalf("send permission profile request: %v", err)
+		}
+		env := <-out
+		done := make(chan struct{})
+		go func() { s.expireCodexPermission(env.ID); close(done) }()
+		var reply struct {
+			Result PermissionsRequestApprovalResponse `json:"result"`
+		}
+		decodeCodexReply(t, srv, &reply)
+		<-done
+		if len(reply.Result.Permissions) != 0 || reply.Result.Scope != "turn" {
+			t.Fatalf("expiry permissions response = %+v", reply.Result)
 		}
 	})
 

@@ -147,6 +147,8 @@ type ChoiceQuestion struct {
 	Header      string
 	Question    string
 	MultiSelect bool
+	IsOther     bool
+	IsSecret    bool
 	Options     []string
 }
 

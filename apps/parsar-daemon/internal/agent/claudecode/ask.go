@@ -297,7 +297,10 @@ func parseAskUserQuestionInput(input map[string]any) ([]proto.PromptForUserChoic
 			Header:      header,
 			Question:    question,
 			MultiSelect: multiSelect,
-			Options:     options,
+			// Claude Code's AskUserQuestion always permits the built-in
+			// "Other" free-text answer in addition to declared options.
+			IsOther: true,
+			Options: options,
 		})
 	}
 	return out, true

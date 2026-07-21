@@ -623,6 +623,8 @@ func (w *Worker) maybeSendPromptForUserChoiceCard(
 			Header:      q.Header,
 			Question:    q.Question,
 			MultiSelect: q.MultiSelect,
+			IsOther:     q.IsOther,
+			IsSecret:    q.IsSecret,
 			Options:     opts,
 		})
 	}
@@ -1068,6 +1070,8 @@ func pendingAskFromPayload(payload map[string]any) (*pendingAsk, bool) {
 		q, _ := payload["question"].(string)
 		header, _ := payload["header"].(string)
 		multiSelect, _ := payload["multi_select"].(bool)
+		isOther, _ := payload["is_other"].(bool)
+		isSecret, _ := payload["is_secret"].(bool)
 		opts := decodePromptForUserChoiceOptionList(payload["options"])
 		if strings.TrimSpace(q) == "" && len(opts) == 0 {
 			return nil, false
@@ -1076,6 +1080,8 @@ func pendingAskFromPayload(payload map[string]any) (*pendingAsk, bool) {
 			Header:      strings.TrimSpace(header),
 			Question:    strings.TrimSpace(q),
 			MultiSelect: multiSelect,
+			IsOther:     isOther,
+			IsSecret:    isSecret,
 			Options:     opts,
 		}}
 	}
@@ -1104,6 +1110,8 @@ func decodePromptForUserChoiceQuestionList(raw any) []store.PromptForUserChoiceQ
 		id, _ := m["id"].(string)
 		header, _ := m["header"].(string)
 		multiSelect, _ := m["multi_select"].(bool)
+		isOther, _ := m["is_other"].(bool)
+		isSecret, _ := m["is_secret"].(bool)
 		opts := decodePromptForUserChoiceOptionList(m["options"])
 		if strings.TrimSpace(q) == "" && len(opts) == 0 {
 			continue
@@ -1113,6 +1121,8 @@ func decodePromptForUserChoiceQuestionList(raw any) []store.PromptForUserChoiceQ
 			Header:      strings.TrimSpace(header),
 			Question:    strings.TrimSpace(q),
 			MultiSelect: multiSelect,
+			IsOther:     isOther,
+			IsSecret:    isSecret,
 			Options:     opts,
 		})
 	}

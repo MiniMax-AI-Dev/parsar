@@ -2923,6 +2923,7 @@ select
   @created_at
 from agent_runs r
 where r.id = @agent_run_id::uuid
+  and r.status not in ('completed', 'failed', 'cancelled', 'interrupted')
 on conflict (workspace_id, device_id, kind, request_id) do nothing;
 
 -- name: ReleaseStaleResolvingAgentInteractions :execrows

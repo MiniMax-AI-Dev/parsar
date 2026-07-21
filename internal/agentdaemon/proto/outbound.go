@@ -101,6 +101,7 @@ type PromptCancelPayload struct{}
 // lets the approver edit the tool input before letting the call
 // proceed (Claude Code's allow-with-changes path).
 type PermissionDecisionPayload struct {
+	DeliveryID   string         `json:"delivery_id"`
 	Approved     bool           `json:"approved"`
 	Message      string         `json:"message,omitempty"`
 	UpdatedInput map[string]any `json:"updated_input,omitempty"`
@@ -129,6 +130,7 @@ type PromptForUserChoiceQuestionAnswer struct {
 //     a short machine tag (e.g. "timeout"); the daemon converts it
 //     into a tool_result message the LLM understands.
 type PromptForUserChoiceDecisionPayload struct {
+	DeliveryID      string                              `json:"delivery_id"`
 	QuestionAnswers []PromptForUserChoiceQuestionAnswer `json:"question_answers,omitempty"`
 	Answers         []string                            `json:"answers,omitempty"`
 	Cancelled       bool                                `json:"cancelled,omitempty"`

@@ -125,7 +125,7 @@ type AgentInteraction struct {
 	Status string `json:"status"`
 	// Immutable request snapshot rendered by Web and IM clients
 	Request []byte `json:"request"`
-	// Human decision snapshot, populated only after resolution
+	// Human decision snapshot populated only after runtime ack; secret answer values are redacted
 	Response []byte `json:"response"`
 	// Agent-daemon device used to route a response to the pod owning the runtime WebSocket
 	DeviceID string `json:"device_id"`

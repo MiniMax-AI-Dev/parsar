@@ -367,12 +367,12 @@ type FileChangeRequestApprovalParams struct {
 }
 
 type PermissionsRequestApprovalParams struct {
-	ThreadID    string  `json:"threadId"`
-	TurnID      string  `json:"turnId"`
-	ItemID      string  `json:"itemId"`
-	Cwd         string  `json:"cwd"`
-	Reason      *string `json:"reason,omitempty"`
-	Permissions any     `json:"permissions,omitempty"`
+	ThreadID    string         `json:"threadId"`
+	TurnID      string         `json:"turnId"`
+	ItemID      string         `json:"itemId"`
+	Cwd         string         `json:"cwd"`
+	Reason      *string        `json:"reason,omitempty"`
+	Permissions map[string]any `json:"permissions,omitempty"`
 }
 
 // CommandExecutionApprovalDecision is the verdict the daemon writes
@@ -380,10 +380,19 @@ type PermissionsRequestApprovalParams struct {
 // / "acceptForSession".
 type CommandExecutionApprovalDecision = string
 
-// ApprovalDecisionResult is the result body in a JSON-RPC response for
-// any of the three approval requests.
+// ApprovalDecisionResult is the result body for command-execution and
+// file-change approvals. item/permissions/requestApproval uses the distinct
+// PermissionsRequestApprovalResponse contract below.
 type ApprovalDecisionResult struct {
 	Decision CommandExecutionApprovalDecision `json:"decision"`
+}
+
+// PermissionsRequestApprovalResponse mirrors Codex app-server's dedicated
+// response contract. Approving echoes the requested permission profile;
+// denying returns an empty profile, which grants no additional capability.
+type PermissionsRequestApprovalResponse struct {
+	Permissions map[string]any `json:"permissions"`
+	Scope       string         `json:"scope,omitempty"`
 }
 
 type ToolRequestUserInputOption struct {

@@ -137,8 +137,9 @@ type InteractionResolver interface {
 // connector.PromptForUserChoiceQuestionAnswer; gateway-side so this
 // package stays free of the connector import.
 type PromptForUserChoiceQuestionAnswer struct {
-	Header string
-	Answer string
+	Header   string
+	Answer   string
+	IsSecret bool
 }
 
 // PromptForUserChoiceDecision mirrors connector.PromptForUserChoiceDecision;
@@ -1787,11 +1788,11 @@ func (m *Manager) patchPermissionResultCard(ctx context.Context, conv store.Conv
 // each answer joined by " / " with the header prefix where set.
 func summarizePromptForUserChoiceAnswers(answers []PromptForUserChoiceQuestionAnswer) string {
 	if len(answers) == 1 {
-		return strings.TrimSpace(answers[0].Answer)
+		return displayPromptForUserChoiceAnswer(answers[0])
 	}
 	parts := make([]string, 0, len(answers))
 	for _, a := range answers {
-		answer := strings.TrimSpace(a.Answer)
+		answer := displayPromptForUserChoiceAnswer(a)
 		if answer == "" {
 			continue
 		}
@@ -1805,17 +1806,34 @@ func summarizePromptForUserChoiceAnswers(answers []PromptForUserChoiceQuestionAn
 	return strings.Join(parts, " / ")
 }
 
+func displayPromptForUserChoiceAnswer(answer PromptForUserChoiceQuestionAnswer) string {
+	value := strings.TrimSpace(answer.Answer)
+	if value != "" && answer.IsSecret {
+		return "[REDACTED]"
+	}
+	return value
+}
+
 // extractPromptForUserChoiceFormAnswer reads field "q<idx>" out of the
 // form payload. select_static delivers a single string; multi_select_static
 // delivers []any; input delivers a string. Missing field → "".
-func extractPromptForUserChoiceFormAnswer(form map[string]any, idx int) string {
+func extractPromptForUserChoiceFormAnswer(form map[string]any, idx int, multi bool) string {
 	if form == nil {
 		return ""
 	}
-	raw, ok := form[fmt.Sprintf("q%d", idx)]
-	if !ok || raw == nil {
-		return ""
+	fieldName := fmt.Sprintf("q%d", idx)
+	selected := promptForUserChoiceFormValue(form[fieldName])
+	other := promptForUserChoiceFormValue(form[fieldName+"_other"])
+	if other == "" {
+		return selected
 	}
+	if !multi || selected == "" {
+		return other
+	}
+	return selected + "、" + other
+}
+
+func promptForUserChoiceFormValue(raw any) string {
 	switch v := raw.(type) {
 	case string:
 		return strings.TrimSpace(v)
@@ -1833,6 +1851,9 @@ func extractPromptForUserChoiceFormAnswer(form map[string]any, idx int) string {
 		}
 		return strings.Join(parts, "、")
 	default:
+		if raw == nil {
+			return ""
+		}
 		return strings.TrimSpace(fmt.Sprint(v))
 	}
 }
@@ -1851,8 +1872,9 @@ func (m *Manager) buildPromptForUserChoiceDoneCardMap(ctx context.Context, conv 
 	cardAnswers := make([]gateway.PromptForUserChoiceCardAnswer, 0, len(answers))
 	for _, a := range answers {
 		cardAnswers = append(cardAnswers, gateway.PromptForUserChoiceCardAnswer{
-			Header: a.Header,
-			Answer: a.Answer,
+			Header:   a.Header,
+			Answer:   a.Answer,
+			IsSecret: a.IsSecret,
 		})
 	}
 	return gateway.BuildPromptForUserChoiceDoneCard(title, cardAnswers)

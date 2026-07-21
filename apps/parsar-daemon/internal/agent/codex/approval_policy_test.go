@@ -19,14 +19,17 @@ func TestSilentGranularPolicy_AllFalse(t *testing.T) {
 	}
 }
 
-func TestHumanApprovalPolicy_AllGatesEnabled(t *testing.T) {
+func TestHumanApprovalPolicy_EnablesOnlyHandledGates(t *testing.T) {
 	p := HumanApprovalPolicy()
 	if p.Granular == nil {
 		t.Fatal("HumanApprovalPolicy must populate Granular")
 	}
 	g := *p.Granular
-	if !g.SandboxApproval || !g.Rules || !g.SkillApproval || !g.RequestPermissions || !g.MCPElicitations {
-		t.Fatalf("human policy must enable every approval gate, got %+v", g)
+	if !g.SandboxApproval || !g.Rules || !g.SkillApproval || !g.RequestPermissions {
+		t.Fatalf("human policy must enable supported approval gates, got %+v", g)
+	}
+	if g.MCPElicitations {
+		t.Fatalf("human policy must not advertise the unhandled MCP elicitation surface, got %+v", g)
 	}
 	if IsSilent(&p) {
 		t.Fatal("HumanApprovalPolicy must surface app-server requests")

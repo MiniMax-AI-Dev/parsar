@@ -102,6 +102,8 @@ type PromptForUserChoiceQuestion struct {
 	Header      string                      `json:"header,omitempty"`
 	Question    string                      `json:"question"`
 	MultiSelect bool                        `json:"multi_select,omitempty"`
+	IsOther     bool                        `json:"is_other,omitempty"`
+	IsSecret    bool                        `json:"is_secret,omitempty"`
 	Options     []PromptForUserChoiceOption `json:"options"`
 }
 

@@ -11,6 +11,8 @@ package dispatch
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -39,10 +41,18 @@ type Router struct {
 	idle        map[string]map[*sessionState]struct{}
 	permIndex   map[string]string // permID  → RunID
 	askIndex    map[string]string // askID   → RunID
-	shutdownCh  chan struct{}     // closed by Shutdown
-	shutdownWG  sync.WaitGroup    // waits for all pump goroutines
+	applied     map[string]appliedInteractionDecision
+	shutdownCh  chan struct{}  // closed by Shutdown
+	shutdownWG  sync.WaitGroup // waits for all pump goroutines
 	idleTimeout time.Duration
 	closed      bool
+}
+
+type appliedInteractionDecision struct {
+	requestID   string
+	kind        string
+	fingerprint [32]byte
+	recordedAt  time.Time
 }
 
 // sessionState is the dispatcher's per-run bookkeeping. The agent
@@ -100,6 +110,7 @@ func New(cfg Config) (*Router, error) {
 		idle:        make(map[string]map[*sessionState]struct{}),
 		permIndex:   make(map[string]string),
 		askIndex:    make(map[string]string),
+		applied:     make(map[string]appliedInteractionDecision),
 		shutdownCh:  make(chan struct{}),
 		idleTimeout: idleTimeout,
 	}, nil
@@ -335,6 +346,16 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 	if err := env.DecodePayload(&payload); err != nil {
 		return fmt.Errorf("dispatch: decode permission_decision: %w", err)
 	}
+	if payload.DeliveryID == "" {
+		return errors.New("dispatch: permission_decision missing delivery_id")
+	}
+	fingerprint, err := interactionDecisionFingerprint(payload)
+	if err != nil {
+		return fmt.Errorf("dispatch: fingerprint permission_decision: %w", err)
+	}
+	if handled, err := r.replayAppliedInteractionDecision(ctx, env.ID, payload.DeliveryID, proto.TypePermissionDecision, fingerprint); handled {
+		return err
+	}
 
 	r.mu.Lock()
 	runID, known := r.permIndex[env.ID]
@@ -348,17 +369,28 @@ func (r *Router) handlePermissionDecision(ctx context.Context, env proto.Envelop
 		// Server's perm timeout / cancel race; common enough that info
 		// is right.
 		r.log.InfoContext(ctx, "permission_decision for unknown perm (run gone)", "perm_id", env.ID)
-		return nil
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", "permission request is no longer pending")
 	}
 
 	if err := state.session.SubmitPermission(ctx, env.ID, payload); err != nil {
 		if errors.Is(err, agent.ErrUnknownPermission) {
 			r.log.InfoContext(ctx, "agent reports unknown perm (race with cancel)", "perm_id", env.ID, "run_id", runID)
-			return nil
+			r.dropPermission(state, env.ID)
+			return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", err.Error())
 		}
-		return fmt.Errorf("dispatch: forward permission_decision perm=%s run=%s: %w", env.ID, runID, err)
+		r.log.WarnContext(ctx, "agent rejected permission decision", "perm_id", env.ID, "run_id", runID, "err", err)
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "runtime_error", err.Error())
 	}
-	return nil
+	r.dropPermission(state, env.ID)
+	r.rememberAppliedInteractionDecision(env.ID, proto.TypePermissionDecision, fingerprint)
+	return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, true, "", "")
+}
+
+func (r *Router) dropPermission(s *sessionState, permissionID string) {
+	r.mu.Lock()
+	delete(r.permIndex, permissionID)
+	delete(s.pendingIDs, permissionID)
+	r.mu.Unlock()
 }
 
 // handlePromptForUserChoiceDecision is the ask-side twin of
@@ -381,6 +413,16 @@ func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env prot
 	if err := env.DecodePayload(&payload); err != nil {
 		return fmt.Errorf("dispatch: decode prompt_for_user_choice_decision: %w", err)
 	}
+	if payload.DeliveryID == "" {
+		return errors.New("dispatch: prompt_for_user_choice_decision missing delivery_id")
+	}
+	fingerprint, err := interactionDecisionFingerprint(payload)
+	if err != nil {
+		return fmt.Errorf("dispatch: fingerprint prompt_for_user_choice_decision: %w", err)
+	}
+	if handled, err := r.replayAppliedInteractionDecision(ctx, env.ID, payload.DeliveryID, proto.TypePromptForUserChoiceDecision, fingerprint); handled {
+		return err
+	}
 
 	r.mu.Lock()
 	runID, known := r.askIndex[env.ID]
@@ -392,20 +434,106 @@ func (r *Router) handlePromptForUserChoiceDecision(ctx context.Context, env prot
 
 	if !known || state == nil {
 		r.log.InfoContext(ctx, "prompt_for_user_choice_decision for unknown ask (run gone)", "ask_id", env.ID)
-		return nil
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", "user-input request is no longer pending")
 	}
 
-	err := state.session.SubmitPromptForUserChoice(ctx, env.ID, payload)
-	// Resolved one way or another — the ask is done from the router's
-	// point of view. Drop it from both indices so subsequent retries
-	// short-circuit as "run gone" rather than re-entering Submit.
-	r.dropAsk(state, env.ID)
+	err = state.session.SubmitPromptForUserChoice(ctx, env.ID, payload)
 	if err != nil {
 		if errors.Is(err, agent.ErrUnknownAsk) {
 			r.log.InfoContext(ctx, "agent reports unknown ask (race with cancel)", "ask_id", env.ID, "run_id", runID)
-			return nil
+			r.dropAsk(state, env.ID)
+			return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "not_pending", err.Error())
 		}
-		return fmt.Errorf("dispatch: forward prompt_for_user_choice_decision ask=%s run=%s: %w", env.ID, runID, err)
+		// Keep the routing entry for transient runtime failures. Codex, for
+		// example, restores its pending request when a JSON-RPC reply write
+		// fails, so dropping the ask here would turn a retryable error into a
+		// permanent not_pending response on the next attempt.
+		r.log.WarnContext(ctx, "agent rejected user-input decision", "ask_id", env.ID, "run_id", runID, "err", err)
+		return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, false, "runtime_error", err.Error())
+	}
+	r.dropAsk(state, env.ID)
+	r.rememberAppliedInteractionDecision(env.ID, proto.TypePromptForUserChoiceDecision, fingerprint)
+	return r.sendInteractionDecisionAck(ctx, env.ID, payload.DeliveryID, true, "", "")
+}
+
+func (r *Router) replayAppliedInteractionDecision(ctx context.Context, requestID, deliveryID, kind string, fingerprint [32]byte) (bool, error) {
+	key := appliedInteractionDecisionKey(requestID, kind)
+	r.mu.Lock()
+	applied, ok := r.applied[key]
+	r.mu.Unlock()
+	if !ok {
+		return false, nil
+	}
+	if applied.requestID != requestID || applied.kind != kind || applied.fingerprint != fingerprint {
+		return true, r.sendInteractionDecisionAck(ctx, requestID, deliveryID, false, "decision_conflict", "request was already applied with a different decision")
+	}
+	return true, r.sendInteractionDecisionAck(ctx, requestID, deliveryID, true, "", "")
+}
+
+func (r *Router) rememberAppliedInteractionDecision(requestID, kind string, fingerprint [32]byte) {
+	now := time.Now().UTC()
+	key := appliedInteractionDecisionKey(requestID, kind)
+	r.mu.Lock()
+	if len(r.applied) >= 1024 {
+		cutoff := now.Add(-time.Hour)
+		for id, entry := range r.applied {
+			if entry.recordedAt.Before(cutoff) {
+				delete(r.applied, id)
+			}
+		}
+	}
+	if len(r.applied) >= 1024 {
+		for id := range r.applied {
+			delete(r.applied, id)
+			break
+		}
+	}
+	r.applied[key] = appliedInteractionDecision{
+		requestID: requestID, kind: kind, fingerprint: fingerprint, recordedAt: now,
+	}
+	r.mu.Unlock()
+}
+
+func appliedInteractionDecisionKey(requestID, kind string) string {
+	return kind + "\x00" + requestID
+}
+
+// interactionDecisionFingerprint excludes the transport delivery id. Each
+// retry gets a fresh delivery id so a late ack cannot satisfy a newer waiter,
+// while the request plus decision content remains stable for daemon replay.
+func interactionDecisionFingerprint(payload any) ([32]byte, error) {
+	switch decision := payload.(type) {
+	case proto.PermissionDecisionPayload:
+		decision.DeliveryID = ""
+		encoded, err := json.Marshal(decision)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		return sha256.Sum256(encoded), nil
+	case proto.PromptForUserChoiceDecisionPayload:
+		decision.DeliveryID = ""
+		encoded, err := json.Marshal(decision)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		return sha256.Sum256(encoded), nil
+	default:
+		return [32]byte{}, fmt.Errorf("unsupported interaction decision %T", payload)
+	}
+}
+
+func (r *Router) sendInteractionDecisionAck(ctx context.Context, requestID, deliveryID string, applied bool, errorCode, message string) error {
+	env, err := proto.NewEnvelope(proto.TypeInteractionDecisionAck, requestID, proto.InteractionDecisionAckPayload{
+		DeliveryID: deliveryID,
+		Applied:    applied,
+		ErrorCode:  errorCode,
+		Error:      message,
+	})
+	if err != nil {
+		return fmt.Errorf("dispatch: build interaction decision ack: %w", err)
+	}
+	if err := r.sender.Send(ctx, env); err != nil {
+		return fmt.Errorf("dispatch: send interaction decision ack: %w", err)
 	}
 	return nil
 }

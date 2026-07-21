@@ -120,7 +120,7 @@ export function InteractionDecisionCard({
                   >
                     <input
                       type={question.multi_select ? "checkbox" : "radio"}
-                      name={key}
+                      name={`${interaction.id}:${key}`}
                       checked={selected.includes(option.label)}
                       onChange={() => {
                         setAnswers((current) => ({
@@ -143,16 +143,20 @@ export function InteractionDecisionCard({
                     </span>
                   </label>
                 ))}
-                <Input
-                  value={custom[key] ?? ""}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setCustom((current) => ({ ...current, [key]: value }))
-                    if (!question.multi_select && value.trim())
-                      setAnswers((current) => ({ ...current, [key]: [] }))
-                  }}
-                  placeholder={t("approvals.questions.customAnswer")}
-                />
+                {question.is_other !== false ? (
+                  <Input
+                    type={question.is_secret ? "password" : "text"}
+                    autoComplete={question.is_secret ? "new-password" : undefined}
+                    value={custom[key] ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setCustom((current) => ({ ...current, [key]: value }))
+                      if (!question.multi_select && value.trim())
+                        setAnswers((current) => ({ ...current, [key]: [] }))
+                    }}
+                    placeholder={t("approvals.questions.customAnswer")}
+                  />
+                ) : null}
               </fieldset>
             )
           })}

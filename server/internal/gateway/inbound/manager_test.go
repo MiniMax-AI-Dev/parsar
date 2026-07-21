@@ -14,10 +14,31 @@ import (
 	"sync/atomic"
 	"testing"
 
-	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
+
+func TestPromptForUserChoiceSecretSummariesAndCustomAnswers(t *testing.T) {
+	answers := []PromptForUserChoiceQuestionAnswer{
+		{Header: "Token", Answer: "super-secret", IsSecret: true},
+		{Header: "Environment", Answer: "staging"},
+	}
+	summary := summarizePromptForUserChoiceAnswers(answers)
+	if strings.Contains(summary, "super-secret") || !strings.Contains(summary, "Token:[REDACTED]") {
+		t.Fatalf("secret summary = %q", summary)
+	}
+	if got := extractPromptForUserChoiceFormAnswer(map[string]any{
+		"q0": []any{"unit", "e2e"}, "q0_other": "smoke",
+	}, 0, true); got != "unit、e2e、smoke" {
+		t.Fatalf("multi-select custom answer = %q", got)
+	}
+	if got := extractPromptForUserChoiceFormAnswer(map[string]any{
+		"q0": "stored", "q0_other": "typed-secret",
+	}, 0, false); got != "typed-secret" {
+		t.Fatalf("single-select custom answer = %q", got)
+	}
+}
 
 func strptr(s string) *string { return &s }
 
@@ -277,12 +298,12 @@ type replaceUserCredentialsCall struct {
 
 func newInboundFakeStore() *inboundFakeStore {
 	return &inboundFakeStore{
-		agentsByAppID:  make(map[string]store.FeishuAgentRoute),
-		agentsByID:     make(map[string]store.FeishuAgentRoute),
-		selections:     make(map[string]string),
-		users:          make(map[string]string),
-		secrets:        make(map[string]store.SecretPayload),
-		cardsByPermReq: make(map[string]store.ConversationInflightCards),
+		agentsByAppID:                 make(map[string]store.FeishuAgentRoute),
+		agentsByID:                    make(map[string]store.FeishuAgentRoute),
+		selections:                    make(map[string]string),
+		users:                         make(map[string]string),
+		secrets:                       make(map[string]store.SecretPayload),
+		cardsByPermReq:                make(map[string]store.ConversationInflightCards),
 		cardsByPromptForUserChoiceReq: make(map[string]store.ConversationInflightCards),
 		inflightByConv:                make(map[string]store.ConversationInflightCards),
 		pendingAskByChat:              make(map[string]inboundFakeChatAsk),
@@ -1598,7 +1619,7 @@ func TestQuotedChainText_MergeForwardChatListFallback(t *testing.T) {
 				chatID:  "oc_chat",
 				// No inline subs — forces fallback.
 			},
-			"om_c1": {msgType: "text", content: `{"text":"fallback line"}`, upperID: "om_mf"},
+			"om_c1":        {msgType: "text", content: `{"text":"fallback line"}`, upperID: "om_mf"},
 			"om_unrelated": {msgType: "text", content: `{"text":"noise"}`, upperID: "om_other_mf"},
 		},
 		map[string][]string{

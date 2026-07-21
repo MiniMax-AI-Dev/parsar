@@ -250,12 +250,15 @@ type wireUserChoiceQuestion struct {
 	Header      string                 `json:"header,omitempty"`
 	Question    string                 `json:"question"`
 	MultiSelect bool                   `json:"multi_select,omitempty"`
+	IsOther     bool                   `json:"is_other"`
+	IsSecret    bool                   `json:"is_secret"`
 	Options     []wireUserChoiceOption `json:"options"`
 }
 
 type wireUserChoiceReq struct {
-	ID        string                   `json:"id"`
-	Questions []wireUserChoiceQuestion `json:"questions"`
+	ID               string                   `json:"id"`
+	Questions        []wireUserChoiceQuestion `json:"questions"`
+	AutoResolutionMs *uint64                  `json:"auto_resolution_ms,omitempty"`
 }
 
 func toWireToolCall(t *connector.ToolCallEvent) *wireToolCall {
@@ -296,10 +299,11 @@ func toWireUserChoiceReq(request *connector.PromptForUserChoiceRequest) *wireUse
 		}
 		questions = append(questions, wireUserChoiceQuestion{
 			ID: question.ID, Header: question.Header, Question: question.Question,
-			MultiSelect: question.MultiSelect, Options: options,
+			MultiSelect: question.MultiSelect, IsOther: question.IsOther,
+			IsSecret: question.IsSecret, Options: options,
 		})
 	}
-	return &wireUserChoiceReq{ID: request.ID, Questions: questions}
+	return &wireUserChoiceReq{ID: request.ID, Questions: questions, AutoResolutionMs: request.AutoResolutionMs}
 }
 
 func newStreamEventWire(ev connector.PromptEvent) streamEventWire {

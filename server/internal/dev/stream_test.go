@@ -373,9 +373,11 @@ func TestWriteSSEEventSerializesUserChoiceQuestions(t *testing.T) {
 	t.Parallel()
 	buf := &bytes.Buffer{}
 	rec := &writeFlusherRecorder{ResponseRecorder: httptest.NewRecorder(), buf: buf}
+	autoResolutionMs := uint64(90_000)
 	ev := connector.PromptEvent{Type: connector.EventPromptForUserChoice, PromptForUserChoice: &connector.PromptForUserChoiceRequest{
-		ID: "ask1", Questions: []connector.PromptForUserChoiceQuestion{{
-			ID: "checks", Header: "Checks", Question: "Which checks?", MultiSelect: true,
+		AutoResolutionMs: &autoResolutionMs,
+		ID:               "ask1", Questions: []connector.PromptForUserChoiceQuestion{{
+			ID: "checks", Header: "Checks", Question: "Which checks?", MultiSelect: true, IsOther: true, IsSecret: true,
 			Options: []connector.PromptForUserChoiceOption{{Label: "Unit"}, {Label: "E2E", Description: "Browser flow"}},
 		}},
 	}}
@@ -390,13 +392,41 @@ func TestWriteSSEEventSerializesUserChoiceQuestions(t *testing.T) {
 	if !ok || choice["id"] != "ask1" {
 		t.Fatalf("choice payload = %#v", frames[0]["prompt_for_user_choice"])
 	}
+	if choice["auto_resolution_ms"] != float64(autoResolutionMs) {
+		t.Fatalf("auto_resolution_ms = %#v", choice["auto_resolution_ms"])
+	}
 	questions, ok := choice["questions"].([]any)
 	if !ok || len(questions) != 1 {
 		t.Fatalf("questions = %#v", choice["questions"])
 	}
 	question, _ := questions[0].(map[string]any)
-	if question["id"] != "checks" || question["header"] != "Checks" || question["multi_select"] != true {
+	if question["id"] != "checks" || question["header"] != "Checks" || question["multi_select"] != true || question["is_other"] != true || question["is_secret"] != true {
 		t.Fatalf("question = %#v", question)
+	}
+}
+
+func TestWriteSSEEventPreservesClosedListQuestionMetadata(t *testing.T) {
+	t.Parallel()
+	buf := &bytes.Buffer{}
+	rec := &writeFlusherRecorder{ResponseRecorder: httptest.NewRecorder(), buf: buf}
+	ev := connector.PromptEvent{Type: connector.EventPromptForUserChoice, PromptForUserChoice: &connector.PromptForUserChoiceRequest{
+		ID: "ask-closed", Questions: []connector.PromptForUserChoiceQuestion{{
+			ID: "environment", Question: "Where?", IsOther: false, IsSecret: false,
+			Options: []connector.PromptForUserChoiceOption{{Label: "Staging"}},
+		}},
+	}}
+	if err := writeSSEEvent(rec, ev); err != nil {
+		t.Fatalf("writeSSEEvent: %v", err)
+	}
+	frames := parseSSEFrames(t, buf)
+	choice, _ := frames[0]["prompt_for_user_choice"].(map[string]any)
+	questions, _ := choice["questions"].([]any)
+	question, _ := questions[0].(map[string]any)
+	if other, ok := question["is_other"]; !ok || other != false {
+		t.Fatalf("is_other = %#v, present = %v, want explicit false", other, ok)
+	}
+	if secret, ok := question["is_secret"]; !ok || secret != false {
+		t.Fatalf("is_secret = %#v, present = %v, want explicit false", secret, ok)
 	}
 }
 

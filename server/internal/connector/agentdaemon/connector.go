@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -691,6 +693,8 @@ func (c *Connector) handleUpstream(
 				Header:      q.Header,
 				Question:    q.Question,
 				MultiSelect: q.MultiSelect,
+				IsOther:     q.IsOther,
+				IsSecret:    q.IsSecret,
 				Options:     opts,
 			})
 		}
@@ -700,10 +704,11 @@ func (c *Connector) handleUpstream(
 		// then routes SubmitPromptForUserChoice back by AskID via the
 		// gateway registry's byAsk index.
 		out <- connector.PromptEvent{Type: connector.EventPromptForUserChoice, PromptForUserChoice: &connector.PromptForUserChoiceRequest{
-			ID:        p.AskID,
-			DeviceID:  bind.DeviceID,
-			Questions: questions,
-			ToolUseID: p.ToolUseID,
+			ID:               p.AskID,
+			DeviceID:         bind.DeviceID,
+			Questions:        questions,
+			ToolUseID:        p.ToolUseID,
+			AutoResolutionMs: p.AutoResolutionMs,
 		}}
 
 	case proto.TypePermissionCancel:
@@ -803,6 +808,12 @@ func (c *Connector) SubmitPermission(ctx context.Context, decision connector.Per
 	if decision.RequestID == "" {
 		return fmt.Errorf("agent_daemon: SubmitPermission requires RequestID")
 	}
+	if strings.TrimSpace(decision.DeliveryID) == "" {
+		// Legacy IM callers do not own a canonical interaction id. Keep a
+		// stable request-derived base; the local owner adds a unique transport
+		// attempt id, while the daemon replays by request and decision content.
+		decision.DeliveryID = "permission:" + strings.TrimSpace(decision.RequestID)
+	}
 	if c.ownerResolver != nil {
 		deviceID := strings.TrimSpace(decision.DeviceID)
 		if deviceID == "" && c.submitSlots != nil {
@@ -840,6 +851,10 @@ func (c *Connector) SubmitPermissionLocal(ctx context.Context, decision connecto
 	if decision.RequestID == "" {
 		return fmt.Errorf("agent_daemon: SubmitPermissionLocal requires RequestID")
 	}
+	if strings.TrimSpace(decision.DeliveryID) == "" {
+		decision.DeliveryID = "permission:" + strings.TrimSpace(decision.RequestID)
+	}
+	deliveryID := interactionDeliveryAttemptID(decision.DeliveryID)
 	sess, err := c.registry.LookupPermission(decision.RequestID)
 	if err != nil {
 		if errors.Is(err, gateway.ErrPermissionNotRegistered) {
@@ -848,18 +863,24 @@ func (c *Connector) SubmitPermissionLocal(ctx context.Context, decision connecto
 		return fmt.Errorf("agent_daemon: %w", err)
 	}
 	env, err := proto.NewEnvelope(proto.TypePermissionDecision, decision.RequestID, proto.PermissionDecisionPayload{
-		Approved: decision.Approved,
-		Message:  decision.Note,
+		DeliveryID: deliveryID,
+		Approved:   decision.Approved,
+		Message:    decision.Note,
 	})
 	if err != nil {
 		return fmt.Errorf("agent_daemon: build permission_decision: %w", err)
 	}
-	if err := sess.Send(ctx, env); err != nil {
+	ack, err := sess.SendAndWaitInteractionAck(ctx, env, deliveryID)
+	if err != nil {
 		return fmt.Errorf("agent_daemon: %w: send permission_decision: %v", connector.ErrInteractionRuntimeUnavailable, err)
 	}
-	// Clear the perm mapping so a duplicate SubmitPermission for the
-	// same id returns ErrPermissionNotRegistered rather than silently
-	// re-sending the verdict.
+	if !ack.Applied {
+		if ack.ErrorCode == "not_pending" || ack.ErrorCode == "decision_conflict" {
+			c.registry.DetachPermission(decision.RequestID)
+			return fmt.Errorf("agent_daemon: %w: %s", connector.ErrInteractionNoLongerPending, ack.Error)
+		}
+		return fmt.Errorf("agent_daemon: %w: %s", connector.ErrInteractionRuntimeUnavailable, ack.Error)
+	}
 	c.registry.DetachPermission(decision.RequestID)
 	return nil
 }
@@ -872,6 +893,9 @@ func (c *Connector) SubmitPermissionLocal(ctx context.Context, decision connecto
 func (c *Connector) SubmitPromptForUserChoice(ctx context.Context, decision connector.PromptForUserChoiceDecision) error {
 	if decision.RequestID == "" {
 		return fmt.Errorf("agent_daemon: SubmitPromptForUserChoice requires RequestID")
+	}
+	if strings.TrimSpace(decision.DeliveryID) == "" {
+		decision.DeliveryID = "user-choice:" + strings.TrimSpace(decision.RequestID)
 	}
 	if c.ownerResolver != nil {
 		deviceID := strings.TrimSpace(decision.DeviceID)
@@ -907,6 +931,10 @@ func (c *Connector) SubmitPromptForUserChoiceLocal(ctx context.Context, decision
 	if decision.RequestID == "" {
 		return fmt.Errorf("agent_daemon: SubmitPromptForUserChoiceLocal requires RequestID")
 	}
+	if strings.TrimSpace(decision.DeliveryID) == "" {
+		decision.DeliveryID = "user-choice:" + strings.TrimSpace(decision.RequestID)
+	}
+	deliveryID := interactionDeliveryAttemptID(decision.DeliveryID)
 	sess, err := c.registry.LookupPromptForUserChoice(decision.RequestID)
 	if err != nil {
 		if errors.Is(err, gateway.ErrPromptForUserChoiceNotRegistered) {
@@ -921,6 +949,7 @@ func (c *Connector) SubmitPromptForUserChoiceLocal(ctx context.Context, decision
 		})
 	}
 	env, err := proto.NewEnvelope(proto.TypePromptForUserChoiceDecision, decision.RequestID, proto.PromptForUserChoiceDecisionPayload{
+		DeliveryID:      deliveryID,
 		QuestionAnswers: qas,
 		Answers:         decision.Answers,
 		Cancelled:       decision.Cancelled,
@@ -929,11 +958,23 @@ func (c *Connector) SubmitPromptForUserChoiceLocal(ctx context.Context, decision
 	if err != nil {
 		return fmt.Errorf("agent_daemon: build prompt_for_user_choice_decision: %w", err)
 	}
-	if err := sess.Send(ctx, env); err != nil {
+	ack, err := sess.SendAndWaitInteractionAck(ctx, env, deliveryID)
+	if err != nil {
 		return fmt.Errorf("agent_daemon: %w: send prompt_for_user_choice_decision: %v", connector.ErrInteractionRuntimeUnavailable, err)
+	}
+	if !ack.Applied {
+		if ack.ErrorCode == "not_pending" || ack.ErrorCode == "decision_conflict" {
+			c.registry.DetachPromptForUserChoice(decision.RequestID)
+			return fmt.Errorf("agent_daemon: %w: %s", connector.ErrInteractionNoLongerPending, ack.Error)
+		}
+		return fmt.Errorf("agent_daemon: %w: %s", connector.ErrInteractionRuntimeUnavailable, ack.Error)
 	}
 	c.registry.DetachPromptForUserChoice(decision.RequestID)
 	return nil
+}
+
+func interactionDeliveryAttemptID(base string) string {
+	return strings.TrimSpace(base) + ":" + uuid.NewString()
 }
 
 // Close drops every binding for the conversation so the next prompt

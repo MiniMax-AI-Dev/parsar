@@ -42,7 +42,7 @@ COMMENT ON TABLE agent_interactions IS 'Durable human interaction requests share
 COMMENT ON COLUMN agent_interactions.kind IS 'permission = approve or deny a tool action; user_choice = answer an AskUserQuestion request';
 COMMENT ON COLUMN agent_interactions.status IS 'Lifecycle: pending, transient resolving, or terminal approved/denied/answered/cancelled/expired';
 COMMENT ON COLUMN agent_interactions.request IS 'Immutable request snapshot rendered by Web and IM clients';
-COMMENT ON COLUMN agent_interactions.response IS 'Human decision snapshot, populated only after resolution';
+COMMENT ON COLUMN agent_interactions.response IS 'Human decision snapshot populated only after runtime ack; secret answer values are redacted';
 COMMENT ON COLUMN agent_interactions.device_id IS 'Agent-daemon device used to route a response to the pod owning the runtime WebSocket';
 COMMENT ON COLUMN agent_interactions.claim_token IS 'CAS token held by the single resolver currently delivering a decision';
 COMMENT ON COLUMN agent_interactions.resolution_source IS 'web, IM platform, system_timeout, or runtime';

@@ -66,7 +66,7 @@ func (s *Service) Resolve(ctx context.Context, req ResolveRequest) (ResolveResul
 			latest, _ := s.store.GetAgentInteraction(ctx, claim.ID)
 			return ResolveResult{Interaction: latest, AlreadyResolved: true}, ErrRuntimeGone
 		}
-		_ = s.store.ReleaseAgentInteractionClaim(ctx, claim, s.now())
+		s.releaseClaim(ctx, claim)
 		return ResolveResult{}, fmt.Errorf("%w: %v", ErrRuntimeUnavailable, err)
 	}
 	if err := s.complete(ctx, claim, status, response, req.Actor); err != nil {
@@ -95,11 +95,19 @@ func (s *Service) Expire(ctx context.Context, interactionID string) error {
 	actor := Actor{ActorID: store.AgentInteractionSourceSystemTimeout, Source: store.AgentInteractionSourceSystemTimeout, ActorType: audit.ActorTypeSystem}
 	_, response, deliveryErr := s.deliver(ctx, claim, decision, actor)
 	if deliveryErr != nil && !errors.Is(deliveryErr, connector.ErrInteractionNoLongerPending) {
-		_ = s.store.ReleaseAgentInteractionClaim(ctx, claim, s.now())
+		s.releaseClaim(ctx, claim)
 		return deliveryErr
 	}
 	response["expired"] = true
 	return s.complete(ctx, claim, store.AgentInteractionStatusExpired, response, actor)
+}
+
+func (s *Service) releaseClaim(ctx context.Context, claim store.AgentInteractionClaim) {
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.store.ReleaseAgentInteractionClaim(writeCtx, claim, s.now()); err != nil {
+		s.warn("release interaction claim failed", "request_id", claim.RequestID, "error", err)
+	}
 }
 
 func (s *Service) load(ctx context.Context, req ResolveRequest) (store.AgentInteractionRead, error) {
@@ -142,7 +150,8 @@ func (s *Service) deliver(ctx context.Context, claim store.AgentInteractionClaim
 		approved := decision.Approved != nil && *decision.Approved
 		response := map[string]any{"approved": approved, "note": strings.TrimSpace(decision.Note)}
 		err := s.delivery.SubmitPermission(ctx, claim.AgentRunID, connector.PermissionDecision{
-			RequestID: claim.RequestID, DeviceID: claim.DeviceID, Approved: approved, Note: strings.TrimSpace(decision.Note), By: actor.ActorID,
+			RequestID: claim.RequestID, DeliveryID: claim.ID, DeviceID: claim.DeviceID,
+			Approved: approved, Note: strings.TrimSpace(decision.Note), By: actor.ActorID,
 		})
 		status := store.AgentInteractionStatusDenied
 		if approved {
@@ -151,15 +160,18 @@ func (s *Service) deliver(ctx context.Context, claim store.AgentInteractionClaim
 		return status, response, err
 	case store.AgentInteractionKindUserChoice:
 		answers := normalizeAnswers(decision.QuestionAnswers)
-		response := map[string]any{"answers": answers, "cancelled": decision.Cancelled, "reason": strings.TrimSpace(decision.Note)}
+		response := map[string]any{"answers": redactSecretAnswers(claim.Request, answers), "cancelled": decision.Cancelled, "reason": strings.TrimSpace(decision.Note)}
 		connectorAnswers := make([]connector.PromptForUserChoiceQuestionAnswer, 0, len(decision.QuestionAnswers))
 		for _, answer := range decision.QuestionAnswers {
+			questionID := strings.TrimSpace(answer.QuestionID)
+			values := answers[questionID]
 			connectorAnswers = append(connectorAnswers, connector.PromptForUserChoiceQuestionAnswer{
-				QuestionID: answer.QuestionID, Answers: append([]string(nil), answer.Answers...), Answer: strings.Join(answer.Answers, ", "),
+				QuestionID: questionID, Answers: append([]string(nil), values...), Answer: strings.Join(values, ", "),
 			})
 		}
 		err := s.delivery.SubmitPromptForUserChoice(ctx, claim.AgentRunID, connector.PromptForUserChoiceDecision{
-			RequestID: claim.RequestID, DeviceID: claim.DeviceID, QuestionAnswers: connectorAnswers, Cancelled: decision.Cancelled,
+			RequestID: claim.RequestID, DeliveryID: claim.ID, DeviceID: claim.DeviceID,
+			QuestionAnswers: connectorAnswers, Cancelled: decision.Cancelled,
 			Reason: strings.TrimSpace(decision.Note), By: actor.ActorID,
 		})
 		status := store.AgentInteractionStatusAnswered
@@ -173,7 +185,9 @@ func (s *Service) deliver(ctx context.Context, claim store.AgentInteractionClaim
 }
 
 func (s *Service) complete(ctx context.Context, claim store.AgentInteractionClaim, status string, response map[string]any, actor Actor) error {
-	if err := s.store.CompleteAgentInteraction(ctx, claim, status, response, s.now()); err != nil {
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.store.CompleteAgentInteraction(writeCtx, claim, status, response, s.now()); err != nil {
 		return err
 	}
 	slot := store.InflightSlotPermission
@@ -182,10 +196,10 @@ func (s *Service) complete(ctx context.Context, claim store.AgentInteractionClai
 		slot = store.InflightSlotPromptForUserChoice
 		eventKind = "prompt_for_user_choice.replied"
 	}
-	if err := s.store.ClearConversationInflightSlot(ctx, claim.ConversationID, slot, claim.AgentRunID); err != nil {
+	if err := s.store.ClearConversationInflightSlot(writeCtx, claim.ConversationID, slot, claim.AgentRunID); err != nil {
 		s.warn("clear interaction inflight slot failed", "request_id", claim.RequestID, "error", err)
 	}
-	if err := s.store.RecordAgentRunEvent(ctx, store.RecordAgentRunEventInput{
+	if err := s.store.RecordAgentRunEvent(writeCtx, store.RecordAgentRunEventInput{
 		RunID: claim.AgentRunID, EventKind: eventKind,
 		Payload: map[string]any{"request_id": claim.RequestID, "status": status, "response": response}, OccurredAt: s.now(),
 	}); err != nil {
@@ -267,6 +281,13 @@ func validateDecision(current store.AgentInteractionRead, decision Decision) err
 			if !question.multiSelect && len(values) != 1 {
 				return fmt.Errorf("%w: question %q accepts exactly one answer", ErrInvalidDecision, question.id)
 			}
+			if !question.isOther {
+				for _, value := range values {
+					if _, allowed := question.options[value]; !allowed {
+						return fmt.Errorf("%w: question %q does not allow a custom answer", ErrInvalidDecision, question.id)
+					}
+				}
+			}
 		}
 		return nil
 	default:
@@ -277,6 +298,9 @@ func validateDecision(current store.AgentInteractionRead, decision Decision) err
 type interactionQuestion struct {
 	id          string
 	multiSelect bool
+	isOther     bool
+	isSecret    bool
+	options     map[string]struct{}
 }
 
 func interactionQuestions(request map[string]any) []interactionQuestion {
@@ -285,11 +309,32 @@ func interactionQuestions(request map[string]any) []interactionQuestion {
 	for index, value := range raw {
 		question, _ := value.(map[string]any)
 		id, _ := question["id"].(string)
-		if strings.TrimSpace(id) == "" {
+		id = strings.TrimSpace(id)
+		if id == "" {
 			id = fmt.Sprintf("q%d", index)
 		}
 		multi, _ := question["multi_select"].(bool)
-		out = append(out, interactionQuestion{id: id, multiSelect: multi})
+		// Older durable rows predate is_other and the Web card has always
+		// treated an omitted flag as allowing free-form input. Only an
+		// explicit false closes the option set.
+		isOther := true
+		if value, ok := question["is_other"].(bool); ok {
+			isOther = value
+		}
+		isSecret, _ := question["is_secret"].(bool)
+		options := make(map[string]struct{})
+		if rawOptions, ok := question["options"].([]any); ok {
+			for _, rawOption := range rawOptions {
+				option, _ := rawOption.(map[string]any)
+				label, _ := option["label"].(string)
+				if label = strings.TrimSpace(label); label != "" {
+					options[label] = struct{}{}
+				}
+			}
+		}
+		out = append(out, interactionQuestion{
+			id: id, multiSelect: multi, isOther: isOther, isSecret: isSecret, options: options,
+		})
 	}
 	return out
 }
@@ -308,6 +353,22 @@ func normalizeAnswers(answers []QuestionAnswer) map[string][]string {
 	out := make(map[string][]string, len(answers))
 	for _, answer := range answers {
 		out[strings.TrimSpace(answer.QuestionID)] = cleanAnswers(answer.Answers)
+	}
+	return out
+}
+
+func redactSecretAnswers(request map[string]any, answers map[string][]string) map[string][]string {
+	secret := make(map[string]bool)
+	for _, question := range interactionQuestions(request) {
+		secret[question.id] = question.isSecret
+	}
+	out := make(map[string][]string, len(answers))
+	for questionID, values := range answers {
+		if secret[questionID] {
+			out[questionID] = []string{"[REDACTED]"}
+			continue
+		}
+		out[questionID] = append([]string(nil), values...)
 	}
 	return out
 }

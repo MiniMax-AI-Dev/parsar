@@ -597,13 +597,14 @@ func (m *Manager) routeUserChoiceSubmit(ctx context.Context, action channel.Card
 	canonicalAnswers := make([]interaction.QuestionAnswer, 0, len(questions))
 	anyAnswer := false
 	for idx, q := range questions {
-		answer := extractPromptForUserChoiceFormAnswer(action.FormValues, idx)
+		answer := extractPromptForUserChoiceFormAnswer(action.FormValues, idx, q.MultiSelect)
 		if answer != "" {
 			anyAnswer = true
 		}
 		answers = append(answers, PromptForUserChoiceQuestionAnswer{
-			Header: q.Header,
-			Answer: answer,
+			Header:   q.Header,
+			Answer:   answer,
+			IsSecret: q.IsSecret,
 		})
 		questionID := strings.TrimSpace(q.ID)
 		if questionID == "" {

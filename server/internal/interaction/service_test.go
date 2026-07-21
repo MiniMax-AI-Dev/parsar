@@ -19,6 +19,7 @@ type fakeStore struct {
 	claim         store.AgentInteractionClaim
 	claimCount    int
 	releaseCount  int
+	releaseCtxErr error
 	staleReleases int64
 	events        []store.RecordAgentRunEventInput
 	audits        []store.AgentInteractionAuditInput
@@ -110,9 +111,10 @@ func (s *fakeStore) CompleteAgentInteraction(_ context.Context, claim store.Agen
 	return nil
 }
 
-func (s *fakeStore) ReleaseAgentInteractionClaim(_ context.Context, claim store.AgentInteractionClaim, _ time.Time) error {
+func (s *fakeStore) ReleaseAgentInteractionClaim(ctx context.Context, claim store.AgentInteractionClaim, _ time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.releaseCtxErr = ctx.Err()
 	if claim.ClaimToken != s.claim.ClaimToken || s.interaction.Status != store.AgentInteractionStatusResolving {
 		return nil
 	}
@@ -228,6 +230,9 @@ func TestResolvePermissionIsDurableAndIdempotent(t *testing.T) {
 	if len(delivery.permissions) != 1 || !delivery.permissions[0].Approved || delivery.permissions[0].By != "user-1" || delivery.permissions[0].DeviceID != "device-1" {
 		t.Fatalf("permission deliveries = %+v", delivery.permissions)
 	}
+	if delivery.permissions[0].DeliveryID != "interaction-1" {
+		t.Fatalf("permission delivery id = %q", delivery.permissions[0].DeliveryID)
+	}
 	if fs.claimCount != 1 || len(fs.events) != 1 || len(fs.audits) != 1 || len(fs.cleared) != 1 {
 		t.Fatalf("side effects: claims=%d events=%d audits=%d cleared=%d", fs.claimCount, len(fs.events), len(fs.audits), len(fs.cleared))
 	}
@@ -239,8 +244,8 @@ func TestResolvePermissionIsDurableAndIdempotent(t *testing.T) {
 func TestResolveQuestionPreservesStableIDsAndAnswerArrays(t *testing.T) {
 	now := time.Now().UTC()
 	request := map[string]any{"questions": []any{
-		map[string]any{"id": "environment", "multi_select": false},
-		map[string]any{"id": "checks", "multi_select": true},
+		map[string]any{"id": "environment", "multi_select": false, "is_other": false, "options": []any{map[string]any{"label": "staging"}, map[string]any{"label": "prod"}}},
+		map[string]any{"id": "checks", "multi_select": true, "is_other": false, "options": []any{map[string]any{"label": "unit"}, map[string]any{"label": "integration"}}},
 	}}
 	fs := newFakeStore(store.AgentInteractionKindUserChoice, request, now)
 	delivery := &fakeDelivery{}
@@ -250,8 +255,8 @@ func TestResolveQuestionPreservesStableIDsAndAnswerArrays(t *testing.T) {
 		Kind: store.AgentInteractionKindUserChoice, RequestID: "request-1", AgentRunID: "run-1",
 		Actor: Actor{ActorID: "ou_1", Source: store.AgentInteractionSourceFeishu},
 		Decision: Decision{QuestionAnswers: []QuestionAnswer{
-			{QuestionID: "checks", Answers: []string{"unit", "integration"}},
-			{QuestionID: "environment", Answers: []string{"staging"}},
+			{QuestionID: " checks ", Answers: []string{" unit ", "integration  "}},
+			{QuestionID: " environment ", Answers: []string{" staging "}},
 		}},
 	})
 	if err != nil || !result.Applied || result.Interaction.Status != store.AgentInteractionStatusAnswered {
@@ -264,6 +269,9 @@ func TestResolveQuestionPreservesStableIDsAndAnswerArrays(t *testing.T) {
 	if delivery.choices[0].DeviceID != "device-1" {
 		t.Fatalf("choice device = %q", delivery.choices[0].DeviceID)
 	}
+	if delivery.choices[0].DeliveryID != "interaction-1" {
+		t.Fatalf("choice delivery id = %q", delivery.choices[0].DeliveryID)
+	}
 	want := []connector.PromptForUserChoiceQuestionAnswer{
 		{QuestionID: "checks", Answers: []string{"unit", "integration"}, Answer: "unit, integration"},
 		{QuestionID: "environment", Answers: []string{"staging"}, Answer: "staging"},
@@ -273,11 +281,51 @@ func TestResolveQuestionPreservesStableIDsAndAnswerArrays(t *testing.T) {
 	}
 }
 
+func TestResolveQuestionDeliversSecretButRedactsDurableRecords(t *testing.T) {
+	now := time.Now().UTC()
+	request := map[string]any{"questions": []any{
+		map[string]any{"id": "token", "is_secret": true, "is_other": true},
+		map[string]any{"id": "environment", "is_secret": false, "options": []any{map[string]any{"label": "staging"}}},
+	}}
+	fs := newFakeStore(store.AgentInteractionKindUserChoice, request, now)
+	delivery := &fakeDelivery{}
+	svc := NewService(fs, delivery, nil)
+	svc.now = func() time.Time { return now }
+	result, err := svc.Resolve(context.Background(), ResolveRequest{
+		WorkspaceID: "workspace-1", InteractionID: "interaction-1",
+		Actor: Actor{ActorID: "user-1", Source: store.AgentInteractionSourceWeb},
+		Decision: Decision{QuestionAnswers: []QuestionAnswer{
+			{QuestionID: "token", Answers: []string{"  super-secret  "}},
+			{QuestionID: "environment", Answers: []string{" staging "}},
+		}},
+	})
+	if err != nil || !result.Applied {
+		t.Fatalf("Resolve = %+v, %v", result, err)
+	}
+	if got := delivery.choices[0].QuestionAnswers[0].Answers; !reflect.DeepEqual(got, []string{"super-secret"}) {
+		t.Fatalf("runtime secret = %v", got)
+	}
+	assertRedacted := func(name string, response map[string]any) {
+		t.Helper()
+		answers, ok := response["answers"].(map[string][]string)
+		if !ok {
+			t.Fatalf("%s answers type = %T (%+v)", name, response["answers"], response)
+		}
+		if !reflect.DeepEqual(answers["token"], []string{"[REDACTED]"}) || !reflect.DeepEqual(answers["environment"], []string{"staging"}) {
+			t.Fatalf("%s answers = %+v", name, answers)
+		}
+	}
+	assertRedacted("interaction", fs.interaction.Response)
+	assertRedacted("audit", fs.audits[0].Response)
+	eventResponse, _ := fs.events[0].Payload["response"].(map[string]any)
+	assertRedacted("event", eventResponse)
+}
+
 func TestResolveQuestionRejectsInvalidStructuredAnswersBeforeClaim(t *testing.T) {
 	now := time.Now().UTC()
 	request := map[string]any{"questions": []any{
-		map[string]any{"id": "environment", "multi_select": false},
-		map[string]any{"id": "checks", "multi_select": true},
+		map[string]any{"id": "environment", "multi_select": false, "is_other": false, "options": []any{map[string]any{"label": "staging"}, map[string]any{"label": "prod"}}},
+		map[string]any{"id": "checks", "multi_select": true, "is_other": false, "options": []any{map[string]any{"label": "unit"}}},
 	}}
 	tests := []struct {
 		name    string
@@ -288,6 +336,7 @@ func TestResolveQuestionRejectsInvalidStructuredAnswersBeforeClaim(t *testing.T)
 		{name: "empty value", answers: []QuestionAnswer{{QuestionID: "environment", Answers: []string{" "}}, {QuestionID: "checks", Answers: []string{"unit"}}}},
 		{name: "multiple single select", answers: []QuestionAnswer{{QuestionID: "environment", Answers: []string{"staging", "prod"}}, {QuestionID: "checks", Answers: []string{"unit"}}}},
 		{name: "unknown id", answers: []QuestionAnswer{{QuestionID: "other", Answers: []string{"staging"}}, {QuestionID: "checks", Answers: []string{"unit"}}}},
+		{name: "custom answer disabled", answers: []QuestionAnswer{{QuestionID: "environment", Answers: []string{"qa"}}, {QuestionID: "checks", Answers: []string{"unit"}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -306,6 +355,46 @@ func TestResolveQuestionRejectsInvalidStructuredAnswersBeforeClaim(t *testing.T)
 				t.Fatalf("invalid decision reached side effects: claims=%d choices=%d", fs.claimCount, len(delivery.choices))
 			}
 		})
+	}
+}
+
+func TestResolveQuestionLegacyMissingIsOtherAllowsCustomAnswer(t *testing.T) {
+	now := time.Now().UTC()
+	request := map[string]any{"questions": []any{
+		map[string]any{"id": " environment ", "options": []any{map[string]any{"label": "staging"}}},
+	}}
+	fs := newFakeStore(store.AgentInteractionKindUserChoice, request, now)
+	delivery := &fakeDelivery{}
+	svc := NewService(fs, delivery, nil)
+	svc.now = func() time.Time { return now }
+	result, err := svc.Resolve(context.Background(), ResolveRequest{
+		WorkspaceID: "workspace-1", InteractionID: "interaction-1",
+		Actor:    Actor{ActorID: "user-1", Source: store.AgentInteractionSourceWeb},
+		Decision: Decision{QuestionAnswers: []QuestionAnswer{{QuestionID: " environment ", Answers: []string{"qa"}}}},
+	})
+	if err != nil || !result.Applied {
+		t.Fatalf("Resolve = %+v, %v", result, err)
+	}
+	if got := delivery.choices[0].QuestionAnswers[0]; got.QuestionID != "environment" || !reflect.DeepEqual(got.Answers, []string{"qa"}) {
+		t.Fatalf("runtime answer = %+v", got)
+	}
+}
+
+func TestResolveQuestionExplicitlyClosedEmptyOptionsRejectsCustomAnswer(t *testing.T) {
+	now := time.Now().UTC()
+	request := map[string]any{"questions": []any{
+		map[string]any{"id": "q0", "is_other": false, "options": []any{}},
+	}}
+	fs := newFakeStore(store.AgentInteractionKindUserChoice, request, now)
+	svc := NewService(fs, &fakeDelivery{}, nil)
+	svc.now = func() time.Time { return now }
+	_, err := svc.Resolve(context.Background(), ResolveRequest{
+		WorkspaceID: "workspace-1", InteractionID: "interaction-1",
+		Actor:    Actor{ActorID: "user-1", Source: store.AgentInteractionSourceWeb},
+		Decision: Decision{QuestionAnswers: []QuestionAnswer{{QuestionID: "q0", Answers: []string{"custom"}}}},
+	})
+	if !errors.Is(err, ErrInvalidDecision) || fs.claimCount != 0 {
+		t.Fatalf("Resolve error/claims = %v/%d, want ErrInvalidDecision before claim", err, fs.claimCount)
 	}
 }
 
@@ -346,6 +435,9 @@ func TestConcurrentResolversHaveOneDeliveryWinner(t *testing.T) {
 		firstDone <- err
 	}()
 	<-delivery.entered
+	if fs.interaction.Status != store.AgentInteractionStatusResolving {
+		t.Fatalf("interaction became terminal before runtime delivery ack: %q", fs.interaction.Status)
+	}
 	_, secondErr := svc.Resolve(context.Background(), req)
 	if !errors.Is(secondErr, ErrAlreadyResolving) {
 		t.Fatalf("second error = %v, want ErrAlreadyResolving", secondErr)
@@ -376,6 +468,28 @@ func TestTemporaryDeliveryFailureReleasesClaimForRetry(t *testing.T) {
 	delivery.err = nil
 	if result, err := svc.Resolve(context.Background(), req); err != nil || !result.Applied {
 		t.Fatalf("retry = %+v, %v", result, err)
+	}
+}
+
+func TestCancelledResolveContextStillReleasesDeliveryClaim(t *testing.T) {
+	now := time.Now().UTC()
+	fs := newFakeStore(store.AgentInteractionKindPermission, nil, now)
+	delivery := &fakeDelivery{err: errors.New("runtime disconnected")}
+	svc := NewService(fs, delivery, nil)
+	svc.now = func() time.Time { return now }
+	approved := true
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := svc.Resolve(ctx, ResolveRequest{
+		WorkspaceID: "workspace-1", InteractionID: "interaction-1",
+		Actor:    Actor{ActorID: "user-1", Source: store.AgentInteractionSourceWeb},
+		Decision: Decision{Approved: &approved},
+	})
+	if !errors.Is(err, ErrRuntimeUnavailable) {
+		t.Fatalf("Resolve error = %v, want ErrRuntimeUnavailable", err)
+	}
+	if fs.releaseCount != 1 || fs.releaseCtxErr != nil || fs.interaction.Status != store.AgentInteractionStatusPending {
+		t.Fatalf("release state = count:%d ctx:%v status:%s", fs.releaseCount, fs.releaseCtxErr, fs.interaction.Status)
 	}
 }
 

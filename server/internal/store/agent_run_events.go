@@ -78,14 +78,14 @@ func (s *Store) RecordAgentRunEvent(ctx context.Context, input RecordAgentRunEve
 		}
 		return err
 	}
-	if kind, requestID, deviceID, ok := interactionFromRunEvent(input.EventKind, payload); ok {
+	if kind, requestID, deviceID, ttl, ok := interactionFromRunEvent(input.EventKind, payload); ok {
 		if err := queries.InsertAgentInteractionFromRun(ctx, sqlc.InsertAgentInteractionFromRunParams{
 			RequestID:  requestID,
 			Kind:       kind,
 			Request:    encoded,
 			DeviceID:   deviceID,
 			CreatedAt:  timestamptz(occurredAt),
-			ExpiresAt:  timestamptz(occurredAt.Add(AgentInteractionTTL)),
+			ExpiresAt:  timestamptz(occurredAt.Add(ttl)),
 			AgentRunID: runID,
 		}); err != nil {
 			return err
@@ -101,19 +101,41 @@ func (s *Store) RecordAgentRunEvent(ctx context.Context, input RecordAgentRunEve
 	return tx.Commit(ctx)
 }
 
-func interactionFromRunEvent(eventKind string, payload map[string]any) (kind, requestID, deviceID string, ok bool) {
+func interactionFromRunEvent(eventKind string, payload map[string]any) (kind, requestID, deviceID string, ttl time.Duration, ok bool) {
 	switch eventKind {
 	case "permission.asked":
 		kind = AgentInteractionKindPermission
 	case "prompt_for_user_choice.asked":
 		kind = AgentInteractionKindUserChoice
 	default:
-		return "", "", "", false
+		return "", "", "", 0, false
 	}
 	requestID, _ = payload["request_id"].(string)
 	deviceID, _ = payload["device_id"].(string)
 	requestID = strings.TrimSpace(requestID)
-	return kind, requestID, strings.TrimSpace(deviceID), requestID != ""
+	ttl = AgentInteractionTTL
+	if millis, valid := positiveUint64(payload["auto_resolution_ms"]); valid {
+		const maxMillis = uint64(^uint64(0)>>1) / uint64(time.Millisecond)
+		if millis <= maxMillis {
+			ttl = time.Duration(millis) * time.Millisecond
+		}
+	}
+	return kind, requestID, strings.TrimSpace(deviceID), ttl, requestID != ""
+}
+
+func positiveUint64(value any) (uint64, bool) {
+	switch typed := value.(type) {
+	case uint64:
+		return typed, typed > 0
+	case int:
+		return uint64(typed), typed > 0
+	case int64:
+		return uint64(typed), typed > 0
+	case float64:
+		return uint64(typed), typed > 0 && typed == float64(uint64(typed))
+	default:
+		return 0, false
+	}
 }
 
 func terminalInteractionReason(eventKind string, payload map[string]any) (string, bool) {

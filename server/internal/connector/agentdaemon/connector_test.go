@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -547,6 +548,36 @@ func TestStreamPrompt_PermissionRequestPropagates(t *testing.T) {
 	}
 }
 
+func TestStreamPrompt_UserChoiceMetadataPropagates(t *testing.T) {
+	c, _, sess, conn, _ := newWiredHarness(t, "dev-1", "conv-1", "pa-1")
+	defer sess.Close("test done")
+	ch, err := c.StreamPrompt(context.Background(), basicInput())
+	if err != nil {
+		t.Fatalf("StreamPrompt: %v", err)
+	}
+	waitForWrite(t, conn, proto.TypePromptRequest, 2*time.Second)
+	autoResolutionMs := uint64(90_000)
+	askEnv, _ := proto.NewEnvelope(proto.TypePromptForUserChoice, "run-1", proto.PromptForUserChoicePayload{
+		AskID: "ask-metadata", AutoResolutionMs: &autoResolutionMs,
+		Questions: []proto.PromptForUserChoiceQuestion{{
+			ID: "token", Question: "Token?", IsOther: true, IsSecret: true,
+		}},
+	})
+	conn.Feed(askEnv)
+	select {
+	case ev := <-ch:
+		if ev.PromptForUserChoice == nil || len(ev.PromptForUserChoice.Questions) != 1 {
+			t.Fatalf("user choice event = %+v", ev)
+		}
+		question := ev.PromptForUserChoice.Questions[0]
+		if !question.IsOther || !question.IsSecret || ev.PromptForUserChoice.AutoResolutionMs == nil || *ev.PromptForUserChoice.AutoResolutionMs != autoResolutionMs {
+			t.Fatalf("user choice metadata = %+v", ev.PromptForUserChoice)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("user choice event timed out")
+	}
+}
+
 // ----------------------------------------------------------------------
 // Abort / SubmitPermission / Close
 // ----------------------------------------------------------------------
@@ -615,9 +646,9 @@ func TestSubmitPermission_RoutesThroughRegistry(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if err := c.SubmitPermission(context.Background(), connector.PermissionDecision{
+	if err := submitPermissionAndAck(t, c, conn, connector.PermissionDecision{
 		RequestID: "perm-xyz", Approved: true, Note: "lgtm",
-	}); err != nil {
+	}, true, ""); err != nil {
 		t.Fatalf("SubmitPermission: %v", err)
 	}
 
@@ -632,6 +663,34 @@ func TestSubmitPermission_RoutesThroughRegistry(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error on duplicate SubmitPermission, got nil")
+	}
+}
+
+func TestSubmitPermission_DoesNotSucceedBeforeRuntimeAck(t *testing.T) {
+	c, _, sess, conn, _ := newWiredHarness(t, "dev-1", "conv-1", "pa-1")
+	defer sess.Close("test done")
+	if _, err := c.StreamPrompt(context.Background(), basicInput()); err != nil {
+		t.Fatalf("StreamPrompt: %v", err)
+	}
+	waitForWrite(t, conn, proto.TypePromptRequest, 2*time.Second)
+	permEnv, _ := proto.NewEnvelope(proto.TypePermissionRequest, "perm-rejected", proto.PermissionRequestPayload{Tool: "Bash"})
+	conn.Feed(permEnv)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := c.registry.LookupPermission("perm-rejected"); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("permission registration timed out")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	err := submitPermissionAndAck(t, c, conn, connector.PermissionDecision{
+		RequestID: "perm-rejected", Approved: true,
+	}, false, "runtime_error")
+	if !errors.Is(err, connector.ErrInteractionRuntimeUnavailable) {
+		t.Fatalf("SubmitPermission error = %v, want ErrInteractionRuntimeUnavailable", err)
 	}
 }
 
@@ -650,6 +709,165 @@ func TestSubmitPermission_RequiresRequestID(t *testing.T) {
 	err := c.SubmitPermission(context.Background(), connector.PermissionDecision{Approved: true})
 	if err == nil {
 		t.Fatal("expected error for empty RequestID, got nil")
+	}
+}
+
+func TestSubmitPromptForUserChoice_WaitsForRuntimeAck(t *testing.T) {
+	c, _, sess, conn, _ := newWiredHarness(t, "dev-1", "conv-1", "pa-1")
+	defer sess.Close("test done")
+	askEnv, _ := proto.NewEnvelope(proto.TypePromptForUserChoice, "run-1", proto.PromptForUserChoicePayload{
+		AskID: "ask-xyz", Questions: []proto.PromptForUserChoiceQuestion{{ID: "q0", Question: "Continue?"}},
+	})
+	conn.Feed(askEnv)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := c.registry.LookupPromptForUserChoice("ask-xyz"); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("user-input registration timed out")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- c.SubmitPromptForUserChoice(context.Background(), connector.PromptForUserChoiceDecision{
+			RequestID: "ask-xyz", QuestionAnswers: []connector.PromptForUserChoiceQuestionAnswer{{QuestionID: "q0", Answers: []string{"yes"}}},
+		})
+	}()
+	var decisionEnv proto.Envelope
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, env := range conn.Writes() {
+			if env.Type == proto.TypePromptForUserChoiceDecision && env.ID == "ask-xyz" {
+				decisionEnv = env
+				break
+			}
+		}
+		if decisionEnv.Type != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if decisionEnv.Type == "" {
+		t.Fatal("prompt_for_user_choice_decision never written")
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("SubmitPromptForUserChoice returned before ack: %v", err)
+	default:
+	}
+	var payload proto.PromptForUserChoiceDecisionPayload
+	if err := decisionEnv.DecodePayload(&payload); err != nil {
+		t.Fatalf("decode user-input decision: %v", err)
+	}
+	ack, _ := proto.NewEnvelope(proto.TypeInteractionDecisionAck, "ask-xyz", proto.InteractionDecisionAckPayload{
+		DeliveryID: payload.DeliveryID, Applied: true,
+	})
+	conn.Feed(ack)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("SubmitPromptForUserChoice: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SubmitPromptForUserChoice did not return after ack")
+	}
+}
+
+func TestSubmitPermission_AckTimeoutIsRetryableAndLateAckIsIsolated(t *testing.T) {
+	oldTimeout := gateway.InteractionAckTimeout
+	gateway.InteractionAckTimeout = 25 * time.Millisecond
+	defer func() { gateway.InteractionAckTimeout = oldTimeout }()
+	c, _, sess, conn, _ := newWiredHarness(t, "dev-1", "conv-1", "pa-1")
+	defer sess.Close("test done")
+	permEnv, _ := proto.NewEnvelope(proto.TypePermissionRequest, "perm-timeout", proto.PermissionRequestPayload{Tool: "Bash"})
+	conn.Feed(permEnv)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := c.registry.LookupPermission("perm-timeout"); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("permission registration timed out")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	err := c.SubmitPermission(context.Background(), connector.PermissionDecision{RequestID: "perm-timeout", Approved: false})
+	if !errors.Is(err, connector.ErrInteractionRuntimeUnavailable) {
+		t.Fatalf("SubmitPermission error = %v, want retryable runtime unavailable", err)
+	}
+	if _, err := c.registry.LookupPermission("perm-timeout"); err != nil {
+		t.Fatalf("permission mapping was detached after missing ack: %v", err)
+	}
+	var firstDeliveryID string
+	for _, env := range conn.Writes() {
+		if env.Type != proto.TypePermissionDecision || env.ID != "perm-timeout" {
+			continue
+		}
+		var payload proto.PermissionDecisionPayload
+		if err := env.DecodePayload(&payload); err != nil {
+			t.Fatalf("decode permission decision: %v", err)
+		}
+		firstDeliveryID = payload.DeliveryID
+	}
+	if !strings.HasPrefix(firstDeliveryID, "permission:perm-timeout:") {
+		t.Fatalf("first delivery id = %q, want request-derived base plus unique attempt", firstDeliveryID)
+	}
+
+	// A retry uses a different transport id. An ack for the timed-out first
+	// attempt must not satisfy this newer waiter, especially when the human
+	// changed the decision while the first result was uncertain.
+	gateway.InteractionAckTimeout = 2 * time.Second
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- c.SubmitPermission(context.Background(), connector.PermissionDecision{
+			RequestID: "perm-timeout", Approved: true,
+		})
+	}()
+	var secondDeliveryID string
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, env := range conn.Writes() {
+			if env.Type != proto.TypePermissionDecision || env.ID != "perm-timeout" {
+				continue
+			}
+			var payload proto.PermissionDecisionPayload
+			if err := env.DecodePayload(&payload); err != nil {
+				t.Fatalf("decode retry permission decision: %v", err)
+			}
+			if payload.DeliveryID != firstDeliveryID {
+				secondDeliveryID = payload.DeliveryID
+			}
+		}
+		if secondDeliveryID != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if secondDeliveryID == "" || secondDeliveryID == firstDeliveryID {
+		t.Fatalf("retry delivery id = %q, first = %q", secondDeliveryID, firstDeliveryID)
+	}
+	lateAck, _ := proto.NewEnvelope(proto.TypeInteractionDecisionAck, "perm-timeout", proto.InteractionDecisionAckPayload{
+		DeliveryID: firstDeliveryID, Applied: true,
+	})
+	conn.Feed(lateAck)
+	select {
+	case err := <-secondDone:
+		t.Fatalf("new attempt consumed stale ack: %v", err)
+	case <-time.After(75 * time.Millisecond):
+	}
+	conflictAck, _ := proto.NewEnvelope(proto.TypeInteractionDecisionAck, "perm-timeout", proto.InteractionDecisionAckPayload{
+		DeliveryID: secondDeliveryID, Applied: false, ErrorCode: "decision_conflict", Error: "decision_conflict",
+	})
+	conn.Feed(conflictAck)
+	select {
+	case err := <-secondDone:
+		if !errors.Is(err, connector.ErrInteractionNoLongerPending) {
+			t.Fatalf("retry error = %v, want no longer pending conflict", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("retry did not return after its own ack")
 	}
 }
 
@@ -735,6 +953,44 @@ func waitForWrite(t *testing.T, conn *fakeConn, typ string, within time.Duration
 			return false
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func submitPermissionAndAck(t *testing.T, c *Connector, conn *fakeConn, decision connector.PermissionDecision, applied bool, errorCode string) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- c.SubmitPermission(context.Background(), decision) }()
+	var decisionEnv proto.Envelope
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, env := range conn.Writes() {
+			if env.Type == proto.TypePermissionDecision && env.ID == decision.RequestID {
+				decisionEnv = env
+				break
+			}
+		}
+		if decisionEnv.Type != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if decisionEnv.Type == "" {
+		t.Fatal("permission_decision never written")
+	}
+	var payload proto.PermissionDecisionPayload
+	if err := decisionEnv.DecodePayload(&payload); err != nil {
+		t.Fatalf("decode permission decision: %v", err)
+	}
+	ack, _ := proto.NewEnvelope(proto.TypeInteractionDecisionAck, decision.RequestID, proto.InteractionDecisionAckPayload{
+		DeliveryID: payload.DeliveryID, Applied: applied, ErrorCode: errorCode, Error: errorCode,
+	})
+	conn.Feed(ack)
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(2 * time.Second):
+		t.Fatal("SubmitPermission did not return after runtime ack")
+		return nil
 	}
 }
 

@@ -13,13 +13,14 @@ func SilentGranularPolicy() AskForApproval {
 	return AskForApproval{Granular: &g}
 }
 
-// HumanApprovalPolicy surfaces every Codex approval gate to Parsar. The
-// daemon turns those server requests into the same permission envelopes used
-// by Claude Code, so Web and IM users make the decision explicitly.
+// HumanApprovalPolicy surfaces every Codex approval gate that Parsar can
+// complete through its permission and user-input protocols. MCP elicitations
+// stay disabled until Parsar supports their typed form and URL response modes;
+// advertising an unhandled server request would leave Codex waiting forever.
 func HumanApprovalPolicy() AskForApproval {
 	g := GranularAskForApproval{
 		SandboxApproval: true, Rules: true, SkillApproval: true,
-		RequestPermissions: true, MCPElicitations: true,
+		RequestPermissions: true, MCPElicitations: false,
 	}
 	return AskForApproval{Granular: &g}
 }

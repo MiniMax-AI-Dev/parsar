@@ -456,6 +456,8 @@ func (w *Worker) maybeSendNeutralChoiceCard(
 			Header:      q.Header,
 			Question:    q.Question,
 			MultiSelect: q.MultiSelect,
+			IsOther:     q.IsOther,
+			IsSecret:    q.IsSecret,
 			Options:     opts,
 		})
 	}

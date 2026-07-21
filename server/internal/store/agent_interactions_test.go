@@ -99,7 +99,8 @@ func TestAgentInteractionLifecycleIsDurableAndSingleWinner(t *testing.T) {
 
 	askPayload := map[string]any{
 		"request_id": "ask-terminal-test", "device_id": "device-web-owner",
-		"questions": []any{map[string]any{"id": "environment", "question": "Where?"}},
+		"auto_resolution_ms": uint64(120_000),
+		"questions":          []any{map[string]any{"id": "environment", "question": "Where?"}},
 	}
 	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
 		RunID: runID, EventKind: "prompt_for_user_choice.asked", Payload: askPayload, OccurredAt: occurredAt.Add(time.Second),
@@ -113,6 +114,12 @@ func TestAgentInteractionLifecycleIsDurableAndSingleWinner(t *testing.T) {
 	questions, _ := ask.Request["questions"].([]any)
 	if len(questions) != 1 || questions[0].(map[string]any)["id"] != "environment" {
 		t.Fatalf("durable question snapshot = %+v", ask.Request)
+	}
+	if lifetime := ask.ExpiresAt.Sub(ask.CreatedAt); lifetime != 2*time.Minute {
+		t.Fatalf("question lifetime = %s, want 2m", lifetime)
+	}
+	if _, err := store.CancelAgentRun(ctx, runID, "operator_cancelled"); err != nil {
+		t.Fatalf("cancel run row: %v", err)
 	}
 	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
 		RunID: runID, EventKind: "run.cancelled", Payload: map[string]any{"reason": "operator_cancelled"}, OccurredAt: occurredAt.Add(2 * time.Second),
@@ -128,5 +135,15 @@ func TestAgentInteractionLifecycleIsDurableAndSingleWinner(t *testing.T) {
 	}
 	if closed[0].ResolutionSource != AgentInteractionSourceRuntime || closed[0].Response["reason"] != "operator_cancelled" {
 		t.Fatalf("terminal provenance/response = %q/%+v", closed[0].ResolutionSource, closed[0].Response)
+	}
+	if err := store.RecordAgentRunEvent(ctx, RecordAgentRunEventInput{
+		RunID: runID, EventKind: "prompt_for_user_choice.asked",
+		Payload:    map[string]any{"request_id": "ask-after-terminal", "device_id": "device-web-owner"},
+		OccurredAt: occurredAt.Add(3 * time.Second),
+	}); err != nil {
+		t.Fatalf("record late question event: %v", err)
+	}
+	if _, err := store.GetAgentInteractionByRequestID(ctx, AgentInteractionKindUserChoice, "ask-after-terminal", runID); !errors.Is(err, ErrUnknownAgentInteraction) {
+		t.Fatalf("late terminal interaction error = %v, want ErrUnknownAgentInteraction", err)
 	}
 }

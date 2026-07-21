@@ -113,6 +113,8 @@ definitions:
       by:
         description: user id
         type: string
+      deliveryID:
+        type: string
       deviceID:
         type: string
       note:
@@ -130,6 +132,8 @@ definitions:
         type: string
       cancelled:
         type: boolean
+      deliveryID:
+        type: string
       deviceID:
         type: string
       questionAnswers:

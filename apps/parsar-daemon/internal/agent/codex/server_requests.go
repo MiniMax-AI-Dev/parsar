@@ -15,18 +15,29 @@ import (
 )
 
 type pendingCodexPermission struct {
-	rpcID any
-	timer *time.Timer
+	rpcID       any
+	kind        codexPermissionKind
+	permissions map[string]any
+	timeout     time.Duration
+	timer       *time.Timer
 }
 
 type pendingCodexAsk struct {
 	rpcID       any
 	questionIDs []string
 	answerKeys  []string
+	timeout     time.Duration
 	timer       *time.Timer
 }
 
 const codexInteractionTimeout = 10 * time.Minute
+
+type codexPermissionKind uint8
+
+const (
+	codexDecisionApproval codexPermissionKind = iota
+	codexPermissionsApproval
+)
 
 type pendingCodexInteractions struct {
 	mu          sync.Mutex
@@ -58,7 +69,7 @@ func (s *Session) handleCodexCommandApproval(raw json.RawMessage, rpcID any) (an
 	if title == "" {
 		title = "Run command"
 	}
-	return s.deferCodexPermission(rpcID, "command_execution", title, stringPointer(params.Reason), raw)
+	return s.deferCodexPermission(rpcID, codexDecisionApproval, "command_execution", title, stringPointer(params.Reason), raw, nil)
 }
 
 func (s *Session) handleCodexFileApproval(raw json.RawMessage, rpcID any) (any, error) {
@@ -70,7 +81,7 @@ func (s *Session) handleCodexFileApproval(raw json.RawMessage, rpcID any) (any, 
 	if title == "" {
 		title = "Apply file changes"
 	}
-	return s.deferCodexPermission(rpcID, "file_change", title, stringPointer(params.Reason), raw)
+	return s.deferCodexPermission(rpcID, codexDecisionApproval, "file_change", title, stringPointer(params.Reason), raw, nil)
 }
 
 func (s *Session) handleCodexPermissionsApproval(raw json.RawMessage, rpcID any) (any, error) {
@@ -82,21 +93,37 @@ func (s *Session) handleCodexPermissionsApproval(raw json.RawMessage, rpcID any)
 	if title == "" {
 		title = "Grant additional permissions"
 	}
-	return s.deferCodexPermission(rpcID, "permission_request", title, stringPointer(params.Reason), raw)
+	return s.deferCodexPermission(rpcID, codexPermissionsApproval, "permission_request", title, stringPointer(params.Reason), raw, params.Permissions)
 }
 
-func (s *Session) deferCodexPermission(rpcID any, tool, title, detail string, raw json.RawMessage) (any, error) {
+func (s *Session) deferCodexPermission(rpcID any, kind codexPermissionKind, tool, title, detail string, raw json.RawMessage, permissions map[string]any) (any, error) {
 	requestID := codexInteractionID("perm")
 	payload := map[string]any{}
 	_ = json.Unmarshal(raw, &payload)
-	timer := time.AfterFunc(codexInteractionTimeout, func() { s.expireCodexPermission(requestID) })
+	pending := pendingCodexPermission{
+		rpcID: rpcID, kind: kind, permissions: permissions,
+		timeout: codexInteractionTimeout,
+	}
 	s.interactions.mu.Lock()
-	s.interactions.permissions[requestID] = pendingCodexPermission{rpcID: rpcID, timer: timer}
+	// Start the timer while holding the table lock. Even a future very short
+	// timeout then blocks in expireCodexPermission until the entry is visible,
+	// rather than firing before insertion and leaving an immortal request.
+	pending.timer = time.AfterFunc(pending.timeout, func() { s.expireCodexPermission(requestID) })
+	s.interactions.permissions[requestID] = pending
 	s.interactions.mu.Unlock()
 	env, err := proto.NewEnvelope(proto.TypePermissionRequest, requestID, proto.PermissionRequestPayload{
 		Tool: tool, Title: title, Detail: detail, Payload: payload,
 	})
 	if err != nil {
+		s.interactions.mu.Lock()
+		pending, ok := s.interactions.permissions[requestID]
+		if ok {
+			delete(s.interactions.permissions, requestID)
+		}
+		s.interactions.mu.Unlock()
+		if ok && pending.timer != nil {
+			pending.timer.Stop()
+		}
 		return nil, err
 	}
 	s.trySend(env)
@@ -132,16 +159,34 @@ func (s *Session) handleCodexUserInput(raw json.RawMessage, rpcID any) (any, err
 		answerKeys = append(answerKeys, header)
 		questions = append(questions, proto.PromptForUserChoiceQuestion{
 			ID: questionID, Header: header, Question: question.Question, Options: options,
+			IsOther: question.IsOther, IsSecret: question.IsSecret,
 		})
 	}
+	timeout := codexInteractionTimeout
+	if params.AutoResolutionMs != nil && *params.AutoResolutionMs > 0 {
+		const maxMillis = uint64(^uint64(0)>>1) / uint64(time.Millisecond)
+		if *params.AutoResolutionMs <= maxMillis {
+			timeout = time.Duration(*params.AutoResolutionMs) * time.Millisecond
+		}
+	}
+	pending := pendingCodexAsk{rpcID: rpcID, questionIDs: questionIDs, answerKeys: answerKeys, timeout: timeout}
 	s.interactions.mu.Lock()
-	timer := time.AfterFunc(codexInteractionTimeout, func() { s.expireCodexAsk(askID) })
-	s.interactions.asks[askID] = pendingCodexAsk{rpcID: rpcID, questionIDs: questionIDs, answerKeys: answerKeys, timer: timer}
+	pending.timer = time.AfterFunc(pending.timeout, func() { s.expireCodexAsk(askID) })
+	s.interactions.asks[askID] = pending
 	s.interactions.mu.Unlock()
 	env, err := proto.NewEnvelope(proto.TypePromptForUserChoice, s.runID, proto.PromptForUserChoicePayload{
-		AskID: askID, Questions: questions,
+		AskID: askID, Questions: questions, AutoResolutionMs: params.AutoResolutionMs,
 	})
 	if err != nil {
+		s.interactions.mu.Lock()
+		pending, ok := s.interactions.asks[askID]
+		if ok {
+			delete(s.interactions.asks, askID)
+		}
+		s.interactions.mu.Unlock()
+		if ok && pending.timer != nil {
+			pending.timer.Stop()
+		}
 		return nil, err
 	}
 	s.trySend(env)
@@ -161,18 +206,32 @@ func (s *Session) submitCodexPermission(requestID string, decision proto.Permiss
 	if pending.timer != nil {
 		pending.timer.Stop()
 	}
-	value := "decline"
-	if decision.Approved {
-		value = "accept"
-	}
-	if err := s.rpc.SendServerReply(pending.rpcID, ApprovalDecisionResult{Decision: value}); err != nil {
-		pending.timer = time.AfterFunc(codexInteractionTimeout, func() { s.expireCodexPermission(requestID) })
+	if err := s.sendCodexPermissionReply(pending, decision.Approved); err != nil {
 		s.interactions.mu.Lock()
+		pending.timer = time.AfterFunc(pending.timeout, func() { s.expireCodexPermission(requestID) })
 		s.interactions.permissions[requestID] = pending
 		s.interactions.mu.Unlock()
 		return err
 	}
 	return nil
+}
+
+func (s *Session) sendCodexPermissionReply(pending pendingCodexPermission, approved bool) error {
+	if pending.kind == codexPermissionsApproval {
+		permissions := map[string]any{}
+		if approved && pending.permissions != nil {
+			permissions = pending.permissions
+		}
+		return s.rpc.SendServerReply(pending.rpcID, PermissionsRequestApprovalResponse{
+			Permissions: permissions,
+			Scope:       "turn",
+		})
+	}
+	value := "decline"
+	if approved {
+		value = "accept"
+	}
+	return s.rpc.SendServerReply(pending.rpcID, ApprovalDecisionResult{Decision: value})
 }
 
 func (s *Session) submitCodexUserInput(askID string, decision proto.PromptForUserChoiceDecisionPayload) error {
@@ -194,8 +253,8 @@ func (s *Session) submitCodexUserInput(askID string, decision proto.PromptForUse
 			reason = "user cancelled input request"
 		}
 		if err := s.rpc.SendServerError(pending.rpcID, -32001, reason, nil); err != nil {
-			pending.timer = time.AfterFunc(codexInteractionTimeout, func() { s.expireCodexAsk(askID) })
 			s.interactions.mu.Lock()
+			pending.timer = time.AfterFunc(pending.timeout, func() { s.expireCodexAsk(askID) })
 			s.interactions.asks[askID] = pending
 			s.interactions.mu.Unlock()
 			return err
@@ -234,8 +293,8 @@ func (s *Session) submitCodexUserInput(askID string, decision proto.PromptForUse
 		result.Answers[questionID] = ToolRequestUserInputAnswer{Answers: values}
 	}
 	if err := s.rpc.SendServerReply(pending.rpcID, result); err != nil {
-		pending.timer = time.AfterFunc(codexInteractionTimeout, func() { s.expireCodexAsk(askID) })
 		s.interactions.mu.Lock()
+		pending.timer = time.AfterFunc(pending.timeout, func() { s.expireCodexAsk(askID) })
 		s.interactions.asks[askID] = pending
 		s.interactions.mu.Unlock()
 		return err
@@ -254,7 +313,7 @@ func (s *Session) expireCodexPermission(requestID string) {
 		if pending.timer != nil {
 			pending.timer.Stop()
 		}
-		_ = s.rpc.SendServerReply(pending.rpcID, ApprovalDecisionResult{Decision: "decline"})
+		_ = s.sendCodexPermissionReply(pending, false)
 	}
 }
 
