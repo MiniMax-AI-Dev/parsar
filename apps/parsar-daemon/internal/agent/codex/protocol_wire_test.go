@@ -105,3 +105,29 @@ func TestThreadStartParams_ModelProviderIsCamelCaseField(t *testing.T) {
 		t.Fatalf("snake_case model_provider leaked: %s", body)
 	}
 }
+
+func TestTurnStartParams_CollaborationModeUsesPlanWireShape(t *testing.T) {
+	developerInstructions := "stay within the configured workspace"
+	params := TurnStartParams{
+		ThreadID: "thread-1",
+		Input:    FirstUserInput("ask me a question"),
+		CollaborationMode: &CollaborationMode{
+			Mode: CollaborationModePlan,
+			Settings: CollaborationModeSettings{
+				Model:                 "MiniMax-M3",
+				DeveloperInstructions: &developerInstructions,
+			},
+		},
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	body := string(raw)
+	if !strings.Contains(body, `"collaborationMode":{"mode":"plan","settings":{"model":"MiniMax-M3","developer_instructions":"stay within the configured workspace"}}`) {
+		t.Fatalf("collaboration mode missing or malformed: %s", body)
+	}
+	if strings.Contains(body, `"collaboration_mode"`) {
+		t.Fatalf("snake_case collaboration_mode leaked: %s", body)
+	}
+}

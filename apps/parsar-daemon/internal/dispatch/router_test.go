@@ -351,8 +351,8 @@ func TestPermissionRequestIsIndexedAndDecisionRoutes(t *testing.T) {
 	sess := <-h.gotSess
 
 	// Session emits a permission_request; pump should index it.
-	permEnv := mustEnv(t, proto.TypePermissionRequest, "perm_abcd1234", proto.PermissionRequestPayload{
-		Tool: "Bash", Title: "rm -rf /",
+	permEnv := mustEnv(t, proto.TypePermissionRequest, "run_p", proto.PermissionRequestPayload{
+		RequestID: "perm_abcd1234", Tool: "Bash", Title: "rm -rf /",
 	})
 	sess.out <- permEnv
 	// Wait until sender records — indexing happens before send.
@@ -393,7 +393,7 @@ func TestPermissionCancelDeindexes(t *testing.T) {
 	<-h.gotReq
 	sess := <-h.gotSess
 
-	sess.out <- mustEnv(t, proto.TypePermissionRequest, "perm_xx", proto.PermissionRequestPayload{Tool: "Bash"})
+	sess.out <- mustEnv(t, proto.TypePermissionRequest, "run_p2", proto.PermissionRequestPayload{RequestID: "perm_xx", Tool: "Bash"})
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 1 }, "perm forwarded")
 	sess.out <- mustEnv(t, proto.TypePermissionCancel, "perm_xx", nil)
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 2 }, "perm_cancel forwarded")

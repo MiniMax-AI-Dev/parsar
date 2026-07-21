@@ -130,6 +130,28 @@ func TestBuildSessionPlan_EmptyOverrideKeepsSystemPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildSessionPlan_ParsesCollaborationMode(t *testing.T) {
+	plan, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
+		"mode": "plan",
+	})
+	if err != nil {
+		t.Fatalf("BuildSessionPlan: %v", err)
+	}
+	defer plan.Cleanup()
+	if plan.CollaborationMode != CollaborationModePlan {
+		t.Fatalf("CollaborationMode = %q, want plan", plan.CollaborationMode)
+	}
+}
+
+func TestBuildSessionPlan_RejectsUnknownCollaborationMode(t *testing.T) {
+	_, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "", map[string]any{
+		"mode": "autopilot",
+	})
+	if err == nil || !strings.Contains(err.Error(), "unsupported collaboration mode") {
+		t.Fatalf("expected unsupported collaboration mode error, got %v", err)
+	}
+}
+
 func TestBuildSessionPlan_RejectsRelativeWorkDir(t *testing.T) {
 	_, err := BuildSessionPlan("run-1", "conv-1/agent-1/codex", "relative/dir", nil)
 	if err == nil {

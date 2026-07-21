@@ -504,11 +504,11 @@ func TestStreamPrompt_PermissionRequestPropagates(t *testing.T) {
 	}
 	waitForWrite(t, conn, proto.TypePromptRequest, 2*time.Second)
 
-	// Daemon emits a permission_request. Envelope.ID is the perm id,
-	// not the runID. The gateway dispatch path indexes it in the
-	// registry's perm map but does NOT fan it to the runID subscriber.
-	permEnv, _ := proto.NewEnvelope(proto.TypePermissionRequest, "perm-xyz", proto.PermissionRequestPayload{
-		Tool: "Bash", Title: "rm -rf /tmp/scratch",
+	// Daemon emits a run-correlated permission request. The request ID stays
+	// in the payload so the gateway can both fan the frame to this stream and
+	// index the later decision route.
+	permEnv, _ := proto.NewEnvelope(proto.TypePermissionRequest, "run-1", proto.PermissionRequestPayload{
+		RequestID: "perm-xyz", Tool: "Bash", Title: "rm -rf /tmp/scratch",
 	})
 	conn.Feed(permEnv)
 
@@ -522,6 +522,15 @@ func TestStreamPrompt_PermissionRequestPropagates(t *testing.T) {
 			t.Fatal("perm-xyz never indexed in registry")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Type != connector.EventPermissionRequest || ev.Permission == nil || ev.Permission.ID != "perm-xyz" {
+			t.Fatalf("permission event = %+v", ev)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("permission request never reached run stream")
 	}
 
 	// Daemon ends the run; the subscriber should see EventDone and close.

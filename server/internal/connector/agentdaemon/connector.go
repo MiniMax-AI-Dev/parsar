@@ -668,8 +668,12 @@ func (c *Connector) handleUpstream(
 			c.log.Warn("agent_daemon: decode permission_request", "err", err, "run_id", in.RunID)
 			return
 		}
+		requestID := strings.TrimSpace(p.RequestID)
+		if requestID == "" {
+			requestID = strings.TrimSpace(env.ID)
+		}
 		out <- connector.PromptEvent{Type: connector.EventPermissionRequest, Permission: &connector.PermissionRequest{
-			ID: env.ID, DeviceID: bind.DeviceID, Tool: p.Tool, Title: p.Title, Detail: p.Detail, Payload: p.Payload,
+			ID: requestID, DeviceID: bind.DeviceID, Tool: p.Tool, Title: p.Title, Detail: p.Detail, Payload: p.Payload,
 		}}
 
 	case proto.TypePromptForUserChoice:

@@ -111,8 +111,8 @@ func (s *Session) deferCodexPermission(rpcID any, kind codexPermissionKind, tool
 	pending.timer = time.AfterFunc(pending.timeout, func() { s.expireCodexPermission(requestID) })
 	s.interactions.permissions[requestID] = pending
 	s.interactions.mu.Unlock()
-	env, err := proto.NewEnvelope(proto.TypePermissionRequest, requestID, proto.PermissionRequestPayload{
-		Tool: tool, Title: title, Detail: detail, Payload: payload,
+	env, err := proto.NewEnvelope(proto.TypePermissionRequest, s.runID, proto.PermissionRequestPayload{
+		RequestID: requestID, Tool: tool, Title: title, Detail: detail, Payload: payload,
 	})
 	if err != nil {
 		s.interactions.mu.Lock()

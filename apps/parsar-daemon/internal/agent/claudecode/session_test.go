@@ -382,7 +382,14 @@ func TestSessionPermissionRoundTrip(t *testing.T) {
 			}
 			collected = append(collected, env)
 			if env.Type == "permission_request" {
-				permID = env.ID
+				if env.ID != "run_p" {
+					t.Fatalf("permission env.ID = %q, want run_p", env.ID)
+				}
+				var request proto.PermissionRequestPayload
+				if err := env.DecodePayload(&request); err != nil {
+					t.Fatalf("decode permission request: %v", err)
+				}
+				permID = request.RequestID
 			}
 		case <-deadline:
 			t.Fatalf("timeout waiting for permission_request; collected %d", len(collected))

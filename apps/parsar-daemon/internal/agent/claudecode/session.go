@@ -541,8 +541,18 @@ func (s *Session) run(stdout io.Reader) {
 					if err := env.DecodePayload(&p); err == nil && p.AskID != "" {
 						s.startAskTimer(p.AskID)
 					}
-				} else if env.Type == proto.TypePermissionRequest && env.ID != "" {
-					s.startPermissionTimer(env.ID)
+				} else if env.Type == proto.TypePermissionRequest {
+					var p proto.PermissionRequestPayload
+					requestID := ""
+					if err := env.DecodePayload(&p); err == nil {
+						requestID = strings.TrimSpace(p.RequestID)
+					}
+					if requestID == "" {
+						requestID = strings.TrimSpace(env.ID)
+					}
+					if requestID != "" {
+						s.startPermissionTimer(requestID)
+					}
 				}
 			case <-s.cancelCtx.Done():
 				s.cfg.logger.Info("claudecode: cancelled during out send", "run_id", s.runID)

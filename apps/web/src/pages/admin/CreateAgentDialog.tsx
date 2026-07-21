@@ -17,6 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
+import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
   modelSupportedEndpointTypes,
@@ -199,6 +200,9 @@ function configBaseForSubmit(a: Agent | null | undefined, connector: string): Re
     delete cfg.agent_kind
     delete cfg.daemon_mode
     delete cfg.device_id
+    // `mode` has engine-specific semantics. The wizard re-emits it only for
+    // Codex so a stale plan mode cannot leak into another engine.
+    delete cfg.mode
     // work_dir is re-emitted from the wizard state below; strip all legacy
     // aliases so a stale value cannot win over a freshly-cleared input.
     delete cfg.work_dir
@@ -242,6 +246,7 @@ export function CreateAgentDialog({
   const [description, setDescription] = useState("")
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("local_device")
   const [agentEngine, setAgentEngine] = useState<AgentEngine>("claude_code")
+  const [codexMode, setCodexMode] = useState<CodexCollaborationMode>("default")
   const [sandboxSize, setSandboxSize] = useState<SandboxSize>("standard")
   const [modelID, setModelID] = useState("")
   const [modelSearch, setModelSearch] = useState("")
@@ -489,6 +494,7 @@ export function CreateAgentDialog({
       const initialExecutionMode = cloneSource ? executionModeFromAgent(cloneSource) : "local_device"
       setExecutionMode(initialExecutionMode)
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
+      setCodexMode(cloneSource ? agentCodexModeOf(cloneSource) : "default")
       setSandboxSize(cloneSource ? sandboxSizeFromAgent(cloneSource) : "standard")
       setModelID(cloneSource ? modelIDFromAgent(cloneSource) : "")
       setModelSearch("")
@@ -520,6 +526,7 @@ export function CreateAgentDialog({
       setDescription(agent.description ?? "")
       setExecutionMode(executionModeFromAgent(agent))
       setAgentEngine(agentEngineFromAgent(agent))
+      setCodexMode(agentCodexModeOf(agent))
       setSandboxSize(sandboxSizeFromAgent(agent))
       setModelID(modelIDFromAgent(agent) || firstModelID)
       setModelSearch("")
@@ -802,6 +809,7 @@ export function CreateAgentDialog({
       profile,
       ...(connector === "agent_daemon" ? {
         agent_kind: agentEngine,
+        ...(agentEngine === "codex" ? { mode: codexMode } : {}),
         ...(executionMode === "sandbox" ? { daemon_mode: "sandbox", sandbox_size: sandboxSize } : {}),
         ...(executionMode === "local_device" ? { daemon_mode: "local", device_id: deviceID } : {}),
         // Daemon read order is work_dir > workdir > working_directory; emit the
@@ -813,6 +821,11 @@ export function CreateAgentDialog({
     const agentProfileConfig: Record<string, unknown> = {
       profile,
       agent_kind: agentEngine,
+      ...(agentEngine === "codex"
+        ? { mode: codexMode }
+        : agentEngineFromAgent(agent) === "codex"
+          ? { mode: null }
+          : {}),
       daemon_mode: executionMode === "sandbox" ? "sandbox" : "local",
       sandbox_size: executionMode === "sandbox" ? sandboxSize : null,
       device_id: executionMode === "local_device" ? deviceID : null,
@@ -1090,6 +1103,23 @@ export function CreateAgentDialog({
                           disabled
                         />
                       </div>
+                    </Field>
+                  )}
+                  {connector === "agent_daemon" && agentEngine === "codex" && (
+                    <Field
+                      label={t("agents.form.fields.codexMode")}
+                      hint={t("agents.form.codexMode.hint")}
+                    >
+                      <select
+                        value={codexMode}
+                        onChange={(e) => setCodexMode(e.target.value === "plan" ? "plan" : "default")}
+                        disabled={pending}
+                        aria-label={t("agents.form.fields.codexMode")}
+                        className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
+                      >
+                        <option value="default">{t("agents.form.codexMode.default")}</option>
+                        <option value="plan">{t("agents.form.codexMode.plan")}</option>
+                      </select>
                     </Field>
                   )}
                   {connector === "agent_daemon" && executionMode === "sandbox" && (

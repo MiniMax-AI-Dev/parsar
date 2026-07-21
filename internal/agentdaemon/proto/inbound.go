@@ -87,13 +87,17 @@ type ToolCallPayload struct {
 }
 
 // PermissionRequestPayload carries an agent's request for human
-// approval. The gateway promotes Envelope.ID to PermissionRequest.ID
-// so caller and daemon agree on which request is which.
+// approval. RequestID is the daemon-minted handle used to route a later
+// decision. It lives in the payload because Envelope.ID is the run ID used
+// by the server gateway to deliver the request to the active run subscriber.
+// Readers still accept legacy frames that omit RequestID and put the request
+// handle in Envelope.ID.
 type PermissionRequestPayload struct {
-	Tool    string         `json:"tool"`
-	Title   string         `json:"title"`
-	Detail  string         `json:"detail,omitempty"`
-	Payload map[string]any `json:"payload,omitempty"`
+	RequestID string         `json:"request_id,omitempty"`
+	Tool      string         `json:"tool"`
+	Title     string         `json:"title"`
+	Detail    string         `json:"detail,omitempty"`
+	Payload   map[string]any `json:"payload,omitempty"`
 }
 
 // InteractionDecisionAckPayload is the daemon's application-level receipt

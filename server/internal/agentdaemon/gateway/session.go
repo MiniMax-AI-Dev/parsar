@@ -582,8 +582,16 @@ func (s *Session) dispatch(env proto.Envelope) {
 		s.handleHeartbeat(env)
 		return
 	case proto.TypePermissionRequest:
-		if env.ID != "" {
-			s.reg.AttachPermission(env.ID, s)
+		var p proto.PermissionRequestPayload
+		requestID := ""
+		if err := env.DecodePayload(&p); err == nil {
+			requestID = strings.TrimSpace(p.RequestID)
+		}
+		if requestID == "" {
+			requestID = strings.TrimSpace(env.ID)
+		}
+		if requestID != "" {
+			s.reg.AttachPermission(requestID, s)
 		}
 	case proto.TypePermissionCancel:
 		if env.ID != "" {
@@ -618,11 +626,11 @@ func (s *Session) dispatch(env proto.Envelope) {
 		return
 	}
 
-	// All run-correlated frames fan to the matching subscriber.
-	// Permission events are stamped with the perm id (not the runID)
-	// and are handled by AttachPermission/DetachPermission above; the
-	// connector routes them via the permission-channel-by-perm-id set,
-	// so they bypass this run-channel path.
+	// All run-correlated frames fan to the matching subscriber. Current
+	// permission and prompt-for-user-choice frames keep their interaction ID
+	// in the payload so Envelope.ID remains the run ID. Legacy permission
+	// frames put the permission ID in Envelope.ID; those are still indexed
+	// above but cannot be correlated to a run subscriber.
 	if env.ID == "" {
 		return
 	}

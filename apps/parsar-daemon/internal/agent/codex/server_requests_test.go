@@ -50,13 +50,16 @@ func TestCodexPermissionRequestWaitsForHumanDecision(t *testing.T) {
 	if err := env.DecodePayload(&request); err != nil {
 		t.Fatalf("decode permission payload: %v", err)
 	}
+	if env.ID != "run-test" || request.RequestID == "" {
+		t.Fatalf("permission correlation = env.ID %q request.ID %q", env.ID, request.RequestID)
+	}
 	if request.Tool != "command_execution" || request.Title != command || request.Detail != reason {
 		t.Fatalf("permission payload = %+v", request)
 	}
 
 	submitDone := make(chan error, 1)
 	go func() {
-		submitDone <- s.SubmitPermission(context.Background(), env.ID, proto.PermissionDecisionPayload{Approved: true})
+		submitDone <- s.SubmitPermission(context.Background(), request.RequestID, proto.PermissionDecisionPayload{Approved: true})
 	}()
 	reply := readCodexServerReply(t, srv)
 	if err := <-submitDone; err != nil {
@@ -90,9 +93,13 @@ func TestCodexPermissionsApprovalUsesDedicatedResponseSchema(t *testing.T) {
 				t.Fatalf("send permissions request: %v", err)
 			}
 			env := <-out
+			var request proto.PermissionRequestPayload
+			if err := env.DecodePayload(&request); err != nil {
+				t.Fatalf("decode permission payload: %v", err)
+			}
 			done := make(chan error, 1)
 			go func() {
-				done <- s.SubmitPermission(context.Background(), env.ID, proto.PermissionDecisionPayload{Approved: tt.approved})
+				done <- s.SubmitPermission(context.Background(), request.RequestID, proto.PermissionDecisionPayload{Approved: tt.approved})
 			}()
 			var reply struct {
 				ID     string `json:"id"`
@@ -242,14 +249,18 @@ func TestCodexInteractionExpiryUnblocksRuntime(t *testing.T) {
 			t.Fatalf("send permission request: %v", err)
 		}
 		env := <-out
+		var request proto.PermissionRequestPayload
+		if err := env.DecodePayload(&request); err != nil {
+			t.Fatalf("decode permission payload: %v", err)
+		}
 		expireDone := make(chan struct{})
-		go func() { s.expireCodexPermission(env.ID); close(expireDone) }()
+		go func() { s.expireCodexPermission(request.RequestID); close(expireDone) }()
 		reply := readCodexServerReply(t, srv)
 		<-expireDone
 		if reply.Result.Decision != "decline" {
 			t.Fatalf("expiry decision = %q", reply.Result.Decision)
 		}
-		if err := s.SubmitPermission(context.Background(), env.ID, proto.PermissionDecisionPayload{Approved: true}); !errors.Is(err, agent.ErrUnknownPermission) {
+		if err := s.SubmitPermission(context.Background(), request.RequestID, proto.PermissionDecisionPayload{Approved: true}); !errors.Is(err, agent.ErrUnknownPermission) {
 			t.Fatalf("late permission error = %v, want ErrUnknownPermission", err)
 		}
 	})
@@ -264,8 +275,12 @@ func TestCodexInteractionExpiryUnblocksRuntime(t *testing.T) {
 			t.Fatalf("send permission profile request: %v", err)
 		}
 		env := <-out
+		var request proto.PermissionRequestPayload
+		if err := env.DecodePayload(&request); err != nil {
+			t.Fatalf("decode permission payload: %v", err)
+		}
 		done := make(chan struct{})
-		go func() { s.expireCodexPermission(env.ID); close(done) }()
+		go func() { s.expireCodexPermission(request.RequestID); close(done) }()
 		var reply struct {
 			Result PermissionsRequestApprovalResponse `json:"result"`
 		}

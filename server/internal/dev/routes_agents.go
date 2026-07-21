@@ -152,6 +152,8 @@ func configureAgentProfile(runtimeStore RuntimeStore) http.HandlerFunc {
 		result, err := runtimeStore.ConfigureAgentProfile(r.Context(), store.ConfigureAgentProfileInput{AgentID: agentID, ModelID: req.ModelID, Workdir: req.Workdir, SystemPrompt: req.SystemPrompt, Config: req.Config})
 		if err != nil {
 			switch {
+			case errors.Is(err, store.ErrInvalidInput):
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, store.ErrUnknownAgent):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			case errors.Is(err, store.ErrUnknownModel):

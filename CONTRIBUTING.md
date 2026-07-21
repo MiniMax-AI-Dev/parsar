@@ -179,6 +179,16 @@ description and keep ownership on the side listed here.
   protocol request and defer the engine response until
   `SubmitPermission` / `SubmitPromptForUserChoice` arrives. Adapters must not
   silently approve, deny, or synthesize empty answers as a fallback.
+- Codex agents that may call `request_user_input` use `config.mode=plan`.
+  Prompt wording cannot unlock the tool in default mode; the daemon must pass
+  the configured mode through app-server `turn/start.collaborationMode`.
+  Agent create/profile configuration owns this persisted value, accepts only
+  `default` or `plan` for Codex, and clears it when switching engines.
+- Daemon-originated approval and question envelopes keep `Envelope.ID` equal
+  to the run ID so the server can deliver them to the active subscriber. Put
+  the daemon-minted interaction handle in payload `request_id` / `ask_id`;
+  legacy permission IDs in `Envelope.ID` are read only for decision-routing
+  compatibility.
 - Persist the run event and its derived `agent_interactions` row in one
   transaction before publishing an approval or question to SSE/IM surfaces.
   If that canonical write fails, abort the run instead of exposing an

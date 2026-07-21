@@ -226,11 +226,30 @@ func (s *Session) run(plan SessionPlan, req proto.PromptRequestPayload) {
 		s.emitTerminal("codex: empty prompt", true)
 		return
 	}
-	turnCtx, turnCancel := context.WithTimeout(s.cancelCtx, 10*time.Second)
-	_, ackErr := s.rpc.Request(turnCtx, "turn/start", TurnStartParams{
+	turnParams := TurnStartParams{
 		ThreadID: s.currentThreadID(),
 		Input:    input,
-	})
+	}
+	if plan.CollaborationMode != "" {
+		model := strings.TrimSpace(s.resolvedModel)
+		if model == "" {
+			s.emitTerminal("codex: collaboration mode requires a resolved model", true)
+			return
+		}
+		var developerInstructions *string
+		if plan.SystemPrompt != "" {
+			developerInstructions = &plan.SystemPrompt
+		}
+		turnParams.CollaborationMode = &CollaborationMode{
+			Mode: plan.CollaborationMode,
+			Settings: CollaborationModeSettings{
+				Model:                 model,
+				DeveloperInstructions: developerInstructions,
+			},
+		}
+	}
+	turnCtx, turnCancel := context.WithTimeout(s.cancelCtx, 10*time.Second)
+	_, ackErr := s.rpc.Request(turnCtx, "turn/start", turnParams)
 	turnCancel()
 	if ackErr != nil {
 		s.cfg.logger.Warn("codex: turn/start ack failed", "run_id", s.runID, "err", ackErr)

@@ -19,17 +19,10 @@ func TestSilentGranularPolicy_AllFalse(t *testing.T) {
 	}
 }
 
-func TestHumanApprovalPolicy_EnablesOnlyHandledGates(t *testing.T) {
+func TestHumanApprovalPolicy_UsesOnRequest(t *testing.T) {
 	p := HumanApprovalPolicy()
-	if p.Granular == nil {
-		t.Fatal("HumanApprovalPolicy must populate Granular")
-	}
-	g := *p.Granular
-	if !g.SandboxApproval || !g.Rules || !g.SkillApproval || !g.RequestPermissions {
-		t.Fatalf("human policy must enable supported approval gates, got %+v", g)
-	}
-	if g.MCPElicitations {
-		t.Fatalf("human policy must not advertise the unhandled MCP elicitation surface, got %+v", g)
+	if p.String != "on-request" || p.Granular != nil {
+		t.Fatalf("HumanApprovalPolicy = %+v, want on-request string policy", p)
 	}
 	if IsSilent(&p) {
 		t.Fatal("HumanApprovalPolicy must surface app-server requests")
@@ -50,7 +43,6 @@ func TestIsSilent_StringPolicies(t *testing.T) {
 	}{
 		{"never silences", AskForApproval{String: "never"}, true},
 		{"on-request loud", AskForApproval{String: "on-request"}, false},
-		{"on-failure loud", AskForApproval{String: "on-failure"}, false},
 		{"untrusted loud", AskForApproval{String: "untrusted"}, false},
 	}
 	for _, tc := range cases {

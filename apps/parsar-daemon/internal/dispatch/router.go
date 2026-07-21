@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -672,12 +673,20 @@ func (r *Router) pump(s *sessionState) {
 func (r *Router) indexPermissionFrame(s *sessionState, env proto.Envelope) {
 	switch env.Type {
 	case proto.TypePermissionRequest:
-		if env.ID == "" {
+		var p proto.PermissionRequestPayload
+		if err := env.DecodePayload(&p); err != nil {
+			return
+		}
+		requestID := strings.TrimSpace(p.RequestID)
+		if requestID == "" {
+			requestID = strings.TrimSpace(env.ID)
+		}
+		if requestID == "" {
 			return
 		}
 		r.mu.Lock()
-		r.permIndex[env.ID] = s.runID
-		s.pendingIDs[env.ID] = struct{}{}
+		r.permIndex[requestID] = s.runID
+		s.pendingIDs[requestID] = struct{}{}
 		r.mu.Unlock()
 	case proto.TypePermissionCancel:
 		if env.ID == "" {

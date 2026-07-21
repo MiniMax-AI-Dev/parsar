@@ -49,6 +49,9 @@ type SessionPlan struct {
 	// SystemPrompt is forwarded as developerInstructions on thread/start.
 	SystemPrompt string
 
+	// CollaborationMode selects Codex's default or plan tool surface.
+	CollaborationMode CollaborationModeKind
+
 	// ApprovalPolicy + Sandbox steer thread/start. Defaults surface human
 	// approvals and confine writes to the workspace.
 	ApprovalPolicy AskForApproval
@@ -90,6 +93,7 @@ type SessionPlan struct {
 //	                                      stream_max_retries (number).
 //	reasoning_summary     string          one of auto/concise/detailed/none —
 //	                                      routed via -c model_reasoning_summary
+//	mode                  string          Codex collaboration mode: default/plan
 //	enable_features       []any           string list, forwarded as --enable
 //	disable_features      []any           string list, forwarded as --disable
 //
@@ -118,6 +122,14 @@ func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any)
 	plan.SystemPrompt = stringOpt(opts, "system_prompt")
 	if override := stringOpt(opts, "override_system_prompt"); override != "" {
 		plan.SystemPrompt = override
+	}
+	if mode := CollaborationModeKind(stringOpt(opts, "mode")); mode != "" {
+		switch mode {
+		case CollaborationModeDefault, CollaborationModePlan:
+			plan.CollaborationMode = mode
+		default:
+			return plan, fmt.Errorf("codex: unsupported collaboration mode %q", mode)
+		}
 	}
 
 	env, err := buildSessionEnv(opts)

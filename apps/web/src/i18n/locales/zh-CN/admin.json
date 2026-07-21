@@ -1250,6 +1250,7 @@
         "intelligence": {
           "title": "智能配置",
           "engine": "Agent 引擎",
+          "codexMode": "Codex 协作模式",
           "systemPrompt": "系统提示词"
         },
         "runtime": {
@@ -1509,6 +1510,7 @@
         "slug": "内部标识",
         "executionMode": "执行方式",
         "agentEngine": "Agent 引擎",
+        "codexMode": "Codex 协作模式",
         "device": "本地设备",
         "sandboxSize": "沙盒规格",
         "sandboxImage": "沙盒镜像",
@@ -1541,6 +1543,11 @@
         "hint": "改完规格后,等当前沙盒被释放才会切换到新规格。",
         "standard": "标准 (2 vCPU / 4 GiB)",
         "xl": "大规格 (4 vCPU / 8 GiB)"
+      },
+      "codexMode": {
+        "hint": "Plan 模式允许 Codex 在对话中发起结构化提问；两种模式都支持权限审批。",
+        "default": "Default（默认）",
+        "plan": "Plan（启用提问）"
       },
       "sandboxImage": {
         "hint": "Agent 首次启动沙盒时，服务端会拉取这个容器镜像。"

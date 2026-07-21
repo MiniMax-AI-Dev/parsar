@@ -1250,6 +1250,7 @@
         "intelligence": {
           "title": "Intelligence",
           "engine": "Agent engine",
+          "codexMode": "Codex collaboration mode",
           "systemPrompt": "System prompt"
         },
         "runtime": {
@@ -1509,6 +1510,7 @@
         "slug": "Internal ID",
         "executionMode": "Execution mode",
         "agentEngine": "Agent engine",
+        "codexMode": "Codex collaboration mode",
         "device": "Local device",
         "sandboxSize": "Sandbox size",
         "sandboxImage": "Sandbox image",
@@ -1541,6 +1543,11 @@
         "hint": "Changes take effect after the current sandbox is released.",
         "standard": "Standard (2 vCPU / 4 GiB)",
         "xl": "Large (4 vCPU / 8 GiB)"
+      },
+      "codexMode": {
+        "hint": "Plan mode enables Codex to ask structured questions in the conversation. Approval requests work in both modes.",
+        "default": "Default",
+        "plan": "Plan (enables questions)"
       },
       "sandboxImage": {
         "hint": "The server pulls this container image when the Agent's sandbox starts for the first time."
