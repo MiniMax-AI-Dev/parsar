@@ -4,7 +4,7 @@ go 1.25.12
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.2
+	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.3
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/httprate v0.16.0
