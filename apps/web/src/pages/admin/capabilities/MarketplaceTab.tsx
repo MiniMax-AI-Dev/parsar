@@ -24,7 +24,7 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)
-  const [hideInstalled, setHideInstalled] = useState(true)
+  const [hideInstalled, setHideInstalled] = useState(false)
 
   const items = useMemo(() => marketplaceQ.data ?? [], [marketplaceQ.data])
   const selected = items.find((item) => item.id === itemID) ?? null
