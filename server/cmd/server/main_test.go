@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
+	authoidc "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/oidc"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -74,6 +75,7 @@ func TestBuildAuthProviderRegistry(t *testing.T) {
 		env              map[string]string
 		wantFeishuEnable bool
 		wantMissing      []string
+		wantProviderIDs  []string
 	}{
 		{
 			name: "default password only and feishu diagnostic disabled",
@@ -83,6 +85,7 @@ func TestBuildAuthProviderRegistry(t *testing.T) {
 				feishu.EnvAppSecret,
 				feishu.EnvRedirectURI,
 			},
+			wantProviderIDs: []string{"password", "feishu"},
 		},
 		{
 			name: "feishu oauth configured",
@@ -92,6 +95,7 @@ func TestBuildAuthProviderRegistry(t *testing.T) {
 				feishu.EnvRedirectURI: "https://parsar.example/api/v1/auth/feishu/callback",
 			},
 			wantFeishuEnable: true,
+			wantProviderIDs:  []string{"password", "feishu"},
 		},
 		{
 			name: "mock feishu configured",
@@ -99,14 +103,45 @@ func TestBuildAuthProviderRegistry(t *testing.T) {
 				feishu.EnvMock: "true",
 			},
 			wantFeishuEnable: true,
+			wantProviderIDs:  []string{"password", "feishu"},
+		},
+		{
+			name: "multiple oidc providers",
+			env: map[string]string{
+				authoidc.EnvProviders:                      "google,company",
+				"PARSAR_AUTH_OIDC_GOOGLE_LABEL":            "Google",
+				"PARSAR_AUTH_OIDC_GOOGLE_ISSUER_URL":       "https://accounts.google.com",
+				"PARSAR_AUTH_OIDC_GOOGLE_CLIENT_ID":        "google-client",
+				"PARSAR_AUTH_OIDC_GOOGLE_CLIENT_SECRET":    "google-secret",
+				"PARSAR_AUTH_OIDC_COMPANY_LABEL":           "Company SSO",
+				"PARSAR_AUTH_OIDC_COMPANY_ISSUER_URL":      "https://idp.example.com",
+				"PARSAR_AUTH_OIDC_COMPANY_CLIENT_ID":       "company-client",
+				"PARSAR_AUTH_OIDC_COMPANY_CLIENT_SECRET":   "company-secret",
+				"PARSAR_AUTH_OIDC_COMPANY_ALLOWED_DOMAINS": "example.com",
+			},
+			wantMissing: []string{
+				feishu.EnvAppID,
+				feishu.EnvAppSecret,
+				feishu.EnvRedirectURI,
+			},
+			wantProviderIDs: []string{"password", "feishu", "oidc:google", "oidc:company"},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			env := func(k string) string { return tc.env[k] }
-			registry := buildAuthProviderRegistry(env, cfg, decideFeishuStartup(env))
-			if len(registry.Providers) != 2 {
-				t.Fatalf("provider count = %d, want 2", len(registry.Providers))
+			oidcStatuses, err := authoidc.LoadProviderStatuses(authoidc.EnvFunc(env), cfg.Server.PublicURL)
+			if err != nil {
+				t.Fatalf("LoadProviderStatuses: %v", err)
+			}
+			registry := buildAuthProviderRegistry(env, cfg, decideFeishuStartup(env), oidcStatuses)
+			if len(registry.Providers) != len(tc.wantProviderIDs) {
+				t.Fatalf("provider count = %d, want %d", len(registry.Providers), len(tc.wantProviderIDs))
+			}
+			for i, wantID := range tc.wantProviderIDs {
+				if registry.Providers[i].ID != wantID {
+					t.Fatalf("provider[%d] id = %q, want %q", i, registry.Providers[i].ID, wantID)
+				}
 			}
 			if registry.Providers[0].ID != "password" || !registry.Providers[0].Enabled {
 				t.Fatalf("password provider = %+v, want enabled password", registry.Providers[0])
