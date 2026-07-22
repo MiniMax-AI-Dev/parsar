@@ -211,7 +211,7 @@ func TestBuildPublicURL(t *testing.T) {
 
 	cfg = Default()
 	cfg.Auth.DevAuth = true
-	if got := cfg.BuildPublicURL("/api/v1/auth/feishu/callback"); got != "http://127.0.0.1:18080/api/v1/auth/feishu/callback" {
+	if got := cfg.BuildPublicURL("/api/v1/auth/feishu/callback"); got != "http://127.0.0.1:18081/api/v1/auth/feishu/callback" {
 		t.Fatalf("BuildPublicURL dev fallback = %q", got)
 	}
 
