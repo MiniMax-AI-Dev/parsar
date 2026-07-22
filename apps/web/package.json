@@ -31,7 +31,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-dropzone": "^17.0.0",
+    "react-dropzone": "^19.1.1",
     "react-i18next": "^17.0.8",
     "react-markdown": "^10.1.0",
     "shiki": "^4.3.0",
