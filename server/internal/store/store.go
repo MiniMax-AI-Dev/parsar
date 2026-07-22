@@ -1988,6 +1988,8 @@ const (
 	auditAgentRunClaimed  = "agent_run.claimed"
 	// AuditAgentRunCancelled is exported so dev package emit calls share it.
 	AuditAgentRunCancelled           = "agent_run.cancelled"
+	AuditPermissionResolved          = "permission.resolved"
+	AuditUserChoiceResolved          = "user_choice.resolved"
 	auditAgentRunCompleted           = "agent_run.completed"
 	auditAgentRunFailed              = "agent_run.failed"
 	auditHTTPAgentCompleted          = "http_agent.completed"
@@ -2187,46 +2189,9 @@ func (s *Store) ConfigureAgentProfile(ctx context.Context, input ConfigureAgentP
 	// Agent edits call this endpoint after the main PATCH. Merge only fields
 	// owned by the profile request so its older snapshot cannot roll back model,
 	// capability, or credential changes already committed by UpdateAgent.
-	config := decodeJSONMap(current.Config)
-	profileConfig := nonNilMap(input.Config)
-	if raw, ok := profileConfig["profile"]; ok {
-		profile, ok := raw.(map[string]any)
-		if !ok || len(profile) == 0 {
-			delete(config, "profile")
-		} else {
-			config["profile"] = cloneAnyMap(profile)
-		}
-	}
-	for _, key := range []string{"agent_kind", "daemon_mode", "sandbox_size", "device_id"} {
-		raw, ok := profileConfig[key]
-		if !ok {
-			continue
-		}
-		value, _ := raw.(string)
-		if value = strings.TrimSpace(value); value == "" {
-			delete(config, key)
-		} else {
-			config[key] = value
-		}
-	}
-	var profileWorkdir any
-	var profileWorkdirSet bool
-	for _, key := range []string{"work_dir", "workdir", "working_directory"} {
-		if value, ok := profileConfig[key]; ok {
-			profileWorkdir = value
-			profileWorkdirSet = true
-			break
-		}
-	}
-	if profileWorkdirSet {
-		delete(config, "work_dir")
-		delete(config, "workdir")
-		delete(config, "working_directory")
-		if workdir, ok := profileWorkdir.(string); ok {
-			if workdir = strings.TrimSpace(workdir); workdir != "" {
-				config["work_dir"] = workdir
-			}
-		}
+	config, err := mergeAgentProfileOwnedConfig(decodeJSONMap(current.Config), input.Config)
+	if err != nil {
+		return ConfigureDevAgentConnectorResult{}, err
 	}
 	if modelID := strings.TrimSpace(input.ModelID); modelID != "" {
 		modelUUID, err := uuid(modelID)
@@ -2252,14 +2217,6 @@ func (s *Store) ConfigureAgentProfile(ctx context.Context, input ConfigureAgentP
 	}
 	if systemPrompt := strings.TrimSpace(input.SystemPrompt); systemPrompt != "" {
 		config["system_prompt"] = systemPrompt
-	}
-	if _, daemonModeSet := profileConfig["daemon_mode"]; daemonModeSet {
-		switch stringFromMap(config, "daemon_mode") {
-		case "sandbox":
-			delete(config, "device_id")
-		case "local":
-			delete(config, "sandbox_size")
-		}
 	}
 	encoded, err := json.Marshal(config)
 	if err != nil {
@@ -8037,14 +7994,8 @@ func agentConfigJSON(systemPrompt, defaultModelID string, capabilities []string,
 	// Fold agent_daemon identity/runtime keys (formerly carried on the
 	// agent config) into the merged agent config.
 	if connectorType == "agent_daemon" {
-		for _, key := range []string{"device_id", "daemon_mode", "agent_kind", "work_dir"} {
-			if v, ok := bindings[key]; ok {
-				if s, ok := v.(string); ok {
-					if trimmed := strings.TrimSpace(s); trimmed != "" {
-						config[key] = trimmed
-					}
-				}
-			}
+		if err := foldAgentDaemonConfig(config, bindings); err != nil {
+			return nil, err
 		}
 	}
 	return json.Marshal(config)

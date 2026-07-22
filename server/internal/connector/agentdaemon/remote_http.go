@@ -189,6 +189,12 @@ func (s HTTPRemoteStreamer) postSubmit(ctx context.Context, owner store.AgentDae
 		}
 		log.Bg().Error("agent_daemon: HTTP remote "+label+" non-2xx",
 			"request_id", requestID, "owner_pod_id", owner.OwnerPodID, "status", resp.StatusCode, "err", errBody.Error)
+		if strings.Contains(errBody.Error, connector.ErrInteractionNoLongerPending.Error()) {
+			return fmt.Errorf("agent_daemon: %w: remote %s %s", connector.ErrInteractionNoLongerPending, label, errBody.Error)
+		}
+		if strings.Contains(errBody.Error, connector.ErrInteractionRuntimeUnavailable.Error()) {
+			return fmt.Errorf("agent_daemon: %w: remote %s %s", connector.ErrInteractionRuntimeUnavailable, label, errBody.Error)
+		}
 		return fmt.Errorf("agent_daemon: remote %s %s returned %s", label, owner.OwnerPodID, errBody.Error)
 	}
 	log.Bg().Info("agent_daemon: HTTP remote "+label+" POST ok",

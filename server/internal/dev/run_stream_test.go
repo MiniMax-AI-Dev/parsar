@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestConversationRunStreamStartAndLateReplayPersistsFinal(t *testing.T) {
@@ -197,7 +197,7 @@ func TestConversationRunStreamInBandFailureEmitsSingleRunFailed(t *testing.T) {
 	}
 }
 
-func TestConversationRunStartPersistsEventsAfterRequestContextCancel(t *testing.T) {
+func TestConversationRunStartPersistsEventsSynchronouslyAfterRequestContextCancel(t *testing.T) {
 	db := openDevRouteTestDB(t)
 	ctx := context.Background()
 	ids := store.DefaultDevFixtureIDs()
@@ -220,13 +220,27 @@ func TestConversationRunStartPersistsEventsAfterRequestContextCancel(t *testing.
 	startCtx, cancel := context.WithCancel(ctx)
 	startPath := "/api/v1/conversations/" + ids.ConversationID + "/runs/" + runID + "/start"
 	startReq := newConversationMessageRequest(http.MethodPost, startPath, "", ids.UserID).WithContext(startCtx)
-	start := serveConversationMessageRequest(r, startReq)
-	if start.Code != http.StatusAccepted {
-		t.Fatalf("start status/body = %d %s, want 202", start.Code, start.Body.String())
+	type startResult struct {
+		code int
+		body string
+	}
+	startDone := make(chan startResult, 1)
+	go func() {
+		response := serveConversationMessageRequest(r, startReq)
+		startDone <- startResult{code: response.Code, body: response.Body.String()}
+	}()
+	waitForDelayedEventWrite(t, delayedStore.started)
+	select {
+	case <-startDone:
+		t.Fatal("start returned before its lifecycle event was durably recorded")
+	default:
 	}
 	cancel()
-	waitForDelayedEventWrite(t, delayedStore.started)
 	close(delayedStore.release)
+	start := <-startDone
+	if start.code != http.StatusAccepted {
+		t.Fatalf("start status/body = %d %s, want 202", start.code, start.body)
+	}
 
 	events := waitForPersistedRunEvents(t, db, runID, 1)
 	if events < 1 {
@@ -689,6 +703,23 @@ func TestEventPersistencePayload_Thinking(t *testing.T) {
 	}
 	if got, _ := payload["sequence"].(uint64); got != 42 {
 		t.Errorf("payload[\"sequence\"] = %v, want 42", payload["sequence"])
+	}
+}
+
+type failingRunEventRecorder struct{ err error }
+
+func (r failingRunEventRecorder) RecordAgentRunEvent(context.Context, store.RecordAgentRunEventInput) error {
+	return r.err
+}
+
+func TestRecordPromptEventReturnsCanonicalInteractionWriteFailure(t *testing.T) {
+	want := errors.New("database unavailable")
+	err := recordPromptEvent(context.Background(), failingRunEventRecorder{err: want}, "run-1", connector.PromptEvent{
+		Type:       connector.EventPermissionRequest,
+		Permission: &connector.PermissionRequest{ID: "perm-1", DeviceID: "device-1"},
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("recordPromptEvent error = %v, want %v", err, want)
 	}
 }
 

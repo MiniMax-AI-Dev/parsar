@@ -265,9 +265,14 @@ func TestSession_PermissionRequestIndexedInRegistry(t *testing.T) {
 	sess.Start()
 	defer sess.Close("test done")
 
-	env, _ := proto.NewEnvelope(proto.TypePermissionRequest, "perm-abc", proto.PermissionRequestPayload{
-		Tool:  "Bash",
-		Title: "rm -rf /tmp/scratch",
+	ch, err := sess.Subscribe("run-1")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	env, _ := proto.NewEnvelope(proto.TypePermissionRequest, "run-1", proto.PermissionRequestPayload{
+		RequestID: "perm-abc",
+		Tool:      "Bash",
+		Title:     "rm -rf /tmp/scratch",
 	})
 	raw, _ := jsonMarshal(env)
 	conn.Feed(raw)
@@ -276,12 +281,21 @@ func TestSession_PermissionRequestIndexedInRegistry(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		if got, err := reg.LookupPermission("perm-abc"); err == nil && got == sess {
-			return
+			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("perm-abc never indexed in registry")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case got := <-ch:
+		if got.ID != "run-1" || got.Type != proto.TypePermissionRequest {
+			t.Fatalf("subscriber received %+v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("run subscriber never received permission request")
 	}
 }
 

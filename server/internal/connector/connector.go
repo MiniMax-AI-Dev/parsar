@@ -22,6 +22,14 @@ var ErrUnknownConnector = errors.New("connector: unknown type")
 // of the given type is already registered.
 var ErrDuplicateConnector = errors.New("connector: type already registered")
 
+// ErrInteractionNoLongerPending means the runtime already resolved,
+// cancelled, or expired the referenced human-interaction request.
+var ErrInteractionNoLongerPending = errors.New("connector: interaction is no longer pending")
+
+// ErrInteractionRuntimeUnavailable means the decision was not delivered and
+// the canonical interaction may safely return to pending for a later retry.
+var ErrInteractionRuntimeUnavailable = errors.New("connector: interaction runtime unavailable")
+
 // Capabilities is the static feature declaration of a connector.
 type Capabilities struct {
 	Sync bool

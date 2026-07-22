@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils"
 import { useAdminView, type AdminView } from "../../lib/admin-router"
 import {
   MessageSquare,
+  Inbox,
   Play,
   CalendarClock,
   Bot,
@@ -47,6 +48,7 @@ const menuGroups: MenuGroup[] = [
     groupKey: "collaborationGroup",
     items: [
       { id: "conversations", itemKey: "conversations", icon: MessageSquare },
+      { id: "approvals", itemKey: "approvals", icon: Inbox },
       { id: "runs", itemKey: "runs", icon: Play },
       { id: "scheduled", itemKey: "scheduled", icon: CalendarClock },
     ],

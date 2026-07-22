@@ -360,6 +360,33 @@ func (q *Queries) ArchiveWorkspace(ctx context.Context, arg ArchiveWorkspacePara
 	return i, err
 }
 
+const cancelOpenAgentInteractionsByRunID = `-- name: CancelOpenAgentInteractionsByRunID :execrows
+update agent_interactions
+set status = 'cancelled',
+    response = jsonb_build_object('reason', $1::text),
+    claim_token = null,
+    resolved_at = $2,
+    updated_at = $2,
+    resolution_source = 'runtime',
+    resolved_actor = 'runtime'
+where agent_run_id = $3::uuid
+  and status in ('pending', 'resolving')
+`
+
+type CancelOpenAgentInteractionsByRunIDParams struct {
+	Reason     string             `json:"reason"`
+	Now        pgtype.Timestamptz `json:"now"`
+	AgentRunID pgtype.UUID        `json:"agent_run_id"`
+}
+
+func (q *Queries) CancelOpenAgentInteractionsByRunID(ctx context.Context, arg CancelOpenAgentInteractionsByRunIDParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelOpenAgentInteractionsByRunID, arg.Reason, arg.Now, arg.AgentRunID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimActiveFeishuInflightConversations = `-- name: ClaimActiveFeishuInflightConversations :many
 with run_event_max as (
   select agent_run_id, max(sequence)::bigint as max_seq
@@ -654,6 +681,133 @@ func (q *Queries) ClaimActiveFeishuInflightConversations(ctx context.Context, ar
 	return items, nil
 }
 
+const claimAgentInteraction = `-- name: ClaimAgentInteraction :one
+update agent_interactions
+set status = 'resolving',
+    claim_token = gen_random_uuid(),
+    claimed_at = $1,
+    resolution_source = $2,
+    resolved_actor = nullif($3::text, ''),
+    resolved_by = nullif($4::text, '')::uuid,
+    updated_at = $1
+where id = $5::uuid
+  and workspace_id = $6::uuid
+  and status = 'pending'
+  and expires_at > $1
+returning id::text, workspace_id::text, request_id, kind, agent_run_id::text,
+  conversation_id::text, request, device_id, claim_token::text
+`
+
+type ClaimAgentInteractionParams struct {
+	Now              pgtype.Timestamptz `json:"now"`
+	ResolutionSource pgtype.Text        `json:"resolution_source"`
+	ResolvedActor    string             `json:"resolved_actor"`
+	ResolvedBy       string             `json:"resolved_by"`
+	InteractionID    pgtype.UUID        `json:"interaction_id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+}
+
+type ClaimAgentInteractionRow struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	RequestID      string `json:"request_id"`
+	Kind           string `json:"kind"`
+	AgentRunID     string `json:"agent_run_id"`
+	ConversationID string `json:"conversation_id"`
+	Request        []byte `json:"request"`
+	DeviceID       string `json:"device_id"`
+	ClaimToken     string `json:"claim_token"`
+}
+
+func (q *Queries) ClaimAgentInteraction(ctx context.Context, arg ClaimAgentInteractionParams) (ClaimAgentInteractionRow, error) {
+	row := q.db.QueryRow(ctx, claimAgentInteraction,
+		arg.Now,
+		arg.ResolutionSource,
+		arg.ResolvedActor,
+		arg.ResolvedBy,
+		arg.InteractionID,
+		arg.WorkspaceID,
+	)
+	var i ClaimAgentInteractionRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.RequestID,
+		&i.Kind,
+		&i.AgentRunID,
+		&i.ConversationID,
+		&i.Request,
+		&i.DeviceID,
+		&i.ClaimToken,
+	)
+	return i, err
+}
+
+const claimAgentInteractionByRequestID = `-- name: ClaimAgentInteractionByRequestID :one
+update agent_interactions
+set status = 'resolving',
+    claim_token = gen_random_uuid(),
+    claimed_at = $1,
+    resolution_source = $2,
+    resolved_actor = nullif($3::text, ''),
+    resolved_by = nullif($4::text, '')::uuid,
+    updated_at = $1
+where kind = $5
+  and request_id = $6
+  and agent_run_id = $7::uuid
+  and status = 'pending'
+  and expires_at > $1
+returning id::text, workspace_id::text, request_id, kind, agent_run_id::text,
+  conversation_id::text, request, device_id, claim_token::text
+`
+
+type ClaimAgentInteractionByRequestIDParams struct {
+	Now              pgtype.Timestamptz `json:"now"`
+	ResolutionSource pgtype.Text        `json:"resolution_source"`
+	ResolvedActor    string             `json:"resolved_actor"`
+	ResolvedBy       string             `json:"resolved_by"`
+	Kind             string             `json:"kind"`
+	RequestID        string             `json:"request_id"`
+	AgentRunID       pgtype.UUID        `json:"agent_run_id"`
+}
+
+type ClaimAgentInteractionByRequestIDRow struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	RequestID      string `json:"request_id"`
+	Kind           string `json:"kind"`
+	AgentRunID     string `json:"agent_run_id"`
+	ConversationID string `json:"conversation_id"`
+	Request        []byte `json:"request"`
+	DeviceID       string `json:"device_id"`
+	ClaimToken     string `json:"claim_token"`
+}
+
+func (q *Queries) ClaimAgentInteractionByRequestID(ctx context.Context, arg ClaimAgentInteractionByRequestIDParams) (ClaimAgentInteractionByRequestIDRow, error) {
+	row := q.db.QueryRow(ctx, claimAgentInteractionByRequestID,
+		arg.Now,
+		arg.ResolutionSource,
+		arg.ResolvedActor,
+		arg.ResolvedBy,
+		arg.Kind,
+		arg.RequestID,
+		arg.AgentRunID,
+	)
+	var i ClaimAgentInteractionByRequestIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.RequestID,
+		&i.Kind,
+		&i.AgentRunID,
+		&i.ConversationID,
+		&i.Request,
+		&i.DeviceID,
+		&i.ClaimToken,
+	)
+	return i, err
+}
+
 const claimDueScheduledTasks = `-- name: ClaimDueScheduledTasks :many
 with picked as (
   select t.id
@@ -726,6 +880,56 @@ func (q *Queries) ClaimDueScheduledTasks(ctx context.Context, arg ClaimDueSchedu
 		return nil, err
 	}
 	return items, nil
+}
+
+const claimExpiredAgentInteraction = `-- name: ClaimExpiredAgentInteraction :one
+update agent_interactions
+set status = 'resolving',
+    claim_token = gen_random_uuid(),
+    claimed_at = $1,
+    resolution_source = 'system_timeout',
+    resolved_actor = 'system_timeout',
+    resolved_by = null,
+    updated_at = $1
+where id = $2::uuid
+  and status = 'pending'
+  and expires_at <= $1
+returning id::text, workspace_id::text, request_id, kind, agent_run_id::text,
+  conversation_id::text, request, device_id, claim_token::text
+`
+
+type ClaimExpiredAgentInteractionParams struct {
+	Now           pgtype.Timestamptz `json:"now"`
+	InteractionID pgtype.UUID        `json:"interaction_id"`
+}
+
+type ClaimExpiredAgentInteractionRow struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	RequestID      string `json:"request_id"`
+	Kind           string `json:"kind"`
+	AgentRunID     string `json:"agent_run_id"`
+	ConversationID string `json:"conversation_id"`
+	Request        []byte `json:"request"`
+	DeviceID       string `json:"device_id"`
+	ClaimToken     string `json:"claim_token"`
+}
+
+func (q *Queries) ClaimExpiredAgentInteraction(ctx context.Context, arg ClaimExpiredAgentInteractionParams) (ClaimExpiredAgentInteractionRow, error) {
+	row := q.db.QueryRow(ctx, claimExpiredAgentInteraction, arg.Now, arg.InteractionID)
+	var i ClaimExpiredAgentInteractionRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.RequestID,
+		&i.Kind,
+		&i.AgentRunID,
+		&i.ConversationID,
+		&i.Request,
+		&i.DeviceID,
+		&i.ClaimToken,
+	)
+	return i, err
 }
 
 const claimNextQueuedHTTPAgentRun = `-- name: ClaimNextQueuedHTTPAgentRun :one
@@ -981,6 +1185,40 @@ type ClearWorkspaceRuntimeCredentialSecretParams struct {
 func (q *Queries) ClearWorkspaceRuntimeCredentialSecret(ctx context.Context, arg ClearWorkspaceRuntimeCredentialSecretParams) error {
 	_, err := q.db.Exec(ctx, clearWorkspaceRuntimeCredentialSecret, arg.Now, arg.WorkspaceID)
 	return err
+}
+
+const completeAgentInteraction = `-- name: CompleteAgentInteraction :one
+update agent_interactions
+set status = $1,
+    response = $2::jsonb,
+    claim_token = null,
+    resolved_at = $3,
+    updated_at = $3
+where id = $4::uuid
+  and status = 'resolving'
+  and claim_token = $5::uuid
+returning id::text
+`
+
+type CompleteAgentInteractionParams struct {
+	Status        string             `json:"status"`
+	Response      []byte             `json:"response"`
+	Now           pgtype.Timestamptz `json:"now"`
+	InteractionID pgtype.UUID        `json:"interaction_id"`
+	ClaimToken    pgtype.UUID        `json:"claim_token"`
+}
+
+func (q *Queries) CompleteAgentInteraction(ctx context.Context, arg CompleteAgentInteractionParams) (string, error) {
+	row := q.db.QueryRow(ctx, completeAgentInteraction,
+		arg.Status,
+		arg.Response,
+		arg.Now,
+		arg.InteractionID,
+		arg.ClaimToken,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
 const completeAgentRun = `-- name: CompleteAgentRun :exec
@@ -4032,6 +4270,189 @@ func (q *Queries) GetAgentForUpdate(ctx context.Context, id pgtype.UUID) (GetAge
 	return i, err
 }
 
+const getAgentInteraction = `-- name: GetAgentInteraction :one
+select
+  ai.id::text,
+  ai.workspace_id::text,
+  ai.conversation_id::text,
+  ai.agent_run_id::text,
+  ai.request_id,
+  ai.kind,
+  ai.status,
+  ai.request,
+  ai.response,
+  ai.device_id,
+  coalesce(ai.resolution_source, '')::text as resolution_source,
+  coalesce(ai.resolved_actor, '')::text as resolved_actor,
+  coalesce(ai.resolved_by::text, '')::text as resolved_by,
+  ai.created_at,
+  ai.expires_at,
+  ai.resolved_at,
+  ai.updated_at,
+  coalesce(a.name, '')::text as agent_name,
+  coalesce(c.title, '')::text as conversation_title
+from agent_interactions ai
+join conversations c on c.id = ai.conversation_id
+left join agent_runs r on r.id = ai.agent_run_id
+left join agents a on a.id = r.agent_id
+where ai.id = $1::uuid
+`
+
+type GetAgentInteractionRow struct {
+	AiID              string             `json:"ai_id"`
+	AiWorkspaceID     string             `json:"ai_workspace_id"`
+	AiConversationID  string             `json:"ai_conversation_id"`
+	AiAgentRunID      string             `json:"ai_agent_run_id"`
+	RequestID         string             `json:"request_id"`
+	Kind              string             `json:"kind"`
+	Status            string             `json:"status"`
+	Request           []byte             `json:"request"`
+	Response          []byte             `json:"response"`
+	DeviceID          string             `json:"device_id"`
+	ResolutionSource  string             `json:"resolution_source"`
+	ResolvedActor     string             `json:"resolved_actor"`
+	ResolvedBy        string             `json:"resolved_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	ResolvedAt        pgtype.Timestamptz `json:"resolved_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	AgentName         string             `json:"agent_name"`
+	ConversationTitle string             `json:"conversation_title"`
+}
+
+func (q *Queries) GetAgentInteraction(ctx context.Context, interactionID pgtype.UUID) (GetAgentInteractionRow, error) {
+	row := q.db.QueryRow(ctx, getAgentInteraction, interactionID)
+	var i GetAgentInteractionRow
+	err := row.Scan(
+		&i.AiID,
+		&i.AiWorkspaceID,
+		&i.AiConversationID,
+		&i.AiAgentRunID,
+		&i.RequestID,
+		&i.Kind,
+		&i.Status,
+		&i.Request,
+		&i.Response,
+		&i.DeviceID,
+		&i.ResolutionSource,
+		&i.ResolvedActor,
+		&i.ResolvedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ResolvedAt,
+		&i.UpdatedAt,
+		&i.AgentName,
+		&i.ConversationTitle,
+	)
+	return i, err
+}
+
+const getAgentInteractionByRequestID = `-- name: GetAgentInteractionByRequestID :one
+select
+  ai.id::text,
+  ai.workspace_id::text,
+  ai.conversation_id::text,
+  ai.agent_run_id::text,
+  ai.request_id,
+  ai.kind,
+  ai.status,
+  ai.request,
+  ai.response,
+  ai.device_id,
+  coalesce(ai.resolution_source, '')::text as resolution_source,
+  coalesce(ai.resolved_actor, '')::text as resolved_actor,
+  coalesce(ai.resolved_by::text, '')::text as resolved_by,
+  ai.created_at,
+  ai.expires_at,
+  ai.resolved_at,
+  ai.updated_at,
+  coalesce(a.name, '')::text as agent_name,
+  coalesce(c.title, '')::text as conversation_title
+from agent_interactions ai
+join conversations c on c.id = ai.conversation_id
+left join agent_runs r on r.id = ai.agent_run_id
+left join agents a on a.id = r.agent_id
+where ai.kind = $1
+  and ai.request_id = $2
+  and ai.agent_run_id = $3::uuid
+order by ai.created_at desc
+limit 1
+`
+
+type GetAgentInteractionByRequestIDParams struct {
+	Kind       string      `json:"kind"`
+	RequestID  string      `json:"request_id"`
+	AgentRunID pgtype.UUID `json:"agent_run_id"`
+}
+
+type GetAgentInteractionByRequestIDRow struct {
+	AiID              string             `json:"ai_id"`
+	AiWorkspaceID     string             `json:"ai_workspace_id"`
+	AiConversationID  string             `json:"ai_conversation_id"`
+	AiAgentRunID      string             `json:"ai_agent_run_id"`
+	RequestID         string             `json:"request_id"`
+	Kind              string             `json:"kind"`
+	Status            string             `json:"status"`
+	Request           []byte             `json:"request"`
+	Response          []byte             `json:"response"`
+	DeviceID          string             `json:"device_id"`
+	ResolutionSource  string             `json:"resolution_source"`
+	ResolvedActor     string             `json:"resolved_actor"`
+	ResolvedBy        string             `json:"resolved_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	ResolvedAt        pgtype.Timestamptz `json:"resolved_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	AgentName         string             `json:"agent_name"`
+	ConversationTitle string             `json:"conversation_title"`
+}
+
+func (q *Queries) GetAgentInteractionByRequestID(ctx context.Context, arg GetAgentInteractionByRequestIDParams) (GetAgentInteractionByRequestIDRow, error) {
+	row := q.db.QueryRow(ctx, getAgentInteractionByRequestID, arg.Kind, arg.RequestID, arg.AgentRunID)
+	var i GetAgentInteractionByRequestIDRow
+	err := row.Scan(
+		&i.AiID,
+		&i.AiWorkspaceID,
+		&i.AiConversationID,
+		&i.AiAgentRunID,
+		&i.RequestID,
+		&i.Kind,
+		&i.Status,
+		&i.Request,
+		&i.Response,
+		&i.DeviceID,
+		&i.ResolutionSource,
+		&i.ResolvedActor,
+		&i.ResolvedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ResolvedAt,
+		&i.UpdatedAt,
+		&i.AgentName,
+		&i.ConversationTitle,
+	)
+	return i, err
+}
+
+const getAgentInteractionDeviceByRequestID = `-- name: GetAgentInteractionDeviceByRequestID :one
+select device_id
+from agent_interactions
+where kind = $1
+  and request_id = $2
+`
+
+type GetAgentInteractionDeviceByRequestIDParams struct {
+	Kind      string `json:"kind"`
+	RequestID string `json:"request_id"`
+}
+
+func (q *Queries) GetAgentInteractionDeviceByRequestID(ctx context.Context, arg GetAgentInteractionDeviceByRequestIDParams) (string, error) {
+	row := q.db.QueryRow(ctx, getAgentInteractionDeviceByRequestID, arg.Kind, arg.RequestID)
+	var device_id string
+	err := row.Scan(&device_id)
+	return device_id, err
+}
+
 const getAgentMetrics = `-- name: GetAgentMetrics :one
 select
   count(*) filter (where r.status = 'completed')::bigint as completed_count,
@@ -6175,6 +6596,52 @@ func (q *Queries) HasMarketplaceDependentsForWorkspace(ctx context.Context, work
 	return exists, err
 }
 
+const insertAgentInteractionFromRun = `-- name: InsertAgentInteractionFromRun :exec
+insert into agent_interactions(
+  workspace_id, conversation_id, agent_run_id,
+  request_id, kind, request, device_id,
+  created_at, expires_at, updated_at
+)
+select
+  r.workspace_id,
+  r.conversation_id,
+  r.id,
+  $1,
+  $2,
+  $3::jsonb,
+  $4,
+  $5,
+  $6,
+  $5
+from agent_runs r
+where r.id = $7::uuid
+  and r.status not in ('completed', 'failed', 'cancelled', 'interrupted')
+on conflict (workspace_id, device_id, kind, request_id) do nothing
+`
+
+type InsertAgentInteractionFromRunParams struct {
+	RequestID  string             `json:"request_id"`
+	Kind       string             `json:"kind"`
+	Request    []byte             `json:"request"`
+	DeviceID   string             `json:"device_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	AgentRunID pgtype.UUID        `json:"agent_run_id"`
+}
+
+func (q *Queries) InsertAgentInteractionFromRun(ctx context.Context, arg InsertAgentInteractionFromRunParams) error {
+	_, err := q.db.Exec(ctx, insertAgentInteractionFromRun,
+		arg.RequestID,
+		arg.Kind,
+		arg.Request,
+		arg.DeviceID,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.AgentRunID,
+	)
+	return err
+}
+
 const insertAgentRunEvent = `-- name: InsertAgentRunEvent :one
 insert into agent_run_events(
   workspace_id, agent_run_id, sequence,
@@ -7702,6 +8169,40 @@ func (q *Queries) ListEnabledAgentsForMarketplaceCapability(ctx context.Context,
 	return items, nil
 }
 
+const listExpiredPendingAgentInteractionIDs = `-- name: ListExpiredPendingAgentInteractionIDs :many
+select id::text
+from agent_interactions
+where status = 'pending'
+  and expires_at <= $1
+order by expires_at asc
+limit $2
+`
+
+type ListExpiredPendingAgentInteractionIDsParams struct {
+	Now       pgtype.Timestamptz `json:"now"`
+	ItemLimit int32              `json:"item_limit"`
+}
+
+func (q *Queries) ListExpiredPendingAgentInteractionIDs(ctx context.Context, arg ListExpiredPendingAgentInteractionIDsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listExpiredPendingAgentInteractionIDs, arg.Now, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIdleSandboxBindings = `-- name: ListIdleSandboxBindings :many
 select
   id::text            as id,
@@ -8830,6 +9331,110 @@ func (q *Queries) ListUserWorkspaces(ctx context.Context, arg ListUserWorkspaces
 	return items, nil
 }
 
+const listWorkspaceAgentInteractions = `-- name: ListWorkspaceAgentInteractions :many
+select
+  ai.id::text,
+  ai.workspace_id::text,
+  ai.conversation_id::text,
+  ai.agent_run_id::text,
+  ai.request_id,
+  ai.kind,
+  ai.status,
+  ai.request,
+  ai.response,
+  ai.device_id,
+  coalesce(ai.resolution_source, '')::text as resolution_source,
+  coalesce(ai.resolved_actor, '')::text as resolved_actor,
+  coalesce(ai.resolved_by::text, '')::text as resolved_by,
+  ai.created_at,
+  ai.expires_at,
+  ai.resolved_at,
+  ai.updated_at,
+  coalesce(a.name, '')::text as agent_name,
+  coalesce(c.title, '')::text as conversation_title
+from agent_interactions ai
+join conversations c on c.id = ai.conversation_id
+left join agent_runs r on r.id = ai.agent_run_id
+left join agents a on a.id = r.agent_id
+where ai.workspace_id = $1::uuid
+  and (
+    $2::text = ''
+    or ($2::text = 'pending' and ai.status in ('pending', 'resolving'))
+    or ($2::text = 'decided' and ai.status in ('approved', 'denied', 'answered'))
+    or ($2::text = 'expired' and ai.status in ('cancelled', 'expired'))
+  )
+order by ai.created_at desc
+limit $3
+`
+
+type ListWorkspaceAgentInteractionsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	StatusGroup string      `json:"status_group"`
+	ItemLimit   int32       `json:"item_limit"`
+}
+
+type ListWorkspaceAgentInteractionsRow struct {
+	AiID              string             `json:"ai_id"`
+	AiWorkspaceID     string             `json:"ai_workspace_id"`
+	AiConversationID  string             `json:"ai_conversation_id"`
+	AiAgentRunID      string             `json:"ai_agent_run_id"`
+	RequestID         string             `json:"request_id"`
+	Kind              string             `json:"kind"`
+	Status            string             `json:"status"`
+	Request           []byte             `json:"request"`
+	Response          []byte             `json:"response"`
+	DeviceID          string             `json:"device_id"`
+	ResolutionSource  string             `json:"resolution_source"`
+	ResolvedActor     string             `json:"resolved_actor"`
+	ResolvedBy        string             `json:"resolved_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	ResolvedAt        pgtype.Timestamptz `json:"resolved_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	AgentName         string             `json:"agent_name"`
+	ConversationTitle string             `json:"conversation_title"`
+}
+
+func (q *Queries) ListWorkspaceAgentInteractions(ctx context.Context, arg ListWorkspaceAgentInteractionsParams) ([]ListWorkspaceAgentInteractionsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceAgentInteractions, arg.WorkspaceID, arg.StatusGroup, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceAgentInteractionsRow{}
+	for rows.Next() {
+		var i ListWorkspaceAgentInteractionsRow
+		if err := rows.Scan(
+			&i.AiID,
+			&i.AiWorkspaceID,
+			&i.AiConversationID,
+			&i.AiAgentRunID,
+			&i.RequestID,
+			&i.Kind,
+			&i.Status,
+			&i.Request,
+			&i.Response,
+			&i.DeviceID,
+			&i.ResolutionSource,
+			&i.ResolvedActor,
+			&i.ResolvedBy,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.ResolvedAt,
+			&i.UpdatedAt,
+			&i.AgentName,
+			&i.ConversationTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaceAgentRunsPage = `-- name: ListWorkspaceAgentRunsPage :many
 select
   r.id::text,
@@ -9918,6 +10523,57 @@ func (q *Queries) RejectJoinRequest(ctx context.Context, arg RejectJoinRequestPa
 	return i, err
 }
 
+const releaseAgentInteractionClaim = `-- name: ReleaseAgentInteractionClaim :exec
+update agent_interactions
+set status = 'pending',
+    claim_token = null,
+    claimed_at = null,
+    resolution_source = null,
+    resolved_actor = null,
+    resolved_by = null,
+    updated_at = $1
+where id = $2::uuid
+  and status = 'resolving'
+  and claim_token = $3::uuid
+`
+
+type ReleaseAgentInteractionClaimParams struct {
+	Now           pgtype.Timestamptz `json:"now"`
+	InteractionID pgtype.UUID        `json:"interaction_id"`
+	ClaimToken    pgtype.UUID        `json:"claim_token"`
+}
+
+func (q *Queries) ReleaseAgentInteractionClaim(ctx context.Context, arg ReleaseAgentInteractionClaimParams) error {
+	_, err := q.db.Exec(ctx, releaseAgentInteractionClaim, arg.Now, arg.InteractionID, arg.ClaimToken)
+	return err
+}
+
+const releaseStaleResolvingAgentInteractions = `-- name: ReleaseStaleResolvingAgentInteractions :execrows
+update agent_interactions
+set status = 'pending',
+    claim_token = null,
+    claimed_at = null,
+    resolution_source = null,
+    resolved_actor = null,
+    resolved_by = null,
+    updated_at = $1
+where status = 'resolving'
+  and claimed_at < $2
+`
+
+type ReleaseStaleResolvingAgentInteractionsParams struct {
+	Now         pgtype.Timestamptz `json:"now"`
+	StaleBefore pgtype.Timestamptz `json:"stale_before"`
+}
+
+func (q *Queries) ReleaseStaleResolvingAgentInteractions(ctx context.Context, arg ReleaseStaleResolvingAgentInteractionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseStaleResolvingAgentInteractions, arg.Now, arg.StaleBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const requeueFailedAgentRun = `-- name: RequeueFailedAgentRun :one
 update agent_runs
 set status = 'queued',
@@ -10065,6 +10721,40 @@ func (q *Queries) ResolveAgentDaemonDeviceByConversation(ctx context.Context, co
 	var runtime_id string
 	err := row.Scan(&runtime_id)
 	return runtime_id, err
+}
+
+const resolveAgentInteractionByRequestID = `-- name: ResolveAgentInteractionByRequestID :execrows
+update agent_interactions
+set status = $1,
+    response = $2::jsonb,
+    claim_token = null,
+    resolved_at = $3,
+    updated_at = $3
+where kind = $4
+  and request_id = $5
+  and status in ('pending', 'resolving')
+`
+
+type ResolveAgentInteractionByRequestIDParams struct {
+	Status    string             `json:"status"`
+	Response  []byte             `json:"response"`
+	Now       pgtype.Timestamptz `json:"now"`
+	Kind      string             `json:"kind"`
+	RequestID string             `json:"request_id"`
+}
+
+func (q *Queries) ResolveAgentInteractionByRequestID(ctx context.Context, arg ResolveAgentInteractionByRequestIDParams) (int64, error) {
+	result, err := q.db.Exec(ctx, resolveAgentInteractionByRequestID,
+		arg.Status,
+		arg.Response,
+		arg.Now,
+		arg.Kind,
+		arg.RequestID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const resolveAgentNameForConversation = `-- name: ResolveAgentNameForConversation :one

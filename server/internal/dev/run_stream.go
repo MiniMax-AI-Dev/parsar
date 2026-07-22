@@ -11,11 +11,11 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 type runStreamStore interface {
@@ -392,8 +392,18 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 	var streamErr string
 	var sawFinalFailure bool
 	for ev := range events {
+		if err := recordPromptEvent(ctx, streamStore, runID, ev); err != nil {
+			reason := fmt.Sprintf("persist agent event %s: %v", ev.Type, err)
+			log.Bg().Error("dispatchConversationRun: canonical event persistence failed", "run_id", runID, "event_type", ev.Type, "err", err)
+			abortCtx, abortCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = target.Abort(abortCtx, connector.AbortInput{ConversationID: invocation.ConversationID, RunID: runID})
+			abortCancel()
+			broker.Publish(runID, connector.PromptEvent{Type: connector.EventError, Error: reason})
+			broker.Publish(runID, connector.PromptEvent{Type: connector.EventDone, Final: &connector.PromptOutput{Metadata: map[string]any{"source": source, "error": reason}}})
+			failRunRowOnly(ctx, runtimeStore, runID, source, reason)
+			return
+		}
 		broker.Publish(runID, ev)
-		recordPromptEvent(ctx, streamStore, runID, ev)
 		if ev.Type == connector.EventDone {
 			final = ev.Final
 			if ev.Final == nil || strings.TrimSpace(ev.Final.Content) == "" {
@@ -443,12 +453,12 @@ func userConversationInitiatorID(invocation store.AgentRunInvocation) string {
 	return strings.TrimSpace(invocation.RequestedByID)
 }
 
-func recordPromptEvent(ctx context.Context, streamStore runStreamStore, runID string, ev connector.PromptEvent) {
+func recordPromptEvent(ctx context.Context, streamStore runLifecycleEventRecorder, runID string, ev connector.PromptEvent) error {
 	kind, payload, ok := eventPersistencePayload(ev)
 	if !ok {
-		return
+		return nil
 	}
-	recordRunLifecycleEvent(streamStore, runID, kind, payload, time.Now().UTC())
+	return persistRunLifecycleEvent(ctx, streamStore, runID, kind, payload, time.Now().UTC())
 }
 
 func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, bool) {
@@ -470,7 +480,7 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 		if ev.Permission == nil {
 			return "permission.asked", map[string]any{"sequence": ev.Sequence}, true
 		}
-		return "permission.asked", map[string]any{"request_id": ev.Permission.ID, "action": ev.Permission.Tool, "resource": ev.Permission.Title, "detail": ev.Permission.Detail, "payload": ev.Permission.Payload, "sequence": ev.Sequence}, true
+		return "permission.asked", map[string]any{"request_id": ev.Permission.ID, "device_id": ev.Permission.DeviceID, "action": ev.Permission.Tool, "resource": ev.Permission.Title, "detail": ev.Permission.Detail, "payload": ev.Permission.Payload, "sequence": ev.Sequence}, true
 	case connector.EventPromptForUserChoice:
 		if ev.PromptForUserChoice == nil {
 			return "prompt_for_user_choice.asked", map[string]any{"sequence": ev.Sequence}, true
@@ -486,17 +496,24 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 				opts = append(opts, map[string]any{"label": opt.Label, "description": opt.Description})
 			}
 			questionsOut = append(questionsOut, map[string]any{
+				"id":           q.ID,
 				"header":       q.Header,
 				"question":     q.Question,
 				"multi_select": q.MultiSelect,
+				"is_other":     q.IsOther,
+				"is_secret":    q.IsSecret,
 				"options":      opts,
 			})
 		}
 		payload := map[string]any{
 			"request_id":  ev.PromptForUserChoice.ID,
+			"device_id":   ev.PromptForUserChoice.DeviceID,
 			"questions":   questionsOut,
 			"tool_use_id": ev.PromptForUserChoice.ToolUseID,
 			"sequence":    ev.Sequence,
+		}
+		if ev.PromptForUserChoice.AutoResolutionMs != nil {
+			payload["auto_resolution_ms"] = *ev.PromptForUserChoice.AutoResolutionMs
 		}
 		// Mirror the first question into the legacy top-level fields so
 		// rollback-compatible readers (older outbound code paths) still
@@ -506,6 +523,8 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 			payload["question"] = qList[0].Question
 			payload["header"] = qList[0].Header
 			payload["multi_select"] = qList[0].MultiSelect
+			payload["is_other"] = qList[0].IsOther
+			payload["is_secret"] = qList[0].IsSecret
 			legacyOpts := make([]map[string]any, 0, len(qList[0].Options))
 			for _, opt := range qList[0].Options {
 				legacyOpts = append(legacyOpts, map[string]any{"label": opt.Label, "description": opt.Description})
@@ -616,8 +635,8 @@ func publishAndFailRun(ctx context.Context, runtimeStore RuntimeStore, broker in
 		// EventDone-empty already records run.failed via
 		// eventPersistencePayload; use failRunRowOnly to avoid a
 		// duplicate event row.
-		recordPromptEvent(ctx, streamStore, runID, errorEvent)
-		recordPromptEvent(ctx, streamStore, runID, doneEvent)
+		_ = recordPromptEvent(ctx, streamStore, runID, errorEvent)
+		_ = recordPromptEvent(ctx, streamStore, runID, doneEvent)
 	}
 	failRunRowOnly(ctx, runtimeStore, runID, source, msg)
 }

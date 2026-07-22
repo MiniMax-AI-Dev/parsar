@@ -250,12 +250,10 @@ func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery
 		Codex: proto.SupportedAgentKind{
 			Kind: "codex",
 			Capabilities: proto.AgentKindCapabilities{
-				// First-cut adapter runs silent (no permission cards),
-				// but streaming + usage + resume are all wired via
-				// the JSON-RPC notification stream + thread/resume RPC.
-				Streaming: true,
-				Usage:     true,
-				Resume:    true,
+				Streaming:   true,
+				Permissions: true,
+				Usage:       true,
+				Resume:      true,
 			},
 		},
 		Pi: proto.SupportedAgentKind{

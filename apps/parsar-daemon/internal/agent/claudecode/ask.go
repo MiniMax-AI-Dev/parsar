@@ -2,6 +2,7 @@ package claudecode
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -262,7 +263,7 @@ func parseAskUserQuestionInput(input map[string]any) ([]proto.PromptForUserChoic
 	}
 
 	out := make([]proto.PromptForUserChoiceQuestion, 0, len(list))
-	for _, rawEntry := range list {
+	for index, rawEntry := range list {
 		q, isMap := rawEntry.(map[string]any)
 		if !isMap {
 			return nil, false
@@ -292,10 +293,14 @@ func parseAskUserQuestionInput(input map[string]any) ([]proto.PromptForUserChoic
 			return nil, false
 		}
 		out = append(out, proto.PromptForUserChoiceQuestion{
+			ID:          fmt.Sprintf("q%d", index),
 			Header:      header,
 			Question:    question,
 			MultiSelect: multiSelect,
-			Options:     options,
+			// Claude Code's AskUserQuestion always permits the built-in
+			// "Other" free-text answer in addition to declared options.
+			IsOther: true,
+			Options: options,
 		})
 	}
 	return out, true
@@ -395,12 +400,9 @@ func formatAskUserResultText(entry pendingAskEntry, decision proto.PromptForUser
 		}
 	}
 
-	// Multi-question path: pair answers with questions by INDEX, not by
-	// Header. Two questions can share the same Header (or both be blank
-	// — claude-code's AskUserQuestion treats `header` as optional), so a
-	// header-keyed map would collapse them and feed the model the wrong
-	// answer. inbound builds QuestionAnswers in the same order as
-	// entry.Questions, so positional indexing is the source of truth.
+	// Multi-question path: stable QuestionID is authoritative. Positional
+	// pairing remains only as a compatibility fallback for older peers;
+	// Header is never a key because duplicate or blank headers are valid.
 	if len(entry.Questions) > 0 {
 		out := make([]map[string]any, 0, len(entry.Questions))
 		anyAnswer := false
@@ -419,6 +421,18 @@ func formatAskUserResultText(entry pendingAskEntry, decision proto.PromptForUser
 			answer := ""
 			if i < len(decision.QuestionAnswers) {
 				answer = decision.QuestionAnswers[i].Answer
+				if len(decision.QuestionAnswers[i].Answers) > 0 {
+					answer = strings.Join(decision.QuestionAnswers[i].Answers, "、")
+				}
+			}
+			for _, candidate := range decision.QuestionAnswers {
+				if q.ID != "" && candidate.QuestionID == q.ID {
+					answer = candidate.Answer
+					if len(candidate.Answers) > 0 {
+						answer = strings.Join(candidate.Answers, "、")
+					}
+					break
+				}
 			}
 			// Legacy callback path: a single-question slot answered via
 			// the flat Answers slice. Multi-question slots always populate

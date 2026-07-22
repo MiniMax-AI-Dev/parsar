@@ -2387,6 +2387,7 @@ func TestConfigureAgentProfilePreservesAgentPatchFields(t *testing.T) {
 				"skills":       []any{capability.Name},
 			},
 			"agent_kind":   "codex",
+			"mode":         "plan",
 			"daemon_mode":  "local",
 			"sandbox_size": "standard",
 			"device_id":    "00000000-0000-0000-0000-000000000401",
@@ -2413,7 +2414,7 @@ func TestConfigureAgentProfilePreservesAgentPatchFields(t *testing.T) {
 	if modelBinding["secret_id"] != "00000000-0000-0000-0000-000000000202" {
 		t.Fatalf("model credential binding was overwritten: %#v", config["model_credential_binding"])
 	}
-	if config["agent_kind"] != "codex" || config["daemon_mode"] != "local" || config["device_id"] != "00000000-0000-0000-0000-000000000401" {
+	if config["agent_kind"] != "codex" || config["mode"] != "plan" || config["daemon_mode"] != "local" || config["device_id"] != "00000000-0000-0000-0000-000000000401" {
 		t.Fatalf("profile-owned daemon fields were not updated: %#v", config)
 	}
 	if config["system_prompt"] != "updated prompt" {
@@ -3767,6 +3768,22 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 			t.Fatalf("CreateAgent(agent_daemon, runtime=%q) = %v, want ErrInvalidInput", badRuntime, err)
 		}
 	}
+	for index, badMode := range []any{"autopilot", true} {
+		_, err := st.CreateAgent(ctx, CreateAgentInput{
+			WorkspaceID:   ids.WorkspaceID,
+			Name:          fmt.Sprintf("daemon-bad-codex-mode-%d", index),
+			Slug:          fmt.Sprintf("daemon-bad-codex-mode-%d", index),
+			ConnectorType: "agent_daemon",
+			AgentConfig: map[string]any{
+				"agent_kind": "codex",
+				"mode":       badMode,
+			},
+			CreatedBy: ids.UserID,
+		})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("CreateAgent(agent_daemon, Codex mode=%#v) = %v, want ErrInvalidInput", badMode, err)
+		}
+	}
 
 	created, err := st.CreateAgent(ctx, CreateAgentInput{
 		WorkspaceID:   ids.WorkspaceID,
@@ -3776,7 +3793,8 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 		AgentConfig: map[string]any{
 			"device_id":   "00000000-0000-0000-0000-00000000d001",
 			"daemon_mode": "local",
-			"agent_kind":  "claude_code",
+			"agent_kind":  "codex",
+			"mode":        "plan",
 			"ignored":     "not-persisted",
 		},
 		CreatedBy: ids.UserID,
@@ -3792,6 +3810,9 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 	}
 	if got := created.Agent.Config["daemon_mode"]; got != "local" {
 		t.Fatalf("agent.config daemon_mode mismatch: got %#v", got)
+	}
+	if got := created.Agent.Config["mode"]; got != "plan" {
+		t.Fatalf("agent.config Codex mode mismatch: got %#v", got)
 	}
 	if _, ok := created.Agent.Config["ignored"]; ok {
 		t.Fatalf("agent.config must not persist unknown daemon key: %#v", created.Agent.Config)
@@ -3810,7 +3831,7 @@ func TestCreateAgentDaemonRejectsRuntimeValue(t *testing.T) {
 	if err := db.QueryRow(ctx, `select config::text from agents where id = $1::uuid`, created.Agent.ID).Scan(&rawPAConfig); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(rawPAConfig, `"device_id": "00000000-0000-0000-0000-00000000d001"`) || strings.Contains(rawPAConfig, `"ignored"`) {
+	if !strings.Contains(rawPAConfig, `"device_id": "00000000-0000-0000-0000-00000000d001"`) || !strings.Contains(rawPAConfig, `"mode": "plan"`) || strings.Contains(rawPAConfig, `"ignored"`) {
 		t.Fatalf("agents.config did not persist only daemon keys, got %s", rawPAConfig)
 	}
 }

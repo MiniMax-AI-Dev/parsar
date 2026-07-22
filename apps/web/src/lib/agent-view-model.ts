@@ -2,6 +2,8 @@ import type { Agent, AgentDetail, Model } from "./api-types"
 
 export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode"
 
+export type CodexCollaborationMode = "default" | "plan"
+
 export type AgentExecutionMode = "local_device" | "sandbox" | "external"
 
 export type AgentEngineLabelKey =
@@ -82,6 +84,13 @@ export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
     case "opencode":
       return "agents.engine.opencode.title"
   }
+}
+
+export function agentCodexModeOf(agent: AgentSource): CodexCollaborationMode {
+  if (agentEngineOf(agent) !== "codex") return "default"
+  const config = configOf(agent)
+  const profile = profileOf(agent)
+  return stringValue(config.mode, profile.mode).toLowerCase() === "plan" ? "plan" : "default"
 }
 
 export function agentExecutionModeOf(agent: AgentSource): AgentExecutionMode {

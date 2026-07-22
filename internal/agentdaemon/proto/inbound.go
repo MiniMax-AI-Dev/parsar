@@ -41,6 +41,12 @@ const (
 	// send. Envelope.ID = "ask_<8hex>" minted by the daemon.
 	TypePromptForUserChoice = "prompt_for_user_choice"
 
+	// TypeInteractionDecisionAck confirms that the daemon-side agent
+	// accepted (or definitively rejected) a permission/user-input decision.
+	// The server must not mark the durable interaction terminal before this
+	// frame arrives.
+	TypeInteractionDecisionAck = "interaction_decision_ack"
+
 	// TypeUsage reports incremental token / cost usage.
 	TypeUsage = "usage"
 
@@ -81,13 +87,27 @@ type ToolCallPayload struct {
 }
 
 // PermissionRequestPayload carries an agent's request for human
-// approval. The gateway promotes Envelope.ID to PermissionRequest.ID
-// so caller and daemon agree on which request is which.
+// approval. RequestID is the daemon-minted handle used to route a later
+// decision. It lives in the payload because Envelope.ID is the run ID used
+// by the server gateway to deliver the request to the active run subscriber.
+// Readers still accept legacy frames that omit RequestID and put the request
+// handle in Envelope.ID.
 type PermissionRequestPayload struct {
-	Tool    string         `json:"tool"`
-	Title   string         `json:"title"`
-	Detail  string         `json:"detail,omitempty"`
-	Payload map[string]any `json:"payload,omitempty"`
+	RequestID string         `json:"request_id,omitempty"`
+	Tool      string         `json:"tool"`
+	Title     string         `json:"title"`
+	Detail    string         `json:"detail,omitempty"`
+	Payload   map[string]any `json:"payload,omitempty"`
+}
+
+// InteractionDecisionAckPayload is the daemon's application-level receipt
+// for a server decision. DeliveryID correlates one resolve attempt without
+// relying on the request id, which may outlive a reconnect or timeout race.
+type InteractionDecisionAckPayload struct {
+	DeliveryID string `json:"delivery_id"`
+	Applied    bool   `json:"applied"`
+	ErrorCode  string `json:"error_code,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 // PromptForUserChoiceOption is one button / checkbox the user can
@@ -102,9 +122,12 @@ type PromptForUserChoiceOption struct {
 // question) AskUserQuestion call. Mirrors the Claude Code built-in
 // schema verbatim so the daemon doesn't translate the shape twice.
 type PromptForUserChoiceQuestion struct {
+	ID          string                      `json:"id"`
 	Header      string                      `json:"header,omitempty"`
 	Question    string                      `json:"question"`
 	MultiSelect bool                        `json:"multi_select,omitempty"`
+	IsOther     bool                        `json:"is_other,omitempty"`
+	IsSecret    bool                        `json:"is_secret,omitempty"`
 	Options     []PromptForUserChoiceOption `json:"options"`
 }
 
@@ -124,9 +147,10 @@ type PromptForUserChoiceQuestion struct {
 // decoded. New code writes Questions; readers must call
 // EffectiveQuestions to get a unified view across both shapes.
 type PromptForUserChoicePayload struct {
-	AskID     string                        `json:"ask_id"`
-	Questions []PromptForUserChoiceQuestion `json:"questions,omitempty"`
-	ToolUseID string                        `json:"tool_use_id,omitempty"`
+	AskID            string                        `json:"ask_id"`
+	Questions        []PromptForUserChoiceQuestion `json:"questions,omitempty"`
+	ToolUseID        string                        `json:"tool_use_id,omitempty"`
+	AutoResolutionMs *uint64                       `json:"auto_resolution_ms,omitempty"`
 
 	// Legacy single-question fields — read-only on the new path. Empty
 	// when Questions is populated.

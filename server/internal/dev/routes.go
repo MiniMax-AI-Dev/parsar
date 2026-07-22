@@ -12,6 +12,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/httprunner"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
@@ -224,9 +225,14 @@ func RegisterRoutes(r chi.Router) {
 // through connectorRegistry.
 type RouterOption func(*routerConfig)
 
+type interactionResolver interface {
+	Resolve(ctx context.Context, req interaction.ResolveRequest) (interaction.ResolveResult, error)
+}
+
 type routerConfig struct {
 	openCodeConnector    connector.AgentConnector
 	connectorRegistry    *connector.Registry
+	interactionService   interactionResolver
 	authMiddleware       *auth.Middleware
 	oauthDeps            *OAuthHandlerDeps
 	authProviders        AuthProviderRegistry
@@ -291,6 +297,12 @@ type feishuRegistrationConfig struct {
 func WithConnectorRegistry(r *connector.Registry) RouterOption {
 	return func(cfg *routerConfig) {
 		cfg.connectorRegistry = r
+	}
+}
+
+func WithInteractionService(service interactionResolver) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.interactionService = service
 	}
 }
 
@@ -660,6 +672,8 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Get("/workspaces/{workspaceID}/agents", listWorkspaceEnabledAgents(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}", getWorkspaceAgent(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agent-runs", listWorkspaceAgentRuns(runtimeStore))
+			r.Get("/workspaces/{workspaceID}/interactions", gateWorkspaceMember(runtimeStore, listAgentInteractions(runtimeStore)))
+			r.Post("/workspaces/{workspaceID}/interactions/{interactionID}/resolve", resolveAgentInteraction(runtimeStore, cfg))
 			r.Get("/workspaces/{workspaceID}/agents/{agentID}/metrics", getAgentMetrics(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/agent-runs/{runID}/events", listAgentRunEvents(runtimeStore))
 			r.Get("/workspaces/{workspaceID}/audit-records", listWorkspaceAuditRecords(runtimeStore))

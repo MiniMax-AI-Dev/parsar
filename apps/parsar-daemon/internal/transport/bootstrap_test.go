@@ -35,7 +35,7 @@ func TestBootstrapSendsBearerAndDeviceID(t *testing.T) {
 			"workspace_id":      "ws_xyz",
 			"ws_url":            "wss://example/agent-daemon/ws",
 			"heartbeat_seconds": 15,
-			"protocol_version":  "0.1.0",
+			"protocol_version":  "0.2.0",
 		})
 	}))
 	defer srv.Close()

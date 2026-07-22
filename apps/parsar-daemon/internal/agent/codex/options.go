@@ -49,10 +49,11 @@ type SessionPlan struct {
 	// SystemPrompt is forwarded as developerInstructions on thread/start.
 	SystemPrompt string
 
-	// ApprovalPolicy + Sandbox steer thread/start. Defaults are
-	// SilentGranularPolicy() and SandboxDangerFullAcces — match the
-	// user's "sandbox runs full-open" decision and equivalent to
-	// claudecode's bypassPermissions.
+	// CollaborationMode selects Codex's default or plan tool surface.
+	CollaborationMode CollaborationModeKind
+
+	// ApprovalPolicy + Sandbox steer thread/start. Defaults surface human
+	// approvals and confine writes to the workspace.
 	ApprovalPolicy AskForApproval
 	Sandbox        SandboxMode
 
@@ -92,6 +93,7 @@ type SessionPlan struct {
 //	                                      stream_max_retries (number).
 //	reasoning_summary     string          one of auto/concise/detailed/none —
 //	                                      routed via -c model_reasoning_summary
+//	mode                  string          Codex collaboration mode: default/plan
 //	enable_features       []any           string list, forwarded as --enable
 //	disable_features      []any           string list, forwarded as --disable
 //
@@ -100,14 +102,13 @@ type SessionPlan struct {
 // location, set it via the daemon's process environment (PATH /
 // codexBinary in sessionConfig) rather than per-call.
 //
-// Approval / sandbox keys are not exposed to admin yet — the daemon
-// always runs silent + full-access. Wire them through once a UI to flip
-// them lands.
+// Approval / sandbox keys are not exposed to admin yet. Parsar's Inbox is
+// the default decision surface; per-agent overrides can be added later.
 func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any) (SessionPlan, error) {
 	cleanup := func() {}
 	plan := SessionPlan{
-		ApprovalPolicy: SilentGranularPolicy(),
-		Sandbox:        SandboxDangerFullAcces,
+		ApprovalPolicy: HumanApprovalPolicy(),
+		Sandbox:        SandboxWorkspaceWrite,
 		Cleanup:        cleanup,
 	}
 
@@ -121,6 +122,14 @@ func BuildSessionPlan(runID, agentStateKey, workDir string, opts map[string]any)
 	plan.SystemPrompt = stringOpt(opts, "system_prompt")
 	if override := stringOpt(opts, "override_system_prompt"); override != "" {
 		plan.SystemPrompt = override
+	}
+	if mode := CollaborationModeKind(stringOpt(opts, "mode")); mode != "" {
+		switch mode {
+		case CollaborationModeDefault, CollaborationModePlan:
+			plan.CollaborationMode = mode
+		default:
+			return plan, fmt.Errorf("codex: unsupported collaboration mode %q", mode)
+		}
 	}
 
 	env, err := buildSessionEnv(opts)

@@ -34,8 +34,8 @@ type sessionConfig struct {
 	// before SIGKILL. 3s in production; tests pin it short.
 	killTimeout time.Duration
 
-	// askTimeout bounds how long the daemon waits for the human to
-	// answer a prompt_for_user_choice (AskUserQuestion). 10 minutes in
+	// askTimeout bounds how long the daemon waits for the human to answer a
+	// permission or prompt_for_user_choice (AskUserQuestion). 10 minutes in
 	// production; tests pin it short so timeout paths are exercisable.
 	// Zero disables the timer — leftover scaffolding for very early
 	// adapter wiring; production always picks defaultAskTimeout.
@@ -87,10 +87,11 @@ type Session struct {
 
 	cancelOnce sync.Once
 
-	// askTimersMu guards askTimers. The ask-timeout watchdog goroutines
-	// race with SubmitPromptForUserChoice; only one wins per askID.
-	askTimersMu sync.Mutex
-	askTimers   map[string]*time.Timer
+	// interactionTimersMu guards permission and AskUserQuestion watchdogs.
+	// Timeout callbacks and human responses race through atomic pending
+	// tables, so only one response can reach Claude Code.
+	interactionTimersMu sync.Mutex
+	interactionTimers   map[string]*time.Timer
 
 	// latestSessionID is the most recent upstream session id seen on a
 	// system-init / result frame. The cancel-path done envelope reads
@@ -242,17 +243,17 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	pending := newPendingTable()
 	askPending := newPendingAskTable()
 	s := &Session{
-		runID:        req.RunID,
-		cfg:          cfg,
-		proc:         proc,
-		stdin:        proc.Stdin,
-		pending:      pending,
-		askPending:   askPending,
-		translator:   newTranslator(req.RunID, pending, askPending, defaultPermIDMinter, defaultAskIDMinter),
-		out:          out,
-		cancelCtx:    proc.Context(),
-		askTimers:    make(map[string]*time.Timer),
-		buildCleanup: buildRes.Cleanup,
+		runID:             req.RunID,
+		cfg:               cfg,
+		proc:              proc,
+		stdin:             proc.Stdin,
+		pending:           pending,
+		askPending:        askPending,
+		translator:        newTranslator(req.RunID, pending, askPending, defaultPermIDMinter, defaultAskIDMinter),
+		out:               out,
+		cancelCtx:         proc.Context(),
+		interactionTimers: make(map[string]*time.Timer),
+		buildCleanup:      buildRes.Cleanup,
 	}
 
 	// Write the initial user message before launching pumps so the
@@ -294,20 +295,20 @@ func (s *Session) writeStdin(b []byte) (int, error) {
 // close) happens asynchronously via the pump.
 func (s *Session) Cancel(_ context.Context) error {
 	s.cancelOnce.Do(func() {
-		s.stopAllAskTimers()
+		s.stopAllInteractionTimers()
 		s.proc.Cancel()
 	})
 	return nil
 }
 
-// stopAllAskTimers cancels every outstanding ask watchdog. Called on
-// session Cancel so a hard shutdown doesn't leave timers firing into
-// a closed stdin.
-func (s *Session) stopAllAskTimers() {
-	s.askTimersMu.Lock()
-	timers := s.askTimers
-	s.askTimers = make(map[string]*time.Timer)
-	s.askTimersMu.Unlock()
+// stopAllInteractionTimers cancels every outstanding human-response
+// watchdog. Called on session Cancel/terminal so timers cannot fire into a
+// closed stdin.
+func (s *Session) stopAllInteractionTimers() {
+	s.interactionTimersMu.Lock()
+	timers := s.interactionTimers
+	s.interactionTimers = make(map[string]*time.Timer)
+	s.interactionTimersMu.Unlock()
 	for _, t := range timers {
 		t.Stop()
 	}
@@ -317,10 +318,11 @@ func (s *Session) stopAllAskTimers() {
 // given perm_id. Returns agent.ErrUnknownPermission when permID isn't
 // in the pending table.
 func (s *Session) SubmitPermission(_ context.Context, permID string, decision proto.PermissionDecisionPayload) error {
-	entry, ok := s.pending.Resolve(permID)
+	entry, ok := s.pending.Take(permID)
 	if !ok {
 		return agent.ErrUnknownPermission
 	}
+	s.stopInteractionTimer(permID)
 
 	var inner map[string]any
 	if decision.Approved {
@@ -357,13 +359,12 @@ func (s *Session) SubmitPermission(_ context.Context, permID string, decision pr
 	body = append(body, '\n')
 
 	if _, err := s.writeStdin(body); err != nil {
-		// Don't Delete the pending entry: a transient stdin write
-		// failure may want a retry, and leaving the entry surfaces a
-		// more useful "unknown permission" on the retry once cleanup
-		// completes.
+		// Restore the entry so a transient stdin write failure remains
+		// retryable and still has a bounded lifetime.
+		s.pending.Record(permID, entry.CCRequestID, entry.Input)
+		s.startPermissionTimer(permID)
 		return fmt.Errorf("claudecode: write control_response: %w", err)
 	}
-	s.pending.Delete(permID)
 	return nil
 }
 
@@ -434,25 +435,49 @@ func (s *Session) startAskTimer(askID string) {
 			Reason:    "timeout",
 		})
 	})
-	s.askTimersMu.Lock()
-	if prev, ok := s.askTimers[askID]; ok {
+	s.interactionTimersMu.Lock()
+	if prev, ok := s.interactionTimers[askID]; ok {
 		// Same askID seen twice: cancel the old timer so we don't fire
 		// two decisions. Shouldn't happen on a clean stream, but two
 		// stdout-pump dispatches with the same env.ID would otherwise
 		// race.
 		prev.Stop()
 	}
-	s.askTimers[askID] = timer
-	s.askTimersMu.Unlock()
+	s.interactionTimers[askID] = timer
+	s.interactionTimersMu.Unlock()
 }
 
 func (s *Session) stopAskTimer(askID string) {
-	s.askTimersMu.Lock()
-	timer, ok := s.askTimers[askID]
-	if ok {
-		delete(s.askTimers, askID)
+	s.stopInteractionTimer(askID)
+}
+
+// startPermissionTimer applies the same bounded human-response window to
+// tool approvals. Expiry is an explicit deny, never an implicit allow.
+func (s *Session) startPermissionTimer(permID string) {
+	if s.cfg.askTimeout <= 0 || permID == "" {
+		return
 	}
-	s.askTimersMu.Unlock()
+	timer := time.AfterFunc(s.cfg.askTimeout, func() {
+		_ = s.SubmitPermission(context.Background(), permID, proto.PermissionDecisionPayload{
+			Approved: false,
+			Message:  "permission request timed out",
+		})
+	})
+	s.interactionTimersMu.Lock()
+	if prev, ok := s.interactionTimers[permID]; ok {
+		prev.Stop()
+	}
+	s.interactionTimers[permID] = timer
+	s.interactionTimersMu.Unlock()
+}
+
+func (s *Session) stopInteractionTimer(id string) {
+	s.interactionTimersMu.Lock()
+	timer, ok := s.interactionTimers[id]
+	if ok {
+		delete(s.interactionTimers, id)
+	}
+	s.interactionTimersMu.Unlock()
 	if ok {
 		timer.Stop()
 	}
@@ -516,6 +541,18 @@ func (s *Session) run(stdout io.Reader) {
 					if err := env.DecodePayload(&p); err == nil && p.AskID != "" {
 						s.startAskTimer(p.AskID)
 					}
+				} else if env.Type == proto.TypePermissionRequest {
+					var p proto.PermissionRequestPayload
+					requestID := ""
+					if err := env.DecodePayload(&p); err == nil {
+						requestID = strings.TrimSpace(p.RequestID)
+					}
+					if requestID == "" {
+						requestID = strings.TrimSpace(env.ID)
+					}
+					if requestID != "" {
+						s.startPermissionTimer(requestID)
+					}
 				}
 			case <-s.cancelCtx.Done():
 				s.cfg.logger.Info("claudecode: cancelled during out send", "run_id", s.runID)
@@ -525,7 +562,7 @@ func (s *Session) run(stdout io.Reader) {
 		}
 		if tx.Terminal {
 			terminal = true
-			s.stopAllAskTimers()
+			s.stopAllInteractionTimers()
 			s.closeOut()
 			break
 		}

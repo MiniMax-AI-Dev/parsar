@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Badge } from "../../../components/ui/badge"
 import {
   agentConnectorLabel,
+  agentCodexModeOf,
   agentEngineLabel,
   agentEngineOf,
   agentExecutionModeOf,
@@ -23,6 +24,7 @@ export function AgentConfigSummary({
   const profile = (config.profile ?? {}) as Record<string, unknown>
   const systemPrompt = String(config.system_prompt ?? profile.system_prompt ?? "").trim()
   const executionMode = agentExecutionModeOf(agent)
+  const agentEngine = agentEngineOf(agent)
 
   return (
     <>
@@ -46,8 +48,14 @@ export function AgentConfigSummary({
       <SummaryCard title={t("agents.detail.config.intelligence.title")}>
         <SummaryField
           label={t("agents.detail.config.intelligence.engine")}
-          value={t(agentEngineLabel(agentEngineOf(agent)))}
+          value={t(agentEngineLabel(agentEngine))}
         />
+        {agentEngine === "codex" && (
+          <SummaryField
+            label={t("agents.detail.config.intelligence.codexMode")}
+            value={t(`agents.form.codexMode.${agentCodexModeOf(agent)}`)}
+          />
+        )}
         <SummaryField label={t("agents.detail.config.runtime.model")} value={modelLabel} mono />
         <SummaryField
           label={t("agents.detail.config.intelligence.systemPrompt")}

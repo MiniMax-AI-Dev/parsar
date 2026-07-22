@@ -233,7 +233,25 @@
     },
     "actions": {
       "allowOnce": "允许一次",
-      "deny": "拒绝"
+      "deny": "拒绝",
+      "submitAnswers": "提交回答",
+      "cancel": "取消请求"
+    },
+    "kind": {
+      "permission": "审批",
+      "userChoice": "提问"
+    },
+    "status": {
+      "pending": "待处理",
+      "resolving": "提交中",
+      "approved": "已允许",
+      "denied": "已拒绝",
+      "answered": "已回答",
+      "cancelled": "已取消",
+      "expired": "已过期"
+    },
+    "questions": {
+      "customAnswer": "可选：自定义回答"
     },
     "detail": {
       "agent": "Agent",
@@ -372,7 +390,14 @@
       "error": "流式输出中断：{{error}}",
       "retry": "重试",
       "queued": "排队中",
-      "queuedWithPosition": "排队中（第 {{position}} 位）"
+      "queuedWithPosition": "排队中（第 {{position}} 位）",
+      "waitingForHuman": "Agent 正在等待你的审批或回答。",
+      "openInbox": "打开收件箱",
+      "interactionTitle": "Agent 需要你的决定",
+      "interactionDescription": "直接在这里处理，请求完成后 Agent 会继续运行。",
+      "viewAllInteractions": "在收件箱中查看全部",
+      "loadingInteraction": "正在加载审批请求…",
+      "interactionLoadError": "无法在对话中加载该请求，请打开收件箱重试。"
     },
     "permission": {
       "header": "Agent 请求批准",
@@ -1240,6 +1265,7 @@
         "intelligence": {
           "title": "智能配置",
           "engine": "Agent 引擎",
+          "codexMode": "Codex 协作模式",
           "systemPrompt": "系统提示词"
         },
         "runtime": {
@@ -1499,6 +1525,7 @@
         "slug": "内部标识",
         "executionMode": "执行方式",
         "agentEngine": "Agent 引擎",
+        "codexMode": "Codex 协作模式",
         "device": "本地设备",
         "sandboxSize": "沙盒规格",
         "sandboxImage": "沙盒镜像",
@@ -1531,6 +1558,11 @@
         "hint": "改完规格后,等当前沙盒被释放才会切换到新规格。",
         "standard": "标准 (2 vCPU / 4 GiB)",
         "xl": "大规格 (4 vCPU / 8 GiB)"
+      },
+      "codexMode": {
+        "hint": "Plan 模式允许 Codex 在对话中发起结构化提问；两种模式都支持权限审批。",
+        "default": "Default（默认）",
+        "plan": "Plan（启用提问）"
       },
       "sandboxImage": {
         "hint": "Agent 首次启动沙盒时，服务端会拉取这个容器镜像。"

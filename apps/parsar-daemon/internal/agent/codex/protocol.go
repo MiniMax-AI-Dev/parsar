@@ -213,8 +213,26 @@ type UserInput struct {
 }
 
 type TurnStartParams struct {
-	ThreadID string      `json:"threadId"`
-	Input    []UserInput `json:"input"`
+	ThreadID          string             `json:"threadId"`
+	Input             []UserInput        `json:"input"`
+	CollaborationMode *CollaborationMode `json:"collaborationMode,omitempty"`
+}
+
+type CollaborationModeKind string
+
+const (
+	CollaborationModePlan    CollaborationModeKind = "plan"
+	CollaborationModeDefault CollaborationModeKind = "default"
+)
+
+type CollaborationMode struct {
+	Mode     CollaborationModeKind     `json:"mode"`
+	Settings CollaborationModeSettings `json:"settings"`
+}
+
+type CollaborationModeSettings struct {
+	Model                 string  `json:"model"`
+	DeveloperInstructions *string `json:"developer_instructions"`
 }
 
 type TurnInterruptParams struct {
@@ -344,9 +362,9 @@ type ErrorNotification struct {
 }
 
 // ---------------------------------------------------------------------------
-// Approval ServerRequest params (suppressed by the all-false granular
-// policy today; left here so server_requests.go can compile against
-// these shapes when surfaceApprovals is later flipped on).
+// Approval and user-input ServerRequest params. Daemon sessions use a
+// human approval policy, so server_requests.go defers each matching JSON-RPC
+// response until Web or IM submits the decision.
 // ---------------------------------------------------------------------------
 
 type CommandExecutionRequestApprovalParams struct {
@@ -367,12 +385,12 @@ type FileChangeRequestApprovalParams struct {
 }
 
 type PermissionsRequestApprovalParams struct {
-	ThreadID    string  `json:"threadId"`
-	TurnID      string  `json:"turnId"`
-	ItemID      string  `json:"itemId"`
-	Cwd         string  `json:"cwd"`
-	Reason      *string `json:"reason,omitempty"`
-	Permissions any     `json:"permissions,omitempty"`
+	ThreadID    string         `json:"threadId"`
+	TurnID      string         `json:"turnId"`
+	ItemID      string         `json:"itemId"`
+	Cwd         string         `json:"cwd"`
+	Reason      *string        `json:"reason,omitempty"`
+	Permissions map[string]any `json:"permissions,omitempty"`
 }
 
 // CommandExecutionApprovalDecision is the verdict the daemon writes
@@ -380,8 +398,47 @@ type PermissionsRequestApprovalParams struct {
 // / "acceptForSession".
 type CommandExecutionApprovalDecision = string
 
-// ApprovalDecisionResult is the result body in a JSON-RPC response for
-// any of the three approval requests.
+// ApprovalDecisionResult is the result body for command-execution and
+// file-change approvals. item/permissions/requestApproval uses the distinct
+// PermissionsRequestApprovalResponse contract below.
 type ApprovalDecisionResult struct {
 	Decision CommandExecutionApprovalDecision `json:"decision"`
+}
+
+// PermissionsRequestApprovalResponse mirrors Codex app-server's dedicated
+// response contract. Approving echoes the requested permission profile;
+// denying returns an empty profile, which grants no additional capability.
+type PermissionsRequestApprovalResponse struct {
+	Permissions map[string]any `json:"permissions"`
+	Scope       string         `json:"scope,omitempty"`
+}
+
+type ToolRequestUserInputOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+type ToolRequestUserInputQuestion struct {
+	ID       string                       `json:"id"`
+	Header   string                       `json:"header"`
+	Question string                       `json:"question"`
+	Options  []ToolRequestUserInputOption `json:"options,omitempty"`
+	IsOther  bool                         `json:"isOther,omitempty"`
+	IsSecret bool                         `json:"isSecret,omitempty"`
+}
+
+type ToolRequestUserInputParams struct {
+	ThreadID         string                         `json:"threadId"`
+	TurnID           string                         `json:"turnId"`
+	ItemID           string                         `json:"itemId"`
+	Questions        []ToolRequestUserInputQuestion `json:"questions"`
+	AutoResolutionMs *uint64                        `json:"autoResolutionMs,omitempty"`
+}
+
+type ToolRequestUserInputAnswer struct {
+	Answers []string `json:"answers"`
+}
+
+type ToolRequestUserInputResponse struct {
+	Answers map[string]ToolRequestUserInputAnswer `json:"answers"`
 }

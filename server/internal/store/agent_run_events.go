@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 type AgentRunEventRead struct {
@@ -62,7 +63,8 @@ func (s *Store) RecordAgentRunEvent(ctx context.Context, input RecordAgentRunEve
 	if err := tx.QueryRow(ctx, `select coalesce(max(sequence), 0) + 1 from agent_run_events where agent_run_id = $1`, runID).Scan(&sequence); err != nil {
 		return err
 	}
-	_, err = sqlc.New(tx).InsertAgentRunEvent(ctx, sqlc.InsertAgentRunEventParams{
+	queries := sqlc.New(tx)
+	_, err = queries.InsertAgentRunEvent(ctx, sqlc.InsertAgentRunEventParams{
 		Sequence:   sequence,
 		EventKind:  input.EventKind,
 		Payload:    encoded,
@@ -76,7 +78,77 @@ func (s *Store) RecordAgentRunEvent(ctx context.Context, input RecordAgentRunEve
 		}
 		return err
 	}
+	if kind, requestID, deviceID, ttl, ok := interactionFromRunEvent(input.EventKind, payload); ok {
+		if err := queries.InsertAgentInteractionFromRun(ctx, sqlc.InsertAgentInteractionFromRunParams{
+			RequestID:  requestID,
+			Kind:       kind,
+			Request:    encoded,
+			DeviceID:   deviceID,
+			CreatedAt:  timestamptz(occurredAt),
+			ExpiresAt:  timestamptz(occurredAt.Add(ttl)),
+			AgentRunID: runID,
+		}); err != nil {
+			return err
+		}
+	}
+	if reason, ok := terminalInteractionReason(input.EventKind, payload); ok {
+		if _, err := queries.CancelOpenAgentInteractionsByRunID(ctx, sqlc.CancelOpenAgentInteractionsByRunIDParams{
+			Reason: reason, Now: timestamptz(occurredAt), AgentRunID: runID,
+		}); err != nil {
+			return err
+		}
+	}
 	return tx.Commit(ctx)
+}
+
+func interactionFromRunEvent(eventKind string, payload map[string]any) (kind, requestID, deviceID string, ttl time.Duration, ok bool) {
+	switch eventKind {
+	case "permission.asked":
+		kind = AgentInteractionKindPermission
+	case "prompt_for_user_choice.asked":
+		kind = AgentInteractionKindUserChoice
+	default:
+		return "", "", "", 0, false
+	}
+	requestID, _ = payload["request_id"].(string)
+	deviceID, _ = payload["device_id"].(string)
+	requestID = strings.TrimSpace(requestID)
+	ttl = AgentInteractionTTL
+	if millis, valid := positiveUint64(payload["auto_resolution_ms"]); valid {
+		const maxMillis = uint64(^uint64(0)>>1) / uint64(time.Millisecond)
+		if millis <= maxMillis {
+			ttl = time.Duration(millis) * time.Millisecond
+		}
+	}
+	return kind, requestID, strings.TrimSpace(deviceID), ttl, requestID != ""
+}
+
+func positiveUint64(value any) (uint64, bool) {
+	switch typed := value.(type) {
+	case uint64:
+		return typed, typed > 0
+	case int:
+		return uint64(typed), typed > 0
+	case int64:
+		return uint64(typed), typed > 0
+	case float64:
+		return uint64(typed), typed > 0 && typed == float64(uint64(typed))
+	default:
+		return 0, false
+	}
+}
+
+func terminalInteractionReason(eventKind string, payload map[string]any) (string, bool) {
+	switch eventKind {
+	case "run.completed", "run.failed", "run.cancelled":
+		reason, _ := payload["reason"].(string)
+		if strings.TrimSpace(reason) == "" {
+			reason = eventKind
+		}
+		return reason, true
+	default:
+		return "", false
+	}
 }
 
 func (s *Store) ListAgentRunEvents(ctx context.Context, runID string, afterSequence int64) ([]AgentRunEventRead, error) {

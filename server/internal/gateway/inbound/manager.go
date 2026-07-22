@@ -14,13 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
+	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/larksuite/oapi-sdk-go/v3/ws"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
-	sharedrouter "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/router"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 // Logger is the small logging surface Manager uses. *slog.Logger satisfies it.
@@ -128,12 +129,17 @@ type PromptForUserChoiceRouter interface {
 	SubmitPromptForUserChoice(ctx context.Context, decision PromptForUserChoiceDecision) error
 }
 
+type InteractionResolver interface {
+	Resolve(ctx context.Context, request interaction.ResolveRequest) (interaction.ResolveResult, error)
+}
+
 // PromptForUserChoiceQuestionAnswer mirrors
 // connector.PromptForUserChoiceQuestionAnswer; gateway-side so this
 // package stays free of the connector import.
 type PromptForUserChoiceQuestionAnswer struct {
-	Header string
-	Answer string
+	Header   string
+	Answer   string
+	IsSecret bool
 }
 
 // PromptForUserChoiceDecision mirrors connector.PromptForUserChoiceDecision;
@@ -210,6 +216,7 @@ type Options struct {
 	// PromptForUserChoiceRouter wires the AskUserQuestion card
 	// callback. Same nil-tolerance: missing router → toast.
 	PromptForUserChoiceRouter PromptForUserChoiceRouter
+	InteractionResolver       InteractionResolver
 
 	// JoinURLBuilder, when non-nil, mints the absolute URL the
 	// visibility=workspace rejection card surfaces as a "Request to join" link.
@@ -241,7 +248,8 @@ type Manager struct {
 	permRouter PermissionRouter
 
 	// pfucRouter is the ask-flow twin. Same nil-tolerance.
-	pfucRouter PromptForUserChoiceRouter
+	pfucRouter          PromptForUserChoiceRouter
+	interactionResolver InteractionResolver
 
 	joinURLBuilder func(workspaceID string) string
 
@@ -296,19 +304,20 @@ func NewManager(opts Options) (*Manager, error) {
 		return nil, errors.New("inbound: DefaultSharedBot requires both AppID and AppSecret")
 	}
 	return &Manager{
-		store:          opts.Store,
-		secrets:        opts.Secrets,
-		logger:         logger,
-		refresh:        refresh,
-		domain:         domain,
-		openAPIBaseURL: openAPIBaseURL,
-		secretKeys:     append([]string(nil), secretKeys...),
-		defaultBot:     defaultBot,
-		permRouter:     opts.PermissionRouter,
-		pfucRouter:     opts.PromptForUserChoiceRouter,
-		joinURLBuilder: opts.JoinURLBuilder,
-		connectors:     opts.Connectors,
-		clients:        make(map[string]*clientHandle),
+		store:               opts.Store,
+		secrets:             opts.Secrets,
+		logger:              logger,
+		refresh:             refresh,
+		domain:              domain,
+		openAPIBaseURL:      openAPIBaseURL,
+		secretKeys:          append([]string(nil), secretKeys...),
+		defaultBot:          defaultBot,
+		permRouter:          opts.PermissionRouter,
+		pfucRouter:          opts.PromptForUserChoiceRouter,
+		interactionResolver: opts.InteractionResolver,
+		joinURLBuilder:      opts.JoinURLBuilder,
+		connectors:          opts.Connectors,
+		clients:             make(map[string]*clientHandle),
 	}, nil
 }
 
@@ -1779,11 +1788,11 @@ func (m *Manager) patchPermissionResultCard(ctx context.Context, conv store.Conv
 // each answer joined by " / " with the header prefix where set.
 func summarizePromptForUserChoiceAnswers(answers []PromptForUserChoiceQuestionAnswer) string {
 	if len(answers) == 1 {
-		return strings.TrimSpace(answers[0].Answer)
+		return displayPromptForUserChoiceAnswer(answers[0])
 	}
 	parts := make([]string, 0, len(answers))
 	for _, a := range answers {
-		answer := strings.TrimSpace(a.Answer)
+		answer := displayPromptForUserChoiceAnswer(a)
 		if answer == "" {
 			continue
 		}
@@ -1797,17 +1806,34 @@ func summarizePromptForUserChoiceAnswers(answers []PromptForUserChoiceQuestionAn
 	return strings.Join(parts, " / ")
 }
 
+func displayPromptForUserChoiceAnswer(answer PromptForUserChoiceQuestionAnswer) string {
+	value := strings.TrimSpace(answer.Answer)
+	if value != "" && answer.IsSecret {
+		return "[REDACTED]"
+	}
+	return value
+}
+
 // extractPromptForUserChoiceFormAnswer reads field "q<idx>" out of the
 // form payload. select_static delivers a single string; multi_select_static
 // delivers []any; input delivers a string. Missing field → "".
-func extractPromptForUserChoiceFormAnswer(form map[string]any, idx int) string {
+func extractPromptForUserChoiceFormAnswer(form map[string]any, idx int, multi bool) string {
 	if form == nil {
 		return ""
 	}
-	raw, ok := form[fmt.Sprintf("q%d", idx)]
-	if !ok || raw == nil {
-		return ""
+	fieldName := fmt.Sprintf("q%d", idx)
+	selected := promptForUserChoiceFormValue(form[fieldName])
+	other := promptForUserChoiceFormValue(form[fieldName+"_other"])
+	if other == "" {
+		return selected
 	}
+	if !multi || selected == "" {
+		return other
+	}
+	return selected + "、" + other
+}
+
+func promptForUserChoiceFormValue(raw any) string {
 	switch v := raw.(type) {
 	case string:
 		return strings.TrimSpace(v)
@@ -1825,6 +1851,9 @@ func extractPromptForUserChoiceFormAnswer(form map[string]any, idx int) string {
 		}
 		return strings.Join(parts, "、")
 	default:
+		if raw == nil {
+			return ""
+		}
 		return strings.TrimSpace(fmt.Sprint(v))
 	}
 }
@@ -1843,8 +1872,9 @@ func (m *Manager) buildPromptForUserChoiceDoneCardMap(ctx context.Context, conv 
 	cardAnswers := make([]gateway.PromptForUserChoiceCardAnswer, 0, len(answers))
 	for _, a := range answers {
 		cardAnswers = append(cardAnswers, gateway.PromptForUserChoiceCardAnswer{
-			Header: a.Header,
-			Answer: a.Answer,
+			Header:   a.Header,
+			Answer:   a.Answer,
+			IsSecret: a.IsSecret,
 		})
 	}
 	return gateway.BuildPromptForUserChoiceDoneCard(title, cardAnswers)

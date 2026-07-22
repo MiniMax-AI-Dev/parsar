@@ -2,9 +2,27 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { AlertTriangle, Bot, Check, ChevronLeft, ChevronRight, ChevronDown, CircleDot, Clock, MessageSquarePlus, Pencil, Send, ShieldAlert, Square, Trash2, X, Loader2 } from "lucide-react"
+import {
+  AlertTriangle,
+  Bot,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  CircleDot,
+  Clock,
+  MessageSquarePlus,
+  Pencil,
+  Send,
+  ShieldAlert,
+  Square,
+  Trash2,
+  X,
+  Loader2,
+} from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
+import { ConversationInteractionCards } from "../../components/conversation/ConversationInteractionCards"
 import { WorkingSteps, StepTrace } from "../../components/conversation/StepDisplay"
 import { Button } from "../../components/ui/button"
 import {
@@ -191,9 +209,7 @@ export function ConversationsPage() {
       // still real and the user can retry from the chat view.
       qc.invalidateQueries({
         predicate: (q) =>
-          q.queryKey[0] === "admin" &&
-          q.queryKey[1] === "conversations" &&
-          q.queryKey[2] === wsId,
+          q.queryKey[0] === "admin" && q.queryKey[1] === "conversations" && q.queryKey[2] === wsId,
       })
       qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conv.id] })
     }
@@ -280,14 +296,18 @@ function sandboxSendGuard(
     return { blocked: true, message: t("conversations.sandboxGuard.checking") }
   }
   if (error) {
-    const detail = error instanceof Error ? error.message : t("conversations.sandboxGuard.errorFallback")
+    const detail =
+      error instanceof Error ? error.message : t("conversations.sandboxGuard.errorFallback")
     return { blocked: true, message: t("conversations.sandboxGuard.error", { error: detail }) }
   }
   if (!binding) {
     return { blocked: true, message: t("conversations.sandboxGuard.missing") }
   }
   if (binding.status_kind !== "live") {
-    return { blocked: true, message: t("conversations.sandboxGuard.notLive", { status: binding.status }) }
+    return {
+      blocked: true,
+      message: t("conversations.sandboxGuard.notLive", { status: binding.status }),
+    }
   }
   return { blocked: false, message: "" }
 }
@@ -411,7 +431,9 @@ function ConversationSidebar(p: SidebarProps) {
           className="absolute left-2 right-2 top-[54px] z-10 max-h-72 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg"
         >
           {p.agentsLoading ? (
-            <div className="p-3"><Skeleton className="h-8 w-full" /></div>
+            <div className="p-3">
+              <Skeleton className="h-8 w-full" />
+            </div>
           ) : p.agents.length === 0 ? (
             <p className="p-3 text-sm text-fg-subtle">{t("conversations.sidebar.allAgentsHint")}</p>
           ) : (
@@ -489,7 +511,9 @@ function ConversationSidebar(p: SidebarProps) {
                 }}
                 className={cn(
                   "group/row relative block w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
-                  isActive ? "border-line bg-surface shadow-sm" : "border-transparent hover:border-line hover:bg-surface/80",
+                  isActive
+                    ? "border-line bg-surface shadow-sm"
+                    : "border-transparent hover:border-line hover:bg-surface/80",
                   isRenaming ? "cursor-default" : "cursor-pointer",
                 )}
               >
@@ -518,9 +542,7 @@ function ConversationSidebar(p: SidebarProps) {
                     />
                     <div className="flex items-center justify-end gap-1">
                       {renameError && (
-                        <span className="mr-auto text-xs text-danger">
-                          {renameError}
-                        </span>
+                        <span className="mr-auto text-xs text-danger">{renameError}</span>
                       )}
                       <button
                         type="button"
@@ -555,7 +577,9 @@ function ConversationSidebar(p: SidebarProps) {
                 ) : (
                   <>
                     <div className="flex items-center gap-1.5 pr-12">
-                      {isActive && <CircleDot className="h-3 w-3 shrink-0 text-success" strokeWidth={2.4} />}
+                      {isActive && (
+                        <CircleDot className="h-3 w-3 shrink-0 text-success" strokeWidth={2.4} />
+                      )}
                       <div
                         className={cn(
                           "truncate text-sm",
@@ -567,7 +591,8 @@ function ConversationSidebar(p: SidebarProps) {
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-faint">
                       <span className="min-w-0 flex-1 truncate">
-                        {c.last_message_preview || (c.last_message_at ? fmtAgo(c.last_message_at) : fmtAgo(c.created_at))}
+                        {c.last_message_preview ||
+                          (c.last_message_at ? fmtAgo(c.last_message_at) : fmtAgo(c.created_at))}
                       </span>
                     </div>
                     {/* Hover-only action cluster. opacity-0 → */}
@@ -628,9 +653,7 @@ function ConversationSidebar(p: SidebarProps) {
             </div>
           </DialogHeader>
           <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-            {deleteError && (
-              <span className="mr-auto text-sm text-danger">{deleteError}</span>
-            )}
+            {deleteError && <span className="mr-auto text-sm text-danger">{deleteError}</span>}
             <Button
               variant="outline"
               size="sm"
@@ -710,7 +733,11 @@ function ConversationMain(p: MainProps) {
         {err ? (
           <div className="flex-1 overflow-y-auto p-6">
             <ErrorState
-              title={isUnreachable ? t("conversations.loadError.unreachable.title") : t("conversations.loadError.title")}
+              title={
+                isUnreachable
+                  ? t("conversations.loadError.unreachable.title")
+                  : t("conversations.loadError.title")
+              }
               description={
                 isUnreachable
                   ? t("conversations.loadError.unreachable.description")
@@ -718,7 +745,11 @@ function ConversationMain(p: MainProps) {
                     ? err.message
                     : t("conversations.loadError.description")
               }
-              hint={isUnreachable ? t("conversations.loadError.unreachable.hint") : t("conversations.loadError.hint")}
+              hint={
+                isUnreachable
+                  ? t("conversations.loadError.unreachable.hint")
+                  : t("conversations.loadError.hint")
+              }
             />
           </div>
         ) : p.convLoading ? (
@@ -742,6 +773,7 @@ function ConversationMain(p: MainProps) {
             agent={p.agent}
             pageDescription={p.onPageDescription}
             conversationId={p.conversationId}
+            workspaceID={p.conv.workspace_id}
             onRenameAfterFirstMessage={p.onRenameAfterFirstMessage}
             focusComposer={p.focusComposer}
             sandboxGuard={p.sandboxGuard}
@@ -767,6 +799,7 @@ function EmptyChat({
   agent,
   pageDescription,
   conversationId,
+  workspaceID,
   onSendFromEmpty,
   onRenameAfterFirstMessage,
   focusComposer,
@@ -776,6 +809,7 @@ function EmptyChat({
   pageDescription: string
   /** When set, composer sends into this conv (in-chat flow). */
   conversationId?: string
+  workspaceID?: string
   /** Create-then-send flow (required when conversationId is unset). */
   onSendFromEmpty?: (content: string) => Promise<void>
   onRenameAfterFirstMessage?: (cid: string, title: string) => Promise<void>
@@ -783,8 +817,9 @@ function EmptyChat({
   sandboxGuard?: SandboxSendGuard
 }) {
   const { t } = useTranslation("admin")
+  const { navigate } = useAdminView()
   return (
-    <div className="flex flex-1 flex-col bg-surface-subtle px-5 py-6 sm:px-8">
+    <div className="flex flex-1 flex-col overflow-y-auto bg-surface-subtle px-5 py-6 sm:px-8">
       <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface/80 px-2 py-1 font-medium shadow-sm">
@@ -795,6 +830,16 @@ function EmptyChat({
             {t("conversations.empty.mode")}
           </span>
         </div>
+
+        {conversationId && workspaceID ? (
+          <div className="mt-5">
+            <ConversationInteractionCards
+              workspaceID={workspaceID}
+              conversationID={conversationId}
+              onOpenInbox={() => navigate("approvals")}
+            />
+          </div>
+        ) : null}
 
         <div className="grid flex-1 place-items-center py-8">
           <div className="w-full max-w-3xl">
@@ -817,7 +862,11 @@ function EmptyChat({
                   : t("conversations.empty.placeholderNoAgent")
               }
               onSendDirect={!conversationId && agent ? onSendFromEmpty : undefined}
-              onAfterSend={conversationId && onRenameAfterFirstMessage ? (title) => onRenameAfterFirstMessage(conversationId, title) : undefined}
+              onAfterSend={
+                conversationId && onRenameAfterFirstMessage
+                  ? (title) => onRenameAfterFirstMessage(conversationId, title)
+                  : undefined
+              }
               blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
             />
           </div>
@@ -869,7 +918,9 @@ function ChatStream({
   const stream = useAgentRunStream(conversationId, activeRunId, { enabled: !!activeRunId })
   const hasActiveStream = !!activeRunId && stream.status !== "error" && stream.status !== "done"
 
-  const timelineQ = useConversationTimeline(conversationId, undefined, { pollingEnabled: !hasActiveStream })
+  const timelineQ = useConversationTimeline(conversationId, undefined, {
+    pollingEnabled: !hasActiveStream,
+  })
   const messages = useMemo(() => timelineQ.data?.messages ?? [], [timelineQ.data?.messages])
   const runs = useMemo(() => timelineQ.data?.agent_runs ?? [], [timelineQ.data?.agent_runs])
 
@@ -888,8 +939,7 @@ function ChatStream({
   // We trust SSE status while a stream is active; otherwise fall back to
   // the run table (covers external runs or page-refresh-during-run cases).
   const someRunActive =
-    hasActiveStream ||
-    runs.some((r) => r.status === "queued" || r.status === "running")
+    hasActiveStream || runs.some((r) => r.status === "queued" || r.status === "running")
 
   // When the stream finishes, refetch the timeline so the persisted
   // assistant message replaces the in-memory deltaText, then drop the
@@ -909,19 +959,30 @@ function ChatStream({
 
   return (
     <>
-      <div className={cn("border-b border-line/70 bg-surface/80 px-5 py-3 sm:px-6 lg:px-10", sidebarFolded && "pl-14 sm:pl-16 lg:pl-[72px]")}>
+      <div
+        className={cn(
+          "border-b border-line/70 bg-surface/80 px-5 py-3 sm:px-6 lg:px-10",
+          sidebarFolded && "pl-14 sm:pl-16 lg:pl-[72px]",
+        )}
+      >
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase text-fg-faint">{t("conversations.detail.kind")}</p>
+            <p className="text-xs font-medium uppercase text-fg-faint">
+              {t("conversations.detail.kind")}
+            </p>
             <h2 className="truncate text-base font-semibold text-fg">
               {agent?.name || t("conversations.sidebar.allAgentsHint")}
             </h2>
           </div>
           <div className="flex shrink-0 items-center gap-2 text-xs text-fg-subtle">
-            <span className={cn(
-              "rounded-md border px-2 py-1 font-medium",
-              someRunActive ? "border-success-border bg-success-subtle text-success" : "border-line bg-surface text-fg-subtle",
-            )}>
+            <span
+              className={cn(
+                "rounded-md border px-2 py-1 font-medium",
+                someRunActive
+                  ? "border-success-border bg-success-subtle text-success"
+                  : "border-line bg-surface text-fg-subtle",
+              )}
+            >
               {someRunActive ? t("conversations.stream.thinking") : t("conversations.stream.ready")}
             </span>
             {someRunActive && (
@@ -942,10 +1003,15 @@ function ChatStream({
                   // is handled by isUserCancelledError in
                   // api-conversations.ts — no banner shown.
                   setActiveRunId(null)
-                  cancelConvMut.mutate({ conversationID: conversationId, reason: "user_clicked_cancel_all" })
+                  cancelConvMut.mutate({
+                    conversationID: conversationId,
+                    reason: "user_clicked_cancel_all",
+                  })
                 }}
                 className="h-7 gap-1 px-2 text-xs text-danger hover:text-danger-emphasis"
-                title={t("conversations.detail.cancelAllAria", { defaultValue: "Cancel all in-flight tasks in this conversation" })}
+                title={t("conversations.detail.cancelAllAria", {
+                  defaultValue: "Cancel all in-flight tasks in this conversation",
+                })}
               >
                 {cancelConvMut.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
@@ -992,13 +1058,20 @@ function ChatStream({
               conversationId={conversationId}
             />
           )}
+          <ConversationInteractionCards
+            workspaceID={convWorkspaceId}
+            conversationID={conversationId}
+            preferredRequestID={stream.pendingInteraction?.requestId}
+            onOpenInbox={() => navigate("approvals")}
+          />
           {stream.status === "error" && (
             <div className="rounded-lg border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
               {t("conversations.stream.error", { error: stream.error ?? "" })}
             </div>
           )}
-          {someRunActive && !stream.deltaText && (
-            stream.steps.length > 0 ? (
+          {someRunActive &&
+            !stream.deltaText &&
+            (stream.steps.length > 0 ? (
               <WorkingSteps
                 steps={stream.steps}
                 cancelling={cancelRunMut.isPending}
@@ -1021,8 +1094,7 @@ function ChatStream({
                   ? t("conversations.stream.thinking")
                   : t("conversations.detail.agentTyping")}
               </div>
-            )
-          )}
+            ))}
           {/*
             Queued runs render an independent "queued" chip per run,
             distinct from the inflight working/thinking indicator
@@ -1049,9 +1121,7 @@ function ChatStream({
 
       <div className="border-t border-line/60 bg-surface/95 px-5 pb-4 pt-2 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-4xl">
-          {chatToast && (
-            <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />
-          )}
+          {chatToast && <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />}
           <ComposerForm
             conversationId={conversationId}
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
@@ -1159,7 +1229,9 @@ function MessageRow({
                 {runtimeError.action}
               </a>
             )}
-            <p className="mt-2 text-sm text-danger-emphasis/80">{t("conversations.runtime_error.retryHint")}</p>
+            <p className="mt-2 text-sm text-danger-emphasis/80">
+              {t("conversations.runtime_error.retryHint")}
+            </p>
           </div>
           <div className="mt-1.5 text-xs text-fg-faint">
             {agentName ? `${stamp} · ${agentName}` : stamp}
@@ -1181,9 +1253,7 @@ function MessageRow({
   return (
     <div className="flex">
       <div className="max-w-[82%] border-l border-line pl-4">
-        <div className="mb-1.5 text-xs font-medium text-fg-faint">
-          {agentName || "Agent"}
-        </div>
+        <div className="mb-1.5 text-xs font-medium text-fg-faint">{agentName || "Agent"}</div>
         <div className="text-base leading-[1.7] text-fg">
           <p className="whitespace-pre-wrap">{content}</p>
         </div>
@@ -1210,11 +1280,17 @@ function runtimeErrorViewModel(
   language: string,
   t: ReturnType<typeof useTranslation<"admin">>["t"],
 ) {
-  const subKind = stringMeta(metadata, "sub_kind") || stringMeta(metadata, "payload.sub_kind") || fallback
-  const capabilityName = stringMeta(metadata, "capability_name") || t("conversations.runtime_error.fallbackCapability")
+  const subKind =
+    stringMeta(metadata, "sub_kind") || stringMeta(metadata, "payload.sub_kind") || fallback
+  const capabilityName =
+    stringMeta(metadata, "capability_name") || t("conversations.runtime_error.fallbackCapability")
   const capabilityID = stringMeta(metadata, "capability_id")
   const credentialKind = stringMeta(metadata, "credential_kind")
-  const kindLabel = credentialKindLabel(credentialKind, language, t("capabilities.credentials.none"))
+  const kindLabel = credentialKindLabel(
+    credentialKind,
+    language,
+    t("capabilities.credentials.none"),
+  )
   const current = `${window.location.pathname}${window.location.search || `?admin=conversations&id=${conversationId}`}`
   const href = credentialKind
     ? `?profile=credentials&kind=${encodeURIComponent(credentialKind)}&returnTo=${encodeURIComponent(current)}`
@@ -1225,18 +1301,43 @@ function runtimeErrorViewModel(
 
   switch (subKind) {
     case "capability_credential_missing":
-      return { message: t("conversations.runtime_error.capability_credential_missing", { name: capabilityName, kind: kindLabel }), action: t("conversations.runtime_error.addCredential"), href }
+      return {
+        message: t("conversations.runtime_error.capability_credential_missing", {
+          name: capabilityName,
+          kind: kindLabel,
+        }),
+        action: t("conversations.runtime_error.addCredential"),
+        href,
+      }
     case "capability_credential_decrypt_failed":
-      return { message: t("conversations.runtime_error.capability_credential_decrypt_failed", { name: capabilityName }), action: "", href: "" }
+      return {
+        message: t("conversations.runtime_error.capability_credential_decrypt_failed", {
+          name: capabilityName,
+        }),
+        action: "",
+        href: "",
+      }
     case "capability_credential_kind_mismatch":
-      return { message: t("conversations.runtime_error.capability_credential_kind_mismatch", { name: capabilityName }), action: t("conversations.runtime_error.resetCredential"), href }
+      return {
+        message: t("conversations.runtime_error.capability_credential_kind_mismatch", {
+          name: capabilityName,
+        }),
+        action: t("conversations.runtime_error.resetCredential"),
+        href,
+      }
     case "capability_version_unavailable":
       // Daemon resolver couldn't find a usable zip (empty oss_key) for
       // either the pinned version or the latest version. Direct the
       // user to the capability detail page where they can re-upload or
       // pick a different version. No credential `href`, but
       // manageCapabilityHref is always populated.
-      return { message: t("conversations.runtime_error.capability_version_unavailable", { name: capabilityName }), action: t("conversations.runtime_error.manageCapability"), href: manageCapabilityHref }
+      return {
+        message: t("conversations.runtime_error.capability_version_unavailable", {
+          name: capabilityName,
+        }),
+        action: t("conversations.runtime_error.manageCapability"),
+        href: manageCapabilityHref,
+      }
     default:
       return { message: fallback || t("conversations.runtime_error.generic"), action: "", href: "" }
   }
@@ -1245,7 +1346,13 @@ function runtimeErrorViewModel(
 function stringMeta(metadata: Record<string, unknown> | undefined, key: string): string {
   if (!metadata) return ""
   const value = key.includes(".")
-    ? key.split(".").reduce<unknown>((acc, part) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[part] : undefined), metadata)
+    ? key
+        .split(".")
+        .reduce<unknown>(
+          (acc, part) =>
+            acc && typeof acc === "object" ? (acc as Record<string, unknown>)[part] : undefined,
+          metadata,
+        )
     : metadata[key]
   return typeof value === "string" ? value : ""
 }
@@ -1370,11 +1477,7 @@ function ComposerForm({
   // the Feishu side. Empty-state composer (onSendDirect) never shows
   // Stop because no run is in flight there.
   const showStop =
-    !onSendDirect &&
-    !!activeRunId &&
-    !!onCancelActiveRun &&
-    trimmed.length === 0 &&
-    !isBusy
+    !onSendDirect && !!activeRunId && !!onCancelActiveRun && trimmed.length === 0 && !isBusy
 
   return (
     <form onSubmit={submit}>
@@ -1437,7 +1540,6 @@ function ComposerForm({
     </form>
   )
 }
-
 
 /* ============================================================== */
 /*  Utilities                                                        */

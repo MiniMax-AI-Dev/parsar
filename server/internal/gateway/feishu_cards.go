@@ -1214,6 +1214,8 @@ type PromptForUserChoiceCardQuestion struct {
 	Header      string
 	Question    string
 	MultiSelect bool
+	IsOther     bool
+	IsSecret    bool
 	Options     []PromptForUserChoiceCardOption
 }
 
@@ -1259,13 +1261,17 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 		// `name`. Empty options list shouldn't happen but renders as
 		// a free-text input so the card still works.
 		if len(q.Options) == 0 {
-			formElements = append(formElements, map[string]any{
+			input := map[string]any{
 				"tag":            "input",
 				"name":           fieldName,
 				"placeholder":    map[string]any{"tag": "plain_text", "content": "Enter your answer"},
 				"label":          map[string]any{"tag": "plain_text", "content": "Answer"},
 				"label_position": "top",
-			})
+			}
+			if q.IsSecret {
+				input["input_type"] = "password"
+			}
+			formElements = append(formElements, input)
 		} else {
 			options := make([]map[string]any, 0, len(q.Options))
 			for _, opt := range q.Options {
@@ -1291,6 +1297,19 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 				"options":     options,
 				"width":       "fill",
 			})
+			if q.IsOther {
+				input := map[string]any{
+					"tag":            "input",
+					"name":           fieldName + "_other",
+					"placeholder":    map[string]any{"tag": "plain_text", "content": "Enter another answer"},
+					"label":          map[string]any{"tag": "plain_text", "content": "Other"},
+					"label_position": "top",
+				}
+				if q.IsSecret {
+					input["input_type"] = "password"
+				}
+				formElements = append(formElements, input)
+			}
 		}
 
 		// Per-option description hints render as a single grey
@@ -1365,8 +1384,9 @@ func BuildPromptForUserChoiceCard(title string, questions []PromptForUserChoiceC
 // PromptForUserChoiceCardAnswer carries one question's answer for the
 // done card. Header pairs with the question shown on the original card.
 type PromptForUserChoiceCardAnswer struct {
-	Header string
-	Answer string
+	Header   string
+	Answer   string
+	IsSecret bool
 }
 
 // BuildPromptForUserChoiceDoneCard renders the post-answer card the
@@ -1383,6 +1403,8 @@ func BuildPromptForUserChoiceDoneCard(title string, answers []PromptForUserChoic
 		answer := strings.TrimSpace(a.Answer)
 		if answer == "" {
 			answer = "(no selection)"
+		} else if a.IsSecret {
+			answer = "[REDACTED]"
 		}
 		parts = append(parts, fmt.Sprintf("**%s**: %s", header, answer))
 	}

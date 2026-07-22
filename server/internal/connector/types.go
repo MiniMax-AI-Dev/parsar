@@ -181,20 +181,25 @@ type ToolCallEvent struct {
 // Connectors with Capabilities.Permissions=true emit one of these and
 // wait (inside the connector) for the matching SubmitPermission call.
 type PermissionRequest struct {
-	ID      string
-	Tool    string
-	Title   string
-	Detail  string
-	Payload map[string]any
+	ID       string
+	DeviceID string
+	Tool     string
+	Title    string
+	Detail   string
+	Payload  map[string]any
 }
 
 // PermissionDecision is the human verdict for a PermissionRequest,
 // submitted via AgentConnector.SubmitPermission.
 type PermissionDecision struct {
-	RequestID string
-	Approved  bool
-	Note      string
-	By        string // user id
+	RequestID  string
+	// DeliveryID is the caller's stable idempotency base. The agent-daemon
+	// connector adds a unique suffix for each wire attempt before awaiting ack.
+	DeliveryID string
+	DeviceID   string
+	Approved   bool
+	Note       string
+	By         string // user id
 }
 
 // PromptForUserChoiceOption is one selectable answer the human can
@@ -208,9 +213,12 @@ type PromptForUserChoiceOption struct {
 // PromptForUserChoiceQuestion is one question in a (possibly multi-
 // question) AskUserQuestion call. Mirrors proto.PromptForUserChoiceQuestion.
 type PromptForUserChoiceQuestion struct {
+	ID          string
 	Header      string
 	Question    string
 	MultiSelect bool
+	IsOther     bool
+	IsSecret    bool
 	Options     []PromptForUserChoiceOption
 }
 
@@ -223,8 +231,10 @@ type PromptForUserChoiceQuestion struct {
 // populated by daemons that haven't been upgraded so server callers
 // have a uniform read path via EffectiveQuestions.
 type PromptForUserChoiceRequest struct {
-	ID        string
-	Questions []PromptForUserChoiceQuestion
+	ID               string
+	DeviceID         string
+	Questions        []PromptForUserChoiceQuestion
+	AutoResolutionMs *uint64
 
 	// Legacy single-question fields. New daemons leave these empty.
 	Question    string
@@ -255,12 +265,14 @@ func (r PromptForUserChoiceRequest) EffectiveQuestions() []PromptForUserChoiceQu
 	}}
 }
 
-// PromptForUserChoiceQuestionAnswer carries one (question, answer)
-// pair from a multi-question submit. Header matches the question's
-// Header field; the daemon falls back to "q<i>" when Header is blank.
+// PromptForUserChoiceQuestionAnswer carries one structured response.
+// QuestionID is canonical and Answers preserves multi-select values;
+// Header and Answer remain compatibility fields for older peers.
 type PromptForUserChoiceQuestionAnswer struct {
-	Header string
-	Answer string
+	QuestionID string
+	Answers    []string
+	Header     string
+	Answer     string
 }
 
 // PromptForUserChoiceDecision is the human's answer, submitted via
@@ -274,6 +286,9 @@ type PromptForUserChoiceQuestionAnswer struct {
 //     daemon can emit a "stop, don't retry" tool_result.
 type PromptForUserChoiceDecision struct {
 	RequestID       string
+	// DeliveryID follows PermissionDecision's stable-base semantics.
+	DeliveryID      string
+	DeviceID        string
 	QuestionAnswers []PromptForUserChoiceQuestionAnswer
 	Answers         []string
 	Cancelled       bool

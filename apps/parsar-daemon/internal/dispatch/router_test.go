@@ -351,14 +351,14 @@ func TestPermissionRequestIsIndexedAndDecisionRoutes(t *testing.T) {
 	sess := <-h.gotSess
 
 	// Session emits a permission_request; pump should index it.
-	permEnv := mustEnv(t, proto.TypePermissionRequest, "perm_abcd1234", proto.PermissionRequestPayload{
-		Tool: "Bash", Title: "rm -rf /",
+	permEnv := mustEnv(t, proto.TypePermissionRequest, "run_p", proto.PermissionRequestPayload{
+		RequestID: "perm_abcd1234", Tool: "Bash", Title: "rm -rf /",
 	})
 	sess.out <- permEnv
 	// Wait until sender records — indexing happens before send.
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 1 }, "permission_request to be forwarded")
 
-	dec := mustEnv(t, proto.TypePermissionDecision, "perm_abcd1234", proto.PermissionDecisionPayload{Approved: true})
+	dec := mustEnv(t, proto.TypePermissionDecision, "perm_abcd1234", proto.PermissionDecisionPayload{DeliveryID: "delivery-perm-1", Approved: true})
 	if err := h.router.Handle(context.Background(), dec); err != nil {
 		t.Fatalf("permission_decision: %v", err)
 	}
@@ -366,6 +366,20 @@ func TestPermissionRequestIsIndexedAndDecisionRoutes(t *testing.T) {
 	if len(calls) != 1 || calls[0].id != "perm_abcd1234" || !calls[0].decision.Approved {
 		t.Errorf("submissions = %+v, want one approved perm_abcd1234", calls)
 	}
+	assertDecisionAck(t, h.sender, "delivery-perm-1", true, "")
+	retry := mustEnv(t, proto.TypePermissionDecision, "perm_abcd1234", proto.PermissionDecisionPayload{DeliveryID: "delivery-perm-2", Approved: true})
+	if err := h.router.Handle(context.Background(), retry); err != nil {
+		t.Fatalf("idempotent permission replay: %v", err)
+	}
+	if calls := sess.submissions(); len(calls) != 1 {
+		t.Fatalf("idempotent replay reached agent twice: %+v", calls)
+	}
+	assertDecisionAck(t, h.sender, "delivery-perm-2", true, "")
+	conflict := mustEnv(t, proto.TypePermissionDecision, "perm_abcd1234", proto.PermissionDecisionPayload{DeliveryID: "delivery-perm-3", Approved: false})
+	if err := h.router.Handle(context.Background(), conflict); err != nil {
+		t.Fatalf("conflicting permission replay: %v", err)
+	}
+	assertDecisionAck(t, h.sender, "delivery-perm-3", false, "decision_conflict")
 
 	close(sess.out)
 }
@@ -379,18 +393,19 @@ func TestPermissionCancelDeindexes(t *testing.T) {
 	<-h.gotReq
 	sess := <-h.gotSess
 
-	sess.out <- mustEnv(t, proto.TypePermissionRequest, "perm_xx", proto.PermissionRequestPayload{Tool: "Bash"})
+	sess.out <- mustEnv(t, proto.TypePermissionRequest, "run_p2", proto.PermissionRequestPayload{RequestID: "perm_xx", Tool: "Bash"})
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 1 }, "perm forwarded")
 	sess.out <- mustEnv(t, proto.TypePermissionCancel, "perm_xx", nil)
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 2 }, "perm_cancel forwarded")
 
 	// A decision for the cancelled perm should be a no-op (session never sees it).
-	if err := h.router.Handle(context.Background(), mustEnv(t, proto.TypePermissionDecision, "perm_xx", proto.PermissionDecisionPayload{})); err != nil {
+	if err := h.router.Handle(context.Background(), mustEnv(t, proto.TypePermissionDecision, "perm_xx", proto.PermissionDecisionPayload{DeliveryID: "delivery-cancelled"})); err != nil {
 		t.Fatalf("decision: %v", err)
 	}
 	if calls := sess.submissions(); len(calls) != 0 {
 		t.Errorf("expected zero submissions after cancel, got %+v", calls)
 	}
+	assertDecisionAck(t, h.sender, "delivery-cancelled", false, "not_pending")
 
 	close(sess.out)
 }
@@ -399,9 +414,10 @@ func TestPermissionDecisionUnknownPermIsNoop(t *testing.T) {
 	h := newHarness(t)
 	defer h.router.Shutdown(context.Background())
 
-	if err := h.router.Handle(context.Background(), mustEnv(t, proto.TypePermissionDecision, "perm_unknown", proto.PermissionDecisionPayload{})); err != nil {
+	if err := h.router.Handle(context.Background(), mustEnv(t, proto.TypePermissionDecision, "perm_unknown", proto.PermissionDecisionPayload{DeliveryID: "delivery-unknown-perm"})); err != nil {
 		t.Errorf("decision for unknown perm = %v, want nil", err)
 	}
+	assertDecisionAck(t, h.sender, "delivery-unknown-perm", false, "not_pending")
 }
 
 func TestPromptForUserChoiceDecisionRoutesToSession(t *testing.T) {
@@ -428,7 +444,7 @@ func TestPromptForUserChoiceDecisionRoutesToSession(t *testing.T) {
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 1 }, "prompt_for_user_choice forwarded")
 
 	dec := mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask_abcd1234", proto.PromptForUserChoiceDecisionPayload{
-		Answers: []string{"yes"},
+		DeliveryID: "delivery-ask-1", Answers: []string{"yes"},
 	})
 	if err := h.router.Handle(context.Background(), dec); err != nil {
 		t.Fatalf("prompt_for_user_choice_decision: %v", err)
@@ -443,6 +459,7 @@ func TestPromptForUserChoiceDecisionRoutesToSession(t *testing.T) {
 	if len(calls[0].decision.Answers) != 1 || calls[0].decision.Answers[0] != "yes" {
 		t.Errorf("answer payload mismatch: %+v", calls[0].decision)
 	}
+	assertDecisionAck(t, h.sender, "delivery-ask-1", true, "")
 
 	// Cleanup contract: a successful decision drops the ask from both
 	// the router-level index and the session's pendingAsks set, so a
@@ -483,7 +500,7 @@ func TestPromptForUserChoiceDecisionClearsIndexOnAgentUnknown(t *testing.T) {
 	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 1 }, "prompt_for_user_choice forwarded")
 
 	dec := mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask_xxxxxxxx", proto.PromptForUserChoiceDecisionPayload{
-		Answers: []string{"yes"},
+		DeliveryID: "delivery-ask-gone", Answers: []string{"yes"},
 	})
 	if err := h.router.Handle(context.Background(), dec); err != nil {
 		t.Fatalf("prompt_for_user_choice_decision: %v", err)
@@ -495,7 +512,50 @@ func TestPromptForUserChoiceDecisionClearsIndexOnAgentUnknown(t *testing.T) {
 	if got := h.router.PendingAsksLenForTest("run_ask_u"); got != 0 {
 		t.Errorf("pendingAsks len = %d, want 0 after ErrUnknownAsk", got)
 	}
+	assertDecisionAck(t, h.sender, "delivery-ask-gone", false, "not_pending")
 
+	close(sess.out)
+}
+
+func TestPromptForUserChoiceDecisionKeepsIndexOnTransientAgentError(t *testing.T) {
+	h := newHarness(t)
+	defer h.router.Shutdown(context.Background())
+
+	env := mustEnv(t, proto.TypePromptRequest, "run_ask_retry", proto.PromptRequestPayload{AgentKind: "claude_code"})
+	if err := h.router.Handle(context.Background(), env); err != nil {
+		t.Fatalf("prompt_request: %v", err)
+	}
+	<-h.gotReq
+	sess := <-h.gotSess
+	sess.askErr = errors.New("temporary stdin failure")
+
+	sess.out <- mustEnv(t, proto.TypePromptForUserChoice, "run_ask_retry", proto.PromptForUserChoicePayload{
+		AskID: "ask_retry", Questions: []proto.PromptForUserChoiceQuestion{{ID: "q0", Question: "Retry?"}},
+	})
+	waitFor(t, func() bool { return len(h.sender.snapshot()) >= 1 }, "prompt_for_user_choice forwarded")
+
+	decision := mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask_retry", proto.PromptForUserChoiceDecisionPayload{
+		DeliveryID: "delivery-ask-retry", Answers: []string{"yes"},
+	})
+	if err := h.router.Handle(context.Background(), decision); err != nil {
+		t.Fatalf("first decision: %v", err)
+	}
+	assertDecisionAck(t, h.sender, "delivery-ask-retry", false, "runtime_error")
+	if got := h.router.AskIndexLenForTest(); got != 1 {
+		t.Fatalf("askIndex len = %d, want 1 after transient error", got)
+	}
+	if got := h.router.PendingAsksLenForTest("run_ask_retry"); got != 1 {
+		t.Fatalf("pendingAsks len = %d, want 1 after transient error", got)
+	}
+
+	sess.askErr = nil
+	if err := h.router.Handle(context.Background(), decision); err != nil {
+		t.Fatalf("retry decision: %v", err)
+	}
+	assertDecisionAck(t, h.sender, "delivery-ask-retry", true, "")
+	if got := h.router.AskIndexLenForTest(); got != 0 {
+		t.Fatalf("askIndex len = %d, want 0 after successful retry", got)
+	}
 	close(sess.out)
 }
 
@@ -503,9 +563,31 @@ func TestPromptForUserChoiceDecisionUnknownAskIsNoop(t *testing.T) {
 	h := newHarness(t)
 	defer h.router.Shutdown(context.Background())
 
-	if err := h.router.Handle(context.Background(), mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask_unknown", proto.PromptForUserChoiceDecisionPayload{})); err != nil {
+	if err := h.router.Handle(context.Background(), mustEnv(t, proto.TypePromptForUserChoiceDecision, "ask_unknown", proto.PromptForUserChoiceDecisionPayload{DeliveryID: "delivery-unknown-ask"})); err != nil {
 		t.Errorf("decision for unknown ask = %v, want nil", err)
 	}
+	assertDecisionAck(t, h.sender, "delivery-unknown-ask", false, "not_pending")
+}
+
+func assertDecisionAck(t *testing.T, sender *recSender, deliveryID string, applied bool, errorCode string) {
+	t.Helper()
+	frames := sender.snapshot()
+	for index := len(frames) - 1; index >= 0; index-- {
+		if frames[index].Type != proto.TypeInteractionDecisionAck {
+			continue
+		}
+		var ack proto.InteractionDecisionAckPayload
+		if err := frames[index].DecodePayload(&ack); err != nil {
+			t.Fatalf("decode decision ack: %v", err)
+		}
+		if ack.DeliveryID == deliveryID {
+			if ack.Applied != applied || ack.ErrorCode != errorCode {
+				t.Fatalf("decision ack = %+v, want applied=%v error_code=%q", ack, applied, errorCode)
+			}
+			return
+		}
+	}
+	t.Fatalf("no decision ack for delivery %q in %+v", deliveryID, frames)
 }
 
 func TestHandleDeviceShutdownCancelsAllSessions(t *testing.T) {

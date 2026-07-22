@@ -427,13 +427,7 @@ export interface UserCredentialPatchRequest {
 /* --- Agent Runs --------------------------------------------------------- */
 
 export type AgentRunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "interrupted"
-
+  "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted"
 
 export interface AgentRunSummary {
   id: string
@@ -574,6 +568,8 @@ export type AgentRunStreamEvent =
   | { type: "done"; final: { content: string } }
   | { type: "error"; error: string }
   | { type: "tool"; tool: StreamToolEvent }
+  | { type: "permission"; permission: StreamPermissionRequest }
+  | { type: "prompt_for_user_choice"; prompt_for_user_choice: StreamUserChoiceRequest }
 
 export interface StreamToolEvent {
   id?: string
@@ -583,6 +579,76 @@ export interface StreamToolEvent {
   result?: Record<string, unknown>
 }
 
+export interface StreamPermissionRequest {
+  id: string
+  tool?: string
+  title?: string
+  detail?: string
+  payload?: Record<string, unknown>
+}
+
+export interface AgentInteractionOption {
+  label: string
+  description?: string
+}
+
+export interface AgentInteractionQuestion {
+  id?: string
+  header?: string
+  question: string
+  multi_select?: boolean
+  is_other?: boolean
+  is_secret?: boolean
+  options: AgentInteractionOption[]
+}
+
+export interface StreamUserChoiceRequest {
+  id: string
+  questions: AgentInteractionQuestion[]
+  auto_resolution_ms?: number
+}
+
+export type AgentInteractionKind = "permission" | "user_choice"
+export type AgentInteractionStatus =
+  "pending" | "resolving" | "approved" | "denied" | "answered" | "cancelled" | "expired"
+
+export interface AgentInteraction {
+  id: string
+  workspace_id: string
+  conversation_id: string
+  agent_run_id: string
+  request_id: string
+  kind: AgentInteractionKind
+  status: AgentInteractionStatus
+  request: Record<string, unknown>
+  response: Record<string, unknown>
+  resolution_source?: string
+  resolved_actor?: string
+  resolved_by?: string
+  created_at: string
+  expires_at: string
+  resolved_at?: string
+  updated_at: string
+  agent_name: string
+  conversation_title: string
+}
+
+export interface ListAgentInteractionsResponse {
+  interactions: AgentInteraction[]
+}
+
+export interface ResolveAgentInteractionRequest {
+  approved?: boolean
+  note?: string
+  answers?: Record<string, string[]>
+  cancelled?: boolean
+}
+
+export interface ResolveAgentInteractionResponse {
+  interaction: AgentInteraction
+  applied: boolean
+  already_resolved: boolean
+}
 
 /* --- Audit Records ------------------------------------------------------ */
 

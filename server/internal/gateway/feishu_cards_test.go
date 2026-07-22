@@ -7,6 +7,32 @@ import (
 	"time"
 )
 
+func TestPromptForUserChoiceSecretOtherInputAndDoneCardAreSafe(t *testing.T) {
+	card := BuildPromptForUserChoiceCard("Agent", []PromptForUserChoiceCardQuestion{{
+		Header: "Token", Question: "Which token?", IsOther: true, IsSecret: true,
+		Options: []PromptForUserChoiceCardOption{{Label: "Use stored token"}},
+	}}, "ask-secret")
+	raw, err := json.Marshal(card)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := string(raw)
+	if !strings.Contains(encoded, `"name":"q0_other"`) || !strings.Contains(encoded, `"input_type":"password"`) {
+		t.Fatalf("secret Other input is not password-masked: %s", encoded)
+	}
+
+	done := BuildPromptForUserChoiceDoneCard("Agent", []PromptForUserChoiceCardAnswer{{
+		Header: "Token", Answer: "super-secret-token", IsSecret: true,
+	}})
+	doneRaw, err := json.Marshal(done)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(doneRaw), "super-secret-token") || !strings.Contains(string(doneRaw), "[REDACTED]") {
+		t.Fatalf("secret answer was not redacted from done card: %s", doneRaw)
+	}
+}
+
 // TestBuildDoneCard_Shape locks the shape of the green "Completed" card so
 // drift in the builder is caught at PR time, not when a user notices
 // their card looks wrong in Feishu. We assert structural keys + the
@@ -948,9 +974,9 @@ func TestBuildCredentialFormSubmittedCard_Green(t *testing.T) {
 func TestCredentialFormCards_DeclareUpdateMulti(t *testing.T) {
 	t.Parallel()
 	cards := map[string]map[string]any{
-		"orange":    BuildCredentialFormCard("", []CredentialFormField{{Kind: "x"}}, "qkey"),
-		"green":     BuildCredentialFormSubmittedCard(""),
-		"red":       BuildCredentialFormRejectedCard("", CredentialFormRejectOperatorMismatch),
+		"orange": BuildCredentialFormCard("", []CredentialFormField{{Kind: "x"}}, "qkey"),
+		"green":  BuildCredentialFormSubmittedCard(""),
+		"red":    BuildCredentialFormRejectedCard("", CredentialFormRejectOperatorMismatch),
 	}
 	for name, card := range cards {
 		t.Run(name, func(t *testing.T) {

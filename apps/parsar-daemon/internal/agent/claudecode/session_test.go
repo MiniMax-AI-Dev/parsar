@@ -382,7 +382,14 @@ func TestSessionPermissionRoundTrip(t *testing.T) {
 			}
 			collected = append(collected, env)
 			if env.Type == "permission_request" {
-				permID = env.ID
+				if env.ID != "run_p" {
+					t.Fatalf("permission env.ID = %q, want run_p", env.ID)
+				}
+				var request proto.PermissionRequestPayload
+				if err := env.DecodePayload(&request); err != nil {
+					t.Fatalf("decode permission request: %v", err)
+				}
+				permID = request.RequestID
 			}
 		case <-deadline:
 			t.Fatalf("timeout waiting for permission_request; collected %d", len(collected))
@@ -422,6 +429,34 @@ func TestSessionPermissionRoundTrip(t *testing.T) {
 		proto.PermissionDecisionPayload{Approved: true})
 	if !errors.Is(err, agent.ErrUnknownPermission) {
 		t.Errorf("second SubmitPermission err = %v, want ErrUnknownPermission", err)
+	}
+}
+
+func TestSessionPermissionTimeoutDeniesInsteadOfHanging(t *testing.T) {
+	out := make(chan proto.Envelope, 32)
+	cfg := helperConfig()
+	cfg.AskTimeout = 150 * time.Millisecond
+	sess, err := claudecode.NewSessionForTest(context.Background(),
+		helperReq("run_permission_timeout", "approve me", "permission"), out, cfg)
+	if err != nil {
+		t.Fatalf("NewSessionForTest: %v", err)
+	}
+	defer sess.Cancel(context.Background())
+
+	envs, closed := drain(t, out, 5*time.Second)
+	if !closed {
+		t.Fatal("out did not close after permission timeout")
+	}
+	final := envs[len(envs)-1]
+	if final.Type != proto.TypeDone {
+		t.Fatalf("final env type = %q, want done; types=%v", final.Type, envTypes(envs))
+	}
+	var done proto.DonePayload
+	if err := final.DecodePayload(&done); err != nil {
+		t.Fatalf("decode done: %v", err)
+	}
+	if !strings.Contains(done.Content, "denied for req_cc_42") {
+		t.Fatalf("timeout did not deny the request: %q", done.Content)
 	}
 }
 

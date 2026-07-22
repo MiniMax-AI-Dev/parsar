@@ -223,15 +223,16 @@ func TestTranslateControlRequestMintsPermIDAndRecords(t *testing.T) {
 		t.Fatalf("want one permission_request env, got %#v", out.Envelopes)
 	}
 	env := out.Envelopes[0]
-	if env.ID != "perm_001" {
-		t.Errorf("env.ID = %q, want perm_001", env.ID)
+	if env.ID != "run_z" {
+		t.Errorf("env.ID = %q, want run_z", env.ID)
 	}
 	pr := mustDecode[struct {
-		Tool    string         `json:"tool"`
-		Title   string         `json:"title"`
-		Payload map[string]any `json:"payload"`
+		RequestID string         `json:"request_id"`
+		Tool      string         `json:"tool"`
+		Title     string         `json:"title"`
+		Payload   map[string]any `json:"payload"`
 	}](t, env.Payload)
-	if pr.Tool != "Bash" || pr.Title != "Bash" {
+	if pr.RequestID != "perm_001" || pr.Tool != "Bash" || pr.Title != "Bash" {
 		t.Errorf("permission payload mismatch: %+v", pr)
 	}
 	if pr.Payload["command"] != "rm -rf /tmp/a" {

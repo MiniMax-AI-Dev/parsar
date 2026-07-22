@@ -3073,6 +3073,9 @@ func (stubRuntimeStore) ConfigureAgentProfile(ctx context.Context, input store.C
 	if input.ModelID == "00000000-0000-0000-0000-000000000902" {
 		return store.ConfigureDevAgentConnectorResult{}, store.ErrUnknownModel
 	}
+	if input.Config["mode"] == "autopilot" {
+		return store.ConfigureDevAgentConnectorResult{}, fmt.Errorf("%w: Codex collaboration mode must be default or plan", store.ErrInvalidInput)
+	}
 	return store.ConfigureDevAgentConnectorResult{
 		AgentID:       input.AgentID,
 		Name:          "Backend Agent",
@@ -3717,6 +3720,19 @@ func TestConfigureAgentProfileAPIErrors(t *testing.T) {
 	}
 	if !strings.Contains(res.Body.String(), "disabled") {
 		t.Fatalf("expected error to mention disabled, got %s", res.Body.String())
+	}
+
+	// invalid profile config -> 400
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/agents/00000000-0000-0000-0000-000000000007/profile",
+		strings.NewReader(`{"config":{"mode":"autopilot"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	res = httptest.NewRecorder()
+	r.ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid profile config, got %d: %s", res.Code, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), "default or plan") {
+		t.Fatalf("expected validation detail, got %s", res.Body.String())
 	}
 
 	// unknown model -> 404

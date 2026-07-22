@@ -325,10 +325,11 @@ func (t *translator) translateControlRequest(line []byte) (translation, error) {
 	if title == "" {
 		title = "Permission request"
 	}
-	env, err := proto.NewEnvelope(proto.TypePermissionRequest, permID, proto.PermissionRequestPayload{
-		Tool:    msg.Request.ToolName,
-		Title:   title,
-		Payload: msg.Request.Input,
+	env, err := proto.NewEnvelope(proto.TypePermissionRequest, t.runID, proto.PermissionRequestPayload{
+		RequestID: permID,
+		Tool:      msg.Request.ToolName,
+		Title:     title,
+		Payload:   msg.Request.Input,
 	})
 	if err != nil {
 		return translation{}, err

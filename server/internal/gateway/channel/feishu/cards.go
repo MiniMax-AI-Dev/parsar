@@ -120,6 +120,8 @@ func (c *Channel) RenderChoiceForm(_ context.Context, _ channel.ReplyTarget, for
 			Header:      q.Header,
 			Question:    q.Question,
 			MultiSelect: q.MultiSelect,
+			IsOther:     q.IsOther,
+			IsSecret:    q.IsSecret,
 			Options:     opts,
 		})
 	}

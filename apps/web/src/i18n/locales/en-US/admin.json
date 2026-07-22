@@ -233,7 +233,25 @@
     },
     "actions": {
       "allowOnce": "Allow once",
-      "deny": "Deny"
+      "deny": "Deny",
+      "submitAnswers": "Submit answers",
+      "cancel": "Cancel request"
+    },
+    "kind": {
+      "permission": "Approval",
+      "userChoice": "Question"
+    },
+    "status": {
+      "pending": "Pending",
+      "resolving": "Submitting",
+      "approved": "Approved",
+      "denied": "Denied",
+      "answered": "Answered",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "questions": {
+      "customAnswer": "Optional custom answer"
     },
     "detail": {
       "agent": "Agent",
@@ -372,7 +390,14 @@
       "error": "Streaming interrupted: {{error}}",
       "retry": "Retry",
       "queued": "Queued",
-      "queuedWithPosition": "Queued (position {{position}})"
+      "queuedWithPosition": "Queued (position {{position}})",
+      "waitingForHuman": "The Agent is waiting for your approval or answer.",
+      "openInbox": "Open Inbox",
+      "interactionTitle": "Agent needs your input",
+      "interactionDescription": "Review this request here to let the run continue.",
+      "viewAllInteractions": "View all in Inbox",
+      "loadingInteraction": "Loading the approval request…",
+      "interactionLoadError": "The request could not be loaded here. Open Inbox to retry."
     },
     "permission": {
       "header": "Agent requests approval",
@@ -1240,6 +1265,7 @@
         "intelligence": {
           "title": "Intelligence",
           "engine": "Agent engine",
+          "codexMode": "Codex collaboration mode",
           "systemPrompt": "System prompt"
         },
         "runtime": {
@@ -1499,6 +1525,7 @@
         "slug": "Internal ID",
         "executionMode": "Execution mode",
         "agentEngine": "Agent engine",
+        "codexMode": "Codex collaboration mode",
         "device": "Local device",
         "sandboxSize": "Sandbox size",
         "sandboxImage": "Sandbox image",
@@ -1531,6 +1558,11 @@
         "hint": "Changes take effect after the current sandbox is released.",
         "standard": "Standard (2 vCPU / 4 GiB)",
         "xl": "Large (4 vCPU / 8 GiB)"
+      },
+      "codexMode": {
+        "hint": "Plan mode enables Codex to ask structured questions in the conversation. Approval requests work in both modes.",
+        "default": "Default",
+        "plan": "Plan (enables questions)"
       },
       "sandboxImage": {
         "hint": "The server pulls this container image when the Agent's sandbox starts for the first time."

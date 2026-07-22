@@ -44,7 +44,9 @@ func TestInternalSubmitPermission_AppliesLocallyOnOwnerPod(t *testing.T) {
 	})
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+internalSubmitPermissionPath, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer tok")
-	resp, err := srv.Client().Do(req)
+	result := doHTTPAsync(srv.Client(), req)
+	ackInteractionDecisionWrite(t, conn, proto.TypePermissionDecision, "perm-x")
+	resp, err := awaitHTTPResult(t, result)
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
@@ -81,6 +83,66 @@ func TestInternalSubmitPermission_RejectsBadToken(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status=%d, want 401", resp.StatusCode)
 	}
+}
+
+type asyncHTTPResult struct {
+	response *http.Response
+	err      error
+}
+
+func doHTTPAsync(client *http.Client, request *http.Request) <-chan asyncHTTPResult {
+	done := make(chan asyncHTTPResult, 1)
+	go func() {
+		response, err := client.Do(request)
+		done <- asyncHTTPResult{response: response, err: err}
+	}()
+	return done
+}
+
+func awaitHTTPResult(t *testing.T, result <-chan asyncHTTPResult) (*http.Response, error) {
+	t.Helper()
+	select {
+	case response := <-result:
+		return response.response, response.err
+	case <-time.After(2 * time.Second):
+		t.Fatal("internal submit endpoint did not return after runtime ack")
+		return nil, nil
+	}
+}
+
+func ackInteractionDecisionWrite(t *testing.T, conn *fakeConn, envelopeType, requestID string) {
+	t.Helper()
+	var decision proto.Envelope
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, env := range conn.Writes() {
+			if env.Type == envelopeType && env.ID == requestID {
+				decision = env
+				break
+			}
+		}
+		if decision.Type != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if decision.Type == "" {
+		t.Fatalf("%s envelope was not written", envelopeType)
+	}
+	var payload struct {
+		DeliveryID string `json:"delivery_id"`
+	}
+	if err := decision.DecodePayload(&payload); err != nil {
+		t.Fatalf("decode %s: %v", envelopeType, err)
+	}
+	ack, err := proto.NewEnvelope(proto.TypeInteractionDecisionAck, requestID, proto.InteractionDecisionAckPayload{
+		DeliveryID: payload.DeliveryID,
+		Applied:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Feed(ack)
 }
 
 func TestInternalSubmitPermission_RejectsBadJSON(t *testing.T) {
@@ -125,7 +187,9 @@ func TestInternalSubmitPromptForUserChoice_AppliesLocallyOnOwnerPod(t *testing.T
 	})
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+internalSubmitPromptForUserChoicePath, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer tok")
-	resp, err := srv.Client().Do(req)
+	result := doHTTPAsync(srv.Client(), req)
+	ackInteractionDecisionWrite(t, conn, proto.TypePromptForUserChoiceDecision, "ask-y")
+	resp, err := awaitHTTPResult(t, result)
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}

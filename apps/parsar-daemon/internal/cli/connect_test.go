@@ -170,8 +170,8 @@ func TestDiscoverAgentCLIsBothAvailable(t *testing.T) {
 	if !got.ClaudeCode.Capabilities.Permissions || !got.ClaudeCode.Capabilities.Resume {
 		t.Fatalf("ClaudeCode capabilities = %#v", got.ClaudeCode.Capabilities)
 	}
-	if !got.Codex.Capabilities.Streaming || !got.Codex.Capabilities.Resume || got.Codex.Capabilities.Permissions {
-		t.Fatalf("Codex capabilities = %#v (want Streaming+Resume, no Permissions)", got.Codex.Capabilities)
+	if !got.Codex.Capabilities.Streaming || !got.Codex.Capabilities.Permissions || !got.Codex.Capabilities.Resume {
+		t.Fatalf("Codex capabilities = %#v (want Streaming+Permissions+Resume)", got.Codex.Capabilities)
 	}
 	if !got.Pi.Available || got.Pi.Version != "pi 0.1.0" {
 		t.Fatalf("Pi descriptor = %#v", got.Pi)
@@ -212,9 +212,10 @@ func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 			Available: true,
 			Version:   "codex 0.141.0",
 			Capabilities: proto.AgentKindCapabilities{
-				Streaming: true,
-				Usage:     true,
-				Resume:    true,
+				Streaming:   true,
+				Permissions: true,
+				Usage:       true,
+				Resume:      true,
 			},
 		},
 		Pi: proto.SupportedAgentKind{

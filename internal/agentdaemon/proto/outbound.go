@@ -101,33 +101,36 @@ type PromptCancelPayload struct{}
 // lets the approver edit the tool input before letting the call
 // proceed (Claude Code's allow-with-changes path).
 type PermissionDecisionPayload struct {
+	DeliveryID   string         `json:"delivery_id"`
 	Approved     bool           `json:"approved"`
 	Message      string         `json:"message,omitempty"`
 	UpdatedInput map[string]any `json:"updated_input,omitempty"`
 }
 
 // PromptForUserChoiceQuestionAnswer carries one (question, answer)
-// pair from a multi-question submit. Header matches the question's
-// Header field on the prompt payload; for blank-header questions the
-// daemon uses the zero-based "q<i>" key instead.
+// pair from a multi-question submit. QuestionID is the canonical key;
+// Header and Answer remain as compatibility fields for older peers.
 type PromptForUserChoiceQuestionAnswer struct {
-	Header string `json:"header,omitempty"`
-	Answer string `json:"answer"`
+	QuestionID string   `json:"question_id,omitempty"`
+	Answers    []string `json:"answers,omitempty"`
+	Header     string   `json:"header,omitempty"`
+	Answer     string   `json:"answer,omitempty"`
 }
 
 // PromptForUserChoiceDecisionPayload carries the human's pick. The
 // daemon turns this into a tool_result JSON the agent's stdin
 // consumes.
 //
-//   - QuestionAnswers carries one entry per question (multi-question
-//     path). Empty for legacy single-question callers.
+//   - QuestionAnswers carries one entry per question, keyed by stable
+//     QuestionID with the selected values preserved as an array.
 //   - Answers length == 1 for single-select; length N for multi-select.
-//     Legacy single-question callback path keeps writing this; the
-//     daemon treats it as "all answers belong to question 0".
+//     Legacy single-question callers may still write this; the daemon
+//     treats it as "all answers belong to question 0".
 //   - Cancelled=true marks a non-answer (timeout, /cancel). Reason is
 //     a short machine tag (e.g. "timeout"); the daemon converts it
-//     into a Chinese tool_result text so the LLM understands.
+//     into a tool_result message the LLM understands.
 type PromptForUserChoiceDecisionPayload struct {
+	DeliveryID      string                              `json:"delivery_id"`
 	QuestionAnswers []PromptForUserChoiceQuestionAnswer `json:"question_answers,omitempty"`
 	Answers         []string                            `json:"answers,omitempty"`
 	Cancelled       bool                                `json:"cancelled,omitempty"`
