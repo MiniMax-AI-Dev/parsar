@@ -180,20 +180,26 @@ func TestParseMCP_MultipleServersSortedAndFirstSuggested(t *testing.T) {
 	}
 }
 
-// TestParseMCP_HTTPTransportEmitsWarning: HTTP/SSE servers parse but warn
-// since downstream renderers may not handle them.
-func TestParseMCP_HTTPTransportEmitsWarning(t *testing.T) {
+func TestParseMCP_StreamableHTTP(t *testing.T) {
 	raw := `{
 		"mcpServers": {
-			"http-server": {"command": "x", "type": "http"}
+			"docs": {"type": "http", "url": "https://docs.example.com/mcp"}
 		}
 	}`
 	res, err := ParseMCP(raw, SourceFormatJSON)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if len(res.Warnings) == 0 || !strings.Contains(strings.Join(res.Warnings, "|"), "type=") {
-		t.Fatalf("expected a warning mentioning type=, got %v", res.Warnings)
+	srv := res.Spec.MCP.Servers[0]
+	if srv.Transport != canonical.MCPTransportStreamableHTTP || srv.URL != "https://docs.example.com/mcp" || srv.Command != "" {
+		t.Fatalf("remote server = %+v", srv)
+	}
+}
+
+func TestParseMCP_RejectsSSE(t *testing.T) {
+	_, err := ParseMCP(`{"mcpServers":{"legacy":{"type":"sse","url":"https://example.com/sse"}}}`, SourceFormatJSON)
+	if err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

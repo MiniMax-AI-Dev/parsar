@@ -100,6 +100,111 @@ func TestCapabilityImportPreview_DefaultsEnvToLiteral(t *testing.T) {
 	}
 }
 
+func TestCapabilityImport_MemberMayImportWorkspaceSkillsOnly(t *testing.T) {
+	ids := store.DefaultDevFixtureIDs()
+	r, _ := capabilityTestRouter(t, map[string]string{ids.UserID: "member"}, nil)
+
+	rawSkill := "---\nslug: member-skill\ntitle: Member Skill\ndescription: A workspace skill imported by a member\n---\n# Instructions\n\nDo the requested task."
+	previewBody := mustJSON(t, map[string]any{
+		"kind":          "skill",
+		"source_format": "markdown",
+		"raw_text":      rawSkill,
+	})
+	preview := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/import/preview",
+		previewBody, ids.UserID)
+	if preview.Code != http.StatusOK {
+		t.Fatalf("member skill preview expected 200, got %d: %s", preview.Code, preview.Body.String())
+	}
+
+	skillSpec := canonical.Spec{
+		SchemaVersion: canonical.SchemaVersionCurrent,
+		Kind:          canonical.KindSkill,
+		Skill: &canonical.SkillSpec{
+			Slug:        "member-skill",
+			Title:       "Member Skill",
+			Description: "A workspace skill imported by a member",
+			Instruction: "# Instructions\n\nDo the requested task.",
+		},
+	}
+	commitBody := mustJSON(t, map[string]any{
+		"kind":           "skill",
+		"name":           "Member Skill",
+		"type":           "skill",
+		"canonical_spec": skillSpec,
+	})
+	commit := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/import/commit",
+		commitBody, ids.UserID)
+	if commit.Code != http.StatusCreated || !strings.Contains(commit.Body.String(), `"visibility":"workspace"`) {
+		t.Fatalf("member skill commit expected 201 workspace visibility, got %d: %s", commit.Code, commit.Body.String())
+	}
+
+	publicBody := mustJSON(t, map[string]any{
+		"kind":           "skill",
+		"name":           "Public Member Skill",
+		"type":           "skill",
+		"visibility":     "public",
+		"canonical_spec": skillSpec,
+	})
+	publicCommit := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/import/commit",
+		publicBody, ids.UserID)
+	if publicCommit.Code != http.StatusForbidden {
+		t.Fatalf("member public skill commit expected 403, got %d: %s", publicCommit.Code, publicCommit.Body.String())
+	}
+
+	mcpRaw := `{"mcpServers":{"example":{"command":"echo"}}}`
+	mcpPreviewBody := mustJSON(t, map[string]any{
+		"kind":          "mcp",
+		"source_format": "json",
+		"raw_text":      mcpRaw,
+	})
+	mcpPreview := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/import/preview",
+		mcpPreviewBody, ids.UserID)
+	if mcpPreview.Code != http.StatusForbidden {
+		t.Fatalf("member MCP preview expected 403, got %d: %s", mcpPreview.Code, mcpPreview.Body.String())
+	}
+
+	mcpSpec := canonical.Spec{
+		SchemaVersion: canonical.SchemaVersionCurrent,
+		Kind:          canonical.KindMCP,
+		MCP: &canonical.MCPSpec{Servers: []canonical.MCPServer{{
+			Name:    "example",
+			Command: "echo",
+		}}},
+	}
+	mcpCommitBody := mustJSON(t, map[string]any{
+		"kind":           "mcp",
+		"name":           "Member MCP",
+		"type":           "mcp",
+		"canonical_spec": mcpSpec,
+	})
+	mcpCommit := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/import/commit",
+		mcpCommitBody, ids.UserID)
+	if mcpCommit.Code != http.StatusForbidden {
+		t.Fatalf("member MCP commit expected 403, got %d: %s", mcpCommit.Code, mcpCommit.Body.String())
+	}
+}
+
+func TestCapabilityImport_ViewerCannotImportSkill(t *testing.T) {
+	ids := store.DefaultDevFixtureIDs()
+	r, _ := capabilityTestRouter(t, map[string]string{ids.UserID: "viewer"}, nil)
+	body := mustJSON(t, map[string]any{
+		"kind":          "skill",
+		"source_format": "markdown",
+		"raw_text":      "---\nslug: viewer-skill\ntitle: Viewer Skill\n---\nBody",
+	})
+	res := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+ids.WorkspaceID+"/capabilities/import/preview",
+		body, ids.UserID)
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("viewer skill preview expected 403, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
 // TestCapabilityImportCommit_InlineSecretLandsInSecretsTable verifies the
 // cleartext-flows-into-encrypted-row safety property.
 //

@@ -37,6 +37,8 @@ interface Props {
   workspaceID: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Members may import Skills but cannot create MCP capabilities. */
+  skillOnly?: boolean
   /** Optional callback after a successful import — the page can navigate to
    *  the new capability detail view, etc. */
   onCreated?: (capabilityID: string) => void
@@ -48,6 +50,7 @@ export function ImportCapabilityDialog({
   workspaceID,
   open,
   onOpenChange,
+  skillOnly = false,
   onCreated,
 }: Props) {
   const { t } = useTranslation("admin")
@@ -55,7 +58,7 @@ export function ImportCapabilityDialog({
 
   // Draft is preserved across tab flips, but the spec itself is dropped
   // on kind change (an MCP spec is meaningless as a Skill spec).
-  const [kind, setKind] = useState<AddCapabilityKind>("mcp")
+  const [kind, setKind] = useState<AddCapabilityKind>(skillOnly ? "skill" : "mcp")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [spec, setSpec] = useState<CanonicalSpec | null>(null)
@@ -77,13 +80,13 @@ export function ImportCapabilityDialog({
   // previous run doesn't bleed in.
   useEffect(() => {
     if (!open) return
-    setKind("mcp")
+    setKind(skillOnly ? "skill" : "mcp")
     setName("")
     setDescription("")
     setSpec(null)
     setInlineSecrets([])
     setRawText("")
-    setSourceFormat("json")
+    setSourceFormat(skillOnly ? "markdown" : "json")
     setSkillOssKey(null)
     nameTouched.current = false
     commitMut.reset()
@@ -93,6 +96,7 @@ export function ImportCapabilityDialog({
 
   const onTabChange = (next: string) => {
     const nextKind = next as AddCapabilityKind
+    if (skillOnly && nextKind !== "skill") return
     if (nextKind === kind) return
     setKind(nextKind)
     // Cross-kind drafts don't make sense — drop the parsed spec and
@@ -193,14 +197,16 @@ export function ImportCapabilityDialog({
         </DialogHeader>
 
         <Tabs value={kind} onValueChange={onTabChange}>
-          <TabsList>
-            <TabsTrigger value="mcp">
-              {t("capabilities.import.tab.mcp", "MCP")}
-            </TabsTrigger>
-            <TabsTrigger value="skill">
-              {t("capabilities.import.tab.skill", "Skill")}
-            </TabsTrigger>
-          </TabsList>
+          {!skillOnly && (
+            <TabsList>
+              <TabsTrigger value="mcp">
+                {t("capabilities.import.tab.mcp", "MCP")}
+              </TabsTrigger>
+              <TabsTrigger value="skill">
+                {t("capabilities.import.tab.skill", "Skill")}
+              </TabsTrigger>
+            </TabsList>
+          )}
 
           {/* ---- shared meta fields (MCP only) -----------------------
               Skill imports derive name + description from frontmatter;

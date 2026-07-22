@@ -98,6 +98,7 @@ the repo**.
 | Bootstrap token | `PARSAR_BOOTSTRAP_TOKEN` | empty (HTTP bootstrap off) |
 | Dev auth toggle | `PARSAR_DEV_AUTH` | `false` (must be false in production) |
 | Runtime profile | `PARSAR_RUNTIME_PROFILE` | `managed` for managed deployments where the platform manages cloud sandboxes |
+| MCP catalog override | `PARSAR_MCP_CATALOG_URL` | empty (use the catalog embedded in the server image) |
 
 Feishu OAuth / event-related env vars are documented in
 [feishu-prod.md](./feishu-prod.md).
@@ -251,7 +252,7 @@ layer**. To make a deployment truly production-ready you still need:
 | Smoke — end-to-end AgentRun / audit / usage | Missing `/api/v1/workspaces/{wid}/{agent-runs,audit-records,usage}` and other cookie-session entry points; smoke-core marks this SKIP/TODO | Later phase |
 | Real audit sink (Kafka / self-hosted storage) | In-memory + Postgres sink for now; the interface is already abstracted | Later phase |
 | Memory L0-L3 | Not implemented | Later phase |
-| Capability marketplace | Not implemented | Later phase |
+| Capability marketplace | Workspace-published Skill market and repository-backed stdio / Streamable HTTP MCP Connector Directory are available | — |
 
 **Invariants delivered by this track:**
 

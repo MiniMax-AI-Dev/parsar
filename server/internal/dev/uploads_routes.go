@@ -62,7 +62,7 @@ var allowedKinds = map[string]struct{}{
 // in so later downloads can verify ownership.
 //
 //	@Summary		Presign a plugin/skill upload
-//	@Description	Returns a presigned URL the browser PUTs the plugin/skill zip to. The blob backend (OSS or PG) mints a workspace-scoped ref that later downloads verify against. Caller must be workspace capability admin.
+//	@Description	Returns a presigned URL the browser PUTs the plugin/skill zip to. The blob backend (OSS or PG) mints a workspace-scoped ref that later downloads verify against. Members may upload Skill zips; Plugin uploads remain owner/admin only.
 //	@Tags			uploads
 //	@ID				createDevWorkspaceUploadPresign
 //	@Accept			json
@@ -71,20 +71,12 @@ var allowedKinds = map[string]struct{}{
 //	@Param			body		body		presignUploadRequest	true	"Presign upload payload"
 //	@Success		200			{object}	presignUploadResponse	"Presigned upload spec"
 //	@Failure		400			{object}	map[string]string		"Body invalid, filename empty, or prefix not in {plugin,skill}"
-//	@Failure		403			{object}	map[string]string		"Caller lacks capability admin permission"
+//	@Failure		403			{object}	map[string]string		"Caller lacks permission for the requested upload kind"
 //	@Failure		500			{object}	map[string]string		"Blob backend error"
 //	@Failure		503			{object}	map[string]string		"Object storage not configured"
 //	@Router			/api/v1/workspaces/{workspaceID}/uploads/presign-upload [post]
 func presignUpload(runtimeStore RuntimeStore, store blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
-		if !ok {
-			return
-		}
-		if store == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "object storage is not configured on this deployment", "code": "OSS_NOT_CONFIGURED"})
-			return
-		}
 		// 4 KiB bound on a malicious admin OOM attempt; generous for a
 		// filename + prefix envelope.
 		r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
@@ -101,6 +93,14 @@ func presignUpload(runtimeStore RuntimeStore, store blob.Store) http.HandlerFunc
 		kind := strings.TrimSpace(strings.ToLower(req.Prefix))
 		if _, ok := allowedKinds[kind]; !ok {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("prefix must be one of %s", knownKinds())})
+			return
+		}
+		workspaceID, _, ok := requireWorkspaceCapabilityImport(w, r, runtimeStore, kind)
+		if !ok {
+			return
+		}
+		if store == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "object storage is not configured on this deployment", "code": "OSS_NOT_CONFIGURED"})
 			return
 		}
 

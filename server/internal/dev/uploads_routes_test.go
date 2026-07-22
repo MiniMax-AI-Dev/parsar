@@ -205,6 +205,38 @@ func TestPresignUpload_PluginPrefixMintsWorkspaceScopedKey(t *testing.T) {
 	}
 }
 
+func TestPresignUpload_MemberMayUploadSkillButNotPlugin(t *testing.T) {
+	t.Parallel()
+	f := newFakeOSS()
+	r, rt := newUploadsTestRouter(t, f)
+	rt.roleStubStore = newRoleStubStore(map[string]string{uploadsTestUserID: "member"})
+
+	skillStatus, skillBody := callRouter(t, r, "POST", uploadsPath("presign-upload"), `{"filename":"member-skill.zip","prefix":"skill"}`)
+	if skillStatus != http.StatusOK {
+		t.Fatalf("member skill upload status = %d, want 200; body=%v", skillStatus, skillBody)
+	}
+	if key, _ := skillBody["ossKey"].(string); !strings.Contains(key, "/skill/") && !strings.Contains(key, "/skills/") {
+		t.Fatalf("member skill upload returned unexpected ossKey %q", key)
+	}
+
+	pluginStatus, _ := callRouter(t, r, "POST", uploadsPath("presign-upload"), `{"filename":"member-plugin.zip","prefix":"plugin"}`)
+	if pluginStatus != http.StatusForbidden {
+		t.Fatalf("member plugin upload status = %d, want 403", pluginStatus)
+	}
+}
+
+func TestPresignUpload_ViewerCannotUploadSkill(t *testing.T) {
+	t.Parallel()
+	f := newFakeOSS()
+	r, rt := newUploadsTestRouter(t, f)
+	rt.roleStubStore = newRoleStubStore(map[string]string{uploadsTestUserID: "viewer"})
+
+	status, _ := callRouter(t, r, "POST", uploadsPath("presign-upload"), `{"filename":"viewer-skill.zip","prefix":"skill"}`)
+	if status != http.StatusForbidden {
+		t.Fatalf("viewer skill upload status = %d, want 403", status)
+	}
+}
+
 func TestPresignUpload_DefaultTTLDelegatedToClient(t *testing.T) {
 	t.Parallel()
 	f := newFakeOSS()

@@ -427,6 +427,26 @@ func TestResolveCapabilityAdditions_MCPNoCreds(t *testing.T) {
 	}
 }
 
+func TestResolveCapabilityAdditions_MCPStreamableHTTP(t *testing.T) {
+	row := newMCPRow(t, "mcp-http", "docs", []canonical.MCPServer{{
+		Name:      "docs",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://docs.example.com/mcp",
+	}}, nil)
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
+		log:          discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	server := got.MCPServers["docs"].(map[string]any)
+	if server["type"] != "http" || server["url"] != "https://docs.example.com/mcp" {
+		t.Fatalf("server = %+v", server)
+	}
+}
+
 func TestResolveCapabilityAdditions_MCPWithCredential(t *testing.T) {
 	svc := testSecretsService(t)
 	ciphertext := encryptPayload(t, svc, map[string]any{"token": "ghp_realtoken123"})

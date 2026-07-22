@@ -1557,13 +1557,8 @@ func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 func requireWorkspaceCapabilityRead(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, bool) {
-	if runtimeStore == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
-		return "", false
-	}
-	workspaceID := strings.TrimSpace(chi.URLParam(r, "workspaceID"))
-	if !isUUID(workspaceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+	workspaceID, ok := requireWorkspaceCapabilityWorkspace(w, r, runtimeStore)
+	if !ok {
 		return "", false
 	}
 	if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
@@ -1573,7 +1568,7 @@ func requireWorkspaceCapabilityRead(w http.ResponseWriter, r *http.Request, runt
 	return workspaceID, true
 }
 
-func requireWorkspaceCapabilityAdmin(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, bool) {
+func requireWorkspaceCapabilityWorkspace(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, bool) {
 	if runtimeStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
 		return "", false
@@ -1583,11 +1578,50 @@ func requireWorkspaceCapabilityAdmin(w http.ResponseWriter, r *http.Request, run
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 		return "", false
 	}
+	return workspaceID, true
+}
+
+func requireWorkspaceCapabilityAdmin(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, bool) {
+	workspaceID, ok := requireWorkspaceCapabilityWorkspace(w, r, runtimeStore)
+	if !ok {
+		return "", false
+	}
 	if err := requireWorkspaceOwnerOrAdmin(r, runtimeStore, workspaceID); err != nil {
 		writeRBACError(w, err)
 		return "", false
 	}
 	return workspaceID, true
+}
+
+// requireWorkspaceCapabilityImport allows non-viewer members to import Skills
+// while keeping MCP imports restricted to owners/admins. It returns whether
+// the caller has admin-level capability permissions so commit handlers can
+// keep member-created Skills workspace-private.
+func requireWorkspaceCapabilityImport(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore, kind string) (string, bool, bool) {
+	workspaceID, ok := requireWorkspaceCapabilityWorkspace(w, r, runtimeStore)
+	if !ok {
+		return "", false, false
+	}
+	ctx := requestContextForRBAC(r)
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		writeRBACError(w, auth.ErrUnauthenticated)
+		return "", false, false
+	}
+	if auth.IsPlatformAdmin(userID) {
+		return workspaceID, true, true
+	}
+	role, err := runtimeStore.GetWorkspaceMemberRole(ctx, workspaceID, userID)
+	if err != nil {
+		writeRBACError(w, err)
+		return "", false, false
+	}
+	isAdmin := role == "owner" || role == "admin"
+	if !isAdmin && !(kind == string(canonical.KindSkill) && role == "member") {
+		writeRBACError(w, auth.ErrForbidden)
+		return "", false, false
+	}
+	return workspaceID, isAdmin, true
 }
 
 func requireWorkspaceCapabilityByID(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore, admin bool) (string, string, bool) {

@@ -57,7 +57,6 @@ import {
   useUndeprecate,
   useUninstall,
   useUnpublish,
-  type MarketplaceCapability,
   type TargetMarketplaceInstall,
   marketplaceSourceName,
 } from "../../../lib/api-marketplace"
@@ -120,6 +119,7 @@ export function CapabilitiesPage() {
   const [toast, setToast] = useState<string | null>(null)
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
+  const canCreateCapability = isAdmin || workspaceRole === "member"
   const marketInstallCountQ = useInstallCount(wid, marketTarget?.capability.id ?? null)
   const uninstallAgentsQ = useMarketplaceEnabledAgents(wid, uninstallTarget?.id ?? null)
 
@@ -143,13 +143,13 @@ export function CapabilitiesPage() {
     navigate("capabilities", { tab: next === "marketplace" ? "marketplace" : null, item: null })
   }
   const marketplaceItem = pageTab === "marketplace" ? itemParam : null
-  const goToAgentsForCapability = (capability: MarketplaceCapability) => {
+  const goToAgentsForCapability = (capabilityID: string) => {
     const url = new URL(window.location.href)
     url.searchParams.set("admin", "agents")
     url.searchParams.delete("id")
     url.searchParams.delete("tab")
     url.searchParams.delete("item")
-    url.searchParams.set("pendingCapability", capability.id)
+    url.searchParams.set("pendingCapability", capabilityID)
     window.history.pushState({}, "", url.toString())
     window.dispatchEvent(new Event("admin:navigate"))
   }
@@ -178,6 +178,9 @@ export function CapabilitiesPage() {
   const versionSummary = useCapabilityVersionSummary(wid, ownCapabilities)
   const latestVersions = versionSummary.latest
   const selectedLatestVersion = addVersionCapability ? latestVersions.get(addVersionCapability.id) : undefined
+  const selectedLatestVersionLoading = addVersionCapability
+    ? versionSummary.loading.has(addVersionCapability.id)
+    : false
   const uninstallAgents = uninstallAgentsQ.data ?? uninstallTarget?.enabled_agents ?? []
   const enabledCounts = useMemo(
     () => countCapabilityInstalls(agentCapabilityQueries.map((q) => q.data?.installed ?? [])),
@@ -229,7 +232,7 @@ export function CapabilitiesPage() {
       <PageHeader
         title={t("capabilities.page.title")}
         action={
-          isAdmin ? (
+          canCreateCapability ? (
             <Button size="sm" onClick={() => setImportOpen(true)}>
               <Plus className="h-3.5 w-3.5" /> {t("capabilities.actions.create")}
             </Button>
@@ -245,7 +248,7 @@ export function CapabilitiesPage() {
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content className="z-50 rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
-                    {t("capabilities.permission.adminOnly")}
+                    {t("capabilities.permission.create")}
                     <Tooltip.Arrow className="fill-white" />
                   </Tooltip.Content>
                 </Tooltip.Portal>
@@ -279,8 +282,11 @@ export function CapabilitiesPage() {
           itemID={marketplaceItem}
           query={query}
           typeFilter={typeFilter}
+          canImport={isAdmin}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
-          onInstall={goToAgentsForCapability}
+          onInstall={(capability) => goToAgentsForCapability(capability.id)}
+          onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
+          onAddToAgent={goToAgentsForCapability}
         />
       ) : err ? (
         <ErrorState
@@ -294,7 +300,7 @@ export function CapabilitiesPage() {
           icon={PackageCheck}
           title={t("capabilities.empty.title")}
           description={isAdmin ? t("capabilities.empty.descriptionAdmin") : t("capabilities.empty.descriptionMember")}
-          action={isAdmin ? <Button size="sm" onClick={() => setImportOpen(true)}><Plus className="h-3.5 w-3.5" /> {t("capabilities.actions.create")}</Button> : undefined}
+          action={canCreateCapability ? <Button size="sm" onClick={() => setImportOpen(true)}><Plus className="h-3.5 w-3.5" /> {t("capabilities.actions.create")}</Button> : undefined}
         />
       ) : (
         <Tooltip.Provider delayDuration={150}>
@@ -424,6 +430,7 @@ export function CapabilitiesPage() {
         workspaceID={wid}
         open={importOpen}
         onOpenChange={setImportOpen}
+        skillOnly={!isAdmin}
         onCreated={(capabilityID) => {
           setToast(t("capabilities.toast.created", { name: capabilityID }))
         }}
@@ -434,6 +441,7 @@ export function CapabilitiesPage() {
           open={!!addVersionCapability}
           capability={addVersionCapability}
           latestVersion={selectedLatestVersion}
+          latestVersionLoading={selectedLatestVersionLoading}
           onOpenChange={(open) => {
             if (open) return
             setAddVersionCapability(null)
@@ -1047,6 +1055,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         workspaceID={wid}
         capability={capability}
         latestVersion={latestVersion}
+        latestVersionLoading={versionsQ.isLoading}
         open={addVersionOpen}
         onOpenChange={(open) => {
           setAddVersionOpen(open)
@@ -1291,7 +1300,7 @@ function useCapabilityVersionSummary(workspaceID: string | null, capabilities: C
       staleTime: 30_000,
     })),
   })
-  return useMemo(() => {
+  const summary = useMemo(() => {
     const latest = new Map<string, CapabilityVersion>()
     const byCapability = new Map<string, CapabilityVersion[]>()
     queries.forEach((q, idx) => {
@@ -1303,6 +1312,11 @@ function useCapabilityVersionSummary(workspaceID: string | null, capabilities: C
     return { latest, byCapability }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [capabilities, queries.map((q) => q.dataUpdatedAt).join(":")])
+  const loading = new Set<string>()
+  queries.forEach((query, index) => {
+    if (query.isLoading) loading.add(capabilities[index].id)
+  })
+  return { ...summary, loading }
 }
 
 function useCapabilityEnabledAgents(wid: string | null, agents: Array<{ id: string; name: string }>, capability: Capability | null, versions: CapabilityVersion[]) {

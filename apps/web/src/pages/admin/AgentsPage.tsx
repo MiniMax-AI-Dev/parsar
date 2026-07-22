@@ -21,6 +21,7 @@ import {
 } from "../../components/ui/tabs"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
+import { useCapabilitiesQuery } from "../../lib/api-capabilities"
 import { createAgentConversation } from "../../lib/api-conversations"
 import {
   useCreateAgent,
@@ -48,7 +49,13 @@ import { DeleteAgentDialog } from "./agents/DeleteAgentDialog"
 function usePendingCapability(workspaceID: string | null) {
   const id = new URLSearchParams(window.location.search).get("pendingCapability")
   const marketplaceQ = useMarketplaceList(workspaceID)
-  const capability = (marketplaceQ.data ?? []).find((item) => item.id === id)
+  const workspaceQ = useCapabilitiesQuery(id ? workspaceID : null)
+  const workspaceCapabilities = [
+    ...(workspaceQ.data?.capabilities ?? []),
+    ...(workspaceQ.data?.marketplace_installs ?? []),
+  ]
+  const capability = workspaceCapabilities.find((item) => item.id === id)
+    ?? (marketplaceQ.data ?? []).find((item) => item.id === id)
   return { id, capability }
 }
 
@@ -127,7 +134,7 @@ export function AgentsPage() {
           onCancel={() => navigate("agents", { pendingCapability: null })}
         >
           {pendingCapability.capability
-            ? t("agents.pendingCapability.banner", { name: pendingCapability.capability.name, source: pendingCapability.capability.source_workspace_name ?? "—" })
+            ? t("agents.pendingCapability.banner", { name: pendingCapability.capability.name, source: pendingCapability.capability.source_workspace_name ?? workspaceName ?? "—" })
             : t("agents.pendingCapability.loading")}
         </PendingCapabilityBanner>
       )}
@@ -410,7 +417,7 @@ export function AgentDetailPage({ id }: { id: string }) {
         >
           {t("agents.pendingCapability.detailBanner", {
             name: pendingCapability.capability?.name ?? pendingCapability.id,
-            source: pendingCapability.capability?.source_workspace_name ?? "—",
+            source: pendingCapability.capability?.source_workspace_name ?? currentWorkspace?.name ?? "—",
           })}
         </PendingCapabilityBanner>
       )}

@@ -36,6 +36,8 @@ type codexMCPDocument struct {
 }
 
 type codexMCPServer struct {
+	Type    string            `json:"type,omitempty"`
+	URL     string            `json:"url,omitempty"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
@@ -69,6 +71,10 @@ func renderCodexMCP(s *canonical.MCPSpec) (Output, error) {
 	}
 	doc := codexMCPDocument{MCPServers: make(map[string]codexMCPServer, len(s.Servers))}
 	for _, srv := range s.Servers {
+		if srv.EffectiveTransport() == canonical.MCPTransportStreamableHTTP {
+			doc.MCPServers[srv.Name] = codexMCPServer{Type: "http", URL: srv.URL}
+			continue
+		}
 		env, err := renderEnvMap(srv.Env)
 		if err != nil {
 			return Output{}, fmt.Errorf("codex render: server %q: %w", srv.Name, err)

@@ -107,11 +107,12 @@ export function ImportMCPForm({
             }
           },
           onError: (err) => {
-            const msg = err instanceof ApiError
-              ? err.envelope.message
-              : err instanceof Error
-                ? err.message
-                : t("capabilities.import.preview.errorFallback", "Failed to parse")
+            const msg =
+              err instanceof ApiError
+                ? err.envelope.message
+                : err instanceof Error
+                  ? err.message
+                  : t("capabilities.import.preview.errorFallback", "Failed to parse")
             setErrorMessage(msg)
             setWarnings([])
             onChange(null)
@@ -149,7 +150,7 @@ export function ImportMCPForm({
             format === "toml"
               ? t(
                   "capabilities.import.mcp.tomlPlaceholder",
-                  "[mcp_servers.github]\ncommand = \"docker\"\nargs = [\"run\", \"-i\", \"ghcr.io/github/github-mcp-server\"]\n\n[mcp_servers.github.env]\nGITHUB_PERSONAL_ACCESS_TOKEN = \"ghp_xxx\"",
+                  '[mcp_servers.github]\ncommand = "docker"\nargs = ["run", "-i", "ghcr.io/github/github-mcp-server"]\n\n[mcp_servers.github.env]\nGITHUB_PERSONAL_ACCESS_TOKEN = "ghp_xxx"',
                 )
               : t(
                   "capabilities.import.mcp.jsonPlaceholder",
@@ -207,9 +208,7 @@ export function ImportMCPForm({
                   }
                   if (existing) {
                     onInlineSecretsChange(
-                      inlineSecrets.map((s) =>
-                        key(s) ? { ...s, plaintext } : s,
-                      ),
+                      inlineSecrets.map((s) => (key(s) ? { ...s, plaintext } : s)),
                     )
                   } else {
                     onInlineSecretsChange([
@@ -318,9 +317,10 @@ function ServerCard({
 }) {
   const { t } = useTranslation("admin")
   const credentialEnvEntries = useMemo(
-    () => Object.entries(server.env ?? {})
-      .filter(([, ev]) => needsEnvCredentialHandling(ev as CanonicalEnvValue))
-      .sort(([a], [b]) => a.localeCompare(b)),
+    () =>
+      Object.entries(server.env ?? {})
+        .filter(([, ev]) => needsEnvCredentialHandling(ev as CanonicalEnvValue))
+        .sort(([a], [b]) => a.localeCompare(b)),
     [server.env],
   )
   const inlineSecretFor = (envKey: string) =>
@@ -331,14 +331,23 @@ function ServerCard({
       <header className="flex min-w-0 flex-col gap-1 border-b border-line-muted pb-2">
         <h4 className="text-sm font-semibold text-fg">{server.name}</h4>
         <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-xs text-fg-subtle">
-          {server.command}
-          {server.args && server.args.length > 0 ? ` ${server.args.join(" ")}` : ""}
+          {server.transport === "streamable-http" ? server.url : server.command}
+          {server.transport !== "streamable-http" && server.args && server.args.length > 0
+            ? ` ${server.args.join(" ")}`
+            : ""}
         </code>
       </header>
 
-      {credentialEnvEntries.length === 0 ? (
+      {server.transport === "streamable-http" ? (
         <p className="mt-2 text-sm text-fg-subtle">
-          {t("capabilities.import.envEmpty.noCredentialPlaceholders", "No credential placeholders to fill")}
+          {t("capabilities.mcpDirectory.detail.noAuthentication", "No authentication required")}
+        </p>
+      ) : credentialEnvEntries.length === 0 ? (
+        <p className="mt-2 text-sm text-fg-subtle">
+          {t(
+            "capabilities.import.envEmpty.noCredentialPlaceholders",
+            "No credential placeholders to fill",
+          )}
         </p>
       ) : (
         <div className="mt-2 space-y-2">
@@ -360,9 +369,7 @@ function ServerCard({
                   onInlineSecretChange(key, "")
                 }
               }}
-              onInlineSecretPlaintextChange={(plaintext) =>
-                onInlineSecretChange(key, plaintext)
-              }
+              onInlineSecretPlaintextChange={(plaintext) => onInlineSecretChange(key, plaintext)}
             />
           ))}
         </div>

@@ -641,7 +641,8 @@
       "browse": "Browse market"
     },
     "permission": {
-      "adminOnly": "Owner / admin only"
+      "adminOnly": "Owner / admin only",
+      "create": "Members can add Skills; only owners / admins can add MCP"
     },
     "status": {
       "active": "Available",
@@ -823,7 +824,7 @@
     "empty": {
       "title": "No capabilities have been added to this workspace yet.",
       "descriptionAdmin": "Capabilities live in the workspace capability pool. They are external tools (MCP) or loadable Skill packages that Agents in this workspace can enable as needed.",
-      "descriptionMember": "This workspace capability pool has no capabilities yet. Ask an owner / admin to add one."
+      "descriptionMember": "This workspace capability pool has no capabilities yet. Members can add or import Skills; ask an owner / admin to add MCP."
     },
     "loadError": {
       "title": "Failed to load capabilities",
@@ -886,6 +887,69 @@
       "loadError": {
         "title": "Failed to load capability market",
         "description": "Backend returned an error."
+      }
+    },
+    "mcpDirectory": {
+      "title": "Connectors",
+      "description": "Browse curated local and remote MCP servers and import their configuration into this workspace.",
+      "verified": "Verified",
+      "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
+      "source": {
+        "builtin": "Built-in catalog",
+        "remote": "Remote catalog"
+      },
+      "filters": {
+        "category": "Connector categories",
+        "allCategories": "All categories",
+        "verified": "Verified only",
+        "sort": "Sort connectors"
+      },
+      "sort": {
+        "popular": "Most popular",
+        "name": "Name"
+      },
+      "actions": {
+        "import": "Import",
+        "installed": "Installed",
+        "back": "Back to connectors",
+        "viewCapability": "View Capability",
+        "addToAgent": "Add to Agent"
+      },
+      "loadError": {
+        "title": "Couldn't load the connectors directory",
+        "description": "Couldn't load the connectors directory. Some connector details may be missing. Retry without leaving the Capability Marketplace."
+      },
+      "empty": {
+        "title": "No connectors match these filters",
+        "description": "Try another search term or clear the category and Verified filters."
+      },
+      "detail": {
+        "loadError": "Failed to load connector details",
+        "notFound": "Connector not found",
+        "version": "Version",
+        "transport": "Transport",
+        "rank": "Popularity rank",
+        "timeout": "Startup timeout",
+        "seconds_one": "{{count}} second",
+        "seconds_other": "{{count}} seconds",
+        "command": "Startup command",
+        "endpoint": "Remote endpoint",
+        "authentication": "Authentication",
+        "noAuthentication": "Not required",
+        "environment": "Environment variable names",
+        "noEnvironment": "No environment variables are declared.",
+        "publisher": "Publisher",
+        "homepage": "Homepage",
+        "repository": "Repository",
+        "openLink": "Open link"
+      },
+      "import": {
+        "title": "Import {{name}}?",
+        "description": "Review the connector configuration. No token is required during import, and nothing will run or bind to an Agent.",
+        "success": "{{name}} was imported as a workspace MCP Capability.",
+        "failed": "The connector could not be imported.",
+        "importing": "Importing...",
+        "cancel": "Cancel"
       }
     },
     "marketplaceDetail": {

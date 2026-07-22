@@ -50,6 +50,7 @@ interface Props {
   capability: Capability
   /** Most-recent version, used for prefill. Undefined when capability has no versions yet. */
   latestVersion: CapabilityVersion | undefined
+  latestVersionLoading?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Toast / parent feedback after a successful commit. */
@@ -60,6 +61,7 @@ export function AddCapabilityVersionDialog({
   workspaceID,
   capability,
   latestVersion,
+  latestVersionLoading = false,
   open,
   onOpenChange,
   onCommitted,
@@ -99,10 +101,10 @@ export function AddCapabilityVersionDialog({
     return tail
   }, [latestVersion])
 
-  // Reset only on the open transition — resetting on every render would
-  // clobber the user's edits.
+  // Initialize once the dialog is open and its latest-version request has
+  // completed. Mounting the editor earlier would lock in an empty prefill.
   useEffect(() => {
-    if (!open) return
+    if (!open || latestVersionLoading) return
     setName(capability.name)
     setDescription(capability.description ?? "")
     setSpec(null)
@@ -113,27 +115,27 @@ export function AddCapabilityVersionDialog({
     setSkillOssKey(null)
     commitMut.reset()
     updateMut.reset()
-    // intentionally only on the open transition
+    // intentionally only on open/loading transitions
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, latestVersionLoading])
 
-  const errMsg = commitMut.error instanceof ApiError
-    ? commitMut.error.envelope.message
-    : commitMut.error instanceof Error
-      ? commitMut.error.message
-      : updateMut.error instanceof ApiError
-        ? updateMut.error.envelope.message
-        : updateMut.error instanceof Error
-          ? updateMut.error.message
-          : null
+  const errMsg =
+    commitMut.error instanceof ApiError
+      ? commitMut.error.envelope.message
+      : commitMut.error instanceof Error
+        ? commitMut.error.message
+        : updateMut.error instanceof ApiError
+          ? updateMut.error.envelope.message
+          : updateMut.error instanceof Error
+            ? updateMut.error.message
+            : null
 
   const trimmedName = name.trim()
-  const nameError =
-    !trimmedName
-      ? t("capabilities.errors.nameRequired")
-      : trimmedName.length > 50
-        ? t("capabilities.errors.nameTooLong")
-        : null
+  const nameError = !trimmedName
+    ? t("capabilities.errors.nameRequired")
+    : trimmedName.length > 50
+      ? t("capabilities.errors.nameTooLong")
+      : null
   // For plugin / skill-zip kinds we accept "no new upload" and let the server
   // reuse the previous OSS blob. So the canSubmit guard relaxes when an
   // inherited blob exists.
@@ -141,15 +143,18 @@ export function AddCapabilityVersionDialog({
     kind !== "plugin"
       ? true
       : pluginUpload.ossKey
-        ? pluginUpload.validation?.valid ?? false
+        ? (pluginUpload.validation?.valid ?? false)
         : !!inheritedOssLabel
 
   const skillSpecReady =
     kind !== "skill"
       ? true
-      : !!skillOssKey || !!inheritedOssLabel || (!!spec && isImportSpecReady(kind, spec, inlineSecrets))
+      : !!skillOssKey ||
+        !!inheritedOssLabel ||
+        (!!spec && isImportSpecReady(kind, spec, inlineSecrets))
 
-  const mcpSpecReady = kind !== "mcp" ? true : !!spec && isImportSpecReady(kind, spec, inlineSecrets)
+  const mcpSpecReady =
+    kind !== "mcp" ? true : !!spec && isImportSpecReady(kind, spec, inlineSecrets)
 
   const canSubmit =
     !commitMut.isPending &&
@@ -194,13 +199,13 @@ export function AddCapabilityVersionDialog({
 
     const ossKeyToSend =
       kind === "plugin"
-        ? pluginUpload.ossKey ?? undefined
+        ? (pluginUpload.ossKey ?? undefined)
         : kind === "skill"
-          ? skillOssKey ?? undefined
+          ? (skillOssKey ?? undefined)
           : undefined
     const uploadSourceToSend =
       kind === "plugin"
-        ? pluginUpload.uploadSource ?? undefined
+        ? (pluginUpload.uploadSource ?? undefined)
         : kind === "skill" && skillOssKey
           ? "zip"
           : undefined
@@ -208,9 +213,7 @@ export function AddCapabilityVersionDialog({
     const payload: ImportCapabilityVersionCommitRequest = {
       canonical_spec: fallbackSpec,
       inline_secrets: kind === "plugin" || inlineSecrets.length === 0 ? undefined : inlineSecrets,
-      source_payload: rawText
-        ? { raw_text: rawText, source_format: sourceFormat }
-        : undefined,
+      source_payload: rawText ? { raw_text: rawText, source_format: sourceFormat } : undefined,
       // omit oss_key on plugin/skill-zip reuse — backend treats missing key
       // as "carry forward the previous version's blob".
       oss_key: ossKeyToSend,
@@ -243,16 +246,15 @@ export function AddCapabilityVersionDialog({
           <DialogTitle>
             {t("capabilities.versions.add.title", { name: capability.name })}
           </DialogTitle>
-          <DialogDescription>
-            {t("capabilities.versions.add.description")}
-          </DialogDescription>
+          <DialogDescription>{t("capabilities.versions.add.description")}</DialogDescription>
         </DialogHeader>
 
         {prefill.didPrefill && (
           <InfoBanner>
             {t("capabilities.versions.add.prefillFromLatest", {
               version: latestVersion?.version ?? "",
-              defaultValue: "Pre-filled with the previous version ({{version}}). Edits will be submitted as a new version.",
+              defaultValue:
+                "Pre-filled with the previous version ({{version}}). Edits will be submitted as a new version.",
             })}
           </InfoBanner>
         )}
@@ -260,17 +262,17 @@ export function AddCapabilityVersionDialog({
           <InfoBanner>
             {t("capabilities.versions.add.reuseExistingZip", {
               filename: inheritedOssLabel,
-              defaultValue: "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package.",
+              defaultValue:
+                "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package.",
             })}
           </InfoBanner>
         )}
         {inheritedInlineSecrets.length > 0 && (
           <WarningBanner>
             {t("capabilities.versions.add.inlineSecretLostWarning", {
-              keys: inheritedInlineSecrets
-                .map((e) => `${e.server}.${e.envKey}`)
-                .join(", "),
-              defaultValue: "Previous-version inline secrets ({{keys}}) are hidden. Re-enter them in plaintext to keep, or switch to managed credentials.",
+              keys: inheritedInlineSecrets.map((e) => `${e.server}.${e.envKey}`).join(", "),
+              defaultValue:
+                "Previous-version inline secrets ({{keys}}) are hidden. Re-enter them in plaintext to keep, or switch to managed credentials.",
             })}
           </WarningBanner>
         )}
@@ -302,7 +304,11 @@ export function AddCapabilityVersionDialog({
         )}
 
         <div className="mt-3">
-          {kind === "mcp" ? (
+          {latestVersionLoading ? (
+            <div className="flex min-h-48 items-center justify-center text-fg-subtle">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : kind === "mcp" ? (
             <ImportMCPForm
               workspaceID={workspaceID}
               value={spec}
@@ -363,7 +369,7 @@ export function AddCapabilityVersionDialog({
           >
             {t("capabilities.actions.cancel")}
           </Button>
-          <Button size="sm" disabled={!canSubmit} onClick={submit}>
+          <Button size="sm" disabled={latestVersionLoading || !canSubmit} onClick={submit}>
             {(commitMut.isPending || updateMut.isPending) && (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             )}
@@ -386,21 +392,70 @@ function usePrefillFromLatest(latestVersion: CapabilityVersion | undefined): {
   format: SourceFormat
   didPrefill: boolean
 } {
-  return useMemo(() => {
-    const sp = latestVersion?.source_payload as
-      | { raw_text?: string; source_format?: string; format?: string; body?: string }
-      | undefined
-    // Accepts two source_payload shapes for forward-compat:
-    //   { raw_text, source_format } — new dialog
-    //   { format, body }            — early server code
-    const rawText = sp?.raw_text ?? sp?.body ?? ""
-    const fmtRaw = (sp?.source_format ?? sp?.format ?? "").toLowerCase()
-    const valid: SourceFormat[] = ["json", "toml", "markdown"]
-    const format = (valid as string[]).includes(fmtRaw)
-      ? (fmtRaw as SourceFormat)
-      : "json"
-    return { rawText, format, didPrefill: rawText.length > 0 }
-  }, [latestVersion])
+  return useMemo(() => prefillFromLatestVersion(latestVersion), [latestVersion])
+}
+
+function prefillFromLatestVersion(latestVersion: CapabilityVersion | undefined): {
+  rawText: string
+  format: SourceFormat
+  didPrefill: boolean
+} {
+  const sp = latestVersion?.source_payload as
+    { raw_text?: string; source_format?: string; format?: string; body?: string } | undefined
+  // Accepts two source_payload shapes for forward-compat:
+  //   { raw_text, source_format } — new dialog
+  //   { format, body }            — early server code
+  const storedRawText = sp?.raw_text ?? sp?.body ?? ""
+  const fmtRaw = (sp?.source_format ?? sp?.format ?? "").toLowerCase()
+  const valid: SourceFormat[] = ["json", "toml", "markdown"]
+  const storedFormat = (valid as string[]).includes(fmtRaw) ? (fmtRaw as SourceFormat) : "json"
+  if (storedRawText.length > 0) {
+    return { rawText: storedRawText, format: storedFormat, didPrefill: true }
+  }
+
+  // Directory imports store provenance in source_payload and keep the actual
+  // executable configuration in canonical_spec. Rebuild editable JSON from
+  // that authoritative spec instead of duplicating configuration at import.
+  if (sp?.source_format === "mcp_catalog") {
+    const rawText = serializeCatalogMCP(latestVersion?.canonical_spec)
+    if (rawText) return { rawText, format: "json", didPrefill: true }
+  }
+
+  return { rawText: "", format: storedFormat, didPrefill: false }
+}
+
+function serializeCatalogMCP(canonicalSpec: Record<string, unknown> | undefined): string {
+  const spec = canonicalSpec as Partial<CanonicalSpec> | undefined
+  if (spec?.kind !== "mcp" || !Array.isArray(spec.mcp?.servers) || spec.mcp.servers.length === 0) {
+    return ""
+  }
+
+  const mcpServers: Record<string, Record<string, unknown>> = {}
+  for (const server of spec.mcp.servers) {
+    if (!server.name?.trim()) continue
+    if (server.transport === "streamable-http" && server.url?.trim()) {
+      mcpServers[server.name] = { type: "http", url: server.url }
+      continue
+    }
+    if (!server.command?.trim()) continue
+    const env = Object.fromEntries(
+      Object.entries(server.env ?? {}).map(([key, value]) => [
+        key,
+        value.mode === "literal" ? (value.literal ?? "") : "",
+      ]),
+    )
+    mcpServers[server.name] = {
+      command: server.command,
+      args: server.args ?? [],
+      env,
+      ...(typeof server.startup_timeout_sec === "number"
+        ? { startup_timeout_sec: server.startup_timeout_sec }
+        : {}),
+    }
+  }
+  if (Object.keys(mcpServers).length === 0) return ""
+
+  return JSON.stringify({ mcpServers }, null, 2)
 }
 
 /**

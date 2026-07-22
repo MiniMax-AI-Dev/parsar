@@ -99,7 +99,7 @@ type commitCapabilityImportResponse struct {
 // Pure parse for mcp/skill (no DB writes).
 //
 //	@Summary		Preview a capability import
-//	@Description	Pure parse for MCP or Skill imports. Skill zip uploads are downloaded from object storage and validated. Owner/admin only.
+//	@Description	Pure parse for MCP or Skill imports. Skill zip uploads are downloaded from object storage and validated. Members may import Skills; MCP remains owner/admin only.
 //	@Tags			capabilities
 //	@ID				previewDevCapabilityImport
 //	@Accept			json
@@ -108,16 +108,12 @@ type commitCapabilityImportResponse struct {
 //	@Param			body		body	previewCapabilityImportBody		true	"Import preview payload (kind, raw_text or oss_key)"
 //	@Success		200 {object} map[string]interface{} "Parsed canonical spec, warnings, suggested name"
 //	@Failure		400 {object} map[string]string "Missing kind, unknown source_format, or parse error"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
+//	@Failure		403 {object} map[string]string "Caller lacks permission for this capability kind, or oss_key is not owned by this workspace"
 //	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
 //	@Failure		503 {object} map[string]string "Object storage or database not configured"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/import/preview [post]
 func previewCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
-		if !ok {
-			return
-		}
 		var body previewCapabilityImportBody
 		if err := decodeBody(r, &body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -128,13 +124,19 @@ func previewCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) ht
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind is required (mcp|skill)"})
 			return
 		}
+		if kind != string(canonical.KindMCP) && kind != string(canonical.KindSkill) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill)", kind)})
+			return
+		}
+		workspaceID, _, ok := requireWorkspaceCapabilityImport(w, r, runtimeStore, kind)
+		if !ok {
+			return
+		}
 		switch kind {
 		case "mcp":
 			previewMCPOrSkillImport(w, body, parseAsMCP)
 		case "skill":
 			previewSkillImport(r.Context(), w, workspaceID, body, blobStore)
-		default:
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill)", kind)})
 		}
 	}
 }
@@ -324,7 +326,7 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 // is rebuilt from OSS bytes (the on-disk zip is authoritative).
 //
 //	@Summary		Commit a capability import
-//	@Description	Encrypts inline_secrets then runs the whole MCP or Skill import (capability + capability_version + secrets) in a single transaction. For Skill zip imports the canonical_spec is rebuilt from OSS bytes. Owner/admin only.
+//	@Description	Encrypts inline_secrets then runs the whole MCP or Skill import (capability + capability_version + secrets) in a single transaction. For Skill zip imports the canonical_spec is rebuilt from OSS bytes. Members may create workspace-private Skills; MCP remains owner/admin only.
 //	@Tags			capabilities
 //	@ID				commitDevCapabilityImport
 //	@Accept			json
@@ -333,21 +335,13 @@ func previewPluginImport(ctx context.Context, w http.ResponseWriter, workspaceID
 //	@Param			body		body	commitCapabilityImportBody		true	"Import commit payload"
 //	@Success		201 {object} map[string]interface{} "Created capability, version, and secret ids"
 //	@Failure		400 {object} map[string]string "Missing name/kind, unknown kind, or spec rebuild failed"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin, or oss_key not owned by this workspace"
+//	@Failure		403 {object} map[string]string "Caller lacks permission for this capability kind, requests public visibility as a member, or oss_key is not owned by this workspace"
 //	@Failure		500 {object} map[string]string "Secrets service unavailable"
 //	@Failure		502 {object} map[string]string "Failed to fetch uploaded zip from object storage"
 //	@Failure		503 {object} map[string]string "Object storage or database not configured"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/import/commit [post]
 func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceCapabilityAdmin(w, r, runtimeStore)
-		if !ok {
-			return
-		}
-		actorID, ok := devActorID(w, r)
-		if !ok {
-			return
-		}
 		var body commitCapabilityImportBody
 		if err := decodeBody(r, &body); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -363,6 +357,26 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 		}
 		if kind != string(canonical.KindMCP) && kind != string(canonical.KindSkill) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown kind %q (want mcp|skill)", kind)})
+			return
+		}
+		if body.CanonicalSpec.Kind != canonical.Kind(kind) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "canonical_spec.kind must match kind"})
+			return
+		}
+		if bodyType := strings.ToLower(strings.TrimSpace(body.Type)); bodyType != "" && bodyType != kind {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must match kind"})
+			return
+		}
+		workspaceID, isAdmin, ok := requireWorkspaceCapabilityImport(w, r, runtimeStore, kind)
+		if !ok {
+			return
+		}
+		if !isAdmin && strings.EqualFold(strings.TrimSpace(body.Visibility), "public") {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "members may only import workspace-private skills"})
+			return
+		}
+		actorID, ok := devActorID(w, r)
+		if !ok {
 			return
 		}
 
@@ -419,7 +433,7 @@ func commitCapabilityImport(runtimeStore RuntimeStore, blobStore blob.Store) htt
 			Name:          body.Name,
 			Description:   body.Description,
 			Visibility:    body.Visibility,
-			Type:          fallback(body.Type, kind),
+			Type:          kind,
 			CreatorID:     actorID,
 			Version:       body.Version,
 			SourcePayload: sourcePayload,

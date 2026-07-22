@@ -1,26 +1,73 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ExternalLink, File, FileText, Folder, FolderOpen, PackageCheck, Server } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  File,
+  FileText,
+  Folder,
+  FolderOpen,
+  PackageCheck,
+  Server,
+} from "lucide-react"
 
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Skeleton } from "../../../components/ui/skeleton"
-import { marketplaceSourceName, useMarketplaceDetail, useMarketplaceList, type MarketplaceCapability, type MarketplaceCapabilityDetail, type MarketplaceMCPEnvValue, type MarketplaceSkillDetail } from "../../../lib/api-marketplace"
+import {
+  marketplaceSourceName,
+  useMarketplaceDetail,
+  useMarketplaceList,
+  type MarketplaceCapability,
+  type MarketplaceCapabilityDetail,
+  type MarketplaceMCPEnvValue,
+  type MarketplaceSkillDetail,
+} from "../../../lib/api-marketplace"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
 import type { Capability } from "../../../lib/api-types"
+import { MCPDirectory } from "./mcp-directory/MCPDirectory"
 
 interface MarketplaceTabProps {
   itemID: string | null
   query: string
   typeFilter: "mcp" | "skill"
+  canImport: boolean
   onSelectItem: (id: string | null) => void
   onInstall: (capability: MarketplaceCapability) => void
+  onViewCapability: (capabilityID: string) => void
+  onAddToAgent: (capabilityID: string) => void
 }
 
-export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInstall }: MarketplaceTabProps) {
+export function MarketplaceTab(props: MarketplaceTabProps) {
+  const mcpItemID = props.itemID?.startsWith("mcp:") ? props.itemID.slice(4) : null
+  if (mcpItemID !== null || (!props.itemID && props.typeFilter === "mcp")) {
+    return (
+      <MCPDirectory
+        itemID={mcpItemID}
+        query={props.query}
+        canImport={props.canImport}
+        onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
+        onViewCapability={props.onViewCapability}
+        onAddToAgent={props.onAddToAgent}
+      />
+    )
+  }
+  return <SkillMarketplaceTab {...props} />
+}
+
+function SkillMarketplaceTab({
+  itemID,
+  query,
+  typeFilter,
+  onSelectItem,
+  onInstall,
+}: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)
@@ -67,12 +114,18 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
 
       {marketplaceQ.isLoading ? (
         <div className="grid gap-3 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 w-full" />)}
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-32 w-full" />
+          ))}
         </div>
       ) : marketplaceQ.error ? (
         <ErrorState
           title={t("capabilities.marketplace.loadError.title")}
-          description={marketplaceQ.error instanceof Error ? marketplaceQ.error.message : t("capabilities.marketplace.loadError.description")}
+          description={
+            marketplaceQ.error instanceof Error
+              ? marketplaceQ.error.message
+              : t("capabilities.marketplace.loadError.description")
+          }
           onRetry={() => void marketplaceQ.refetch()}
         />
       ) : filtered.length === 0 ? (
@@ -98,7 +151,12 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
   )
 }
 
-function MarketplaceCard({ capability, language, onOpen, onInstall }: {
+function MarketplaceCard({
+  capability,
+  language,
+  onOpen,
+  onInstall,
+}: {
   capability: MarketplaceCapability
   language: string
   onOpen: () => void
@@ -106,7 +164,11 @@ function MarketplaceCard({ capability, language, onOpen, onInstall }: {
 }) {
   const { t } = useTranslation("admin")
   const source = marketplaceSourceName(capability)
-  const count = capability.installed_agent_count ?? capability.enabled_agent_count ?? capability.install_count ?? 0
+  const count =
+    capability.installed_agent_count ??
+    capability.enabled_agent_count ??
+    capability.install_count ??
+    0
   return (
     <div className="rounded-lg border border-line bg-surface p-4 transition hover:border-line-strong hover:shadow-sm">
       <button type="button" className="w-full text-left" onClick={onOpen}>
@@ -115,20 +177,44 @@ function MarketplaceCard({ capability, language, onOpen, onInstall }: {
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-medium text-fg">{capability.name}</h3>
               <CapabilityTypeBadge type={capability.type} />
-              {capability.self_published && <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge>}
-              {!capability.self_published && capability.installed && <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge>}
+              {capability.self_published && (
+                <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge>
+              )}
+              {!capability.self_published && capability.installed && (
+                <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge>
+              )}
             </div>
-            {source && <p className="mt-1 text-sm text-fg-subtle">{t("capabilities.marketplace.card.source", { source })}</p>}
+            {source && (
+              <p className="mt-1 text-sm text-fg-subtle">
+                {t("capabilities.marketplace.card.source", { source })}
+              </p>
+            )}
           </div>
           <ArrowRight className="mt-1 h-3.5 w-3.5 text-fg-faint" />
         </div>
-        {capability.description && <p className="mt-3 line-clamp-2 text-sm leading-5 text-fg-muted">{capability.description}</p>}
+        {capability.description && (
+          <p className="mt-3 line-clamp-2 text-sm leading-5 text-fg-muted">
+            {capability.description}
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-fg-subtle">
-          <span>{t("capabilities.marketplace.card.latest", { version: capability.latest_version ?? "—" })}</span>
+          <span>
+            {t("capabilities.marketplace.card.latest", {
+              version: capability.latest_version ?? "—",
+            })}
+          </span>
           <span>·</span>
           <span>{t("capabilities.marketplace.card.added", { count })}</span>
           <span>·</span>
-          <span>{t("capabilities.marketplace.card.credential", { kind: requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none")) })}</span>
+          <span>
+            {t("capabilities.marketplace.card.credential", {
+              kind: requiredCredentialsLabel(
+                capability.required_credentials,
+                language,
+                t("capabilities.credentials.none"),
+              ),
+            })}
+          </span>
         </div>
       </button>
       <div className="mt-4 flex justify-end">
@@ -144,7 +230,12 @@ function MarketplaceCard({ capability, language, onOpen, onInstall }: {
   )
 }
 
-function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
+function MarketplaceItemDetail({
+  capability,
+  language,
+  onBack,
+  onInstall,
+}: {
   capability: MarketplaceCapability
   language: string
   onBack: () => void
@@ -166,12 +257,34 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
           <h3 className="text-lg font-semibold text-fg">{capability.name}</h3>
           <CapabilityTypeBadge type={capability.type} />
         </div>
-        {source && <p className="mt-2 text-sm text-fg-subtle">{t("capabilities.marketplace.card.source", { source })}</p>}
-        {capability.description && <p className="mt-4 text-sm leading-5 text-fg-muted">{capability.description}</p>}
+        {source && (
+          <p className="mt-2 text-sm text-fg-subtle">
+            {t("capabilities.marketplace.card.source", { source })}
+          </p>
+        )}
+        {capability.description && (
+          <p className="mt-4 text-sm leading-5 text-fg-muted">{capability.description}</p>
+        )}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <Detail label={t("capabilities.table.latestVersion")} value={capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")} mono />
-          <Detail label={t("capabilities.table.credentials")} value={requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))} />
-          <Detail label={t("capabilities.marketplace.detail.addedCount")} value={String(capability.install_count ?? capability.installed_workspace_count ?? 0)} />
+          <Detail
+            label={t("capabilities.table.latestVersion")}
+            value={
+              capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")
+            }
+            mono
+          />
+          <Detail
+            label={t("capabilities.table.credentials")}
+            value={requiredCredentialsLabel(
+              capability.required_credentials,
+              language,
+              t("capabilities.credentials.none"),
+            )}
+          />
+          <Detail
+            label={t("capabilities.marketplace.detail.addedCount")}
+            value={String(capability.install_count ?? capability.installed_workspace_count ?? 0)}
+          />
         </div>
         {previewable && (
           <div className="mt-5 border-t border-line pt-5">
@@ -205,7 +318,9 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
         )}
         <div className="mt-5 flex justify-end">
           <Button size="sm" disabled={capability.self_published} onClick={onInstall}>
-            {capability.self_published ? t("capabilities.marketplace.card.selfPublished") : t("capabilities.marketplace.card.install")}
+            {capability.self_published
+              ? t("capabilities.marketplace.card.selfPublished")
+              : t("capabilities.marketplace.card.install")}
           </Button>
         </div>
       </div>
@@ -377,7 +492,11 @@ function buildSkillFileTree(paths: string[]): SkillFileTreeNode[] {
   return roots
 }
 
-function SkillFileTree({ paths, selectedPath, onSelect }: {
+function SkillFileTree({
+  paths,
+  selectedPath,
+  onSelect,
+}: {
   paths: string[]
   selectedPath: string
   onSelect: (path: string) => void
@@ -397,7 +516,12 @@ function SkillFileTree({ paths, selectedPath, onSelect }: {
   )
 }
 
-function SkillFileTreeItem({ node, selectedPath, onSelect, depth = 0 }: {
+function SkillFileTreeItem({
+  node,
+  selectedPath,
+  onSelect,
+  depth = 0,
+}: {
   node: SkillFileTreeNode
   selectedPath: string
   onSelect: (path: string) => void
@@ -422,15 +546,16 @@ function SkillFileTreeItem({ node, selectedPath, onSelect, depth = 0 }: {
           <FolderIcon className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
           <span className="truncate text-2xs">{node.name}</span>
         </button>
-        {expanded && node.children.map((child) => (
-          <SkillFileTreeItem
-            key={child.path}
-            node={child}
-            selectedPath={selectedPath}
-            onSelect={onSelect}
-            depth={depth + 1}
-          />
-        ))}
+        {expanded &&
+          node.children.map((child) => (
+            <SkillFileTreeItem
+              key={child.path}
+              node={child}
+              selectedPath={selectedPath}
+              onSelect={onSelect}
+              depth={depth + 1}
+            />
+          ))}
       </div>
     )
   }
@@ -464,7 +589,11 @@ function MCPPreview({ detail }: { detail: MarketplaceCapabilityDetail }) {
         const env = Object.entries(server.env ?? {}).sort(([left], [right]) =>
           left.localeCompare(right),
         )
-        const command = [server.command, ...(server.args ?? [])].map(formatCommandPart).join(" ")
+        const isRemote = server.transport === "streamable-http"
+        const command = [server.command ?? "", ...(server.args ?? [])]
+          .filter(Boolean)
+          .map(formatCommandPart)
+          .join(" ")
         return (
           <div key={server.name} className="overflow-hidden rounded-lg border border-line">
             <div className="flex items-center gap-2 border-b border-line bg-surface-muted/45 px-3 py-2">
@@ -475,40 +604,46 @@ function MCPPreview({ detail }: { detail: MarketplaceCapabilityDetail }) {
             <div className="space-y-4 p-4">
               <div>
                 <p className="text-xs text-fg-subtle">
-                  {t("capabilities.marketplace.detail.command")}
+                  {t(
+                    isRemote
+                      ? "capabilities.mcpDirectory.detail.endpoint"
+                      : "capabilities.marketplace.detail.command",
+                  )}
                 </p>
                 <pre className="mt-1.5 overflow-x-auto rounded-md border border-line bg-surface-emphasis/[0.035] px-3 py-2 font-mono text-xs leading-5 text-fg">
-                  {command}
+                  {isRemote ? server.url : command}
                 </pre>
               </div>
-              <div>
-                <p className="text-xs text-fg-subtle">
-                  {t("capabilities.marketplace.detail.environment")}
-                </p>
-                {env.length === 0 ? (
-                  <p className="mt-1.5 text-xs text-fg-faint">
-                    {t("capabilities.marketplace.detail.noEnvironment")}
+              {!isRemote ? (
+                <div>
+                  <p className="text-xs text-fg-subtle">
+                    {t("capabilities.marketplace.detail.environment")}
                   </p>
-                ) : (
-                  <div className="mt-1.5 divide-y divide-line rounded-md border border-line">
-                    {env.map(([name, value]) => (
-                      <div
-                        key={name}
-                        className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[minmax(120px,0.45fr)_1fr]"
-                      >
-                        <span className="font-mono text-fg-subtle">{name}</span>
-                        <span className="break-all font-mono text-fg">
-                          {formatMCPEnvValue(
-                            value,
-                            t("capabilities.marketplace.detail.redactedSecret"),
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {server.startup_timeout_sec ? (
+                  {env.length === 0 ? (
+                    <p className="mt-1.5 text-xs text-fg-faint">
+                      {t("capabilities.marketplace.detail.noEnvironment")}
+                    </p>
+                  ) : (
+                    <div className="mt-1.5 divide-y divide-line rounded-md border border-line">
+                      {env.map(([name, value]) => (
+                        <div
+                          key={name}
+                          className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[minmax(120px,0.45fr)_1fr]"
+                        >
+                          <span className="font-mono text-fg-subtle">{name}</span>
+                          <span className="break-all font-mono text-fg">
+                            {formatMCPEnvValue(
+                              value,
+                              t("capabilities.marketplace.detail.redactedSecret"),
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              {!isRemote && server.startup_timeout_sec ? (
                 <p className="text-xs text-fg-subtle">
                   {t("capabilities.marketplace.detail.timeout", {
                     seconds: server.startup_timeout_sec,

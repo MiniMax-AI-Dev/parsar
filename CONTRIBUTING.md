@@ -269,6 +269,22 @@ description and keep ownership on the side listed here.
   are committed artifacts, but never the source of truth. Change annotations
   or SQL first, then regenerate.
 
+### Capability marketplace and MCP directory
+
+- The MCP Connector Directory is a repository- or operator-maintained catalog,
+  not a new capability type. Imports become ordinary private `mcp`
+  capabilities through `canonical.Spec`, `Store.ImportCapability`, capability
+  versions, and the existing Agent binding flow.
+- Catalog data lives in `catalog/mcp/catalog.json` or the trusted deployment
+  override `PARSAR_MCP_CATALOG_URL`. It is validated and cached in memory; do
+  not add a connector catalog table or accept catalog URLs from API requests.
+- Import saves configuration only. It must not execute a command, create empty
+  secrets, bind an Agent, or trust client-submitted command/args/env fields.
+- Catalog provenance belongs in `capability_version.source_payload` using
+  `source_format=mcp_catalog`, stable `catalog_id`, `catalog_version`, and
+  `catalog_source`. Installation state uses that provenance, never a name
+  comparison.
+
 ## Code quality & architecture
 
 Parsar favors small, single-purpose files and reused helpers over growing

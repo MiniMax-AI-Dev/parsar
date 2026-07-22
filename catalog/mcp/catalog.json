@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-22T06:52:30Z",
+  "items": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem",
+      "description": "Read and write files within directories explicitly exposed to the MCP server.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Developer Tools", "Files"],
+      "popularity_rank": 1,
+      "version": "2026.7.10",
+      "transport": "stdio",
+      "server": {
+        "name": "filesystem",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem@2026.7.10",
+          "."
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright",
+      "description": "Automate browser navigation and interaction through structured accessibility snapshots.",
+      "publisher": {
+        "name": "Microsoft",
+        "url": "https://github.com/microsoft"
+      },
+      "icon_url": "https://github.com/microsoft.png?size=128",
+      "homepage_url": "https://playwright.dev",
+      "repository_url": "https://github.com/microsoft/playwright-mcp",
+      "verified": true,
+      "categories": ["Developer Tools", "Browser Automation"],
+      "popularity_rank": 2,
+      "version": "0.0.78",
+      "transport": "stdio",
+      "server": {
+        "name": "playwright",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@playwright/mcp@0.0.78",
+          "--headless"
+        ],
+        "env": {},
+        "startup_timeout_sec": 60
+      }
+    },
+    {
+      "id": "context7",
+      "name": "Context7",
+      "description": "Retrieve current library documentation and code examples for coding workflows.",
+      "publisher": {
+        "name": "Upstash",
+        "url": "https://github.com/upstash"
+      },
+      "icon_url": "https://github.com/upstash.png?size=128",
+      "homepage_url": "https://context7.com",
+      "repository_url": "https://github.com/upstash/context7",
+      "verified": true,
+      "categories": ["Developer Tools", "Documentation"],
+      "popularity_rank": 3,
+      "version": "3.2.4",
+      "transport": "stdio",
+      "server": {
+        "name": "context7",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@upstash/context7-mcp@3.2.4"
+        ],
+        "env": {
+          "CONTEXT7_API_KEY": ""
+        },
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "fetch",
+      "name": "Fetch",
+      "description": "Fetch web content and convert it into a model-friendly representation.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Web", "Research"],
+      "popularity_rank": 4,
+      "version": "2026.7.10",
+      "transport": "stdio",
+      "server": {
+        "name": "fetch",
+        "command": "uvx",
+        "args": [
+          "--from",
+          "mcp-server-fetch==2026.7.10",
+          "mcp-server-fetch"
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "description": "Inspect, search, and modify Git repositories available in the configured working directory.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Developer Tools", "Version Control"],
+      "popularity_rank": 5,
+      "version": "2026.7.10",
+      "transport": "stdio",
+      "server": {
+        "name": "git",
+        "command": "uvx",
+        "args": [
+          "--from",
+          "mcp-server-git==2026.7.10",
+          "mcp-server-git",
+          "--repository",
+          "."
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "description": "Store and retrieve persistent knowledge through a local knowledge graph.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Productivity", "Knowledge"],
+      "popularity_rank": 6,
+      "version": "2026.7.4",
+      "transport": "stdio",
+      "server": {
+        "name": "memory",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-memory@2026.7.4"
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "time",
+      "name": "Time",
+      "description": "Get the current time and convert values between IANA time zones.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Productivity", "Utilities"],
+      "popularity_rank": 7,
+      "version": "2026.7.10",
+      "transport": "stdio",
+      "server": {
+        "name": "time",
+        "command": "uvx",
+        "args": [
+          "--from",
+          "mcp-server-time==2026.7.10",
+          "mcp-server-time"
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "sequential-thinking",
+      "name": "Sequential Thinking",
+      "description": "Break complex problems into explicit, revisable reasoning steps.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Developer Tools", "Reasoning"],
+      "popularity_rank": 8,
+      "version": "2026.7.4",
+      "transport": "stdio",
+      "server": {
+        "name": "sequential-thinking",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking@2026.7.4"
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "everything",
+      "name": "Everything",
+      "description": "Exercise MCP tools, resources, prompts, sampling, and other protocol features for client testing.",
+      "publisher": {
+        "name": "Model Context Protocol",
+        "url": "https://github.com/modelcontextprotocol"
+      },
+      "icon_url": "https://avatars.githubusercontent.com/u/182288589?s=128&v=4",
+      "homepage_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
+      "repository_url": "https://github.com/modelcontextprotocol/servers",
+      "verified": true,
+      "categories": ["Developer Tools", "Testing"],
+      "popularity_rank": 9,
+      "version": "2026.7.4",
+      "transport": "stdio",
+      "server": {
+        "name": "everything",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-everything@2026.7.4"
+        ],
+        "env": {},
+        "startup_timeout_sec": 30
+      }
+    },
+    {
+      "id": "cloudflare-docs",
+      "name": "Cloudflare Documentation",
+      "description": "Search Cloudflare product documentation and retrieve current implementation guidance.",
+      "publisher": {
+        "name": "Cloudflare",
+        "url": "https://www.cloudflare.com"
+      },
+      "icon_url": "https://github.com/cloudflare.png?size=128",
+      "homepage_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+      "repository_url": "https://github.com/cloudflare/mcp-server-cloudflare",
+      "verified": true,
+      "categories": ["Documentation", "Cloud"],
+      "popularity_rank": 10,
+      "version": "0.4.9",
+      "transport": "streamable-http",
+      "server": {
+        "name": "cloudflare-docs",
+        "url": "https://docs.mcp.cloudflare.com/mcp"
+      }
+    },
+    {
+      "id": "microsoft-learn",
+      "name": "Microsoft Learn",
+      "description": "Search official Microsoft technical documentation and code samples.",
+      "publisher": {
+        "name": "Microsoft",
+        "url": "https://www.microsoft.com"
+      },
+      "icon_url": "https://github.com/MicrosoftDocs.png?size=128",
+      "homepage_url": "https://github.com/MicrosoftDocs/mcp",
+      "repository_url": "https://github.com/MicrosoftDocs/mcp",
+      "verified": true,
+      "categories": ["Documentation", "Developer Tools"],
+      "popularity_rank": 11,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "microsoft-learn",
+        "url": "https://learn.microsoft.com/api/mcp"
+      }
+    },
+    {
+      "id": "aws-knowledge",
+      "name": "AWS Knowledge",
+      "description": "Search AWS documentation, API references, architecture guidance, and service information.",
+      "publisher": {
+        "name": "Amazon Web Services",
+        "url": "https://aws.amazon.com"
+      },
+      "icon_url": "https://github.com/awslabs.png?size=128",
+      "homepage_url": "https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server",
+      "repository_url": "https://github.com/awslabs/mcp",
+      "verified": true,
+      "categories": ["Documentation", "Cloud"],
+      "popularity_rank": 12,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "aws-knowledge",
+        "url": "https://knowledge-mcp.global.api.aws"
+      }
+    },
+    {
+      "id": "deepwiki",
+      "name": "DeepWiki",
+      "description": "Read public GitHub repositories as generated documentation and ask repository questions.",
+      "publisher": {
+        "name": "Cognition",
+        "url": "https://www.cognition.ai"
+      },
+      "icon_url": "https://deepwiki.com/favicon.ico",
+      "homepage_url": "https://docs.devin.ai/work-with-devin/deepwiki-mcp",
+      "verified": true,
+      "categories": ["Documentation", "Version Control"],
+      "popularity_rank": 13,
+      "version": "2.14.3",
+      "transport": "streamable-http",
+      "server": {
+        "name": "deepwiki",
+        "url": "https://mcp.deepwiki.com/mcp"
+      }
+    },
+    {
+      "id": "agent-web",
+      "name": "Agent Web",
+      "description": "Read public web pages as clean model-ready content while respecting robots.txt.",
+      "publisher": {
+        "name": "Foomworks",
+        "url": "https://github.com/foomworks"
+      },
+      "icon_url": "https://github.com/foomworks.png?size=128",
+      "homepage_url": "https://agent-web.foomworks.workers.dev",
+      "repository_url": "https://github.com/foomworks/agent-web",
+      "verified": false,
+      "categories": ["Web", "Research"],
+      "popularity_rank": 14,
+      "version": "0.2.1",
+      "transport": "streamable-http",
+      "server": {
+        "name": "agent-web",
+        "url": "https://agent-web.foomworks.workers.dev/mcp"
+      }
+    },
+    {
+      "id": "arxiv",
+      "name": "arXiv",
+      "description": "Search arXiv papers, retrieve metadata, and inspect available full text.",
+      "publisher": {
+        "name": "cyanheads",
+        "url": "https://github.com/cyanheads"
+      },
+      "icon_url": "https://github.com/cyanheads.png?size=128",
+      "homepage_url": "https://github.com/cyanheads/arxiv-mcp-server",
+      "repository_url": "https://github.com/cyanheads/arxiv-mcp-server",
+      "verified": false,
+      "categories": ["Research", "Science"],
+      "popularity_rank": 15,
+      "version": "1.2.15",
+      "transport": "streamable-http",
+      "server": {
+        "name": "arxiv",
+        "url": "https://arxiv.caseyjhand.com/mcp"
+      }
+    },
+    {
+      "id": "pubmed",
+      "name": "PubMed",
+      "description": "Search biomedical literature and retrieve article metadata, citations, and available full text.",
+      "publisher": {
+        "name": "cyanheads",
+        "url": "https://github.com/cyanheads"
+      },
+      "icon_url": "https://github.com/cyanheads.png?size=128",
+      "homepage_url": "https://github.com/cyanheads/pubmed-mcp-server",
+      "repository_url": "https://github.com/cyanheads/pubmed-mcp-server",
+      "verified": false,
+      "categories": ["Research", "Health"],
+      "popularity_rank": 16,
+      "version": "2.9.8",
+      "transport": "streamable-http",
+      "server": {
+        "name": "pubmed",
+        "url": "https://pubmed.caseyjhand.com/mcp"
+      }
+    },
+    {
+      "id": "us-weather",
+      "name": "US Weather",
+      "description": "Get United States forecasts, active alerts, and current observations from public weather data.",
+      "publisher": {
+        "name": "cyanheads",
+        "url": "https://github.com/cyanheads"
+      },
+      "icon_url": "https://github.com/cyanheads.png?size=128",
+      "homepage_url": "https://github.com/cyanheads/nws-weather-mcp-server",
+      "repository_url": "https://github.com/cyanheads/nws-weather-mcp-server",
+      "verified": false,
+      "categories": ["Utilities", "Weather"],
+      "popularity_rank": 17,
+      "version": "0.7.2",
+      "transport": "streamable-http",
+      "server": {
+        "name": "us-weather",
+        "url": "https://nws.caseyjhand.com/mcp"
+      }
+    },
+    {
+      "id": "mdn-search",
+      "name": "MDN Search",
+      "description": "Search MDN Web Docs for browser APIs, JavaScript, CSS, and HTML guidance.",
+      "publisher": {
+        "name": "PipeWorx",
+        "url": "https://pipeworx.io"
+      },
+      "icon_url": "https://github.com/pipeworx-io.png?size=128",
+      "homepage_url": "https://pipeworx.io/packs/mdn-search",
+      "repository_url": "https://github.com/pipeworx-io/mcp-mdn-search",
+      "verified": false,
+      "categories": ["Documentation", "Web"],
+      "popularity_rank": 18,
+      "version": "0.1.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "mdn-search",
+        "url": "https://gateway.pipeworx.io/mdn-search/mcp"
+      }
+    },
+    {
+      "id": "npm-registry",
+      "name": "npm Registry",
+      "description": "Look up public npm packages, versions, metadata, maintainers, and download information.",
+      "publisher": {
+        "name": "PipeWorx",
+        "url": "https://pipeworx.io"
+      },
+      "icon_url": "https://github.com/pipeworx-io.png?size=128",
+      "homepage_url": "https://pipeworx.io/packs/npm",
+      "repository_url": "https://github.com/pipeworx-io/mcp-npm",
+      "verified": false,
+      "categories": ["Developer Tools", "Packages"],
+      "popularity_rank": 19,
+      "version": "0.1.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "npm-registry",
+        "url": "https://gateway.pipeworx.io/npm/mcp"
+      }
+    },
+    {
+      "id": "docker-hub",
+      "name": "Docker Hub",
+      "description": "Search public Docker Hub repositories, tags, image metadata, and pull statistics.",
+      "publisher": {
+        "name": "PipeWorx",
+        "url": "https://pipeworx.io"
+      },
+      "icon_url": "https://github.com/pipeworx-io.png?size=128",
+      "homepage_url": "https://pipeworx.io/packs/dockerhub",
+      "repository_url": "https://github.com/pipeworx-io/mcp-dockerhub",
+      "verified": false,
+      "categories": ["Developer Tools", "Containers"],
+      "popularity_rank": 20,
+      "version": "0.1.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "docker-hub",
+        "url": "https://gateway.pipeworx.io/dockerhub/mcp"
+      }
+    },
+    {
+      "id": "wikipedia",
+      "name": "Wikipedia",
+      "description": "Search Wikipedia and retrieve public article summaries and page content.",
+      "publisher": {
+        "name": "PipeWorx",
+        "url": "https://pipeworx.io"
+      },
+      "icon_url": "https://github.com/pipeworx-io.png?size=128",
+      "homepage_url": "https://pipeworx.io/packs/wikipedia",
+      "repository_url": "https://github.com/pipeworx-io/mcp-wikipedia",
+      "verified": false,
+      "categories": ["Research", "Knowledge"],
+      "popularity_rank": 21,
+      "version": "0.1.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "wikipedia",
+        "url": "https://gateway.pipeworx.io/wikipedia/mcp"
+      }
+    }
+  ]
+}

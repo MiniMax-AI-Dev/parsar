@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiRequest, noUnreachableRetry } from "./api-client"
-import { KEY_AGENT_CAPABILITIES, KEY_CAPABILITIES_WORKSPACE, KEY_CAPABILITY_VERSIONS } from "./api-capabilities"
+import {
+  KEY_AGENT_CAPABILITIES,
+  KEY_CAPABILITIES_WORKSPACE,
+  KEY_CAPABILITY_VERSIONS,
+} from "./api-capabilities"
 import type { Capability } from "./api-types"
 
 export interface MarketplaceCapability extends Capability {
@@ -58,7 +62,9 @@ export interface MarketplaceMCPDetail {
 
 export interface MarketplaceMCPServer {
   name: string
-  command: string
+  transport?: "stdio" | "streamable-http"
+  url?: string
+  command?: string
   args?: string[]
   env?: Record<string, MarketplaceMCPEnvValue>
   startup_timeout_sec?: number
@@ -91,6 +97,46 @@ export interface EnabledMarketplaceAgent {
   version?: string
 }
 
+export interface MCPDirectoryPublisher {
+  name: string
+  url: string
+}
+
+export interface MCPDirectoryItem {
+  id: string
+  name: string
+  description: string
+  publisher: MCPDirectoryPublisher
+  icon_url?: string
+  homepage_url?: string
+  repository_url?: string
+  verified: boolean
+  categories: string[]
+  popularity_rank: number
+  version: string
+  transport: "stdio" | "streamable-http"
+  url?: string
+  command?: string
+  args?: string[]
+  env?: string[]
+  startup_timeout_sec?: number
+  installed: boolean
+  installed_capability_id: string | null
+}
+
+export interface MCPDirectoryListResponse {
+  items: MCPDirectoryItem[]
+  updated_at: string
+  source: "builtin" | "remote"
+}
+
+export interface MCPDirectoryImportResponse {
+  installed: boolean
+  capability_id: string
+  created: boolean
+  capability?: Capability
+}
+
 interface MarketplaceListResponse {
   capabilities?: MarketplaceCapability[]
   marketplace?: MarketplaceCapability[]
@@ -118,12 +164,20 @@ interface EnabledAgentsResponse {
   items?: EnabledMarketplaceAgent[]
 }
 
-export const KEY_MARKETPLACE_LIST = (workspaceID: string) => ["admin", "capabilityMarketplace", workspaceID] as const
+export const KEY_MARKETPLACE_LIST = (workspaceID: string) =>
+  ["admin", "capabilityMarketplace", workspaceID] as const
 export const KEY_MARKETPLACE_DETAIL = (workspaceID: string, capabilityID: string) =>
   ["admin", "capabilityMarketplaceDetail", workspaceID, capabilityID] as const
-export const KEY_TARGET_MARKETPLACE_INSTALLS = (workspaceID: string) => ["admin", "targetMarketplaceInstalls", workspaceID] as const
-export const KEY_INSTALL_COUNT = (workspaceID: string, capabilityID: string) => ["admin", "capabilityInstallCount", workspaceID, capabilityID] as const
-export const KEY_MARKETPLACE_ENABLED_AGENTS = (workspaceID: string, capabilityID: string) => ["admin", "marketplaceEnabledAgents", workspaceID, capabilityID] as const
+export const KEY_TARGET_MARKETPLACE_INSTALLS = (workspaceID: string) =>
+  ["admin", "targetMarketplaceInstalls", workspaceID] as const
+export const KEY_INSTALL_COUNT = (workspaceID: string, capabilityID: string) =>
+  ["admin", "capabilityInstallCount", workspaceID, capabilityID] as const
+export const KEY_MARKETPLACE_ENABLED_AGENTS = (workspaceID: string, capabilityID: string) =>
+  ["admin", "marketplaceEnabledAgents", workspaceID, capabilityID] as const
+export const KEY_MCP_DIRECTORY = (workspaceID: string) =>
+  ["admin", "mcpDirectory", workspaceID] as const
+export const KEY_MCP_DIRECTORY_DETAIL = (workspaceID: string, catalogID: string) =>
+  ["admin", "mcpDirectoryDetail", workspaceID, catalogID] as const
 
 async function listMarketplace(workspaceID: string | null): Promise<MarketplaceCapability[]> {
   if (!workspaceID) return []
@@ -132,7 +186,9 @@ async function listMarketplace(workspaceID: string | null): Promise<MarketplaceC
     { query: { workspace_id: workspaceID } },
   )
   if (Array.isArray(data)) return data
-  return (data.capabilities ?? data.marketplace ?? data.items ?? []).map(normalizeMarketplaceCapability)
+  return (data.capabilities ?? data.marketplace ?? data.items ?? []).map(
+    normalizeMarketplaceCapability,
+  )
 }
 
 async function getMarketplaceDetail(
@@ -152,11 +208,16 @@ async function listTargetInstalls(workspaceID: string | null): Promise<TargetMar
   const data = await apiRequest<TargetInstallsResponse | TargetMarketplaceInstall[]>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/marketplace-installs`,
   )
-  const items = Array.isArray(data) ? data : data.capabilities ?? data.installs ?? data.items ?? []
+  const items = Array.isArray(data)
+    ? data
+    : (data.capabilities ?? data.installs ?? data.items ?? [])
   return items.map(normalizeMarketplaceInstall)
 }
 
-async function getInstallCount(workspaceID: string | null, capabilityID: string | null): Promise<number> {
+async function getInstallCount(
+  workspaceID: string | null,
+  capabilityID: string | null,
+): Promise<number> {
   if (!workspaceID || !capabilityID) return 0
   const data = await apiRequest<InstallCountResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/install-count`,
@@ -164,18 +225,54 @@ async function getInstallCount(workspaceID: string | null, capabilityID: string 
   return data.install_count ?? data.workspace_count ?? data.count ?? 0
 }
 
-async function listEnabledAgents(workspaceID: string | null, capabilityID: string | null): Promise<EnabledMarketplaceAgent[]> {
+async function listEnabledAgents(
+  workspaceID: string | null,
+  capabilityID: string | null,
+): Promise<EnabledMarketplaceAgent[]> {
   if (!workspaceID || !capabilityID) return []
   const data = await apiRequest<EnabledAgentsResponse | EnabledMarketplaceAgent[]>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/enabled-agents`,
   )
-  const items = Array.isArray(data) ? data : data.agents ?? data.items ?? []
+  const items = Array.isArray(data) ? data : (data.agents ?? data.items ?? [])
   return items.map(normalizeEnabledAgent)
+}
+
+async function listMCPDirectory(workspaceID: string | null): Promise<MCPDirectoryListResponse> {
+  if (!workspaceID) return { items: [], updated_at: "", source: "builtin" }
+  return apiRequest<MCPDirectoryListResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory`,
+  )
+}
+
+async function getMCPDirectoryItem(
+  workspaceID: string | null,
+  catalogID: string | null,
+): Promise<MCPDirectoryItem> {
+  if (!workspaceID || !catalogID) throw new Error("workspace and catalog item are required")
+  return apiRequest<MCPDirectoryItem>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}`,
+  )
+}
+
+async function importMCPDirectoryItem(
+  workspaceID: string,
+  catalogID: string,
+): Promise<MCPDirectoryImportResponse> {
+  return apiRequest<MCPDirectoryImportResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/import`,
+    { method: "POST" },
+  )
 }
 
 function normalizeMarketplaceCapability(item: MarketplaceCapability): MarketplaceCapability {
   const id = item.id ?? item.capability_id ?? ""
-  return { ...item, id, latest_version: item.latest_version ?? item.latest_published_version, created_at: item.created_at ?? item.latest_version_created_at, updated_at: item.updated_at ?? item.latest_version_created_at }
+  return {
+    ...item,
+    id,
+    latest_version: item.latest_version ?? item.latest_published_version,
+    created_at: item.created_at ?? item.latest_version_created_at,
+    updated_at: item.updated_at ?? item.latest_version_created_at,
+  }
 }
 
 function normalizeMarketplaceInstall(item: TargetMarketplaceInstall): TargetMarketplaceInstall {
@@ -186,7 +283,11 @@ function normalizeEnabledAgent(item: EnabledMarketplaceAgent): EnabledMarketplac
   return { ...item, name: item.name ?? item.agent_name ?? "—" }
 }
 
-async function postWorkspaceCapability(workspaceID: string, capabilityID: string, action: "publish" | "unpublish" | "deprecate" | "undeprecate") {
+async function postWorkspaceCapability(
+  workspaceID: string,
+  capabilityID: string,
+  action: "publish" | "unpublish" | "deprecate" | "undeprecate",
+) {
   return apiRequest<Capability>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/${action}`,
     { method: "POST" },
@@ -207,7 +308,12 @@ async function deleteWorkspaceCapability(workspaceID: string, capabilityID: stri
   )
 }
 
-async function upgradeCapability(workspaceID: string, agentID: string, capabilityID: string, versionID: string) {
+async function upgradeCapability(
+  workspaceID: string,
+  agentID: string,
+  capabilityID: string,
+  versionID: string,
+) {
   return apiRequest(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/agents/${encodeURIComponent(agentID)}/capabilities/${encodeURIComponent(capabilityID)}/upgrade`,
     { method: "POST", body: { new_version_id: versionID } },
@@ -252,7 +358,10 @@ export function useInstallCount(workspaceID: string | null, capabilityID: string
   })
 }
 
-export function useMarketplaceEnabledAgents(workspaceID: string | null, capabilityID: string | null) {
+export function useMarketplaceEnabledAgents(
+  workspaceID: string | null,
+  capabilityID: string | null,
+) {
   return useQuery({
     queryKey: KEY_MARKETPLACE_ENABLED_AGENTS(workspaceID ?? "_none", capabilityID ?? "_none"),
     queryFn: () => listEnabledAgents(workspaceID, capabilityID),
@@ -262,19 +371,82 @@ export function useMarketplaceEnabledAgents(workspaceID: string | null, capabili
   })
 }
 
-function invalidateMarketplace(qc: ReturnType<typeof useQueryClient>, workspaceID: string | null, capabilityID?: string) {
+export function useMCPDirectory(workspaceID: string | null) {
+  return useQuery({
+    queryKey: KEY_MCP_DIRECTORY(workspaceID ?? "_none"),
+    queryFn: () => listMCPDirectory(workspaceID),
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
+export function useMCPDirectoryDetail(workspaceID: string | null, catalogID: string | null) {
+  return useQuery({
+    queryKey: KEY_MCP_DIRECTORY_DETAIL(workspaceID ?? "_none", catalogID ?? "_none"),
+    queryFn: () => getMCPDirectoryItem(workspaceID, catalogID),
+    enabled: !!workspaceID && !!catalogID,
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
+export function useImportMCPDirectoryItem(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (catalogID: string) => {
+      if (!workspaceID) throw new Error("workspace is required")
+      return importMCPDirectoryItem(workspaceID, catalogID)
+    },
+    retry: noUnreachableRetry,
+    onSuccess: (result, catalogID) => {
+      if (!workspaceID) return
+      qc.setQueryData<MCPDirectoryListResponse>(KEY_MCP_DIRECTORY(workspaceID), (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === catalogID
+                  ? { ...item, installed: true, installed_capability_id: result.capability_id }
+                  : item,
+              ),
+            }
+          : current,
+      )
+      qc.setQueryData<MCPDirectoryItem>(
+        KEY_MCP_DIRECTORY_DETAIL(workspaceID, catalogID),
+        (current) =>
+          current
+            ? { ...current, installed: true, installed_capability_id: result.capability_id }
+            : current,
+      )
+      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID) })
+      void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
+    },
+  })
+}
+
+function invalidateMarketplace(
+  qc: ReturnType<typeof useQueryClient>,
+  workspaceID: string | null,
+  capabilityID?: string,
+) {
   void qc.invalidateQueries({ queryKey: KEY_MARKETPLACE_LIST(workspaceID ?? "_none") })
   void qc.invalidateQueries({ queryKey: KEY_TARGET_MARKETPLACE_INSTALLS(workspaceID ?? "_none") })
   void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID ?? "_none") })
   void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
   if (workspaceID && capabilityID) {
     void qc.invalidateQueries({ queryKey: KEY_INSTALL_COUNT(workspaceID, capabilityID) })
-    void qc.invalidateQueries({ queryKey: KEY_MARKETPLACE_ENABLED_AGENTS(workspaceID, capabilityID) })
+    void qc.invalidateQueries({
+      queryKey: KEY_MARKETPLACE_ENABLED_AGENTS(workspaceID, capabilityID),
+    })
     void qc.invalidateQueries({ queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, capabilityID) })
   }
 }
 
-function useWorkspaceAction(workspaceID: string | null, action: "publish" | "unpublish" | "deprecate" | "undeprecate") {
+function useWorkspaceAction(
+  workspaceID: string | null,
+  action: "publish" | "unpublish" | "deprecate" | "undeprecate",
+) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (capabilityID: string) => {
@@ -351,6 +523,8 @@ export function useUpgrade(workspaceID: string | null, agentID: string | null) {
   })
 }
 
-export function marketplaceSourceName(capability: Partial<MarketplaceCapability | TargetMarketplaceInstall>): string {
+export function marketplaceSourceName(
+  capability: Partial<MarketplaceCapability | TargetMarketplaceInstall>,
+): string {
   return capability.source_workspace_name ?? ""
 }

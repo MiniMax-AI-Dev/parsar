@@ -14,6 +14,7 @@ import (
 // before spawning the app-server child.
 type mcpServerConfig struct {
 	Name    string
+	URL     string
 	Command string
 	Args    []string
 	Env     map[string]string
@@ -49,6 +50,12 @@ func writeCodexMCPConfig(codexHome string, servers map[string]mcpServerConfig) e
 		b.WriteString("[mcp_servers.")
 		b.WriteString(tomlQuoteString(name))
 		b.WriteString("]\n")
+		if srv.URL != "" {
+			b.WriteString(`url = `)
+			b.WriteString(tomlQuoteString(srv.URL))
+			b.WriteString("\n\n")
+			continue
+		}
 		b.WriteString(`command = `)
 		b.WriteString(tomlQuoteString(srv.Command))
 		b.WriteByte('\n')

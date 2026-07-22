@@ -59,6 +59,7 @@ type jsonMCPServer struct {
 	Args              []string          `json:"args"`
 	Env               map[string]string `json:"env"`
 	Environment       map[string]string `json:"environment"`
+	URL               string            `json:"url"`
 	StartupTimeoutSec int               `json:"startup_timeout_sec"`
 	Enabled           *bool             `json:"enabled"`
 	Type              string            `json:"type"`
@@ -104,21 +105,31 @@ func buildMCPResult(servers map[string]jsonMCPServer) (MCPParseResult, error) {
 			warnings = append(warnings, "ignored server with empty name")
 			continue
 		}
-		// Only stdio is modeled; HTTP/SSE servers parse but renderers may fail.
-		if t := strings.ToLower(strings.TrimSpace(srv.Type)); t != "" && t != "stdio" {
-			warnings = append(warnings, fmt.Sprintf("server %q has type=%q which is not supported in v1 (only stdio); the entry will still be parsed but downstream renderers may fail", name, t))
-		}
-		command, args, err := flattenMCPCommand(srv.Command, srv.Args)
+		transport, err := normalizeMCPTransport(srv.Type, srv.URL)
 		if err != nil {
-			return MCPParseResult{}, fmt.Errorf("mcp parse: server %q command: %w", name, err)
+			return MCPParseResult{}, fmt.Errorf("mcp parse: server %q: %w", name, err)
 		}
-		env, envWarnings := mergeMCPEnv(name, srv.Env, srv.Environment)
-		warnings = append(warnings, envWarnings...)
+		var command string
+		var args []string
+		var env map[string]canonical.EnvValue
+		if transport == canonical.MCPTransportStdio {
+			command, args, err = flattenMCPCommand(srv.Command, srv.Args)
+			if err != nil {
+				return MCPParseResult{}, fmt.Errorf("mcp parse: server %q command: %w", name, err)
+			}
+			var envWarnings []string
+			env, envWarnings = mergeMCPEnv(name, srv.Env, srv.Environment)
+			warnings = append(warnings, envWarnings...)
+		} else if srv.Command != nil || len(srv.Args) > 0 || len(srv.Env) > 0 || len(srv.Environment) > 0 {
+			return MCPParseResult{}, fmt.Errorf("mcp parse: server %q: remote HTTP entries must not set command, args, env, or environment", name)
+		}
 		if srv.Enabled != nil && !*srv.Enabled {
 			warnings = append(warnings, fmt.Sprintf("server %q has enabled=false — the parser preserves the entry but the renderer will treat all imported servers as enabled", name))
 		}
 		out.Servers = append(out.Servers, canonical.MCPServer{
 			Name:              name,
+			Transport:         transport,
+			URL:               strings.TrimSpace(srv.URL),
 			Command:           command,
 			Args:              args,
 			Env:               env,
@@ -138,6 +149,27 @@ func buildMCPResult(servers map[string]jsonMCPServer) (MCPParseResult, error) {
 		Warnings:      warnings,
 		SuggestedName: out.Servers[0].Name,
 	}, nil
+}
+
+func normalizeMCPTransport(rawType, rawURL string) (string, error) {
+	t := strings.ToLower(strings.TrimSpace(rawType))
+	hasURL := strings.TrimSpace(rawURL) != ""
+	switch t {
+	case "", canonical.MCPTransportStdio, "local":
+		if hasURL {
+			return canonical.MCPTransportStreamableHTTP, nil
+		}
+		return canonical.MCPTransportStdio, nil
+	case "http", canonical.MCPTransportStreamableHTTP, "remote":
+		if !hasURL {
+			return "", fmt.Errorf("type=%q requires url", t)
+		}
+		return canonical.MCPTransportStreamableHTTP, nil
+	case "sse", "ws", "websocket":
+		return "", fmt.Errorf("type=%q is not supported; use streamable HTTP", t)
+	default:
+		return "", fmt.Errorf("unsupported type=%q", t)
+	}
 }
 
 // flattenMCPCommand normalizes "command" + "args" to a single executable +
@@ -220,6 +252,7 @@ type tomlCodexServer struct {
 	Command           string            `toml:"command"`
 	Args              []string          `toml:"args"`
 	Env               map[string]string `toml:"env"`
+	URL               string            `toml:"url"`
 	StartupTimeoutSec int               `toml:"startup_timeout_sec"`
 }
 
@@ -238,6 +271,7 @@ func parseMCPTOML(raw string) (MCPParseResult, error) {
 			Command:           srv.Command,
 			Args:              srv.Args,
 			Env:               srv.Env,
+			URL:               srv.URL,
 			StartupTimeoutSec: srv.StartupTimeoutSec,
 		}
 	}
