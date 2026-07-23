@@ -279,8 +279,10 @@ export function CapabilitiesPage() {
           itemID={marketplaceItem}
           query={query}
           typeFilter={typeFilter}
+          canImport={isAdmin}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
           onInstall={goToAgentsForCapability}
+          onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
         />
       ) : err ? (
         <ErrorState

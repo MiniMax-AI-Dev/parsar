@@ -682,11 +682,23 @@ func validateMCPSpecPreCommit(m canonical.MCPSpec) error {
 		if strings.TrimSpace(srv.Name) == "" {
 			return fmt.Errorf("server[%d]: name is required", i)
 		}
-		if strings.TrimSpace(srv.Command) == "" {
-			return fmt.Errorf("server %q: command is required", srv.Name)
-		}
 		if srv.StartupTimeoutSec < 0 {
 			return fmt.Errorf("server %q: startup_timeout_sec must be >= 0", srv.Name)
+		}
+		switch srv.EffectiveTransport() {
+		case canonical.MCPTransportStdio:
+			if strings.TrimSpace(srv.Command) == "" {
+				return fmt.Errorf("server %q: command is required", srv.Name)
+			}
+			if strings.TrimSpace(srv.URL) != "" {
+				return fmt.Errorf("server %q: stdio transport must not set url", srv.Name)
+			}
+		case canonical.MCPTransportStreamableHTTP:
+			if err := srv.Validate(); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("server %q: unsupported transport %q", srv.Name, srv.Transport)
 		}
 		for name, value := range srv.Env {
 			if strings.TrimSpace(name) == "" {

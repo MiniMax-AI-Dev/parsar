@@ -2,27 +2,41 @@ package canonical
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
-// MCPSpec carries one or more MCP stdio servers. HTTP transport is not
-// modeled; the import pipeline only accepts stdio.
+const (
+	MCPTransportStdio          = "stdio"
+	MCPTransportStreamableHTTP = "streamable-http"
+)
+
+// MCPSpec carries one or more MCP servers. Existing specs omit transport and
+// therefore continue to resolve as stdio.
 type MCPSpec struct {
 	Servers []MCPServer `json:"servers"`
 }
 
-// MCPServer is one launchable MCP stdio server. Command + Args stay separate
-// because renderers join them differently (Claude Code accepts string or
-// array; OpenCode wants an array).
+// MCPServer is either a launchable stdio process or a streamable HTTP URL.
+// Command + Args stay separate because renderers join them differently.
 //
 // StartupTimeoutSec=0 means "use scaffold default"; preserved because Codex's
 // TOML uses it explicitly.
 type MCPServer struct {
 	Name              string              `json:"name"`
-	Command           string              `json:"command"`
+	Transport         string              `json:"transport,omitempty"`
+	URL               string              `json:"url,omitempty"`
+	Command           string              `json:"command,omitempty"`
 	Args              []string            `json:"args,omitempty"`
 	Env               map[string]EnvValue `json:"env,omitempty"`
 	StartupTimeoutSec int                 `json:"startup_timeout_sec,omitempty"`
+}
+
+func (s MCPServer) EffectiveTransport() string {
+	if strings.TrimSpace(s.Transport) == "" {
+		return MCPTransportStdio
+	}
+	return strings.ToLower(strings.TrimSpace(s.Transport))
 }
 
 // Validate checks structure only — it does NOT resolve cross-table references
@@ -49,11 +63,27 @@ func (s MCPServer) Validate() error {
 	if strings.TrimSpace(s.Name) == "" {
 		return fmt.Errorf("%w: server name is required", ErrInvalidMCP)
 	}
-	if strings.TrimSpace(s.Command) == "" {
-		return fmt.Errorf("%w: server %q: command is required", ErrInvalidMCP, s.Name)
-	}
 	if s.StartupTimeoutSec < 0 {
 		return fmt.Errorf("%w: server %q: startup_timeout_sec must be >= 0", ErrInvalidMCP, s.Name)
+	}
+	switch s.EffectiveTransport() {
+	case MCPTransportStdio:
+		if strings.TrimSpace(s.Command) == "" {
+			return fmt.Errorf("%w: server %q: command is required", ErrInvalidMCP, s.Name)
+		}
+		if strings.TrimSpace(s.URL) != "" {
+			return fmt.Errorf("%w: server %q: stdio transport must not set url", ErrInvalidMCP, s.Name)
+		}
+	case MCPTransportStreamableHTTP:
+		parsed, err := url.Parse(strings.TrimSpace(s.URL))
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
+			return fmt.Errorf("%w: server %q: streamable-http url must be an http or https URL without embedded credentials", ErrInvalidMCP, s.Name)
+		}
+		if strings.TrimSpace(s.Command) != "" || len(s.Args) > 0 || len(s.Env) > 0 {
+			return fmt.Errorf("%w: server %q: streamable-http transport must not set command, args, or env", ErrInvalidMCP, s.Name)
+		}
+	default:
+		return fmt.Errorf("%w: server %q: unsupported transport %q", ErrInvalidMCP, s.Name, s.Transport)
 	}
 	for name, value := range s.Env {
 		if strings.TrimSpace(name) == "" {

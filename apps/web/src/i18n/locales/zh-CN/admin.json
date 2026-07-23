@@ -888,6 +888,60 @@
         "description": "后端返回错误。"
       }
     },
+    "mcpDirectory": {
+      "title": "连接器",
+      "description": "浏览经过筛选的托管 MCP 服务，并将配置导入当前工作区。",
+      "verified": "已验证",
+      "securityNotice": "导入只会保存配置，不会立即运行。启用并绑定 Agent 后，该 MCP 才可能在 Runtime 中执行。",
+      "source": {
+        "builtin": "内置目录"
+      },
+      "filters": {
+        "category": "连接器分类",
+        "allCategories": "全部分类",
+        "verified": "仅已验证",
+        "sort": "连接器排序"
+      },
+      "sort": {
+        "featured": "精选优先",
+        "name": "名称"
+      },
+      "actions": {
+        "import": "导入",
+        "installed": "已安装",
+        "back": "返回连接器列表",
+        "viewCapability": "查看 Capability"
+      },
+      "loadError": {
+        "title": "无法加载连接器目录",
+        "description": "无法加载连接器目录，部分连接器信息可能缺失。你可以直接重试，不会影响 Skill 市场和工作区 Capability。"
+      },
+      "empty": {
+        "title": "没有符合筛选条件的连接器",
+        "description": "请更换搜索词，或清除分类和已验证筛选。"
+      },
+      "detail": {
+        "loadError": "无法加载连接器详情",
+        "notFound": "未找到该连接器",
+        "version": "版本",
+        "transport": "传输方式",
+        "endpoint": "远程地址",
+        "authentication": "鉴权",
+        "noAuthentication": "无需鉴权",
+        "publisher": "发布者",
+        "homepage": "主页",
+        "repository": "代码仓库",
+        "openLink": "打开链接"
+      },
+      "import": {
+        "title": "导入 {{name}}？",
+        "description": "请检查连接器配置。导入时不需要 Token，也不会运行 MCP 或绑定 Agent。",
+        "success": "已将 {{name}} 导入为工作区 MCP Capability。",
+        "failed": "无法导入该连接器。",
+        "importing": "正在导入...",
+        "cancel": "取消"
+      }
+    },
     "marketplaceDetail": {
       "badge": "来自市场",
       "notFound": {
