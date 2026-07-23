@@ -4697,8 +4697,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Toggles a runtime-injected built-in on/off for one agent. Only
-        the agent creator may change it. The key must be a known built-in.
+      description: Toggles a runtime-injected built-in on/off for one agent. Workspace
+        owners, admins, and members may change it. The key must be a known built-in.
       operationId: setDevAgentBuiltinCapability
       parameters:
       - description: Workspace UUID
@@ -4737,7 +4737,7 @@ paths:
               type: string
             type: object
         "403":
-          description: Not agent creator
+          description: Caller is a viewer or non-member
           schema:
             additionalProperties:
               type: string
@@ -4814,7 +4814,8 @@ paths:
       consumes:
       - application/json
       description: Swaps the agent's binding to a new version of the same capability,
-        optionally flipping the pinning mode at the same time. Agent creator only.
+        optionally flipping the pinning mode at the same time. Workspace owner, admin,
+        or member only.
       operationId: upgradeDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -4853,7 +4854,7 @@ paths:
               type: string
             type: object
         "403":
-          description: Not agent creator
+          description: Caller is a viewer or non-member
           schema:
             additionalProperties:
               type: string
@@ -4875,8 +4876,8 @@ paths:
       - capabilities
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}:
     delete:
-      description: Removes the given capability version from the agent. Agent creator
-        only.
+      description: Removes the given capability version from the agent. Workspace
+        owner, admin, or member only.
       operationId: deleteDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -4906,7 +4907,7 @@ paths:
               type: string
             type: object
         "403":
-          description: Not agent creator
+          description: Caller is a viewer or non-member
           schema:
             additionalProperties:
               type: string
@@ -4931,8 +4932,8 @@ paths:
       consumes:
       - application/json
       description: Enables (installs) a capability version on the agent. Cross-workspace
-        enable requires the source capability to be public and non-deprecated. Agent
-        creator only.
+        enable requires the source capability to be public and non-deprecated. Workspace
+        owner, admin, or member only.
       operationId: enableDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -4971,7 +4972,8 @@ paths:
               type: string
             type: object
         "403":
-          description: Not agent creator, or marketplace capability unavailable
+          description: Caller is a viewer/non-member, or marketplace capability is
+            unavailable
           schema:
             additionalProperties:
               type: string
