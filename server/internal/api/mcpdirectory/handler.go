@@ -81,6 +81,10 @@ type importResponse struct {
 	CapabilityID string `json:"capability_id"`
 }
 
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
 type sourcePayload struct {
 	SourceFormat   string `json:"source_format"`
 	CatalogID      string `json:"catalog_id"`
@@ -104,10 +108,10 @@ func RegisterRoutes(r chi.Router, deps Deps) {
 //	@Produce	json
 //	@Param		workspaceID path string true "workspace id"
 //	@Success	200 {object} listResponse
-//	@Failure	400 {object} map[string]string
-//	@Failure	401 {object} map[string]string
-//	@Failure	403 {object} map[string]string
-//	@Failure	503 {object} map[string]string
+//	@Failure	400 {object} errorResponse
+//	@Failure	401 {object} errorResponse
+//	@Failure	403 {object} errorResponse
+//	@Failure	503 {object} errorResponse
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory [get]
 func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := h.authorize(w, r, false)
@@ -142,8 +146,8 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 //	@Param		workspaceID path string true "workspace id"
 //	@Param		catalogID path string true "catalog item id"
 //	@Success	200 {object} itemResponse
-//	@Failure	400 {object} map[string]string
-//	@Failure	404 {object} map[string]string
+//	@Failure	400 {object} errorResponse
+//	@Failure	404 {object} errorResponse
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID} [get]
 func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := h.authorize(w, r, false)
@@ -178,10 +182,10 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 //	@Param		catalogID path string true "catalog item id"
 //	@Success	200 {object} importResponse "already installed"
 //	@Success	201 {object} importResponse "imported"
-//	@Failure	400 {object} map[string]string
-//	@Failure	403 {object} map[string]string
-//	@Failure	404 {object} map[string]string
-//	@Failure	409 {object} map[string]string
+//	@Failure	400 {object} errorResponse
+//	@Failure	403 {object} errorResponse
+//	@Failure	404 {object} errorResponse
+//	@Failure	409 {object} errorResponse
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/import [post]
 func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := h.authorize(w, r, true)
@@ -371,5 +375,5 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 }
 
 func writeError(w http.ResponseWriter, status int, code string) {
-	writeJSON(w, status, map[string]string{"error": code})
+	writeJSON(w, status, errorResponse{Error: code})
 }
