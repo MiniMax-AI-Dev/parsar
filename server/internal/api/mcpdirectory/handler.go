@@ -188,7 +188,7 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 //	@Failure	409 {object} errorResponse
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/import [post]
 func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorize(w, r, true)
+	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin", "member")
 	if !ok {
 		return
 	}

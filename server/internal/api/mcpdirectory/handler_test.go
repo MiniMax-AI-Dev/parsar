@@ -89,20 +89,16 @@ func TestDirectoryReadAllowsWorkspaceMember(t *testing.T) {
 	}
 }
 
-func TestDirectoryImportRequiresAdmin(t *testing.T) {
-	for _, role := range []string{"member", "viewer"} {
-		t.Run(role, func(t *testing.T) {
-			fs := &fakeDirectoryStore{role: role}
-			rec := request(t, fs, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/context7/import")
-			if rec.Code != http.StatusForbidden || fs.imported != nil {
-				t.Fatalf("status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
-			}
-		})
+func TestDirectoryImportRejectsViewer(t *testing.T) {
+	fs := &fakeDirectoryStore{role: "viewer"}
+	rec := request(t, fs, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/context7/import")
+	if rec.Code != http.StatusForbidden || fs.imported != nil {
+		t.Fatalf("status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
 	}
 }
 
 func TestDirectoryImportUsesServerCatalogAndCreatesNoSecretsOrBindings(t *testing.T) {
-	for _, role := range []string{"owner", "admin"} {
+	for _, role := range []string{"owner", "admin", "member"} {
 		t.Run(role, func(t *testing.T) {
 			fs := &fakeDirectoryStore{role: role}
 			rec := request(t, fs, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/context7/import")
