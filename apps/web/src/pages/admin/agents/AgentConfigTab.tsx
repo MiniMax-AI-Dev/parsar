@@ -105,27 +105,42 @@ function secretCredentialKind(secret: Secret) {
   return typeof value === "string" ? value.trim() : ""
 }
 
-function sharedSecretsForKind(secrets: Secret[], kind: string) {
+function sharedSecretsForKind(secrets: Secret[], kind: string, catalogID = "") {
   return secrets.filter((secret) => {
     const secretKind = secretCredentialKind(secret)
-    return secret.kind === "capability_inline"
+    const matchesKind = secret.kind === "capability_inline"
       && secret.status === "active"
       && (secretKind === "" || secretKind === kind)
+    if (!matchesKind) return false
+    if (kind !== "mcp_oauth") return true
+    return secretKind === kind && !!catalogID
+      && secret.auth_type === "oauth2"
+      && secret.provider === catalogID
   })
 }
 
-function sharedSecretBindingID(agent: Agent, kind: string) {
-  const bindings = agent.config?.credential_bindings
-  if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) return ""
+function credentialBinding(config: Record<string, unknown> | undefined, kind: string) {
+  const bindings = config?.credential_bindings
+  if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) return undefined
   const binding = (bindings as Record<string, unknown>)[kind]
-  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return ""
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return undefined
   const value = binding as Record<string, unknown>
-  return value.source === "shared" && typeof value.secret_id === "string" ? value.secret_id : ""
+  if (value.source !== "personal" && value.source !== "shared") return undefined
+  return {
+    source: value.source,
+    secretID: value.source === "shared" && typeof value.secret_id === "string" ? value.secret_id : "",
+  }
 }
 
-function hasUsableCredential(agent: Agent, credentials: UserCredential[], sharedSecrets: Secret[], kind: string) {
-  const sharedID = sharedSecretBindingID(agent, kind)
-  if (sharedID && sharedSecrets.some((secret) => secret.id === sharedID)) return true
+function boundSharedSecretID(agent: Agent, binding: AgentCapability | undefined, kind: string) {
+  const capabilityBinding = credentialBinding(binding?.configuration, kind)
+  if (capabilityBinding) return capabilityBinding.secretID
+  return credentialBinding(agent.config, kind)?.secretID ?? ""
+}
+
+function hasUsableCredential(agent: Agent, binding: AgentCapability | undefined, credentials: UserCredential[], sharedSecrets: Secret[], kind: string, catalogID: string) {
+  const sharedID = boundSharedSecretID(agent, binding, kind)
+  if (sharedID && sharedSecretsForKind(sharedSecrets, kind, catalogID).some((secret) => secret.id === sharedID)) return true
   return agent.visibility !== "public" && hasCredentialKind(credentials, kind)
 }
 
@@ -220,9 +235,10 @@ function CapabilityCard({
   const binding = item.binding
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, mode === "enabled")
   const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
+  const catalogID = catalogIDFromVersion(boundVersion ?? latest)
   const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
   const missingCredential = capability
-    ? requiredCredentialKinds(capability).some((rc) => !hasUsableCredential(agent, credentials, sharedSecrets, rc.kind))
+    ? requiredCredentialKinds(capability).some((rc) => !hasUsableCredential(agent, binding, credentials, sharedSecrets, rc.kind, catalogID))
     : false
   const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
   const deprecated = !!capability?.deprecated_at
@@ -291,7 +307,7 @@ function CapabilityCard({
         />
       )}
 
-      <CredentialStatus capability={capability} agent={agent} credentials={credentials} sharedSecrets={sharedSecrets} />
+      <CredentialStatus capability={capability} binding={binding} agent={agent} credentials={credentials} sharedSecrets={sharedSecrets} catalogID={catalogID} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -341,14 +357,18 @@ function CapabilityCard({
 
 function CredentialStatus({
   capability,
+  binding,
   agent,
   credentials,
   sharedSecrets,
+  catalogID,
 }: {
   capability: Capability
+  binding?: AgentCapability
   agent: Agent
   credentials: UserCredential[]
   sharedSecrets: Secret[]
+  catalogID: string
 }) {
   const { t, i18n } = useTranslation("admin")
   const requiredCreds = capability.required_credentials ?? []
@@ -358,8 +378,8 @@ function CredentialStatus({
   return (
     <div className="mt-3 space-y-1.5">
       {requiredCreds.map((rc) => {
-        const sharedID = sharedSecretBindingID(agent, rc.kind)
-        const sharedSecret = sharedSecrets.find((secret) => secret.id === sharedID)
+        const sharedID = boundSharedSecretID(agent, binding, rc.kind)
+        const sharedSecret = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID).find((secret) => secret.id === sharedID)
         const credential = agent.visibility === "public" ? undefined : credentials.find((cred) => cred.kind === rc.kind)
         const available = sharedSecret ?? credential
         const label = credentialKindLabel(rc.kind, i18n.language, rc.kind)
@@ -421,6 +441,7 @@ function EnableCredentialBindingList({
   requiredKinds,
   credentials,
   sharedSecrets,
+  catalogID,
   publicAgent,
   bindings,
   onChange,
@@ -428,6 +449,7 @@ function EnableCredentialBindingList({
   requiredKinds: { kind: string }[]
   credentials: UserCredential[]
   sharedSecrets: Secret[]
+  catalogID: string
   publicAgent: boolean
   bindings: Record<string, string>
   onChange: (kind: string, secretID: string) => void
@@ -436,7 +458,7 @@ function EnableCredentialBindingList({
   return (
     <div className="space-y-2">
       {requiredKinds.map((rc) => {
-        const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind)
+        const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID)
         const selectedSecretID = bindings[rc.kind] ?? ""
         const hasPersonal = !publicAgent && hasCredentialKind(credentials, rc.kind)
         const ready = !!selectedSecretID || hasPersonal
@@ -521,10 +543,8 @@ function CapabilityVersionDialog({
   const defaultCredentialBindings = useMemo(() => {
     const defaults: Record<string, string> = {}
     for (const rc of requiredKinds) {
-      const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind)
-      const oauthSecret = catalogID
-        ? kindSecrets.find((secret) => secret.auth_type === "oauth2" && secret.provider === catalogID)
-        : undefined
+      const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID)
+      const oauthSecret = kindSecrets.find((secret) => rc.kind === "mcp_oauth")
       if (oauthSecret) defaults[rc.kind] = oauthSecret.id
       else if (agent.visibility === "public" && kindSecrets[0]) defaults[rc.kind] = kindSecrets[0].id
     }
@@ -533,7 +553,7 @@ function CapabilityVersionDialog({
   const credentialBindings = { ...defaultCredentialBindings, ...credentialBindingChoices }
   const missingRequiredCredential = requiredKinds.some((rc) => {
     const selectedSecretID = credentialBindings[rc.kind]
-    if (selectedSecretID && sharedSecretsForKind(sharedSecrets, rc.kind).some((secret) => secret.id === selectedSecretID)) {
+    if (selectedSecretID && sharedSecretsForKind(sharedSecrets, rc.kind, catalogID).some((secret) => secret.id === selectedSecretID)) {
       return false
     }
     return agent.visibility === "public" || !hasCredentialKind(credentials, rc.kind)
@@ -544,12 +564,19 @@ function CapabilityVersionDialog({
 
   const submit = () => {
     if (!selectedVersion) return
-    const sharedBindings = Object.fromEntries(
-      Object.entries(credentialBindings).filter(([, secretID]) => secretID !== ""),
+    const capabilityBindings = Object.fromEntries(
+      requiredKinds.map(({ kind }) => {
+        const secretID = credentialBindings[kind]
+        return [kind, secretID
+          ? { source: "shared", secret_id: secretID }
+          : { source: "personal" }]
+      }),
     )
     mut.mutate({
       capabilityVersionID: selectedVersion.id,
-      credentialBindings: mode === "enable" ? sharedBindings : undefined,
+      configuration: mode === "enable"
+        ? { credential_bindings: capabilityBindings }
+        : binding?.configuration,
     }, {
       onSuccess: () => {
         setOpen(false)
@@ -600,6 +627,7 @@ function CapabilityVersionDialog({
                   requiredKinds={requiredKinds}
                   credentials={credentials}
                   sharedSecrets={sharedSecrets}
+                  catalogID={catalogID}
                   publicAgent={agent.visibility === "public"}
                   bindings={credentialBindings}
                   onChange={(kind, secretID) => setCredentialBindingChoices((current) => ({ ...current, [kind]: secretID }))}

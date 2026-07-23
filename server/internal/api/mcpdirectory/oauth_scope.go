@@ -38,7 +38,7 @@ func (h *handler) saveWorkspaceOAuthCredential(
 		AuthType:           "oauth2",
 		Masked:             secrets.MaskPayload(payload),
 		CreatedBy:          createdBy,
-		CredentialKindCode: item.Authentication.CredentialKind,
+		CredentialKindCode: mcpcatalog.OAuthCredentialKind,
 	}, encrypted)
 	return err
 }
@@ -57,7 +57,7 @@ func (h *handler) workspaceOAuthCredentialRead(
 			candidate.AuthType != "oauth2" ||
 			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) ||
 			strings.TrimSpace(candidate.Provider) != item.ID ||
-			metadataString(candidate.Metadata, "credential_kind_code") != item.Authentication.CredentialKind {
+			metadataString(candidate.Metadata, "credential_kind_code") != mcpcatalog.OAuthCredentialKind {
 			continue
 		}
 		return candidate, true, nil

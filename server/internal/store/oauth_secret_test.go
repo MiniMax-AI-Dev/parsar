@@ -21,7 +21,7 @@ func TestCapabilitySecretIsScopedToWorkspaceAndCanRotate(t *testing.T) {
 		AuthType:           "oauth2",
 		Masked:             "configured",
 		CreatedBy:          ids.UserID,
-		CredentialKindCode: "notion_mcp_oauth",
+		CredentialKindCode: "mcp_oauth",
 	}, []byte(`{"token":"first"}`))
 	if err != nil {
 		t.Fatalf("CreateSecret: %v", err)

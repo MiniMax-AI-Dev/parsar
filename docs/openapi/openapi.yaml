@@ -242,10 +242,6 @@ definitions:
       configuration:
         additionalProperties: {}
         type: object
-      credential_bindings:
-        additionalProperties:
-          type: string
-        type: object
       pinning_mode:
         description: |-
           PinningMode is "latest" or "pinned". Empty falls back to the

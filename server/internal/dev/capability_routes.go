@@ -15,6 +15,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -61,8 +62,7 @@ type credentialBody struct {
 }
 
 type agentCapabilityBody struct {
-	Configuration      map[string]any    `json:"configuration"`
-	CredentialBindings map[string]string `json:"credential_bindings,omitempty"`
+	Configuration map[string]any `json:"configuration"`
 	// PinningMode is "latest" or "pinned". Empty falls back to the
 	// store-side default (pinned), but the create/edit dialogs always
 	// send a value so the server doesn't have to guess.
@@ -1429,14 +1429,22 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 				requiredKinds[required.Kind] = true
 			}
 		}
-		bindings := make(map[string]string, len(body.CredentialBindings))
-		for rawKind, rawSecretID := range body.CredentialBindings {
+		bindings, err := capabilityCredentialBindings(body.Configuration)
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
+		catalogID := catalogIDFromSourcePayload(version.SourcePayload)
+		for rawKind, binding := range bindings {
 			kind := strings.TrimSpace(rawKind)
-			secretID := strings.TrimSpace(rawSecretID)
 			if !requiredKinds[kind] {
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding kind is not required by this capability"})
 				return
 			}
+			if binding.Source == "personal" {
+				continue
+			}
+			secretID := binding.SecretID
 			if !isUUID(secretID) {
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding secret_id must be a valid uuid"})
 				return
@@ -1451,19 +1459,30 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding secret has the wrong credential kind"})
 				return
 			}
-			bindings[kind] = secretID
+			if kind == mcpcatalog.OAuthCredentialKind && catalogID != "" &&
+				(secretKind != kind || secret.AuthType != "oauth2" || strings.TrimSpace(secret.Provider) != catalogID) {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding secret belongs to a different MCP connector"})
+				return
+			}
 		}
 		if agentRecord.Visibility == agentVisibilityPublic {
 			existing, _ := agentRecord.Config["credential_bindings"].(map[string]any)
 			for kind := range requiredKinds {
-				if bindings[kind] != "" || sharedCredentialBindingExists(existing[kind]) {
+				if binding, explicitlyConfigured := bindings[kind]; explicitlyConfigured {
+					if binding.Source == "shared" {
+						continue
+					}
+					writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "public agents require a shared secret for every capability credential"})
+					return
+				}
+				if sharedCredentialBindingExists(existing[kind]) {
 					continue
 				}
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "public agents require a shared secret for every capability credential"})
 				return
 			}
 		}
-		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), agentID, versionID, body.Configuration, body.PinningMode, bindings)
+		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), agentID, versionID, body.Configuration, body.PinningMode)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to enable agent capability")
 			return
@@ -1472,9 +1491,54 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
+type capabilityCredentialBinding struct {
+	Source   string
+	SecretID string
+}
+
+func capabilityCredentialBindings(configuration map[string]any) (map[string]capabilityCredentialBinding, error) {
+	result := map[string]capabilityCredentialBinding{}
+	raw, exists := configuration["credential_bindings"]
+	if !exists || raw == nil {
+		return result, nil
+	}
+	bindings, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("configuration.credential_bindings must be an object")
+	}
+	for rawKind, rawBinding := range bindings {
+		kind := strings.TrimSpace(rawKind)
+		binding, ok := rawBinding.(map[string]any)
+		source := strings.TrimSpace(fmt.Sprint(binding["source"]))
+		if kind == "" || !ok || (source != "personal" && source != "shared") {
+			return nil, fmt.Errorf("configuration.credential_bindings entries must use personal or shared source")
+		}
+		secretID := strings.TrimSpace(fmt.Sprint(binding["secret_id"]))
+		if source == "shared" && secretID == "" {
+			return nil, fmt.Errorf("configuration.credential_bindings[%s].secret_id is required", kind)
+		}
+		result[kind] = capabilityCredentialBinding{Source: source, SecretID: secretID}
+	}
+	return result, nil
+}
+
 func metadataStringValue(metadata map[string]any, key string) string {
 	value, _ := metadata[key].(string)
 	return value
+}
+
+func catalogIDFromSourcePayload(sourcePayload json.RawMessage) string {
+	if len(sourcePayload) == 0 {
+		return ""
+	}
+	var source struct {
+		SourceFormat string `json:"source_format"`
+		CatalogID    string `json:"catalog_id"`
+	}
+	if err := json.Unmarshal(sourcePayload, &source); err != nil || source.SourceFormat != "mcp_catalog" {
+		return ""
+	}
+	return strings.TrimSpace(source.CatalogID)
 }
 
 func sharedCredentialBindingExists(value any) bool {

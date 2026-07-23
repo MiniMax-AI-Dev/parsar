@@ -4,7 +4,10 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 )
 
-const SchemaVersion = 1
+const (
+	SchemaVersion       = 1
+	OAuthCredentialKind = "mcp_oauth"
+)
 
 type Catalog struct {
 	SchemaVersion int    `json:"schema_version"`
@@ -30,8 +33,7 @@ type Item struct {
 }
 
 type Authentication struct {
-	Type           string `json:"type,omitempty"`
-	CredentialKind string `json:"credential_kind,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 func (a Authentication) EffectiveType() string {
@@ -62,7 +64,7 @@ func (i Item) CanonicalSpec() canonical.Spec {
 			"Authorization": {
 				Mode:               canonical.EnvModeCredentialRef,
 				Prefix:             "Bearer ",
-				CredentialKindCode: i.Authentication.CredentialKind,
+				CredentialKindCode: OAuthCredentialKind,
 			},
 		}
 	}

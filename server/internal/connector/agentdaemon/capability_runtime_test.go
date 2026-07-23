@@ -12,6 +12,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -468,10 +469,18 @@ func TestResolveCapabilityAdditions_UsesWorkspaceOAuthHeader(t *testing.T) {
 			"Authorization": {
 				Mode:               canonical.EnvModeCredentialRef,
 				Prefix:             "Bearer ",
-				CredentialKindCode: "notion_integration",
+				CredentialKindCode: mcpcatalog.OAuthCredentialKind,
 			},
 		},
-	}}, []store.RequiredCredential{{Kind: "notion_integration", Required: true}})
+	}}, []store.RequiredCredential{{Kind: mcpcatalog.OAuthCredentialKind, Required: true}})
+	row.Configuration = map[string]any{
+		"credential_bindings": map[string]any{
+			mcpcatalog.OAuthCredentialKind: map[string]any{
+				"source":    "shared",
+				"secret_id": "secret-1",
+			},
+		},
+	}
 	c := &Connector{
 		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
 		modelResolver: &fakeModelResolver{secret: store.SecretPayload{
@@ -483,14 +492,6 @@ func TestResolveCapabilityAdditions_UsesWorkspaceOAuthHeader(t *testing.T) {
 	}
 	in := defaultPromptInput()
 	in.ConversationInitiatorID = ""
-	in.AgentConfig = map[string]any{
-		"credential_bindings": map[string]any{
-			"notion_integration": map[string]any{
-				"source":    "shared",
-				"secret_id": "secret-1",
-			},
-		},
-	}
 	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
 	if err != nil {
 		t.Fatalf("resolveCapabilityAdditions: %v", err)
@@ -498,6 +499,77 @@ func TestResolveCapabilityAdditions_UsesWorkspaceOAuthHeader(t *testing.T) {
 	headers := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
 	if headers["Authorization"] != "Bearer workspace-notion-token" {
 		t.Fatalf("Authorization = %q", headers["Authorization"])
+	}
+}
+
+func TestResolveCapabilityAdditions_UsesCapabilityScopedOAuthBindings(t *testing.T) {
+	svc := testSecretsService(t)
+	newCredential := func(token, resource string) mcpoauth.Credential {
+		return mcpoauth.Credential{
+			AccessToken:             token,
+			ClientID:                "client-1",
+			TokenEndpointAuthMethod: "none",
+			TokenEndpoint:           resource + "/token",
+			Resource:                resource,
+		}
+	}
+	newRow := func(id, name, serverName, url, secretID string) store.EnabledCapabilityRead {
+		row := newMCPRow(t, id, name, []canonical.MCPServer{{
+			Name:      serverName,
+			Transport: canonical.MCPTransportStreamableHTTP,
+			URL:       url,
+			Headers: map[string]canonical.EnvValue{
+				"Authorization": {
+					Mode:               canonical.EnvModeCredentialRef,
+					Prefix:             "Bearer ",
+					CredentialKindCode: mcpcatalog.OAuthCredentialKind,
+				},
+			},
+		}}, []store.RequiredCredential{{Kind: mcpcatalog.OAuthCredentialKind, Required: true}})
+		row.Configuration = map[string]any{
+			"credential_bindings": map[string]any{
+				mcpcatalog.OAuthCredentialKind: map[string]any{
+					"source":    "shared",
+					"secret_id": secretID,
+				},
+			},
+		}
+		return row
+	}
+	notionURL := "https://mcp.notion.com/mcp"
+	githubURL := "https://api.githubcopilot.com/mcp"
+	resolver := &fakeModelResolver{secrets: map[string]store.SecretPayload{
+		"secret-notion": {
+			SecretRead:       store.SecretRead{ID: "secret-notion", Status: "active"},
+			EncryptedPayload: encryptPayload(t, svc, newCredential("notion-token", notionURL).Payload()),
+		},
+		"secret-github": {
+			SecretRead:       store.SecretRead{ID: "secret-github", Status: "active"},
+			EncryptedPayload: encryptPayload(t, svc, newCredential("github-token", githubURL).Payload()),
+		},
+	}}
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newRow("mcp-notion", "Notion", "notion", notionURL, "secret-notion"),
+			newRow("mcp-github", "GitHub", "github", githubURL, "secret-github"),
+		}},
+		modelResolver: resolver,
+		secrets:       svc,
+		log:           discardLogger(),
+	}
+	in := defaultPromptInput()
+	in.ConversationInitiatorID = ""
+	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	notionHeaders := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
+	githubHeaders := got.MCPServers["github"].(map[string]any)["headers"].(map[string]string)
+	if notionHeaders["Authorization"] != "Bearer notion-token" {
+		t.Fatalf("notion Authorization = %q", notionHeaders["Authorization"])
+	}
+	if githubHeaders["Authorization"] != "Bearer github-token" {
+		t.Fatalf("github Authorization = %q", githubHeaders["Authorization"])
 	}
 }
 

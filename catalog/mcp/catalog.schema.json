@@ -42,16 +42,8 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": { "enum": ["none", "oauth2"] },
-        "credential_kind": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*$"
-        }
-      },
-      "if": {
-        "properties": { "type": { "const": "oauth2" } }
-      },
-      "then": { "required": ["credential_kind"] }
+        "type": { "enum": ["none", "oauth2"] }
+      }
     },
     "item": {
       "type": "object",
