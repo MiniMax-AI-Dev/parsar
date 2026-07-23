@@ -699,7 +699,7 @@ type UsageLogRead struct {
 }
 
 type CreateSecretInput struct {
-	WorkspaceID string // accepted for caller-compat; secrets are org-global
+	WorkspaceID string
 	Name        string
 	Kind        string
 	Provider    string
@@ -711,6 +711,7 @@ type CreateSecretInput struct {
 	// secret to a single credential_kinds.code. Used by the agent-creation
 	// shared-binding picker to filter secrets by the kind they hold.
 	CredentialKindCode string
+	Metadata           map[string]any
 }
 
 type SecretRead struct {
@@ -5709,12 +5710,17 @@ func (s *Store) ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, 
 
 func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encryptedPayload []byte) (SecretRead, error) {
 	now := time.Now().UTC()
-	// Secrets are org-global; WorkspaceID accepted for caller-compat only.
-	_ = input.WorkspaceID
 	createdBy := nullableUUID(input.CreatedBy)
-	metaPayload := map[string]any{"masked": strings.TrimSpace(input.Masked)}
+	metaPayload := make(map[string]any, len(input.Metadata)+3)
+	for key, value := range input.Metadata {
+		metaPayload[key] = value
+	}
+	metaPayload["masked"] = strings.TrimSpace(input.Masked)
 	if code := strings.TrimSpace(input.CredentialKindCode); code != "" {
 		metaPayload["credential_kind_code"] = code
+	}
+	if strings.TrimSpace(input.Kind) == "capability_inline" {
+		metaPayload["workspace_id"] = strings.TrimSpace(input.WorkspaceID)
 	}
 	metadata, err := json.Marshal(metaPayload)
 	if err != nil {
@@ -5759,10 +5765,22 @@ func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encry
 	return read, nil
 }
 
-// ListSecrets returns active secrets in the org-global catalog.
-// workspaceID is accepted for caller-compat only and ignored.
 func (s *Store) ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]SecretRead, error) {
-	return s.ListSecretsByKind(ctx, "", limit)
+	if limit <= 0 {
+		limit = defaultReadLimit
+	}
+	rows, err := sqlc.New(s.db).ListSecretsForWorkspace(ctx, sqlc.ListSecretsForWorkspaceParams{
+		WorkspaceID: strings.TrimSpace(workspaceID),
+		ItemLimit:   limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]SecretRead, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, secretReadFromWorkspaceListRow(row))
+	}
+	return result, nil
 }
 
 func (s *Store) ListSecretsByKind(ctx context.Context, kindFilter string, limit int32) ([]SecretRead, error) {
@@ -5782,7 +5800,9 @@ func (s *Store) ListSecretsByKind(ctx context.Context, kindFilter string, limit 
 
 func (s *Store) DisableSecret(ctx context.Context, workspaceID string, secretID string) (SecretRead, error) {
 	now := time.Now().UTC()
-	_ = workspaceID
+	if _, err := s.GetSecretPayload(ctx, workspaceID, secretID); err != nil {
+		return SecretRead{}, err
+	}
 	secretUUID, err := uuid(secretID)
 	if err != nil {
 		return SecretRead{}, err
@@ -5815,7 +5835,6 @@ func (s *Store) DisableSecret(ctx context.Context, workspaceID string, secretID 
 }
 
 func (s *Store) GetSecretPayload(ctx context.Context, workspaceID string, secretID string) (SecretPayload, error) {
-	_ = workspaceID
 	secretUUID, err := uuid(secretID)
 	if err != nil {
 		return SecretPayload{}, err
@@ -5828,7 +5847,44 @@ func (s *Store) GetSecretPayload(ctx context.Context, workspaceID string, secret
 		return SecretPayload{}, err
 	}
 	read := secretReadFromSecretRow(row)
+	if scopedWorkspaceID := secretWorkspaceID(read.Metadata); scopedWorkspaceID != "" && scopedWorkspaceID != strings.TrimSpace(workspaceID) {
+		return SecretPayload{}, fmt.Errorf("%w: %s", ErrUnknownSecret, secretID)
+	}
 	return SecretPayload{SecretRead: read, EncryptedPayload: row.EncryptedPayload}, nil
+}
+
+func (s *Store) UpdateSecretPayload(ctx context.Context, workspaceID, secretID string, encryptedPayload []byte) (SecretPayload, error) {
+	current, err := s.GetSecretPayload(ctx, workspaceID, secretID)
+	if err != nil {
+		return SecretPayload{}, err
+	}
+	secretUUID, err := uuid(secretID)
+	if err != nil {
+		return SecretPayload{}, err
+	}
+	keyVersion := strings.TrimSpace(current.KeyVersion)
+	if keyVersion == "" {
+		keyVersion = "v1"
+	}
+	row, err := sqlc.New(s.db).UpdateSecretPayload(ctx, sqlc.UpdateSecretPayloadParams{
+		ID:               secretUUID,
+		EncryptedPayload: encryptedPayload,
+		KeyVersion:       keyVersion,
+		Now:              timestamptz(time.Now().UTC()),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SecretPayload{}, fmt.Errorf("%w: %s", ErrUnknownSecret, secretID)
+		}
+		return SecretPayload{}, err
+	}
+	read := secretReadFromUpdatePayloadRow(row)
+	return SecretPayload{SecretRead: read, EncryptedPayload: row.EncryptedPayload}, nil
+}
+
+func secretWorkspaceID(metadata map[string]any) string {
+	workspaceID, _ := metadata["workspace_id"].(string)
+	return strings.TrimSpace(workspaceID)
 }
 
 // SlackBotSecret is a decrypt-ready Slack bot-token secret resolved by Slack
@@ -8282,11 +8338,19 @@ func secretReadFromListRow(row sqlc.ListSecretsRow) SecretRead {
 	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
 }
 
+func secretReadFromWorkspaceListRow(row sqlc.ListSecretsForWorkspaceRow) SecretRead {
+	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
+}
+
 func secretReadFromDisableRow(row sqlc.DisableSecretRow) SecretRead {
 	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
 }
 
 func secretReadFromSecretRow(row sqlc.GetSecretPayloadRow) SecretRead {
+	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
+}
+
+func secretReadFromUpdatePayloadRow(row sqlc.UpdateSecretPayloadRow) SecretRead {
 	return secretRead(row.ID, row.Slug, row.Name, row.Kind, row.Provider, row.AuthType, row.KeyVersion, row.Status, row.Metadata, row.CreatedAt, row.UpdatedAt)
 }
 

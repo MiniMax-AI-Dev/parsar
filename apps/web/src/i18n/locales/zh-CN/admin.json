@@ -912,6 +912,12 @@
         "back": "返回连接器列表",
         "viewCapability": "查看 Capability"
       },
+	  "oauth": {
+		"connect": "连接",
+		"connected": "已连接",
+		"required": "需要 OAuth 授权",
+		"failed": "授权未完成，请重试。"
+	  },
       "loadError": {
         "title": "无法加载连接器目录",
         "description": "无法加载连接器目录，部分连接器信息可能缺失。你可以直接重试，不会影响 Skill 市场和工作区 Capability。"
@@ -935,7 +941,7 @@
       },
       "import": {
         "title": "导入 {{name}}？",
-        "description": "请检查连接器配置。导入时不需要 Token，也不会运行 MCP 或绑定 Agent。",
+		"description": "请检查连接器配置。OAuth 连接器需要先完成授权；导入不会运行 MCP 或绑定 Agent。",
         "success": "已将 {{name}} 导入为工作区 MCP Capability。",
         "failed": "无法导入该连接器。",
         "importing": "正在导入...",

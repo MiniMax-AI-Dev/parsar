@@ -15,7 +15,7 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 	if snapshot.Source != SourceBuiltin {
 		t.Fatalf("source = %q", snapshot.Source)
 	}
-	want := []string{"context7", "exa", "firecrawl"}
+	want := []string{"context7", "exa", "firecrawl", "notion"}
 	if len(snapshot.Catalog.Items) != len(want) {
 		t.Fatalf("items = %d, want %d", len(snapshot.Catalog.Items), len(want))
 	}
@@ -26,6 +26,12 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 		}
 		if err := item.CanonicalSpec().Validate(); err != nil {
 			t.Fatalf("item %q canonical spec: %v", item.ID, err)
+		}
+		if item.ID == "notion" {
+			header := item.CanonicalSpec().MCP.Servers[0].Headers["Authorization"]
+			if header.Prefix != "Bearer " || header.CredentialKindCode != "notion_integration" {
+				t.Fatalf("notion authorization header = %+v", header)
+			}
 		}
 	}
 }
@@ -42,6 +48,9 @@ func TestCatalogValidationRejectsInvalidContent(t *testing.T) {
 		{"insecure URL", func(c *Catalog) { c.Items[0].Server.URL = "http://example.com/mcp" }, "https URL"},
 		{"embedded credentials", func(c *Catalog) { c.Items[0].Server.URL = "https://token@example.com/mcp" }, "embedded credentials"},
 		{"featured rank", func(c *Catalog) { c.Items[0].FeaturedRank = 0 }, "featured_rank"},
+		{"oauth credential kind", func(c *Catalog) {
+			c.Items[0].Authentication = Authentication{Type: "oauth2", CredentialKind: "Not Valid"}
+		}, "credential_kind"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

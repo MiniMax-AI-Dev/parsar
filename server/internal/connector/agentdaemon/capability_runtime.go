@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/render"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
@@ -73,8 +74,7 @@ type ResolvedSkill struct {
 	SHA256      string `json:"sha256"`
 }
 
-// credentialPlaceholderRe matches ${PARSAR_CREDENTIAL:<kind>}.
-var credentialPlaceholderRe = regexp.MustCompile(`^\$\{PARSAR_CREDENTIAL:([a-zA-Z0-9_]+)\}$`)
+var credentialPlaceholderRe = regexp.MustCompile(`\$\{PARSAR_CREDENTIAL:([a-zA-Z0-9_]+)\}`)
 
 // capabilityAdditions holds the results of resolveCapabilityAdditions.
 type capabilityAdditions struct {
@@ -602,6 +602,17 @@ func (c *Connector) resolveMCPCapability(
 	for name, server := range parsed.MCPServers {
 		if server.URL != "" {
 			entry := map[string]any{"url": server.URL}
+			headers := make(map[string]string, len(server.Headers))
+			for headerName, value := range server.Headers {
+				resolved, err := substituteCredentialPlaceholders(value, credentialValues)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s mcp server %q header %s: %w", cap.CapabilityID, name, headerName, err)
+				}
+				headers[headerName] = resolved
+			}
+			if len(headers) > 0 {
+				entry["headers"] = headers
+			}
 			if server.Type != "" {
 				entry["type"] = server.Type
 			}
@@ -613,17 +624,11 @@ func (c *Connector) resolveMCPCapability(
 		}
 		env := map[string]string{}
 		for key, value := range server.Env {
-			if match := credentialPlaceholderRe.FindStringSubmatch(value); match != nil {
-				kind := match[1]
-				credValue, ok := credentialValues[kind]
-				if !ok {
-					return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s mcp server %q env %s references unresolved credential kind %q",
-						cap.CapabilityID, name, key, kind)
-				}
-				env[key] = credValue
-				continue
+			resolved, err := substituteCredentialPlaceholders(value, credentialValues)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s mcp server %q env %s: %w", cap.CapabilityID, name, key, err)
 			}
-			env[key] = value
+			env[key] = resolved
 		}
 		entry := map[string]any{
 			"command": server.Command,
@@ -708,7 +713,6 @@ func (c *Connector) resolveCredentialValues(
 	if c.secrets == nil {
 		return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s requires credentials but secrets service is not configured", cap.CapabilityID)
 	}
-
 	// First pass: split required kinds into personal vs shared.
 	type sharedTarget struct {
 		Kind     string
@@ -754,6 +758,10 @@ func (c *Connector) resolveCredentialValues(
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("agent_daemon: decrypt shared credential kind=%s secret_id=%s: %w", st.Kind, st.SecretID, err)
 			}
+			payload, err = c.refreshSharedOAuthCredentialIfNeeded(ctx, in.WorkspaceID, st.SecretID, payload)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("agent_daemon: refresh shared credential kind=%s secret_id=%s: %w", st.Kind, st.SecretID, err)
+			}
 			value := credentialPayloadValue(payload)
 			if value == "" {
 				return nil, nil, nil, fmt.Errorf("agent_daemon: shared credential kind=%s secret_id=%s decrypted payload has no token/api_key value", st.Kind, st.SecretID)
@@ -793,6 +801,53 @@ func (c *Connector) resolveCredentialValues(
 	}
 
 	return values, sharedSecretIDs, missing, nil
+}
+
+type sharedOAuthCredentialStore interface {
+	UpdateSecretPayload(ctx context.Context, workspaceID, secretID string, encryptedPayload []byte) (store.SecretPayload, error)
+}
+
+func (c *Connector) refreshSharedOAuthCredentialIfNeeded(
+	ctx context.Context,
+	workspaceID string,
+	secretID string,
+	payload map[string]any,
+) (map[string]any, error) {
+	credential, isOAuth, err := mcpoauth.CredentialFromPayload(payload)
+	if err != nil || !isOAuth || !credential.NeedsRefresh(time.Now()) {
+		return payload, err
+	}
+	credentialStore, ok := c.modelResolver.(sharedOAuthCredentialStore)
+	if !ok {
+		return nil, errors.New("shared credential store does not support OAuth token rotation")
+	}
+	refreshed, err := mcpoauth.New(nil).Refresh(ctx, credential)
+	if err != nil {
+		return nil, err
+	}
+	refreshedPayload := refreshed.Payload()
+	mcpoauth.PreserveMetadata(payload, refreshedPayload)
+	encrypted, err := c.secrets.Encrypt(refreshedPayload)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt refreshed token: %w", err)
+	}
+	if _, err := credentialStore.UpdateSecretPayload(ctx, workspaceID, secretID, encrypted); err != nil {
+		return nil, fmt.Errorf("persist refreshed token: %w", err)
+	}
+	return refreshedPayload, nil
+}
+
+func substituteCredentialPlaceholders(value string, credentials map[string]string) (string, error) {
+	matches := credentialPlaceholderRe.FindAllStringSubmatch(value, -1)
+	resolved := value
+	for _, match := range matches {
+		credential, ok := credentials[match[1]]
+		if !ok {
+			return "", fmt.Errorf("references unresolved credential kind %q", match[1])
+		}
+		resolved = strings.ReplaceAll(resolved, match[0], credential)
+	}
+	return resolved, nil
 }
 
 // lookupCredential fetches a user credential by kind, using a cache to
@@ -861,6 +916,7 @@ type claudeCodeMCPDocument struct {
 type claudeCodeMCPServerEntry struct {
 	Type    string            `json:"type,omitempty"`
 	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
