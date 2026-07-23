@@ -348,7 +348,6 @@ export interface AgentCapability {
 
 export interface EnableAgentCapabilityRequest {
   configuration?: Record<string, unknown>
-  credential_bindings?: Record<string, string>
   /** See AgentCapability.pinning_mode. Empty defaults to "pinned" server-side. */
   pinning_mode?: "latest" | "pinned"
 }

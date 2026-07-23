@@ -18,6 +18,7 @@ import (
 type fakeModelResolver struct {
 	runtime   store.ModelRuntime
 	secret    store.SecretPayload
+	secrets   map[string]store.SecretPayload
 	modelErr  error
 	secretErr error
 
@@ -60,9 +61,12 @@ func (f *fakeModelResolver) ResolveModelRuntimeForUser(_ context.Context, _, _ s
 	return f.runtime, nil
 }
 
-func (f *fakeModelResolver) GetSecretPayload(_ context.Context, _, _ string) (store.SecretPayload, error) {
+func (f *fakeModelResolver) GetSecretPayload(_ context.Context, _, secretID string) (store.SecretPayload, error) {
 	if f.secretErr != nil {
 		return store.SecretPayload{}, f.secretErr
+	}
+	if secret, ok := f.secrets[secretID]; ok {
+		return secret, nil
 	}
 	return f.secret, nil
 }

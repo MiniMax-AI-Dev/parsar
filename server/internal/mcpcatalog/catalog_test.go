@@ -25,7 +25,7 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 		}
 		if item.ID == "notion" {
 			header := item.CanonicalSpec().MCP.Servers[0].Headers["Authorization"]
-			if header.Prefix != "Bearer " || header.CredentialKindCode != "notion_mcp_oauth" {
+			if header.Prefix != "Bearer " || header.CredentialKindCode != OAuthCredentialKind {
 				t.Fatalf("notion authorization header = %+v", header)
 			}
 		}
@@ -44,9 +44,9 @@ func TestCatalogValidationRejectsInvalidContent(t *testing.T) {
 		{"insecure URL", func(c *Catalog) { c.Items[0].Server.URL = "http://example.com/mcp" }, "https URL"},
 		{"embedded credentials", func(c *Catalog) { c.Items[0].Server.URL = "https://token@example.com/mcp" }, "embedded credentials"},
 		{"featured rank", func(c *Catalog) { c.Items[0].FeaturedRank = 0 }, "featured_rank"},
-		{"oauth credential kind", func(c *Catalog) {
-			c.Items[0].Authentication = Authentication{Type: "oauth2", CredentialKind: "Not Valid"}
-		}, "credential_kind"},
+		{"authentication type", func(c *Catalog) {
+			c.Items[0].Authentication = Authentication{Type: "api_key"}
+		}, "unsupported"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

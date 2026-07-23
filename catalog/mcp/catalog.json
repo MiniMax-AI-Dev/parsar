@@ -81,8 +81,7 @@
       "version": "1.0.1",
       "transport": "streamable-http",
       "authentication": {
-        "type": "oauth2",
-        "credential_kind": "notion_mcp_oauth"
+        "type": "oauth2"
       },
       "server": {
         "name": "notion",

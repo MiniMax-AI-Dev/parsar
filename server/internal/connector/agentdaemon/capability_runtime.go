@@ -583,6 +583,10 @@ func (c *Connector) resolveMCPCapability(
 	// table lookup) or, by default, per-user user_credentials keyed by
 	// the conversation initiator.
 	bindings := ParseCredentialBindings(in.AgentConfig)
+	// A binding configured on this Agent-Capability pair overrides the
+	// legacy agent-wide default, allowing two OAuth connectors to use
+	// different workspace Secrets even though both use mcp_oauth.
+	mergeBindings(bindings, cap.Configuration)
 	credentialValues, sharedSecretIDs, missing, err := c.resolveCredentialValues(ctx, in, cap, credentialCache, bindings)
 	if err != nil {
 		return nil, nil, nil, err

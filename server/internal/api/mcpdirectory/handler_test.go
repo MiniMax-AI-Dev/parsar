@@ -146,7 +146,7 @@ func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T)
 		Publisher: mcpcatalog.Publisher{Name: "Notion", URL: "https://www.notion.so"},
 		Verified:  true, Categories: []string{"Productivity"}, FeaturedRank: 1,
 		Version: "1.0.0", Transport: "streamable-http",
-		Authentication: mcpcatalog.Authentication{Type: "oauth2", CredentialKind: "notion_mcp_oauth"},
+		Authentication: mcpcatalog.Authentication{Type: "oauth2"},
 		Server:         mcpcatalog.Server{Name: "notion", URL: "https://mcp.notion.com/mcp"},
 	}}
 	fs := &fakeDirectoryStore{role: "admin"}
@@ -167,14 +167,14 @@ func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T)
 
 	credentials.secrets = []store.SecretRead{{
 		ID: "secret-2", Kind: "capability_inline", Provider: "notion", AuthType: "oauth2", Status: "active",
-		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": "notion_mcp_oauth"},
+		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": mcpcatalog.OAuthCredentialKind},
 	}}
 	rec = requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	header := fs.imported.Spec.MCP.Servers[0].Headers["Authorization"]
-	if header.Prefix != "Bearer " || header.CredentialKindCode != "notion_mcp_oauth" {
+	if header.Prefix != "Bearer " || header.CredentialKindCode != mcpcatalog.OAuthCredentialKind {
 		t.Fatalf("authorization header = %+v", header)
 	}
 }

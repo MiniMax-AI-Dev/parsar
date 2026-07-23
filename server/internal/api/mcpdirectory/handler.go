@@ -347,7 +347,7 @@ func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, wo
 		catalogID := strings.TrimSpace(candidate.Provider)
 		item, found := catalog.Find(catalogID)
 		if !found || item.Authentication.EffectiveType() != "oauth2" ||
-			metadataString(candidate.Metadata, "credential_kind_code") != item.Authentication.CredentialKind {
+			metadataString(candidate.Metadata, "credential_kind_code") != mcpcatalog.OAuthCredentialKind {
 			continue
 		}
 		result[catalogID] = true

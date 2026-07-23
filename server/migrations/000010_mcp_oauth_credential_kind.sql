@@ -7,9 +7,9 @@ INSERT INTO credential_kinds (
   code, display_name, description, source, built_in
 )
 VALUES (
-  'notion_mcp_oauth',
-  'Notion MCP OAuth',
-  'Notion MCP OAuth access token',
+  'mcp_oauth',
+  'MCP OAuth',
+  'OAuth credential for hosted MCP connectors',
   'platform_oauth',
   TRUE
 )
@@ -20,5 +20,5 @@ ON CONFLICT DO NOTHING;
 -- Rollback only; normal startup does not execute this section.
 
 DELETE FROM credential_kinds
-WHERE code = 'notion_mcp_oauth'
+WHERE code = 'mcp_oauth'
   AND built_in = TRUE;
