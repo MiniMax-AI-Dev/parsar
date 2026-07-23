@@ -77,10 +77,8 @@ type listResponse struct {
 }
 
 type importResponse struct {
-	Installed    bool                  `json:"installed"`
-	CapabilityID string                `json:"capability_id"`
-	Created      bool                  `json:"created"`
-	Capability   *store.CapabilityRead `json:"capability,omitempty"`
+	Installed    bool   `json:"installed"`
+	CapabilityID string `json:"capability_id"`
 }
 
 type sourcePayload struct {
@@ -254,8 +252,6 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, importResponse{
 		Installed:    true,
 		CapabilityID: result.Capability.ID,
-		Created:      true,
-		Capability:   &result.Capability,
 	})
 }
 

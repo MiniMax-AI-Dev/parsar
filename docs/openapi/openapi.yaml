@@ -1141,12 +1141,8 @@ definitions:
     type: object
   mcpdirectory.importResponse:
     properties:
-      capability:
-        $ref: '#/definitions/store.CapabilityRead'
       capability_id:
         type: string
-      created:
-        type: boolean
       installed:
         type: boolean
     type: object
@@ -1573,43 +1569,6 @@ definitions:
       slug:
         type: string
       status:
-        type: string
-      updated_at:
-        type: string
-      visibility:
-        type: string
-      workspace_id:
-        type: string
-    type: object
-  store.CapabilityRead:
-    properties:
-      created_at:
-        type: string
-      creator_id:
-        type: string
-      deleted_at:
-        type: string
-      deprecated_at:
-        type: string
-      description:
-        type: string
-      id:
-        type: string
-      latest_version:
-        type: string
-      latest_version_created_at:
-        type: string
-      latest_version_id:
-        type: string
-      name:
-        type: string
-      required_credentials:
-        items:
-          $ref: '#/definitions/store.RequiredCredential'
-        type: array
-      status:
-        type: string
-      type:
         type: string
       updated_at:
         type: string

@@ -138,7 +138,7 @@ func TestDirectoryImportIsIdempotent(t *testing.T) {
 	}
 	var response importResponse
 	decodeResponse(t, rec, &response)
-	if !response.Installed || response.CapabilityID != testCapabilityID || response.Created {
+	if !response.Installed || response.CapabilityID != testCapabilityID {
 		t.Fatalf("response=%+v", response)
 	}
 }

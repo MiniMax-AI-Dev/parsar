@@ -120,8 +120,6 @@ export interface MCPDirectoryListResponse {
 export interface MCPDirectoryImportResponse {
   installed: boolean
   capability_id: string
-  created: boolean
-  capability?: Capability
 }
 
 interface MarketplaceListResponse {
