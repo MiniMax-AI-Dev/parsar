@@ -3592,11 +3592,9 @@ order by c.name asc, c.created_at desc;
 
 -- name: ListMCPDirectoryInstalls :many
 -- Catalog provenance lives on capability versions rather than the capability
--- row. Keep the newest matching provenance per catalog id so a later catalog
--- re-import can update catalog_version without creating a second install.
+-- row. Keep the newest matching provenance per catalog id.
 select distinct on (cv.source_payload->>'catalog_id')
   coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
-  coalesce(cv.source_payload->>'catalog_version', '')::text as catalog_version,
   c.id::text as capability_id
 from capability c
 join capability_version cv on cv.capability_id = c.id

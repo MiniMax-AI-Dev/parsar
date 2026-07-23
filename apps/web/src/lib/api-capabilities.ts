@@ -320,14 +320,19 @@ export function useEnableAgentCapabilityMutation(
 ) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ capabilityVersionID, configuration, pinningMode }: { capabilityVersionID: string; configuration?: Record<string, unknown>; pinningMode?: "latest" | "pinned" }) => {
+    mutationFn: ({ capabilityVersionID, configuration, pinningMode, credentialBindings }: { capabilityVersionID: string; configuration?: Record<string, unknown>; pinningMode?: "latest" | "pinned"; credentialBindings?: Record<string, string> }) => {
       if (!workspaceID || !agentID) throw new Error("workspace and agent are required")
-      return enableAgentCapability(workspaceID, agentID, capabilityVersionID, { configuration, pinning_mode: pinningMode })
+      return enableAgentCapability(workspaceID, agentID, capabilityVersionID, {
+        configuration,
+        credential_bindings: credentialBindings,
+        pinning_mode: pinningMode,
+      })
     },
     retry: noUnreachableRetry,
     onSuccess: () => {
       if (workspaceID && agentID) {
         qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
+        qc.invalidateQueries({ queryKey: ["admin", "agent", workspaceID, agentID] })
       }
     },
   })

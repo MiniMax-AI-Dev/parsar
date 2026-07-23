@@ -113,8 +113,6 @@ export interface MCPDirectoryItem {
 
 export interface MCPDirectoryListResponse {
   items: MCPDirectoryItem[]
-  updated_at: string
-  source: "builtin"
 }
 
 export interface MCPDirectoryImportResponse {
@@ -207,7 +205,7 @@ async function listEnabledAgents(workspaceID: string | null, capabilityID: strin
 }
 
 async function listMCPDirectory(workspaceID: string | null): Promise<MCPDirectoryListResponse> {
-  if (!workspaceID) return { items: [], updated_at: "", source: "builtin" }
+  if (!workspaceID) return { items: [] }
   return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory`)
 }
 

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, PackageCheck, Server } from "lucide-react"
 
-import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import { EmptyState } from "../../../../components/ui/empty-state"
 import { ErrorState } from "../../../../components/ui/error-state"
@@ -154,7 +153,7 @@ export function MCPDirectory({
   return (
     <div className="space-y-4" data-testid="mcp-directory">
       <div className="rounded-xl border border-line bg-surface px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <div>
             <div className="flex items-center gap-2">
               <Server className="h-4 w-4 text-fg-subtle" />
@@ -162,7 +161,6 @@ export function MCPDirectory({
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-5 text-fg-muted">{t("capabilities.mcpDirectory.description")}</p>
           </div>
-          {directoryQ.data?.source ? <Badge variant="neutral">{t(`capabilities.mcpDirectory.source.${directoryQ.data.source}`)}</Badge> : null}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
           <div className="flex min-w-0 flex-1 flex-wrap gap-1.5" aria-label={t("capabilities.mcpDirectory.filters.category")}>

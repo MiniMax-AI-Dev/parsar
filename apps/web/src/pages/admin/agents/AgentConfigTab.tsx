@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Loader2, Plus, Search } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -36,8 +36,9 @@ import {
   useToggleBuiltinCapabilityMutation,
 } from "../../../lib/api-capabilities"
 import { useMyCredentials } from "../../../lib/api-credentials"
+import { useSecrets } from "../../../lib/api-secrets"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
-import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, UserCredential } from "../../../lib/api-types"
+import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "../capability-ui"
@@ -97,6 +98,42 @@ function requiredCredentialKinds(capability: Capability) {
 
 function hasCredentialKind(credentials: UserCredential[], kind: string) {
   return credentials.some((credential) => credential.kind === kind)
+}
+
+function secretCredentialKind(secret: Secret) {
+  const value = secret.metadata?.credential_kind_code
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function sharedSecretsForKind(secrets: Secret[], kind: string) {
+  return secrets.filter((secret) => {
+    const secretKind = secretCredentialKind(secret)
+    return secret.kind === "capability_inline"
+      && secret.status === "active"
+      && (secretKind === "" || secretKind === kind)
+  })
+}
+
+function sharedSecretBindingID(agent: Agent, kind: string) {
+  const bindings = agent.config?.credential_bindings
+  if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) return ""
+  const binding = (bindings as Record<string, unknown>)[kind]
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return ""
+  const value = binding as Record<string, unknown>
+  return value.source === "shared" && typeof value.secret_id === "string" ? value.secret_id : ""
+}
+
+function hasUsableCredential(agent: Agent, credentials: UserCredential[], sharedSecrets: Secret[], kind: string) {
+  const sharedID = sharedSecretBindingID(agent, kind)
+  if (sharedID && sharedSecrets.some((secret) => secret.id === sharedID)) return true
+  return agent.visibility !== "public" && hasCredentialKind(credentials, kind)
+}
+
+function catalogIDFromVersion(version: CapabilityVersion | undefined) {
+  const payload = version?.source_payload
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
+  const catalogID = (payload as Record<string, unknown>).catalog_id
+  return typeof catalogID === "string" ? catalogID.trim() : ""
 }
 
 function useCapabilityVersions(
@@ -166,6 +203,7 @@ function CapabilityCard({
   agent,
   workspaceID,
   credentials,
+  sharedSecrets,
   mode,
   onToast,
 }: {
@@ -173,6 +211,7 @@ function CapabilityCard({
   agent: Agent
   workspaceID: string | null
   credentials: UserCredential[]
+  sharedSecrets: Secret[]
   mode: "enabled" | "available"
   onToast: (message: string) => void
 }) {
@@ -182,7 +221,9 @@ function CapabilityCard({
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, mode === "enabled")
   const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
   const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
-  const missingCredential = capability ? requiredCredentialKinds(capability).some((rc) => !hasCredentialKind(credentials, rc.kind)) : false
+  const missingCredential = capability
+    ? requiredCredentialKinds(capability).some((rc) => !hasUsableCredential(agent, credentials, sharedSecrets, rc.kind))
+    : false
   const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
   const deprecated = !!capability?.deprecated_at
   const border = mode === "available" ? "border-dashed border-line-strong" : "border-line"
@@ -250,7 +291,7 @@ function CapabilityCard({
         />
       )}
 
-      <CredentialStatus capability={capability} credentials={credentials} />
+      <CredentialStatus capability={capability} agent={agent} credentials={credentials} sharedSecrets={sharedSecrets} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -267,6 +308,7 @@ function CapabilityCard({
               agent={agent}
               capability={capability}
               credentials={credentials}
+              sharedSecrets={sharedSecrets}
               workspaceID={workspaceID}
               onToast={onToast}
             />
@@ -297,7 +339,17 @@ function CapabilityCard({
   )
 }
 
-function CredentialStatus({ capability, credentials }: { capability: Capability; credentials: UserCredential[] }) {
+function CredentialStatus({
+  capability,
+  agent,
+  credentials,
+  sharedSecrets,
+}: {
+  capability: Capability
+  agent: Agent
+  credentials: UserCredential[]
+  sharedSecrets: Secret[]
+}) {
   const { t, i18n } = useTranslation("admin")
   const requiredCreds = capability.required_credentials ?? []
   if (requiredCreds.length === 0) {
@@ -306,16 +358,19 @@ function CredentialStatus({ capability, credentials }: { capability: Capability;
   return (
     <div className="mt-3 space-y-1.5">
       {requiredCreds.map((rc) => {
-        const credential = credentials.find((cred) => cred.kind === rc.kind)
+        const sharedID = sharedSecretBindingID(agent, rc.kind)
+        const sharedSecret = sharedSecrets.find((secret) => secret.id === sharedID)
+        const credential = agent.visibility === "public" ? undefined : credentials.find((cred) => cred.kind === rc.kind)
+        const available = sharedSecret ?? credential
         const label = credentialKindLabel(rc.kind, i18n.language, rc.kind)
         return (
-          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-sm ${credential ? "border-success-border bg-success-subtle text-success-emphasis" : "border-danger-border bg-danger-subtle text-danger-emphasis"}`}>
-            {credential ? (
-              <span>{t("agents.detail.capabilities.credential.present", { kind: label, name: credential.display_name || t("agents.detail.capabilities.credential.defaultName") })}</span>
+          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-sm ${available ? "border-success-border bg-success-subtle text-success-emphasis" : "border-danger-border bg-danger-subtle text-danger-emphasis"}`}>
+            {available ? (
+              <span>{t("agents.detail.capabilities.credential.present", { kind: label, name: sharedSecret?.name || credential?.display_name || t("agents.detail.capabilities.credential.defaultName") })}</span>
             ) : (
               <span>{t("agents.detail.capabilities.credential.missing", { kind: label })}</span>
             )}
-            <CredentialLink kind={rc.kind} className="ml-2 font-medium underline underline-offset-2" />
+            {!sharedSecret && <CredentialLink kind={rc.kind} className="ml-2 font-medium underline underline-offset-2" />}
           </div>
         )
       })}
@@ -362,30 +417,63 @@ function VersionSelect({ versions, value, onChange }: { versions: CapabilityVers
   )
 }
 
-function EnableCredentialStatusList({
+function EnableCredentialBindingList({
   requiredKinds,
   credentials,
+  sharedSecrets,
+  publicAgent,
+  bindings,
+  onChange,
 }: {
   requiredKinds: { kind: string }[]
   credentials: UserCredential[]
+  sharedSecrets: Secret[]
+  publicAgent: boolean
+  bindings: Record<string, string>
+  onChange: (kind: string, secretID: string) => void
 }) {
-  const { t } = useTranslation("admin")
+  const { t, i18n } = useTranslation("admin")
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {requiredKinds.map((rc) => {
-        const has = hasCredentialKind(credentials, rc.kind)
+        const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind)
+        const selectedSecretID = bindings[rc.kind] ?? ""
+        const hasPersonal = !publicAgent && hasCredentialKind(credentials, rc.kind)
+        const ready = !!selectedSecretID || hasPersonal
         return (
           <div
             key={rc.kind}
             className={
-              has
-                ? "flex items-center gap-2 rounded-md border border-success-border bg-success-subtle px-3 py-1.5 text-sm text-success-emphasis"
-                : "flex items-center gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-1.5 text-sm text-warning-emphasis"
+              ready
+                ? "rounded-md border border-success-border bg-success-subtle px-3 py-2"
+                : "rounded-md border border-warning-border bg-warning-subtle px-3 py-2"
             }
           >
-            <span>{has ? "✓" : "⚠"}</span>
-            <span>{rc.kind}</span>
-            {!has && <span className="ml-auto text-xs">{t("credentialCheck.personalYouMissing")}</span>}
+            <label className="mb-1 block text-xs font-medium text-fg-muted">
+              {credentialKindLabel(rc.kind, i18n.language, rc.kind)}
+            </label>
+            <select
+              value={selectedSecretID}
+              onChange={(event) => onChange(rc.kind, event.target.value)}
+              className="h-8 w-full rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
+            >
+              {!publicAgent && (
+                <option value="">{t("credentialCheck.sourcePersonal")}</option>
+              )}
+              {publicAgent && !selectedSecretID && (
+                <option value="">{t("credentialCheck.sharedPlaceholder")}</option>
+              )}
+              {kindSecrets.map((secret) => (
+                <option key={secret.id} value={secret.id}>
+                  {t("credentialCheck.sourceShared")}: {secret.name}
+                </option>
+              ))}
+            </select>
+            {!ready && (
+              <p className="mt-1 text-xs text-warning-emphasis">
+                {publicAgent ? t("credentialCheck.sharedNoneAvailable") : t("credentialCheck.personalYouMissing")}
+              </p>
+            )}
           </div>
         )
       })}
@@ -398,6 +486,7 @@ function CapabilityVersionDialog({
   agent,
   capability,
   credentials = [],
+  sharedSecrets = [],
   workspaceID,
   binding,
   triggerLabel,
@@ -408,6 +497,7 @@ function CapabilityVersionDialog({
   agent: Agent
   capability: Capability
   credentials?: UserCredential[]
+  sharedSecrets?: Secret[]
   workspaceID: string | null
   binding?: AgentCapability
   triggerLabel?: string
@@ -418,19 +508,49 @@ function CapabilityVersionDialog({
   const [open, setOpen] = useState(false)
   const mut = useEnableAgentCapabilityMutation(workspaceID, agent.id)
   const [selected, setSelected] = useState(binding?.capability_version_id ?? "")
+  const [credentialBindingChoices, setCredentialBindingChoices] = useState<Record<string, string>>({})
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, open)
   const selectedVersion = selected
     ? versions.find((version) => version.id === selected) ?? (mode === "enable" ? latest : versions[0])
     : mode === "enable" ? latest : versions[0]
-  const requiredKinds = mode === "enable" ? requiredCredentialKinds(capability) : []
-  const missingRequiredCredential = requiredKinds.some((rc) => !hasCredentialKind(credentials, rc.kind))
+  const requiredKinds = useMemo(
+    () => mode === "enable" ? requiredCredentialKinds(capability) : [],
+    [capability, mode],
+  )
+  const catalogID = catalogIDFromVersion(selectedVersion)
+  const defaultCredentialBindings = useMemo(() => {
+    const defaults: Record<string, string> = {}
+    for (const rc of requiredKinds) {
+      const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind)
+      const oauthSecret = catalogID
+        ? kindSecrets.find((secret) => secret.auth_type === "oauth2" && secret.provider === catalogID)
+        : undefined
+      if (oauthSecret) defaults[rc.kind] = oauthSecret.id
+      else if (agent.visibility === "public" && kindSecrets[0]) defaults[rc.kind] = kindSecrets[0].id
+    }
+    return defaults
+  }, [agent.visibility, catalogID, requiredKinds, sharedSecrets])
+  const credentialBindings = { ...defaultCredentialBindings, ...credentialBindingChoices }
+  const missingRequiredCredential = requiredKinds.some((rc) => {
+    const selectedSecretID = credentialBindings[rc.kind]
+    if (selectedSecretID && sharedSecretsForKind(sharedSecrets, rc.kind).some((secret) => secret.id === selectedSecretID)) {
+      return false
+    }
+    return agent.visibility === "public" || !hasCredentialKind(credentials, rc.kind)
+  })
   const canSubmit = !!selectedVersion
     && !mut.isPending
     && (mode === "enable" ? !missingRequiredCredential : selectedVersion.id !== binding?.capability_version_id)
 
   const submit = () => {
     if (!selectedVersion) return
-    mut.mutate({ capabilityVersionID: selectedVersion.id }, {
+    const sharedBindings = Object.fromEntries(
+      Object.entries(credentialBindings).filter(([, secretID]) => secretID !== ""),
+    )
+    mut.mutate({
+      capabilityVersionID: selectedVersion.id,
+      credentialBindings: mode === "enable" ? sharedBindings : undefined,
+    }, {
       onSuccess: () => {
         setOpen(false)
         onToast(mode === "enable"
@@ -476,7 +596,14 @@ function CapabilityVersionDialog({
                 {versionsQ.isLoading ? <Skeleton className="h-8 w-full" /> : <VersionSelect versions={versions} value={selectedVersion?.id ?? ""} onChange={setSelected} />}
               </div>
               {requiredKinds.length > 0 ? (
-                <EnableCredentialStatusList requiredKinds={requiredKinds} credentials={credentials} />
+                <EnableCredentialBindingList
+                  requiredKinds={requiredKinds}
+                  credentials={credentials}
+                  sharedSecrets={sharedSecrets}
+                  publicAgent={agent.visibility === "public"}
+                  bindings={credentialBindings}
+                  onChange={(kind, secretID) => setCredentialBindingChoices((current) => ({ ...current, [kind]: secretID }))}
+                />
               ) : (
                 <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
                   {t("agents.detail.capabilities.enableDialog.noCredential")}
@@ -573,7 +700,12 @@ export function AgentConfigTab({
   const agentCapabilitiesQ = useAgentCapabilitiesQuery(workspaceID, agent.id)
   const workspaceCapabilitiesQ = useCapabilitiesQuery(workspaceID)
   const credentialsQ = useMyCredentials()
+  const secretsQ = useSecrets(workspaceID)
   const credentials = credentialsQ.data?.credentials ?? []
+  const sharedSecrets = useMemo(
+    () => (secretsQ.data?.secrets ?? []).filter((secret) => secret.kind === "capability_inline" && secret.status === "active"),
+    [secretsQ.data?.secrets],
+  )
   const installedCapabilities = agentCapabilitiesQ.data?.installed ?? []
   const availableCapabilities = agentCapabilitiesQ.data?.available ?? workspaceCapabilitiesQ.data?.capabilities ?? []
   const installedIDs = new Set(installedCapabilities.map((item) => item.capability_id))
@@ -608,6 +740,7 @@ export function AgentConfigTab({
         enabledCaps={enabledCaps}
         installable={installable}
         credentials={credentials}
+        sharedSecrets={sharedSecrets}
         loading={agentCapabilitiesQ.isLoading || workspaceCapabilitiesQ.isLoading}
         error={agentCapabilitiesQ.error ?? workspaceCapabilitiesQ.error}
         onToast={onToast}
@@ -623,6 +756,7 @@ function ConfigCapabilitiesSection({
   enabledCaps,
   installable,
   credentials,
+  sharedSecrets,
   loading,
   error,
   onToast,
@@ -633,6 +767,7 @@ function ConfigCapabilitiesSection({
   enabledCaps: Array<{ binding: AgentCapability; capability?: Capability }>
   installable: Capability[]
   credentials: UserCredential[]
+  sharedSecrets: Secret[]
   loading: boolean
   error: unknown
   onToast: (message: string) => void
@@ -702,6 +837,7 @@ function ConfigCapabilitiesSection({
                 agent={agent}
                 workspaceID={workspaceID}
                 credentials={credentials}
+                sharedSecrets={sharedSecrets}
                 mode="enabled"
                 onToast={onToast}
               />
@@ -717,6 +853,7 @@ function ConfigCapabilitiesSection({
         workspaceID={workspaceID}
         installable={installable}
         credentials={credentials}
+        sharedSecrets={sharedSecrets}
         onToast={onToast}
       />
     </section>
@@ -730,6 +867,7 @@ function AddCapabilityDialog({
   workspaceID,
   installable,
   credentials,
+  sharedSecrets,
   onToast,
 }: {
   open: boolean
@@ -738,6 +876,7 @@ function AddCapabilityDialog({
   workspaceID: string | null
   installable: Capability[]
   credentials: UserCredential[]
+  sharedSecrets: Secret[]
   onToast: (message: string) => void
 }) {
   const { t } = useTranslation("admin")
@@ -779,6 +918,7 @@ function AddCapabilityDialog({
                   agent={agent}
                   workspaceID={workspaceID}
                   credentials={credentials}
+                  sharedSecrets={sharedSecrets}
                   mode="available"
                   onToast={(msg) => {
                     onToast(msg)

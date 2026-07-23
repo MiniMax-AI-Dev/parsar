@@ -21,7 +21,7 @@ import (
 )
 
 type catalogLoader interface {
-	Load(ctx context.Context) (mcpcatalog.Snapshot, error)
+	Load() (mcpcatalog.Catalog, error)
 }
 
 type directoryStore interface {
@@ -71,9 +71,7 @@ type itemResponse struct {
 }
 
 type listResponse struct {
-	Items     []itemResponse `json:"items"`
-	UpdatedAt string         `json:"updated_at"`
-	Source    string         `json:"source"`
+	Items []itemResponse `json:"items"`
 }
 
 type importResponse struct {
@@ -89,7 +87,6 @@ type sourcePayload struct {
 	SourceFormat   string `json:"source_format"`
 	CatalogID      string `json:"catalog_id"`
 	CatalogVersion string `json:"catalog_version"`
-	CatalogSource  string `json:"catalog_source"`
 }
 
 func RegisterRoutes(r chi.Router, deps Deps) {
@@ -114,28 +111,24 @@ func RegisterRoutes(r chi.Router, deps Deps) {
 //	@Failure	503 {object} errorResponse
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory [get]
 func (h *handler) list(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorize(w, r, false)
+	workspaceID, ok := h.authorize(w, r)
 	if !ok {
 		return
 	}
-	snapshot, installs, ok := h.load(w, r, workspaceID)
+	catalog, installs, ok := h.load(w, r, workspaceID)
 	if !ok {
 		return
 	}
 	byCatalog := installMap(installs)
-	connected, ok := h.connectedCatalogIDs(w, r, workspaceID)
+	connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
 	if !ok {
 		return
 	}
-	items := make([]itemResponse, 0, len(snapshot.Catalog.Items))
-	for _, item := range snapshot.Catalog.Items {
+	items := make([]itemResponse, 0, len(catalog.Items))
+	for _, item := range catalog.Items {
 		items = append(items, summarizeItem(item, byCatalog[item.ID], connected[item.ID]))
 	}
-	writeJSON(w, http.StatusOK, listResponse{
-		Items:     items,
-		UpdatedAt: snapshot.Catalog.UpdatedAt,
-		Source:    string(snapshot.Source),
-	})
+	writeJSON(w, http.StatusOK, listResponse{Items: items})
 }
 
 // get godoc
@@ -150,20 +143,20 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 //	@Failure	404 {object} errorResponse
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID} [get]
 func (h *handler) get(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorize(w, r, false)
+	workspaceID, ok := h.authorize(w, r)
 	if !ok {
 		return
 	}
-	snapshot, installs, ok := h.load(w, r, workspaceID)
+	catalog, installs, ok := h.load(w, r, workspaceID)
 	if !ok {
 		return
 	}
-	item, found := snapshot.Find(chi.URLParam(r, "catalogID"))
+	item, found := catalog.Find(chi.URLParam(r, "catalogID"))
 	if !found {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return
 	}
-	connected, ok := h.connectedCatalogIDs(w, r, workspaceID)
+	connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
 	if !ok {
 		return
 	}
@@ -192,11 +185,11 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	snapshot, installs, ok := h.load(w, r, workspaceID)
+	catalog, installs, ok := h.load(w, r, workspaceID)
 	if !ok {
 		return
 	}
-	item, found := snapshot.Find(chi.URLParam(r, "catalogID"))
+	item, found := catalog.Find(chi.URLParam(r, "catalogID"))
 	if !found {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return
@@ -206,7 +199,7 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Authentication.EffectiveType() == "oauth2" {
-		connected, ok := h.connectedCatalogIDs(w, r, workspaceID)
+		connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
 		if !ok {
 			return
 		}
@@ -220,10 +213,9 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 		SourceFormat:   "mcp_catalog",
 		CatalogID:      item.ID,
 		CatalogVersion: item.Version,
-		CatalogSource:  string(snapshot.Source),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "catalog_source_encode_failed")
+		writeError(w, http.StatusInternalServerError, "catalog_provenance_encode_failed")
 		return
 	}
 	result, err := h.deps.Store.ImportCapability(r.Context(), store.ImportCapabilityInput{
@@ -259,12 +251,8 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) authorize(w http.ResponseWriter, r *http.Request, admin bool) (string, bool) {
-	allowed := []string{"owner", "admin", "member", "viewer"}
-	if admin {
-		allowed = []string{"owner", "admin"}
-	}
-	return h.authorizeRoles(w, r, allowed...)
+func (h *handler) authorize(w http.ResponseWriter, r *http.Request) (string, bool) {
+	return h.authorizeRoles(w, r, "owner", "admin", "member", "viewer")
 }
 
 func (h *handler) authorizeRoles(w http.ResponseWriter, r *http.Request, allowed ...string) (string, bool) {
@@ -291,18 +279,18 @@ func (h *handler) authorizeRoles(w http.ResponseWriter, r *http.Request, allowed
 	return workspaceID, true
 }
 
-func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID string) (mcpcatalog.Snapshot, []store.MCPDirectoryInstall, bool) {
-	snapshot, err := h.deps.Catalog.Load(r.Context())
+func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID string) (mcpcatalog.Catalog, []store.MCPDirectoryInstall, bool) {
+	catalog, err := h.deps.Catalog.Load()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "mcp_catalog_unavailable")
-		return mcpcatalog.Snapshot{}, nil, false
+		return mcpcatalog.Catalog{}, nil, false
 	}
 	installs, err := h.deps.Store.ListMCPDirectoryInstalls(r.Context(), workspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "directory_install_state_failed")
-		return mcpcatalog.Snapshot{}, nil, false
+		return mcpcatalog.Catalog{}, nil, false
 	}
-	return snapshot, installs, true
+	return catalog, installs, true
 }
 
 func installMap(installs []store.MCPDirectoryInstall) map[string]store.MCPDirectoryInstall {
@@ -339,7 +327,7 @@ func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall, conn
 	}
 }
 
-func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, workspaceID string) (map[string]bool, bool) {
+func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, workspaceID string, catalog mcpcatalog.Catalog) (map[string]bool, bool) {
 	result := map[string]bool{}
 	if h.deps.WorkspaceCredentials == nil {
 		return result, true
@@ -356,9 +344,13 @@ func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, wo
 			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) {
 			continue
 		}
-		if catalogID := metadataString(candidate.Metadata, "catalog_id"); catalogID != "" {
-			result[catalogID] = true
+		catalogID := strings.TrimSpace(candidate.Provider)
+		item, found := catalog.Find(catalogID)
+		if !found || item.Authentication.EffectiveType() != "oauth2" ||
+			metadataString(candidate.Metadata, "credential_kind_code") != item.Authentication.CredentialKind {
+			continue
 		}
+		result[catalogID] = true
 	}
 	return result, true
 }

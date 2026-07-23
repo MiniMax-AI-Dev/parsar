@@ -624,7 +624,7 @@ func syncAgentCapabilities(
 		if cap.fromMarketplace {
 			mode = store.PinningModePinned
 		}
-		if _, err := rs.EnableAgentCapability(ctx, agentID, latestVersionID, nil, mode); err != nil {
+		if _, err := rs.EnableAgentCapability(ctx, agentID, latestVersionID, nil, mode, nil); err != nil {
 			log.Bg().Warn("syncAgentCapabilities: enable failed, skipping",
 				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
 			continue

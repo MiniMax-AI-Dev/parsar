@@ -21,14 +21,13 @@ func TestCapabilitySecretIsScopedToWorkspaceAndCanRotate(t *testing.T) {
 		AuthType:           "oauth2",
 		Masked:             "configured",
 		CreatedBy:          ids.UserID,
-		CredentialKindCode: "notion_integration",
-		Metadata:           map[string]any{"catalog_id": "notion"},
+		CredentialKindCode: "notion_mcp_oauth",
 	}, []byte(`{"token":"first"}`))
 	if err != nil {
 		t.Fatalf("CreateSecret: %v", err)
 	}
-	if created.Metadata["workspace_id"] != ids.WorkspaceID || created.Metadata["catalog_id"] != "notion" {
-		t.Fatalf("metadata = %+v", created.Metadata)
+	if created.Provider != "notion" || created.Metadata["workspace_id"] != ids.WorkspaceID {
+		t.Fatalf("secret = %+v", created)
 	}
 
 	otherWorkspaceID := "00000000-0000-0000-0000-000000000099"

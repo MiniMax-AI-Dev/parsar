@@ -8,12 +8,10 @@ import (
 )
 
 // MCPDirectoryInstall identifies the workspace capability created from one
-// MCP Directory catalog item. CatalogVersion is retained for future update
-// detection; v1 only reports it.
+// MCP Directory catalog item.
 type MCPDirectoryInstall struct {
-	CatalogID      string `json:"catalog_id"`
-	CatalogVersion string `json:"catalog_version"`
-	CapabilityID   string `json:"capability_id"`
+	CatalogID    string
+	CapabilityID string
 }
 
 func (s *Store) ListMCPDirectoryInstalls(ctx context.Context, workspaceID string) ([]MCPDirectoryInstall, error) {
@@ -28,9 +26,8 @@ func (s *Store) ListMCPDirectoryInstalls(ctx context.Context, workspaceID string
 	installs := make([]MCPDirectoryInstall, 0, len(rows))
 	for _, row := range rows {
 		installs = append(installs, MCPDirectoryInstall{
-			CatalogID:      row.CatalogID,
-			CatalogVersion: row.CatalogVersion,
-			CapabilityID:   row.CapabilityID,
+			CatalogID:    row.CatalogID,
+			CapabilityID: row.CapabilityID,
 		})
 	}
 	return installs, nil

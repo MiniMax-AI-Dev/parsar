@@ -1,21 +1,11 @@
 package mcpcatalog
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	mcpcatalogdata "github.com/MiniMax-AI-Dev/parsar/catalog/mcp"
 )
-
-type Source string
-
-const SourceBuiltin Source = "builtin"
-
-type Snapshot struct {
-	Catalog Catalog
-	Source  Source
-}
 
 type Options struct {
 	BuiltinJSON []byte
@@ -35,16 +25,16 @@ func New(options Options) *Loader {
 	return &Loader{builtin: builtin, builtinErr: builtinErr}
 }
 
-func (l *Loader) Load(_ context.Context) (Snapshot, error) {
+func (l *Loader) Load() (Catalog, error) {
 	if l.builtinErr != nil {
-		return Snapshot{}, fmt.Errorf("load builtin catalog: %w", l.builtinErr)
+		return Catalog{}, fmt.Errorf("load builtin catalog: %w", l.builtinErr)
 	}
-	return Snapshot{Catalog: l.builtin, Source: SourceBuiltin}, nil
+	return l.builtin, nil
 }
 
-func (s Snapshot) Find(id string) (Item, bool) {
+func (c Catalog) Find(id string) (Item, bool) {
 	id = strings.TrimSpace(id)
-	for _, item := range s.Catalog.Items {
+	for _, item := range c.Items {
 		if item.ID == id {
 			return item, true
 		}

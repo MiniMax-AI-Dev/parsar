@@ -8283,7 +8283,6 @@ func (q *Queries) ListIdleSandboxBindings(ctx context.Context, arg ListIdleSandb
 const listMCPDirectoryInstalls = `-- name: ListMCPDirectoryInstalls :many
 select distinct on (cv.source_payload->>'catalog_id')
   coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
-  coalesce(cv.source_payload->>'catalog_version', '')::text as catalog_version,
   c.id::text as capability_id
 from capability c
 join capability_version cv on cv.capability_id = c.id
@@ -8296,14 +8295,12 @@ order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc
 `
 
 type ListMCPDirectoryInstallsRow struct {
-	CatalogID      string `json:"catalog_id"`
-	CatalogVersion string `json:"catalog_version"`
-	CapabilityID   string `json:"capability_id"`
+	CatalogID    string `json:"catalog_id"`
+	CapabilityID string `json:"capability_id"`
 }
 
 // Catalog provenance lives on capability versions rather than the capability
-// row. Keep the newest matching provenance per catalog id so a later catalog
-// re-import can update catalog_version without creating a second install.
+// row. Keep the newest matching provenance per catalog id.
 func (q *Queries) ListMCPDirectoryInstalls(ctx context.Context, workspaceID pgtype.UUID) ([]ListMCPDirectoryInstallsRow, error) {
 	rows, err := q.db.Query(ctx, listMCPDirectoryInstalls, workspaceID)
 	if err != nil {
@@ -8313,7 +8310,7 @@ func (q *Queries) ListMCPDirectoryInstalls(ctx context.Context, workspaceID pgty
 	items := []ListMCPDirectoryInstallsRow{}
 	for rows.Next() {
 		var i ListMCPDirectoryInstallsRow
-		if err := rows.Scan(&i.CatalogID, &i.CatalogVersion, &i.CapabilityID); err != nil {
+		if err := rows.Scan(&i.CatalogID, &i.CapabilityID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -711,7 +711,6 @@ type CreateSecretInput struct {
 	// secret to a single credential_kinds.code. Used by the agent-creation
 	// shared-binding picker to filter secrets by the kind they hold.
 	CredentialKindCode string
-	Metadata           map[string]any
 }
 
 type SecretRead struct {
@@ -5711,11 +5710,7 @@ func (s *Store) ListWorkspaceUsageLogs(ctx context.Context, workspaceID string, 
 func (s *Store) CreateSecret(ctx context.Context, input CreateSecretInput, encryptedPayload []byte) (SecretRead, error) {
 	now := time.Now().UTC()
 	createdBy := nullableUUID(input.CreatedBy)
-	metaPayload := make(map[string]any, len(input.Metadata)+3)
-	for key, value := range input.Metadata {
-		metaPayload[key] = value
-	}
-	metaPayload["masked"] = strings.TrimSpace(input.Masked)
+	metaPayload := map[string]any{"masked": strings.TrimSpace(input.Masked)}
 	if code := strings.TrimSpace(input.CredentialKindCode); code != "" {
 		metaPayload["credential_kind_code"] = code
 	}

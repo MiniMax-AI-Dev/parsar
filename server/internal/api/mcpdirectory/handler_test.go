@@ -21,11 +21,11 @@ const (
 )
 
 type fakeCatalog struct {
-	snapshot mcpcatalog.Snapshot
-	err      error
+	catalog mcpcatalog.Catalog
+	err     error
 }
 
-func (f fakeCatalog) Load(context.Context) (mcpcatalog.Snapshot, error) { return f.snapshot, f.err }
+func (f fakeCatalog) Load() (mcpcatalog.Catalog, error) { return f.catalog, f.err }
 
 type fakeDirectoryStore struct {
 	role              string
@@ -68,11 +68,11 @@ func (f *fakeDirectoryStore) ImportCapability(_ context.Context, input store.Imp
 	f.imported = &input
 	if f.importErr != nil {
 		if f.concurrentInstall {
-			f.installs = append(f.installs, store.MCPDirectoryInstall{CatalogID: "context7", CatalogVersion: "1.0.0", CapabilityID: testCapabilityID})
+			f.installs = append(f.installs, store.MCPDirectoryInstall{CatalogID: "context7", CapabilityID: testCapabilityID})
 		}
 		return store.ImportCapabilityResult{}, f.importErr
 	}
-	f.installs = append(f.installs, store.MCPDirectoryInstall{CatalogID: "context7", CatalogVersion: "1.0.0", CapabilityID: testCapabilityID})
+	f.installs = append(f.installs, store.MCPDirectoryInstall{CatalogID: "context7", CapabilityID: testCapabilityID})
 	return store.ImportCapabilityResult{Capability: store.CapabilityRead{ID: testCapabilityID, Name: input.Name, Type: input.Type}}, nil
 }
 
@@ -119,7 +119,7 @@ func TestDirectoryImportUsesServerCatalogAndCreatesNoSecretsOrBindings(t *testin
 			if err := json.Unmarshal(input.SourcePayload, &source); err != nil {
 				t.Fatal(err)
 			}
-			if source.SourceFormat != "mcp_catalog" || source.CatalogID != "context7" || source.CatalogSource != "builtin" {
+			if source.SourceFormat != "mcp_catalog" || source.CatalogID != "context7" || source.CatalogVersion != "1.0.0" {
 				t.Fatalf("source=%+v", source)
 			}
 		})
@@ -140,32 +140,41 @@ func TestDirectoryImportIsIdempotent(t *testing.T) {
 }
 
 func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T) {
-	snapshot := testSnapshot()
-	snapshot.Catalog.Items = []mcpcatalog.Item{{
+	catalog := testCatalog()
+	catalog.Items = []mcpcatalog.Item{{
 		ID: "notion", Name: "Notion", Description: "Search Notion.",
 		Publisher: mcpcatalog.Publisher{Name: "Notion", URL: "https://www.notion.so"},
 		Verified:  true, Categories: []string{"Productivity"}, FeaturedRank: 1,
 		Version: "1.0.0", Transport: "streamable-http",
-		Authentication: mcpcatalog.Authentication{Type: "oauth2", CredentialKind: "notion_integration"},
+		Authentication: mcpcatalog.Authentication{Type: "oauth2", CredentialKind: "notion_mcp_oauth"},
 		Server:         mcpcatalog.Server{Name: "notion", URL: "https://mcp.notion.com/mcp"},
 	}}
 	fs := &fakeDirectoryStore{role: "admin"}
 	credentials := &fakeWorkspaceCredentialStore{}
-	rec := requestWithDeps(t, fs, credentials, snapshot, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
+	rec := requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
 	if rec.Code != http.StatusConflict || fs.imported != nil {
 		t.Fatalf("status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
 	}
 
 	credentials.secrets = []store.SecretRead{{
-		ID: "secret-1", Kind: "capability_inline", AuthType: "oauth2", Status: "active",
-		Metadata: map[string]any{"workspace_id": testWorkspaceID, "catalog_id": "notion"},
+		ID: "secret-1", Kind: "capability_inline", Provider: "notion", AuthType: "oauth2", Status: "active",
+		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": "notion_integration"},
 	}}
-	rec = requestWithDeps(t, fs, credentials, snapshot, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
+	rec = requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
+	if rec.Code != http.StatusConflict || fs.imported != nil {
+		t.Fatalf("legacy Notion token must not satisfy MCP OAuth: status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
+	}
+
+	credentials.secrets = []store.SecretRead{{
+		ID: "secret-2", Kind: "capability_inline", Provider: "notion", AuthType: "oauth2", Status: "active",
+		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": "notion_mcp_oauth"},
+	}}
+	rec = requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	header := fs.imported.Spec.MCP.Servers[0].Headers["Authorization"]
-	if header.Prefix != "Bearer " || header.CredentialKindCode != "notion_integration" {
+	if header.Prefix != "Bearer " || header.CredentialKindCode != "notion_mcp_oauth" {
 		t.Fatalf("authorization header = %+v", header)
 	}
 }
@@ -188,15 +197,15 @@ func TestDirectoryUnknownCatalogItem(t *testing.T) {
 
 func TestDirectoryDetailIncludesStreamableHTTPURL(t *testing.T) {
 	fs := &fakeDirectoryStore{role: "member"}
-	snapshot := testSnapshot()
-	snapshot.Catalog.Items = []mcpcatalog.Item{{
+	catalog := testCatalog()
+	catalog.Items = []mcpcatalog.Item{{
 		ID: "docs", Name: "Docs", Description: "Search docs.",
 		Publisher: mcpcatalog.Publisher{Name: "Publisher", URL: "https://example.com"},
 		Verified:  true, Categories: []string{"Documentation"}, FeaturedRank: 1,
 		Version: "1.0.0", Transport: "streamable-http",
 		Server: mcpcatalog.Server{Name: "docs", URL: "https://docs.example.com/mcp"},
 	}}
-	rec := requestWithSnapshot(t, fs, snapshot, http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/docs")
+	rec := requestWithCatalog(t, fs, catalog, http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/docs")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -224,14 +233,14 @@ func TestDirectoryRejectsInvalidWorkspaceID(t *testing.T) {
 }
 
 func request(t *testing.T, fs *fakeDirectoryStore, method, path string) *httptest.ResponseRecorder {
-	return requestWithSnapshot(t, fs, testSnapshot(), method, path)
+	return requestWithCatalog(t, fs, testCatalog(), method, path)
 }
 
-func requestWithSnapshot(t *testing.T, fs *fakeDirectoryStore, snapshot mcpcatalog.Snapshot, method, path string) *httptest.ResponseRecorder {
-	return requestWithDeps(t, fs, nil, snapshot, method, path)
+func requestWithCatalog(t *testing.T, fs *fakeDirectoryStore, catalog mcpcatalog.Catalog, method, path string) *httptest.ResponseRecorder {
+	return requestWithDeps(t, fs, nil, catalog, method, path)
 }
 
-func requestWithDeps(t *testing.T, fs *fakeDirectoryStore, credentials workspaceCredentialStore, snapshot mcpcatalog.Snapshot, method, path string) *httptest.ResponseRecorder {
+func requestWithDeps(t *testing.T, fs *fakeDirectoryStore, credentials workspaceCredentialStore, catalog mcpcatalog.Catalog, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	router := chi.NewRouter()
 	router.Use(func(next http.Handler) http.Handler {
@@ -239,14 +248,14 @@ func requestWithDeps(t *testing.T, fs *fakeDirectoryStore, credentials workspace
 			next.ServeHTTP(w, r.WithContext(auth.WithUserID(r.Context(), testUserID)))
 		})
 	})
-	RegisterRoutes(router, Deps{Catalog: fakeCatalog{snapshot: snapshot}, Store: fs, WorkspaceCredentials: credentials})
+	RegisterRoutes(router, Deps{Catalog: fakeCatalog{catalog: catalog}, Store: fs, WorkspaceCredentials: credentials})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
 	return rec
 }
 
-func testSnapshot() mcpcatalog.Snapshot {
-	return mcpcatalog.Snapshot{Source: mcpcatalog.SourceBuiltin, Catalog: mcpcatalog.Catalog{
+func testCatalog() mcpcatalog.Catalog {
+	return mcpcatalog.Catalog{
 		SchemaVersion: 1,
 		UpdatedAt:     "2026-07-22T00:00:00Z",
 		Items: []mcpcatalog.Item{{
@@ -256,7 +265,7 @@ func testSnapshot() mcpcatalog.Snapshot {
 			Version: "1.0.0", Transport: "streamable-http",
 			Server: mcpcatalog.Server{Name: "context7", URL: "https://mcp.context7.com/mcp"},
 		}},
-	}}
+	}
 }
 
 func decodeResponse(t *testing.T, rec *httptest.ResponseRecorder, target any) {

@@ -18,7 +18,7 @@ func TestMCPDirectoryImportPersistsProvenanceWithoutSecretsOrBindings(t *testing
 	if err := db.QueryRow(ctx, `select count(*) from secrets`).Scan(&secretsBefore); err != nil {
 		t.Fatal(err)
 	}
-	source := json.RawMessage(`{"source_format":"mcp_catalog","catalog_id":"filesystem","catalog_version":"1.0.0","catalog_source":"builtin"}`)
+	source := json.RawMessage(`{"source_format":"mcp_catalog","catalog_id":"filesystem","catalog_version":"1.0.0"}`)
 	result, err := st.ImportCapability(ctx, ImportCapabilityInput{
 		WorkspaceID:   ids.WorkspaceID,
 		Name:          "Directory Filesystem",
@@ -54,7 +54,7 @@ func TestMCPDirectoryImportPersistsProvenanceWithoutSecretsOrBindings(t *testing
 	if err != nil {
 		t.Fatalf("ListMCPDirectoryInstalls: %v", err)
 	}
-	if len(installs) != 1 || installs[0].CatalogID != "filesystem" || installs[0].CatalogVersion != "1.0.0" || installs[0].CapabilityID != result.Capability.ID {
+	if len(installs) != 1 || installs[0].CatalogID != "filesystem" || installs[0].CapabilityID != result.Capability.ID {
 		t.Fatalf("installs=%+v", installs)
 	}
 
@@ -80,7 +80,7 @@ func TestMCPDirectoryImportPersistsProvenanceWithoutSecretsOrBindings(t *testing
 	if err := json.Unmarshal(stored, &provenance); err != nil {
 		t.Fatal(err)
 	}
-	if provenance["catalog_id"] != "filesystem" || provenance["catalog_source"] != "builtin" {
+	if provenance["catalog_id"] != "filesystem" || provenance["catalog_version"] != "1.0.0" {
 		t.Fatalf("source_payload=%s", stored)
 	}
 }

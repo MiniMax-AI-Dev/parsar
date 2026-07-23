@@ -214,6 +214,37 @@ func TestCapabilityAgentWriteRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	assertSingleAgentCapability(t, db, ownedPA, capID, v2)
 }
 
+func TestCapabilityEnablePersistsSelectedSharedSecret(t *testing.T) {
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
+	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Shared Secret MCP")
+	agentID := insertAgentForOwner(t, db, testUserAID, "shared-secret-agent")
+	secretID := "00000000-0000-0000-0000-000000000099"
+	if _, err := db.Exec(context.Background(), `
+		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
+		values ($1, 'shared-github-test', 'Shared GitHub', 'capability_inline', 'inline', 'literal', '\x01'::bytea, 'v1', 'active', $2::jsonb, $3, now(), now())
+	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"github_pat"}`, testUserAID); err != nil {
+		t.Fatalf("insert shared secret: %v", err)
+	}
+
+	res := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
+		`{"credential_bindings":{"github_pat":"`+secretID+`"}}`, testUserAID)
+	if res.Code != http.StatusOK {
+		t.Fatalf("enable expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	assertSingleAgentCapability(t, db, agentID, capID, versionID)
+	var storedSecretID string
+	if err := db.QueryRow(context.Background(), `
+		select config #>> '{credential_bindings,github_pat,secret_id}'
+		from agents where id = $1
+	`, agentID).Scan(&storedSecretID); err != nil {
+		t.Fatalf("read stored binding: %v", err)
+	}
+	if storedSecretID != secretID {
+		t.Fatalf("stored secret_id=%q want %q", storedSecretID, secretID)
+	}
+}
+
 func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	capID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Marketplace Secret")
