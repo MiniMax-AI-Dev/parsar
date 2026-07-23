@@ -319,8 +319,8 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 		}
 
 		// Materialise any inline_new_secrets the user pasted in step 3.
-		// Each one becomes a capability_inline secret in the org-global
-		// catalog; its id is then patched into the corresponding
+		// Each one becomes a workspace-scoped capability_inline secret;
+		// its id is then patched into the corresponding
 		// credential_bindings entry (or model_credential_binding when
 		// IsModel=true) inside req.Config so CreateAgent persists a
 		// fully-resolved binding map. Failure here is fatal — the agent

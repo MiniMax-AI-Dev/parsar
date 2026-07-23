@@ -176,6 +176,11 @@ const (
 type EnvValue struct {
 	Mode EnvMode `json:"mode"`
 
+	// Prefix is prepended only when a secret or credential placeholder is
+	// materialized. Remote MCP Authorization headers use "Bearer " without
+	// persisting the token in canonical_spec.
+	Prefix string `json:"prefix,omitempty"`
+
 	// Literal is set iff Mode == EnvModeLiteral.
 	Literal string `json:"literal,omitempty"`
 
@@ -191,8 +196,8 @@ type EnvValue struct {
 func (v EnvValue) Validate() error {
 	switch v.Mode {
 	case EnvModeLiteral:
-		if v.SecretID != "" || v.CredentialKindCode != "" {
-			return fmt.Errorf("%w: literal mode must not set secret_id/credential_kind_code", ErrInvalidEnvValue)
+		if v.SecretID != "" || v.CredentialKindCode != "" || v.Prefix != "" {
+			return fmt.Errorf("%w: literal mode must not set secret_id/credential_kind_code/prefix", ErrInvalidEnvValue)
 		}
 	case EnvModeInlineSecret:
 		if strings.TrimSpace(v.SecretID) == "" {

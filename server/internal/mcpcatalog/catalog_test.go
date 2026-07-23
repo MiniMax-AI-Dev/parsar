@@ -3,12 +3,8 @@ package mcpcatalog
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func TestBuiltinCatalogLoads(t *testing.T) {
@@ -31,98 +27,52 @@ func TestBuiltinCatalogContainsCuratedConnectors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	want := map[string]string{
-		"filesystem":          "2026.7.10",
-		"playwright":          "0.0.78",
-		"context7":            "3.2.4",
-		"fetch":               "2026.7.10",
-		"git":                 "2026.7.10",
-		"memory":              "2026.7.4",
-		"time":                "2026.7.10",
-		"sequential-thinking": "2026.7.4",
-		"everything":          "2026.7.4",
-		"cloudflare-docs":     "0.4.9",
-		"microsoft-learn":     "1.0.0",
-		"aws-knowledge":       "1.0.0",
-		"deepwiki":            "2.14.3",
-		"agent-web":           "0.2.1",
-		"arxiv":               "1.2.15",
-		"pubmed":              "2.9.8",
-		"us-weather":          "0.7.2",
-		"mdn-search":          "0.1.0",
-		"npm-registry":        "0.1.0",
-		"docker-hub":          "0.1.0",
-		"wikipedia":           "0.1.0",
+	want := map[string]struct {
+		version        string
+		credentialKind string
+	}{
+		"context7":        {version: "3.2.3"},
+		"exa":             {version: "3.2.1"},
+		"firecrawl":       {version: "3.22.4"},
+		"postman":         {version: "1.0.0", credentialKind: "postman_mcp_oauth"},
+		"notion":          {version: "1.0.0", credentialKind: "notion_mcp_oauth"},
+		"sentry":          {version: "1.0.0", credentialKind: "sentry_mcp_oauth"},
+		"linear":          {version: "1.0.0", credentialKind: "linear_mcp_oauth"},
+		"stripe":          {version: "1.0.0", credentialKind: "stripe_mcp_oauth"},
 	}
 	if len(snapshot.Catalog.Items) != len(want) {
 		t.Fatalf("items=%d, want %d", len(snapshot.Catalog.Items), len(want))
 	}
 	for _, item := range snapshot.Catalog.Items {
-		version, ok := want[item.ID]
+		expected, ok := want[item.ID]
 		if !ok {
 			t.Fatalf("unexpected connector %q", item.ID)
 		}
-		if item.Version != version {
-			t.Fatalf("connector %q version=%q, want %q", item.ID, item.Version, version)
+		if item.Version != expected.version {
+			t.Fatalf("connector %q version=%q, want %q", item.ID, item.Version, expected.version)
+		}
+		if item.Transport != "streamable-http" || !item.Verified {
+			t.Fatalf("connector %q has unexpected transport or verification: %+v", item.ID, item)
+		}
+		if !item.Authentication.ConnectionSupported() {
+			t.Fatalf("connector %q is listed but cannot be connected", item.ID)
+		}
+		if expected.credentialKind != "" {
+			if item.Authentication.EffectiveType() != "oauth2" || item.Authentication.CredentialKind != expected.credentialKind {
+				t.Fatalf("connector %q authentication = %+v", item.ID, item.Authentication)
+			}
+			spec := item.CanonicalSpec()
+			authorization := spec.MCP.Servers[0].Headers["Authorization"]
+			if authorization.Prefix != "Bearer " || authorization.CredentialKindCode != expected.credentialKind {
+				t.Fatalf("connector %q authorization header = %+v", item.ID, authorization)
+			}
 		}
 	}
 }
 
-func TestRemoteCatalogLoadsAndCaches(t *testing.T) {
-	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(validCatalogJSON(t, "remote"))
-	}))
-	defer server.Close()
-
-	loader := New(Options{RemoteURL: server.URL, CacheTTL: time.Minute})
-	first, err := loader.Load(context.Background())
-	if err != nil {
-		t.Fatalf("first Load: %v", err)
-	}
-	second, err := loader.Load(context.Background())
-	if err != nil {
-		t.Fatalf("second Load: %v", err)
-	}
-	if first.Source != SourceRemote || second.Source != SourceRemote || calls.Load() != 1 {
-		t.Fatalf("sources=%q/%q calls=%d", first.Source, second.Source, calls.Load())
-	}
-}
-
-func TestRemoteFailureFallsBackToBuiltin(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "unavailable", http.StatusBadGateway)
-	}))
-	defer server.Close()
-	snapshot, err := New(Options{RemoteURL: server.URL}).Load(context.Background())
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if snapshot.Source != SourceBuiltin {
-		t.Fatalf("source = %q", snapshot.Source)
-	}
-}
-
-func TestCatalogLoadFailsClearlyWhenRemoteAndBuiltinAreInvalid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"schema_version":2}`))
-	}))
-	defer server.Close()
-	_, err := New(Options{RemoteURL: server.URL, BuiltinJSON: []byte(`not-json`)}).Load(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "load remote catalog") || !strings.Contains(err.Error(), "load builtin catalog") {
-		t.Fatalf("error = %v", err)
-	}
-}
-
-func TestRemoteCatalogResponseSizeIsBounded(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(validCatalogJSON(t, "oversized"))
-	}))
-	defer server.Close()
-	_, err := New(Options{RemoteURL: server.URL, BuiltinJSON: []byte(`not-json`), MaxResponseBytes: 16}).Load(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "response exceeds") {
+func TestCatalogLoadFailsClearlyWhenBuiltinIsInvalid(t *testing.T) {
+	_, err := New(Options{BuiltinJSON: []byte(`not-json`)}).Load(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "load builtin catalog") {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -149,6 +99,22 @@ func TestCatalogValidationRejectsInvalidContent(t *testing.T) {
 			c.Items[0].Transport = "streamable-http"
 			c.Items[0].Server = Server{Name: "remote", URL: "https://example.com/mcp", Command: "npx"}
 		}, "must not set command"},
+		{"oauth on stdio", func(c *Catalog) {
+			c.Items[0].Authentication = Authentication{Type: "oauth2", CredentialKind: "notion_mcp_oauth"}
+		}, "requires streamable-http"},
+		{"oauth missing credential kind", func(c *Catalog) {
+			c.Items[0].Transport = "streamable-http"
+			c.Items[0].Server = Server{Name: "remote", URL: "https://example.com/mcp"}
+			c.Items[0].Authentication = Authentication{Type: "oauth2"}
+		}, "credential_kind"},
+		{"unsupported client registration", func(c *Catalog) {
+			c.Items[0].Transport = "streamable-http"
+			c.Items[0].Server = Server{Name: "remote", URL: "https://example.com/mcp"}
+			c.Items[0].Authentication = Authentication{Type: "oauth2", CredentialKind: "example_mcp_oauth", ClientRegistration: "static"}
+		}, "client_registration"},
+		{"client registration without oauth", func(c *Catalog) {
+			c.Items[0].Authentication = Authentication{Type: "none", ClientRegistration: ClientRegistrationApprovedClient}
+		}, "requires oauth2"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -166,30 +132,21 @@ func TestCatalogValidationRejectsInvalidContent(t *testing.T) {
 	}
 }
 
-func validCatalogJSON(t *testing.T, id string) []byte {
-	t.Helper()
-	data, err := json.Marshal(validCatalog(id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
 func validCatalog(id string) Catalog {
 	return Catalog{
 		SchemaVersion: SchemaVersion,
 		UpdatedAt:     "2026-07-22T00:00:00Z",
 		Items: []Item{{
-			ID:             id,
-			Name:           "Connector",
-			Description:    "A connector used by tests.",
-			Publisher:      Publisher{Name: "Publisher", URL: "https://example.com"},
-			RepositoryURL:  "https://example.com/repository",
-			Verified:       true,
-			Categories:     []string{"Developer Tools"},
-			PopularityRank: 1,
-			Version:        "1.0.0",
-			Transport:      "stdio",
+			ID:            id,
+			Name:          "Connector",
+			Description:   "A connector used by tests.",
+			Publisher:     Publisher{Name: "Publisher", URL: "https://example.com"},
+			RepositoryURL: "https://example.com/repository",
+			Verified:      true,
+			Categories:    []string{"Developer Tools"},
+			FeaturedRank:  1,
+			Version:       "1.0.0",
+			Transport:     "stdio",
 			Server: Server{
 				Name:              id,
 				Command:           "npx",

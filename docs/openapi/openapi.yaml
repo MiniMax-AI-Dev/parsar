@@ -1156,11 +1156,33 @@ definitions:
         items:
           type: string
         type: array
+      authentication:
+        type: string
       categories:
         items:
           type: string
         type: array
       command:
+        type: string
+      connected:
+        type: boolean
+      connection_checked_at:
+        type: string
+      connection_error:
+        type: string
+      connection_protocol_version:
+        type: string
+      connection_server_name:
+        type: string
+      connection_server_version:
+        type: string
+      connection_status:
+        type: string
+      connection_supported:
+        type: boolean
+      connection_tool_count:
+        type: integer
+      credential_kind:
         type: string
       description:
         type: string
@@ -1168,6 +1190,8 @@ definitions:
         items:
           type: string
         type: array
+      featured_rank:
+        type: integer
       homepage_url:
         type: string
       icon_url:
@@ -1180,8 +1204,6 @@ definitions:
         type: string
       name:
         type: string
-      popularity_rank:
-        type: integer
       publisher:
         $ref: '#/definitions/mcpcatalog.Publisher'
       repository_url:
@@ -1207,6 +1229,27 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  mcpdirectory.oauthConnectionResponse:
+    properties:
+      authorized:
+        type: boolean
+      checked_at:
+        type: string
+      error_code:
+        type: string
+      protocol_version:
+        type: string
+      server_name:
+        type: string
+      server_version:
+        type: string
+      status:
+        type: string
+      tool_count:
+        type: integer
+      verified:
+        type: boolean
     type: object
   password.errorResponse:
     properties:
@@ -7161,6 +7204,129 @@ paths:
               type: string
             type: object
       summary: Import an MCP Connector Directory item
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      - description: OAuth state
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to the connector detail page
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Complete an MCP connector OAuth flow
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      - description: post-authorization action; currently import
+        in: query
+        name: intent
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to the provider authorization page
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start an MCP connector OAuth flow
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/test:
+    post:
+      description: Refreshes the token when necessary, then completes MCP initialize
+        and tools/list without executing a tool.
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mcpdirectory.oauthConnectionResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify an authorized OAuth MCP connector
       tags:
       - mcp-directory
   /api/v1/workspaces/{workspaceID}/members:

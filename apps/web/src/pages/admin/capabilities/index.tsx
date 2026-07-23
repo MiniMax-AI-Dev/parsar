@@ -71,6 +71,7 @@ import { DeprecateCapabilityDialog } from "./DeprecateCapabilityDialog"
 import { DeleteCapabilityDialog } from "./DeleteCapabilityDialog"
 import { ImportCapabilityDialog } from "./ImportCapabilityDialog"
 import { AddCapabilityVersionDialog } from "./AddCapabilityVersionDialog"
+import { AddCapabilityToAgentDialog } from "./AddCapabilityToAgentDialog"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 
 type MarketAction = "publish" | "unpublish" | "deprecate" | "undeprecate" | null
@@ -116,6 +117,7 @@ export function CapabilitiesPage() {
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<TargetMarketplaceInstall | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Capability | null>(null)
+  const [addToAgentCapabilityID, setAddToAgentCapabilityID] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
@@ -286,7 +288,7 @@ export function CapabilitiesPage() {
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
           onInstall={(capability) => goToAgentsForCapability(capability.id)}
           onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
-          onAddToAgent={goToAgentsForCapability}
+          onAddToAgent={setAddToAgentCapabilityID}
         />
       ) : err ? (
         <ErrorState
@@ -344,6 +346,9 @@ export function CapabilitiesPage() {
                       {allCapabilities.map((cap) => {
                         const fromMarketplace = !!cap.from_marketplace || cap.workspace_id !== wid
                         const marketCap = cap as TargetMarketplaceInstall
+                        const directoryManaged = isMCPDirectoryCapability(
+                          versionSummary.byCapability.get(cap.id) ?? [],
+                        )
                         const enabledCount = fromMarketplace ? marketCap.enabled_agent_count ?? enabledCounts.get(cap.id) ?? 0 : enabledCounts.get(cap.id) ?? 0
                         const sourceLine = fromMarketplace
                           ? t("capabilities.marketplace.sourceLine", {
@@ -394,6 +399,7 @@ export function CapabilitiesPage() {
                               <CapabilityRowActions
                                 capability={cap}
                                 fromMarketplace={fromMarketplace}
+                                directoryManaged={directoryManaged}
                                 isAdmin={isAdmin}
                                 marketPending={marketPendingID === cap.id}
                                 uninstallPending={uninstallPendingID === cap.id}
@@ -435,6 +441,18 @@ export function CapabilitiesPage() {
           setToast(t("capabilities.toast.created", { name: capabilityID }))
         }}
       />
+      {addToAgentCapabilityID && (
+        <AddCapabilityToAgentDialog
+          workspaceID={wid}
+          capabilityID={addToAgentCapabilityID}
+          onOpenChange={(open) => {
+            if (!open) setAddToAgentCapabilityID(null)
+          }}
+          onAdded={(capabilityName, agentName) => {
+            setToast(t("capabilities.mcpDirectory.addToAgent.success", { capabilityName, agentName }))
+          }}
+        />
+      )}
       {addVersionCapability && (
         <AddCapabilityVersionDialog
           workspaceID={wid}
@@ -636,6 +654,7 @@ function CapabilitiesPagination({
 function CapabilityRowActions({
   capability,
   fromMarketplace,
+  directoryManaged,
   isAdmin,
   marketPending,
   uninstallPending,
@@ -648,6 +667,7 @@ function CapabilityRowActions({
 }: {
   capability: Capability
   fromMarketplace: boolean
+  directoryManaged: boolean
   isAdmin: boolean
   marketPending: boolean
   uninstallPending: boolean
@@ -695,6 +715,7 @@ function CapabilityRowActions({
       />
       <CapabilityRowMoreMenu
         published={published}
+        directoryManaged={directoryManaged}
         disabledByRole={disabledByRole}
         menuPending={someMenuPending}
         onView={onView}
@@ -711,6 +732,7 @@ function CapabilityRowActions({
  */
 function CapabilityRowMoreMenu({
   published,
+  directoryManaged,
   disabledByRole,
   menuPending,
   onView,
@@ -718,6 +740,7 @@ function CapabilityRowMoreMenu({
   onDelete,
 }: {
   published: boolean
+  directoryManaged: boolean
   disabledByRole: boolean
   menuPending: boolean
   onView: () => void
@@ -748,12 +771,14 @@ function CapabilityRowMoreMenu({
             <>
               <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
 
-              <CapabilityMenuItem
-                icon={Share2}
-                label={t(published ? "capabilities.rowActions.unpublish" : "capabilities.rowActions.publish")}
-                tone={published ? "danger" : "success"}
-                onSelect={() => onMarketAction(published ? "unpublish" : "publish")}
-              />
+              {(!directoryManaged || published) && (
+                <CapabilityMenuItem
+                  icon={Share2}
+                  label={t(published ? "capabilities.rowActions.unpublish" : "capabilities.rowActions.publish")}
+                  tone={published ? "danger" : "success"}
+                  onSelect={() => onMarketAction(published ? "unpublish" : "publish")}
+                />
+              )}
               {/*
                 "Delete" releases the capability.name workspace-unique index,
                 allowing a same-name capability to be re-imported. The server
@@ -833,6 +858,8 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const capability = capQ.data ?? null
   const latestVersion = versionsQ.data?.versions?.[0]
+  const directoryManaged = isMCPDirectoryCapability(versionsQ.data?.versions ?? [])
+  const published = capability?.visibility === "public" || capability?.scope === "public"
   const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versionsQ.data?.versions ?? [])
   const enabledCount = installationSummary.installations.length
 
@@ -882,6 +909,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
 
   const requestMarketAction = (action: MarketAction) => {
     setMarketClientError(null)
+    if (action === "publish" && directoryManaged) return
     if (action === "publish" && capability.type === "mcp") {
       const leakingVersion = (versionsQ.data?.versions ?? []).find((version) => containsPlaintextSecretPattern(JSON.stringify(version.content ?? {})))
       if (leakingVersion) {
@@ -986,12 +1014,18 @@ export function CapabilityDetailPage({ id }: { id: string }) {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={capability.visibility === "public" || capability.scope === "public" ? "success" : "neutral"} dot>
-                    {capability.visibility === "public" || capability.scope === "public" ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
+                  <Badge variant={directoryManaged || published ? "success" : "neutral"} dot>
+                    {directoryManaged
+                      ? t("capabilities.marketStatus.directoryManaged")
+                      : published
+                        ? t("capabilities.marketStatus.published")
+                        : t("capabilities.marketStatus.unpublished")}
                   </Badge>
                   {capability.deprecated_at && <Badge variant="destructive">{t("capabilities.deprecated.badgeSource")}</Badge>}
                 </div>
-                <p className="text-sm text-fg-subtle">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
+                {!directoryManaged && (
+                  <p className="text-sm text-fg-subtle">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {/*
@@ -1022,10 +1056,12 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                     </Tooltip.Portal>
                   </Tooltip.Root>
                 </Tooltip.Provider>
-                {(capability.visibility === "public" || capability.scope === "public") ? (
-                  <Button size="sm" variant="ghost" onClick={() => requestMarketAction("unpublish")}>{t("capabilities.marketStatus.actions.unpublish")}</Button>
-                ) : (
-                  <Button size="sm" onClick={() => requestMarketAction("publish")}>{t("capabilities.marketStatus.actions.publish")}</Button>
+                {(!directoryManaged || published) && (
+                  published ? (
+                    <Button size="sm" variant="ghost" onClick={() => requestMarketAction("unpublish")}>{t("capabilities.marketStatus.actions.unpublish")}</Button>
+                  ) : (
+                    <Button size="sm" onClick={() => requestMarketAction("publish")}>{t("capabilities.marketStatus.actions.publish")}</Button>
+                  )
                 )}
               </div>
             </div>
@@ -1356,6 +1392,19 @@ function countCapabilityInstalls(groups: AgentCapability[][]) {
     }
   }
   return counts
+}
+
+function isMCPDirectoryCapability(versions: CapabilityVersion[]): boolean {
+  return versions.some((version) => {
+    const source = version.source_payload
+    return (
+      source !== null &&
+      typeof source === "object" &&
+      !Array.isArray(source) &&
+      "source_format" in source &&
+      source.source_format === "mcp_catalog"
+    )
+  })
 }
 
 const plaintextSecretPatternRes = [

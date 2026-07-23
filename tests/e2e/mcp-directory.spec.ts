@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const WORKSPACE_ID = "00000000-0000-0000-0000-000000000011";
 const CAPABILITY_ID = "00000000-0000-0000-0000-000000000033";
+const AGENT_ID = "00000000-0000-0000-0000-000000000066";
 
 const directoryItems = [
   {
@@ -15,9 +16,12 @@ const directoryItems = [
     repository_url: "https://example.com/filesystem",
     verified: true,
     categories: ["Developer Tools", "Files"],
-    popularity_rank: 1,
+    featured_rank: 1,
     version: "1.0.0",
     transport: "stdio",
+    authentication: "none",
+    connection_supported: true,
+    connected: false,
     installed: false,
     installed_capability_id: null,
   },
@@ -31,9 +35,12 @@ const directoryItems = [
     },
     verified: true,
     categories: ["Data"],
-    popularity_rank: 2,
+    featured_rank: 2,
     version: "1.1.0",
     transport: "stdio",
+    authentication: "none",
+    connection_supported: true,
+    connected: false,
     installed: false,
     installed_capability_id: null,
   },
@@ -44,9 +51,12 @@ const directoryItems = [
     publisher: { name: "Community", url: "https://example.com/community" },
     verified: false,
     categories: ["Utilities"],
-    popularity_rank: 3,
+    featured_rank: 3,
     version: "0.2.0",
     transport: "stdio",
+    authentication: "none",
+    connection_supported: true,
+    connected: false,
     installed: false,
     installed_capability_id: null,
   },
@@ -57,9 +67,29 @@ const directoryItems = [
     publisher: { name: "Cognition", url: "https://www.cognition.ai" },
     verified: true,
     categories: ["Documentation"],
-    popularity_rank: 4,
+    featured_rank: 4,
     version: "2.14.3",
     transport: "streamable-http",
+    authentication: "none",
+    connection_supported: true,
+    connected: false,
+    installed: false,
+    installed_capability_id: null,
+  },
+  {
+    id: "notion",
+    name: "Notion",
+    description: "Search, read, create, and update Notion content.",
+    publisher: { name: "Notion", url: "https://www.notion.so" },
+    verified: true,
+    categories: ["Productivity"],
+    featured_rank: 5,
+    version: "1.0.0",
+    transport: "streamable-http",
+    authentication: "oauth2",
+    credential_kind: "notion_mcp_oauth",
+    connection_supported: true,
+    connected: false,
     installed: false,
     installed_capability_id: null,
   },
@@ -72,7 +102,7 @@ test("browse, filter, inspect, and import an MCP connector without affecting Ski
   await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
 
   await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
-  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(4);
+  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(5);
 
   const search = page.getByPlaceholder("Search capability name / description");
   await search.fill("memory");
@@ -85,7 +115,7 @@ test("browse, filter, inspect, and import an MCP connector without affecting Ski
   await page.getByRole("button", { name: "All categories" }).click();
 
   await page.getByRole("checkbox", { name: "Verified only" }).check();
-  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(3);
+  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(4);
   await page.getByRole("checkbox", { name: "Verified only" }).uncheck();
 
   await page
@@ -123,6 +153,12 @@ test("browse, filter, inspect, and import an MCP connector without affecting Ski
   ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Back to connectors" }).click();
+  await expect(
+    page
+      .getByTestId("mcp-directory-card")
+      .filter({ has: page.getByRole("heading", { name: "Filesystem" }) })
+      .getByRole("button", { name: "View Capability" }),
+  ).toBeVisible();
   await page.getByRole("tab", { name: "Skill" }).click();
   await expect(
     page.getByRole("heading", { name: "Diagram Maker" }),
@@ -148,7 +184,20 @@ test("shows a retryable connector directory error", async ({ page }) => {
     ),
   ).toBeVisible();
   await page.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(4);
+  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(5);
+});
+
+test("returns to the directory when a bookmarked connector no longer exists", async ({
+  page,
+}) => {
+  await mockApp(page);
+  await page.goto(
+    `/?admin=capabilities&tab=marketplace&item=mcp%3Agit&ws=${WORKSPACE_ID}`,
+  );
+
+  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(5);
+  await expect(page).not.toHaveURL(/(?:\?|&)item=/);
+  await expect(page.getByText("connector_not_found")).toHaveCount(0);
 });
 
 test("shows a loading state while the connector catalog is pending", async ({
@@ -166,7 +215,7 @@ test("shows a loading state while the connector catalog is pending", async ({
 
   await expect(page.getByTestId("mcp-directory-loading")).toBeVisible();
   releaseDirectory?.();
-  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(4);
+  await expect(page.getByTestId("mcp-directory-card")).toHaveCount(5);
 });
 
 test("shows a no-auth streamable HTTP connector endpoint", async ({ page }) => {
@@ -186,6 +235,137 @@ test("shows a no-auth streamable HTTP connector endpoint", async ({ page }) => {
   await expect(dialog.getByRole("textbox")).toHaveCount(0);
 });
 
+test("requires Notion OAuth before confirming the connector import", async ({
+  page,
+}) => {
+  await mockApp(page);
+  await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+
+  await page.getByRole("heading", { name: "Notion" }).click();
+  const detail = page.getByTestId("mcp-directory-detail");
+  await expect(detail).toContainText("OAuth 2.1 required");
+  await expect(
+    page.getByRole("button", { name: "Connect Notion" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("mcp-oauth-status")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Import", exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText(
+    "Authorize this workspace before importing. You'll return here to confirm the import.",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Authorize & continue" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Import", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("reopens the Notion import confirmation after OAuth", async ({ page }) => {
+  await mockApp(page, undefined, false, "owner", 0, true);
+  await page.goto(
+    `/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}&item=mcp:notion&connected=notion&import=notion`,
+  );
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Authorized");
+  await expect(
+    dialog.getByRole("button", { name: "Import", exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Authorize & continue" }),
+  ).toHaveCount(0);
+
+  const returnURL = new URL(page.url());
+  expect(returnURL.searchParams.get("import")).toBeNull();
+  expect(returnURL.searchParams.get("connected")).toBe("notion");
+  expect(returnURL.searchParams.get("item")).toBe("mcp:notion");
+});
+
+test("opens Notion OAuth in a popup and refreshes the original page on return", async ({
+  page,
+}) => {
+  await mockApp(page);
+  await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+  await page.getByRole("heading", { name: "Notion" }).click();
+  const originalURL = page.url();
+
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Connect Notion" }).click();
+  const popup = await popupPromise;
+
+  await expect.poll(() => popup.isClosed()).toBe(true);
+  await expect(page).toHaveURL(originalURL);
+  await expect(page.getByTestId("mcp-directory-detail")).toContainText(
+    "Authorized, connection not verified",
+  );
+  await expect(
+    page.getByRole("button", { name: "Test connection" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reconnect" })).toBeVisible();
+});
+
+test("members can authorize the shared workspace OAuth connection", async ({
+  page,
+}) => {
+  await mockApp(page, undefined, false, "member");
+  await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+
+  await page.getByRole("heading", { name: "Notion" }).click();
+  await expect(
+    page.getByRole("button", { name: "Connect Notion" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("mcp-oauth-status")).toHaveCount(0);
+});
+
+test("shows an authorized connector with a green status", async ({ page }) => {
+  await mockApp(page, undefined, false, "owner", 0, true);
+  await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+
+  const card = page.getByTestId("mcp-directory-card").filter({
+    has: page.getByRole("heading", { name: "Notion" }),
+  });
+  await expect(card.getByText("Authorized", { exact: true })).toHaveClass(
+    /bg-success-subtle/,
+  );
+
+  await card.getByRole("heading", { name: "Notion" }).click();
+  await expect(
+    page
+      .getByTestId("mcp-directory-detail")
+      .getByText("Authorized", { exact: true }),
+  ).toHaveClass(/bg-success-subtle/);
+});
+
+test("verifies an authorized Notion connection without verbose status copy", async ({
+  page,
+}) => {
+  await mockApp(page, undefined, false, "owner", 0, true);
+  await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+
+  await page.getByRole("heading", { name: "Notion" }).click();
+  const detail = page.getByTestId("mcp-directory-detail");
+  const response = page.waitForResponse(
+    (candidate) =>
+      candidate.url().includes("/mcp-directory/notion/oauth/test") &&
+      candidate.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Test connection" }).click();
+
+  await expect((await response).ok()).toBe(true);
+  await expect(
+    page.getByRole("button", { name: "Connection works" }),
+  ).toHaveClass(/bg-success-subtle/);
+  await expect(detail).not.toContainText("Notion connection verified");
+  await expect(detail).not.toContainText("available tools");
+  await expect(detail).not.toContainText("NOTION · tool");
+});
+
 test("resolves an imported workspace connector on the Add to Agent path", async ({
   page,
 }) => {
@@ -203,11 +383,27 @@ test("resolves an imported workspace connector on the Add to Agent path", async 
     .getByRole("button", { name: "Add to Agent" })
     .click();
 
-  await expect(page).toHaveURL(
-    new RegExp(`admin=agents.*pendingCapability=${CAPABILITY_ID}`),
-  );
+  const originalURL = page.url();
+  const addDialog = page.getByRole("dialog");
   await expect(
-    page.getByText('You are preparing to add "Filesystem"', { exact: false }),
+    addDialog.getByRole("heading", { name: "Add Filesystem to an Agent" }),
+  ).toBeVisible();
+  await addDialog.getByRole("radio", { name: "Directory Agent" }).check();
+
+  const enableRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname ===
+        `/api/v1/workspaces/${WORKSPACE_ID}/agents/${AGENT_ID}/capabilities/version-1/enable`,
+  );
+  await addDialog.getByRole("button", { name: "Add to Agent" }).click();
+  const request = await enableRequest;
+
+  expect(request.postDataJSON()).toEqual({ pinning_mode: "latest" });
+  await expect(addDialog).toHaveCount(0);
+  await expect(page).toHaveURL(originalURL);
+  await expect(
+    page.getByText("Filesystem was added to Directory Agent.", { exact: true }),
   ).toBeVisible();
 });
 
@@ -227,6 +423,28 @@ test("prefills an imported connector edit from its canonical spec", async ({
   await expect(editor).toHaveValue(/"startup_timeout_sec": 30/);
 });
 
+test("does not offer publishing a Connector Directory import again", async ({
+  page,
+}) => {
+  await mockApp(page, undefined, true);
+  await page.goto(`/?admin=capabilities&ws=${WORKSPACE_ID}`);
+
+  const row = page.getByRole("row").filter({ hasText: "Filesystem" });
+  await row.getByRole("button", { name: "More actions" }).click();
+  await expect(
+    page.getByRole("menuitem", { name: "Publish to market" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
+
+  await page.goto(
+    `/?admin=capabilities&id=${CAPABILITY_ID}&ws=${WORKSPACE_ID}`,
+  );
+  await expect(page.getByText("Connector Directory item")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Publish to market" }),
+  ).toHaveCount(0);
+});
+
 test("lets members open a Skill-only capability import", async ({ page }) => {
   await mockApp(page, undefined, false, "member");
   await page.goto(`/?admin=capabilities&ws=${WORKSPACE_ID}`);
@@ -244,9 +462,12 @@ async function mockApp(
   initiallyImported = false,
   workspaceRole = "owner",
   versionDelayMs = 0,
+  notionConnected = false,
 ) {
   let imported = initiallyImported;
-  await page.route("**/api/v1/**", async (route) => {
+  let notionAuthorized = notionConnected;
+  let notionStatus = notionAuthorized ? "authorized" : "not_connected";
+  await page.context().route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
@@ -282,7 +503,78 @@ async function mockApp(
         offset: 0,
       });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/agents`)
-      return json(route, { agents: [] });
+      return json(route, {
+        agents: [
+          {
+            id: AGENT_ID,
+            workspace_id: WORKSPACE_ID,
+            name: "Directory Agent",
+            slug: "directory-agent",
+            description: "Agent used by the connector directory test.",
+            connector_type: "agent_daemon",
+            status: "active",
+            runtime: "local",
+            visibility: "workspace",
+            created_by_user_id: "user-1",
+            config: { daemon_mode: "local", agent_kind: "claude_code" },
+            created_at: "2026-07-22T00:00:00Z",
+            updated_at: "2026-07-22T00:00:00Z",
+          },
+        ],
+      });
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/agents/${AGENT_ID}`)
+      return json(route, {
+        id: AGENT_ID,
+        workspace_id: WORKSPACE_ID,
+        name: "Directory Agent",
+        slug: "directory-agent",
+        description: "Agent used by the connector directory test.",
+        connector_type: "agent_daemon",
+        status: "active",
+        runtime: "local",
+        visibility: "workspace",
+        config: { daemon_mode: "local", agent_kind: "claude_code" },
+        created_at: "2026-07-22T00:00:00Z",
+        updated_at: "2026-07-22T00:00:00Z",
+      });
+    if (
+      path ===
+      `/api/v1/workspaces/${WORKSPACE_ID}/agents/${AGENT_ID}/capabilities`
+    )
+      return json(route, {
+        workspace_id: WORKSPACE_ID,
+        agent_id: AGENT_ID,
+        installed: [],
+        available: [
+          {
+            id: CAPABILITY_ID,
+            workspace_id: WORKSPACE_ID,
+            type: "mcp",
+            name: "Filesystem",
+            description: "Read and write files from configured directories.",
+            visibility: "workspace",
+            status: "active",
+            required_credentials: [],
+            latest_version_id: "version-1",
+            latest_version: "1.0.0",
+            creator_id: "user-1",
+            created_at: "2026-07-22T00:00:00Z",
+            updated_at: "2026-07-22T00:00:00Z",
+          },
+        ],
+      });
+    if (
+      path ===
+        `/api/v1/workspaces/${WORKSPACE_ID}/agents/${AGENT_ID}/capabilities/version-1/enable` &&
+      request.method() === "POST"
+    )
+      return json(route, {});
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/models`)
+      return json(route, { models: [] });
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/secrets`)
+      return json(route, { secrets: [] });
+    if (path === "/api/v1/me/credentials")
+      return json(route, { credentials: [] });
     if (
       path ===
       `/api/v1/workspaces/${WORKSPACE_ID}/capabilities/marketplace-installs`
@@ -296,7 +588,7 @@ async function mockApp(
         id: CAPABILITY_ID,
         workspace_id: WORKSPACE_ID,
         type: "mcp",
-        name: "Git",
+        name: "Filesystem",
         description: "Read, search, and inspect a local Git repository.",
         visibility: "workspace",
         status: "active",
@@ -421,7 +713,21 @@ async function mockApp(
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory`) {
       if (directoryOverride && (await directoryOverride(route))) return;
       return json(route, {
-        items: directoryItems,
+        items: directoryItems.map((item) => {
+          if (item.id === "notion")
+            return {
+              ...item,
+              connected: notionAuthorized,
+              connection_status: notionStatus,
+            };
+          if (item.id === "filesystem" && imported)
+            return {
+              ...item,
+              installed: true,
+              installed_capability_id: CAPABILITY_ID,
+            };
+          return item;
+        }),
         updated_at: "2026-07-22T00:00:00Z",
         source: "builtin",
       });
@@ -445,6 +751,54 @@ async function mockApp(
       return json(route, {
         ...directoryItems[3],
         url: "https://mcp.deepwiki.com/mcp",
+      });
+    }
+    if (
+      path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/notion` &&
+      request.method() === "GET"
+    ) {
+      return json(route, {
+        ...directoryItems[4],
+        connected: notionAuthorized,
+        connection_status: notionStatus,
+        url: "https://mcp.notion.com/mcp",
+      });
+    }
+    if (
+      path ===
+        `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/notion/oauth/test` &&
+      request.method() === "POST"
+    ) {
+      notionStatus = "verified";
+      return json(route, {
+        authorized: true,
+        verified: true,
+        status: "verified",
+        checked_at: "2026-07-22T10:30:00Z",
+        protocol_version: "2025-06-18",
+        server_name: "Notion",
+        server_version: "1.0.0",
+        tool_count: 2,
+      });
+    }
+    if (
+      path ===
+        `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/notion/oauth/start` &&
+      request.method() === "GET"
+    ) {
+      notionAuthorized = true;
+      notionStatus = "authorized";
+      const intent = url.searchParams.get("intent");
+      const callback = new URL("/", url.origin);
+      callback.searchParams.set("admin", "capabilities");
+      callback.searchParams.set("tab", "marketplace");
+      callback.searchParams.set("ws", WORKSPACE_ID);
+      callback.searchParams.set("item", "mcp:notion");
+      callback.searchParams.set("connected", "notion");
+      if (intent === "import") callback.searchParams.set("import", "notion");
+      return route.fulfill({
+        status: 302,
+        headers: { location: callback.toString() },
       });
     }
     if (

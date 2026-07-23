@@ -28,13 +28,20 @@ type fakeCatalog struct {
 func (f fakeCatalog) Load(context.Context) (mcpcatalog.Snapshot, error) { return f.snapshot, f.err }
 
 type fakeDirectoryStore struct {
-	role              string
-	roleErr           error
-	installs          []store.MCPDirectoryInstall
-	listErr           error
-	importErr         error
-	concurrentInstall bool
-	imported          *store.ImportCapabilityInput
+	role               string
+	roleErr            error
+	installs           []store.MCPDirectoryInstall
+	listErr            error
+	importErr          error
+	concurrentInstall  bool
+	imported           *store.ImportCapabilityInput
+	credentials        []store.UserCredentialRead
+	createdCredential  *store.CreateUserCredentialInput
+	updatedCredential  *store.UpdateUserCredentialInput
+	workspaceSecrets   []store.SecretPayload
+	createdSecret      *store.CreateSecretInput
+	createdSecretCount int
+	updatedSecretID    string
 }
 
 func (f *fakeDirectoryStore) GetWorkspaceMemberRole(context.Context, string, string) (string, error) {
@@ -149,7 +156,7 @@ func TestDirectoryDetailIncludesStreamableHTTPURL(t *testing.T) {
 	snapshot.Catalog.Items = []mcpcatalog.Item{{
 		ID: "docs", Name: "Docs", Description: "Search docs.",
 		Publisher: mcpcatalog.Publisher{Name: "Publisher", URL: "https://example.com"},
-		Verified:  true, Categories: []string{"Documentation"}, PopularityRank: 1,
+		Verified:  true, Categories: []string{"Documentation"}, FeaturedRank: 1,
 		Version: "1.0.0", Transport: "streamable-http",
 		Server: mcpcatalog.Server{Name: "docs", URL: "https://docs.example.com/mcp"},
 	}}
@@ -161,6 +168,27 @@ func TestDirectoryDetailIncludesStreamableHTTPURL(t *testing.T) {
 	decodeResponse(t, rec, &response)
 	if response.Transport != "streamable-http" || response.URL != "https://docs.example.com/mcp" || response.Command != "" {
 		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestDirectoryReportsUnsupportedApprovedClientConnector(t *testing.T) {
+	fs := &fakeDirectoryStore{role: "member"}
+	rec := requestWithSnapshot(t, fs, approvedClientSnapshot(), http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/approved-connector")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var response itemResponse
+	decodeResponse(t, rec, &response)
+	if response.ConnectionSupported || response.Authentication != "oauth2" {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestDirectoryRejectsNewImportForApprovedClientConnector(t *testing.T) {
+	fs := &fakeDirectoryStore{role: "admin"}
+	rec := requestWithSnapshot(t, fs, approvedClientSnapshot(), http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/approved-connector/import")
+	if rec.Code != http.StatusConflict || fs.imported != nil {
+		t.Fatalf("status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
 	}
 }
 
@@ -205,9 +233,26 @@ func testSnapshot() mcpcatalog.Snapshot {
 		Items: []mcpcatalog.Item{{
 			ID: "filesystem", Name: "Filesystem", Description: "Access configured files.",
 			Publisher: mcpcatalog.Publisher{Name: "MCP", URL: "https://example.com"},
-			Verified:  true, Categories: []string{"Files"}, PopularityRank: 1,
+			Verified:  true, Categories: []string{"Files"}, FeaturedRank: 1,
 			Version: "1.0.0", Transport: "stdio",
 			Server: mcpcatalog.Server{Name: "filesystem", Command: "npx", Args: []string{"package@1.0.0"}, Env: map[string]string{"ROOT": ""}, StartupTimeoutSec: 30},
+		}},
+	}}
+}
+
+func approvedClientSnapshot() mcpcatalog.Snapshot {
+	return mcpcatalog.Snapshot{Source: mcpcatalog.SourceBuiltin, Catalog: mcpcatalog.Catalog{
+		SchemaVersion: 1,
+		UpdatedAt:     "2026-07-23T04:20:00Z",
+		Items: []mcpcatalog.Item{{
+			ID: "approved-connector", Name: "Approved Connector", Description: "Requires an approved MCP client.",
+			Publisher: mcpcatalog.Publisher{Name: "Provider", URL: "https://example.com"},
+			Verified:  true, Categories: []string{"Design"}, FeaturedRank: 1,
+			Version: "1.0.0", Transport: "streamable-http",
+			Authentication: mcpcatalog.Authentication{
+				Type: "oauth2", CredentialKind: "approved_mcp_oauth", ClientRegistration: mcpcatalog.ClientRegistrationApprovedClient,
+			},
+			Server: mcpcatalog.Server{Name: "approved-connector", URL: "https://mcp.example.com/mcp"},
 		}},
 	}}
 }

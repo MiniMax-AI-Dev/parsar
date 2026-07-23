@@ -1,4 +1,4 @@
-import { ArrowLeft, Server, ShieldCheck } from "lucide-react"
+import { ArrowLeft, Check, Loader2, Server, ShieldCheck } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "../../../../components/ui/badge"
@@ -8,7 +8,7 @@ import { ErrorState } from "../../../../components/ui/error-state"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
 import { ConnectorIcon, ExternalLinkRow, Metadata, VerifiedBadge } from "./shared"
-import { formatCommandPart } from "./utils"
+import { formatCommandPart, isConnectorConnectionActive } from "./utils"
 
 export function DirectoryDetail({
   item,
@@ -18,6 +18,12 @@ export function DirectoryDetail({
   onBack,
   onRetry,
   onImport,
+  onConnect,
+  onTestConnection,
+  testingConnection,
+  connectionTestSucceeded,
+  connectionTestFailed,
+  connectionTestError,
   onViewCapability,
   onAddToAgent,
 }: {
@@ -28,6 +34,12 @@ export function DirectoryDetail({
   onBack: () => void
   onRetry: () => void
   onImport: () => void
+  onConnect: () => void
+  onTestConnection: () => void
+  testingConnection: boolean
+  connectionTestSucceeded: boolean
+  connectionTestFailed: boolean
+  connectionTestError: unknown
   onViewCapability: (capabilityID: string) => void
   onAddToAgent: (capabilityID: string) => void
 }) {
@@ -64,6 +76,12 @@ export function DirectoryDetail({
     .map(formatCommandPart)
     .join(" ")
   const isRemote = item.transport === "streamable-http"
+  const oauthStatus = item.connection_status ?? (item.connected ? "authorized" : "not_connected")
+  const connectionVerified = oauthStatus === "verified"
+  const connectionHealthy = connectionVerified || connectionTestSucceeded
+  const connectionActive = isConnectorConnectionActive(item)
+  const connectionUnavailable =
+    item.authentication === "oauth2" && item.connection_supported === false
   return (
     <div className="space-y-3" data-testid="mcp-directory-detail">
       <Button variant="ghost" size="sm" onClick={onBack}>
@@ -79,12 +97,26 @@ export function DirectoryDetail({
               {item.installed ? (
                 <Badge variant="success">{t("capabilities.mcpDirectory.actions.installed")}</Badge>
               ) : null}
+              {connectionActive ? (
+                <Badge variant="success">
+                  {t(
+                    connectionVerified
+                      ? "capabilities.mcpDirectory.oauth.verified"
+                      : "capabilities.mcpDirectory.oauth.connected",
+                  )}
+                </Badge>
+              ) : null}
+              {connectionUnavailable ? (
+                <Badge variant="neutral">
+                  {t("capabilities.mcpDirectory.actions.unavailable")}
+                </Badge>
+              ) : null}
             </div>
             <p className="mt-1 text-sm text-fg-subtle">{item.publisher.name}</p>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-fg-muted">{item.description}</p>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Metadata
             label={t("capabilities.mcpDirectory.detail.version")}
             value={item.version}
@@ -96,10 +128,6 @@ export function DirectoryDetail({
             mono
           />
           <Metadata
-            label={t("capabilities.mcpDirectory.detail.rank")}
-            value={`#${item.popularity_rank}`}
-          />
-          <Metadata
             label={
               isRemote
                 ? t("capabilities.mcpDirectory.detail.authentication")
@@ -107,7 +135,15 @@ export function DirectoryDetail({
             }
             value={
               isRemote
-                ? t("capabilities.mcpDirectory.detail.noAuthentication")
+                ? connectionUnavailable
+                  ? t("capabilities.mcpDirectory.actions.unavailable")
+                  : item.authentication === "oauth2"
+                    ? connectionVerified
+                      ? t("capabilities.mcpDirectory.oauth.verified")
+                      : item.connected
+                        ? t("capabilities.mcpDirectory.oauth.authorized")
+                        : t("capabilities.mcpDirectory.oauth.required")
+                    : t("capabilities.mcpDirectory.detail.noAuthentication")
                 : t("capabilities.mcpDirectory.detail.seconds", {
                     count: item.startup_timeout_sec ?? 0,
                   })
@@ -173,7 +209,48 @@ export function DirectoryDetail({
             />
           </aside>
         </div>
+        {connectionUnavailable ? (
+          <div className="mt-5 rounded-lg border border-line bg-surface-muted/25 px-4 py-3 text-sm text-fg-muted">
+            {t("capabilities.mcpDirectory.oauth.approvedClientRequired", { name: item.name })}
+          </div>
+        ) : null}
+        {connectionTestError || connectionTestFailed ? (
+          <p className="mt-4 text-sm text-danger-emphasis">
+            {t("capabilities.mcpDirectory.oauth.testFailed")}
+          </p>
+        ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
+          {!connectionUnavailable && item.authentication === "oauth2" && item.connected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className={
+                connectionHealthy
+                  ? "border-success-border bg-success-subtle text-success-emphasis hover:border-success-border hover:bg-success-subtle"
+                  : undefined
+              }
+              onClick={onTestConnection}
+              disabled={testingConnection}
+            >
+              {testingConnection ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : connectionHealthy ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : null}
+              {testingConnection
+                ? t("capabilities.mcpDirectory.oauth.testing")
+                : connectionHealthy
+                  ? t("capabilities.mcpDirectory.oauth.testSuccess")
+                  : t("capabilities.mcpDirectory.oauth.test")}
+            </Button>
+          ) : null}
+          {!connectionUnavailable && item.authentication === "oauth2" ? (
+            <Button variant="outline" size="sm" onClick={onConnect} disabled={testingConnection}>
+              {item.connected
+                ? t("capabilities.mcpDirectory.oauth.reconnect")
+                : t("capabilities.mcpDirectory.oauth.connect", { name: item.name })}
+            </Button>
+          ) : null}
           {item.installed && item.installed_capability_id ? (
             <>
               <Button
@@ -183,20 +260,32 @@ export function DirectoryDetail({
               >
                 {t("capabilities.mcpDirectory.actions.viewCapability")}
               </Button>
-              <Button size="sm" onClick={() => onAddToAgent(item.installed_capability_id!)}>
-                {t("capabilities.mcpDirectory.actions.addToAgent")}
-              </Button>
+              {!connectionUnavailable ? (
+                <Button size="sm" onClick={() => onAddToAgent(item.installed_capability_id!)}>
+                  {t("capabilities.mcpDirectory.actions.addToAgent")}
+                </Button>
+              ) : null}
             </>
           ) : (
             <Button
               size="sm"
-              disabled={!canImport}
-              title={!canImport ? t("capabilities.permission.adminOnly") : undefined}
+              disabled={!canImport || connectionUnavailable}
+              title={
+                connectionUnavailable
+                  ? t("capabilities.mcpDirectory.oauth.approvedClientRequired", {
+                      name: item.name,
+                    })
+                  : !canImport
+                    ? t("capabilities.permission.adminOnly")
+                    : undefined
+              }
               onClick={onImport}
             >
-              {canImport
-                ? t("capabilities.mcpDirectory.actions.import")
-                : t("capabilities.permission.adminOnly")}
+              {connectionUnavailable
+                ? t("capabilities.mcpDirectory.actions.unavailable")
+                : canImport
+                  ? t("capabilities.mcpDirectory.actions.import")
+                  : t("capabilities.permission.adminOnly")}
             </Button>
           )}
         </div>

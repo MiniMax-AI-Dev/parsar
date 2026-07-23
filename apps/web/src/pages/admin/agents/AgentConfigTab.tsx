@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Loader2, Plus, Search } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -36,8 +36,9 @@ import {
   useToggleBuiltinCapabilityMutation,
 } from "../../../lib/api-capabilities"
 import { useMyCredentials } from "../../../lib/api-credentials"
+import { useSecrets } from "../../../lib/api-secrets"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
-import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, UserCredential } from "../../../lib/api-types"
+import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "../capability-ui"
@@ -95,8 +96,17 @@ function requiredCredentialKinds(capability: Capability) {
   return (capability.required_credentials ?? []).filter((rc) => rc.required)
 }
 
-function hasCredentialKind(credentials: UserCredential[], kind: string) {
-  return credentials.some((credential) => credential.kind === kind)
+function workspaceOAuthCredentialKinds(secrets: Secret[]) {
+  return new Set(
+    secrets
+      .filter((secret) => secret.kind === "capability_inline" && secret.auth_type === "oauth2" && secret.status === "active" && typeof secret.metadata.catalog_id === "string")
+      .map((secret) => secret.metadata.credential_kind_code)
+      .filter((kind): kind is string => typeof kind === "string" && kind !== ""),
+  )
+}
+
+function hasCredentialKind(credentials: UserCredential[], workspaceOAuthKinds: Set<string>, kind: string) {
+  return workspaceOAuthKinds.has(kind) || credentials.some((credential) => credential.kind === kind)
 }
 
 function useCapabilityVersions(
@@ -166,6 +176,7 @@ function CapabilityCard({
   agent,
   workspaceID,
   credentials,
+  workspaceOAuthKinds,
   mode,
   onToast,
 }: {
@@ -173,6 +184,7 @@ function CapabilityCard({
   agent: Agent
   workspaceID: string | null
   credentials: UserCredential[]
+  workspaceOAuthKinds: Set<string>
   mode: "enabled" | "available"
   onToast: (message: string) => void
 }) {
@@ -182,7 +194,7 @@ function CapabilityCard({
   const { latest, versions, versionsQ } = useCapabilityVersions(workspaceID, capability, mode === "enabled")
   const boundVersion = versions.find((version) => version.id === binding?.capability_version_id) ?? (binding?.capability_version_id && capability?.pinned_version ? { id: binding.capability_version_id, capability_id: capability.id, version: capability.pinned_version, created_at: capability.latest_version_created_at ?? capability.created_at } as CapabilityVersion : undefined)
   const versionDeleted = !!binding && !versionsQ.isLoading && !boundVersion && !capability?.latest_version_id
-  const missingCredential = capability ? requiredCredentialKinds(capability).some((rc) => !hasCredentialKind(credentials, rc.kind)) : false
+  const missingCredential = capability ? requiredCredentialKinds(capability).some((rc) => !hasCredentialKind(credentials, workspaceOAuthKinds, rc.kind)) : false
   const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
   const deprecated = !!capability?.deprecated_at
   const border = mode === "available" ? "border-dashed border-line-strong" : "border-line"
@@ -220,6 +232,7 @@ function CapabilityCard({
                 agent={agent}
                 capability={capability}
                 binding={binding}
+                workspaceOAuthKinds={workspaceOAuthKinds}
                 workspaceID={workspaceID}
                 triggerLabel={t("agents.detail.capabilities.bindings.versionDeleted.switchAction")}
                 triggerVariant="link"
@@ -250,7 +263,7 @@ function CapabilityCard({
         />
       )}
 
-      <CredentialStatus capability={capability} credentials={credentials} />
+      <CredentialStatus capability={capability} credentials={credentials} workspaceOAuthKinds={workspaceOAuthKinds} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -267,6 +280,7 @@ function CapabilityCard({
               agent={agent}
               capability={capability}
               credentials={credentials}
+              workspaceOAuthKinds={workspaceOAuthKinds}
               workspaceID={workspaceID}
               onToast={onToast}
             />
@@ -278,6 +292,7 @@ function CapabilityCard({
                   agent={agent}
                   capability={capability}
                   binding={binding}
+                  workspaceOAuthKinds={workspaceOAuthKinds}
                   workspaceID={workspaceID}
                   onToast={onToast}
                 />
@@ -297,7 +312,15 @@ function CapabilityCard({
   )
 }
 
-function CredentialStatus({ capability, credentials }: { capability: Capability; credentials: UserCredential[] }) {
+function CredentialStatus({
+  capability,
+  credentials,
+  workspaceOAuthKinds,
+}: {
+  capability: Capability
+  credentials: UserCredential[]
+  workspaceOAuthKinds: Set<string>
+}) {
   const { t, i18n } = useTranslation("admin")
   const requiredCreds = capability.required_credentials ?? []
   if (requiredCreds.length === 0) {
@@ -307,11 +330,12 @@ function CredentialStatus({ capability, credentials }: { capability: Capability;
     <div className="mt-3 space-y-1.5">
       {requiredCreds.map((rc) => {
         const credential = credentials.find((cred) => cred.kind === rc.kind)
+        const workspaceConnected = workspaceOAuthKinds.has(rc.kind)
         const label = credentialKindLabel(rc.kind, i18n.language, rc.kind)
         return (
-          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-sm ${credential ? "border-success-border bg-success-subtle text-success-emphasis" : "border-danger-border bg-danger-subtle text-danger-emphasis"}`}>
-            {credential ? (
-              <span>{t("agents.detail.capabilities.credential.present", { kind: label, name: credential.display_name || t("agents.detail.capabilities.credential.defaultName") })}</span>
+          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-sm ${credential || workspaceConnected ? "border-success-border bg-success-subtle text-success-emphasis" : "border-danger-border bg-danger-subtle text-danger-emphasis"}`}>
+            {credential || workspaceConnected ? (
+              <span>{t("agents.detail.capabilities.credential.present", { kind: label, name: workspaceConnected ? t("capabilities.mcpDirectory.oauth.workspaceCredential") : credential?.display_name || t("agents.detail.capabilities.credential.defaultName") })}</span>
             ) : (
               <span>{t("agents.detail.capabilities.credential.missing", { kind: label })}</span>
             )}
@@ -365,15 +389,17 @@ function VersionSelect({ versions, value, onChange }: { versions: CapabilityVers
 function EnableCredentialStatusList({
   requiredKinds,
   credentials,
+  workspaceOAuthKinds,
 }: {
   requiredKinds: { kind: string }[]
   credentials: UserCredential[]
+  workspaceOAuthKinds: Set<string>
 }) {
   const { t } = useTranslation("admin")
   return (
     <div className="space-y-1.5">
       {requiredKinds.map((rc) => {
-        const has = hasCredentialKind(credentials, rc.kind)
+        const has = hasCredentialKind(credentials, workspaceOAuthKinds, rc.kind)
         return (
           <div
             key={rc.kind}
@@ -398,6 +424,7 @@ function CapabilityVersionDialog({
   agent,
   capability,
   credentials = [],
+  workspaceOAuthKinds,
   workspaceID,
   binding,
   triggerLabel,
@@ -408,6 +435,7 @@ function CapabilityVersionDialog({
   agent: Agent
   capability: Capability
   credentials?: UserCredential[]
+  workspaceOAuthKinds: Set<string>
   workspaceID: string | null
   binding?: AgentCapability
   triggerLabel?: string
@@ -423,7 +451,7 @@ function CapabilityVersionDialog({
     ? versions.find((version) => version.id === selected) ?? (mode === "enable" ? latest : versions[0])
     : mode === "enable" ? latest : versions[0]
   const requiredKinds = mode === "enable" ? requiredCredentialKinds(capability) : []
-  const missingRequiredCredential = requiredKinds.some((rc) => !hasCredentialKind(credentials, rc.kind))
+  const missingRequiredCredential = requiredKinds.some((rc) => !hasCredentialKind(credentials, workspaceOAuthKinds, rc.kind))
   const canSubmit = !!selectedVersion
     && !mut.isPending
     && (mode === "enable" ? !missingRequiredCredential : selectedVersion.id !== binding?.capability_version_id)
@@ -476,7 +504,7 @@ function CapabilityVersionDialog({
                 {versionsQ.isLoading ? <Skeleton className="h-8 w-full" /> : <VersionSelect versions={versions} value={selectedVersion?.id ?? ""} onChange={setSelected} />}
               </div>
               {requiredKinds.length > 0 ? (
-                <EnableCredentialStatusList requiredKinds={requiredKinds} credentials={credentials} />
+                <EnableCredentialStatusList requiredKinds={requiredKinds} credentials={credentials} workspaceOAuthKinds={workspaceOAuthKinds} />
               ) : (
                 <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
                   {t("agents.detail.capabilities.enableDialog.noCredential")}
@@ -562,18 +590,22 @@ export function AgentConfigTab({
   workspaceID,
   workspaceRole,
   modelLabel,
+  pendingCapabilityID,
   onToast,
 }: {
   agent: AgentDetail
   workspaceID: string | null
   workspaceRole?: string
   modelLabel: string
+  pendingCapabilityID?: string | null
   onToast: (message: string) => void
 }) {
   const agentCapabilitiesQ = useAgentCapabilitiesQuery(workspaceID, agent.id)
   const workspaceCapabilitiesQ = useCapabilitiesQuery(workspaceID)
   const credentialsQ = useMyCredentials()
+  const secretsQ = useSecrets(workspaceID)
   const credentials = credentialsQ.data?.credentials ?? []
+  const workspaceOAuthKinds = workspaceOAuthCredentialKinds(secretsQ.data?.secrets ?? [])
   const installedCapabilities = agentCapabilitiesQ.data?.installed ?? []
   const availableCapabilities = agentCapabilitiesQ.data?.available ?? workspaceCapabilitiesQ.data?.capabilities ?? []
   const installedIDs = new Set(installedCapabilities.map((item) => item.capability_id))
@@ -605,9 +637,11 @@ export function AgentConfigTab({
         isAdmin={isAdmin}
         enabledCaps={enabledCaps}
         installable={installable}
+        pendingCapabilityID={pendingCapabilityID}
         credentials={credentials}
-        loading={agentCapabilitiesQ.isLoading || workspaceCapabilitiesQ.isLoading}
-        error={agentCapabilitiesQ.error ?? workspaceCapabilitiesQ.error}
+        workspaceOAuthKinds={workspaceOAuthKinds}
+        loading={agentCapabilitiesQ.isLoading || workspaceCapabilitiesQ.isLoading || secretsQ.isLoading}
+        error={agentCapabilitiesQ.error ?? workspaceCapabilitiesQ.error ?? secretsQ.error}
         onToast={onToast}
       />
     </div>
@@ -620,7 +654,9 @@ function ConfigCapabilitiesSection({
   isAdmin,
   enabledCaps,
   installable,
+  pendingCapabilityID,
   credentials,
+  workspaceOAuthKinds,
   loading,
   error,
   onToast,
@@ -630,13 +666,23 @@ function ConfigCapabilitiesSection({
   isAdmin: boolean
   enabledCaps: Array<{ binding: AgentCapability; capability?: Capability }>
   installable: Capability[]
+  pendingCapabilityID?: string | null
   credentials: UserCredential[]
+  workspaceOAuthKinds: Set<string>
   loading: boolean
   error: unknown
   onToast: (message: string) => void
 }) {
   const { t } = useTranslation("admin")
   const [addOpen, setAddOpen] = useState(false)
+  const openedPendingCapability = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!isAdmin || !pendingCapabilityID || openedPendingCapability.current === pendingCapabilityID) return
+    if (!installable.some((capability) => capability.id === pendingCapabilityID)) return
+    openedPendingCapability.current = pendingCapabilityID
+    setAddOpen(true)
+  }, [installable, isAdmin, pendingCapabilityID])
 
   if (loading) {
     return (
@@ -700,6 +746,7 @@ function ConfigCapabilitiesSection({
                 agent={agent}
                 workspaceID={workspaceID}
                 credentials={credentials}
+                workspaceOAuthKinds={workspaceOAuthKinds}
                 mode="enabled"
                 onToast={onToast}
               />
@@ -714,7 +761,9 @@ function ConfigCapabilitiesSection({
         agent={agent}
         workspaceID={workspaceID}
         installable={installable}
+        preferredCapabilityID={pendingCapabilityID}
         credentials={credentials}
+        workspaceOAuthKinds={workspaceOAuthKinds}
         onToast={onToast}
       />
     </section>
@@ -727,7 +776,9 @@ function AddCapabilityDialog({
   agent,
   workspaceID,
   installable,
+  preferredCapabilityID,
   credentials,
+  workspaceOAuthKinds,
   onToast,
 }: {
   open: boolean
@@ -735,12 +786,15 @@ function AddCapabilityDialog({
   agent: Agent
   workspaceID: string | null
   installable: Capability[]
+  preferredCapabilityID?: string | null
   credentials: UserCredential[]
+  workspaceOAuthKinds: Set<string>
   onToast: (message: string) => void
 }) {
   const { t } = useTranslation("admin")
   const [q, setQ] = useState("")
-  const filtered = installable.filter((cap) => {
+  const preferredCapability = installable.find((cap) => cap.id === preferredCapabilityID)
+  const filtered = !q.trim() && preferredCapability ? [preferredCapability] : installable.filter((cap) => {
     if (!q.trim()) return true
     const needle = q.toLowerCase()
     return cap.name.toLowerCase().includes(needle)
@@ -777,6 +831,7 @@ function AddCapabilityDialog({
                   agent={agent}
                   workspaceID={workspaceID}
                   credentials={credentials}
+                  workspaceOAuthKinds={workspaceOAuthKinds}
                   mode="available"
                   onToast={(msg) => {
                     onToast(msg)

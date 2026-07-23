@@ -36,7 +36,6 @@ services:
       PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
       PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
       PARSAR_AGENT_DAEMON_WS_URL: "ws://parsar-server:8080/agent-daemon/ws"
-      PARSAR_MCP_CATALOG_URL: "${PARSAR_MCP_CATALOG_URL:-}"
     volumes:
       - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
     healthcheck:

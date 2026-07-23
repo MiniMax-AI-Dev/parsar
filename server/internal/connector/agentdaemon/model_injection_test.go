@@ -30,6 +30,8 @@ type fakeModelResolver struct {
 	// resolver is never invoked when an agent has a workspace secret.
 	resolveCalls     int
 	resolveUserCalls int
+	updatedSecretID  string
+	updatedPayload   []byte
 }
 
 func (f *fakeModelResolver) ResolveModelRuntime(_ context.Context, _, _ string) (store.ModelRuntime, error) {
@@ -64,6 +66,14 @@ func (f *fakeModelResolver) GetSecretPayload(_ context.Context, _, _ string) (st
 	if f.secretErr != nil {
 		return store.SecretPayload{}, f.secretErr
 	}
+	return f.secret, nil
+}
+
+func (f *fakeModelResolver) UpdateSecretPayload(_ context.Context, _, secretID string, encryptedPayload []byte) (store.SecretPayload, error) {
+	f.updatedSecretID = secretID
+	f.updatedPayload = encryptedPayload
+	f.secret.EncryptedPayload = encryptedPayload
+	f.secret.Status = "active"
 	return f.secret, nil
 }
 

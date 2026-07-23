@@ -347,15 +347,19 @@
     },
     "runtime_error": {
       "badge": "Run failed",
+      "capabilityBadge": "Capability unavailable",
       "fallbackCapability": "this capability",
       "capability_credential_missing": "Capability {{name}} failed to start: missing {{kind}} credential.",
       "capability_credential_decrypt_failed": "Capability {{name}} credential could not be decrypted. Please contact an administrator.",
       "capability_credential_kind_mismatch": "Capability {{name}} credential type does not match. Please set it again.",
+      "capability_unsupported": "Capability {{name}} is not supported by this Agent type and was skipped.",
       "capability_version_unavailable": "Capability {{name}} has no usable upload yet. Re-upload it as a zip, pick a newer version, or switch the binding to 'latest'.",
       "addCredential": "Add credential",
       "resetCredential": "Reset credential",
       "manageCapability": "Manage capability",
       "retryHint": "After setting the credential, send your request again. Parsar will not retry automatically.",
+      "unsupportedHint": "Remove this capability from the Agent, or use an Agent type that supports it.",
+      "versionUnavailableHint": "Upload a zip version or remove this capability, then send your request again.",
       "generic": "A runtime capability failed to start. Please retry later or contact an administrator."
     },
     "composer": {
@@ -891,12 +895,27 @@
     },
     "mcpDirectory": {
       "title": "Connectors",
-      "description": "Browse curated local and remote MCP servers and import their configuration into this workspace.",
+      "description": "Browse curated MCP servers and import their configuration into this workspace.",
       "verified": "Verified",
       "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
+      "oauth": {
+        "required": "OAuth 2.1 required",
+        "connected": "Authorized",
+        "authorized": "Authorized, connection not verified",
+        "verified": "Connection verified",
+        "connect": "Connect {{name}}",
+        "reconnect": "Reconnect",
+        "workspaceCredential": "Workspace credential",
+        "test": "Test connection",
+        "testing": "Testing...",
+        "testSuccess": "Connection works",
+        "testFailed": "Connection test failed. Reconnect and try again.",
+        "approvedClientRequired": "{{name}} currently requires an approved MCP client and can't be connected from Parsar.",
+        "authorizeAndContinue": "Authorize & continue",
+        "authorizeBeforeImport": "Authorize this workspace before importing. You'll return here to confirm the import."
+      },
       "source": {
-        "builtin": "Built-in catalog",
-        "remote": "Remote catalog"
+        "builtin": "Built-in catalog"
       },
       "filters": {
         "category": "Connector categories",
@@ -905,15 +924,28 @@
         "sort": "Sort connectors"
       },
       "sort": {
-        "popular": "Most popular",
+        "featured": "Featured",
         "name": "Name"
       },
       "actions": {
         "import": "Import",
-        "installed": "Installed",
+        "installed": "Imported",
+        "unavailable": "Unavailable",
         "back": "Back to connectors",
         "viewCapability": "View Capability",
         "addToAgent": "Add to Agent"
+      },
+      "addToAgent": {
+        "title": "Add {{name}} to an Agent",
+        "description": "Choose an Agent. The latest version will be added immediately.",
+        "connectorFallback": "connector",
+        "agentListLabel": "Agents",
+        "added": "Added",
+        "empty": "You don't have an Agent you can manage in this workspace.",
+        "loadError": "Couldn't load the connector or Agent list.",
+        "submitError": "Couldn't add the connector to this Agent.",
+        "cancel": "Cancel",
+        "success": "{{capabilityName}} was added to {{agentName}}."
       },
       "loadError": {
         "title": "Couldn't load the connectors directory",
@@ -928,7 +960,6 @@
         "notFound": "Connector not found",
         "version": "Version",
         "transport": "Transport",
-        "rank": "Popularity rank",
         "timeout": "Startup timeout",
         "seconds_one": "{{count}} second",
         "seconds_other": "{{count}} seconds",
@@ -980,6 +1011,7 @@
     },
     "marketStatus": {
       "title": "Market status",
+      "directoryManaged": "Connector Directory item",
       "published": "Published to market",
       "unpublished": "Not published",
       "installCount": "{{count}} workspace(s) added",
@@ -1711,8 +1743,8 @@
       }
     },
     "pendingCapability": {
-      "banner": "You are preparing to add \"{{name}}\" (from {{source}}). Choose an Agent to enable it.",
-      "detailBanner": "You are adding \"{{name}}\" (from {{source}}). Use Enable in the Available section below to finish.",
+      "banner": "You are adding \"{{name}}\" (from {{source}}). Select an Agent to open its Add Capability dialog.",
+      "detailBanner": "You are adding \"{{name}}\" (from {{source}}). Select a version in the open dialog, then click Enable.",
       "loading": "Loading the capability you are preparing to add…",
       "cancel": "Cancel"
     },

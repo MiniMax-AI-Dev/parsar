@@ -1963,9 +1963,9 @@ order by created_at desc, id desc
 limit @item_limit;
 
 -- name: CreateSecret :one
--- Organization-level shared secret. slug is supplied by the caller
--- (via generateAutoSlug("secret")); name is the display name and
--- may repeat.
+-- Shared secret. capability_inline rows may carry metadata.workspace_id;
+-- legacy and infrastructure kinds remain organization-wide. slug is supplied
+-- by the caller (via generateAutoSlug("secret")); name may repeat.
 insert into secrets(
   id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at
 )
@@ -1984,11 +1984,31 @@ where (@kind_filter::text = '' or kind = @kind_filter::text)
 order by created_at desc, id desc
 limit @item_limit;
 
+-- name: ListSecretsForWorkspace :many
+-- Workspace-scoped capability credentials are stamped in metadata. Legacy
+-- secrets without workspace_id remain organization-wide for compatibility.
+select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+from secrets
+where (coalesce(metadata->>'workspace_id', '') = '' or metadata->>'workspace_id' = @workspace_id::text)
+  and deleted_at is null
+order by created_at desc, id desc
+limit @item_limit;
+
 -- name: GetSecretPayload :one
 select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
 from secrets
 where id = @id::uuid
   and deleted_at is null;
+
+-- name: UpdateSecretPayload :one
+update secrets
+set encrypted_payload = @encrypted_payload::jsonb,
+    key_version = @key_version,
+    status = 'active',
+    updated_at = @now
+where id = @id::uuid
+  and deleted_at is null
+returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at;
 
 -- name: ResolveSlackBotSecretByTeam :one
 -- Resolve the active Slack bot-token secret for a workspace, keyed by the

@@ -31,6 +31,14 @@ function toolIcon(name: string) {
   return TOOL_ICONS[key] ?? Wrench
 }
 
+function displayToolName(name: string): string {
+  const match = /^mcp__([^_]+)__(.+)$/i.exec(name.trim())
+  if (!match) return (name || "tool").toUpperCase()
+  const server = match[1].replace(/[-_]+/g, " ").toUpperCase()
+  const tool = match[2].replace(/[-_]+/g, " ").toUpperCase()
+  return `${server} · ${tool}`
+}
+
 const SUMMARY_MAX = 80
 
 /** Picks the most informative single field from a tool's args payload.
@@ -100,7 +108,7 @@ export function StepItem({
   durationMs?: number
 }) {
   const Icon = toolIcon(name)
-  const upper = (name || "tool").toUpperCase()
+  const upper = displayToolName(name)
   const summary = detail ? ellipsizeMiddle(detail) : ""
   return (
     <div className="flex items-center gap-1.5 py-0.5 text-sm">
@@ -121,14 +129,12 @@ export function StepItem({
               ? "text-danger-emphasis"
               : "text-fg-subtle",
         )}
+        title={name}
       >
         {upper}
       </span>
       {summary && (
-        <span
-          className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle"
-          title={detail}
-        >
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle" title={detail}>
           {summary}
         </span>
       )}
@@ -169,8 +175,7 @@ export function WorkingSteps({
   const lastEnded = !anyRunning
     ? Math.max(...completedSteps.map((s) => s.ended_at ?? s.started_at), 0)
     : null
-  const overallMs =
-    firstStart === null ? 0 : (lastEnded ?? now) - firstStart
+  const overallMs = firstStart === null ? 0 : (lastEnded ?? now) - firstStart
 
   return (
     <div className="flex w-fit min-w-[240px] flex-col gap-1 rounded-md bg-surface px-3 py-2 text-sm shadow-sm ring-1 ring-slate-200/70">
@@ -179,9 +184,7 @@ export function WorkingSteps({
           type="button"
           aria-expanded={expanded}
           aria-label={
-            expanded
-              ? t("conversations.steps.collapseAria")
-              : t("conversations.steps.expandAria")
+            expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")
           }
           onClick={() => setExpanded((v) => !v)}
           className="flex shrink-0 items-center text-fg-faint transition-colors hover:text-fg-muted"
@@ -235,7 +238,9 @@ export function WorkingSteps({
             type="button"
             onClick={onCancel}
             disabled={cancelling}
-            aria-label={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
+            aria-label={t("conversations.steps.cancelAria", {
+              defaultValue: "Cancel current task",
+            })}
             title={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
             className="rounded p-0.5 text-fg-faint transition-colors hover:bg-surface-muted hover:text-danger disabled:opacity-40"
           >
@@ -292,7 +297,9 @@ export function StepTrace({ steps }: { steps: ToolStep[] }) {
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")}
+        aria-label={
+          expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")
+        }
         onClick={() => setExpanded((v) => !v)}
         className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg-muted"
       >

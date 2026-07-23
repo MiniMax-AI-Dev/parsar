@@ -311,6 +311,15 @@ export function CreateAgentDialog({
     () => (secretsQ.data?.secrets ?? []).filter((s) => s.kind === "capability_inline" && s.status === "active"),
     [secretsQ.data?.secrets],
   )
+  const workspaceOAuthCredentialKinds = useMemo(
+    () => new Set(
+      sharedSecrets
+        .filter((secret) => secret.auth_type === "oauth2" && typeof secret.metadata.catalog_id === "string")
+        .map((secret) => secret.metadata.credential_kind_code)
+        .filter((kind): kind is string => typeof kind === "string" && kind !== ""),
+    ),
+    [sharedSecrets],
+  )
   const activeModels = useMemo(() => models.filter((m) => m.status === "active"), [models])
   // Default to the first model the chosen engine can actually drive, so a
   // fresh create (and any engine switch) never lands on a greyed-out model
@@ -463,10 +472,13 @@ export function CreateAgentDialog({
     return [...own, ...installed, ...available]
   }, [allCapabilitiesQ.data])
   const aggregatedRequiredKinds = useMemo(
-    () => mode === "create"
-      ? aggregateRequiredCredentialsByID(selectedCapabilityIDs, allCapabilitiesPool)
-      : aggregateRequiredCredentials(capabilities, allCapabilitiesPool),
-    [capabilities, mode, selectedCapabilityIDs, allCapabilitiesPool]
+    () => {
+      const required = mode === "create"
+        ? aggregateRequiredCredentialsByID(selectedCapabilityIDs, allCapabilitiesPool)
+        : aggregateRequiredCredentials(capabilities, allCapabilitiesPool)
+      return required.filter((credential) => !workspaceOAuthCredentialKinds.has(credential.kind))
+    },
+    [capabilities, mode, selectedCapabilityIDs, allCapabilitiesPool, workspaceOAuthCredentialKinds]
   )
   const admin = isAdminRole(workspaceRole)
 

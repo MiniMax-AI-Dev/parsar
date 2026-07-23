@@ -15,6 +15,7 @@ import (
 type mcpServerConfig struct {
 	Name    string
 	URL     string
+	Headers map[string]string
 	Command string
 	Args    []string
 	Env     map[string]string
@@ -53,7 +54,25 @@ func writeCodexMCPConfig(codexHome string, servers map[string]mcpServerConfig) e
 		if srv.URL != "" {
 			b.WriteString(`url = `)
 			b.WriteString(tomlQuoteString(srv.URL))
-			b.WriteString("\n\n")
+			b.WriteByte('\n')
+			if len(srv.Headers) > 0 {
+				headerKeys := make([]string, 0, len(srv.Headers))
+				for key := range srv.Headers {
+					headerKeys = append(headerKeys, key)
+				}
+				sort.Strings(headerKeys)
+				b.WriteString("http_headers = {")
+				for index, key := range headerKeys {
+					if index > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(tomlQuoteString(key))
+					b.WriteString(" = ")
+					b.WriteString(tomlQuoteString(srv.Headers[key]))
+				}
+				b.WriteString("}\n")
+			}
+			b.WriteByte('\n')
 			continue
 		}
 		b.WriteString(`command = `)

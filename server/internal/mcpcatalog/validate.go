@@ -82,14 +82,37 @@ func (i Item) Validate() error {
 			return fmt.Errorf("item %q: %w", i.ID, err)
 		}
 	}
-	if i.PopularityRank < 1 {
-		return fmt.Errorf("item %q popularity_rank must be positive", i.ID)
+	if i.FeaturedRank < 1 {
+		return fmt.Errorf("item %q featured_rank must be positive", i.ID)
 	}
 	if strings.TrimSpace(i.Version) == "" {
 		return fmt.Errorf("item %q version is required", i.ID)
 	}
 	if i.Transport != canonical.MCPTransportStdio && i.Transport != canonical.MCPTransportStreamableHTTP {
 		return fmt.Errorf("item %q transport %q is unsupported", i.ID, i.Transport)
+	}
+	switch i.Authentication.EffectiveType() {
+	case "none":
+		if strings.TrimSpace(i.Authentication.CredentialKind) != "" {
+			return fmt.Errorf("item %q authentication credential_kind requires oauth2", i.ID)
+		}
+		if strings.TrimSpace(i.Authentication.ClientRegistration) != "" {
+			return fmt.Errorf("item %q authentication client_registration requires oauth2", i.ID)
+		}
+	case "oauth2":
+		if i.Transport != canonical.MCPTransportStreamableHTTP {
+			return fmt.Errorf("item %q oauth2 authentication requires streamable-http", i.ID)
+		}
+		if !envPattern.MatchString(i.Authentication.CredentialKind) {
+			return fmt.Errorf("item %q authentication credential_kind %q is invalid", i.ID, i.Authentication.CredentialKind)
+		}
+		switch i.Authentication.EffectiveClientRegistration() {
+		case ClientRegistrationDynamic, ClientRegistrationApprovedClient:
+		default:
+			return fmt.Errorf("item %q authentication client_registration %q is unsupported", i.ID, i.Authentication.ClientRegistration)
+		}
+	default:
+		return fmt.Errorf("item %q authentication type %q is unsupported", i.ID, i.Authentication.Type)
 	}
 	categorySeen := make(map[string]struct{}, len(i.Categories))
 	for _, category := range i.Categories {

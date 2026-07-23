@@ -205,7 +205,7 @@ func TestResolveCapabilityAdditions_EmptyAgentKindDefaultsClaudeCode(t *testing.
 // production buildAgentOptions entry — not just resolveCapabilityAdditions
 // directly — to confirm that an unsupported-by-agent-kind capability
 // flows all the way through emitDisabledCapabilityNotices and lands in
-// the SystemMessages sink as a CapabilityCredentialMissing notice.
+// the SystemMessages sink as a CapabilityUnsupported notice.
 //
 // This is the contract the channel layer relies on: a codex agent
 // enabling a skill capability must produce a user-visible nudge
@@ -241,8 +241,8 @@ func TestBuildAgentOptions_CodexSkillSurfacesDisabledNotice(t *testing.T) {
 		t.Fatalf("expected exactly 1 runtime_error notice for the disabled skill, got %d: %+v", len(sm.runtimeErrors), sm.runtimeErrors)
 	}
 	notice := sm.runtimeErrors[0]
-	if notice.SubKind != CapabilityCredentialMissing {
-		t.Errorf("SubKind = %q, want %q", notice.SubKind, CapabilityCredentialMissing)
+	if notice.SubKind != CapabilityUnsupported {
+		t.Errorf("SubKind = %q, want %q", notice.SubKind, CapabilityUnsupported)
 	}
 	if notice.CapabilityID != "skill-a" {
 		t.Errorf("CapabilityID = %q, want skill-a", notice.CapabilityID)

@@ -27,6 +27,7 @@ type openCodeMCPDocument struct {
 type openCodeMCPServer struct {
 	Type    string            `json:"type,omitempty"`
 	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
@@ -61,7 +62,11 @@ func renderOpenCodeMCP(s *canonical.MCPSpec) (Output, error) {
 	doc := openCodeMCPDocument{MCPServers: make(map[string]openCodeMCPServer, len(s.Servers))}
 	for _, srv := range s.Servers {
 		if srv.EffectiveTransport() == canonical.MCPTransportStreamableHTTP {
-			doc.MCPServers[srv.Name] = openCodeMCPServer{Type: "remote", URL: srv.URL, Enabled: true}
+			headers, err := renderEnvMap(srv.Headers)
+			if err != nil {
+				return Output{}, fmt.Errorf("opencode render: server %q headers: %w", srv.Name, err)
+			}
+			doc.MCPServers[srv.Name] = openCodeMCPServer{Type: "remote", URL: srv.URL, Headers: headers, Enabled: true}
 			continue
 		}
 		env, err := renderEnvMap(srv.Env)

@@ -112,9 +112,20 @@ export interface MCPDirectoryItem {
   repository_url?: string
   verified: boolean
   categories: string[]
-  popularity_rank: number
+  featured_rank: number
   version: string
   transport: "stdio" | "streamable-http"
+  authentication: "none" | "oauth2"
+  credential_kind?: string
+  connection_supported: boolean
+  connected: boolean
+  connection_status?: "authorized" | "verified" | "reconnect_required" | "unavailable"
+  connection_checked_at?: string
+  connection_error?: string
+  connection_protocol_version?: string
+  connection_server_name?: string
+  connection_server_version?: string
+  connection_tool_count?: number
   url?: string
   command?: string
   args?: string[]
@@ -127,7 +138,7 @@ export interface MCPDirectoryItem {
 export interface MCPDirectoryListResponse {
   items: MCPDirectoryItem[]
   updated_at: string
-  source: "builtin" | "remote"
+  source: "builtin"
 }
 
 export interface MCPDirectoryImportResponse {
@@ -135,6 +146,18 @@ export interface MCPDirectoryImportResponse {
   capability_id: string
   created: boolean
   capability?: Capability
+}
+
+export interface MCPDirectoryConnectionResult {
+  authorized: boolean
+  verified: boolean
+  status: "verified" | "reconnect_required" | "unavailable"
+  checked_at?: string
+  error_code?: string
+  protocol_version?: string
+  server_name?: string
+  server_version?: string
+  tool_count?: number
 }
 
 interface MarketplaceListResponse {
@@ -260,6 +283,26 @@ async function importMCPDirectoryItem(
 ): Promise<MCPDirectoryImportResponse> {
   return apiRequest<MCPDirectoryImportResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/import`,
+    { method: "POST" },
+  )
+}
+
+export function mcpDirectoryOAuthStartURL(
+  workspaceID: string,
+  catalogID: string,
+  options?: { intent?: "import" },
+): string {
+  const path = `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/oauth/start`
+  if (!options?.intent) return path
+  return `${path}?${new URLSearchParams({ intent: options.intent }).toString()}`
+}
+
+async function testMCPDirectoryConnection(
+  workspaceID: string,
+  catalogID: string,
+): Promise<MCPDirectoryConnectionResult> {
+  return apiRequest<MCPDirectoryConnectionResult>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/oauth/test`,
     { method: "POST" },
   )
 }
@@ -421,6 +464,44 @@ export function useImportMCPDirectoryItem(workspaceID: string | null) {
       )
       void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID) })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
+    },
+  })
+}
+
+export function useTestMCPDirectoryConnection(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ catalogID }: { catalogID: string }) => {
+      if (!workspaceID) throw new Error("workspace is required")
+      return testMCPDirectoryConnection(workspaceID, catalogID)
+    },
+    retry: noUnreachableRetry,
+    onSuccess: (result, { catalogID }) => {
+      if (!workspaceID) return
+      const connectionPatch: Partial<MCPDirectoryItem> = {
+        connected: result.authorized,
+        connection_status: result.status,
+        connection_checked_at: result.checked_at,
+        connection_error: result.error_code,
+        connection_protocol_version: result.protocol_version,
+        connection_server_name: result.server_name,
+        connection_server_version: result.server_version,
+        connection_tool_count: result.tool_count,
+      }
+      qc.setQueryData<MCPDirectoryItem>(
+        KEY_MCP_DIRECTORY_DETAIL(workspaceID, catalogID),
+        (current) => (current ? { ...current, ...connectionPatch } : current),
+      )
+      qc.setQueryData<MCPDirectoryListResponse>(KEY_MCP_DIRECTORY(workspaceID), (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === catalogID ? { ...item, ...connectionPatch } : item,
+              ),
+            }
+          : current,
+      )
     },
   })
 }

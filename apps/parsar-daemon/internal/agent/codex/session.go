@@ -345,6 +345,7 @@ func (s *Session) registerHandlers() {
 	// Older app-server releases used this unseparated method name.
 	rpc.OnServerRequest("item/permissionsRequestApproval", s.handleCodexPermissionsApproval)
 	rpc.OnServerRequest("item/tool/requestUserInput", s.handleCodexUserInput)
+	rpc.OnServerRequest("mcpServer/elicitation/request", s.handleCodexMCPElicitation)
 }
 
 func (s *Session) onThreadStarted(raw json.RawMessage) {

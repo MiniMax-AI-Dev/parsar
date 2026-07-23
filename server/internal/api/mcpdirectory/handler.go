@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -29,9 +32,21 @@ type directoryStore interface {
 	ImportCapability(ctx context.Context, input store.ImportCapabilityInput) (store.ImportCapabilityResult, error)
 }
 
+type workspaceCredentialStore interface {
+	ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]store.SecretRead, error)
+	CreateSecret(ctx context.Context, input store.CreateSecretInput, encryptedPayload []byte) (store.SecretRead, error)
+	GetSecretPayload(ctx context.Context, workspaceID, secretID string) (store.SecretPayload, error)
+	UpdateSecretPayload(ctx context.Context, workspaceID, secretID string, encryptedPayload []byte) (store.SecretPayload, error)
+}
+
 type Deps struct {
-	Catalog catalogLoader
-	Store   directoryStore
+	Catalog              catalogLoader
+	Store                directoryStore
+	WorkspaceCredentials workspaceCredentialStore
+	OAuth                *mcpoauth.Client
+	Secrets              *secrets.Service
+	PublicURL            string
+	CookieSecure         bool
 }
 
 type handler struct {
@@ -48,9 +63,20 @@ type itemResponse struct {
 	RepositoryURL         string               `json:"repository_url,omitempty"`
 	Verified              bool                 `json:"verified"`
 	Categories            []string             `json:"categories"`
-	PopularityRank        int                  `json:"popularity_rank"`
+	FeaturedRank          int                  `json:"featured_rank"`
 	Version               string               `json:"version"`
 	Transport             string               `json:"transport"`
+	Authentication        string               `json:"authentication"`
+	CredentialKind        string               `json:"credential_kind,omitempty"`
+	ConnectionSupported   bool                 `json:"connection_supported"`
+	Connected             bool                 `json:"connected"`
+	ConnectionStatus      string               `json:"connection_status,omitempty"`
+	ConnectionCheckedAt   *time.Time           `json:"connection_checked_at,omitempty"`
+	ConnectionError       string               `json:"connection_error,omitempty"`
+	ConnectionProtocol    string               `json:"connection_protocol_version,omitempty"`
+	ConnectionServerName  string               `json:"connection_server_name,omitempty"`
+	ConnectionServerVer   string               `json:"connection_server_version,omitempty"`
+	ConnectionToolCount   *int                 `json:"connection_tool_count,omitempty"`
 	URL                   string               `json:"url,omitempty"`
 	Command               string               `json:"command,omitempty"`
 	Args                  []string             `json:"args,omitempty"`
@@ -85,6 +111,9 @@ func RegisterRoutes(r chi.Router, deps Deps) {
 	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory", h.list)
 	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}", h.get)
 	r.Post("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/import", h.importItem)
+	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start", h.oauthStart)
+	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback", h.oauthCallback)
+	r.Post("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/test", h.oauthTest)
 }
 
 // list godoc
@@ -109,9 +138,13 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byCatalog := installMap(installs)
+	connections, ok := h.connectionStates(w, r, workspaceID)
+	if !ok {
+		return
+	}
 	items := make([]itemResponse, 0, len(snapshot.Catalog.Items))
 	for _, item := range snapshot.Catalog.Items {
-		items = append(items, summarizeItem(item, byCatalog[item.ID]))
+		items = append(items, summarizeItem(item, byCatalog[item.ID], connections))
 	}
 	writeJSON(w, http.StatusOK, listResponse{
 		Items:     items,
@@ -145,7 +178,11 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return
 	}
-	response := summarizeItem(item, installMap(installs)[item.ID])
+	connections, ok := h.connectionStates(w, r, workspaceID)
+	if !ok {
+		return
+	}
+	response := summarizeItem(item, installMap(installs)[item.ID], connections)
 	response.URL = item.Server.URL
 	response.Command = item.Server.Command
 	response.Args = append([]string(nil), item.Server.Args...)
@@ -185,6 +222,10 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing, installed := installMap(installs)[item.ID]; installed {
 		writeJSON(w, http.StatusOK, importResponse{Installed: true, CapabilityID: existing.CapabilityID})
+		return
+	}
+	if !item.Authentication.ConnectionSupported() {
+		writeError(w, http.StatusConflict, "connector_connection_unavailable")
 		return
 	}
 
@@ -234,6 +275,14 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) authorize(w http.ResponseWriter, r *http.Request, admin bool) (string, bool) {
+	allowed := []string{"owner", "admin", "member", "viewer"}
+	if admin {
+		allowed = []string{"owner", "admin"}
+	}
+	return h.authorizeRoles(w, r, allowed...)
+}
+
+func (h *handler) authorizeRoles(w http.ResponseWriter, r *http.Request, allowed ...string) (string, bool) {
 	if h.deps.Catalog == nil || h.deps.Store == nil {
 		writeError(w, http.StatusServiceUnavailable, "mcp_directory_unavailable")
 		return "", false
@@ -242,10 +291,6 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, admin bool) 
 	if _, err := uuid.Parse(workspaceID); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_workspace_id")
 		return "", false
-	}
-	allowed := []string{"owner", "admin", "member", "viewer"}
-	if admin {
-		allowed = []string{"owner", "admin"}
 	}
 	if err := auth.RequireWorkspaceRole(r.Context(), h.deps.Store, workspaceID, allowed...); err != nil {
 		switch {
@@ -283,12 +328,28 @@ func installMap(installs []store.MCPDirectoryInstall) map[string]store.MCPDirect
 	return result
 }
 
-func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall) itemResponse {
+type connectionState struct {
+	Authorized      bool
+	Status          string
+	CheckedAt       *time.Time
+	ErrorCode       string
+	ProtocolVersion string
+	ServerName      string
+	ServerVersion   string
+	ToolCount       *int
+}
+
+func summarizeItem(
+	item mcpcatalog.Item,
+	install store.MCPDirectoryInstall,
+	connections map[string]connectionState,
+) itemResponse {
 	var installedCapabilityID *string
 	if install.CapabilityID != "" {
 		id := install.CapabilityID
 		installedCapabilityID = &id
 	}
+	connection := connections[item.Authentication.CredentialKind]
 	return itemResponse{
 		ID:                    item.ID,
 		Name:                  item.Name,
@@ -299,12 +360,90 @@ func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall) item
 		RepositoryURL:         item.RepositoryURL,
 		Verified:              item.Verified,
 		Categories:            append([]string(nil), item.Categories...),
-		PopularityRank:        item.PopularityRank,
+		FeaturedRank:          item.FeaturedRank,
 		Version:               item.Version,
 		Transport:             item.Transport,
+		Authentication:        item.Authentication.EffectiveType(),
+		CredentialKind:        item.Authentication.CredentialKind,
+		ConnectionSupported:   item.Authentication.ConnectionSupported(),
+		Connected:             connection.Authorized,
+		ConnectionStatus:      connection.Status,
+		ConnectionCheckedAt:   connection.CheckedAt,
+		ConnectionError:       connection.ErrorCode,
+		ConnectionProtocol:    connection.ProtocolVersion,
+		ConnectionServerName:  connection.ServerName,
+		ConnectionServerVer:   connection.ServerVersion,
+		ConnectionToolCount:   connection.ToolCount,
 		Installed:             install.CapabilityID != "",
 		InstalledCapabilityID: installedCapabilityID,
 	}
+}
+
+func (h *handler) connectionStates(w http.ResponseWriter, r *http.Request, workspaceID string) (map[string]connectionState, bool) {
+	if h.deps.WorkspaceCredentials == nil {
+		return map[string]connectionState{}, true
+	}
+	workspaceSecrets, err := h.deps.WorkspaceCredentials.ListSecrets(r.Context(), workspaceID, 1000)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "connector_workspace_connection_state_failed")
+		return nil, false
+	}
+	result := make(map[string]connectionState)
+	for _, workspaceSecret := range workspaceSecrets {
+		if workspaceSecret.Kind != "capability_inline" ||
+			workspaceSecret.Status != "active" ||
+			workspaceSecret.AuthType != "oauth2" ||
+			metadataString(workspaceSecret.Metadata, "workspace_id") != workspaceID {
+			continue
+		}
+		credentialKind := metadataString(workspaceSecret.Metadata, "credential_kind_code")
+		if credentialKind == "" {
+			continue
+		}
+		if _, exists := result[credentialKind]; exists {
+			continue
+		}
+		state := connectionState{Authorized: true, Status: "authorized"}
+		if h.deps.Secrets != nil {
+			stored, err := h.deps.WorkspaceCredentials.GetSecretPayload(r.Context(), workspaceID, workspaceSecret.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "connector_workspace_connection_state_failed")
+				return nil, false
+			}
+			payload, err := h.deps.Secrets.Decrypt(stored.EncryptedPayload)
+			if err != nil {
+				state.Status = mcpoauth.VerificationUnavailable
+				state.ErrorCode = "connector_oauth_credential_unreadable"
+			} else {
+				applyVerificationState(&state, payload)
+			}
+		}
+		result[credentialKind] = state
+	}
+	return result, true
+}
+
+func applyVerificationState(state *connectionState, payload map[string]any) {
+	verification := mcpoauth.VerificationFromPayload(payload)
+	if verification.Status == "" {
+		return
+	}
+	state.Status = verification.Status
+	state.ErrorCode = verification.ErrorCode
+	state.ProtocolVersion = verification.ProtocolVersion
+	state.ServerName = verification.ServerName
+	state.ServerVersion = verification.ServerVersion
+	if !verification.CheckedAt.IsZero() {
+		checkedAt := verification.CheckedAt
+		state.CheckedAt = &checkedAt
+	}
+	toolCount := verification.ToolCount
+	state.ToolCount = &toolCount
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	value, _ := metadata[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func sortedEnvNames(env map[string]string) []string {

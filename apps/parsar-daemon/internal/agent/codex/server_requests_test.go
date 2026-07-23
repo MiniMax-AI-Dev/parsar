@@ -239,6 +239,83 @@ func TestCodexUserInputCancellationReturnsErrorInsteadOfEmptyAnswers(t *testing.
 	}
 }
 
+func TestCodexMCPElicitationMapsFormAnswers(t *testing.T) {
+	tc, srv, cleanup := NewTestClient()
+	defer cleanup()
+	s, out := newInteractionTestSession(tc.JSONRPCClient)
+
+	if err := SendServerRequest(srv, "rpc-mcp-form", "mcpServer/elicitation/request", MCPServerElicitationRequestParams{
+		ThreadID: "thread-1", ServerName: "Massive Market Data", Mode: "form",
+		Message: "Allow this market data request?",
+		RequestedSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"approved": map[string]any{"type": "boolean", "title": "Allow request"},
+			},
+			"required": []any{"approved"},
+		},
+	}); err != nil {
+		t.Fatalf("send MCP elicitation: %v", err)
+	}
+
+	var request proto.PromptForUserChoicePayload
+	if err := (<-out).DecodePayload(&request); err != nil {
+		t.Fatalf("decode MCP elicitation payload: %v", err)
+	}
+	if len(request.Questions) != 1 || request.Questions[0].ID != "approved" || len(request.Questions[0].Options) != 2 {
+		t.Fatalf("MCP elicitation questions = %+v", request.Questions)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- s.SubmitPromptForUserChoice(context.Background(), request.AskID, proto.PromptForUserChoiceDecisionPayload{
+			QuestionAnswers: []proto.PromptForUserChoiceQuestionAnswer{{QuestionID: "approved", Answers: []string{"Yes"}}},
+		})
+	}()
+	var reply struct {
+		ID     string                       `json:"id"`
+		Result MCPServerElicitationResponse `json:"result"`
+	}
+	decodeCodexReply(t, srv, &reply)
+	if err := <-done; err != nil {
+		t.Fatalf("submit MCP elicitation: %v", err)
+	}
+	if reply.ID != "rpc-mcp-form" || reply.Result.Action != "accept" || reply.Result.Content["approved"] != true {
+		t.Fatalf("MCP elicitation reply = %+v", reply)
+	}
+}
+
+func TestCodexMCPElicitationCancellationUsesMCPResponse(t *testing.T) {
+	tc, srv, cleanup := NewTestClient()
+	defer cleanup()
+	s, out := newInteractionTestSession(tc.JSONRPCClient)
+
+	if err := SendServerRequest(srv, "rpc-mcp-url", "mcpServer/elicitation/request", MCPServerElicitationRequestParams{
+		ThreadID: "thread-1", ServerName: "Example", Mode: "url",
+		Message: "Open the provider page, then continue.", URL: "https://example.com/confirm",
+	}); err != nil {
+		t.Fatalf("send MCP URL elicitation: %v", err)
+	}
+	var request proto.PromptForUserChoicePayload
+	if err := (<-out).DecodePayload(&request); err != nil {
+		t.Fatalf("decode MCP URL elicitation payload: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- s.SubmitPromptForUserChoice(context.Background(), request.AskID, proto.PromptForUserChoiceDecisionPayload{Cancelled: true})
+	}()
+	var reply struct {
+		ID     string                       `json:"id"`
+		Result MCPServerElicitationResponse `json:"result"`
+	}
+	decodeCodexReply(t, srv, &reply)
+	if err := <-done; err != nil {
+		t.Fatalf("cancel MCP elicitation: %v", err)
+	}
+	if reply.ID != "rpc-mcp-url" || reply.Result.Action != "cancel" || reply.Result.Content != nil {
+		t.Fatalf("MCP cancellation reply = %+v", reply)
+	}
+}
+
 func TestCodexInteractionExpiryUnblocksRuntime(t *testing.T) {
 	t.Run("permission declines", func(t *testing.T) {
 		tc, srv, cleanup := NewTestClient()

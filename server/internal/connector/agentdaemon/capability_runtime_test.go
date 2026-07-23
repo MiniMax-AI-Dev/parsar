@@ -6,8 +6,12 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
@@ -22,6 +26,7 @@ type stubCapabilityStore struct {
 	rows        []store.EnabledCapabilityRead
 	err         error
 	credentials map[string]store.UserCredentialRead // key = "userID:kind"
+	secrets     []store.SecretRead
 
 	// builtinDisabled maps capability_key -> true when the built-in should
 	// report as OFF. Absence => default ON (mirrors the store's no-row
@@ -51,6 +56,10 @@ func (s stubCapabilityStore) IsBuiltinCapabilityEnabled(_ context.Context, _, ke
 		return false, nil
 	}
 	return true, nil
+}
+
+func (s stubCapabilityStore) ListSecrets(_ context.Context, _ string, _ int32) ([]store.SecretRead, error) {
+	return append([]store.SecretRead(nil), s.secrets...), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -444,6 +453,190 @@ func TestResolveCapabilityAdditions_MCPStreamableHTTP(t *testing.T) {
 	server := got.MCPServers["docs"].(map[string]any)
 	if server["type"] != "http" || server["url"] != "https://docs.example.com/mcp" {
 		t.Fatalf("server = %+v", server)
+	}
+}
+
+func TestResolveCapabilityAdditions_MCPStreamableHTTPWithOAuthHeader(t *testing.T) {
+	svc := testSecretsService(t)
+	oauthCredential := mcpoauth.Credential{
+		AccessToken:             "notion-access-token",
+		RefreshToken:            "notion-refresh-token",
+		ExpiresAt:               time.Now().Add(time.Hour),
+		ClientID:                "client-1",
+		TokenEndpointAuthMethod: "none",
+		TokenEndpoint:           "https://mcp.notion.com/token",
+		Resource:                "https://mcp.notion.com/mcp",
+	}
+	ciphertext := encryptPayload(t, svc, oauthCredential.Payload())
+	row := newMCPRow(t, "mcp-notion", "Notion", []canonical.MCPServer{{
+		Name:      "notion",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://mcp.notion.com/mcp",
+		Headers: map[string]canonical.EnvValue{
+			"Authorization": {
+				Mode:               canonical.EnvModeCredentialRef,
+				Prefix:             "Bearer ",
+				CredentialKindCode: "notion_mcp_oauth",
+			},
+		},
+	}}, []store.RequiredCredential{{Kind: "notion_mcp_oauth", Required: true}})
+	c := &Connector{
+		capabilities: stubCapabilityStore{
+			rows: []store.EnabledCapabilityRead{row},
+			credentials: map[string]store.UserCredentialRead{
+				defaultPromptInput().ConversationInitiatorID + ":notion_mcp_oauth": {
+					ID:         "credential-1",
+					Kind:       "notion_mcp_oauth",
+					Ciphertext: ciphertext,
+				},
+			},
+		},
+		secrets: svc,
+		log:     discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	server := got.MCPServers["notion"].(map[string]any)
+	headers := server["headers"].(map[string]string)
+	if headers["Authorization"] != "Bearer notion-access-token" {
+		t.Fatalf("Authorization = %q", headers["Authorization"])
+	}
+}
+
+func TestResolveCapabilityAdditions_UsesWorkspaceOAuthWithoutAgentBinding(t *testing.T) {
+	svc := testSecretsService(t)
+	oauthCredential := mcpoauth.Credential{
+		AccessToken:             "workspace-notion-token",
+		RefreshToken:            "workspace-notion-refresh",
+		ExpiresAt:               time.Now().Add(time.Hour),
+		ClientID:                "client-1",
+		TokenEndpointAuthMethod: "none",
+		TokenEndpoint:           "https://mcp.notion.com/token",
+		Resource:                "https://mcp.notion.com/mcp",
+	}
+	row := newMCPRow(t, "mcp-notion", "Notion", []canonical.MCPServer{{
+		Name:      "notion",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://mcp.notion.com/mcp",
+		Headers: map[string]canonical.EnvValue{
+			"Authorization": {
+				Mode:               canonical.EnvModeCredentialRef,
+				Prefix:             "Bearer ",
+				CredentialKindCode: "notion_mcp_oauth",
+			},
+		},
+	}}, []store.RequiredCredential{{Kind: "notion_mcp_oauth", Required: true}})
+	resolver := &fakeModelResolver{secret: store.SecretPayload{
+		SecretRead:       store.SecretRead{ID: "secret-1", Status: "active"},
+		EncryptedPayload: encryptPayload(t, svc, oauthCredential.Payload()),
+	}}
+	c := &Connector{
+		capabilities: stubCapabilityStore{
+			rows: []store.EnabledCapabilityRead{row},
+			secrets: []store.SecretRead{{
+				ID:       "secret-1",
+				Kind:     "capability_inline",
+				AuthType: "oauth2",
+				Status:   "active",
+				Metadata: map[string]any{
+					"workspace_id":         "ws-1",
+					"catalog_id":           "notion",
+					"credential_kind_code": "notion_mcp_oauth",
+				},
+			}},
+		},
+		modelResolver: resolver,
+		secrets:       svc,
+		log:           discardLogger(),
+	}
+	in := defaultPromptInput()
+	in.ConversationInitiatorID = ""
+	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	headers := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
+	if headers["Authorization"] != "Bearer workspace-notion-token" {
+		t.Fatalf("Authorization=%q", headers["Authorization"])
+	}
+	if len(got.Disabled) != 0 {
+		t.Fatalf("disabled=%+v", got.Disabled)
+	}
+}
+
+func TestResolveCapabilityAdditions_RefreshesSharedOAuthCredential(t *testing.T) {
+	tokenServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != "shared-refresh-token" {
+			t.Fatalf("refresh form=%v", r.Form)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"shared-new-token","refresh_token":"shared-refresh-token","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer tokenServer.Close()
+	previousTransport := http.DefaultTransport
+	http.DefaultTransport = tokenServer.Client().Transport
+	t.Cleanup(func() { http.DefaultTransport = previousTransport })
+
+	svc := testSecretsService(t)
+	expired := mcpoauth.Credential{
+		AccessToken:             "shared-old-token",
+		RefreshToken:            "shared-refresh-token",
+		ExpiresAt:               time.Now().Add(-time.Minute),
+		ClientID:                "client-1",
+		TokenEndpointAuthMethod: "none",
+		TokenEndpoint:           tokenServer.URL,
+		Resource:                "https://mcp.notion.com/mcp",
+	}
+	resolver := &fakeModelResolver{secret: store.SecretPayload{
+		SecretRead:       store.SecretRead{ID: "secret-1", Status: "active"},
+		EncryptedPayload: encryptPayload(t, svc, expired.Payload()),
+	}}
+	row := newMCPRow(t, "mcp-notion", "Notion", []canonical.MCPServer{{
+		Name:      "notion",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://mcp.notion.com/mcp",
+		Headers: map[string]canonical.EnvValue{
+			"Authorization": {
+				Mode:               canonical.EnvModeCredentialRef,
+				Prefix:             "Bearer ",
+				CredentialKindCode: "notion_mcp_oauth",
+			},
+		},
+	}}, []store.RequiredCredential{{Kind: "notion_mcp_oauth", Required: true}})
+	in := defaultPromptInput()
+	in.AgentConfig = map[string]any{
+		"credential_bindings": map[string]any{
+			"notion_mcp_oauth": map[string]any{"source": "shared", "secret_id": "secret-1"},
+		},
+	}
+	c := &Connector{
+		capabilities:  stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
+		modelResolver: resolver,
+		secrets:       svc,
+		log:           discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	headers := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
+	if headers["Authorization"] != "Bearer shared-new-token" {
+		t.Fatalf("Authorization=%q", headers["Authorization"])
+	}
+	if resolver.updatedSecretID != "secret-1" {
+		t.Fatalf("updated secret=%q", resolver.updatedSecretID)
+	}
+	payload, err := svc.Decrypt(resolver.updatedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload["access_token"] != "shared-new-token" {
+		t.Fatalf("payload=%+v", payload)
 	}
 }
 

@@ -1,8 +1,9 @@
 # MCP Connector Directory Catalog
 
 `catalog.json` is the repository-maintained source for Parsar's built-in MCP
-Connector Directory. It contains metadata plus either stdio launch configuration
-or a credential-free Streamable HTTP endpoint. Importing an item saves a
+Connector Directory. It contains publisher-maintained Streamable HTTP endpoints
+that have been exercised with Parsar's current MCP client. Entries may be
+credential-free or use the standard MCP OAuth flow. Importing an item saves a
 workspace capability and never executes it.
 
 ## Updating the catalog
@@ -11,14 +12,32 @@ workspace capability and never executes it.
   official MCP Registry.
 - Keep `id` stable and unique. Renaming an item does not require changing its
   ID.
-- Pin npm and Python packages to an explicit version. Do not use `latest`.
-- Stdio entries use `command`, `args`, `env`, and `startup_timeout_sec`.
-- Streamable HTTP entries use an HTTPS `url` only. Built-in remote entries must
-  complete an MCP initialize request without headers, API keys, OAuth, or other
-  user credentials before they are added.
-- Catalog entries may rely on tools such as `npx` or `uvx` being available in
-  the eventual Runtime. Importing a connector does not install those tools or
-  download its package.
+- Streamable HTTP entries use an HTTPS `url` only. Credential-free entries must
+  complete MCP initialize, tools/list, and a harmless tool call without headers.
+  OAuth entries must complete the full Parsar authorization and connection-test
+  flow using official protected-resource and authorization-server discovery,
+  dynamic client registration, and PKCE; do not add provider-specific client
+  secrets.
+- OAuth entries set `authentication.type` to `oauth2` and reference a built-in
+  `credential_kind`. A member authorizes with their provider account, and
+  Parsar stores the token as a workspace-scoped shared credential. Agents in
+  that workspace use it automatically after the connector is enabled. Tokens
+  are never stored in this catalog.
+- Do not list unavailable or approved-client-only connectors. Add them only
+  after Parsar can complete their authorization and connection-test flow.
+- Do not add runtime-specific `npx` or `uvx` entries to the built-in directory.
+  They may execute inside a container instead of the user's device and create a
+  misleading product experience.
+- Do not add MCPB/DXT desktop extensions as stdio entries. Control Chrome,
+  PowerPoint (By Anthropic), Word (By Anthropic), and PDF Tools currently depend
+  on Claude's desktop bundle installation lifecycle and cannot be represented by
+  a truthful Parsar `command`/`args` pair. Add them only after Parsar supports
+  audited MCPB installation.
+- Do not list MCP Apps whose primary experience requires an embedded
+  `io.modelcontextprotocol/ui` host. A runnable stdio example alone is not a
+  complete Parsar connector until the web client can render that UI contract.
+- `featured_rank` is the repository's explicit curation order. It is not a
+  claim about usage or popularity.
 - `env` declares variable names. Every value must be an empty string; secrets,
   API keys, tokens, and passwords must never be committed to the catalog.
 - Use only `http` or `https` metadata URLs without embedded credentials. Remote
@@ -32,10 +51,3 @@ repository gate:
 go test ./server/internal/mcpcatalog
 make check
 ```
-
-## Remote catalog override
-
-Operators may set `PARSAR_MCP_CATALOG_URL` to a trusted JSON endpoint with the
-same schema. Parsar applies a bounded download size, HTTP timeout, redirect
-limit, and full structural validation. A failed remote load falls back to the
-embedded catalog. Catalog URLs cannot be supplied through an API request.

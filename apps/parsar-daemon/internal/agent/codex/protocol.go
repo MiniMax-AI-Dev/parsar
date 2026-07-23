@@ -442,3 +442,27 @@ type ToolRequestUserInputAnswer struct {
 type ToolRequestUserInputResponse struct {
 	Answers map[string]ToolRequestUserInputAnswer `json:"answers"`
 }
+
+// MCPServerElicitationRequestParams mirrors Codex app-server's
+// mcpServer/elicitation/request payload. requestedSchema remains generic so
+// Parsar can tolerate additive MCP schema fields while mapping the supported
+// primitive form controls into its existing user-choice interaction.
+type MCPServerElicitationRequestParams struct {
+	ThreadID        string         `json:"threadId"`
+	TurnID          *string        `json:"turnId"`
+	ServerName      string         `json:"serverName"`
+	Mode            string         `json:"mode"`
+	Meta            any            `json:"_meta"`
+	Message         string         `json:"message"`
+	RequestedSchema map[string]any `json:"requestedSchema"`
+	URL             string         `json:"url"`
+	ElicitationID   string         `json:"elicitationId"`
+}
+
+// MCPServerElicitationResponse is the response body expected by Codex and the
+// upstream MCP server. Content is populated only for accepted form requests.
+type MCPServerElicitationResponse struct {
+	Action  string         `json:"action"`
+	Content map[string]any `json:"content"`
+	Meta    any            `json:"_meta"`
+}

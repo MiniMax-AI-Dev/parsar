@@ -47,6 +47,33 @@
         "startup_timeout_sec": { "type": "integer", "minimum": 0, "maximum": 300 }
       }
     },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["none", "oauth2"] },
+        "credential_kind": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "client_registration": { "enum": ["dynamic", "approved-client"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "oauth2" } } },
+          "then": { "required": ["credential_kind"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["credential_kind"] },
+                { "required": ["client_registration"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "item": {
       "type": "object",
       "additionalProperties": false,
@@ -57,7 +84,7 @@
         "publisher",
         "verified",
         "categories",
-        "popularity_rank",
+        "featured_rank",
         "version",
         "transport",
         "server"
@@ -79,9 +106,10 @@
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
         },
-        "popularity_rank": { "type": "integer", "minimum": 1 },
+        "featured_rank": { "type": "integer", "minimum": 1 },
         "version": { "type": "string", "minLength": 1 },
         "transport": { "enum": ["stdio", "streamable-http"] },
+        "authentication": { "$ref": "#/$defs/authentication" },
         "server": { "$ref": "#/$defs/server" }
       },
       "allOf": [

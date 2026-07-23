@@ -68,6 +68,11 @@ import {
   writeConversationViewState,
 } from "../../lib/conversation-view-state"
 import { credentialKindLabel } from "./capability-ui"
+import {
+  dedupeCapabilityRuntimeDiagnostics,
+  isRuntimeErrorMessage,
+  stringMeta,
+} from "./conversation-runtime-errors"
 
 const FOLD_KEY = "parsar:conv:sidebarFolded"
 
@@ -921,7 +926,10 @@ function ChatStream({
   const timelineQ = useConversationTimeline(conversationId, undefined, {
     pollingEnabled: !hasActiveStream,
   })
-  const messages = useMemo(() => timelineQ.data?.messages ?? [], [timelineQ.data?.messages])
+  const messages = useMemo(
+    () => dedupeCapabilityRuntimeDiagnostics(timelineQ.data?.messages ?? []),
+    [timelineQ.data?.messages],
+  )
   const runs = useMemo(() => timelineQ.data?.agent_runs ?? [], [timelineQ.data?.agent_runs])
 
   // Map output_message_id → runs[] so MessageRow can render StepTrace
@@ -1210,14 +1218,19 @@ function MessageRow({
       </div>
     )
   }
-  if (messageType === "runtime_error") {
+  if (isRuntimeErrorMessage(messageType, metadata)) {
     const runtimeError = runtimeErrorViewModel(metadata, content, conversationId, i18n.language, t)
+    const runtimeErrorSubKind =
+      stringMeta(metadata, "sub_kind") || stringMeta(metadata, "payload.sub_kind")
+    const runtimeErrorBadge = runtimeErrorSubKind.startsWith("capability_")
+      ? t("conversations.runtime_error.capabilityBadge")
+      : t("conversations.runtime_error.badge")
     return (
       <div className="flex">
         <div className="max-w-[78%]">
           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-danger-emphasis">
             <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
-            <span>{t("conversations.runtime_error.badge")}</span>
+            <span>{runtimeErrorBadge}</span>
           </div>
           <div className="rounded-xl border border-danger-border bg-danger-subtle px-3 py-2.5 text-base leading-relaxed text-danger-emphasis shadow-sm">
             <p className="font-medium">{runtimeError.message}</p>
@@ -1229,9 +1242,7 @@ function MessageRow({
                 {runtimeError.action}
               </a>
             )}
-            <p className="mt-2 text-sm text-danger-emphasis/80">
-              {t("conversations.runtime_error.retryHint")}
-            </p>
+            <p className="mt-2 text-sm text-danger-emphasis/80">{runtimeError.hint}</p>
           </div>
           <div className="mt-1.5 text-xs text-fg-faint">
             {agentName ? `${stamp} · ${agentName}` : stamp}
@@ -1301,6 +1312,16 @@ function runtimeErrorViewModel(
 
   switch (subKind) {
     case "capability_credential_missing":
+      if (!credentialKind) {
+        return {
+          message: t("conversations.runtime_error.capability_unsupported", {
+            name: capabilityName,
+          }),
+          action: t("conversations.runtime_error.manageCapability"),
+          href: manageCapabilityHref,
+          hint: t("conversations.runtime_error.unsupportedHint"),
+        }
+      }
       return {
         message: t("conversations.runtime_error.capability_credential_missing", {
           name: capabilityName,
@@ -1308,6 +1329,7 @@ function runtimeErrorViewModel(
         }),
         action: t("conversations.runtime_error.addCredential"),
         href,
+        hint: t("conversations.runtime_error.retryHint"),
       }
     case "capability_credential_decrypt_failed":
       return {
@@ -1316,6 +1338,7 @@ function runtimeErrorViewModel(
         }),
         action: "",
         href: "",
+        hint: t("conversations.runtime_error.retryHint"),
       }
     case "capability_credential_kind_mismatch":
       return {
@@ -1324,6 +1347,16 @@ function runtimeErrorViewModel(
         }),
         action: t("conversations.runtime_error.resetCredential"),
         href,
+        hint: t("conversations.runtime_error.retryHint"),
+      }
+    case "capability_unsupported":
+      return {
+        message: t("conversations.runtime_error.capability_unsupported", {
+          name: capabilityName,
+        }),
+        action: t("conversations.runtime_error.manageCapability"),
+        href: manageCapabilityHref,
+        hint: t("conversations.runtime_error.unsupportedHint"),
       }
     case "capability_version_unavailable":
       // Daemon resolver couldn't find a usable zip (empty oss_key) for
@@ -1337,24 +1370,16 @@ function runtimeErrorViewModel(
         }),
         action: t("conversations.runtime_error.manageCapability"),
         href: manageCapabilityHref,
+        hint: t("conversations.runtime_error.versionUnavailableHint"),
       }
     default:
-      return { message: fallback || t("conversations.runtime_error.generic"), action: "", href: "" }
+      return {
+        message: fallback || t("conversations.runtime_error.generic"),
+        action: "",
+        href: "",
+        hint: t("conversations.runtime_error.retryHint"),
+      }
   }
-}
-
-function stringMeta(metadata: Record<string, unknown> | undefined, key: string): string {
-  if (!metadata) return ""
-  const value = key.includes(".")
-    ? key
-        .split(".")
-        .reduce<unknown>(
-          (acc, part) =>
-            acc && typeof acc === "object" ? (acc as Record<string, unknown>)[part] : undefined,
-          metadata,
-        )
-    : metadata[key]
-  return typeof value === "string" ? value : ""
 }
 
 /* ============================================================== */

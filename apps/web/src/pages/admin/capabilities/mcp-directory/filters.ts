@@ -1,6 +1,6 @@
 import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
 
-export type DirectorySort = "popular" | "name"
+export type DirectorySort = "featured" | "name"
 
 interface DirectoryFilters {
   query: string
@@ -22,5 +22,5 @@ export function filterMCPDirectoryItems(items: MCPDirectoryItem[], filters: Dire
   })
   return filtered.sort((left, right) => filters.sort === "name"
     ? left.name.localeCompare(right.name)
-    : left.popularity_rank - right.popularity_rank || left.name.localeCompare(right.name))
+    : left.featured_rank - right.featured_rank || left.name.localeCompare(right.name))
 }

@@ -275,11 +275,23 @@ description and keep ownership on the side listed here.
   not a new capability type. Imports become ordinary private `mcp`
   capabilities through `canonical.Spec`, `Store.ImportCapability`, capability
   versions, and the existing Agent binding flow.
-- Catalog data lives in `catalog/mcp/catalog.json` or the trusted deployment
-  override `PARSAR_MCP_CATALOG_URL`. It is validated and cached in memory; do
-  not add a connector catalog table or accept catalog URLs from API requests.
+- Catalog data lives in `catalog/mcp/catalog.json`. It is embedded in the
+  server image; do not add a connector catalog table or accept catalog URLs
+  from API requests.
 - Import saves configuration only. It must not execute a command, create empty
   secrets, bind an Agent, or trust client-submitted command/args/env fields.
+- OAuth directory items declare an authentication type, a registered
+  `credential_kinds.code`, and whether credentials may be user-scoped,
+  workspace-scoped, or both. Provider discovery, dynamic client registration,
+  PKCE, code exchange, and refresh stay server-side. User tokens are encrypted
+  in `user_credentials`; workspace tokens use workspace-stamped
+  `capability_inline` secrets and existing Agent credential bindings as the
+  allow list. Tokens never belong in the catalog, canonical spec, frontend
+  state, or logs.
+- Remote MCP authorization is represented as a credential-backed canonical
+  header. The connector resolves it for the conversation initiator and the
+  daemon writes it only into the per-run MCP configuration. Renderers and
+  adapters must preserve remote headers for every supported Agent engine.
 - Catalog provenance belongs in `capability_version.source_payload` using
   `source_format=mcp_catalog`, stable `catalog_id`, `catalog_version`, and
   `catalog_source`. Installation state uses that provenance, never a name

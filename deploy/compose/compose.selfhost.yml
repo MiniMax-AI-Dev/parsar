@@ -100,8 +100,6 @@ services:
       DATABASE_URL: postgres://${PARSAR_PG_USER}:${PARSAR_PG_PASSWORD}@postgres:5432/${PARSAR_PG_DB}?sslmode=disable
       PARSAR_MASTER_KEY: ${PARSAR_MASTER_KEY:?PARSAR_MASTER_KEY is required - generate with openssl rand -hex 32}
       PARSAR_PUBLIC_URL: ${PARSAR_PUBLIC_URL:?PARSAR_PUBLIC_URL is required - e.g. https://parsar.your-domain.com}
-      PARSAR_MCP_CATALOG_URL: ${PARSAR_MCP_CATALOG_URL:-}
-
       # ---------- Listen / runtime path ----------
       PARSAR_ADDR: ":8080"
       PARSAR_DATA_DIR: "/var/lib/parsar"

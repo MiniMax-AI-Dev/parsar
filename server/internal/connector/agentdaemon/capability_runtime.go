@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/render"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
@@ -26,6 +28,10 @@ type CapabilityRuntimeStore interface {
 	GetEnabledCapabilitiesForAgent(ctx context.Context, agentID string) ([]store.EnabledCapabilityRead, error)
 	GetUserCredentialByUserKind(ctx context.Context, userID, kind string) (store.UserCredentialRead, bool, error)
 	IsBuiltinCapabilityEnabled(ctx context.Context, agentID, key string) (bool, error)
+}
+
+type workspaceOAuthCredentialLister interface {
+	ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]store.SecretRead, error)
 }
 
 // OSSPresigner is the narrow surface for the object-storage backend:
@@ -73,8 +79,9 @@ type ResolvedSkill struct {
 	SHA256      string `json:"sha256"`
 }
 
-// credentialPlaceholderRe matches ${PARSAR_CREDENTIAL:<kind>}.
-var credentialPlaceholderRe = regexp.MustCompile(`^\$\{PARSAR_CREDENTIAL:([a-zA-Z0-9_]+)\}$`)
+// credentialPlaceholderRe matches one credential placeholder inside a value.
+// Prefixes such as "Bearer " are part of the canonical value and stay public.
+var credentialPlaceholderRe = regexp.MustCompile(`\$\{PARSAR_CREDENTIAL:([a-zA-Z0-9_]+)\}`)
 
 // capabilityAdditions holds the results of resolveCapabilityAdditions.
 type capabilityAdditions struct {
@@ -158,6 +165,10 @@ type CapabilitySystemMessageStore interface {
 // on this.
 const CapabilityCredentialMissing = "capability_credential_missing"
 
+// CapabilityUnsupported is emitted when the selected agent runtime cannot
+// render a capability kind, such as a Skill bound to a Codex agent.
+const CapabilityUnsupported = "capability_unsupported"
+
 // CapabilityVersionUnavailable is the metadata.sub_kind value emitted
 // when the resolved capability version has no usable storage
 // breadcrumb (empty oss_key/sha256). This happens after a schema-level
@@ -200,12 +211,13 @@ func agentKindToRenderTarget(agentKind string) render.Target {
 // when a renderer returns render.ErrUnsupported — e.g. an opencode/codex
 // agent enabling a skill or plugin capability. MissingCredentials is left
 // empty; emitDisabledCapabilityNotices treats that as a "non-credential"
-// disable and posts a generic notice.
+// disable and posts a typed notice.
 func disabledForUnsupportedCapability(cap store.EnabledCapabilityRead) DisabledCapability {
 	return DisabledCapability{
 		CapabilityID:        cap.CapabilityID,
 		CapabilityVersionID: cap.CapabilityVersionID,
 		CapabilityName:      cap.Name,
+		SubKind:             CapabilityUnsupported,
 	}
 }
 
@@ -602,6 +614,17 @@ func (c *Connector) resolveMCPCapability(
 	for name, server := range parsed.MCPServers {
 		if server.URL != "" {
 			entry := map[string]any{"url": server.URL}
+			headers := make(map[string]string, len(server.Headers))
+			for headerName, value := range server.Headers {
+				resolved, err := substituteCredentialPlaceholders(value, credentialValues)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s mcp server %q header %s: %w", cap.CapabilityID, name, headerName, err)
+				}
+				headers[headerName] = resolved
+			}
+			if len(headers) > 0 {
+				entry["headers"] = headers
+			}
 			if server.Type != "" {
 				entry["type"] = server.Type
 			}
@@ -613,17 +636,11 @@ func (c *Connector) resolveMCPCapability(
 		}
 		env := map[string]string{}
 		for key, value := range server.Env {
-			if match := credentialPlaceholderRe.FindStringSubmatch(value); match != nil {
-				kind := match[1]
-				credValue, ok := credentialValues[kind]
-				if !ok {
-					return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s mcp server %q env %s references unresolved credential kind %q",
-						cap.CapabilityID, name, key, kind)
-				}
-				env[key] = credValue
-				continue
+			resolved, err := substituteCredentialPlaceholders(value, credentialValues)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s mcp server %q env %s: %w", cap.CapabilityID, name, key, err)
 			}
-			env[key] = value
+			env[key] = resolved
 		}
 		entry := map[string]any{
 			"command": server.Command,
@@ -709,6 +726,14 @@ func (c *Connector) resolveCredentialValues(
 		return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s requires credentials but secrets service is not configured", cap.CapabilityID)
 	}
 
+	// Workspace OAuth credentials are shared automatically. A member completes
+	// OAuth once, then every Agent in the workspace can use that connector
+	// without an additional per-Agent binding or per-user authorization.
+	automaticShared, err := c.workspaceOAuthCredentialIDs(ctx, in.WorkspaceID, cap.RequiredCredentials)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("agent_daemon: capability %s list workspace OAuth credentials: %w", cap.CapabilityID, err)
+	}
+
 	// First pass: split required kinds into personal vs shared.
 	type sharedTarget struct {
 		Kind     string
@@ -721,6 +746,10 @@ func (c *Connector) resolveCredentialValues(
 	for _, rc := range cap.RequiredCredentials {
 		if b, ok := bindings[rc.Kind]; ok && b.IsShared() {
 			sharedTargets = append(sharedTargets, sharedTarget{Kind: rc.Kind, SecretID: b.SecretID})
+			continue
+		}
+		if secretID := automaticShared[rc.Kind]; secretID != "" {
+			sharedTargets = append(sharedTargets, sharedTarget{Kind: rc.Kind, SecretID: secretID})
 			continue
 		}
 		personalKinds = append(personalKinds, rc)
@@ -754,6 +783,10 @@ func (c *Connector) resolveCredentialValues(
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("agent_daemon: decrypt shared credential kind=%s secret_id=%s: %w", st.Kind, st.SecretID, err)
 			}
+			payload, err = c.refreshSharedOAuthCredentialIfNeeded(ctx, in.WorkspaceID, st.SecretID, payload)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("agent_daemon: refresh shared credential kind=%s secret_id=%s: %w", st.Kind, st.SecretID, err)
+			}
 			value := credentialPayloadValue(payload)
 			if value == "" {
 				return nil, nil, nil, fmt.Errorf("agent_daemon: shared credential kind=%s secret_id=%s decrypted payload has no token/api_key value", st.Kind, st.SecretID)
@@ -785,6 +818,10 @@ func (c *Connector) resolveCredentialValues(
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("agent_daemon: decrypt credential kind=%s user_credential_id=%s: %w", kind, cred.ID, err)
 		}
+		payload, err = c.refreshOAuthCredentialIfNeeded(ctx, cred, payload, credentialCache)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("agent_daemon: refresh credential kind=%s user_credential_id=%s: %w", kind, cred.ID, err)
+		}
 		value := credentialPayloadValue(payload)
 		if value == "" {
 			return nil, nil, nil, fmt.Errorf("agent_daemon: credential kind=%s user_credential_id=%s decrypted payload has no token/api_key value", kind, cred.ID)
@@ -793,6 +830,144 @@ func (c *Connector) resolveCredentialValues(
 	}
 
 	return values, sharedSecretIDs, missing, nil
+}
+
+func (c *Connector) workspaceOAuthCredentialIDs(
+	ctx context.Context,
+	workspaceID string,
+	required []store.RequiredCredential,
+) (map[string]string, error) {
+	result := map[string]string{}
+	if len(required) == 0 || strings.TrimSpace(workspaceID) == "" {
+		return result, nil
+	}
+	lister, ok := c.capabilities.(workspaceOAuthCredentialLister)
+	if !ok {
+		return result, nil
+	}
+	wanted := make(map[string]struct{}, len(required))
+	for _, credential := range required {
+		wanted[strings.TrimSpace(credential.Kind)] = struct{}{}
+	}
+	workspaceSecrets, err := lister.ListSecrets(ctx, workspaceID, 1000)
+	if err != nil {
+		return nil, err
+	}
+	for _, candidate := range workspaceSecrets {
+		if candidate.Kind != "capability_inline" || candidate.AuthType != "oauth2" || candidate.Status != "active" {
+			continue
+		}
+		candidateWorkspaceID, _ := candidate.Metadata["workspace_id"].(string)
+		if strings.TrimSpace(candidateWorkspaceID) != strings.TrimSpace(workspaceID) {
+			continue
+		}
+		kind, _ := candidate.Metadata["credential_kind_code"].(string)
+		kind = strings.TrimSpace(kind)
+		if _, needed := wanted[kind]; !needed || result[kind] != "" {
+			continue
+		}
+		catalogID, _ := candidate.Metadata["catalog_id"].(string)
+		if strings.TrimSpace(catalogID) == "" {
+			continue
+		}
+		result[kind] = candidate.ID
+	}
+	return result, nil
+}
+
+type oauthCredentialStore interface {
+	UpdateUserCredential(ctx context.Context, input store.UpdateUserCredentialInput) (store.UserCredentialRead, error)
+}
+
+type sharedOAuthCredentialStore interface {
+	UpdateSecretPayload(ctx context.Context, workspaceID, secretID string, encryptedPayload []byte) (store.SecretPayload, error)
+}
+
+func (c *Connector) refreshSharedOAuthCredentialIfNeeded(
+	ctx context.Context,
+	workspaceID string,
+	secretID string,
+	payload map[string]any,
+) (map[string]any, error) {
+	oauthCredential, isOAuth, err := mcpoauth.CredentialFromPayload(payload)
+	if err != nil || !isOAuth || !oauthCredential.NeedsRefresh(time.Now()) {
+		return payload, err
+	}
+	credentialStore, ok := c.modelResolver.(sharedOAuthCredentialStore)
+	if !ok {
+		return nil, errors.New("shared credential store does not support OAuth token rotation")
+	}
+	refreshed, err := mcpoauth.New(nil).Refresh(ctx, oauthCredential)
+	if err != nil {
+		return nil, err
+	}
+	refreshedPayload := refreshed.Payload()
+	mcpoauth.PreserveMetadata(payload, refreshedPayload)
+	encrypted, err := c.secrets.Encrypt(refreshedPayload)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt refreshed token: %w", err)
+	}
+	if _, err := credentialStore.UpdateSecretPayload(ctx, workspaceID, secretID, encrypted); err != nil {
+		return nil, fmt.Errorf("persist refreshed token: %w", err)
+	}
+	return refreshedPayload, nil
+}
+
+func (c *Connector) refreshOAuthCredentialIfNeeded(
+	ctx context.Context,
+	credential store.UserCredentialRead,
+	payload map[string]any,
+	credentialCache map[string]store.UserCredentialRead,
+) (map[string]any, error) {
+	oauthCredential, isOAuth, err := mcpoauth.CredentialFromPayload(payload)
+	if err != nil || !isOAuth || !oauthCredential.NeedsRefresh(time.Now()) {
+		return payload, err
+	}
+	credentialStore, ok := c.capabilities.(oauthCredentialStore)
+	if !ok {
+		return nil, errors.New("credential store does not support OAuth token rotation")
+	}
+	refreshed, err := mcpoauth.New(nil).Refresh(ctx, oauthCredential)
+	if err != nil {
+		return nil, err
+	}
+	refreshedPayload := refreshed.Payload()
+	mcpoauth.PreserveMetadata(payload, refreshedPayload)
+	encrypted, err := c.secrets.Encrypt(refreshedPayload)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt refreshed token: %w", err)
+	}
+	updated, err := credentialStore.UpdateUserCredential(ctx, store.UpdateUserCredentialInput{
+		CredentialID:   credential.ID,
+		EncryptedValue: encrypted,
+		KeyVersion:     secrets.EnvelopeVersion,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("persist refreshed token: %w", err)
+	}
+	for cacheKey, cached := range credentialCache {
+		if cached.ID == credential.ID {
+			credentialCache[cacheKey] = updated
+		}
+	}
+	return refreshedPayload, nil
+}
+
+func substituteCredentialPlaceholders(value string, credentials map[string]string) (string, error) {
+	matches := credentialPlaceholderRe.FindAllStringSubmatch(value, -1)
+	if len(matches) == 0 {
+		return value, nil
+	}
+	resolved := value
+	for _, match := range matches {
+		kind := match[1]
+		credential, ok := credentials[kind]
+		if !ok {
+			return "", fmt.Errorf("references unresolved credential kind %q", kind)
+		}
+		resolved = strings.ReplaceAll(resolved, match[0], credential)
+	}
+	return resolved, nil
 }
 
 // lookupCredential fetches a user credential by kind, using a cache to
@@ -861,6 +1036,7 @@ type claudeCodeMCPDocument struct {
 type claudeCodeMCPServerEntry struct {
 	Type    string            `json:"type,omitempty"`
 	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`

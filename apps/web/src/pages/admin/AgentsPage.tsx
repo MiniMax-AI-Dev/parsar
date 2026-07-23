@@ -183,7 +183,13 @@ export function AgentsPage() {
           deletePending={deleteMut.isPending}
           formatRelativeTime={fmtAgo}
           onKeywordChange={setKeyword}
-          onOpenAgent={(agent) => navigate("agents", { id: agent.id })}
+          onOpenAgent={(agent) =>
+            navigate("agents", {
+              id: agent.id,
+              tab: pendingCapability.id ? "config" : null,
+              pendingCapability: pendingCapability.id,
+            })
+          }
           onChat={(agent) => void startChatWith(agent)}
           onEdit={setEditAgent}
           onClone={setCloneAgent}
@@ -442,7 +448,13 @@ export function AgentDetailPage({ id }: { id: string }) {
             workspaceID={wid}
             workspaceRole={workspaceRole}
             modelLabel={model}
-            onToast={setToast}
+            pendingCapabilityID={pendingCapability.id}
+            onToast={(message) => {
+              setToast(message)
+              if (pendingCapability.id) {
+                navigate("agents", { id: agent.id, tab: "config", pendingCapability: null })
+              }
+            }}
           />
         </TabsContent>
 

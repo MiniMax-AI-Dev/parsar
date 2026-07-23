@@ -347,15 +347,19 @@
     },
     "runtime_error": {
       "badge": "运行失败",
+      "capabilityBadge": "能力未加载",
       "fallbackCapability": "此能力",
       "capability_credential_missing": "能力 {{name}} 启动失败：缺少 {{kind}} 凭据。",
       "capability_credential_decrypt_failed": "能力 {{name}} 凭据解密失败，请联系管理员。",
       "capability_credential_kind_mismatch": "能力 {{name}} 凭据类型不匹配，请重新设置。",
+      "capability_unsupported": "能力 {{name}} 与当前 Agent 类型不兼容，已跳过。",
       "capability_version_unavailable": "能力 {{name}} 还没有可用的上传版本，请重新上传 zip、选择更新的版本，或将该能力切换为 latest 模式。",
       "addCredential": "去添加凭据",
       "resetCredential": "去重新设置",
       "manageCapability": "去管理能力",
       "retryHint": "设置好后请回到对话里重新发送请求，系统不会自动重试。",
+      "unsupportedHint": "请从 Agent 中移除此能力，或改用支持该能力的 Agent 类型。",
+      "versionUnavailableHint": "请上传 zip 版本或从 Agent 中移除此能力，再重新发送请求。",
       "generic": "运行期能力启动失败，请稍后重试或联系管理员。"
     },
     "composer": {
@@ -891,12 +895,27 @@
     },
     "mcpDirectory": {
       "title": "连接器",
-      "description": "浏览经过筛选的本地与远程 MCP 服务，并将配置导入当前工作区。",
+      "description": "浏览精选 MCP 服务，并将配置导入当前工作区。",
       "verified": "已验证",
       "securityNotice": "导入只会保存配置，不会立即运行。启用并绑定 Agent 后，该 MCP 才可能在 Runtime 中执行。",
+      "oauth": {
+        "required": "需要 OAuth 2.1 授权",
+        "connected": "已授权",
+        "authorized": "已授权，尚未验证连接",
+        "verified": "连接已验证",
+        "connect": "连接 {{name}}",
+        "reconnect": "重新授权",
+        "workspaceCredential": "工作区共享凭证",
+        "test": "测试连接",
+        "testing": "检测中...",
+        "testSuccess": "连接正常",
+        "testFailed": "连接检测失败，请重新授权后再试。",
+        "approvedClientRequired": "{{name}} 当前仅支持已获批准的 MCP 客户端，暂时无法从 Parsar 连接。",
+        "authorizeAndContinue": "授权并继续",
+        "authorizeBeforeImport": "导入前请先为当前工作区授权。授权完成后会返回这里确认导入。"
+      },
       "source": {
-        "builtin": "内置目录",
-        "remote": "远程目录"
+        "builtin": "内置目录"
       },
       "filters": {
         "category": "连接器分类",
@@ -905,15 +924,28 @@
         "sort": "连接器排序"
       },
       "sort": {
-        "popular": "最受欢迎",
+        "featured": "精选排序",
         "name": "名称"
       },
       "actions": {
         "import": "导入",
-        "installed": "已安装",
+        "installed": "已导入",
+        "unavailable": "暂不可用",
         "back": "返回连接器列表",
         "viewCapability": "查看 Capability",
         "addToAgent": "添加到 Agent"
+      },
+      "addToAgent": {
+        "title": "将 {{name}} 添加到 Agent",
+        "description": "选择一个 Agent，系统会直接添加最新版本。",
+        "connectorFallback": "连接器",
+        "agentListLabel": "Agent 列表",
+        "added": "已添加",
+        "empty": "当前工作区没有你可以管理的 Agent。",
+        "loadError": "无法加载连接器或 Agent 列表。",
+        "submitError": "无法将连接器添加到该 Agent。",
+        "cancel": "取消",
+        "success": "已将 {{capabilityName}} 添加到 {{agentName}}。"
       },
       "loadError": {
         "title": "无法加载连接器目录",
@@ -928,7 +960,6 @@
         "notFound": "未找到该连接器",
         "version": "版本",
         "transport": "传输方式",
-        "rank": "热度排名",
         "timeout": "启动超时",
         "seconds_other": "{{count}} 秒",
         "command": "启动命令",
@@ -979,6 +1010,7 @@
     },
     "marketStatus": {
       "title": "市场状态",
+      "directoryManaged": "连接器市场项目",
       "published": "已发布到市场",
       "unpublished": "未发布",
       "installCount": "{{count}} 个工作区已添加",
@@ -1710,8 +1742,8 @@
       }
     },
     "pendingCapability": {
-      "banner": "你正在准备装「{{name}}」（来自 {{source}}）。请选择一个 Agent 启用此能力。",
-      "detailBanner": "你正在装「{{name}}」（来自 {{source}}）。在下方工作区可装段点击启用即可完成。",
+      "banner": "你正在添加「{{name}}」（来自 {{source}}）。选择一个 Agent 后会直接打开“添加能力”窗口。",
+      "detailBanner": "你正在添加「{{name}}」（来自 {{source}}）。请在已打开的窗口中选择版本，然后点击“启用”。",
       "loading": "正在加载准备装到 Agent 的能力…",
       "cancel": "取消"
     },

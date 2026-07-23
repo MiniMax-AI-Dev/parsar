@@ -23,6 +23,7 @@ export function ImportMCPDialog({
   mutationError,
   onRetry,
   onOpenChange,
+  onConnect,
   onConfirm,
 }: {
   open: boolean
@@ -33,6 +34,7 @@ export function ImportMCPDialog({
   mutationError: unknown
   onRetry: () => void
   onOpenChange: (open: boolean) => void
+  onConnect: () => void
   onConfirm: () => void
 }) {
   const { t } = useTranslation("admin")
@@ -40,6 +42,7 @@ export function ImportMCPDialog({
     ? [item.command, ...(item.args ?? [])].map(formatCommandPart).join(" ")
     : ""
   const isRemote = item?.transport === "streamable-http"
+  const needsOAuth = item?.authentication === "oauth2" && !item.connected
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -84,7 +87,11 @@ export function ImportMCPDialog({
               </p>
               <p className="mt-1.5 font-mono text-xs text-fg">
                 {isRemote
-                  ? t("capabilities.mcpDirectory.detail.noAuthentication")
+                  ? item.authentication === "oauth2"
+                    ? item.connected
+                      ? t("capabilities.mcpDirectory.oauth.connected")
+                      : t("capabilities.mcpDirectory.oauth.authorizeBeforeImport")
+                    : t("capabilities.mcpDirectory.detail.noAuthentication")
                   : item.env?.join(", ") || t("capabilities.mcpDirectory.detail.noEnvironment")}
               </p>
             </div>
@@ -104,14 +111,20 @@ export function ImportMCPDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             {t("capabilities.mcpDirectory.import.cancel")}
           </Button>
-          <Button
-            onClick={onConfirm}
-            disabled={!item || loading || !!error || pending || item.installed}
-          >
-            {pending
-              ? t("capabilities.mcpDirectory.import.importing")
-              : t("capabilities.mcpDirectory.actions.import")}
-          </Button>
+          {needsOAuth ? (
+            <Button onClick={onConnect} disabled={!item || loading || !!error || item.installed}>
+              {t("capabilities.mcpDirectory.oauth.authorizeAndContinue")}
+            </Button>
+          ) : (
+            <Button
+              onClick={onConfirm}
+              disabled={!item || loading || !!error || pending || item.installed}
+            >
+              {pending
+                ? t("capabilities.mcpDirectory.import.importing")
+                : t("capabilities.mcpDirectory.actions.import")}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

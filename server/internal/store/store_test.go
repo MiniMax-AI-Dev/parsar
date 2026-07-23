@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -92,6 +93,84 @@ func TestWorkspaceRuntimeSettingsReadsCredentialMask(t *testing.T) {
 	if settings.RuntimeCredentialMasked != "e2b_•••wxyz" {
 		t.Fatalf("RuntimeCredentialMasked = %q", settings.RuntimeCredentialMasked)
 	}
+}
+
+func TestCapabilityInlineSecretsAreWorkspaceScoped(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	st := New(db)
+	ids := mustSeedDevFixture(t, ctx, st)
+	otherWorkspace, err := st.CreateWorkspace(ctx, CreateWorkspaceInput{
+		Name:      "Other Workspace",
+		CreatedBy: ids.UserID,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scoped, err := st.CreateSecret(ctx, CreateSecretInput{
+		WorkspaceID:        ids.WorkspaceID,
+		Name:               "Notion OAuth",
+		Kind:               "capability_inline",
+		Provider:           "notion",
+		AuthType:           "oauth2",
+		CreatedBy:          ids.UserID,
+		CredentialKindCode: "notion_mcp_oauth",
+		Metadata:           map[string]any{"catalog_id": "notion"},
+	}, []byte(`{"version":"v1"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := secretWorkspaceID(scoped.Metadata); got != ids.WorkspaceID {
+		t.Fatalf("workspace_id=%q want=%q", got, ids.WorkspaceID)
+	}
+
+	current, err := st.ListSecrets(ctx, ids.WorkspaceID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsSecret(current, scoped.ID) {
+		t.Fatalf("workspace secrets do not contain %s: %+v", scoped.ID, current)
+	}
+	other, err := st.ListSecrets(ctx, otherWorkspace.Workspace.ID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsSecret(other, scoped.ID) {
+		t.Fatalf("scoped secret leaked into workspace %s", otherWorkspace.Workspace.ID)
+	}
+	if _, err := st.GetSecretPayload(ctx, otherWorkspace.Workspace.ID, scoped.ID); !errors.Is(err, ErrUnknownSecret) {
+		t.Fatalf("GetSecretPayload error=%v want ErrUnknownSecret", err)
+	}
+	if _, err := st.UpdateSecretPayload(ctx, otherWorkspace.Workspace.ID, scoped.ID, []byte(`{}`)); !errors.Is(err, ErrUnknownSecret) {
+		t.Fatalf("UpdateSecretPayload error=%v want ErrUnknownSecret", err)
+	}
+	if _, err := st.DisableSecret(ctx, otherWorkspace.Workspace.ID, scoped.ID); !errors.Is(err, ErrUnknownSecret) {
+		t.Fatalf("DisableSecret error=%v want ErrUnknownSecret", err)
+	}
+
+	rotated := []byte(`{"version":"v1","rotated":true}`)
+	updated, err := st.UpdateSecretPayload(ctx, ids.WorkspaceID, scoped.ID, rotated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var updatedPayload map[string]any
+	if err := json.Unmarshal(updated.EncryptedPayload, &updatedPayload); err != nil {
+		t.Fatal(err)
+	}
+	if updatedPayload["rotated"] != true || updatedPayload["version"] != "v1" || updated.ID != scoped.ID {
+		t.Fatalf("updated=%+v", updated)
+	}
+}
+
+func containsSecret(secrets []SecretRead, secretID string) bool {
+	for _, secret := range secrets {
+		if secret.ID == secretID {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCreateUserCredentialRejectsUnknownKind(t *testing.T) {
