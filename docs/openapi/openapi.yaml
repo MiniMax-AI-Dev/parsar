@@ -1139,6 +1139,11 @@ definitions:
       url:
         type: string
     type: object
+  mcpdirectory.errorResponse:
+    properties:
+      error:
+        type: string
+    type: object
   mcpdirectory.importResponse:
     properties:
       capability_id:
@@ -7000,27 +7005,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "401":
           description: Unauthorized
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "403":
           description: Forbidden
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "503":
           description: Service Unavailable
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: List MCP Connector Directory items
       tags:
       - mcp-directory
@@ -7047,15 +7044,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: Get an MCP Connector Directory item
       tags:
       - mcp-directory
@@ -7088,27 +7081,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "403":
           description: Forbidden
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: Import an MCP Connector Directory item
       tags:
       - mcp-directory
@@ -7141,15 +7126,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "502":
           description: Bad Gateway
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: Complete an MCP connector OAuth flow
       tags:
       - mcp-directory
@@ -7172,21 +7153,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "503":
           description: Service Unavailable
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: Start an MCP connector OAuth flow
       tags:
       - mcp-directory

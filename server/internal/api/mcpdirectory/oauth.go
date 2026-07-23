@@ -37,9 +37,9 @@ type oauthCookie struct {
 //	@Param workspaceID path string true "workspace id"
 //	@Param catalogID path string true "catalog item id"
 //	@Success 302 "Redirect to the provider authorization page"
-//	@Failure 400 {object} map[string]string
-//	@Failure 404 {object} map[string]string
-//	@Failure 503 {object} map[string]string
+//	@Failure 400 {object} errorResponse
+//	@Failure 404 {object} errorResponse
+//	@Failure 503 {object} errorResponse
 //	@Router /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start [get]
 func (h *handler) oauthStart(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin", "member")
@@ -101,8 +101,8 @@ func (h *handler) oauthStart(w http.ResponseWriter, r *http.Request) {
 //	@Param state query string true "OAuth state"
 //	@Param code query string true "OAuth authorization code"
 //	@Success 200 "Closes the OAuth popup"
-//	@Failure 400 {object} map[string]string
-//	@Failure 502 {object} map[string]string
+//	@Failure 400 {object} errorResponse
+//	@Failure 502 {object} errorResponse
 //	@Router /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback [get]
 func (h *handler) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin", "member")
