@@ -2693,7 +2693,7 @@ func (stubRuntimeStore) GetEnabledMarketplaceCapabilitiesForAgent(ctx context.Co
 	return []store.EnabledCapabilityRead{}, nil
 }
 
-func (stubRuntimeStore) EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error) {
+func (stubRuntimeStore) EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string, credentialBindings map[string]string) (store.AgentCapabilityRead, error) {
 	return store.AgentCapabilityRead{ID: "00000000-0000-0000-0000-000000000c04", AgentID: agentID, CapabilityID: "00000000-0000-0000-0000-000000000c01", CapabilityVersionID: versionID, Enabled: true, PinningMode: pinningMode}, nil
 }
 

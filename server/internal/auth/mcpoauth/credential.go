@@ -12,12 +12,16 @@ func (c Credential) Payload() map[string]any {
 	payload := map[string]any{
 		"provider":                   CredentialProvider,
 		"access_token":               c.AccessToken,
-		"refresh_token":              c.RefreshToken,
 		"client_id":                  c.ClientID,
-		"client_secret":              c.ClientSecret,
 		"token_endpoint_auth_method": c.TokenEndpointAuthMethod,
 		"token_endpoint":             c.TokenEndpoint,
 		"resource":                   c.Resource,
+	}
+	if c.RefreshToken != "" {
+		payload["refresh_token"] = c.RefreshToken
+	}
+	if c.ClientSecret != "" {
+		payload["client_secret"] = c.ClientSecret
 	}
 	if !c.ExpiresAt.IsZero() {
 		payload["expires_at"] = c.ExpiresAt.UTC().Format(time.RFC3339)

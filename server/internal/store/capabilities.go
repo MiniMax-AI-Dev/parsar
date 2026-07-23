@@ -853,39 +853,107 @@ func normalizePinningMode(mode string) string {
 	}
 }
 
-func (s *Store) EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string) (AgentCapabilityRead, error) {
-	version, err := s.GetCapabilityVersion(ctx, versionID)
+func (s *Store) EnableAgentCapability(ctx context.Context, agentID string, versionID string, configuration map[string]any, pinningMode string, credentialBindings map[string]string) (AgentCapabilityRead, error) {
+	agentUUID, err := uuid(agentID)
 	if err != nil {
 		return AgentCapabilityRead{}, err
 	}
-	config, err := json.Marshal(nonNilMap(configuration))
+	versionUUID, err := uuid(versionID)
+	if err != nil {
+		return AgentCapabilityRead{}, err
+	}
+	tx, err := beginTx(ctx, s.db)
+	if err != nil {
+		return AgentCapabilityRead{}, err
+	}
+	defer tx.Rollback(ctx)
+	queries := sqlc.New(tx)
+	versionRow, err := queries.GetCapabilityVersion(ctx, versionUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return AgentCapabilityRead{}, fmt.Errorf("%w: %s", ErrUnknownCapabilityVersion, versionID)
+		}
+		return AgentCapabilityRead{}, err
+	}
+	agentRow, err := queries.GetAgentForUpdate(ctx, agentUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return AgentCapabilityRead{}, fmt.Errorf("%w: %s", ErrUnknownAgent, agentID)
+		}
+		return AgentCapabilityRead{}, err
+	}
+	if len(credentialBindings) > 0 {
+		agentConfig := decodeJSONMap(agentRow.Config)
+		bindings, _ := agentConfig["credential_bindings"].(map[string]any)
+		bindings = cloneAnyMap(bindings)
+		for kind, secretID := range credentialBindings {
+			bindings[kind] = map[string]any{"source": "shared", "secret_id": secretID}
+		}
+		agentConfig["credential_bindings"] = bindings
+		encodedAgentConfig, err := json.Marshal(agentConfig)
+		if err != nil {
+			return AgentCapabilityRead{}, err
+		}
+		if _, err := queries.UpdateAgentCRUD(ctx, sqlc.UpdateAgentCRUDParams{
+			ID:            agentUUID,
+			Name:          agentRow.Name,
+			Description:   agentRow.Description,
+			ConnectorType: agentRow.ConnectorType,
+			Config:        encodedAgentConfig,
+			Now:           timestamptz(time.Now().UTC()),
+		}); err != nil {
+			return AgentCapabilityRead{}, err
+		}
+	}
+	capabilityConfig, err := json.Marshal(nonNilMap(configuration))
 	if err != nil {
 		return AgentCapabilityRead{}, err
 	}
 	mode := normalizePinningMode(pinningMode)
 	now := time.Now().UTC()
-	params := sqlc.CreateAgentCapabilityParams{ID: mustUUID(newID()), AgentID: mustUUID(agentID), CapabilityID: mustUUID(version.CapabilityID), CapabilityVersionID: mustUUID(version.ID), Enabled: true, Configuration: config, PinningMode: mode, Now: timestamptz(now)}
-	row, err := sqlc.New(s.db).CreateAgentCapability(ctx, params)
-	if err == nil {
-		return agentCapabilityFromCreateRow(row), nil
-	}
-	if !isUniqueViolation(err) {
-		return AgentCapabilityRead{}, err
-	}
-	existingRows, err := sqlc.New(s.db).ListAgentCapabilitiesByAgent(ctx, mustUUID(agentID))
+	existingRows, err := queries.ListAgentCapabilitiesByAgent(ctx, agentUUID)
 	if err != nil {
 		return AgentCapabilityRead{}, err
 	}
+	var enabled AgentCapabilityRead
 	for _, existing := range existingRows {
-		if existing.CapabilityID == version.CapabilityID {
-			updated, err := sqlc.New(s.db).UpdateAgentCapability(ctx, sqlc.UpdateAgentCapabilityParams{ID: mustUUID(existing.ID), CapabilityVersionID: mustUUID(version.ID), Enabled: true, Configuration: config, PinningMode: mode, Now: timestamptz(now)})
-			if err != nil {
-				return AgentCapabilityRead{}, err
-			}
-			return agentCapabilityFromUpdateRow(updated), nil
+		if existing.CapabilityID != versionRow.CapabilityID {
+			continue
 		}
+		updated, err := queries.UpdateAgentCapability(ctx, sqlc.UpdateAgentCapabilityParams{
+			ID:                  mustUUID(existing.ID),
+			CapabilityVersionID: versionUUID,
+			Enabled:             true,
+			Configuration:       capabilityConfig,
+			PinningMode:         mode,
+			Now:                 timestamptz(now),
+		})
+		if err != nil {
+			return AgentCapabilityRead{}, err
+		}
+		enabled = agentCapabilityFromUpdateRow(updated)
+		break
 	}
-	return AgentCapabilityRead{}, err
+	if enabled.ID == "" {
+		created, err := queries.CreateAgentCapability(ctx, sqlc.CreateAgentCapabilityParams{
+			ID:                  mustUUID(newID()),
+			AgentID:             agentUUID,
+			CapabilityID:        mustUUID(versionRow.CapabilityID),
+			CapabilityVersionID: versionUUID,
+			Enabled:             true,
+			Configuration:       capabilityConfig,
+			PinningMode:         mode,
+			Now:                 timestamptz(now),
+		})
+		if err != nil {
+			return AgentCapabilityRead{}, err
+		}
+		enabled = agentCapabilityFromCreateRow(created)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return AgentCapabilityRead{}, err
+	}
+	return enabled, nil
 }
 
 func (s *Store) UpgradeAgentCapability(ctx context.Context, agentID string, capabilityID string, newVersionID string, pinningMode string) (AgentCapabilityRead, error) {

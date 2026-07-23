@@ -61,7 +61,8 @@ type credentialBody struct {
 }
 
 type agentCapabilityBody struct {
-	Configuration map[string]any `json:"configuration"`
+	Configuration      map[string]any    `json:"configuration"`
+	CredentialBindings map[string]string `json:"credential_bindings,omitempty"`
 	// PinningMode is "latest" or "pinned". Empty falls back to the
 	// store-side default (pinned), but the create/edit dialogs always
 	// send a value so the server doesn't have to guess.
@@ -1417,13 +1418,71 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
-		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), agentID, versionID, body.Configuration, body.PinningMode)
+		agentRecord, err := runtimeStore.GetAgent(r.Context(), agentID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to get agent")
+			return
+		}
+		requiredKinds := make(map[string]bool, len(version.RequiredCredentials))
+		for _, required := range version.RequiredCredentials {
+			if required.Required {
+				requiredKinds[required.Kind] = true
+			}
+		}
+		bindings := make(map[string]string, len(body.CredentialBindings))
+		for rawKind, rawSecretID := range body.CredentialBindings {
+			kind := strings.TrimSpace(rawKind)
+			secretID := strings.TrimSpace(rawSecretID)
+			if !requiredKinds[kind] {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding kind is not required by this capability"})
+				return
+			}
+			if !isUUID(secretID) {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding secret_id must be a valid uuid"})
+				return
+			}
+			secret, err := runtimeStore.GetSecretPayload(r.Context(), agent.WorkspaceID, secretID)
+			if err != nil || secret.Status != "active" || secret.Kind != "capability_inline" {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding secret is unavailable"})
+				return
+			}
+			secretKind := strings.TrimSpace(metadataStringValue(secret.Metadata, "credential_kind_code"))
+			if secretKind != "" && secretKind != kind {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "credential binding secret has the wrong credential kind"})
+				return
+			}
+			bindings[kind] = secretID
+		}
+		if agentRecord.Visibility == agentVisibilityPublic {
+			existing, _ := agentRecord.Config["credential_bindings"].(map[string]any)
+			for kind := range requiredKinds {
+				if bindings[kind] != "" || sharedCredentialBindingExists(existing[kind]) {
+					continue
+				}
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "public agents require a shared secret for every capability credential"})
+				return
+			}
+		}
+		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), agentID, versionID, body.Configuration, body.PinningMode, bindings)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to enable agent capability")
 			return
 		}
 		writeJSON(w, http.StatusOK, enabled)
 	}
+}
+
+func metadataStringValue(metadata map[string]any, key string) string {
+	value, _ := metadata[key].(string)
+	return value
+}
+
+func sharedCredentialBindingExists(value any) bool {
+	binding, ok := value.(map[string]any)
+	if !ok || strings.TrimSpace(fmt.Sprint(binding["source"])) != "shared" {
+		return false
+	}
+	return isUUID(strings.TrimSpace(fmt.Sprint(binding["secret_id"])))
 }
 
 // deleteAgentCapability uninstalls a capability version from the agent.

@@ -131,16 +131,12 @@ async function mockApp(
       });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory`) {
       if (directoryOverride && (await directoryOverride(route))) return;
-      return json(route, {
-        items: directoryItems,
-        updated_at: "2026-07-23T00:00:00Z",
-        source: "builtin",
-      });
+      return json(route, { items: directoryItems });
     }
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/context7`)
       return json(route, { ...directoryItems[0], url: "https://mcp.context7.com/mcp" });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/context7/import`)
-      return json(route, { installed: true, capability_id: CAPABILITY_ID, created: true }, 201);
+      return json(route, { installed: true, capability_id: CAPABILITY_ID }, 201);
     return json(route, {});
   });
 }

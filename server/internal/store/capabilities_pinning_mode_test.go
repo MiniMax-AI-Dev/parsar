@@ -165,7 +165,7 @@ func TestGetEnabledCapabilitiesForAgent_PinningModeLatestFields(t *testing.T) {
 	// cv.* still reflect v1 (we didn't rewrite capability_version_id);
 	// latest_* still reflect v2; PinningMode is now "latest". The
 	// daemon resolver's resolveVersionFields then picks v2 fields.
-	if _, err := st.EnableAgentCapability(ctx, created.Agent.ID, v1ID, nil, PinningModeLatest); err != nil {
+	if _, err := st.EnableAgentCapability(ctx, created.Agent.ID, v1ID, nil, PinningModeLatest, nil); err != nil {
 		t.Fatalf("EnableAgentCapability flip to latest: %v", err)
 	}
 	enabled, err = st.GetEnabledCapabilitiesForAgent(ctx, created.Agent.ID)
