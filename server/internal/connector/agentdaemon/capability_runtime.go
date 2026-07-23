@@ -826,7 +826,6 @@ func (c *Connector) refreshSharedOAuthCredentialIfNeeded(
 		return nil, err
 	}
 	refreshedPayload := refreshed.Payload()
-	mcpoauth.PreserveMetadata(payload, refreshedPayload)
 	encrypted, err := c.secrets.Encrypt(refreshedPayload)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt refreshed token: %w", err)
