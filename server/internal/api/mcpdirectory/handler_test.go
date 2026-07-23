@@ -37,6 +37,22 @@ type fakeDirectoryStore struct {
 	imported          *store.ImportCapabilityInput
 }
 
+type fakeWorkspaceCredentialStore struct {
+	secrets []store.SecretRead
+}
+
+func (f *fakeWorkspaceCredentialStore) ListSecrets(context.Context, string, int32) ([]store.SecretRead, error) {
+	return append([]store.SecretRead(nil), f.secrets...), nil
+}
+
+func (f *fakeWorkspaceCredentialStore) CreateSecret(context.Context, store.CreateSecretInput, []byte) (store.SecretRead, error) {
+	return store.SecretRead{}, nil
+}
+
+func (f *fakeWorkspaceCredentialStore) UpdateSecretPayload(context.Context, string, string, []byte) (store.SecretPayload, error) {
+	return store.SecretPayload{}, nil
+}
+
 func (f *fakeDirectoryStore) GetWorkspaceMemberRole(context.Context, string, string) (string, error) {
 	if f.roleErr != nil {
 		return "", f.roleErr
@@ -127,6 +143,37 @@ func TestDirectoryImportIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T) {
+	snapshot := testSnapshot()
+	snapshot.Catalog.Items = []mcpcatalog.Item{{
+		ID: "notion", Name: "Notion", Description: "Search Notion.",
+		Publisher: mcpcatalog.Publisher{Name: "Notion", URL: "https://www.notion.so"},
+		Verified:  true, Categories: []string{"Productivity"}, FeaturedRank: 1,
+		Version: "1.0.0", Transport: "streamable-http",
+		Authentication: mcpcatalog.Authentication{Type: "oauth2", CredentialKind: "notion_integration"},
+		Server:         mcpcatalog.Server{Name: "notion", URL: "https://mcp.notion.com/mcp"},
+	}}
+	fs := &fakeDirectoryStore{role: "admin"}
+	credentials := &fakeWorkspaceCredentialStore{}
+	rec := requestWithDeps(t, fs, credentials, snapshot, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
+	if rec.Code != http.StatusConflict || fs.imported != nil {
+		t.Fatalf("status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
+	}
+
+	credentials.secrets = []store.SecretRead{{
+		ID: "secret-1", Kind: "capability_inline", AuthType: "oauth2", Status: "active",
+		Metadata: map[string]any{"workspace_id": testWorkspaceID, "catalog_id": "notion"},
+	}}
+	rec = requestWithDeps(t, fs, credentials, snapshot, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	header := fs.imported.Spec.MCP.Servers[0].Headers["Authorization"]
+	if header.Prefix != "Bearer " || header.CredentialKindCode != "notion_integration" {
+		t.Fatalf("authorization header = %+v", header)
+	}
+}
+
 func TestDirectoryImportRecoversConcurrentIdenticalImport(t *testing.T) {
 	fs := &fakeDirectoryStore{role: "admin", importErr: store.ErrCapabilityNameTaken, concurrentInstall: true}
 	rec := request(t, fs, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/context7/import")
@@ -185,6 +232,10 @@ func request(t *testing.T, fs *fakeDirectoryStore, method, path string) *httptes
 }
 
 func requestWithSnapshot(t *testing.T, fs *fakeDirectoryStore, snapshot mcpcatalog.Snapshot, method, path string) *httptest.ResponseRecorder {
+	return requestWithDeps(t, fs, nil, snapshot, method, path)
+}
+
+func requestWithDeps(t *testing.T, fs *fakeDirectoryStore, credentials workspaceCredentialStore, snapshot mcpcatalog.Snapshot, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	router := chi.NewRouter()
 	router.Use(func(next http.Handler) http.Handler {
@@ -192,7 +243,7 @@ func requestWithSnapshot(t *testing.T, fs *fakeDirectoryStore, snapshot mcpcatal
 			next.ServeHTTP(w, r.WithContext(auth.WithUserID(r.Context(), testUserID)))
 		})
 	})
-	RegisterRoutes(router, Deps{Catalog: fakeCatalog{snapshot: snapshot}, Store: fs})
+	RegisterRoutes(router, Deps{Catalog: fakeCatalog{snapshot: snapshot}, Store: fs, WorkspaceCredentials: credentials})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
 	return rec

@@ -37,6 +37,22 @@
         "url": { "$ref": "#/$defs/httpUrl" }
       }
     },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["none", "oauth2"] },
+        "credential_kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "if": {
+        "properties": { "type": { "const": "oauth2" } }
+      },
+      "then": { "required": ["credential_kind"] }
+    },
     "item": {
       "type": "object",
       "additionalProperties": false,
@@ -69,6 +85,7 @@
         "featured_rank": { "type": "integer", "minimum": 1 },
         "version": { "type": "string", "minLength": 1 },
         "transport": { "const": "streamable-http" },
+        "authentication": { "$ref": "#/$defs/authentication" },
         "server": { "$ref": "#/$defs/server" }
       }
     }

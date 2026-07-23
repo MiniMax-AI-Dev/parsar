@@ -17,6 +17,7 @@ export function DirectoryDetail({
   onBack,
   onRetry,
   onImport,
+	onConnect,
   onViewCapability,
 }: {
   item: MCPDirectoryItem | null
@@ -26,6 +27,7 @@ export function DirectoryDetail({
   onBack: () => void
   onRetry: () => void
   onImport: () => void
+	onConnect: () => void
   onViewCapability: (capabilityID: string) => void
 }) {
   const { t } = useTranslation("admin")
@@ -71,6 +73,7 @@ export function DirectoryDetail({
               {item.installed ? (
                 <Badge variant="success">{t("capabilities.mcpDirectory.actions.installed")}</Badge>
               ) : null}
+			  {item.connected ? <Badge variant="success">{t("capabilities.mcpDirectory.oauth.connected")}</Badge> : null}
             </div>
             <p className="mt-1 text-sm text-fg-subtle">{item.publisher.name}</p>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-fg-muted">{item.description}</p>
@@ -89,7 +92,11 @@ export function DirectoryDetail({
           />
           <Metadata
             label={t("capabilities.mcpDirectory.detail.authentication")}
-            value={t("capabilities.mcpDirectory.detail.noAuthentication")}
+			value={item.authentication === "oauth2"
+			  ? item.connected
+				? t("capabilities.mcpDirectory.oauth.connected")
+				: t("capabilities.mcpDirectory.oauth.required")
+			  : t("capabilities.mcpDirectory.detail.noAuthentication")}
           />
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -128,7 +135,11 @@ export function DirectoryDetail({
           </aside>
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
-          {item.installed && item.installed_capability_id ? (
+		  {item.authentication === "oauth2" && !item.connected ? (
+			<Button size="sm" onClick={onConnect}>
+			  {t("capabilities.mcpDirectory.oauth.connect")}
+			</Button>
+		  ) : item.installed && item.installed_capability_id ? (
             <Button
               variant="outline"
               size="sm"

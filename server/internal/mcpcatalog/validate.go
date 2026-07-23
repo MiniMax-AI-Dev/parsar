@@ -14,7 +14,10 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 )
 
-var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+var (
+	idPattern         = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	credentialPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+)
 
 func Decode(data []byte) (Catalog, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -87,6 +90,18 @@ func (i Item) Validate() error {
 	}
 	if i.Transport != canonical.MCPTransportStreamableHTTP {
 		return fmt.Errorf("item %q transport %q is unsupported", i.ID, i.Transport)
+	}
+	switch i.Authentication.EffectiveType() {
+	case "none":
+		if strings.TrimSpace(i.Authentication.CredentialKind) != "" {
+			return fmt.Errorf("item %q authentication credential_kind requires oauth2", i.ID)
+		}
+	case "oauth2":
+		if !credentialPattern.MatchString(i.Authentication.CredentialKind) {
+			return fmt.Errorf("item %q authentication credential_kind %q is invalid", i.ID, i.Authentication.CredentialKind)
+		}
+	default:
+		return fmt.Errorf("item %q authentication type %q is unsupported", i.ID, i.Authentication.Type)
 	}
 	if strings.TrimSpace(i.Server.Name) == "" {
 		return fmt.Errorf("item %q server name is required", i.ID)

@@ -100,7 +100,10 @@ func TestBuildArgsMergesLocalAndRemoteMCPServers(t *testing.T) {
 		"opencode_json": `{"provider":{}}`,
 		"mcp_servers": map[string]any{
 			"local": map[string]any{"command": "npx", "args": []any{"-y", "pkg"}},
-			"docs":  map[string]any{"url": "https://docs.example.com/mcp"},
+			"docs": map[string]any{
+				"url":     "https://docs.example.com/mcp",
+				"headers": map[string]any{"Authorization": "Bearer token"},
+			},
 		},
 	})
 	if err != nil {
@@ -120,6 +123,10 @@ func TestBuildArgsMergesLocalAndRemoteMCPServers(t *testing.T) {
 	remote := mcp["docs"].(map[string]any)
 	if remote["type"] != "remote" || remote["url"] != "https://docs.example.com/mcp" {
 		t.Fatalf("remote = %+v", remote)
+	}
+	headers := remote["headers"].(map[string]any)
+	if headers["Authorization"] != "Bearer token" {
+		t.Fatalf("headers = %+v", headers)
 	}
 	local := mcp["local"].(map[string]any)
 	if local["type"] != "local" {

@@ -70,7 +70,11 @@ export function ImportMCPDialog({
                 {t("capabilities.mcpDirectory.detail.authentication")}
               </p>
               <p className="mt-1.5 font-mono text-xs text-fg">
-                {t("capabilities.mcpDirectory.detail.noAuthentication")}
+				{item.authentication === "oauth2"
+				  ? item.connected
+					? t("capabilities.mcpDirectory.oauth.connected")
+					: t("capabilities.mcpDirectory.oauth.required")
+				  : t("capabilities.mcpDirectory.detail.noAuthentication")}
               </p>
             </div>
             <p className="rounded-md border border-line bg-surface-muted/25 p-3 text-xs leading-5 text-fg-muted">
@@ -91,7 +95,7 @@ export function ImportMCPDialog({
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={!item || loading || !!error || pending || item.installed}
+			disabled={!item || loading || !!error || pending || item.installed || (item.authentication === "oauth2" && !item.connected)}
           >
             {pending
               ? t("capabilities.mcpDirectory.import.importing")

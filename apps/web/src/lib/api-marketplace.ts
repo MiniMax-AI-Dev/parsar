@@ -102,9 +102,11 @@ export interface MCPDirectoryItem {
   verified: boolean
   categories: string[]
   featured_rank: number
-  version: string
-  transport: "streamable-http"
-  url?: string
+	version: string
+	transport: "streamable-http"
+	authentication: "none" | "oauth2"
+	connected: boolean
+	url?: string
   installed: boolean
   installed_capability_id: string | null
 }
@@ -218,6 +220,10 @@ async function getMCPDirectoryItem(workspaceID: string | null, catalogID: string
 
 async function importMCPDirectoryItem(workspaceID: string, catalogID: string): Promise<MCPDirectoryImportResponse> {
   return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/import`, { method: "POST" })
+}
+
+export function mcpDirectoryOAuthStartURL(workspaceID: string, catalogID: string): string {
+	return `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/oauth/start`
 }
 
 function normalizeMarketplaceCapability(item: MarketplaceCapability): MarketplaceCapability {

@@ -1152,10 +1152,14 @@ definitions:
     type: object
   mcpdirectory.itemResponse:
     properties:
+      authentication:
+        type: string
       categories:
         items:
           type: string
         type: array
+      connected:
+        type: boolean
       description:
         type: string
       featured_rank:
@@ -7147,6 +7151,84 @@ paths:
               type: string
             type: object
       summary: Import an MCP Connector Directory item
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      - description: OAuth state
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Closes the OAuth popup
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Complete an MCP connector OAuth flow
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Redirect to the provider authorization page
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start an MCP connector OAuth flow
       tags:
       - mcp-directory
   /api/v1/workspaces/{workspaceID}/members:

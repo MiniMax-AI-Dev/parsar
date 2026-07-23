@@ -6,11 +6,12 @@ import { Button } from "../../../../components/ui/button"
 import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
 import { ConnectorIcon, VerifiedBadge } from "./shared"
 
-export function DirectoryCard({ item, canImport, onOpen, onImport, onViewCapability }: {
+export function DirectoryCard({ item, canImport, onOpen, onImport, onConnect, onViewCapability }: {
   item: MCPDirectoryItem
   canImport: boolean
   onOpen: () => void
   onImport: () => void
+	onConnect: () => void
   onViewCapability: (capabilityID: string) => void
 }) {
   const { t } = useTranslation("admin")
@@ -27,6 +28,7 @@ export function DirectoryCard({ item, canImport, onOpen, onImport, onViewCapabil
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-fg-subtle">
               <span className="truncate">{item.publisher.name}</span>
               {item.verified ? <VerifiedBadge /> : null}
+			  {item.connected ? <Badge variant="success">{t("capabilities.mcpDirectory.oauth.connected")}</Badge> : null}
             </div>
           </div>
         </div>
@@ -40,7 +42,11 @@ export function DirectoryCard({ item, canImport, onOpen, onImport, onViewCapabil
           <Button className="w-full" variant="outline" size="sm" onClick={() => onViewCapability(item.installed_capability_id!)}>
             <Check className="h-3.5 w-3.5" /> {t("capabilities.mcpDirectory.actions.installed")}
           </Button>
-        ) : (
+        ) : item.authentication === "oauth2" && !item.connected ? (
+		  <Button className="w-full" size="sm" onClick={onConnect}>
+			{t("capabilities.mcpDirectory.oauth.connect")}
+		  </Button>
+		) : (
           <Button className="w-full" size="sm" disabled={!canImport} title={!canImport ? t("capabilities.permission.adminOnly") : undefined} onClick={onImport}>
             {canImport ? t("capabilities.mcpDirectory.actions.import") : t("capabilities.permission.adminOnly")}
           </Button>

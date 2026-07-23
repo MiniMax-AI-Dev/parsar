@@ -64,6 +64,30 @@
         "name": "firecrawl",
         "url": "https://mcp.firecrawl.dev/v2/mcp"
       }
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "description": "Search, read, create, and update pages and databases in the Notion workspaces you authorize.",
+      "publisher": {
+        "name": "Notion",
+        "url": "https://www.notion.so"
+      },
+      "icon_url": "https://github.com/makenotion.png?size=128",
+      "homepage_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+      "verified": true,
+      "categories": ["Productivity", "Knowledge"],
+      "featured_rank": 4,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "authentication": {
+        "type": "oauth2",
+        "credential_kind": "notion_integration"
+      },
+      "server": {
+        "name": "notion",
+        "url": "https://mcp.notion.com/mcp"
+      }
     }
   ]
 }
