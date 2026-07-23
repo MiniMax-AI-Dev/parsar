@@ -13,8 +13,6 @@ func (c Credential) Payload() map[string]any {
 		"provider":                   CredentialProvider,
 		"access_token":               c.AccessToken,
 		"refresh_token":              c.RefreshToken,
-		"token_type":                 c.TokenType,
-		"scope":                      c.Scope,
 		"client_id":                  c.ClientID,
 		"client_secret":              c.ClientSecret,
 		"token_endpoint_auth_method": c.TokenEndpointAuthMethod,
@@ -34,8 +32,6 @@ func CredentialFromPayload(payload map[string]any) (Credential, bool, error) {
 	credential := Credential{
 		AccessToken:             stringValue(payload, "access_token"),
 		RefreshToken:            stringValue(payload, "refresh_token"),
-		TokenType:               stringValue(payload, "token_type"),
-		Scope:                   stringValue(payload, "scope"),
 		ClientID:                stringValue(payload, "client_id"),
 		ClientSecret:            stringValue(payload, "client_secret"),
 		TokenEndpointAuthMethod: stringValue(payload, "token_endpoint_auth_method"),
@@ -57,12 +53,6 @@ func CredentialFromPayload(payload map[string]any) (Credential, bool, error) {
 
 func (c Credential) NeedsRefresh(now time.Time) bool {
 	return !c.ExpiresAt.IsZero() && !c.ExpiresAt.After(now.UTC().Add(time.Minute))
-}
-
-func PreserveMetadata(source, target map[string]any) {
-	if value, ok := source["catalog_id"]; ok {
-		target["catalog_id"] = value
-	}
 }
 
 func stringValue(payload map[string]any, key string) string {

@@ -166,7 +166,6 @@ func TestCredentialPayloadRoundTrip(t *testing.T) {
 	want := Credential{
 		AccessToken:             "access",
 		RefreshToken:            "refresh",
-		TokenType:               "Bearer",
 		ExpiresAt:               time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC),
 		ClientID:                "client",
 		TokenEndpointAuthMethod: "none",

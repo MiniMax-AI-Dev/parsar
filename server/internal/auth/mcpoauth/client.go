@@ -35,19 +35,15 @@ type Transaction struct {
 	ClientID                string `json:"client_id"`
 	ClientSecret            string `json:"client_secret,omitempty"`
 	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method"`
-	AuthorizationEndpoint   string `json:"authorization_endpoint"`
 	TokenEndpoint           string `json:"token_endpoint"`
 	RedirectURI             string `json:"redirect_uri"`
 	Resource                string `json:"resource"`
-	Scope                   string `json:"scope,omitempty"`
 	IssuedAt                int64  `json:"issued_at"`
 }
 
 type Credential struct {
 	AccessToken             string
 	RefreshToken            string
-	TokenType               string
-	Scope                   string
 	ExpiresAt               time.Time
 	ClientID                string
 	ClientSecret            string
@@ -68,7 +64,6 @@ type authorizationServerMetadata struct {
 	TokenEndpoint                 string   `json:"token_endpoint"`
 	RegistrationEndpoint          string   `json:"registration_endpoint"`
 	CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
-	TokenEndpointMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 }
 
 type registrationResponse struct {
@@ -80,8 +75,6 @@ type registrationResponse struct {
 type tokenResponse struct {
 	AccessToken  string          `json:"access_token"`
 	RefreshToken string          `json:"refresh_token"`
-	TokenType    string          `json:"token_type"`
-	Scope        string          `json:"scope"`
 	ExpiresIn    json.RawMessage `json:"expires_in"`
 }
 
@@ -175,11 +168,9 @@ func (c *Client) Begin(ctx context.Context, resource, redirectURI string) (Trans
 		ClientID:                registration.ClientID,
 		ClientSecret:            registration.ClientSecret,
 		TokenEndpointAuthMethod: registration.TokenEndpointAuthMethod,
-		AuthorizationEndpoint:   metadata.AuthorizationEndpoint,
 		TokenEndpoint:           metadata.TokenEndpoint,
 		RedirectURI:             redirectURI,
 		Resource:                resourceURL.String(),
-		Scope:                   scope,
 		IssuedAt:                c.now().UTC().Unix(),
 	}, authorizeURL.String(), nil
 }
@@ -297,8 +288,6 @@ func (c *Client) tokenRequest(ctx context.Context, endpoint, authMethod, clientI
 	return Credential{
 		AccessToken:             response.AccessToken,
 		RefreshToken:            refreshToken,
-		TokenType:               response.TokenType,
-		Scope:                   response.Scope,
 		ExpiresAt:               expiresAt,
 		ClientID:                clientID,
 		ClientSecret:            clientSecret,

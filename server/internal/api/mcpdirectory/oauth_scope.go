@@ -18,7 +18,6 @@ func (h *handler) saveWorkspaceOAuthCredential(
 	createdBy string,
 ) error {
 	payload := credential.Payload()
-	payload["catalog_id"] = item.ID
 	encrypted, err := h.deps.Secrets.Encrypt(payload)
 	if err != nil {
 		return err
