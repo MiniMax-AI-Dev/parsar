@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	gatewaypkg "github.com/MiniMax-AI-Dev/parsar/server/internal/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
@@ -2472,6 +2473,48 @@ type stubRuntimeStore struct {
 	httpEndpoint                string
 }
 
+type createAgentOAuthValidationStore struct {
+	stubRuntimeStore
+	secretProvider string
+	createCalls    int
+}
+
+func (s *createAgentOAuthValidationStore) GetCapabilityVersion(context.Context, string) (store.CapabilityVersionRead, error) {
+	return store.CapabilityVersionRead{
+		ID:                  "00000000-0000-0000-0000-000000000c02",
+		CapabilityID:        "00000000-0000-0000-0000-000000000c01",
+		Version:             "1.0.0",
+		SourcePayload:       json.RawMessage(`{"source_format":"mcp_catalog","catalog_id":"notion"}`),
+		RequiredCredentials: []store.RequiredCredential{{Kind: capability.CredentialKindMCPOAuth, Required: true}},
+	}, nil
+}
+
+func (s *createAgentOAuthValidationStore) GetCapability(context.Context, string) (store.CapabilityRead, error) {
+	return store.CapabilityRead{
+		ID:          "00000000-0000-0000-0000-000000000c01",
+		WorkspaceID: "00000000-0000-0000-0000-000000000002",
+		Type:        "mcp",
+		Visibility:  "workspace",
+		Status:      "active",
+	}, nil
+}
+
+func (s *createAgentOAuthValidationStore) GetSecretPayload(context.Context, string, string) (store.SecretPayload, error) {
+	return store.SecretPayload{SecretRead: store.SecretRead{
+		ID:       "00000000-0000-0000-0000-000000000099",
+		Kind:     "capability_inline",
+		Provider: s.secretProvider,
+		AuthType: "oauth2",
+		Status:   "active",
+		Metadata: map[string]any{"credential_kind_code": capability.CredentialKindMCPOAuth},
+	}}, nil
+}
+
+func (s *createAgentOAuthValidationStore) CreateAgent(ctx context.Context, input store.CreateAgentInput) (store.CreateAgentResult, error) {
+	s.createCalls++
+	return s.stubRuntimeStore.CreateAgent(ctx, input)
+}
+
 type roleStubStore struct {
 	stubRuntimeStore
 	roles map[string]string
@@ -4044,6 +4087,51 @@ func TestCreateAgentAPIHappyPathAndNameConflict(t *testing.T) {
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for duplicate agent name (no longer rejected), got %d: %s", res.Code, res.Body.String())
 	}
+}
+
+func TestCreateAgentValidatesInitialCapabilityOAuthBinding(t *testing.T) {
+	const body = `{
+		"name":"OAuth Agent",
+		"connector_type":"agent_daemon",
+		"visibility":"workspace",
+		"initial_capabilities":[{
+			"capability_version_id":"00000000-0000-0000-0000-000000000c02",
+			"configuration":{"credential_bindings":{"mcp_oauth":{"source":"shared","secret_id":"00000000-0000-0000-0000-000000000099"}}}
+		}],
+		"config":{"daemon_mode":"sandbox","agent_kind":"opencode"}
+	}`
+
+	t.Run("rejects a secret from another connector", func(t *testing.T) {
+		storeStub := &createAgentOAuthValidationStore{secretProvider: "github"}
+		r := chi.NewRouter()
+		RegisterRoutesWithStore(r, storeStub)
+		req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(body)))
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
+		r.ServeHTTP(res, req)
+		if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), "different MCP connector") {
+			t.Fatalf("expected 422 connector mismatch, got %d: %s", res.Code, res.Body.String())
+		}
+		if storeStub.createCalls != 0 {
+			t.Fatalf("CreateAgent calls = %d, want 0", storeStub.createCalls)
+		}
+	})
+
+	t.Run("accepts a matching connector secret", func(t *testing.T) {
+		storeStub := &createAgentOAuthValidationStore{secretProvider: "notion"}
+		r := chi.NewRouter()
+		RegisterRoutesWithStore(r, storeStub)
+		req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(body)))
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
+		r.ServeHTTP(res, req)
+		if res.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", res.Code, res.Body.String())
+		}
+		if storeStub.createCalls != 1 {
+			t.Fatalf("CreateAgent calls = %d, want 1", storeStub.createCalls)
+		}
+	})
 }
 
 func TestUpdateAgentAPIHappyPathAndImmutableSlug(t *testing.T) {

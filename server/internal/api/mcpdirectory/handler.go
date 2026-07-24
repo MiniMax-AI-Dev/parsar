@@ -15,6 +15,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
@@ -347,7 +348,7 @@ func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, wo
 		catalogID := strings.TrimSpace(candidate.Provider)
 		item, found := catalog.Find(catalogID)
 		if !found || item.Authentication.EffectiveType() != "oauth2" ||
-			metadataString(candidate.Metadata, "credential_kind_code") != mcpcatalog.OAuthCredentialKind {
+			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
 			continue
 		}
 		result[catalogID] = true

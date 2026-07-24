@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
@@ -38,7 +39,7 @@ func (h *handler) saveWorkspaceOAuthCredential(
 		AuthType:           "oauth2",
 		Masked:             secrets.MaskPayload(payload),
 		CreatedBy:          createdBy,
-		CredentialKindCode: mcpcatalog.OAuthCredentialKind,
+		CredentialKindCode: capability.CredentialKindMCPOAuth,
 	}, encrypted)
 	return err
 }
@@ -57,7 +58,7 @@ func (h *handler) workspaceOAuthCredentialRead(
 			candidate.AuthType != "oauth2" ||
 			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) ||
 			strings.TrimSpace(candidate.Provider) != item.ID ||
-			metadataString(candidate.Metadata, "credential_kind_code") != mcpcatalog.OAuthCredentialKind {
+			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
 			continue
 		}
 		return candidate, true, nil
