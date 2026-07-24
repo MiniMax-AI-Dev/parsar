@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 )
 
 func TestBuiltinCatalogLoads(t *testing.T) {
@@ -25,7 +27,7 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 		}
 		if item.ID == "notion" {
 			header := item.CanonicalSpec().MCP.Servers[0].Headers["Authorization"]
-			if header.Prefix != "Bearer " || header.CredentialKindCode != OAuthCredentialKind {
+			if header.Prefix != "Bearer " || header.CredentialKindCode != capability.CredentialKindMCPOAuth {
 				t.Fatalf("notion authorization header = %+v", header)
 			}
 		}

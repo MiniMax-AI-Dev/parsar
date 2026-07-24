@@ -1,13 +1,11 @@
 package mcpcatalog
 
 import (
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 )
 
-const (
-	SchemaVersion       = 1
-	OAuthCredentialKind = "mcp_oauth"
-)
+const SchemaVersion = 1
 
 type Catalog struct {
 	SchemaVersion int    `json:"schema_version"`
@@ -64,7 +62,7 @@ func (i Item) CanonicalSpec() canonical.Spec {
 			"Authorization": {
 				Mode:               canonical.EnvModeCredentialRef,
 				Prefix:             "Bearer ",
-				CredentialKindCode: OAuthCredentialKind,
+				CredentialKindCode: capability.CredentialKindMCPOAuth,
 			},
 		}
 	}

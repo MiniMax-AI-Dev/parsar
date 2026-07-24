@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -469,13 +469,13 @@ func TestResolveCapabilityAdditions_UsesWorkspaceOAuthHeader(t *testing.T) {
 			"Authorization": {
 				Mode:               canonical.EnvModeCredentialRef,
 				Prefix:             "Bearer ",
-				CredentialKindCode: mcpcatalog.OAuthCredentialKind,
+				CredentialKindCode: capability.CredentialKindMCPOAuth,
 			},
 		},
-	}}, []store.RequiredCredential{{Kind: mcpcatalog.OAuthCredentialKind, Required: true}})
+	}}, []store.RequiredCredential{{Kind: capability.CredentialKindMCPOAuth, Required: true}})
 	row.Configuration = map[string]any{
 		"credential_bindings": map[string]any{
-			mcpcatalog.OAuthCredentialKind: map[string]any{
+			capability.CredentialKindMCPOAuth: map[string]any{
 				"source":    "shared",
 				"secret_id": "secret-1",
 			},
@@ -522,13 +522,13 @@ func TestResolveCapabilityAdditions_UsesCapabilityScopedOAuthBindings(t *testing
 				"Authorization": {
 					Mode:               canonical.EnvModeCredentialRef,
 					Prefix:             "Bearer ",
-					CredentialKindCode: mcpcatalog.OAuthCredentialKind,
+					CredentialKindCode: capability.CredentialKindMCPOAuth,
 				},
 			},
-		}}, []store.RequiredCredential{{Kind: mcpcatalog.OAuthCredentialKind, Required: true}})
+		}}, []store.RequiredCredential{{Kind: capability.CredentialKindMCPOAuth, Required: true}})
 		row.Configuration = map[string]any{
 			"credential_bindings": map[string]any{
-				mcpcatalog.OAuthCredentialKind: map[string]any{
+				capability.CredentialKindMCPOAuth: map[string]any{
 					"source":    "shared",
 					"secret_id": secretID,
 				},

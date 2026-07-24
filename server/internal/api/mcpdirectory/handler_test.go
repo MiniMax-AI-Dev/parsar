@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -167,14 +168,14 @@ func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T)
 
 	credentials.secrets = []store.SecretRead{{
 		ID: "secret-2", Kind: "capability_inline", Provider: "notion", AuthType: "oauth2", Status: "active",
-		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": mcpcatalog.OAuthCredentialKind},
+		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": capability.CredentialKindMCPOAuth},
 	}}
 	rec = requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	header := fs.imported.Spec.MCP.Servers[0].Headers["Authorization"]
-	if header.Prefix != "Bearer " || header.CredentialKindCode != mcpcatalog.OAuthCredentialKind {
+	if header.Prefix != "Bearer " || header.CredentialKindCode != capability.CredentialKindMCPOAuth {
 		t.Fatalf("authorization header = %+v", header)
 	}
 }
