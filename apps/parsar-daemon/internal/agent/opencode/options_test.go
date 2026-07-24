@@ -1,6 +1,7 @@
 package opencode_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -89,6 +90,47 @@ func TestBuildArgsWritesManagedConfigUnderParsarHome(t *testing.T) {
 	res.Cleanup()
 	if _, err := os.Stat(filepath.Join(home, "parsar-daemon", "scratch", "run_id")); !os.IsNotExist(err) {
 		t.Fatalf("scratch dir still exists after cleanup: %v", err)
+	}
+}
+
+func TestBuildArgsMergesLocalAndRemoteMCPServers(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PARSAR_HOME", home)
+	res, err := opencode.BuildArgs("run-mcp", "hello", "", map[string]any{
+		"opencode_json": `{"provider":{}}`,
+		"mcp_servers": map[string]any{
+			"local": map[string]any{"command": "npx", "args": []any{"-y", "pkg"}},
+			"docs": map[string]any{
+				"url":     "https://docs.example.com/mcp",
+				"headers": map[string]any{"Authorization": "Bearer token"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildArgs: %v", err)
+	}
+	defer res.Cleanup()
+	path := filepath.Join(envValue(res.Env, "XDG_CONFIG_HOME"), "opencode", "opencode.json")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(body, &config); err != nil {
+		t.Fatal(err)
+	}
+	mcp := config["mcp"].(map[string]any)
+	remote := mcp["docs"].(map[string]any)
+	if remote["type"] != "remote" || remote["url"] != "https://docs.example.com/mcp" {
+		t.Fatalf("remote = %+v", remote)
+	}
+	headers := remote["headers"].(map[string]any)
+	if headers["Authorization"] != "Bearer token" {
+		t.Fatalf("headers = %+v", headers)
+	}
+	local := mcp["local"].(map[string]any)
+	if local["type"] != "local" {
+		t.Fatalf("local = %+v", local)
 	}
 }
 

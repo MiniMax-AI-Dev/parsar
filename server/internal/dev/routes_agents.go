@@ -343,8 +343,38 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 			return
 		}
 		initialCapabilities := make([]store.InitialAgentCapabilityInput, 0, len(req.InitialCapabilities))
-		for _, capability := range req.InitialCapabilities {
-			initialCapabilities = append(initialCapabilities, store.InitialAgentCapabilityInput{CapabilityVersionID: capability.CapabilityVersionID, Configuration: capability.Configuration, PinningMode: capability.PinningMode})
+		for _, requested := range req.InitialCapabilities {
+			versionID := strings.TrimSpace(requested.CapabilityVersionID)
+			if !isUUID(versionID) {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "capability_version_id must be a valid uuid"})
+				return
+			}
+			version, err := runtimeStore.GetCapabilityVersion(r.Context(), versionID)
+			if err != nil {
+				writeCapabilityError(w, err, "failed to get capability version")
+				return
+			}
+			capabilityRecord, err := runtimeStore.GetCapability(r.Context(), version.CapabilityID)
+			if err != nil {
+				writeCapabilityError(w, err, "failed to get capability")
+				return
+			}
+			if capabilityRecord.WorkspaceID != workspaceID &&
+				(capabilityRecord.Visibility != "public" || capabilityRecord.DeprecatedAt != nil || capabilityRecord.Status != "active") {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "marketplace capability is unavailable"})
+				return
+			}
+			if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+				WorkspaceID:     workspaceID,
+				AgentVisibility: req.Visibility,
+				AgentConfig:     req.Config,
+				Version:         version,
+				Configuration:   requested.Configuration,
+			}); err != nil {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+				return
+			}
+			initialCapabilities = append(initialCapabilities, store.InitialAgentCapabilityInput{CapabilityVersionID: versionID, Configuration: requested.Configuration, PinningMode: requested.PinningMode})
 		}
 		result, err := runtimeStore.CreateAgent(r.Context(), store.CreateAgentInput{WorkspaceID: workspaceID, Name: req.Name, Description: req.Description, ConnectorType: req.ConnectorType, SystemPrompt: req.SystemPrompt, DefaultModelID: req.DefaultModelID, Capabilities: req.Capabilities, CapabilitiesSet: hasCaps, InitialCapabilities: initialCapabilities, Runtime: "", AgentConfig: req.Config, Visibility: req.Visibility, Slug: req.Slug, CreatedBy: actorIDFromRequest(r)})
 		if err != nil {
@@ -543,6 +573,10 @@ func syncAgentCapabilities(
 	for _, ac := range existing {
 		existingByCapID[ac.CapabilityID] = ac
 	}
+	agent, err := rs.GetAgent(ctx, agentID)
+	if err != nil {
+		return fmt.Errorf("syncAgentCapabilities: get agent: %w", err)
+	}
 
 	// 2. Resolve desired names. A name can come from this workspace's own
 	// capabilities, OR from the marketplace (a public capability published
@@ -623,6 +657,22 @@ func syncAgentCapabilities(
 		mode := store.PinningModeLatest
 		if cap.fromMarketplace {
 			mode = store.PinningModePinned
+		}
+		version, err := rs.GetCapabilityVersion(ctx, latestVersionID)
+		if err != nil {
+			log.Bg().Warn("syncAgentCapabilities: get version failed, skipping",
+				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
+			continue
+		}
+		if err := validateCapabilityCredentialBindings(ctx, rs, capabilityCredentialBindingValidationInput{
+			WorkspaceID:     workspaceID,
+			AgentVisibility: agent.Visibility,
+			AgentConfig:     agent.Config,
+			Version:         version,
+		}); err != nil {
+			log.Bg().Warn("syncAgentCapabilities: credential validation failed, skipping",
+				"capability_id", cap.capabilityID, "name", name, "version_id", latestVersionID, "err", err)
+			continue
 		}
 		if _, err := rs.EnableAgentCapability(ctx, agentID, latestVersionID, nil, mode); err != nil {
 			log.Bg().Warn("syncAgentCapabilities: enable failed, skipping",

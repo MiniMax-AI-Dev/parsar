@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 type RequiredCredential struct {
@@ -20,10 +20,10 @@ type RequiredCredential struct {
 }
 
 type EnabledCapabilityRead struct {
-	AgentCapabilityID      string               `json:"agent_capability_id"`
-	AgentID                string               `json:"agent_id"`
-	Enabled                bool                 `json:"enabled"`
-	Configuration          map[string]any       `json:"configuration"`
+	AgentCapabilityID string         `json:"agent_capability_id"`
+	AgentID           string         `json:"agent_id"`
+	Enabled           bool           `json:"enabled"`
+	Configuration     map[string]any `json:"configuration"`
 	// PinningMode is 'latest' or 'pinned'. In 'latest' mode the daemon
 	// resolver ignores OssKey/SHA256/CanonicalSpec/Version on this struct
 	// and uses LatestOssKey/LatestSHA256/LatestCanonicalSpec/LatestVersion

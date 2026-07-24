@@ -15,9 +15,9 @@ func envValueToString(v canonical.EnvValue) (string, error) {
 	case canonical.EnvModeLiteral:
 		return v.Literal, nil
 	case canonical.EnvModeInlineSecret:
-		return fmt.Sprintf("${PARSAR_SECRET:%s}", v.SecretID), nil
+		return v.Prefix + fmt.Sprintf("${PARSAR_SECRET:%s}", v.SecretID), nil
 	case canonical.EnvModeCredentialRef:
-		return fmt.Sprintf("${PARSAR_CREDENTIAL:%s}", v.CredentialKindCode), nil
+		return v.Prefix + fmt.Sprintf("${PARSAR_CREDENTIAL:%s}", v.CredentialKindCode), nil
 	default:
 		return "", fmt.Errorf("render: unknown env mode %q", v.Mode)
 	}

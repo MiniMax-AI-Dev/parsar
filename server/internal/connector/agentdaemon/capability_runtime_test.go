@@ -7,7 +7,10 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
@@ -424,6 +427,149 @@ func TestResolveCapabilityAdditions_MCPNoCreds(t *testing.T) {
 	env, _ := srvMap["env"].(map[string]string)
 	if env["NODE_OPTIONS"] != "--max-old-space-size=512" {
 		t.Fatalf("env NODE_OPTIONS = %v", env["NODE_OPTIONS"])
+	}
+}
+
+func TestResolveCapabilityAdditions_MCPStreamableHTTP(t *testing.T) {
+	row := newMCPRow(t, "mcp-http", "docs", []canonical.MCPServer{{
+		Name:      "docs",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://docs.example.com/mcp",
+	}}, nil)
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
+		log:          discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	server := got.MCPServers["docs"].(map[string]any)
+	if server["type"] != "http" || server["url"] != "https://docs.example.com/mcp" {
+		t.Fatalf("server = %+v", server)
+	}
+}
+
+func TestResolveCapabilityAdditions_UsesWorkspaceOAuthHeader(t *testing.T) {
+	svc := testSecretsService(t)
+	credential := mcpoauth.Credential{
+		AccessToken:             "workspace-notion-token",
+		RefreshToken:            "workspace-notion-refresh",
+		ExpiresAt:               time.Now().Add(time.Hour),
+		ClientID:                "client-1",
+		TokenEndpointAuthMethod: "none",
+		TokenEndpoint:           "https://mcp.notion.com/token",
+		Resource:                "https://mcp.notion.com/mcp",
+	}
+	row := newMCPRow(t, "mcp-notion", "Notion", []canonical.MCPServer{{
+		Name:      "notion",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://mcp.notion.com/mcp",
+		Headers: map[string]canonical.EnvValue{
+			"Authorization": {
+				Mode:               canonical.EnvModeCredentialRef,
+				Prefix:             "Bearer ",
+				CredentialKindCode: capability.CredentialKindMCPOAuth,
+			},
+		},
+	}}, []store.RequiredCredential{{Kind: capability.CredentialKindMCPOAuth, Required: true}})
+	row.Configuration = map[string]any{
+		"credential_bindings": map[string]any{
+			capability.CredentialKindMCPOAuth: map[string]any{
+				"source":    "shared",
+				"secret_id": "secret-1",
+			},
+		},
+	}
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
+		modelResolver: &fakeModelResolver{secret: store.SecretPayload{
+			SecretRead:       store.SecretRead{ID: "secret-1", Status: "active"},
+			EncryptedPayload: encryptPayload(t, svc, credential.Payload()),
+		}},
+		secrets: svc,
+		log:     discardLogger(),
+	}
+	in := defaultPromptInput()
+	in.ConversationInitiatorID = ""
+	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	headers := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
+	if headers["Authorization"] != "Bearer workspace-notion-token" {
+		t.Fatalf("Authorization = %q", headers["Authorization"])
+	}
+}
+
+func TestResolveCapabilityAdditions_UsesCapabilityScopedOAuthBindings(t *testing.T) {
+	svc := testSecretsService(t)
+	newCredential := func(token, resource string) mcpoauth.Credential {
+		return mcpoauth.Credential{
+			AccessToken:             token,
+			ClientID:                "client-1",
+			TokenEndpointAuthMethod: "none",
+			TokenEndpoint:           resource + "/token",
+			Resource:                resource,
+		}
+	}
+	newRow := func(id, name, serverName, url, secretID string) store.EnabledCapabilityRead {
+		row := newMCPRow(t, id, name, []canonical.MCPServer{{
+			Name:      serverName,
+			Transport: canonical.MCPTransportStreamableHTTP,
+			URL:       url,
+			Headers: map[string]canonical.EnvValue{
+				"Authorization": {
+					Mode:               canonical.EnvModeCredentialRef,
+					Prefix:             "Bearer ",
+					CredentialKindCode: capability.CredentialKindMCPOAuth,
+				},
+			},
+		}}, []store.RequiredCredential{{Kind: capability.CredentialKindMCPOAuth, Required: true}})
+		row.Configuration = map[string]any{
+			"credential_bindings": map[string]any{
+				capability.CredentialKindMCPOAuth: map[string]any{
+					"source":    "shared",
+					"secret_id": secretID,
+				},
+			},
+		}
+		return row
+	}
+	notionURL := "https://mcp.notion.com/mcp"
+	githubURL := "https://api.githubcopilot.com/mcp"
+	resolver := &fakeModelResolver{secrets: map[string]store.SecretPayload{
+		"secret-notion": {
+			SecretRead:       store.SecretRead{ID: "secret-notion", Status: "active"},
+			EncryptedPayload: encryptPayload(t, svc, newCredential("notion-token", notionURL).Payload()),
+		},
+		"secret-github": {
+			SecretRead:       store.SecretRead{ID: "secret-github", Status: "active"},
+			EncryptedPayload: encryptPayload(t, svc, newCredential("github-token", githubURL).Payload()),
+		},
+	}}
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newRow("mcp-notion", "Notion", "notion", notionURL, "secret-notion"),
+			newRow("mcp-github", "GitHub", "github", githubURL, "secret-github"),
+		}},
+		modelResolver: resolver,
+		secrets:       svc,
+		log:           discardLogger(),
+	}
+	in := defaultPromptInput()
+	in.ConversationInitiatorID = ""
+	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	notionHeaders := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
+	githubHeaders := got.MCPServers["github"].(map[string]any)["headers"].(map[string]string)
+	if notionHeaders["Authorization"] != "Bearer notion-token" {
+		t.Fatalf("notion Authorization = %q", notionHeaders["Authorization"])
+	}
+	if githubHeaders["Authorization"] != "Bearer github-token" {
+		t.Fatalf("github Authorization = %q", githubHeaders["Authorization"])
 	}
 }
 

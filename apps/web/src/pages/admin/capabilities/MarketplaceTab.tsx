@@ -11,16 +11,33 @@ import { marketplaceSourceName, useMarketplaceDetail, useMarketplaceList, type M
 import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
 import type { Capability } from "../../../lib/api-types"
+import { MCPDirectory } from "./mcp-directory/MCPDirectory"
 
 interface MarketplaceTabProps {
   itemID: string | null
   query: string
   typeFilter: "mcp" | "skill"
+  canImport: boolean
   onSelectItem: (id: string | null) => void
   onInstall: (capability: MarketplaceCapability) => void
+  onViewCapability: (capabilityID: string) => void
 }
 
-export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInstall }: MarketplaceTabProps) {
+export function MarketplaceTab(props: MarketplaceTabProps) {
+  const mcpItemID = props.itemID?.startsWith("mcp:") ? props.itemID.slice(4) : null
+  if (mcpItemID !== null || (!props.itemID && props.typeFilter === "mcp")) {
+    return <MCPDirectory
+      itemID={mcpItemID}
+      query={props.query}
+      canImport={props.canImport}
+      onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
+      onViewCapability={props.onViewCapability}
+    />
+  }
+  return <SkillMarketplaceTab {...props} />
+}
+
+function SkillMarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInstall }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)

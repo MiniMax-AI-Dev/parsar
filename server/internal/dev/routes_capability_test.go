@@ -168,9 +168,9 @@ func TestCapabilityUserCredentialsOwnScopeAndNoSecretLeak(t *testing.T) {
 	}
 }
 
-func TestCapabilityAgentEnableRBACWorkspaceAndUniqueUpdate(t *testing.T) {
+func TestCapabilityAgentWriteRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
-	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserBID: "admin"}, map[string]string{testUserAID: "member", testUserBID: "member"})
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member", testUserBID: "viewer"}, nil)
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
 	capID, v1, v2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "GitHub MCP")
 	_ = capID
@@ -183,9 +183,25 @@ func TestCapabilityAgentEnableRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable own agent expected 200, got %d: %s", enabled.Code, enabled.Body.String())
 	}
-	forbidden := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if forbidden.Code != http.StatusForbidden {
-		t.Fatalf("enable other agent expected 403, got %d: %s", forbidden.Code, forbidden.Body.String())
+	enabledOther := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	if enabledOther.Code != http.StatusOK {
+		t.Fatalf("member enable another workspace agent expected 200, got %d: %s", enabledOther.Code, enabledOther.Body.String())
+	}
+	upgradedOther := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
+	if upgradedOther.Code != http.StatusOK {
+		t.Fatalf("member upgrade another workspace agent expected 200, got %d: %s", upgradedOther.Code, upgradedOther.Body.String())
+	}
+	toggledOther := serveCapabilityRoute(t, r, http.MethodPut, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/builtin-capabilities/parsar_chat_history", `{"enabled":false}`, testUserAID)
+	if toggledOther.Code != http.StatusOK {
+		t.Fatalf("member toggle another workspace agent builtin expected 200, got %d: %s", toggledOther.Code, toggledOther.Body.String())
+	}
+	removedOther := serveCapabilityRoute(t, r, http.MethodDelete, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v2, ``, testUserAID)
+	if removedOther.Code != http.StatusNoContent {
+		t.Fatalf("member remove another workspace agent capability expected 204, got %d: %s", removedOther.Code, removedOther.Body.String())
+	}
+	viewer := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v1+"/enable", `{}`, testUserBID)
+	if viewer.Code != http.StatusForbidden {
+		t.Fatalf("viewer enable expected 403, got %d: %s", viewer.Code, viewer.Body.String())
 	}
 	foreign := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+foreignV1+"/enable", `{}`, testUserAID)
 	if foreign.Code != http.StatusForbidden {
@@ -196,6 +212,72 @@ func TestCapabilityAgentEnableRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 		t.Fatalf("enable second version expected update 200, got %d: %s", updated.Code, updated.Body.String())
 	}
 	assertSingleAgentCapability(t, db, ownedPA, capID, v2)
+}
+
+func TestCapabilityEnablePersistsSelectedSharedSecret(t *testing.T) {
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
+	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Shared Secret MCP")
+	agentID := insertAgentForOwner(t, db, testUserAID, "shared-secret-agent")
+	secretID := "00000000-0000-0000-0000-000000000099"
+	if _, err := db.Exec(context.Background(), `
+		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
+		values ($1, 'shared-github-test', 'Shared GitHub', 'capability_inline', 'inline', 'literal', '\x01'::bytea, 'v1', 'active', $2::jsonb, $3, now(), now())
+	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"github_pat"}`, testUserAID); err != nil {
+		t.Fatalf("insert shared secret: %v", err)
+	}
+
+	res := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
+		`{"configuration":{"credential_bindings":{"github_pat":{"source":"shared","secret_id":"`+secretID+`"}}}}`, testUserAID)
+	if res.Code != http.StatusOK {
+		t.Fatalf("enable expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	assertSingleAgentCapability(t, db, agentID, capID, versionID)
+	var storedSecretID string
+	if err := db.QueryRow(context.Background(), `
+		select configuration #>> '{credential_bindings,github_pat,secret_id}'
+		from agent_capabilities where agent_id = $1
+	`, agentID).Scan(&storedSecretID); err != nil {
+		t.Fatalf("read stored binding: %v", err)
+	}
+	if storedSecretID != secretID {
+		t.Fatalf("stored secret_id=%q want %q", storedSecretID, secretID)
+	}
+}
+
+func TestCapabilityEnableRejectsOAuthSecretFromDifferentCatalogConnector(t *testing.T) {
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
+	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Notion MCP")
+	agentID := insertAgentForOwner(t, db, testUserAID, "notion-agent")
+	secretID := "00000000-0000-0000-0000-000000000098"
+	if _, err := db.Exec(context.Background(), `
+		update capability_version
+		set source_payload = '{"source_format":"mcp_catalog","catalog_id":"notion"}'::jsonb,
+		    required_credentials = '[{"kind":"mcp_oauth","required":true}]'::jsonb
+		where id = $1
+	`, versionID); err != nil {
+		t.Fatalf("mark catalog capability: %v", err)
+	}
+	if _, err := db.Exec(context.Background(), `
+		insert into secrets(id, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_by, created_at, updated_at)
+		values ($1, 'github-oauth-test', 'GitHub OAuth', 'capability_inline', 'github', 'oauth2', '\x01'::bytea, 'v1', 'active', $2::jsonb, $3, now(), now())
+	`, secretID, `{"workspace_id":"`+store.DefaultDevFixtureIDs().WorkspaceID+`","credential_kind_code":"mcp_oauth"}`, testUserAID); err != nil {
+		t.Fatalf("insert shared secret: %v", err)
+	}
+
+	res := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
+		`{"configuration":{"credential_bindings":{"mcp_oauth":{"source":"shared","secret_id":"`+secretID+`"}}}}`, testUserAID)
+	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), "different MCP connector") {
+		t.Fatalf("enable with wrong connector secret expected 422, got %d: %s", res.Code, res.Body.String())
+	}
+	var count int
+	if err := db.QueryRow(context.Background(), `select count(*) from agent_capabilities where agent_id = $1 and capability_id = $2`, agentID, capID).Scan(&count); err != nil {
+		t.Fatalf("count agent capabilities: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("agent capability was created with a mismatched connector secret")
+	}
 }
 
 func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *testing.T) {

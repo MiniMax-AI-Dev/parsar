@@ -1984,11 +1984,29 @@ where (@kind_filter::text = '' or kind = @kind_filter::text)
 order by created_at desc, id desc
 limit @item_limit;
 
+-- name: ListSecretsForWorkspace :many
+select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
+from secrets
+where (coalesce(metadata->>'workspace_id', '') = '' or metadata->>'workspace_id' = @workspace_id::text)
+  and deleted_at is null
+order by created_at desc, id desc
+limit @item_limit;
+
 -- name: GetSecretPayload :one
 select id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
 from secrets
 where id = @id::uuid
   and deleted_at is null;
+
+-- name: UpdateSecretPayload :one
+update secrets
+set encrypted_payload = @encrypted_payload::jsonb,
+    key_version = @key_version,
+    status = 'active',
+    updated_at = @now
+where id = @id::uuid
+  and deleted_at is null
+returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at;
 
 -- name: ResolveSlackBotSecretByTeam :one
 -- Resolve the active Slack bot-token secret for a workspace, keyed by the
@@ -3571,6 +3589,21 @@ where c.workspace_id = @workspace_id::uuid
   and c.type::text = @type
   and c.deleted_at is null
 order by c.name asc, c.created_at desc;
+
+-- name: ListMCPDirectoryInstalls :many
+-- Catalog provenance lives on capability versions rather than the capability
+-- row. Keep the newest matching provenance per catalog id.
+select distinct on (cv.source_payload->>'catalog_id')
+  coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
+  c.id::text as capability_id
+from capability c
+join capability_version cv on cv.capability_id = c.id
+where c.workspace_id = @workspace_id::uuid
+  and c.type = 'mcp'
+  and c.deleted_at is null
+  and cv.source_payload->>'source_format' = 'mcp_catalog'
+  and coalesce(cv.source_payload->>'catalog_id', '') <> ''
+order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc;
 
 -- name: UpdateCapability :one
 update capability

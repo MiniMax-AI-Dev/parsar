@@ -34,6 +34,10 @@ export const CREDENTIAL_KIND_LABELS = {
     zh: "Notion 集成 token",
     en: "Notion Integration Token",
   },
+  mcp_oauth: {
+    zh: "MCP OAuth",
+    en: "MCP OAuth",
+  },
   jira_api_token: {
     zh: "Jira API Token",
     en: "Jira API Token",
@@ -47,6 +51,7 @@ export const CREDENTIAL_KIND_OPTIONS: KnownCredentialKind[] = [
   "slack_bot_token",
   "postgres_dsn",
   "notion_integration",
+  "mcp_oauth",
   "jira_api_token",
 ]
 
@@ -65,6 +70,9 @@ export const CREDENTIAL_KIND_META: Record<KnownCredentialKind, { placeholder: { 
   notion_integration: {
     placeholder: { zh: "secret_…", en: "secret_…" },
     getUrl: "https://www.notion.so/profile/integrations",
+  },
+  mcp_oauth: {
+    placeholder: { zh: "通过连接器目录授权", en: "Authorize from the connector directory" },
   },
   jira_api_token: {
     placeholder: { zh: "ATATT…", en: "ATATT…" },

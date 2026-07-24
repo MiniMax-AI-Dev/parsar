@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/credentialbinding"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
@@ -116,27 +117,13 @@ func validateAgentVisibilityBindings(visibility string, cfg map[string]any) erro
 	if strings.TrimSpace(visibility) != agentVisibilityPublic {
 		return nil
 	}
-	// Per-capability credential bindings.
-	if raw, ok := cfg["credential_bindings"]; ok {
-		if raw != nil {
-			bindings, ok := raw.(map[string]any)
-			if !ok {
-				return errors.New("credential_bindings must be an object")
-			}
-			for kind, entry := range bindings {
-				obj, ok := entry.(map[string]any)
-				if !ok {
-					return fmt.Errorf("credential_bindings[%s] must be an object", kind)
-				}
-				source, _ := obj["source"].(string)
-				if strings.TrimSpace(source) != "shared" {
-					return fmt.Errorf("public agents cannot use personal credentials (credential_bindings[%s].source=%q)", kind, source)
-				}
-				secretID, _ := obj["secret_id"].(string)
-				if strings.TrimSpace(secretID) == "" {
-					return fmt.Errorf("credential_bindings[%s].secret_id is required for shared source", kind)
-				}
-			}
+	bindings, err := credentialbinding.ParseStrict(cfg)
+	if err != nil {
+		return err
+	}
+	for kind, binding := range bindings {
+		if !binding.IsShared() {
+			return fmt.Errorf("public agents cannot use personal credentials (credential_bindings[%s].source=%q)", kind, binding.Source)
 		}
 	}
 	// Optional model-level binding.

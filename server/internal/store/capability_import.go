@@ -460,6 +460,7 @@ func commitCapabilityVersionInTx(ctx context.Context, q *sqlc.Queries, p commitV
 		metaJSON, err := json.Marshal(map[string]any{
 			"origin":        "capability_import",
 			"capability_id": p.CapabilityName,
+			"workspace_id":  pgUUIDString(p.WorkspaceID),
 			"server":        secret.ServerName,
 			"env_key":       secret.EnvKey,
 		})
@@ -587,6 +588,23 @@ func (s *Store) collectAndValidateCredentialRefs(ctx context.Context, spec canon
 			seen[code] = struct{}{}
 			out = append(out, RequiredCredential{Kind: code, Required: true})
 		}
+		for headerName, value := range srv.Headers {
+			if value.Mode != canonical.EnvModeCredentialRef {
+				continue
+			}
+			code := strings.ToLower(strings.TrimSpace(value.CredentialKindCode))
+			if code == "" {
+				return nil, fmt.Errorf("import_capability: server %q header %q: credential_ref missing credential_kind_code", srv.Name, headerName)
+			}
+			if _, dup := seen[code]; dup {
+				continue
+			}
+			if _, err := s.GetCredentialKindByCode(ctx, code); err != nil {
+				return nil, fmt.Errorf("import_capability: server %q header %q references unknown credential_kind %q: %w", srv.Name, headerName, code, err)
+			}
+			seen[code] = struct{}{}
+			out = append(out, RequiredCredential{Kind: code, Required: true})
+		}
 	}
 	return out, nil
 }
@@ -682,11 +700,23 @@ func validateMCPSpecPreCommit(m canonical.MCPSpec) error {
 		if strings.TrimSpace(srv.Name) == "" {
 			return fmt.Errorf("server[%d]: name is required", i)
 		}
-		if strings.TrimSpace(srv.Command) == "" {
-			return fmt.Errorf("server %q: command is required", srv.Name)
-		}
 		if srv.StartupTimeoutSec < 0 {
 			return fmt.Errorf("server %q: startup_timeout_sec must be >= 0", srv.Name)
+		}
+		switch srv.EffectiveTransport() {
+		case canonical.MCPTransportStdio:
+			if strings.TrimSpace(srv.Command) == "" {
+				return fmt.Errorf("server %q: command is required", srv.Name)
+			}
+			if strings.TrimSpace(srv.URL) != "" {
+				return fmt.Errorf("server %q: stdio transport must not set url", srv.Name)
+			}
+		case canonical.MCPTransportStreamableHTTP:
+			if err := srv.Validate(); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("server %q: unsupported transport %q", srv.Name, srv.Transport)
 		}
 		for name, value := range srv.Env {
 			if strings.TrimSpace(name) == "" {
@@ -694,8 +724,8 @@ func validateMCPSpecPreCommit(m canonical.MCPSpec) error {
 			}
 			switch value.Mode {
 			case canonical.EnvModeLiteral:
-				if value.SecretID != "" || value.CredentialKindCode != "" {
-					return fmt.Errorf("server %q env %q: literal mode must not set secret_id/credential_kind_code", srv.Name, name)
+				if value.SecretID != "" || value.CredentialKindCode != "" || value.Prefix != "" {
+					return fmt.Errorf("server %q env %q: literal mode must not set secret_id/credential_kind_code/prefix", srv.Name, name)
 				}
 			case canonical.EnvModeInlineSecret:
 				// Empty SecretID is intentional here — the import tx fills it
@@ -712,6 +742,17 @@ func validateMCPSpecPreCommit(m canonical.MCPSpec) error {
 				}
 			default:
 				return fmt.Errorf("server %q env %q: unknown env mode %q", srv.Name, name, value.Mode)
+			}
+		}
+		for name, value := range srv.Headers {
+			if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "\r\n") {
+				return fmt.Errorf("server %q: invalid header name", srv.Name)
+			}
+			if value.Mode == canonical.EnvModeInlineSecret {
+				return fmt.Errorf("server %q header %q: inline_secret is not supported", srv.Name, name)
+			}
+			if err := value.Validate(); err != nil {
+				return fmt.Errorf("server %q header %q: %w", srv.Name, name, err)
 			}
 		}
 		if _, dup := seen[srv.Name]; dup {

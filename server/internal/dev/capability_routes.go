@@ -1369,7 +1369,7 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 // Cross-workspace requires the source capability to be public + non-deprecated.
 //
 //	@Summary		Enable a capability on an agent
-//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Agent creator only.
+//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Workspace owner, admin, or member only.
 //	@Tags			capabilities
 //	@ID				enableDevAgentCapability
 //	@Accept			json
@@ -1380,13 +1380,13 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Param			body				body	agentCapabilityBody		true	"Configuration + pinning mode"
 //	@Success		200 {object} map[string]interface{} "Enabled agent_capability row"
 //	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
-//	@Failure		403 {object} map[string]string "Not agent creator, or marketplace capability unavailable"
+//	@Failure		403 {object} map[string]string "Caller is a viewer/non-member, or marketplace capability is unavailable"
 //	@Failure		404 {object} map[string]string "Agent, capability, or version not found"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable [post]
 func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, agentID, agent, ok := requireAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, agent, ok := requireAgentWritableMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -1417,6 +1417,21 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
+		agentRecord, err := runtimeStore.GetAgent(r.Context(), agentID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to get agent")
+			return
+		}
+		if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+			WorkspaceID:     agent.WorkspaceID,
+			AgentVisibility: agentRecord.Visibility,
+			AgentConfig:     agentRecord.Config,
+			Version:         version,
+			Configuration:   body.Configuration,
+		}); err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
 		enabled, err := runtimeStore.EnableAgentCapability(r.Context(), agentID, versionID, body.Configuration, body.PinningMode)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to enable agent capability")
@@ -1429,7 +1444,7 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 // deleteAgentCapability uninstalls a capability version from the agent.
 //
 //	@Summary		Uninstall a capability from an agent
-//	@Description	Removes the given capability version from the agent. Agent creator only.
+//	@Description	Removes the given capability version from the agent. Workspace owner, admin, or member only.
 //	@Tags			capabilities
 //	@ID				deleteDevAgentCapability
 //	@Produce		json
@@ -1438,13 +1453,13 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Param			capabilityVersionID	path	string	true	"Capability version UUID"
 //	@Success		204 "Uninstalled"
 //	@Failure		400 {object} map[string]string "Invalid UUID"
-//	@Failure		403 {object} map[string]string "Not agent creator"
+//	@Failure		403 {object} map[string]string "Caller is a viewer or non-member"
 //	@Failure		404 {object} map[string]string "Agent capability not found"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID} [delete]
 func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -1462,14 +1477,11 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 // setBuiltinCapability toggles a runtime-injected built-in on/off for one agent.
-// Only the agent owner may change it; the key is validated against the built-in
-// registry so callers can't create arbitrary rows.
-// setBuiltinCapability toggles a runtime-injected built-in on/off for one agent.
-// Only the agent owner may change it; the key is validated against the built-in
+// Any non-viewer workspace member may change it; the key is validated against the built-in
 // registry so callers can't create arbitrary rows.
 //
 //	@Summary		Toggle a built-in capability on an agent
-//	@Description	Toggles a runtime-injected built-in on/off for one agent. Only the agent creator may change it. The key must be a known built-in.
+//	@Description	Toggles a runtime-injected built-in on/off for one agent. Workspace owners, admins, and members may change it. The key must be a known built-in.
 //	@Tags			capabilities
 //	@ID				setDevAgentBuiltinCapability
 //	@Accept			json
@@ -1480,13 +1492,13 @@ func deleteAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Param			body		body	builtinCapabilityBody	true	"Enabled flag"
 //	@Success		200 {object} map[string]interface{} "agent_id, builtin_key, enabled"
 //	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
-//	@Failure		403 {object} map[string]string "Not agent creator"
+//	@Failure		403 {object} map[string]string "Caller is a viewer or non-member"
 //	@Failure		404 {object} map[string]string "Unknown builtin key or agent not found"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/builtin-capabilities/{key} [put]
 func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -1512,7 +1524,7 @@ func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 // same capability, optionally flipping the pinning mode at the same time.
 //
 //	@Summary		Upgrade an agent's capability version
-//	@Description	Swaps the agent's binding to a new version of the same capability, optionally flipping the pinning mode at the same time. Agent creator only.
+//	@Description	Swaps the agent's binding to a new version of the same capability, optionally flipping the pinning mode at the same time. Workspace owner, admin, or member only.
 //	@Tags			capabilities
 //	@ID				upgradeDevAgentCapability
 //	@Accept			json
@@ -1523,13 +1535,13 @@ func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Param			body			body	upgradeAgentCapabilityBody		true	"new_version_id and optional pinning_mode"
 //	@Success		200 {object} map[string]interface{} "Updated agent_capability row"
 //	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
-//	@Failure		403 {object} map[string]string "Not agent creator"
+//	@Failure		403 {object} map[string]string "Caller is a viewer or non-member"
 //	@Failure		404 {object} map[string]string "Agent, capability, or version not found"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade [post]
 func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, agentID, _, ok := requireAgentOwnerMember(w, r, runtimeStore)
+		_, agentID, _, ok := requireAgentWritableMember(w, r, runtimeStore)
 		if !ok {
 			return
 		}
@@ -1636,6 +1648,14 @@ func requireAuthenticatedUser(w http.ResponseWriter, r *http.Request, runtimeSto
 }
 
 func requireAgentMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.AgentStatusRead, bool) {
+	return requireAgentRoles(w, r, runtimeStore, "owner", "admin", "member", "viewer")
+}
+
+func requireAgentWritableMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.AgentStatusRead, bool) {
+	return requireAgentRoles(w, r, runtimeStore, "owner", "admin", "member")
+}
+
+func requireAgentRoles(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore, roles ...string) (string, string, store.AgentStatusRead, bool) {
 	if runtimeStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
 		return "", "", store.AgentStatusRead{}, false
@@ -1653,21 +1673,8 @@ func requireAgentMember(w http.ResponseWriter, r *http.Request, runtimeStore Run
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})
 		return "", "", store.AgentStatusRead{}, false
 	}
-	if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
+	if err := auth.RequireWorkspaceRole(requestContextForRBAC(r), runtimeStore, workspaceID, roles...); err != nil {
 		writeRBACError(w, err)
-		return "", "", store.AgentStatusRead{}, false
-	}
-	return workspaceID, agentID, agent, true
-}
-
-func requireAgentOwnerMember(w http.ResponseWriter, r *http.Request, runtimeStore RuntimeStore) (string, string, store.AgentStatusRead, bool) {
-	workspaceID, agentID, agent, ok := requireAgentMember(w, r, runtimeStore)
-	if !ok {
-		return "", "", store.AgentStatusRead{}, false
-	}
-	userID := strings.TrimSpace(auth.UserIDFromContext(requestContextForRBAC(r)))
-	if strings.TrimSpace(agent.CreatedBy) != "" && agent.CreatedBy != userID {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 		return "", "", store.AgentStatusRead{}, false
 	}
 	return workspaceID, agentID, agent, true

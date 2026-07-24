@@ -55,7 +55,14 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any) (BuildResult,
 		return result, err
 	}
 
-	if rawConfig := stringOpt(opts, "opencode_json"); rawConfig != "" {
+	rawConfig := stringOpt(opts, "opencode_json")
+	if servers, ok := opts["mcp_servers"]; ok && servers != nil {
+		rawConfig, err = mergeMCPConfig(rawConfig, servers)
+		if err != nil {
+			return result, err
+		}
+	}
+	if rawConfig != "" {
 		configHome, scratchCleanup, err := writeConfigHome(runID, rawConfig)
 		if err != nil {
 			return result, err
@@ -69,6 +76,91 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any) (BuildResult,
 	result.WorkDir = resolvedWorkDir
 	result.Cleanup = cleanup
 	return result, nil
+}
+
+func mergeMCPConfig(rawConfig string, rawServers any) (string, error) {
+	config := map[string]any{}
+	if strings.TrimSpace(rawConfig) != "" {
+		if err := json.Unmarshal([]byte(rawConfig), &config); err != nil {
+			return "", fmt.Errorf("opencode: opencode_json must be valid JSON: %w", err)
+		}
+	}
+	servers, ok := rawServers.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("opencode: mcp_servers must be object, got %T", rawServers)
+	}
+	mcp, _ := config["mcp"].(map[string]any)
+	if mcp == nil {
+		mcp = map[string]any{}
+	}
+	for name, raw := range servers {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("opencode: mcp_servers[%q] must be object, got %T", name, raw)
+		}
+		enabled := true
+		if value, ok := entry["enabled"].(bool); ok {
+			enabled = value
+		}
+		if remoteURL, ok := entry["url"].(string); ok && strings.TrimSpace(remoteURL) != "" {
+			remote := map[string]any{
+				"type":    "remote",
+				"url":     strings.TrimSpace(remoteURL),
+				"enabled": enabled,
+			}
+			if headers := stringMap(entry["headers"]); len(headers) > 0 {
+				remote["headers"] = headers
+			}
+			mcp[name] = remote
+			continue
+		}
+		command, ok := entry["command"].(string)
+		if !ok || strings.TrimSpace(command) == "" {
+			return "", fmt.Errorf("opencode: mcp_servers[%q] missing command or url", name)
+		}
+		commandParts := []string{command}
+		if args, ok := entry["args"].([]any); ok {
+			for _, arg := range args {
+				if value, ok := arg.(string); ok {
+					commandParts = append(commandParts, value)
+				}
+			}
+		} else if args, ok := entry["args"].([]string); ok {
+			commandParts = append(commandParts, args...)
+		}
+		local := map[string]any{"type": "local", "command": commandParts, "enabled": enabled}
+		if env, ok := entry["env"].(map[string]any); ok && len(env) > 0 {
+			local["environment"] = env
+		} else if env, ok := entry["env"].(map[string]string); ok && len(env) > 0 {
+			local["environment"] = env
+		}
+		mcp[name] = local
+	}
+	if len(mcp) > 0 {
+		config["mcp"] = mcp
+	}
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("opencode: marshal merged MCP config: %w", err)
+	}
+	return string(encoded), nil
+}
+
+func stringMap(value any) map[string]string {
+	switch typed := value.(type) {
+	case map[string]string:
+		return typed
+	case map[string]any:
+		result := make(map[string]string, len(typed))
+		for key, raw := range typed {
+			if text, ok := raw.(string); ok {
+				result[key] = text
+			}
+		}
+		return result
+	default:
+		return nil
+	}
 }
 
 func resolveWorkDir(input string) (string, error) {

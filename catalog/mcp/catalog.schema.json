@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MiniMax-AI-Dev/parsar/catalog/mcp/catalog.schema.json",
+  "title": "Parsar MCP Connector Directory Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "updated_at", "items"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "$defs": {
+    "httpUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "$ref": "#/$defs/httpUrl" }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "$ref": "#/$defs/httpUrl" }
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["none", "oauth2"] }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "description",
+        "publisher",
+        "verified",
+        "categories",
+        "featured_rank",
+        "version",
+        "transport",
+        "server"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "publisher": { "$ref": "#/$defs/publisher" },
+        "icon_url": { "$ref": "#/$defs/httpUrl" },
+        "homepage_url": { "$ref": "#/$defs/httpUrl" },
+        "repository_url": { "$ref": "#/$defs/httpUrl" },
+        "verified": { "type": "boolean" },
+        "categories": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "featured_rank": { "type": "integer", "minimum": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "transport": { "const": "streamable-http" },
+        "authentication": { "$ref": "#/$defs/authentication" },
+        "server": { "$ref": "#/$defs/server" }
+      }
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-23T00:00:00Z",
+  "items": [
+    {
+      "id": "context7",
+      "name": "Context7",
+      "description": "Retrieve current library documentation and code examples for coding workflows.",
+      "publisher": {
+        "name": "Upstash",
+        "url": "https://github.com/upstash"
+      },
+      "icon_url": "https://github.com/upstash.png?size=128",
+      "homepage_url": "https://context7.com",
+      "repository_url": "https://github.com/upstash/context7",
+      "verified": true,
+      "categories": ["Developer Tools", "Documentation"],
+      "featured_rank": 1,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "context7",
+        "url": "https://mcp.context7.com/mcp"
+      }
+    },
+    {
+      "id": "exa",
+      "name": "Exa",
+      "description": "Search the web and retrieve relevant content through Exa's hosted MCP server.",
+      "publisher": {
+        "name": "Exa",
+        "url": "https://exa.ai"
+      },
+      "icon_url": "https://github.com/exa-labs.png?size=128",
+      "homepage_url": "https://exa.ai",
+      "repository_url": "https://github.com/exa-labs/exa-mcp-server",
+      "verified": true,
+      "categories": ["Developer Tools", "Search"],
+      "featured_rank": 2,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "exa",
+        "url": "https://mcp.exa.ai/mcp"
+      }
+    },
+    {
+      "id": "firecrawl",
+      "name": "Firecrawl",
+      "description": "Crawl and extract web content through Firecrawl's hosted MCP server.",
+      "publisher": {
+        "name": "Firecrawl",
+        "url": "https://firecrawl.dev"
+      },
+      "icon_url": "https://github.com/mendableai.png?size=128",
+      "homepage_url": "https://firecrawl.dev",
+      "repository_url": "https://github.com/mendableai/firecrawl-mcp-server",
+      "verified": true,
+      "categories": ["Developer Tools", "Web"],
+      "featured_rank": 3,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "server": {
+        "name": "firecrawl",
+        "url": "https://mcp.firecrawl.dev/v2/mcp"
+      }
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "description": "Search, read, create, and update pages and databases in the Notion workspaces you authorize.",
+      "publisher": {
+        "name": "Notion",
+        "url": "https://www.notion.so"
+      },
+      "icon_url": "https://github.com/makenotion.png?size=128",
+      "homepage_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+      "verified": true,
+      "categories": ["Productivity", "Knowledge"],
+      "featured_rank": 4,
+      "version": "1.0.1",
+      "transport": "streamable-http",
+      "authentication": {
+        "type": "oauth2"
+      },
+      "server": {
+        "name": "notion",
+        "url": "https://mcp.notion.com/mcp"
+      }
+    }
+  ]
+}

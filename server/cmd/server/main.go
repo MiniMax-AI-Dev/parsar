@@ -40,12 +40,14 @@ import (
 	agentdaemongateway "github.com/MiniMax-AI-Dev/parsar/server/internal/agentdaemon/gateway"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/api"
 	imhistoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/imhistoryapi"
+	mcpdirectoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/mcpdirectory"
 	runtimeapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/runtime"
 	specmemapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/specmem"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
@@ -66,6 +68,7 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inbound/teamsrunner"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/gateway/inflight"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/interaction"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/otlp"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runstream"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/scheduler"
@@ -704,10 +707,28 @@ func main() {
 			Store:              dbStore,
 			SharedRuntimeToken: strings.TrimSpace(envLookup("PARSAR_SHARED_RUNTIME_TOKEN")),
 		}
+		mcpCatalog := mcpcatalog.New(mcpcatalog.Options{})
+		mcpOAuthSecrets, mcpOAuthSecretsErr := secrets.New(cfg.Secret.MasterKey)
+		if mcpOAuthSecretsErr != nil {
+			log.Bg().Warn("MCP connector OAuth disabled", "error", mcpOAuthSecretsErr)
+		}
+		publicURL := strings.TrimSpace(cfg.Server.PublicURL)
+		if publicURL == "" {
+			publicURL = "http://localhost" + cfg.Server.Addr
+		}
 		sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
 		authMw := auth.NewMiddleware(sessionStore).WithDevAuth(cfg.Auth.DevAuth)
 		r.Group(func(r chi.Router) {
 			r.Use(authMw.Require)
+			mcpdirectoryapi.RegisterRoutes(r, mcpdirectoryapi.Deps{
+				Catalog:              mcpCatalog,
+				Store:                dbStore,
+				WorkspaceCredentials: dbStore,
+				OAuth:                mcpoauth.New(nil),
+				Secrets:              mcpOAuthSecrets,
+				PublicURL:            publicURL,
+				CookieSecure:         cfg.Auth.Cookie.Secure,
+			})
 			runtimeapi.RegisterAdminRoutes(r, runtimeDeps)
 		})
 		runtimeapi.RegisterRunnerRoutes(r, runtimeDeps)
