@@ -38,7 +38,9 @@ import {
 import { useMyCredentials } from "../../../lib/api-credentials"
 import { useSecrets } from "../../../lib/api-secrets"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
+import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
 import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
+import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "../capability-ui"
@@ -94,42 +96,6 @@ function latestCapabilityVersion(capability: Capability): CapabilityVersion | un
 
 function requiredCredentialKinds(capability: Capability) {
   return (capability.required_credentials ?? []).filter((rc) => rc.required)
-}
-
-function hasCredentialKind(credentials: UserCredential[], kind: string) {
-  return credentials.some((credential) => credential.kind === kind)
-}
-
-function secretCredentialKind(secret: Secret) {
-  const value = secret.metadata?.credential_kind_code
-  return typeof value === "string" ? value.trim() : ""
-}
-
-function sharedSecretsForKind(secrets: Secret[], kind: string, catalogID = "") {
-  return secrets.filter((secret) => {
-    const secretKind = secretCredentialKind(secret)
-    const matchesKind = secret.kind === "capability_inline"
-      && secret.status === "active"
-      && (secretKind === "" || secretKind === kind)
-    if (!matchesKind) return false
-    if (kind !== "mcp_oauth") return true
-    return secretKind === kind && !!catalogID
-      && secret.auth_type === "oauth2"
-      && secret.provider === catalogID
-  })
-}
-
-function credentialBinding(config: Record<string, unknown> | undefined, kind: string) {
-  const bindings = config?.credential_bindings
-  if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) return undefined
-  const binding = (bindings as Record<string, unknown>)[kind]
-  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return undefined
-  const value = binding as Record<string, unknown>
-  if (value.source !== "personal" && value.source !== "shared") return undefined
-  return {
-    source: value.source,
-    secretID: value.source === "shared" && typeof value.secret_id === "string" ? value.secret_id : "",
-  }
 }
 
 function boundSharedSecretID(agent: Agent, binding: AgentCapability | undefined, kind: string) {
@@ -474,23 +440,16 @@ function EnableCredentialBindingList({
             <label className="mb-1 block text-xs font-medium text-fg-muted">
               {credentialKindLabel(rc.kind, i18n.language, rc.kind)}
             </label>
-            <select
+            <CredentialBindingSelect
               value={selectedSecretID}
-              onChange={(event) => onChange(rc.kind, event.target.value)}
+              secrets={kindSecrets}
+              allowPersonal={!publicAgent}
+              personalLabel={t("credentialCheck.sourcePersonal")}
+              personalPlaceholder={t("credentialCheck.sharedPlaceholder")}
+              sharedLabel={t("credentialCheck.sourceShared")}
+              onChange={(value) => onChange(rc.kind, value)}
               className="h-8 w-full rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
-            >
-              {!publicAgent && (
-                <option value="">{t("credentialCheck.sourcePersonal")}</option>
-              )}
-              {publicAgent && !selectedSecretID && (
-                <option value="">{t("credentialCheck.sharedPlaceholder")}</option>
-              )}
-              {kindSecrets.map((secret) => (
-                <option key={secret.id} value={secret.id}>
-                  {t("credentialCheck.sourceShared")}: {secret.name}
-                </option>
-              ))}
-            </select>
+            />
             {!ready && (
               <p className="mt-1 text-xs text-warning-emphasis">
                 {publicAgent ? t("credentialCheck.sharedNoneAvailable") : t("credentialCheck.personalYouMissing")}
