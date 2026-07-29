@@ -12,8 +12,9 @@ Importing an item saves a workspace capability and never executes it.
   ID.
 - Entries use an HTTPS `url` only.
 - OAuth entries must support MCP OAuth discovery, PKCE, and dynamic client
-  registration. Tokens are stored in the existing encrypted workspace secret
-  flow and are never included in the catalog.
+  registration. Declare only the OAuth scopes the connector needs. Tokens use
+  the shared `mcp_oauth` credential kind in the existing encrypted workspace
+  secret flow and are never included in the catalog.
 - Use only HTTPS URLs without embedded credentials.
 - Update `updated_at` whenever catalog content changes.
 

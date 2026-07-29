@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 )
 
 func TestBuiltinCatalogLoads(t *testing.T) {
@@ -27,8 +25,11 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 		}
 		if item.ID == "notion" {
 			header := item.CanonicalSpec().MCP.Servers[0].Headers["Authorization"]
-			if header.Prefix != "Bearer " || header.CredentialKindCode != capability.CredentialKindMCPOAuth {
+			if header.Prefix != "Bearer " || header.CredentialKindCode != "mcp_oauth" {
 				t.Fatalf("notion authorization header = %+v", header)
+			}
+			if len(item.Authentication.Scopes) != 1 || item.Authentication.Scopes[0] != "default" {
+				t.Fatalf("notion scopes = %v", item.Authentication.Scopes)
 			}
 		}
 	}
@@ -46,9 +47,12 @@ func TestCatalogValidationRejectsInvalidContent(t *testing.T) {
 		{"insecure URL", func(c *Catalog) { c.Items[0].Server.URL = "http://example.com/mcp" }, "https URL"},
 		{"embedded credentials", func(c *Catalog) { c.Items[0].Server.URL = "https://token@example.com/mcp" }, "embedded credentials"},
 		{"featured rank", func(c *Catalog) { c.Items[0].FeaturedRank = 0 }, "featured_rank"},
-		{"authentication type", func(c *Catalog) {
-			c.Items[0].Authentication = Authentication{Type: "api_key"}
-		}, "unsupported"},
+		{"oauth scopes required", func(c *Catalog) {
+			c.Items[0].Authentication = Authentication{Type: "oauth2"}
+		}, "scopes are required"},
+		{"oauth scope token", func(c *Catalog) {
+			c.Items[0].Authentication = Authentication{Type: "oauth2", Scopes: []string{"not valid"}}
+		}, "scope"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

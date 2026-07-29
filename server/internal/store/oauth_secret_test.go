@@ -26,7 +26,7 @@ func TestCapabilitySecretIsScopedToWorkspaceAndCanRotate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSecret: %v", err)
 	}
-	if created.Provider != "notion" || created.Metadata["workspace_id"] != ids.WorkspaceID {
+	if created.Provider != "notion" || created.Metadata["workspace_id"] != ids.WorkspaceID || created.Metadata["credential_kind_code"] != "mcp_oauth" {
 		t.Fatalf("secret = %+v", created)
 	}
 

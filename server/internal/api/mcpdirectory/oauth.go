@@ -42,7 +42,7 @@ type oauthCookie struct {
 //	@Failure 503 {object} errorResponse
 //	@Router /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start [get]
 func (h *handler) oauthStart(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin", "member")
+	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin")
 	if !ok {
 		return
 	}
@@ -64,7 +64,7 @@ func (h *handler) oauthStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "connector_oauth_public_url_invalid")
 		return
 	}
-	transaction, authorizeURL, err := h.deps.OAuth.Begin(r.Context(), item.Server.URL, callbackURL)
+	transaction, authorizeURL, err := h.deps.OAuth.Begin(r.Context(), item.Server.URL, callbackURL, item.Authentication.Scopes)
 	if err != nil {
 		log.Warn(r.Context(), "mcp oauth start failed", "catalog_id", item.ID, "error", err)
 		writeError(w, http.StatusBadGateway, "connector_oauth_discovery_failed")
@@ -105,7 +105,7 @@ func (h *handler) oauthStart(w http.ResponseWriter, r *http.Request) {
 //	@Failure 502 {object} errorResponse
 //	@Router /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback [get]
 func (h *handler) oauthCallback(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin", "member")
+	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin")
 	if !ok {
 		return
 	}

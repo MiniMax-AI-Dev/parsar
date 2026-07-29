@@ -42,8 +42,18 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": { "enum": ["none", "oauth2"] }
-      }
+        "type": { "enum": ["none", "oauth2"] },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "if": {
+        "properties": { "type": { "const": "oauth2" } }
+      },
+      "then": { "required": ["scopes"] }
     },
     "item": {
       "type": "object",

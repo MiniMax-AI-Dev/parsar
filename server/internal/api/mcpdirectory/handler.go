@@ -342,13 +342,13 @@ func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, wo
 		if candidate.Kind != "capability_inline" ||
 			candidate.AuthType != "oauth2" ||
 			candidate.Status != "active" ||
-			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) {
+			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) ||
+			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
 			continue
 		}
 		catalogID := strings.TrimSpace(candidate.Provider)
 		item, found := catalog.Find(catalogID)
-		if !found || item.Authentication.EffectiveType() != "oauth2" ||
-			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
+		if !found || item.Authentication.EffectiveType() != "oauth2" {
 			continue
 		}
 		result[catalogID] = true

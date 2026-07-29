@@ -31,7 +31,8 @@ type Item struct {
 }
 
 type Authentication struct {
-	Type string `json:"type,omitempty"`
+	Type   string   `json:"type,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 func (a Authentication) EffectiveType() string {

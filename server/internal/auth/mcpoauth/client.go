@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,6 +23,10 @@ const (
 
 type Doer interface {
 	Do(req *http.Request) (*http.Response, error)
+}
+
+type ipResolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
 type Client struct {
@@ -80,12 +85,12 @@ type tokenResponse struct {
 
 func New(httpClient Doer) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 10 * time.Second}
+		httpClient = newSafeHTTPClient()
 	}
 	return &Client{http: httpClient, now: time.Now}
 }
 
-func (c *Client) Begin(ctx context.Context, resource, redirectURI string) (Transaction, string, error) {
+func (c *Client) Begin(ctx context.Context, resource, redirectURI string, requestedScopes []string) (Transaction, string, error) {
 	resourceURL, err := requireHTTPSURL(resource)
 	if err != nil {
 		return Transaction{}, "", fmt.Errorf("mcp oauth: resource: %w", err)
@@ -103,6 +108,10 @@ func (c *Client) Begin(ctx context.Context, resource, redirectURI string) (Trans
 	}
 	if len(protected.AuthorizationServers) == 0 {
 		return Transaction{}, "", errors.New("mcp oauth: protected resource metadata has no authorization server")
+	}
+	scopes, err := selectScopes(requestedScopes, protected.ScopesSupported)
+	if err != nil {
+		return Transaction{}, "", err
 	}
 	issuer, err := requireHTTPSURL(protected.AuthorizationServers[0])
 	if err != nil {
@@ -156,7 +165,7 @@ func (c *Client) Begin(ctx context.Context, resource, redirectURI string) (Trans
 	query.Set("code_challenge", challenge)
 	query.Set("code_challenge_method", "S256")
 	query.Set("resource", resourceURL.String())
-	scope := strings.Join(protected.ScopesSupported, " ")
+	scope := strings.Join(scopes, " ")
 	if scope != "" {
 		query.Set("scope", scope)
 	}
@@ -380,6 +389,112 @@ func requireHTTPURL(raw string) (*url.URL, error) {
 		return nil, errors.New("must be an http or https URL without embedded credentials")
 	}
 	return parsed, nil
+}
+
+func newSafeHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	resolver := net.DefaultResolver
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("mcp oauth: split destination: %w", err)
+		}
+		ips, err := validatedPublicIPs(ctx, resolver, host)
+		if err != nil {
+			return nil, err
+		}
+		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
+	}
+	safeTransport := &validatedTransport{base: transport, resolver: resolver}
+	return &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: safeTransport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("mcp oauth: too many redirects")
+			}
+			return validateOutboundURL(req.Context(), resolver, req.URL)
+		},
+	}
+}
+
+type validatedTransport struct {
+	base     http.RoundTripper
+	resolver ipResolver
+}
+
+func (t *validatedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := validateOutboundURL(req.Context(), t.resolver, req.URL); err != nil {
+		return nil, err
+	}
+	return t.base.RoundTrip(req)
+}
+
+func validateOutboundURL(ctx context.Context, resolver ipResolver, target *url.URL) error {
+	if target == nil {
+		return errors.New("mcp oauth: destination URL is empty")
+	}
+	if _, err := requireHTTPSURL(target.String()); err != nil {
+		return fmt.Errorf("mcp oauth: destination: %w", err)
+	}
+	_, err := validatedPublicIPs(ctx, resolver, target.Hostname())
+	return err
+}
+
+func validatedPublicIPs(ctx context.Context, resolver ipResolver, host string) ([]net.IPAddr, error) {
+	host = strings.TrimSpace(host)
+	if host == "" || strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
+		return nil, fmt.Errorf("mcp oauth: destination host %q is not public", host)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedIP(ip) {
+			return nil, fmt.Errorf("mcp oauth: destination IP %q is not public", host)
+		}
+		return []net.IPAddr{{IP: ip}}, nil
+	}
+	ips, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("mcp oauth: resolve destination %q: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("mcp oauth: destination %q resolved to no addresses", host)
+	}
+	for _, resolved := range ips {
+		if isBlockedIP(resolved.IP) {
+			return nil, fmt.Errorf("mcp oauth: destination %q resolved to non-public IP %q", host, resolved.IP)
+		}
+	}
+	return ips, nil
+}
+
+func isBlockedIP(ip net.IP) bool {
+	return ip == nil ||
+		!ip.IsGlobalUnicast() ||
+		ip.IsPrivate() ||
+		ip.IsLoopback() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast()
+}
+
+func selectScopes(requested, supported []string) ([]string, error) {
+	selected := make([]string, 0, len(requested))
+	seen := make(map[string]struct{}, len(requested))
+	for _, raw := range requested {
+		scope := strings.TrimSpace(raw)
+		if scope == "" || strings.ContainsAny(scope, " \t\r\n") {
+			return nil, fmt.Errorf("mcp oauth: invalid requested scope %q", raw)
+		}
+		if _, duplicate := seen[scope]; duplicate {
+			continue
+		}
+		if len(supported) > 0 && !contains(supported, scope) {
+			return nil, fmt.Errorf("mcp oauth: requested scope %q is not supported", scope)
+		}
+		seen[scope] = struct{}{}
+		selected = append(selected, scope)
+	}
+	return selected, nil
 }
 
 func randomURLToken(size int) (string, error) {

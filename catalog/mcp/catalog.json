@@ -78,10 +78,11 @@
       "verified": true,
       "categories": ["Productivity", "Knowledge"],
       "featured_rank": 4,
-      "version": "1.0.1",
+      "version": "1.0.0",
       "transport": "streamable-http",
       "authentication": {
-        "type": "oauth2"
+        "type": "oauth2",
+        "scopes": ["default"]
       },
       "server": {
         "name": "notion",

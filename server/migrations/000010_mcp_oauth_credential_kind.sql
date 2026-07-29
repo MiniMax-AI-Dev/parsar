@@ -17,8 +17,6 @@ ON CONFLICT DO NOTHING;
 
 -- +goose Down
 
--- Rollback only; normal startup does not execute this section.
-
 DELETE FROM credential_kinds
 WHERE code = 'mcp_oauth'
   AND built_in = TRUE;

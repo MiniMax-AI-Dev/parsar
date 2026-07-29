@@ -147,7 +147,7 @@ func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T)
 		Publisher: mcpcatalog.Publisher{Name: "Notion", URL: "https://www.notion.so"},
 		Verified:  true, Categories: []string{"Productivity"}, FeaturedRank: 1,
 		Version: "1.0.0", Transport: "streamable-http",
-		Authentication: mcpcatalog.Authentication{Type: "oauth2"},
+		Authentication: mcpcatalog.Authentication{Type: "oauth2", Scopes: []string{"default"}},
 		Server:         mcpcatalog.Server{Name: "notion", URL: "https://mcp.notion.com/mcp"},
 	}}
 	fs := &fakeDirectoryStore{role: "admin"}
@@ -177,6 +177,25 @@ func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T)
 	header := fs.imported.Spec.MCP.Servers[0].Headers["Authorization"]
 	if header.Prefix != "Bearer " || header.CredentialKindCode != capability.CredentialKindMCPOAuth {
 		t.Fatalf("authorization header = %+v", header)
+	}
+}
+
+func TestOAuthConnectRequiresWorkspaceAdmin(t *testing.T) {
+	catalog := testCatalog()
+	catalog.Items = []mcpcatalog.Item{{
+		ID: "notion", Name: "Notion", Description: "Search Notion.",
+		Publisher: mcpcatalog.Publisher{Name: "Notion", URL: "https://www.notion.so"},
+		Verified:  true, Categories: []string{"Productivity"}, FeaturedRank: 1,
+		Version: "1.0.0", Transport: "streamable-http",
+		Authentication: mcpcatalog.Authentication{Type: "oauth2", Scopes: []string{"default"}},
+		Server:         mcpcatalog.Server{Name: "notion", URL: "https://mcp.notion.com/mcp"},
+	}}
+	for _, suffix := range []string{"/oauth/start", "/oauth/callback"} {
+		fs := &fakeDirectoryStore{role: "member"}
+		rec := requestWithCatalog(t, fs, catalog, http.MethodGet, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion"+suffix)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("path=%s status=%d body=%s", suffix, rec.Code, rec.Body.String())
+		}
 	}
 }
 
