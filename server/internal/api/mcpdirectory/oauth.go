@@ -161,12 +161,12 @@ func (h *handler) oauthCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) oauthItem(w http.ResponseWriter, r *http.Request) (mcpcatalog.Item, bool) {
-	snapshot, err := h.deps.Catalog.Load(r.Context())
+	catalog, err := h.deps.Catalog.Load()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "mcp_catalog_unavailable")
 		return mcpcatalog.Item{}, false
 	}
-	item, found := snapshot.Find(chi.URLParam(r, "catalogID"))
+	item, found := catalog.Find(chi.URLParam(r, "catalogID"))
 	if !found {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return mcpcatalog.Item{}, false

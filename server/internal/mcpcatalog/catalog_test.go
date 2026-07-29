@@ -1,26 +1,22 @@
 package mcpcatalog
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 )
 
 func TestBuiltinCatalogLoads(t *testing.T) {
-	snapshot, err := New(Options{}).Load(context.Background())
+	catalog, err := New(Options{}).Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if snapshot.Source != SourceBuiltin {
-		t.Fatalf("source = %q", snapshot.Source)
-	}
 	want := []string{"context7", "exa", "firecrawl", "notion"}
-	if len(snapshot.Catalog.Items) != len(want) {
-		t.Fatalf("items = %d, want %d", len(snapshot.Catalog.Items), len(want))
+	if len(catalog.Items) != len(want) {
+		t.Fatalf("items = %d, want %d", len(catalog.Items), len(want))
 	}
 	for index, id := range want {
-		item := snapshot.Catalog.Items[index]
+		item := catalog.Items[index]
 		if item.ID != id {
 			t.Fatalf("item[%d] = %q, want %q", index, item.ID, id)
 		}

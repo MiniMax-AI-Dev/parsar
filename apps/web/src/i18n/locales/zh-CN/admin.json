@@ -893,9 +893,6 @@
       "description": "浏览经过筛选的托管 MCP 服务，并将配置导入当前工作区。",
       "verified": "已验证",
       "securityNotice": "导入只会保存配置，不会立即运行。启用并绑定 Agent 后，该 MCP 才可能在 Runtime 中执行。",
-      "source": {
-        "builtin": "内置目录"
-      },
       "filters": {
         "category": "连接器分类",
         "allCategories": "全部分类",
