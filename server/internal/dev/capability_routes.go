@@ -1540,6 +1540,7 @@ func setBuiltinCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
 //	@Failure		403 {object} map[string]string "Not agent creator"
 //	@Failure		404 {object} map[string]string "Agent, capability, or version not found"
+//	@Failure		422 {object} map[string]string "Target version credential requirements are not satisfied"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityID}/upgrade [post]
 func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {

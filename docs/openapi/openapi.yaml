@@ -4860,6 +4860,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "422":
+          description: Target version credential requirements are not satisfied
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "503":
           description: Database-backed capability APIs are disabled
           schema:
