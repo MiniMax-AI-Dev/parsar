@@ -102,17 +102,17 @@ export interface MCPDirectoryItem {
   verified: boolean
   categories: string[]
   featured_rank: number
-	version: string
-	transport: "streamable-http"
-	authentication: "none" | "oauth2"
-	connected: boolean
-	url?: string
+  version: string
+  transport: "streamable-http"
+  url?: string
   installed: boolean
   installed_capability_id: string | null
 }
 
 export interface MCPDirectoryListResponse {
   items: MCPDirectoryItem[]
+  updated_at: string
+  source: "builtin"
 }
 
 export interface MCPDirectoryImportResponse {
@@ -205,7 +205,7 @@ async function listEnabledAgents(workspaceID: string | null, capabilityID: strin
 }
 
 async function listMCPDirectory(workspaceID: string | null): Promise<MCPDirectoryListResponse> {
-  if (!workspaceID) return { items: [] }
+  if (!workspaceID) return { items: [], updated_at: "", source: "builtin" }
   return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory`)
 }
 
@@ -216,10 +216,6 @@ async function getMCPDirectoryItem(workspaceID: string | null, catalogID: string
 
 async function importMCPDirectoryItem(workspaceID: string, catalogID: string): Promise<MCPDirectoryImportResponse> {
   return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/import`, { method: "POST" })
-}
-
-export function mcpDirectoryOAuthStartURL(workspaceID: string, catalogID: string): string {
-	return `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/oauth/start`
 }
 
 function normalizeMarketplaceCapability(item: MarketplaceCapability): MarketplaceCapability {

@@ -893,6 +893,9 @@
       "description": "Browse curated hosted MCP servers and import their configuration into this workspace.",
       "verified": "Verified",
       "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
+      "source": {
+        "builtin": "Built-in catalog"
+      },
       "filters": {
         "category": "Connector categories",
         "allCategories": "All categories",
@@ -909,12 +912,6 @@
         "back": "Back to connectors",
         "viewCapability": "View Capability"
       },
-	  "oauth": {
-		"connect": "Connect",
-		"connected": "Connected",
-		"required": "OAuth required",
-		"failed": "Authorization did not complete. Please try again."
-	  },
       "loadError": {
         "title": "Couldn't load the connectors directory",
         "description": "Couldn't load the connectors directory. Some connector details may be missing. Retry without leaving the Capability Marketplace."
@@ -938,7 +935,7 @@
       },
       "import": {
         "title": "Import {{name}}?",
-		"description": "Review the connector configuration. OAuth connectors must be connected first; importing does not run the MCP or bind it to an Agent.",
+        "description": "Review the connector configuration. No token is required during import, and nothing will run or bind to an Agent.",
         "success": "{{name}} was imported as a workspace MCP Capability.",
         "failed": "The connector could not be imported.",
         "importing": "Importing...",

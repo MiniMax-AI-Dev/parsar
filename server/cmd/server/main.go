@@ -47,7 +47,6 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/feishu"
 	authgithub "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/github"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	authpassword "github.com/MiniMax-AI-Dev/parsar/server/internal/auth/password"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/bootstrap"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
@@ -708,26 +707,13 @@ func main() {
 			SharedRuntimeToken: strings.TrimSpace(envLookup("PARSAR_SHARED_RUNTIME_TOKEN")),
 		}
 		mcpCatalog := mcpcatalog.New(mcpcatalog.Options{})
-		mcpOAuthSecrets, mcpOAuthSecretsErr := secrets.New(cfg.Secret.MasterKey)
-		if mcpOAuthSecretsErr != nil {
-			log.Bg().Warn("MCP connector OAuth disabled", "error", mcpOAuthSecretsErr)
-		}
-		publicURL := strings.TrimSpace(cfg.Server.PublicURL)
-		if publicURL == "" {
-			publicURL = "http://localhost" + cfg.Server.Addr
-		}
 		sessionStore := auth.NewPostgresSessionStore(sqlc.New(pool))
 		authMw := auth.NewMiddleware(sessionStore).WithDevAuth(cfg.Auth.DevAuth)
 		r.Group(func(r chi.Router) {
 			r.Use(authMw.Require)
 			mcpdirectoryapi.RegisterRoutes(r, mcpdirectoryapi.Deps{
-				Catalog:              mcpCatalog,
-				Store:                dbStore,
-				WorkspaceCredentials: dbStore,
-				OAuth:                mcpoauth.New(nil),
-				Secrets:              mcpOAuthSecrets,
-				PublicURL:            publicURL,
-				CookieSecure:         cfg.Auth.Cookie.Secure,
+				Catalog: mcpCatalog,
+				Store:   dbStore,
 			})
 			runtimeapi.RegisterAdminRoutes(r, runtimeDeps)
 		})

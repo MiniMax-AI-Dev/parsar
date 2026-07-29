@@ -88,11 +88,6 @@ func (i Item) Validate() error {
 	if i.Transport != canonical.MCPTransportStreamableHTTP {
 		return fmt.Errorf("item %q transport %q is unsupported", i.ID, i.Transport)
 	}
-	switch i.Authentication.EffectiveType() {
-	case "none", "oauth2":
-	default:
-		return fmt.Errorf("item %q authentication type %q is unsupported", i.ID, i.Authentication.Type)
-	}
 	if strings.TrimSpace(i.Server.Name) == "" {
 		return fmt.Errorf("item %q server name is required", i.ID)
 	}

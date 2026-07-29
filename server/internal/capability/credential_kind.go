@@ -1,7 +1,5 @@
 package capability
 
-const CredentialKindMCPOAuth = "mcp_oauth"
-
 type CredentialKindMeta struct {
 	Name        string
 	ZhCN        string

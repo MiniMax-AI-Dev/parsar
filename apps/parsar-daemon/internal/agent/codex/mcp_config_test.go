@@ -64,11 +64,7 @@ func TestWriteCodexMCPConfig_EmitsCommandArgsEnv(t *testing.T) {
 func TestWriteCodexMCPConfig_EmitsStreamableHTTPURL(t *testing.T) {
 	dir := t.TempDir()
 	servers := map[string]mcpServerConfig{
-		"docs": {
-			Name:    "docs",
-			URL:     "https://docs.example.com/mcp",
-			Headers: map[string]string{"Authorization": "Bearer token"},
-		},
+		"docs": {Name: "docs", URL: "https://docs.example.com/mcp"},
 	}
 	if err := writeCodexMCPConfig(dir, servers); err != nil {
 		t.Fatalf("write: %v", err)
@@ -76,9 +72,6 @@ func TestWriteCodexMCPConfig_EmitsStreamableHTTPURL(t *testing.T) {
 	body, _ := os.ReadFile(filepath.Join(dir, "config.toml"))
 	if !strings.Contains(string(body), `url = "https://docs.example.com/mcp"`) || strings.Contains(string(body), "command =") {
 		t.Fatalf("remote config: %s", body)
-	}
-	if !strings.Contains(string(body), `http_headers = {"Authorization" = "Bearer token"}`) {
-		t.Fatalf("remote headers: %s", body)
 	}
 }
 

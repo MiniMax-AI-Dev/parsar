@@ -14,15 +14,12 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 )
 
 type catalogLoader interface {
-	Load() (mcpcatalog.Catalog, error)
+	Load(ctx context.Context) (mcpcatalog.Snapshot, error)
 }
 
 type directoryStore interface {
@@ -31,20 +28,9 @@ type directoryStore interface {
 	ImportCapability(ctx context.Context, input store.ImportCapabilityInput) (store.ImportCapabilityResult, error)
 }
 
-type workspaceCredentialStore interface {
-	ListSecrets(ctx context.Context, workspaceID string, limit int32) ([]store.SecretRead, error)
-	CreateSecret(ctx context.Context, input store.CreateSecretInput, encryptedPayload []byte) (store.SecretRead, error)
-	UpdateSecretPayload(ctx context.Context, workspaceID, secretID string, encryptedPayload []byte) (store.SecretPayload, error)
-}
-
 type Deps struct {
-	Catalog              catalogLoader
-	Store                directoryStore
-	WorkspaceCredentials workspaceCredentialStore
-	OAuth                *mcpoauth.Client
-	Secrets              *secrets.Service
-	PublicURL            string
-	CookieSecure         bool
+	Catalog catalogLoader
+	Store   directoryStore
 }
 
 type handler struct {
@@ -64,15 +50,15 @@ type itemResponse struct {
 	FeaturedRank          int                  `json:"featured_rank"`
 	Version               string               `json:"version"`
 	Transport             string               `json:"transport"`
-	Authentication        string               `json:"authentication"`
-	Connected             bool                 `json:"connected"`
 	URL                   string               `json:"url,omitempty"`
 	Installed             bool                 `json:"installed"`
 	InstalledCapabilityID *string              `json:"installed_capability_id"`
 }
 
 type listResponse struct {
-	Items []itemResponse `json:"items"`
+	Items     []itemResponse `json:"items"`
+	UpdatedAt string         `json:"updated_at"`
+	Source    string         `json:"source"`
 }
 
 type importResponse struct {
@@ -80,14 +66,11 @@ type importResponse struct {
 	CapabilityID string `json:"capability_id"`
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
 type sourcePayload struct {
 	SourceFormat   string `json:"source_format"`
 	CatalogID      string `json:"catalog_id"`
 	CatalogVersion string `json:"catalog_version"`
+	CatalogSource  string `json:"catalog_source"`
 }
 
 func RegisterRoutes(r chi.Router, deps Deps) {
@@ -95,8 +78,6 @@ func RegisterRoutes(r chi.Router, deps Deps) {
 	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory", h.list)
 	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}", h.get)
 	r.Post("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/import", h.importItem)
-	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start", h.oauthStart)
-	r.Get("/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback", h.oauthCallback)
 }
 
 // list godoc
@@ -106,30 +87,30 @@ func RegisterRoutes(r chi.Router, deps Deps) {
 //	@Produce	json
 //	@Param		workspaceID path string true "workspace id"
 //	@Success	200 {object} listResponse
-//	@Failure	400 {object} errorResponse
-//	@Failure	401 {object} errorResponse
-//	@Failure	403 {object} errorResponse
-//	@Failure	503 {object} errorResponse
+//	@Failure	400 {object} map[string]string
+//	@Failure	401 {object} map[string]string
+//	@Failure	403 {object} map[string]string
+//	@Failure	503 {object} map[string]string
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory [get]
 func (h *handler) list(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorize(w, r)
+	workspaceID, ok := h.authorize(w, r, false)
 	if !ok {
 		return
 	}
-	catalog, installs, ok := h.load(w, r, workspaceID)
+	snapshot, installs, ok := h.load(w, r, workspaceID)
 	if !ok {
 		return
 	}
 	byCatalog := installMap(installs)
-	connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
-	if !ok {
-		return
+	items := make([]itemResponse, 0, len(snapshot.Catalog.Items))
+	for _, item := range snapshot.Catalog.Items {
+		items = append(items, summarizeItem(item, byCatalog[item.ID]))
 	}
-	items := make([]itemResponse, 0, len(catalog.Items))
-	for _, item := range catalog.Items {
-		items = append(items, summarizeItem(item, byCatalog[item.ID], connected[item.ID]))
-	}
-	writeJSON(w, http.StatusOK, listResponse{Items: items})
+	writeJSON(w, http.StatusOK, listResponse{
+		Items:     items,
+		UpdatedAt: snapshot.Catalog.UpdatedAt,
+		Source:    string(snapshot.Source),
+	})
 }
 
 // get godoc
@@ -140,28 +121,24 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 //	@Param		workspaceID path string true "workspace id"
 //	@Param		catalogID path string true "catalog item id"
 //	@Success	200 {object} itemResponse
-//	@Failure	400 {object} errorResponse
-//	@Failure	404 {object} errorResponse
+//	@Failure	400 {object} map[string]string
+//	@Failure	404 {object} map[string]string
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID} [get]
 func (h *handler) get(w http.ResponseWriter, r *http.Request) {
-	workspaceID, ok := h.authorize(w, r)
+	workspaceID, ok := h.authorize(w, r, false)
 	if !ok {
 		return
 	}
-	catalog, installs, ok := h.load(w, r, workspaceID)
+	snapshot, installs, ok := h.load(w, r, workspaceID)
 	if !ok {
 		return
 	}
-	item, found := catalog.Find(chi.URLParam(r, "catalogID"))
+	item, found := snapshot.Find(chi.URLParam(r, "catalogID"))
 	if !found {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return
 	}
-	connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
-	if !ok {
-		return
-	}
-	response := summarizeItem(item, installMap(installs)[item.ID], connected[item.ID])
+	response := summarizeItem(item, installMap(installs)[item.ID])
 	response.URL = item.Server.URL
 	writeJSON(w, http.StatusOK, response)
 }
@@ -176,21 +153,21 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 //	@Param		catalogID path string true "catalog item id"
 //	@Success	200 {object} importResponse "already installed"
 //	@Success	201 {object} importResponse "imported"
-//	@Failure	400 {object} errorResponse
-//	@Failure	403 {object} errorResponse
-//	@Failure	404 {object} errorResponse
-//	@Failure	409 {object} errorResponse
+//	@Failure	400 {object} map[string]string
+//	@Failure	403 {object} map[string]string
+//	@Failure	404 {object} map[string]string
+//	@Failure	409 {object} map[string]string
 //	@Router		/api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/import [post]
 func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	workspaceID, ok := h.authorizeRoles(w, r, "owner", "admin", "member")
 	if !ok {
 		return
 	}
-	catalog, installs, ok := h.load(w, r, workspaceID)
+	snapshot, installs, ok := h.load(w, r, workspaceID)
 	if !ok {
 		return
 	}
-	item, found := catalog.Find(chi.URLParam(r, "catalogID"))
+	item, found := snapshot.Find(chi.URLParam(r, "catalogID"))
 	if !found {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return
@@ -199,24 +176,15 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, importResponse{Installed: true, CapabilityID: existing.CapabilityID})
 		return
 	}
-	if item.Authentication.EffectiveType() == "oauth2" {
-		connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
-		if !ok {
-			return
-		}
-		if !connected[item.ID] {
-			writeError(w, http.StatusConflict, "connector_oauth_required")
-			return
-		}
-	}
 
 	payload, err := json.Marshal(sourcePayload{
 		SourceFormat:   "mcp_catalog",
 		CatalogID:      item.ID,
 		CatalogVersion: item.Version,
+		CatalogSource:  string(snapshot.Source),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "catalog_provenance_encode_failed")
+		writeError(w, http.StatusInternalServerError, "catalog_source_encode_failed")
 		return
 	}
 	result, err := h.deps.Store.ImportCapability(r.Context(), store.ImportCapabilityInput{
@@ -252,8 +220,12 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *handler) authorize(w http.ResponseWriter, r *http.Request) (string, bool) {
-	return h.authorizeRoles(w, r, "owner", "admin", "member", "viewer")
+func (h *handler) authorize(w http.ResponseWriter, r *http.Request, admin bool) (string, bool) {
+	allowed := []string{"owner", "admin", "member", "viewer"}
+	if admin {
+		allowed = []string{"owner", "admin"}
+	}
+	return h.authorizeRoles(w, r, allowed...)
 }
 
 func (h *handler) authorizeRoles(w http.ResponseWriter, r *http.Request, allowed ...string) (string, bool) {
@@ -280,18 +252,18 @@ func (h *handler) authorizeRoles(w http.ResponseWriter, r *http.Request, allowed
 	return workspaceID, true
 }
 
-func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID string) (mcpcatalog.Catalog, []store.MCPDirectoryInstall, bool) {
-	catalog, err := h.deps.Catalog.Load()
+func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID string) (mcpcatalog.Snapshot, []store.MCPDirectoryInstall, bool) {
+	snapshot, err := h.deps.Catalog.Load(r.Context())
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "mcp_catalog_unavailable")
-		return mcpcatalog.Catalog{}, nil, false
+		return mcpcatalog.Snapshot{}, nil, false
 	}
 	installs, err := h.deps.Store.ListMCPDirectoryInstalls(r.Context(), workspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "directory_install_state_failed")
-		return mcpcatalog.Catalog{}, nil, false
+		return mcpcatalog.Snapshot{}, nil, false
 	}
-	return catalog, installs, true
+	return snapshot, installs, true
 }
 
 func installMap(installs []store.MCPDirectoryInstall) map[string]store.MCPDirectoryInstall {
@@ -302,7 +274,7 @@ func installMap(installs []store.MCPDirectoryInstall) map[string]store.MCPDirect
 	return result
 }
 
-func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall, connected bool) itemResponse {
+func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall) itemResponse {
 	var installedCapabilityID *string
 	if install.CapabilityID != "" {
 		id := install.CapabilityID
@@ -321,44 +293,9 @@ func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall, conn
 		FeaturedRank:          item.FeaturedRank,
 		Version:               item.Version,
 		Transport:             item.Transport,
-		Authentication:        item.Authentication.EffectiveType(),
-		Connected:             connected,
 		Installed:             install.CapabilityID != "",
 		InstalledCapabilityID: installedCapabilityID,
 	}
-}
-
-func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, workspaceID string, catalog mcpcatalog.Catalog) (map[string]bool, bool) {
-	result := map[string]bool{}
-	if h.deps.WorkspaceCredentials == nil {
-		return result, true
-	}
-	workspaceSecrets, err := h.deps.WorkspaceCredentials.ListSecrets(r.Context(), workspaceID, 1000)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "connector_connection_state_failed")
-		return nil, false
-	}
-	for _, candidate := range workspaceSecrets {
-		if candidate.Kind != "capability_inline" ||
-			candidate.AuthType != "oauth2" ||
-			candidate.Status != "active" ||
-			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) {
-			continue
-		}
-		catalogID := strings.TrimSpace(candidate.Provider)
-		item, found := catalog.Find(catalogID)
-		if !found || item.Authentication.EffectiveType() != "oauth2" ||
-			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
-			continue
-		}
-		result[catalogID] = true
-	}
-	return result, true
-}
-
-func metadataString(metadata map[string]any, key string) string {
-	value, _ := metadata[key].(string)
-	return strings.TrimSpace(value)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
@@ -368,5 +305,5 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 }
 
 func writeError(w http.ResponseWriter, status int, code string) {
-	writeJSON(w, status, errorResponse{Error: code})
+	writeJSON(w, status, map[string]string{"error": code})
 }

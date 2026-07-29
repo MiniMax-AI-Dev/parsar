@@ -103,15 +103,11 @@ func mergeMCPConfig(rawConfig string, rawServers any) (string, error) {
 			enabled = value
 		}
 		if remoteURL, ok := entry["url"].(string); ok && strings.TrimSpace(remoteURL) != "" {
-			remote := map[string]any{
+			mcp[name] = map[string]any{
 				"type":    "remote",
 				"url":     strings.TrimSpace(remoteURL),
 				"enabled": enabled,
 			}
-			if headers := stringMap(entry["headers"]); len(headers) > 0 {
-				remote["headers"] = headers
-			}
-			mcp[name] = remote
 			continue
 		}
 		command, ok := entry["command"].(string)
@@ -144,23 +140,6 @@ func mergeMCPConfig(rawConfig string, rawServers any) (string, error) {
 		return "", fmt.Errorf("opencode: marshal merged MCP config: %w", err)
 	}
 	return string(encoded), nil
-}
-
-func stringMap(value any) map[string]string {
-	switch typed := value.(type) {
-	case map[string]string:
-		return typed
-	case map[string]any:
-		result := make(map[string]string, len(typed))
-		for key, raw := range typed {
-			if text, ok := raw.(string); ok {
-				result[key] = text
-			}
-		}
-		return result
-	default:
-		return nil
-	}
 }
 
 func resolveWorkDir(input string) (string, error) {

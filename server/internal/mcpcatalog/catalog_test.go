@@ -1,35 +1,31 @@
 package mcpcatalog
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 )
 
 func TestBuiltinCatalogLoads(t *testing.T) {
-	catalog, err := New(Options{}).Load()
+	snapshot, err := New(Options{}).Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	want := []string{"context7", "exa", "firecrawl", "notion"}
-	if len(catalog.Items) != len(want) {
-		t.Fatalf("items = %d, want %d", len(catalog.Items), len(want))
+	if snapshot.Source != SourceBuiltin {
+		t.Fatalf("source = %q", snapshot.Source)
+	}
+	want := []string{"context7", "exa", "firecrawl"}
+	if len(snapshot.Catalog.Items) != len(want) {
+		t.Fatalf("items = %d, want %d", len(snapshot.Catalog.Items), len(want))
 	}
 	for index, id := range want {
-		item := catalog.Items[index]
+		item := snapshot.Catalog.Items[index]
 		if item.ID != id {
 			t.Fatalf("item[%d] = %q, want %q", index, item.ID, id)
 		}
 		if err := item.CanonicalSpec().Validate(); err != nil {
 			t.Fatalf("item %q canonical spec: %v", item.ID, err)
-		}
-		if item.ID == "notion" {
-			header := item.CanonicalSpec().MCP.Servers[0].Headers["Authorization"]
-			if header.Prefix != "Bearer " || header.CredentialKindCode != capability.CredentialKindMCPOAuth {
-				t.Fatalf("notion authorization header = %+v", header)
-			}
 		}
 	}
 }
@@ -46,9 +42,6 @@ func TestCatalogValidationRejectsInvalidContent(t *testing.T) {
 		{"insecure URL", func(c *Catalog) { c.Items[0].Server.URL = "http://example.com/mcp" }, "https URL"},
 		{"embedded credentials", func(c *Catalog) { c.Items[0].Server.URL = "https://token@example.com/mcp" }, "embedded credentials"},
 		{"featured rank", func(c *Catalog) { c.Items[0].FeaturedRank = 0 }, "featured_rank"},
-		{"authentication type", func(c *Catalog) {
-			c.Items[0].Authentication = Authentication{Type: "api_key"}
-		}, "unsupported"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

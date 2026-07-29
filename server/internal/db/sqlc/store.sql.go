@@ -8283,6 +8283,7 @@ func (q *Queries) ListIdleSandboxBindings(ctx context.Context, arg ListIdleSandb
 const listMCPDirectoryInstalls = `-- name: ListMCPDirectoryInstalls :many
 select distinct on (cv.source_payload->>'catalog_id')
   coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
+  coalesce(cv.source_payload->>'catalog_version', '')::text as catalog_version,
   c.id::text as capability_id
 from capability c
 join capability_version cv on cv.capability_id = c.id
@@ -8295,12 +8296,14 @@ order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc
 `
 
 type ListMCPDirectoryInstallsRow struct {
-	CatalogID    string `json:"catalog_id"`
-	CapabilityID string `json:"capability_id"`
+	CatalogID      string `json:"catalog_id"`
+	CatalogVersion string `json:"catalog_version"`
+	CapabilityID   string `json:"capability_id"`
 }
 
 // Catalog provenance lives on capability versions rather than the capability
-// row. Keep the newest matching provenance per catalog id.
+// row. Keep the newest matching provenance per catalog id so a later catalog
+// re-import can update catalog_version without creating a second install.
 func (q *Queries) ListMCPDirectoryInstalls(ctx context.Context, workspaceID pgtype.UUID) ([]ListMCPDirectoryInstallsRow, error) {
 	rows, err := q.db.Query(ctx, listMCPDirectoryInstalls, workspaceID)
 	if err != nil {
@@ -8310,7 +8313,7 @@ func (q *Queries) ListMCPDirectoryInstalls(ctx context.Context, workspaceID pgty
 	items := []ListMCPDirectoryInstallsRow{}
 	for rows.Next() {
 		var i ListMCPDirectoryInstallsRow
-		if err := rows.Scan(&i.CatalogID, &i.CapabilityID); err != nil {
+		if err := rows.Scan(&i.CatalogID, &i.CatalogVersion, &i.CapabilityID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -8999,66 +9002,6 @@ func (q *Queries) ListSecrets(ctx context.Context, arg ListSecretsParams) ([]Lis
 	items := []ListSecretsRow{}
 	for rows.Next() {
 		var i ListSecretsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Slug,
-			&i.Name,
-			&i.Kind,
-			&i.Provider,
-			&i.AuthType,
-			&i.KeyVersion,
-			&i.Status,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSecretsForWorkspace = `-- name: ListSecretsForWorkspace :many
-select id::text, slug, name, kind, provider, auth_type, key_version, status, metadata, created_at, updated_at
-from secrets
-where (coalesce(metadata->>'workspace_id', '') = '' or metadata->>'workspace_id' = $1::text)
-  and deleted_at is null
-order by created_at desc, id desc
-limit $2
-`
-
-type ListSecretsForWorkspaceParams struct {
-	WorkspaceID string `json:"workspace_id"`
-	ItemLimit   int32  `json:"item_limit"`
-}
-
-type ListSecretsForWorkspaceRow struct {
-	ID         string             `json:"id"`
-	Slug       string             `json:"slug"`
-	Name       string             `json:"name"`
-	Kind       string             `json:"kind"`
-	Provider   string             `json:"provider"`
-	AuthType   string             `json:"auth_type"`
-	KeyVersion string             `json:"key_version"`
-	Status     string             `json:"status"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) ListSecretsForWorkspace(ctx context.Context, arg ListSecretsForWorkspaceParams) ([]ListSecretsForWorkspaceRow, error) {
-	rows, err := q.db.Query(ctx, listSecretsForWorkspace, arg.WorkspaceID, arg.ItemLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSecretsForWorkspaceRow{}
-	for rows.Next() {
-		var i ListSecretsForWorkspaceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Slug,
@@ -12471,64 +12414,6 @@ func (q *Queries) UpdateScheduledTask(ctx context.Context, arg UpdateScheduledTa
 		&i.LastStatus,
 		&i.ConsecutiveFailures,
 		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateSecretPayload = `-- name: UpdateSecretPayload :one
-update secrets
-set encrypted_payload = $1::jsonb,
-    key_version = $2,
-    status = 'active',
-    updated_at = $3
-where id = $4::uuid
-  and deleted_at is null
-returning id::text, slug, name, kind, provider, auth_type, encrypted_payload, key_version, status, metadata, created_at, updated_at
-`
-
-type UpdateSecretPayloadParams struct {
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Now              pgtype.Timestamptz `json:"now"`
-	ID               pgtype.UUID        `json:"id"`
-}
-
-type UpdateSecretPayloadRow struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Kind             string             `json:"kind"`
-	Provider         string             `json:"provider"`
-	AuthType         string             `json:"auth_type"`
-	EncryptedPayload []byte             `json:"encrypted_payload"`
-	KeyVersion       string             `json:"key_version"`
-	Status           string             `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) UpdateSecretPayload(ctx context.Context, arg UpdateSecretPayloadParams) (UpdateSecretPayloadRow, error) {
-	row := q.db.QueryRow(ctx, updateSecretPayload,
-		arg.EncryptedPayload,
-		arg.KeyVersion,
-		arg.Now,
-		arg.ID,
-	)
-	var i UpdateSecretPayloadRow
-	err := row.Scan(
-		&i.ID,
-		&i.Slug,
-		&i.Name,
-		&i.Kind,
-		&i.Provider,
-		&i.AuthType,
-		&i.EncryptedPayload,
-		&i.KeyVersion,
-		&i.Status,
-		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

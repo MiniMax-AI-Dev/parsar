@@ -4,7 +4,6 @@ import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ExternalLink, Loader2, S
 
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
-import { CredentialBindingSelect } from "./CredentialBindingSelect"
 import { useMyCredentials } from "../../lib/api-credentials"
 import {
   credentialKindLabel,
@@ -13,9 +12,12 @@ import {
   type KnownCredentialKind,
 } from "../../lib/credential-kind-ui"
 import type { AgentInlineNewSecret, RequiredCredential, Secret } from "../../lib/api-types"
-import { hasCredentialKind, sharedSecretsForKind, type PerKindBindingChoice } from "../../lib/credential-bindings"
 
-export type { PerKindBindingChoice } from "../../lib/credential-bindings"
+/** PerKindBinding is the per-credential decision made in the picker. */
+export type PerKindBindingChoice =
+  | { source: "personal" }
+  | { source: "shared"; existing_secret_id: string }
+  | { source: "shared"; new_secret: { display_name: string; plaintext: string } }
 
 interface CredentialCheckPanelProps {
   /** Only entries with required===true should be passed. */
@@ -169,7 +171,7 @@ export function CredentialCheckPanel({
       for (const rc of requiredKinds) {
         const choice = choices[rc.kind]
         if (choice?.source !== "personal") continue
-        if (!hasCredentialKind(credentials ?? [], rc.kind)) {
+        if (!(credentials ?? []).some((c) => c.kind === rc.kind)) {
           // Personal but the creator has not configured this kind. Allow
           // the pick (other callers may have it), but signal invalid so
           // the create button stays disabled until they add it OR switch
@@ -220,8 +222,15 @@ export function CredentialCheckPanel({
       {requiredKinds.map((rc) => {
         const { displayName, placeholder, getUrl } = getKindMeta(rc.kind)
         const choice = choices[rc.kind]
-        const hasPersonalCredential = hasCredentialKind(credentials ?? [], rc.kind)
-        const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind)
+        const hasPersonalCredential = (credentials ?? []).some((c) => c.kind === rc.kind)
+        const kindSecrets = sharedSecrets.filter((s) => {
+          if (s.kind !== "capability_inline") return false
+          const metaCode = (s.metadata as { credential_kind_code?: unknown } | undefined)?.credential_kind_code
+          // Untagged legacy secrets surface for every kind (operator's
+          // responsibility to pick the right one); new secrets are
+          // always tagged so this only matters for pre-2026-06 rows.
+          return typeof metaCode !== "string" || metaCode === "" || metaCode === rc.kind
+        })
 
         return (
           <div key={rc.kind} className="rounded-md border border-line bg-surface">
@@ -295,29 +304,29 @@ export function CredentialCheckPanel({
                   {choice?.source === "shared" && (
                     <div className="mt-1 space-y-1.5">
                       {kindSecrets.length > 0 && (
-                        <CredentialBindingSelect
+                        <select
                           value={"existing_secret_id" in choice ? choice.existing_secret_id : "__new__"}
-                          secrets={kindSecrets}
-                          allowPersonal={false}
-                          allowCreateNew
-                          personalLabel={t("credentialCheck.sourcePersonal")}
-                          personalPlaceholder={t("credentialCheck.sharedPlaceholder")}
-                          sharedLabel={t("credentialCheck.sourceShared")}
-                          createNewLabel={t("credentialCheck.createNewShared")}
-                          onChange={(value) => {
-                            if (value === "__new__") {
+                          onChange={(e) => {
+                            e.stopPropagation()
+                            if (e.target.value === "__new__") {
                               setExpandedNewSecretFor(rc.kind)
                               if (!("new_secret" in choice)) {
                                 setNewSecretDisplayName("")
                                 setNewSecretPlaintext("")
                               }
                             } else {
-                              setKindChoice(rc.kind, { source: "shared", existing_secret_id: value })
+                              setKindChoice(rc.kind, { source: "shared", existing_secret_id: e.target.value })
                               if (expandedNewSecretFor === rc.kind) setExpandedNewSecretFor(null)
                             }
                           }}
+                          onClick={(e) => e.stopPropagation()}
                           className="h-7 w-full rounded border border-line bg-surface px-2 text-sm"
-                        />
+                        >
+                          {kindSecrets.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                          <option value="__new__">{t("credentialCheck.createNewShared")}</option>
+                        </select>
                       )}
                       {kindSecrets.length === 0 && expandedNewSecretFor !== rc.kind && !("new_secret" in choice) && (
                         <button

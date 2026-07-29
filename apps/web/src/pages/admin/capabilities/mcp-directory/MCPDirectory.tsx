@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, PackageCheck, Server } from "lucide-react"
 
+import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import { EmptyState } from "../../../../components/ui/empty-state"
 import { ErrorState } from "../../../../components/ui/error-state"
@@ -10,7 +11,6 @@ import {
   useImportMCPDirectoryItem,
   useMCPDirectory,
   useMCPDirectoryDetail,
-  mcpDirectoryOAuthStartURL,
 } from "../../../../lib/api-marketplace"
 import { useWorkspaceId } from "../../../../lib/workspace"
 import { DirectoryCard } from "./MCPDirectoryCard"
@@ -40,8 +40,7 @@ export function MCPDirectory({
   const [category, setCategory] = useState("")
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sort, setSort] = useState<DirectorySort>("featured")
-	const [confirmID, setConfirmID] = useState<string | null>(null)
-	const [oauthError, setOAuthError] = useState(false)
+  const [confirmID, setConfirmID] = useState<string | null>(null)
   const [success, setSuccess] = useState<{ name: string; capabilityID: string } | null>(null)
   const detailID = confirmID ?? itemID
   const detailQ = useMCPDirectoryDetail(workspaceID, detailID)
@@ -57,47 +56,10 @@ export function MCPDirectory({
   )
   const selectedSummary = items.find((item) => item.id === itemID) ?? null
   const selected = detailQ.data?.id === itemID ? detailQ.data : selectedSummary
-	const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
-
-	useEffect(() => {
-		const onMessage = (event: MessageEvent) => {
-			if (event.origin !== window.location.origin || event.data?.type !== "parsar:mcp-oauth") return
-			setOAuthError(Boolean(event.data.error))
-			if (!event.data.error) {
-				void directoryQ.refetch()
-				void detailQ.refetch()
-			}
-		}
-		window.addEventListener("message", onMessage)
-		return () => window.removeEventListener("message", onMessage)
-	}, [detailQ, directoryQ])
-
-	const connectOAuth = (id: string) => {
-		if (!workspaceID) return
-		setOAuthError(false)
-		const width = 620
-		const height = 760
-		const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2))
-		const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2))
-		const popup = window.open(
-			mcpDirectoryOAuthStartURL(workspaceID, id),
-			`parsar-mcp-oauth-${id}`,
-			`popup=yes,width=${width},height=${height},left=${left},top=${top}`,
-		)
-		if (!popup) {
-			setOAuthError(true)
-			return
-		}
-		popup.focus()
-	}
+  const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
 
   const requestImport = (id: string) => {
     if (!canImport) return
-		const item = items.find((candidate) => candidate.id === id)
-		if (item?.authentication === "oauth2" && !item.connected) {
-			connectOAuth(id)
-			return
-		}
     importMut.reset()
     setConfirmID(id)
   }
@@ -133,7 +95,6 @@ export function MCPDirectory({
     return (
       <>
         {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
-		{oauthError ? <p className="mb-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-danger">{t("capabilities.mcpDirectory.oauth.failed")}</p> : null}
         <DirectoryDetail
           item={selected}
           loading={detailQ.isLoading}
@@ -142,7 +103,6 @@ export function MCPDirectory({
           onBack={() => onSelectItem(null)}
           onRetry={() => void detailQ.refetch()}
           onImport={() => requestImport(itemID)}
-		  onConnect={() => connectOAuth(itemID)}
           onViewCapability={onViewCapability}
         />
         {importDialog}
@@ -153,7 +113,7 @@ export function MCPDirectory({
   return (
     <div className="space-y-4" data-testid="mcp-directory">
       <div className="rounded-xl border border-line bg-surface px-5 py-4">
-        <div className="flex flex-wrap items-start gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <Server className="h-4 w-4 text-fg-subtle" />
@@ -161,6 +121,7 @@ export function MCPDirectory({
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-5 text-fg-muted">{t("capabilities.mcpDirectory.description")}</p>
           </div>
+          {directoryQ.data?.source ? <Badge variant="neutral">{t(`capabilities.mcpDirectory.source.${directoryQ.data.source}`)}</Badge> : null}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
           <div className="flex min-w-0 flex-1 flex-wrap gap-1.5" aria-label={t("capabilities.mcpDirectory.filters.category")}>
@@ -179,7 +140,6 @@ export function MCPDirectory({
       </div>
 
       {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
-	  {oauthError ? <p className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-danger">{t("capabilities.mcpDirectory.oauth.failed")}</p> : null}
       {directoryQ.isLoading ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-directory-loading">
           {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-52 w-full" />)}
@@ -190,7 +150,7 @@ export function MCPDirectory({
         <EmptyState icon={PackageCheck} title={t("capabilities.mcpDirectory.empty.title")} description={t("capabilities.mcpDirectory.empty.description")} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-		  {filtered.map((item) => <DirectoryCard key={item.id} item={item} canImport={canImport} onOpen={() => onSelectItem(item.id)} onImport={() => requestImport(item.id)} onConnect={() => connectOAuth(item.id)} onViewCapability={onViewCapability} />)}
+          {filtered.map((item) => <DirectoryCard key={item.id} item={item} canImport={canImport} onOpen={() => onSelectItem(item.id)} onImport={() => requestImport(item.id)} onViewCapability={onViewCapability} />)}
         </div>
       )}
       {importDialog}
