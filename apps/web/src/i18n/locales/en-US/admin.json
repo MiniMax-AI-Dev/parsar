@@ -893,9 +893,6 @@
       "description": "Browse curated hosted MCP servers and import their configuration into this workspace.",
       "verified": "Verified",
       "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
-      "source": {
-        "builtin": "Built-in catalog"
-      },
       "filters": {
         "category": "Connector categories",
         "allCategories": "All categories",
