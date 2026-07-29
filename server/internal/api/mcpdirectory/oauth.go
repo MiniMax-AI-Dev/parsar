@@ -205,11 +205,11 @@ func (h *handler) decryptOAuthCookie(encoded string) (oauthCookie, error) {
 		return oauthCookie{}, err
 	}
 	result := oauthCookie{
-		WorkspaceID: stringField(payload, "workspace_id"),
-		CatalogID:   stringField(payload, "catalog_id"),
-		UserID:      stringField(payload, "user_id"),
+		WorkspaceID: metadataString(payload, "workspace_id"),
+		CatalogID:   metadataString(payload, "catalog_id"),
+		UserID:      metadataString(payload, "user_id"),
 	}
-	if err := json.Unmarshal([]byte(stringField(payload, "transaction")), &result.Transaction); err != nil {
+	if err := json.Unmarshal([]byte(metadataString(payload, "transaction")), &result.Transaction); err != nil {
 		return oauthCookie{}, err
 	}
 	return result, nil
@@ -280,9 +280,4 @@ func (h *handler) clearOAuthCookie(w http.ResponseWriter, workspaceID, catalogID
 
 func oauthCookiePath(workspaceID, catalogID string) string {
 	return "/api/v1/workspaces/" + url.PathEscape(workspaceID) + "/mcp-directory/" + url.PathEscape(catalogID) + "/oauth"
-}
-
-func stringField(payload map[string]any, key string) string {
-	value, _ := payload[key].(string)
-	return strings.TrimSpace(value)
 }
