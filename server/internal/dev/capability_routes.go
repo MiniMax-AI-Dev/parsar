@@ -1562,6 +1562,48 @@ func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "new_version_id must be a valid uuid"})
 			return
 		}
+		version, err := runtimeStore.GetCapabilityVersion(r.Context(), body.NewVersionID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to get capability version")
+			return
+		}
+		if version.CapabilityID != capabilityID {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "capability version does not belong to capability"})
+			return
+		}
+		agent, err := runtimeStore.GetAgent(r.Context(), agentID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to get agent")
+			return
+		}
+		bindings, err := runtimeStore.ListAgentCapabilities(r.Context(), agentID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to list agent capabilities")
+			return
+		}
+		var configuration map[string]any
+		bindingFound := false
+		for _, binding := range bindings {
+			if binding.CapabilityID == capabilityID {
+				configuration = binding.Configuration
+				bindingFound = true
+				break
+			}
+		}
+		if !bindingFound {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent capability not found"})
+			return
+		}
+		if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
+			WorkspaceID:     agent.WorkspaceID,
+			AgentVisibility: agent.Visibility,
+			AgentConfig:     agent.Config,
+			Version:         version,
+			Configuration:   configuration,
+		}); err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
 		upgraded, err := runtimeStore.UpgradeAgentCapability(r.Context(), agentID, capabilityID, body.NewVersionID, body.PinningMode)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to upgrade agent capability")

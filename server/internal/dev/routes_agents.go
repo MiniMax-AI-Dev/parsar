@@ -744,6 +744,15 @@ func updateAgentVisibility(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
+		if err := validateAgentCapabilityBindingsForVisibility(r.Context(), runtimeStore, agent, req.Visibility); err != nil {
+			var validationErr *capabilityCredentialValidationError
+			if errors.As(err, &validationErr) {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": validationErr.Error()})
+				return
+			}
+			writeStoreAgentError(w, err)
+			return
+		}
 		change, err := runtimeStore.UpdateAgentVisibility(r.Context(), agentID, req.Visibility, actorIDFromRequest(r))
 		if err != nil {
 			if errors.Is(err, store.ErrInvalidAgentVisibility) {

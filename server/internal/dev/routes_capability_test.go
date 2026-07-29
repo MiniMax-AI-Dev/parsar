@@ -264,6 +264,66 @@ func TestCapabilityEnableRejectsOAuthSecretFromDifferentCatalogConnector(t *test
 	}
 }
 
+func TestCapabilityUpgradeValidatesNewVersionCredentials(t *testing.T) {
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "admin"}, nil)
+	capID, v1, v2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Credential Upgrade MCP")
+	if _, err := db.Exec(context.Background(), `
+		update capability_version
+		set required_credentials = case
+			when id = $1 then '[]'::jsonb
+			when id = $2 then '[{"kind":"github_pat","required":true}]'::jsonb
+			else required_credentials
+		end
+		where id in ($1, $2)
+	`, v1, v2); err != nil {
+		t.Fatalf("update capability credentials: %v", err)
+	}
+	agentID := insertAgentForOwner(t, db, testUserAID, "credential-upgrade-agent")
+	if _, err := db.Exec(context.Background(), `update agents set visibility = 'public' where id = $1`, agentID); err != nil {
+		t.Fatalf("make agent public: %v", err)
+	}
+	enabled := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+v1+"/enable",
+		`{}`, testUserAID)
+	if enabled.Code != http.StatusOK {
+		t.Fatalf("enable v1 expected 200, got %d: %s", enabled.Code, enabled.Body.String())
+	}
+
+	upgraded := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+capID+"/upgrade",
+		`{"new_version_id":"`+v2+`"}`, testUserAID)
+	if upgraded.Code != http.StatusUnprocessableEntity || !strings.Contains(upgraded.Body.String(), "public agents require a shared secret") {
+		t.Fatalf("upgrade without v2 credential expected 422, got %d: %s", upgraded.Code, upgraded.Body.String())
+	}
+	assertSingleAgentCapability(t, db, agentID, capID, v1)
+}
+
+func TestAgentVisibilityRejectsPersonalCapabilityCredential(t *testing.T) {
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "admin"}, nil)
+	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Public Visibility MCP")
+	agentID := insertAgentForOwner(t, db, testUserAID, "public-visibility-agent")
+	enabled := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
+		`{"configuration":{"credential_bindings":{"github_pat":{"source":"personal"}}}}`, testUserAID)
+	if enabled.Code != http.StatusOK {
+		t.Fatalf("enable personal capability expected 200, got %d: %s", enabled.Code, enabled.Body.String())
+	}
+	assertSingleAgentCapability(t, db, agentID, capID, versionID)
+
+	visibility := serveCapabilityRoute(t, r, http.MethodPatch,
+		"/api/v1/agents/"+agentID+"/visibility", `{"visibility":"public"}`, testUserAID)
+	if visibility.Code != http.StatusUnprocessableEntity || !strings.Contains(visibility.Body.String(), "public agents require a shared secret") {
+		t.Fatalf("public visibility with personal capability credential expected 422, got %d: %s", visibility.Code, visibility.Body.String())
+	}
+	var storedVisibility string
+	if err := db.QueryRow(context.Background(), `select visibility from agents where id = $1`, agentID).Scan(&storedVisibility); err != nil {
+		t.Fatalf("read agent visibility: %v", err)
+	}
+	if storedVisibility != "workspace" {
+		t.Fatalf("visibility changed to %q after rejected update", storedVisibility)
+	}
+}
+
 func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	capID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Marketplace Secret")
