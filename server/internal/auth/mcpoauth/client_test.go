@@ -1,7 +1,9 @@
 package mcpoauth
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -76,7 +78,7 @@ func TestOAuthDiscoveryRegistrationExchangeAndRefresh(t *testing.T) {
 	now := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
 	client.now = func() time.Time { return now }
 	redirectURI := "http://127.0.0.1:18080/oauth/callback"
-	transaction, authorizeURL, err := client.Begin(t.Context(), server.URL+"/mcp", redirectURI)
+	transaction, authorizeURL, err := client.Begin(t.Context(), server.URL+"/mcp", redirectURI, []string{"offline_access"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,7 @@ func TestOAuthDiscoveryRegistrationExchangeAndRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := parsedAuthorizeURL.Query()
-	if query.Get("client_id") != "client-1" || query.Get("redirect_uri") != redirectURI || query.Get("resource") != server.URL+"/mcp" || query.Get("scope") != "openid offline_access" {
+	if query.Get("client_id") != "client-1" || query.Get("redirect_uri") != redirectURI || query.Get("resource") != server.URL+"/mcp" || query.Get("scope") != "offline_access" {
 		t.Fatalf("unexpected authorize query: %v", query)
 	}
 	if query.Get("code_challenge_method") != "S256" || query.Get("code_challenge") == "" || query.Get("state") == "" {
@@ -146,6 +148,7 @@ func TestOAuthDiscoveryFallsBackToOpenIDConfiguration(t *testing.T) {
 		t.Context(),
 		server.URL,
 		"http://127.0.0.1:18080/oauth/callback",
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -156,10 +159,58 @@ func TestOAuthDiscoveryFallsBackToOpenIDConfiguration(t *testing.T) {
 }
 
 func TestBeginRejectsNonHTTPSResource(t *testing.T) {
-	_, _, err := New(nil).Begin(t.Context(), "http://example.com/mcp", "http://127.0.0.1/callback")
+	_, _, err := New(nil).Begin(t.Context(), "http://example.com/mcp", "http://127.0.0.1/callback", nil)
 	if err == nil || !strings.Contains(err.Error(), "https") {
 		t.Fatalf("error = %v", err)
 	}
+}
+
+func TestSelectScopesRejectsUnsupportedScope(t *testing.T) {
+	_, err := selectScopes([]string{"write"}, []string{"read"})
+	if err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestValidateOutboundURLRejectsPrivateDestinations(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawURL   string
+		resolver ipResolver
+	}{
+		{name: "localhost", rawURL: "https://localhost/oauth", resolver: fakeResolver{}},
+		{name: "loopback IP", rawURL: "https://127.0.0.1/oauth", resolver: fakeResolver{}},
+		{name: "metadata IP", rawURL: "https://169.254.169.254/oauth", resolver: fakeResolver{}},
+		{name: "private DNS", rawURL: "https://oauth.example.com/token", resolver: fakeResolver{ips: []net.IPAddr{{IP: net.ParseIP("10.0.0.2")}}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			target, err := url.Parse(tc.rawURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateOutboundURL(t.Context(), tc.resolver, target); err == nil || !strings.Contains(err.Error(), "public") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestSafeHTTPClientRejectsInsecureRedirect(t *testing.T) {
+	client := newSafeHTTPClient()
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/token", nil)
+	if err := client.CheckRedirect(req, nil); err == nil || !strings.Contains(err.Error(), "https") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+type fakeResolver struct {
+	ips []net.IPAddr
+	err error
+}
+
+func (f fakeResolver) LookupIPAddr(context.Context, string) ([]net.IPAddr, error) {
+	return f.ips, f.err
 }
 
 func TestCredentialPayloadRoundTrip(t *testing.T) {

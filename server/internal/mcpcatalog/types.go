@@ -1,6 +1,7 @@
 package mcpcatalog
 
 import (
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 )
 
@@ -30,8 +31,8 @@ type Item struct {
 }
 
 type Authentication struct {
-	Type           string `json:"type,omitempty"`
-	CredentialKind string `json:"credential_kind,omitempty"`
+	Type   string   `json:"type,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 func (a Authentication) EffectiveType() string {
@@ -62,7 +63,7 @@ func (i Item) CanonicalSpec() canonical.Spec {
 			"Authorization": {
 				Mode:               canonical.EnvModeCredentialRef,
 				Prefix:             "Bearer ",
-				CredentialKindCode: i.Authentication.CredentialKind,
+				CredentialKindCode: capability.CredentialKindMCPOAuth,
 			},
 		}
 	}

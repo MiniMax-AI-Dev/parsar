@@ -82,7 +82,7 @@
       "transport": "streamable-http",
       "authentication": {
         "type": "oauth2",
-        "credential_kind": "notion_integration"
+        "scopes": ["default"]
       },
       "server": {
         "name": "notion",

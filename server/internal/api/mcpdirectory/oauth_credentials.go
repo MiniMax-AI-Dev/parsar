@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
@@ -22,7 +23,7 @@ func (h *handler) saveWorkspaceOAuthCredential(
 	if err != nil {
 		return err
 	}
-	existing, found, err := h.workspaceOAuthCredentialRead(ctx, workspaceID, item, false)
+	existing, found, err := h.workspaceOAuthCredentialRead(ctx, workspaceID, item)
 	if err != nil {
 		return err
 	}
@@ -38,10 +39,7 @@ func (h *handler) saveWorkspaceOAuthCredential(
 		AuthType:           "oauth2",
 		Masked:             secrets.MaskPayload(payload),
 		CreatedBy:          createdBy,
-		CredentialKindCode: item.Authentication.CredentialKind,
-		Metadata: map[string]any{
-			"catalog_id": item.ID,
-		},
+		CredentialKindCode: capability.CredentialKindMCPOAuth,
 	}, encrypted)
 	return err
 }
@@ -50,20 +48,17 @@ func (h *handler) workspaceOAuthCredentialRead(
 	ctx context.Context,
 	workspaceID string,
 	item mcpcatalog.Item,
-	activeOnly bool,
 ) (store.SecretRead, bool, error) {
 	workspaceSecrets, err := h.deps.WorkspaceCredentials.ListSecrets(ctx, workspaceID, 1000)
 	if err != nil {
 		return store.SecretRead{}, false, err
 	}
 	for _, candidate := range workspaceSecrets {
-		if activeOnly && candidate.Status != "active" {
-			continue
-		}
 		if candidate.Kind != "capability_inline" ||
 			candidate.AuthType != "oauth2" ||
 			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) ||
-			metadataString(candidate.Metadata, "catalog_id") != item.ID {
+			strings.TrimSpace(candidate.Provider) != item.ID ||
+			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
 			continue
 		}
 		return candidate, true, nil

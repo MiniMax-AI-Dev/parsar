@@ -43,15 +43,17 @@
       "required": ["type"],
       "properties": {
         "type": { "enum": ["none", "oauth2"] },
-        "credential_kind": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*$"
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "if": {
         "properties": { "type": { "const": "oauth2" } }
       },
-      "then": { "required": ["credential_kind"] }
+      "then": { "required": ["scopes"] }
     },
     "item": {
       "type": "object",

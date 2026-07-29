@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	idPattern         = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-	credentialPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 )
 
 func Decode(data []byte) (Catalog, error) {
@@ -93,12 +92,22 @@ func (i Item) Validate() error {
 	}
 	switch i.Authentication.EffectiveType() {
 	case "none":
-		if strings.TrimSpace(i.Authentication.CredentialKind) != "" {
-			return fmt.Errorf("item %q authentication credential_kind requires oauth2", i.ID)
+		if len(i.Authentication.Scopes) != 0 {
+			return fmt.Errorf("item %q authentication scopes require oauth2", i.ID)
 		}
 	case "oauth2":
-		if !credentialPattern.MatchString(i.Authentication.CredentialKind) {
-			return fmt.Errorf("item %q authentication credential_kind %q is invalid", i.ID, i.Authentication.CredentialKind)
+		if len(i.Authentication.Scopes) == 0 {
+			return fmt.Errorf("item %q authentication scopes are required", i.ID)
+		}
+		seenScopes := make(map[string]struct{}, len(i.Authentication.Scopes))
+		for _, scope := range i.Authentication.Scopes {
+			if strings.TrimSpace(scope) != scope || scope == "" || strings.ContainsAny(scope, " \t\r\n") {
+				return fmt.Errorf("item %q authentication scope %q is invalid", i.ID, scope)
+			}
+			if _, duplicate := seenScopes[scope]; duplicate {
+				return fmt.Errorf("item %q authentication scope %q is duplicated", i.ID, scope)
+			}
+			seenScopes[scope] = struct{}{}
 		}
 	default:
 		return fmt.Errorf("item %q authentication type %q is unsupported", i.ID, i.Authentication.Type)

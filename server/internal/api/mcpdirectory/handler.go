@@ -15,6 +15,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/mcpcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
@@ -341,10 +342,11 @@ func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, wo
 		if candidate.Kind != "capability_inline" ||
 			candidate.AuthType != "oauth2" ||
 			candidate.Status != "active" ||
-			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) {
+			metadataString(candidate.Metadata, "workspace_id") != strings.TrimSpace(workspaceID) ||
+			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
 			continue
 		}
-		if catalogID := metadataString(candidate.Metadata, "catalog_id"); catalogID != "" {
+		if catalogID := strings.TrimSpace(candidate.Provider); catalogID != "" {
 			result[catalogID] = true
 		}
 	}
