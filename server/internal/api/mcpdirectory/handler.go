@@ -121,7 +121,7 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byCatalog := installMap(installs)
-	connected, ok := h.connectedCatalogIDs(w, r, workspaceID)
+	connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
 	if !ok {
 		return
 	}
@@ -157,7 +157,7 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "connector_not_found")
 		return
 	}
-	connected, ok := h.connectedCatalogIDs(w, r, workspaceID)
+	connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
 	if !ok {
 		return
 	}
@@ -200,7 +200,7 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Authentication.EffectiveType() == "oauth2" {
-		connected, ok := h.connectedCatalogIDs(w, r, workspaceID)
+		connected, ok := h.connectedCatalogIDs(w, r, workspaceID, catalog)
 		if !ok {
 			return
 		}
@@ -328,7 +328,7 @@ func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall, conn
 	}
 }
 
-func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, workspaceID string) (map[string]bool, bool) {
+func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, workspaceID string, catalog mcpcatalog.Catalog) (map[string]bool, bool) {
 	result := map[string]bool{}
 	if h.deps.WorkspaceCredentials == nil {
 		return result, true
@@ -346,9 +346,12 @@ func (h *handler) connectedCatalogIDs(w http.ResponseWriter, r *http.Request, wo
 			metadataString(candidate.Metadata, "credential_kind_code") != capability.CredentialKindMCPOAuth {
 			continue
 		}
-		if catalogID := strings.TrimSpace(candidate.Provider); catalogID != "" {
-			result[catalogID] = true
+		catalogID := strings.TrimSpace(candidate.Provider)
+		item, found := catalog.Find(catalogID)
+		if !found || item.Authentication.EffectiveType() != "oauth2" {
+			continue
 		}
+		result[catalogID] = true
 	}
 	return result, true
 }

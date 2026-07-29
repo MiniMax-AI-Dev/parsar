@@ -158,6 +158,15 @@ func TestOAuthDirectoryItemRequiresWorkspaceConnectionBeforeImport(t *testing.T)
 
 	credentials.secrets = []store.SecretRead{{
 		ID: "secret-1", Kind: "capability_inline", Provider: "notion", AuthType: "oauth2", Status: "active",
+		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": "notion_integration"},
+	}}
+	rec = requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
+	if rec.Code != http.StatusConflict || fs.imported != nil {
+		t.Fatalf("legacy Notion token must not satisfy MCP OAuth: status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
+	}
+
+	credentials.secrets = []store.SecretRead{{
+		ID: "secret-2", Kind: "capability_inline", Provider: "notion", AuthType: "oauth2", Status: "active",
 		Metadata: map[string]any{"workspace_id": testWorkspaceID, "credential_kind_code": "mcp_oauth"},
 	}}
 	rec = requestWithDeps(t, fs, credentials, catalog, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/notion/import")
