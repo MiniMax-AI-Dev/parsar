@@ -92,6 +92,11 @@ services:
       # reverse proxy (nginx / caddy / ingress) terminate
       # TLS there and forward to 127.0.0.1:8080 on the host.
       - "127.0.0.1:${PARSAR_HOST_PORT}:8080"
+    # Pass through dynamic env prefixes such as PARSAR_AUTH_OIDC_<ID>_*.
+    # Explicit environment entries below still document the required and
+    # commonly-used values.
+    env_file:
+      - .env
     environment:
       # ---------- Required ----------
       # Postgres connection. Use the service name `postgres` when
