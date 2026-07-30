@@ -850,10 +850,6 @@
         "search": "Search capability name / description",
         "hideInstalled": "Hide already added"
       },
-      "publishedMCP": {
-        "title": "Published MCPs",
-        "description": "Browse MCP capabilities published by this workspace and other workspaces."
-      },
       "card": {
         "source": "▷ From: {{source}}",
         "latest": "Latest v{{version}}",
@@ -894,7 +890,7 @@
     },
     "mcpDirectory": {
       "title": "Connectors",
-      "description": "Browse curated hosted MCP servers and import their configuration into this workspace.",
+      "description": "Browse curated connectors and MCP capabilities published by workspaces in one marketplace.",
       "verified": "Verified",
       "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
       "filters": {
