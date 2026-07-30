@@ -44,6 +44,10 @@ type codexMCPServer struct {
 	Env     map[string]string `json:"env,omitempty"`
 }
 
+func (codexRenderer) Supports(kind canonical.Kind) bool {
+	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt
+}
+
 func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
 	if err := spec.Validate(); err != nil {
 		return Output{}, fmt.Errorf("codex render: invalid spec: %w", err)

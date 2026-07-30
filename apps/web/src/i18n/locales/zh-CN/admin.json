@@ -1398,6 +1398,16 @@
             "switchAction": "请切到可用版本"
           }
         },
+        "compatibility": {
+          "badge": "不支持",
+          "unsupported": "{{engine}} 不支持 {{type}} 能力。支持的 Agent 引擎：{{engines}}。",
+          "types": {
+            "mcp": "MCP",
+            "skill": "Skill",
+            "plugin": "Plugin",
+            "system_prompt": "System Prompt"
+          }
+        },
         "builtin": {
           "badge": "系统内置",
           "on": "已开启",

@@ -1,4 +1,4 @@
-import type { Agent, AgentDetail, Model } from "./api-types"
+import type { Agent, AgentDetail, CapabilityType, Model } from "./api-types"
 
 export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode"
 
@@ -84,6 +84,24 @@ export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
     case "opencode":
       return "agents.engine.opencode.title"
   }
+}
+
+export function agentEngineSupportsCapability(engine: AgentEngine, capabilityType: CapabilityType): boolean {
+  switch (engine) {
+    case "claude_code":
+      return true
+    case "codex":
+    case "opencode":
+      return capabilityType === "mcp" || capabilityType === "system_prompt"
+    case "pi":
+      return capabilityType === "skill" || capabilityType === "system_prompt"
+  }
+}
+
+export function agentEnginesSupportingCapability(capabilityType: CapabilityType): AgentEngine[] {
+  return (["claude_code", "codex", "pi", "opencode"] as const).filter((engine) =>
+    agentEngineSupportsCapability(engine, capabilityType),
+  )
 }
 
 export function agentCodexModeOf(agent: AgentSource): CodexCollaborationMode {

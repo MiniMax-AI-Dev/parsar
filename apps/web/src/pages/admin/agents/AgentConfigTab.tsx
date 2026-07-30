@@ -38,6 +38,7 @@ import {
 import { useMyCredentials } from "../../../lib/api-credentials"
 import { useSecrets } from "../../../lib/api-secrets"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
+import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
 import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
 import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
@@ -227,6 +228,16 @@ function CapabilityCard({
   }
   if (!capability) return null
 
+  const agentEngine = agentEngineOf(agent)
+  const incompatible = !agentEngineSupportsCapability(agentEngine, capability.type)
+  const compatibilityMessage = incompatible
+    ? t("agents.detail.capabilities.compatibility.unsupported", {
+        engine: t(agentEngineLabel(agentEngine)),
+        type: t(`agents.detail.capabilities.compatibility.types.${capability.type}`),
+        engines: agentEnginesSupportingCapability(capability.type).map((engine) => t(agentEngineLabel(engine))).join(", "),
+      })
+    : ""
+
   return (
     <div className={`rounded-md border ${border} p-3`}>
       <div className="flex items-start justify-between gap-3">
@@ -235,6 +246,7 @@ function CapabilityCard({
             <span className="text-sm font-medium text-fg">{capability.name}</span>
             <CapabilityTypeBadge type={capability.type} />
             {fromMarketplace && <Badge variant="primary">{t("agents.detail.capabilities.marketplace.badge")}</Badge>}
+            {incompatible && <Badge variant="destructive">{t("agents.detail.capabilities.compatibility.badge")}</Badge>}
             {missingCredential && <Badge variant="destructive">{t("agents.detail.capabilities.credential.missingBadge")}</Badge>}
             {versionDeleted && <Badge variant="destructive">{t("agents.detail.capabilities.bindings.versionDeleted.warning")}</Badge>}
             {versionDeleted && versions.length > 0 && binding && (
@@ -258,6 +270,12 @@ function CapabilityCard({
       {mode === "enabled" && deprecated && (
         <div className="mt-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm leading-5 text-danger-emphasis">
           {t("agents.detail.capabilities.marketplace.deprecatedBanner", { version: boundVersion?.version ?? capability.pinned_version ?? "—" })}
+        </div>
+      )}
+
+      {incompatible && (
+        <div className="mt-3 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm leading-5 text-warning-emphasis">
+          {compatibilityMessage}
         </div>
       )}
 
@@ -292,6 +310,7 @@ function CapabilityCard({
               credentials={credentials}
               sharedSecrets={sharedSecrets}
               workspaceID={workspaceID}
+              disabled={incompatible}
               onToast={onToast}
             />
           ) : binding ? (
@@ -472,6 +491,7 @@ function CapabilityVersionDialog({
   binding,
   triggerLabel,
   triggerVariant = "ghost",
+  disabled = false,
   onToast,
 }: {
   mode: "enable" | "switch"
@@ -483,6 +503,7 @@ function CapabilityVersionDialog({
   binding?: AgentCapability
   triggerLabel?: string
   triggerVariant?: "ghost" | "link"
+  disabled?: boolean
   onToast: (message: string) => void
 }) {
   const { t } = useTranslation("admin")
@@ -519,6 +540,7 @@ function CapabilityVersionDialog({
   })
   const canSubmit = !!selectedVersion
     && !mut.isPending
+    && !disabled
     && (mode === "enable" ? !missingRequiredCredential : selectedVersion.id !== binding?.capability_version_id)
 
   const submit = () => {
@@ -558,6 +580,7 @@ function CapabilityVersionDialog({
         variant={isSwitch ? triggerVariant : "default"}
         size="sm"
         className={isSwitch && triggerVariant === "link" ? "h-auto px-1 py-0 text-sm text-danger-emphasis" : undefined}
+        disabled={disabled}
         onClick={() => setOpen(true)}
       >
         {triggerLabel ?? t(isSwitch ? "agents.detail.capabilities.actions.switchVersion" : "agents.detail.capabilities.actions.enable")}

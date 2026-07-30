@@ -15,6 +15,7 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/render"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -1382,6 +1383,7 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Failure		400 {object} map[string]string "Invalid UUID or malformed body"
 //	@Failure		403 {object} map[string]string "Not agent creator, or marketplace capability unavailable"
 //	@Failure		404 {object} map[string]string "Agent, capability, or version not found"
+//	@Failure		422 {object} map[string]string "Capability is incompatible with the Agent engine or its credentials are invalid"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/capabilities/{capabilityVersionID}/enable [post]
 func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
@@ -1420,6 +1422,18 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		agentRecord, err := runtimeStore.GetAgent(r.Context(), agentID)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to get agent")
+			return
+		}
+		agentKind, _ := agentRecord.Config["agent_kind"].(string)
+		agentKind = strings.TrimSpace(agentKind)
+		target := render.TargetForAgentKind(agentKind)
+		if !render.Supports(target, canonical.Kind(capability.Type)) {
+			if agentKind == "" {
+				agentKind = "claude_code"
+			}
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+				"error": fmt.Sprintf("agent kind %q does not support %s capabilities", agentKind, capability.Type),
+			})
 			return
 		}
 		if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{

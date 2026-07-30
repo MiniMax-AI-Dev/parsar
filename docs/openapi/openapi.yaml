@@ -4984,6 +4984,13 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "422":
+          description: Capability is incompatible with the Agent engine or its credentials
+            are invalid
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "503":
           description: Database-backed capability APIs are disabled
           schema:

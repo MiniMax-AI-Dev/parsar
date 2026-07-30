@@ -52,6 +52,15 @@ type claudeCodePluginDocument struct {
 	SHA256  string `json:"sha256"`
 }
 
+func (claudeCodeRenderer) Supports(kind canonical.Kind) bool {
+	switch kind {
+	case canonical.KindMCP, canonical.KindSkill, canonical.KindPlugin, canonical.KindSystemPrompt:
+		return true
+	default:
+		return false
+	}
+}
+
 func (claudeCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
 	if err := spec.Validate(); err != nil {
 		return Output{}, fmt.Errorf("claudecode render: invalid spec: %w", err)

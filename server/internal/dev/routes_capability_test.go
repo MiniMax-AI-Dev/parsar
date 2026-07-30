@@ -264,6 +264,29 @@ func TestCapabilityEnableRejectsOAuthSecretFromDifferentCatalogConnector(t *test
 	}
 }
 
+func TestCapabilityEnableRejectsUnsupportedAgentKind(t *testing.T) {
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member"}, nil)
+	capID, versionID, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Pi Incompatible MCP")
+	agentID := insertAgentForOwner(t, db, testUserAID, "pi-incompatible-mcp")
+	if _, err := db.Exec(context.Background(), `update agents set config = jsonb_set(config, '{agent_kind}', '"pi"'::jsonb) where id = $1`, agentID); err != nil {
+		t.Fatalf("set pi agent kind: %v", err)
+	}
+
+	res := serveCapabilityRoute(t, r, http.MethodPost,
+		"/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentID+"/capabilities/"+versionID+"/enable",
+		`{}`, testUserAID)
+	if res.Code != http.StatusUnprocessableEntity || !strings.Contains(res.Body.String(), `agent kind \"pi\" does not support mcp capabilities`) {
+		t.Fatalf("enable incompatible MCP expected 422, got %d: %s", res.Code, res.Body.String())
+	}
+	var count int
+	if err := db.QueryRow(context.Background(), `select count(*) from agent_capabilities where agent_id = $1 and capability_id = $2`, agentID, capID).Scan(&count); err != nil {
+		t.Fatalf("count agent capabilities: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("incompatible capability was enabled")
+	}
+}
+
 func TestCapabilityUpgradeValidatesNewVersionCredentials(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "admin"}, nil)
 	capID, v1, v2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Credential Upgrade MCP")

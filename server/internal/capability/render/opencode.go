@@ -34,6 +34,10 @@ type openCodeMCPServer struct {
 	Enabled bool              `json:"enabled"`
 }
 
+func (openCodeRenderer) Supports(kind canonical.Kind) bool {
+	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt
+}
+
 func (openCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
 	if err := spec.Validate(); err != nil {
 		return Output{}, fmt.Errorf("opencode render: invalid spec: %w", err)

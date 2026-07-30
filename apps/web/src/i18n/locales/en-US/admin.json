@@ -1398,6 +1398,16 @@
             "switchAction": "Switch to an available version"
           }
         },
+        "compatibility": {
+          "badge": "Not supported",
+          "unsupported": "{{engine}} does not support {{type}} capabilities. Supported engines: {{engines}}.",
+          "types": {
+            "mcp": "MCP",
+            "skill": "Skill",
+            "plugin": "Plugin",
+            "system_prompt": "System Prompt"
+          }
+        },
         "builtin": {
           "badge": "Built-in",
           "on": "On",

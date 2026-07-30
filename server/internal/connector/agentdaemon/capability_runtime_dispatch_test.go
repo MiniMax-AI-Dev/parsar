@@ -16,7 +16,7 @@ import (
 //
 // Unknown / empty kinds must fall back to TargetClaudeCode so legacy rows
 // keep rendering as before.
-func TestAgentKindToRenderTarget(t *testing.T) {
+func TestTargetForAgentKind(t *testing.T) {
 	cases := []struct {
 		agentKind string
 		want      render.Target
@@ -31,8 +31,8 @@ func TestAgentKindToRenderTarget(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.agentKind, func(t *testing.T) {
-			if got := agentKindToRenderTarget(tc.agentKind); got != tc.want {
-				t.Fatalf("agentKindToRenderTarget(%q) = %q, want %q", tc.agentKind, got, tc.want)
+			if got := render.TargetForAgentKind(tc.agentKind); got != tc.want {
+				t.Fatalf("render.TargetForAgentKind(%q) = %q, want %q", tc.agentKind, got, tc.want)
 			}
 		})
 	}
