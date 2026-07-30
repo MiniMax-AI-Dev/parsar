@@ -15,12 +15,15 @@ test("browses and imports a hosted MCP connector", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
   await expect(page.getByTestId("mcp-directory-card")).toHaveCount(3);
-  await expect(page.getByRole("heading", { name: "Published MCPs" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "My MCP" })).toBeVisible();
+  const marketplaceGrid = page.getByTestId("mcp-marketplace-grid");
+  await expect(marketplaceGrid.getByRole("heading", { name: "Context7" })).toBeVisible();
+  await expect(marketplaceGrid.getByRole("heading", { name: "My MCP" })).toBeVisible();
+  await expect(page.getByTestId("marketplace-mcp-card")).toHaveCount(1);
 
   const search = page.getByPlaceholder("Search capability name / description");
   await search.fill("exa");
   await expect(page.getByTestId("mcp-directory-card")).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "My MCP" })).toHaveCount(0);
   await search.clear();
 
   await page.getByRole("button", { name: "Documentation", exact: true }).click();
