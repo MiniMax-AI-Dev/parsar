@@ -21,6 +21,10 @@ type piRenderer struct{}
 
 func (piRenderer) Target() Target { return TargetPi }
 
+func (piRenderer) Supports(kind canonical.Kind) bool {
+	return kind == canonical.KindSkill || kind == canonical.KindSystemPrompt
+}
+
 func (piRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
 	if err := spec.Validate(); err != nil {
 		return Output{}, fmt.Errorf("pi render: invalid spec: %w", err)

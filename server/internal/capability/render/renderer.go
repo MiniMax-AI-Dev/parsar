@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 )
@@ -47,7 +48,29 @@ var ErrUnsupported = errors.New("render: spec kind unsupported for target")
 // Renderer implementations must be pure and side-effect free.
 type Renderer interface {
 	Target() Target
+	Supports(kind canonical.Kind) bool
 	Render(ctx context.Context, spec canonical.Spec) (Output, error)
+}
+
+// TargetForAgentKind maps the daemon agent_kind value to its capability
+// renderer. Unknown and legacy empty values retain the Claude Code fallback.
+func TargetForAgentKind(agentKind string) Target {
+	switch strings.TrimSpace(agentKind) {
+	case "opencode":
+		return TargetOpenCode
+	case "codex":
+		return TargetCodex
+	case "pi":
+		return TargetPi
+	default:
+		return TargetClaudeCode
+	}
+}
+
+// Supports reports whether target can render the capability kind.
+func Supports(target Target, kind canonical.Kind) bool {
+	renderer, err := For(target)
+	return err == nil && renderer.Supports(kind)
 }
 
 func For(target Target) (Renderer, error) {

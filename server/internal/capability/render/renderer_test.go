@@ -76,6 +76,30 @@ func TestFor_UnknownTarget(t *testing.T) {
 	}
 }
 
+func TestSupports(t *testing.T) {
+	cases := []struct {
+		target Target
+		kind   canonical.Kind
+		want   bool
+	}{
+		{TargetClaudeCode, canonical.KindMCP, true},
+		{TargetClaudeCode, canonical.KindSkill, true},
+		{TargetCodex, canonical.KindMCP, true},
+		{TargetCodex, canonical.KindSkill, false},
+		{TargetOpenCode, canonical.KindMCP, true},
+		{TargetOpenCode, canonical.KindSkill, false},
+		{TargetPi, canonical.KindMCP, false},
+		{TargetPi, canonical.KindSkill, true},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.target)+"/"+string(tc.kind), func(t *testing.T) {
+			if got := Supports(tc.target, tc.kind); got != tc.want {
+				t.Fatalf("Supports(%q, %q) = %t, want %t", tc.target, tc.kind, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestOpenCodeRenderer_MCPGolden locks in the wire shape the OpenCode
 // connector reads back. Changes here must coordinate with capability_runtime.go.
 func TestOpenCodeRenderer_MCPGolden(t *testing.T) {

@@ -26,6 +26,7 @@ type MCPServer struct {
 	Name              string              `json:"name"`
 	Transport         string              `json:"transport,omitempty"`
 	URL               string              `json:"url,omitempty"`
+	Headers           map[string]EnvValue `json:"headers,omitempty"`
 	Command           string              `json:"command,omitempty"`
 	Args              []string            `json:"args,omitempty"`
 	Env               map[string]EnvValue `json:"env,omitempty"`
@@ -74,6 +75,9 @@ func (s MCPServer) Validate() error {
 		if strings.TrimSpace(s.URL) != "" {
 			return fmt.Errorf("%w: server %q: stdio transport must not set url", ErrInvalidMCP, s.Name)
 		}
+		if len(s.Headers) > 0 {
+			return fmt.Errorf("%w: server %q: stdio transport must not set headers", ErrInvalidMCP, s.Name)
+		}
 	case MCPTransportStreamableHTTP:
 		parsed, err := url.Parse(strings.TrimSpace(s.URL))
 		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
@@ -91,6 +95,17 @@ func (s MCPServer) Validate() error {
 		}
 		if err := value.Validate(); err != nil {
 			return fmt.Errorf("server %q env %q: %w", s.Name, name, err)
+		}
+	}
+	for name, value := range s.Headers {
+		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "\r\n") {
+			return fmt.Errorf("%w: server %q: invalid header name", ErrInvalidMCP, s.Name)
+		}
+		if value.Mode == EnvModeInlineSecret {
+			return fmt.Errorf("%w: server %q header %q: inline_secret is not supported", ErrInvalidMCP, s.Name, name)
+		}
+		if err := value.Validate(); err != nil {
+			return fmt.Errorf("server %q header %q: %w", s.Name, name, err)
 		}
 	}
 	return nil

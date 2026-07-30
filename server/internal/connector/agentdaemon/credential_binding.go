@@ -2,6 +2,8 @@ package agentdaemon
 
 import (
 	"strings"
+
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/credentialbinding"
 )
 
 // CredentialBindingSource discriminates how an agent-level credential
@@ -13,26 +15,17 @@ import (
 //     SecretID; the same plaintext is served to every caller.
 //
 // Bindings are read from agent_config.credential_bindings[<kind_code>].
-type CredentialBindingSource string
+type CredentialBindingSource = credentialbinding.Source
 
 const (
-	CredentialBindingPersonal CredentialBindingSource = "personal"
-	CredentialBindingShared   CredentialBindingSource = "shared"
+	CredentialBindingPersonal = credentialbinding.SourcePersonal
+	CredentialBindingShared   = credentialbinding.SourceShared
 )
 
 // CredentialBinding is the parsed agent-level binding for one credential
 // kind. Source=="" is treated as personal (back-compat with agents created
 // before credential_bindings existed).
-type CredentialBinding struct {
-	Source   CredentialBindingSource
-	SecretID string
-}
-
-// IsShared returns true when this binding should bypass user_credentials
-// lookup and serve a workspace secret instead.
-func (b CredentialBinding) IsShared() bool {
-	return b.Source == CredentialBindingShared && strings.TrimSpace(b.SecretID) != ""
-}
+type CredentialBinding = credentialbinding.Binding
 
 // ParseCredentialBindings extracts the credential_bindings map from the
 // agent_config.
@@ -41,47 +34,11 @@ func (b CredentialBinding) IsShared() bool {
 // dropped silently to avoid hard-failing a run on a malformed config;
 // callers fall back to personal in that case.
 func ParseCredentialBindings(agentConfig map[string]any) map[string]CredentialBinding {
-	out := map[string]CredentialBinding{}
-	mergeBindings(out, agentConfig)
-	return out
+	return credentialbinding.ParseLenient(agentConfig)
 }
 
 func mergeBindings(out map[string]CredentialBinding, cfg map[string]any) {
-	if len(cfg) == 0 {
-		return
-	}
-	raw, ok := cfg["credential_bindings"]
-	if !ok {
-		return
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return
-	}
-	for kind, entry := range m {
-		kind = strings.TrimSpace(kind)
-		if kind == "" {
-			continue
-		}
-		obj, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		source, _ := obj["source"].(string)
-		secretID, _ := obj["secret_id"].(string)
-		switch CredentialBindingSource(strings.TrimSpace(source)) {
-		case CredentialBindingShared:
-			if strings.TrimSpace(secretID) == "" {
-				continue
-			}
-			out[kind] = CredentialBinding{
-				Source:   CredentialBindingShared,
-				SecretID: strings.TrimSpace(secretID),
-			}
-		case CredentialBindingPersonal, "":
-			out[kind] = CredentialBinding{Source: CredentialBindingPersonal}
-		}
-	}
+	credentialbinding.MergeLenient(out, cfg)
 }
 
 // ParseModelCredentialBinding extracts the optional model_credential_binding

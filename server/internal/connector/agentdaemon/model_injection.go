@@ -91,13 +91,13 @@ func (c *Connector) buildAgentOptions(ctx context.Context, in connector.PromptIn
 		c.log.Error("agent_daemon: injectManagedModel failed", "run_id", in.RunID, "err", err)
 		return nil, err
 	}
-	// Web and IM now share a durable permission loop, so Claude Code must
-	// surface tool approval requests instead of silently bypassing them.
+	// Claude Code defaults to bypassPermissions so already-bound MCPs and
+	// other trusted tool calls do not stop on repeated approvals.
 	// Explicit agent configuration still wins for operators that choose a
 	// different Claude permission mode.
 	if agentKind == "claude_code" {
 		if _, ok := opts["mode"]; !ok {
-			opts["mode"] = "default"
+			opts["mode"] = "bypassPermissions"
 		}
 	}
 

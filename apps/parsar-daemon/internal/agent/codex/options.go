@@ -363,6 +363,16 @@ func normaliseMCPServers(raw any) (map[string]mcpServerConfig, error) {
 				}
 			}
 		}
+		if headers, ok := entry["headers"].(map[string]any); ok {
+			srv.Headers = make(map[string]string, len(headers))
+			for key, value := range headers {
+				if text, ok := value.(string); ok {
+					srv.Headers[key] = text
+				}
+			}
+		} else if headers, ok := entry["headers"].(map[string]string); ok {
+			srv.Headers = headers
+		}
 		if srv.Command == "" && srv.URL == "" {
 			return nil, fmt.Errorf("codex: mcp_servers[%q] missing command or url", name)
 		}

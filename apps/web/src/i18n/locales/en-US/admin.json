@@ -909,6 +909,12 @@
         "back": "Back to connectors",
         "viewCapability": "View Capability"
       },
+	  "oauth": {
+		"connect": "Connect",
+		"connected": "Connected",
+		"required": "OAuth required",
+		"failed": "Authorization did not complete. Please try again."
+	  },
       "loadError": {
         "title": "Couldn't load the connectors directory",
         "description": "Couldn't load the connectors directory. Some connector details may be missing. Retry without leaving the Capability Marketplace."
@@ -932,7 +938,7 @@
       },
       "import": {
         "title": "Import {{name}}?",
-        "description": "Review the connector configuration. No token is required during import, and nothing will run or bind to an Agent.",
+		"description": "Review the connector configuration. OAuth connectors must be connected first; importing does not run the MCP or bind it to an Agent.",
         "success": "{{name}} was imported as a workspace MCP Capability.",
         "failed": "The connector could not be imported.",
         "importing": "Importing...",
@@ -1390,6 +1396,16 @@
           "versionDeleted": {
             "warning": "Version unavailable",
             "switchAction": "Switch to an available version"
+          }
+        },
+        "compatibility": {
+          "badge": "Not supported",
+          "unsupported": "{{engine}} does not support {{type}} capabilities. Supported engines: {{engines}}.",
+          "types": {
+            "mcp": "MCP",
+            "skill": "Skill",
+            "plugin": "Plugin",
+            "system_prompt": "System Prompt"
           }
         },
         "builtin": {
