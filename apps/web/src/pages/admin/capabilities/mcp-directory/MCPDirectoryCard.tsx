@@ -1,9 +1,9 @@
-import { ArrowRight, Check } from "lucide-react"
+import { ArrowRight, Check, Server } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
-import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
+import { marketplaceSourceName, type MCPDirectoryItem, type MarketplaceCapability } from "../../../../lib/api-marketplace"
 import { ConnectorIcon, VerifiedBadge } from "./shared"
 
 export function DirectoryCard({ item, canImport, onOpen, onImport, onConnect, onViewCapability }: {
@@ -51,6 +51,48 @@ export function DirectoryCard({ item, canImport, onOpen, onImport, onConnect, on
             {canImport ? t("capabilities.mcpDirectory.actions.import") : t("capabilities.permission.adminOnly")}
           </Button>
         )}
+      </div>
+    </article>
+  )
+}
+
+export function MarketplaceMCPCard({ capability, onOpen, onInstall }: {
+  capability: MarketplaceCapability
+  onOpen: () => void
+  onInstall: () => void
+}) {
+  const { t } = useTranslation("admin")
+  const source = marketplaceSourceName(capability)
+  const count = capability.installed_agent_count ?? capability.enabled_agent_count ?? capability.install_count ?? 0
+  return (
+    <article className="flex min-h-52 flex-col rounded-xl border border-line bg-surface p-4 transition hover:border-line-strong hover:shadow-sm" data-testid="marketplace-mcp-card">
+      <button type="button" className="flex flex-1 flex-col text-left" onClick={onOpen}>
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-muted text-fg-subtle"><Server className="h-4 w-4" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="truncate text-base font-semibold text-fg">{capability.name}</h3>
+              <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-fg-faint" />
+            </div>
+            {source ? <p className="mt-1 truncate text-xs text-fg-subtle">{source}</p> : null}
+          </div>
+        </div>
+        {capability.description ? <p className="mt-3 line-clamp-3 text-sm leading-5 text-fg-muted">{capability.description}</p> : null}
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4">
+          <Badge variant="neutral">MCP</Badge>
+          {capability.self_published ? <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge> : null}
+          {!capability.self_published && capability.installed ? <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge> : null}
+          <Badge variant="neutral">v{capability.latest_version ?? "—"}</Badge>
+        </div>
+      </button>
+      <div className="mt-3 border-t border-line pt-3">
+        <Button className="w-full" size="sm" disabled={capability.self_published} onClick={onInstall}>
+          {capability.self_published
+            ? t("capabilities.marketplace.card.selfPublished")
+            : capability.installed
+              ? t("capabilities.marketplace.card.installed", { count })
+              : t("capabilities.marketplace.card.install")}
+        </Button>
       </div>
     </article>
   )

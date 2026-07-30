@@ -24,7 +24,6 @@ interface MarketplaceTabProps {
 }
 
 export function MarketplaceTab(props: MarketplaceTabProps) {
-  const { t } = useTranslation("admin")
   const mcpItemID = props.itemID?.startsWith("mcp:") ? props.itemID.slice(4) : null
   if (mcpItemID !== null) {
     return <MCPDirectory
@@ -32,6 +31,8 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
       query={props.query}
       canImport={props.canImport}
       onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
+      onSelectMarketplaceItem={props.onSelectItem}
+      onInstallMarketplace={props.onInstall}
       onViewCapability={props.onViewCapability}
     />
   }
@@ -40,24 +41,15 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
     return <PublishedMarketplaceTab {...props} />
   }
 
-  return (
-    <div className="space-y-8">
-      <MCPDirectory
-        itemID={null}
-        query={props.query}
-        canImport={props.canImport}
-        onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
-        onViewCapability={props.onViewCapability}
-      />
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold text-fg">{t("capabilities.marketplace.publishedMCP.title")}</h2>
-          <p className="mt-1 text-sm leading-5 text-fg-muted">{t("capabilities.marketplace.publishedMCP.description")}</p>
-        </div>
-        <PublishedMarketplaceTab {...props} />
-      </section>
-    </div>
-  )
+  return <MCPDirectory
+    itemID={null}
+    query={props.query}
+    canImport={props.canImport}
+    onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
+    onSelectMarketplaceItem={props.onSelectItem}
+    onInstallMarketplace={props.onInstall}
+    onViewCapability={props.onViewCapability}
+  />
 }
 
 function PublishedMarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInstall }: MarketplaceTabProps) {
