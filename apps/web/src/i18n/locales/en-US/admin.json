@@ -850,6 +850,10 @@
         "search": "Search capability name / description",
         "hideInstalled": "Hide already added"
       },
+      "publishedMCP": {
+        "title": "Published MCPs",
+        "description": "Browse MCP capabilities published by this workspace and other workspaces."
+      },
       "card": {
         "source": "▷ From: {{source}}",
         "latest": "Latest v{{version}}",

@@ -15,6 +15,8 @@ test("browses and imports a hosted MCP connector", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
   await expect(page.getByTestId("mcp-directory-card")).toHaveCount(3);
+  await expect(page.getByRole("heading", { name: "Published MCPs" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My MCP" })).toBeVisible();
 
   const search = page.getByPlaceholder("Search capability name / description");
   await search.fill("exa");
@@ -115,19 +117,34 @@ async function mockApp(
       return json(route, { capabilities: [] });
     if (path === "/api/v1/capabilities/marketplace")
       return json(route, {
-        capabilities: [{
-          id: "00000000-0000-0000-0000-000000000044",
-          type: "skill",
-          name: "Diagram Maker",
-          description: "Create diagrams.",
-          visibility: "public",
-          status: "active",
-          required_credentials: [],
-          latest_version: "1.0.0",
-          source_workspace_name: "Public Catalog",
-          installed: false,
-          self_published: false,
-        }],
+        capabilities: [
+          {
+            id: "00000000-0000-0000-0000-000000000044",
+            type: "skill",
+            name: "Diagram Maker",
+            description: "Create diagrams.",
+            visibility: "public",
+            status: "active",
+            required_credentials: [],
+            latest_version: "1.0.0",
+            source_workspace_name: "Public Catalog",
+            installed: false,
+            self_published: false,
+          },
+          {
+            id: "00000000-0000-0000-0000-000000000055",
+            type: "mcp",
+            name: "My MCP",
+            description: "A workspace-published MCP.",
+            visibility: "public",
+            status: "active",
+            required_credentials: [],
+            latest_version: "1.0.0",
+            source_workspace_name: "Directory Test",
+            installed: false,
+            self_published: true,
+          },
+        ],
       });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory`) {
       if (directoryOverride && (await directoryOverride(route))) return;
