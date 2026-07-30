@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ExternalLink, File, FileText, Folder, FolderOpen, PackageCheck, Server, Trash2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ExternalLink, File, FileText, Folder, FolderOpen, PackageCheck, Server, X } from "lucide-react"
 
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
@@ -182,7 +182,7 @@ function MarketplaceCard({ capability, language, canManage, onOpen, onInstall, o
         {capability.self_published ? (
           <>
             <Button size="sm" variant="outline" onClick={onViewCapability}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
-            {canManage ? <Button size="sm" variant="destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" />{t("capabilities.rowActions.delete")}</Button> : null}
+            {canManage ? <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-fg-faint hover:bg-transparent hover:text-fg-muted" aria-label={t("capabilities.rowActions.delete")} title={t("capabilities.rowActions.delete")} onClick={onDelete}><X className="h-4 w-4" /></Button> : null}
           </>
         ) : (
           <Button size="sm" onClick={onInstall}>
@@ -262,7 +262,7 @@ function MarketplaceItemDetail({ capability, language, canManage, onBack, onInst
           {capability.self_published ? (
             <>
               <Button size="sm" variant="outline" onClick={onViewCapability}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
-              {canManage ? <Button size="sm" variant="destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" />{t("capabilities.rowActions.delete")}</Button> : null}
+              {canManage ? <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-fg-faint hover:bg-transparent hover:text-fg-muted" aria-label={t("capabilities.rowActions.delete")} title={t("capabilities.rowActions.delete")} onClick={onDelete}><X className="h-4 w-4" /></Button> : null}
             </>
           ) : (
             <Button size="sm" onClick={onInstall}>{t("capabilities.marketplace.card.install")}</Button>
