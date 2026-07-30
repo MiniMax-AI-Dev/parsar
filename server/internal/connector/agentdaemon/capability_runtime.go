@@ -179,23 +179,6 @@ const CapabilityVersionUnavailable = "capability_version_unavailable"
 // rows.
 var errCapabilityVersionUnavailable = errors.New("agent_daemon: capability version unavailable (empty oss_key)")
 
-// agentKindToRenderTarget maps the daemon-side agent_kind discriminant
-// onto the render.Target the capability serializer should produce. Unknown
-// kinds fall back to TargetClaudeCode so legacy rows (empty agent_kind)
-// keep working.
-func agentKindToRenderTarget(agentKind string) render.Target {
-	switch strings.TrimSpace(agentKind) {
-	case "opencode":
-		return render.TargetOpenCode
-	case "codex":
-		return render.TargetCodex
-	case "pi":
-		return render.TargetPi
-	default:
-		return render.TargetClaudeCode
-	}
-}
-
 // disabledForUnsupportedCapability builds the DisabledCapability surfaced
 // when a renderer returns render.ErrUnsupported — e.g. an opencode/codex
 // agent enabling a skill or plugin capability. MissingCredentials is left
@@ -284,7 +267,7 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 		c.log.Info("agent_daemon: no enabled capabilities for agent", "agent_id", in.AgentID)
 		return result, nil
 	}
-	target := agentKindToRenderTarget(agentKind)
+	target := render.TargetForAgentKind(agentKind)
 	renderer, err := render.For(target)
 	if err != nil {
 		return result, fmt.Errorf("agent_daemon: render lookup: %w", err)

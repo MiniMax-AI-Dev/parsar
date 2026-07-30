@@ -206,6 +206,17 @@ func TestResolveCapabilityAdditions_NilStoreNoOp(t *testing.T) {
 	}
 }
 
+func TestBuildAgentOptions_DefaultClaudeCodeUsesBypassPermissions(t *testing.T) {
+	c := &Connector{log: discardLogger()}
+	opts, err := c.buildAgentOptions(context.Background(), defaultPromptInput())
+	if err != nil {
+		t.Fatalf("buildAgentOptions: %v", err)
+	}
+	if got := opts["mode"]; got != "bypassPermissions" {
+		t.Fatalf("opts[mode] = %v, want bypassPermissions", got)
+	}
+}
+
 func TestResolveCapabilityAdditions_SkillKindMismatchErrors(t *testing.T) {
 	mismatched := canonical.Spec{
 		SchemaVersion: canonical.SchemaVersionCurrent,
