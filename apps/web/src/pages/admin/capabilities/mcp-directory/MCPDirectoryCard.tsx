@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Server, Trash2 } from "lucide-react"
+import { ArrowRight, Check, Server, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "../../../../components/ui/badge"
@@ -86,7 +86,7 @@ export function MarketplaceMCPCard({ capability, canManage, onOpen, onInstall, o
         {capability.self_published ? (
           <div className="flex gap-2">
             <Button className="min-w-0 flex-1" variant="outline" size="sm" onClick={onViewCapability}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
-            {canManage ? <Button variant="destructive" size="sm" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" />{t("capabilities.rowActions.delete")}</Button> : null}
+            {canManage ? <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-fg-faint hover:bg-transparent hover:text-fg-muted" aria-label={t("capabilities.rowActions.delete")} title={t("capabilities.rowActions.delete")} onClick={onDelete}><X className="h-4 w-4" /></Button> : null}
           </div>
         ) : (
           <Button className="w-full" size="sm" onClick={onInstall}>
