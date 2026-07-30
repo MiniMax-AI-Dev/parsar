@@ -168,9 +168,9 @@ func TestCapabilityUserCredentialsOwnScopeAndNoSecretLeak(t *testing.T) {
 	}
 }
 
-func TestCapabilityAgentEnableRBACWorkspaceAndUniqueUpdate(t *testing.T) {
+func TestCapabilityAgentWriteRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
-	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserBID: "admin"}, map[string]string{testUserAID: "member", testUserBID: "member"})
+	r, db := capabilityTestRouter(t, map[string]string{testUserAID: "member", testUserBID: "viewer"}, nil)
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
 	capID, v1, v2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "GitHub MCP")
 	_ = capID
@@ -183,9 +183,25 @@ func TestCapabilityAgentEnableRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable own agent expected 200, got %d: %s", enabled.Code, enabled.Body.String())
 	}
-	forbidden := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if forbidden.Code != http.StatusForbidden {
-		t.Fatalf("enable other agent expected 403, got %d: %s", forbidden.Code, forbidden.Body.String())
+	enabledOther := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	if enabledOther.Code != http.StatusOK {
+		t.Fatalf("member enable another workspace agent expected 200, got %d: %s", enabledOther.Code, enabledOther.Body.String())
+	}
+	upgradedOther := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
+	if upgradedOther.Code != http.StatusOK {
+		t.Fatalf("member upgrade another workspace agent expected 200, got %d: %s", upgradedOther.Code, upgradedOther.Body.String())
+	}
+	toggledOther := serveCapabilityRoute(t, r, http.MethodPut, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/builtin-capabilities/parsar_chat_history", `{"enabled":false}`, testUserAID)
+	if toggledOther.Code != http.StatusOK {
+		t.Fatalf("member toggle another workspace agent builtin expected 200, got %d: %s", toggledOther.Code, toggledOther.Body.String())
+	}
+	removedOther := serveCapabilityRoute(t, r, http.MethodDelete, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+otherPA+"/capabilities/"+v2, ``, testUserAID)
+	if removedOther.Code != http.StatusNoContent {
+		t.Fatalf("member remove another workspace agent capability expected 204, got %d: %s", removedOther.Code, removedOther.Body.String())
+	}
+	viewer := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v1+"/enable", `{}`, testUserBID)
+	if viewer.Code != http.StatusForbidden {
+		t.Fatalf("viewer enable expected 403, got %d: %s", viewer.Code, viewer.Body.String())
 	}
 	foreign := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+foreignV1+"/enable", `{}`, testUserAID)
 	if foreign.Code != http.StatusForbidden {

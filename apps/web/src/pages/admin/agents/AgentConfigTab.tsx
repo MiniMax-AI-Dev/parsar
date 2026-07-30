@@ -589,7 +589,9 @@ export function AgentConfigTab({
       }
     })
   const installable = availableCapabilities.filter((cap) => !installedIDs.has(cap.id))
-  const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
+  const canManageCapabilities = workspaceRole === "owner"
+    || workspaceRole === "admin"
+    || workspaceRole === "member"
 
   return (
     <div className="space-y-4">
@@ -602,7 +604,7 @@ export function AgentConfigTab({
       <ConfigCapabilitiesSection
         agent={agent}
         workspaceID={workspaceID}
-        isAdmin={isAdmin}
+        isAdmin={canManageCapabilities}
         enabledCaps={enabledCaps}
         installable={installable}
         credentials={credentials}
