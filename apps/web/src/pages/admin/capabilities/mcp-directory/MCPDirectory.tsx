@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, PackageCheck, Server } from "lucide-react"
 
@@ -13,6 +13,7 @@ import {
   useMarketplaceList,
   useMCPDirectory,
   useMCPDirectoryDetail,
+  mcpDirectoryOAuthStartURL,
 } from "../../../../lib/api-marketplace"
 import { useWorkspaceId } from "../../../../lib/workspace"
 import { DirectoryCard, MarketplaceMCPCard } from "./MCPDirectoryCard"
@@ -51,7 +52,8 @@ export function MCPDirectory({
   const [category, setCategory] = useState("")
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sort, setSort] = useState<DirectorySort>("featured")
-  const [confirmID, setConfirmID] = useState<string | null>(null)
+	const [confirmID, setConfirmID] = useState<string | null>(null)
+	const [oauthError, setOAuthError] = useState(false)
   const [success, setSuccess] = useState<{ name: string; capabilityID: string } | null>(null)
   const detailID = confirmID ?? itemID
   const detailQ = useMCPDirectoryDetail(workspaceID, detailID)
@@ -88,10 +90,47 @@ export function MCPDirectory({
   }, [filtered, publishedMCPs, sort])
   const selectedSummary = items.find((item) => item.id === itemID) ?? null
   const selected = detailQ.data?.id === itemID ? detailQ.data : selectedSummary
-  const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
+	const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
+
+	useEffect(() => {
+		const onMessage = (event: MessageEvent) => {
+			if (event.origin !== window.location.origin || event.data?.type !== "parsar:mcp-oauth") return
+			setOAuthError(Boolean(event.data.error))
+			if (!event.data.error) {
+				void directoryQ.refetch()
+				void detailQ.refetch()
+			}
+		}
+		window.addEventListener("message", onMessage)
+		return () => window.removeEventListener("message", onMessage)
+	}, [detailQ, directoryQ])
+
+	const connectOAuth = (id: string) => {
+		if (!workspaceID) return
+		setOAuthError(false)
+		const width = 620
+		const height = 760
+		const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2))
+		const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2))
+		const popup = window.open(
+			mcpDirectoryOAuthStartURL(workspaceID, id),
+			`parsar-mcp-oauth-${id}`,
+			`popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+		)
+		if (!popup) {
+			setOAuthError(true)
+			return
+		}
+		popup.focus()
+	}
 
   const requestImport = (id: string) => {
     if (!canImport) return
+		const item = items.find((candidate) => candidate.id === id)
+		if (item?.authentication === "oauth2" && !item.connected) {
+			connectOAuth(id)
+			return
+		}
     importMut.reset()
     setConfirmID(id)
   }
@@ -127,6 +166,7 @@ export function MCPDirectory({
     return (
       <>
         {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
+		{oauthError ? <p className="mb-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-danger">{t("capabilities.mcpDirectory.oauth.failed")}</p> : null}
         <DirectoryDetail
           item={selected}
           loading={detailQ.isLoading}
@@ -135,6 +175,7 @@ export function MCPDirectory({
           onBack={() => onSelectItem(null)}
           onRetry={() => void detailQ.refetch()}
           onImport={() => requestImport(itemID)}
+		  onConnect={() => connectOAuth(itemID)}
           onViewCapability={onViewCapability}
         />
         {importDialog}
@@ -171,6 +212,7 @@ export function MCPDirectory({
       </div>
 
       {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
+      {oauthError ? <p className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-danger">{t("capabilities.mcpDirectory.oauth.failed")}</p> : null}
       {directoryQ.error ? (
         <ErrorState title={t("capabilities.mcpDirectory.loadError.title")} description={t("capabilities.mcpDirectory.loadError.description")} onRetry={() => void directoryQ.refetch()} />
       ) : null}
@@ -186,7 +228,7 @@ export function MCPDirectory({
       ) : cards.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-marketplace-grid">
           {cards.map((card) => card.kind === "directory" ? (
-            <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onViewCapability={onViewCapability} />
+            <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onConnect={() => connectOAuth(card.item.id)} onViewCapability={onViewCapability} />
           ) : (
             <MarketplaceMCPCard key={`marketplace:${card.item.id}`} capability={card.item} canManage={canManageMarketplace} onOpen={() => onSelectMarketplaceItem(card.item.id)} onInstall={() => onInstallMarketplace(card.item)} onDelete={() => onDeleteMarketplace(card.item)} onViewCapability={() => onViewCapability(card.item.id)} />
           ))}

@@ -7,7 +7,9 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth/mcpoauth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
@@ -444,6 +446,58 @@ func TestResolveCapabilityAdditions_MCPStreamableHTTP(t *testing.T) {
 	server := got.MCPServers["docs"].(map[string]any)
 	if server["type"] != "http" || server["url"] != "https://docs.example.com/mcp" {
 		t.Fatalf("server = %+v", server)
+	}
+}
+
+func TestResolveCapabilityAdditions_UsesWorkspaceOAuthHeader(t *testing.T) {
+	svc := testSecretsService(t)
+	credential := mcpoauth.Credential{
+		AccessToken:             "workspace-notion-token",
+		RefreshToken:            "workspace-notion-refresh",
+		ExpiresAt:               time.Now().Add(time.Hour),
+		ClientID:                "client-1",
+		TokenEndpointAuthMethod: "none",
+		TokenEndpoint:           "https://mcp.notion.com/token",
+		Resource:                "https://mcp.notion.com/mcp",
+	}
+	row := newMCPRow(t, "mcp-notion", "Notion", []canonical.MCPServer{{
+		Name:      "notion",
+		Transport: canonical.MCPTransportStreamableHTTP,
+		URL:       "https://mcp.notion.com/mcp",
+		Headers: map[string]canonical.EnvValue{
+			"Authorization": {
+				Mode:               canonical.EnvModeCredentialRef,
+				Prefix:             "Bearer ",
+				CredentialKindCode: "notion_integration",
+			},
+		},
+	}}, []store.RequiredCredential{{Kind: "notion_integration", Required: true}})
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
+		modelResolver: &fakeModelResolver{secret: store.SecretPayload{
+			SecretRead:       store.SecretRead{ID: "secret-1", Status: "active"},
+			EncryptedPayload: encryptPayload(t, svc, credential.Payload()),
+		}},
+		secrets: svc,
+		log:     discardLogger(),
+	}
+	in := defaultPromptInput()
+	in.ConversationInitiatorID = ""
+	in.AgentConfig = map[string]any{
+		"credential_bindings": map[string]any{
+			"notion_integration": map[string]any{
+				"source":    "shared",
+				"secret_id": "secret-1",
+			},
+		},
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), in, "claude_code")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	headers := got.MCPServers["notion"].(map[string]any)["headers"].(map[string]string)
+	if headers["Authorization"] != "Bearer workspace-notion-token" {
+		t.Fatalf("Authorization = %q", headers["Authorization"])
 	}
 }
 

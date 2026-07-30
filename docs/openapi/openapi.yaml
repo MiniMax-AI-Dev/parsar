@@ -1139,6 +1139,11 @@ definitions:
       url:
         type: string
     type: object
+  mcpdirectory.errorResponse:
+    properties:
+      error:
+        type: string
+    type: object
   mcpdirectory.importResponse:
     properties:
       capability_id:
@@ -1148,10 +1153,14 @@ definitions:
     type: object
   mcpdirectory.itemResponse:
     properties:
+      authentication:
+        type: string
       categories:
         items:
           type: string
         type: array
+      connected:
+        type: boolean
       description:
         type: string
       featured_rank:
@@ -6992,27 +7001,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "401":
           description: Unauthorized
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "403":
           description: Forbidden
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "503":
           description: Service Unavailable
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: List MCP Connector Directory items
       tags:
       - mcp-directory
@@ -7039,15 +7040,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: Get an MCP Connector Directory item
       tags:
       - mcp-directory
@@ -7080,28 +7077,88 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "403":
           description: Forbidden
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
         "409":
           description: Conflict
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/mcpdirectory.errorResponse'
       summary: Import an MCP Connector Directory item
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/callback:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      - description: OAuth state
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Closes the OAuth popup
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/mcpdirectory.errorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/mcpdirectory.errorResponse'
+      summary: Complete an MCP connector OAuth flow
+      tags:
+      - mcp-directory
+  /api/v1/workspaces/{workspaceID}/mcp-directory/{catalogID}/oauth/start:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Redirect to the provider authorization page
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/mcpdirectory.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/mcpdirectory.errorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/mcpdirectory.errorResponse'
+      summary: Start an MCP connector OAuth flow
       tags:
       - mcp-directory
   /api/v1/workspaces/{workspaceID}/members:
