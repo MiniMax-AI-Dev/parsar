@@ -850,6 +850,10 @@
         "search": "搜索能力名 / 描述",
         "hideInstalled": "隐藏本工作区已添加"
       },
+      "publishedMCP": {
+        "title": "已发布的 MCP",
+        "description": "浏览本工作区和其他工作区发布到市场的 MCP 能力。"
+      },
       "card": {
         "source": "▷ 来自：{{source}}",
         "latest": "最新版本 v{{version}}",
