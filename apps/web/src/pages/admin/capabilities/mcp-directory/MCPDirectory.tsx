@@ -27,6 +27,8 @@ interface MCPDirectoryProps {
   onSelectItem: (id: string | null) => void
   onSelectMarketplaceItem: (id: string | null) => void
   onInstallMarketplace: (capability: MarketplaceCapability) => void
+  canManageMarketplace: boolean
+  onDeleteMarketplace: (capability: MarketplaceCapability) => void
   onViewCapability: (capabilityID: string) => void
 }
 
@@ -37,6 +39,8 @@ export function MCPDirectory({
   onSelectItem,
   onSelectMarketplaceItem,
   onInstallMarketplace,
+  canManageMarketplace,
+  onDeleteMarketplace,
   onViewCapability,
 }: MCPDirectoryProps) {
   const { t } = useTranslation("admin")
@@ -184,7 +188,7 @@ export function MCPDirectory({
           {cards.map((card) => card.kind === "directory" ? (
             <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onViewCapability={onViewCapability} />
           ) : (
-            <MarketplaceMCPCard key={`marketplace:${card.item.id}`} capability={card.item} onOpen={() => onSelectMarketplaceItem(card.item.id)} onInstall={() => onInstallMarketplace(card.item)} />
+            <MarketplaceMCPCard key={`marketplace:${card.item.id}`} capability={card.item} canManage={canManageMarketplace} onOpen={() => onSelectMarketplaceItem(card.item.id)} onInstall={() => onInstallMarketplace(card.item)} onDelete={() => onDeleteMarketplace(card.item)} onViewCapability={() => onViewCapability(card.item.id)} />
           ))}
         </div>
       ) : null}
