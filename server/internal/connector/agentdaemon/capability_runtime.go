@@ -600,6 +600,17 @@ func (c *Connector) resolveMCPCapability(
 	// Build the daemon-consumable map: server_name → config object.
 	result := map[string]any{}
 	for name, server := range parsed.MCPServers {
+		if server.URL != "" {
+			entry := map[string]any{"url": server.URL}
+			if server.Type != "" {
+				entry["type"] = server.Type
+			}
+			if server.Enabled != nil {
+				entry["enabled"] = *server.Enabled
+			}
+			result[name] = entry
+			continue
+		}
 		env := map[string]string{}
 		for key, value := range server.Env {
 			if match := credentialPlaceholderRe.FindStringSubmatch(value); match != nil {
@@ -673,9 +684,9 @@ func (c *Connector) resolveMCPCapability(
 //
 //   - values:           kind → decrypted plaintext
 //   - sharedSecretIDs:  kind → secret_id (only for shared bindings; used
-//                       by audit emits)
+//     by audit emits)
 //   - missing:          kinds the resolver could not fulfil (personal-binding
-//                       kinds whose initiator has not configured the credential)
+//     kinds whose initiator has not configured the credential)
 //
 // A missing entry DOES NOT short-circuit — the caller treats them as
 // "this MCP must be disabled this turn". Decrypt / payload-shape errors
@@ -848,9 +859,12 @@ type claudeCodeMCPDocument struct {
 }
 
 type claudeCodeMCPServerEntry struct {
+	Type    string            `json:"type,omitempty"`
+	URL     string            `json:"url,omitempty"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
+	Enabled *bool             `json:"enabled,omitempty"`
 }
 
 // resolveSkillCapability mirrors resolvePluginCapability — skill and

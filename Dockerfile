@@ -79,6 +79,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 COPY internal ./internal
+COPY catalog ./catalog
 COPY server ./server
 
 # Build all three binaries in one RUN so the layer represents one

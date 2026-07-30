@@ -120,6 +120,7 @@ export function CapabilitiesPage() {
   const [toast, setToast] = useState<string | null>(null)
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
+  const canImportDirectory = isAdmin || workspaceRole === "member"
   const marketInstallCountQ = useInstallCount(wid, marketTarget?.capability.id ?? null)
   const uninstallAgentsQ = useMarketplaceEnabledAgents(wid, uninstallTarget?.id ?? null)
 
@@ -279,8 +280,12 @@ export function CapabilitiesPage() {
           itemID={marketplaceItem}
           query={query}
           typeFilter={typeFilter}
+          canImport={canImportDirectory}
+          canManage={isAdmin}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
           onInstall={goToAgentsForCapability}
+          onDelete={setDeleteTarget}
+          onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
         />
       ) : err ? (
         <ErrorState

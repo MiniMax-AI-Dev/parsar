@@ -144,3 +144,18 @@ func TestMCPSpec_ValidateDetectsDuplicateName(t *testing.T) {
 		t.Fatalf("expected duplicate name error, got %v", err)
 	}
 }
+
+func TestMCPSpec_ValidateStreamableHTTP(t *testing.T) {
+	s := MCPSpec{Servers: []MCPServer{{
+		Name:      "docs",
+		Transport: MCPTransportStreamableHTTP,
+		URL:       "https://docs.example.com/mcp",
+	}}}
+	if err := s.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	s.Servers[0].Command = "npx"
+	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "must not set command") {
+		t.Fatalf("expected remote command rejection, got %v", err)
+	}
+}

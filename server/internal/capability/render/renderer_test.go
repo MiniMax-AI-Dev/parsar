@@ -45,6 +45,18 @@ func skillFixture() canonical.Spec {
 	}
 }
 
+func remoteMCPFixture() canonical.Spec {
+	return canonical.Spec{
+		SchemaVersion: canonical.SchemaVersionCurrent,
+		Kind:          canonical.KindMCP,
+		MCP: &canonical.MCPSpec{Servers: []canonical.MCPServer{{
+			Name:      "docs",
+			Transport: canonical.MCPTransportStreamableHTTP,
+			URL:       "https://docs.example.com/mcp",
+		}}},
+	}
+}
+
 // TestFor_KnownTargets catches "added a Target without wiring For()".
 func TestFor_KnownTargets(t *testing.T) {
 	for _, target := range []Target{TargetOpenCode, TargetClaudeCode, TargetCodex, TargetPi} {
@@ -135,6 +147,21 @@ func TestClaudeCodeRenderer_MCPGolden(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeRenderer_StreamableHTTP(t *testing.T) {
+	out, err := claudeCodeRenderer{}.Render(context.Background(), remoteMCPFixture())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	var got claudeCodeMCPDocument
+	if err := json.Unmarshal(out.Content, &got); err != nil {
+		t.Fatal(err)
+	}
+	srv := got.MCPServers["docs"]
+	if srv.Type != "http" || srv.URL != "https://docs.example.com/mcp" || srv.Command != "" {
+		t.Fatalf("server = %+v", srv)
+	}
+}
+
 func TestClaudeCodeRenderer_SkillGolden(t *testing.T) {
 	out, err := claudeCodeRenderer{}.Render(context.Background(), skillFixture())
 	if err != nil {
@@ -209,6 +236,36 @@ func TestCodexRenderer_MCPGolden(t *testing.T) {
 	}
 	if got, want := srv.Env["WORKSPACE_SECRET"], "${PARSAR_SECRET:00000000-0000-0000-0000-000000000001}"; got != want {
 		t.Fatalf("secret placeholder: want %q got %q", want, got)
+	}
+}
+
+func TestCodexRenderer_StreamableHTTP(t *testing.T) {
+	out, err := codexRenderer{}.Render(context.Background(), remoteMCPFixture())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	var got codexMCPDocument
+	if err := json.Unmarshal(out.Content, &got); err != nil {
+		t.Fatal(err)
+	}
+	srv := got.MCPServers["docs"]
+	if srv.Type != "http" || srv.URL != "https://docs.example.com/mcp" || srv.Command != "" {
+		t.Fatalf("server = %+v", srv)
+	}
+}
+
+func TestOpenCodeRenderer_StreamableHTTP(t *testing.T) {
+	out, err := openCodeRenderer{}.Render(context.Background(), remoteMCPFixture())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	var got openCodeMCPDocument
+	if err := json.Unmarshal(out.Content, &got); err != nil {
+		t.Fatal(err)
+	}
+	srv := got.MCPServers["docs"]
+	if srv.Type != "remote" || srv.URL != "https://docs.example.com/mcp" || !srv.Enabled {
+		t.Fatalf("server = %+v", srv)
 	}
 }
 

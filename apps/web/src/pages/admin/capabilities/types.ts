@@ -31,7 +31,9 @@ export interface CanonicalEnvValue {
 
 export interface CanonicalMCPServer {
   name: string
-  command: string
+  transport?: "stdio" | "streamable-http"
+  url?: string
+  command?: string
   args?: string[]
   env?: Record<string, CanonicalEnvValue>
   startup_timeout_sec?: number

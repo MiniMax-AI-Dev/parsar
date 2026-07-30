@@ -61,6 +61,20 @@ func TestWriteCodexMCPConfig_EmitsCommandArgsEnv(t *testing.T) {
 	}
 }
 
+func TestWriteCodexMCPConfig_EmitsStreamableHTTPURL(t *testing.T) {
+	dir := t.TempDir()
+	servers := map[string]mcpServerConfig{
+		"docs": {Name: "docs", URL: "https://docs.example.com/mcp"},
+	}
+	if err := writeCodexMCPConfig(dir, servers); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	body, _ := os.ReadFile(filepath.Join(dir, "config.toml"))
+	if !strings.Contains(string(body), `url = "https://docs.example.com/mcp"`) || strings.Contains(string(body), "command =") {
+		t.Fatalf("remote config: %s", body)
+	}
+}
+
 // TestWriteCodexMCPConfig_FreshHomeDropsStaleEntries documents the
 // "fresh entries only" guarantee: callers allocate a brand-new
 // CODEX_HOME per prompt (BuildSessionPlan does this via allocCodexHome

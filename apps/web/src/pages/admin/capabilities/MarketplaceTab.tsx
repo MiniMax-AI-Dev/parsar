@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ExternalLink, File, FileText, Folder, FolderOpen, PackageCheck, Server } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, ExternalLink, File, FileText, Folder, FolderOpen, PackageCheck, Server, X } from "lucide-react"
 
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
@@ -11,16 +11,54 @@ import { marketplaceSourceName, useMarketplaceDetail, useMarketplaceList, type M
 import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
 import type { Capability } from "../../../lib/api-types"
+import { MCPDirectory } from "./mcp-directory/MCPDirectory"
 
 interface MarketplaceTabProps {
   itemID: string | null
   query: string
   typeFilter: "mcp" | "skill"
+  canImport: boolean
+  canManage: boolean
   onSelectItem: (id: string | null) => void
   onInstall: (capability: MarketplaceCapability) => void
+  onDelete: (capability: MarketplaceCapability) => void
+  onViewCapability: (capabilityID: string) => void
 }
 
-export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInstall }: MarketplaceTabProps) {
+export function MarketplaceTab(props: MarketplaceTabProps) {
+  const mcpItemID = props.itemID?.startsWith("mcp:") ? props.itemID.slice(4) : null
+  if (mcpItemID !== null) {
+    return <MCPDirectory
+      itemID={mcpItemID}
+      query={props.query}
+      canImport={props.canImport}
+      onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
+      onSelectMarketplaceItem={props.onSelectItem}
+      onInstallMarketplace={props.onInstall}
+      canManageMarketplace={props.canManage}
+      onDeleteMarketplace={props.onDelete}
+      onViewCapability={props.onViewCapability}
+    />
+  }
+
+  if (props.itemID || props.typeFilter === "skill") {
+    return <PublishedMarketplaceTab {...props} />
+  }
+
+  return <MCPDirectory
+    itemID={null}
+    query={props.query}
+    canImport={props.canImport}
+    onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
+    onSelectMarketplaceItem={props.onSelectItem}
+    onInstallMarketplace={props.onInstall}
+    canManageMarketplace={props.canManage}
+    onDeleteMarketplace={props.onDelete}
+    onViewCapability={props.onViewCapability}
+  />
+}
+
+function PublishedMarketplaceTab({ itemID, query, typeFilter, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)
@@ -45,8 +83,11 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
       <MarketplaceItemDetail
         capability={selected}
         language={i18n.language}
+        canManage={canManage}
         onBack={() => onSelectItem(null)}
         onInstall={() => onInstall(selected)}
+        onDelete={() => onDelete(selected)}
+        onViewCapability={() => onViewCapability(selected.id)}
       />
     )
   }
@@ -88,8 +129,11 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
               key={item.id}
               capability={item}
               language={i18n.language}
+              canManage={canManage}
               onOpen={() => onSelectItem(item.id)}
               onInstall={() => onInstall(item)}
+              onDelete={() => onDelete(item)}
+              onViewCapability={() => onViewCapability(item.id)}
             />
           ))}
         </div>
@@ -98,11 +142,14 @@ export function MarketplaceTab({ itemID, query, typeFilter, onSelectItem, onInst
   )
 }
 
-function MarketplaceCard({ capability, language, onOpen, onInstall }: {
+function MarketplaceCard({ capability, language, canManage, onOpen, onInstall, onDelete, onViewCapability }: {
   capability: MarketplaceCapability
   language: string
+  canManage: boolean
   onOpen: () => void
   onInstall: () => void
+  onDelete: () => void
+  onViewCapability: () => void
 }) {
   const { t } = useTranslation("admin")
   const source = marketplaceSourceName(capability)
@@ -131,24 +178,32 @@ function MarketplaceCard({ capability, language, onOpen, onInstall }: {
           <span>{t("capabilities.marketplace.card.credential", { kind: requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none")) })}</span>
         </div>
       </button>
-      <div className="mt-4 flex justify-end">
-        <Button size="sm" disabled={capability.self_published} onClick={onInstall}>
-          {capability.self_published
-            ? t("capabilities.marketplace.card.selfPublished")
-            : capability.installed
+      <div className="mt-4 flex justify-end gap-2">
+        {capability.self_published ? (
+          <>
+            <Button size="sm" variant="outline" onClick={onViewCapability}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
+            {canManage ? <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-fg-faint hover:bg-transparent hover:text-fg-muted" aria-label={t("capabilities.rowActions.delete")} title={t("capabilities.rowActions.delete")} onClick={onDelete}><X className="h-4 w-4" /></Button> : null}
+          </>
+        ) : (
+          <Button size="sm" onClick={onInstall}>
+            {capability.installed
               ? t("capabilities.marketplace.card.installed", { count })
               : t("capabilities.marketplace.card.install")}
-        </Button>
+          </Button>
+        )}
       </div>
     </div>
   )
 }
 
-function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
+function MarketplaceItemDetail({ capability, language, canManage, onBack, onInstall, onDelete, onViewCapability }: {
   capability: MarketplaceCapability
   language: string
+  canManage: boolean
   onBack: () => void
   onInstall: () => void
+  onDelete: () => void
+  onViewCapability: () => void
 }) {
   const { t } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
@@ -203,10 +258,15 @@ function MarketplaceItemDetail({ capability, language, onBack, onInstall }: {
             ) : null}
           </div>
         )}
-        <div className="mt-5 flex justify-end">
-          <Button size="sm" disabled={capability.self_published} onClick={onInstall}>
-            {capability.self_published ? t("capabilities.marketplace.card.selfPublished") : t("capabilities.marketplace.card.install")}
-          </Button>
+        <div className="mt-5 flex justify-end gap-2">
+          {capability.self_published ? (
+            <>
+              <Button size="sm" variant="outline" onClick={onViewCapability}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
+              {canManage ? <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-fg-faint hover:bg-transparent hover:text-fg-muted" aria-label={t("capabilities.rowActions.delete")} title={t("capabilities.rowActions.delete")} onClick={onDelete}><X className="h-4 w-4" /></Button> : null}
+            </>
+          ) : (
+            <Button size="sm" onClick={onInstall}>{t("capabilities.marketplace.card.install")}</Button>
+          )}
         </div>
       </div>
     </div>

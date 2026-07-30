@@ -342,6 +342,9 @@ func normaliseMCPServers(raw any) (map[string]mcpServerConfig, error) {
 			return nil, fmt.Errorf("codex: mcp_servers[%q] must be object, got %T", name, v)
 		}
 		srv := mcpServerConfig{Name: name}
+		if url, ok := entry["url"].(string); ok {
+			srv.URL = strings.TrimSpace(url)
+		}
 		if cmd, ok := entry["command"].(string); ok {
 			srv.Command = cmd
 		}
@@ -360,8 +363,11 @@ func normaliseMCPServers(raw any) (map[string]mcpServerConfig, error) {
 				}
 			}
 		}
-		if srv.Command == "" {
-			return nil, fmt.Errorf("codex: mcp_servers[%q] missing command", name)
+		if srv.Command == "" && srv.URL == "" {
+			return nil, fmt.Errorf("codex: mcp_servers[%q] missing command or url", name)
+		}
+		if srv.Command != "" && srv.URL != "" {
+			return nil, fmt.Errorf("codex: mcp_servers[%q] cannot set both command and url", name)
 		}
 		out[name] = srv
 	}
