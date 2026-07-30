@@ -7,12 +7,15 @@ import { EmptyState } from "../../../../components/ui/empty-state"
 import { ErrorState } from "../../../../components/ui/error-state"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import {
+  marketplaceSourceName,
+  type MarketplaceCapability,
   useImportMCPDirectoryItem,
+  useMarketplaceList,
   useMCPDirectory,
   useMCPDirectoryDetail,
 } from "../../../../lib/api-marketplace"
 import { useWorkspaceId } from "../../../../lib/workspace"
-import { DirectoryCard } from "./MCPDirectoryCard"
+import { DirectoryCard, MarketplaceMCPCard } from "./MCPDirectoryCard"
 import { DirectoryDetail } from "./MCPDirectoryDetail"
 import { ImportMCPDialog } from "./ImportMCPDialog"
 import { filterMCPDirectoryItems, type DirectorySort } from "./filters"
@@ -22,6 +25,8 @@ interface MCPDirectoryProps {
   query: string
   canImport: boolean
   onSelectItem: (id: string | null) => void
+  onSelectMarketplaceItem: (id: string | null) => void
+  onInstallMarketplace: (capability: MarketplaceCapability) => void
   onViewCapability: (capabilityID: string) => void
 }
 
@@ -30,11 +35,14 @@ export function MCPDirectory({
   query,
   canImport,
   onSelectItem,
+  onSelectMarketplaceItem,
+  onInstallMarketplace,
   onViewCapability,
 }: MCPDirectoryProps) {
   const { t } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const directoryQ = useMCPDirectory(workspaceID)
+  const marketplaceQ = useMarketplaceList(itemID ? null : workspaceID)
   const importMut = useImportMCPDirectoryItem(workspaceID)
   const [category, setCategory] = useState("")
   const [verifiedOnly, setVerifiedOnly] = useState(false)
@@ -53,6 +61,27 @@ export function MCPDirectory({
     () => filterMCPDirectoryItems(items, { query, category, verifiedOnly, sort }),
     [items, query, category, verifiedOnly, sort],
   )
+  const publishedMCPs = useMemo(() => {
+    if (category || verifiedOnly) return []
+    const installedIDs = new Set(items.flatMap((item) => item.installed_capability_id ? [item.installed_capability_id] : []))
+    const needle = query.trim().toLocaleLowerCase()
+    const matches = (marketplaceQ.data ?? []).filter((item) => {
+      if (item.type !== "mcp" || installedIDs.has(item.id)) return false
+      if (!needle) return true
+      return [item.name, item.description ?? "", marketplaceSourceName(item)].join(" ").toLocaleLowerCase().includes(needle)
+    })
+    return matches.sort((left, right) => left.name.localeCompare(right.name))
+  }, [category, items, marketplaceQ.data, query, verifiedOnly])
+  const cards = useMemo(() => {
+    const merged: Array<
+      | { kind: "directory"; item: (typeof filtered)[number] }
+      | { kind: "marketplace"; item: MarketplaceCapability }
+    > = [
+      ...filtered.map((item) => ({ kind: "directory" as const, item })),
+      ...publishedMCPs.map((item) => ({ kind: "marketplace" as const, item })),
+    ]
+    return sort === "name" ? merged.sort((left, right) => left.item.name.localeCompare(right.item.name)) : merged
+  }, [filtered, publishedMCPs, sort])
   const selectedSummary = items.find((item) => item.id === itemID) ?? null
   const selected = detailQ.data?.id === itemID ? detailQ.data : selectedSummary
   const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
@@ -138,19 +167,27 @@ export function MCPDirectory({
       </div>
 
       {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
-      {directoryQ.isLoading ? (
+      {directoryQ.error ? (
+        <ErrorState title={t("capabilities.mcpDirectory.loadError.title")} description={t("capabilities.mcpDirectory.loadError.description")} onRetry={() => void directoryQ.refetch()} />
+      ) : null}
+      {marketplaceQ.error ? (
+        <ErrorState title={t("capabilities.marketplace.loadError.title")} description={marketplaceQ.error instanceof Error ? marketplaceQ.error.message : t("capabilities.marketplace.loadError.description")} onRetry={() => void marketplaceQ.refetch()} />
+      ) : null}
+      {cards.length === 0 && (directoryQ.isLoading || marketplaceQ.isLoading) ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-directory-loading">
           {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-52 w-full" />)}
         </div>
-      ) : directoryQ.error ? (
-        <ErrorState title={t("capabilities.mcpDirectory.loadError.title")} description={t("capabilities.mcpDirectory.loadError.description")} onRetry={() => void directoryQ.refetch()} />
-      ) : filtered.length === 0 ? (
+      ) : cards.length === 0 && !directoryQ.error && !marketplaceQ.error ? (
         <EmptyState icon={PackageCheck} title={t("capabilities.mcpDirectory.empty.title")} description={t("capabilities.mcpDirectory.empty.description")} />
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item) => <DirectoryCard key={item.id} item={item} canImport={canImport} onOpen={() => onSelectItem(item.id)} onImport={() => requestImport(item.id)} onViewCapability={onViewCapability} />)}
+      ) : cards.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-marketplace-grid">
+          {cards.map((card) => card.kind === "directory" ? (
+            <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onViewCapability={onViewCapability} />
+          ) : (
+            <MarketplaceMCPCard key={`marketplace:${card.item.id}`} capability={card.item} onOpen={() => onSelectMarketplaceItem(card.item.id)} onInstall={() => onInstallMarketplace(card.item)} />
+          ))}
         </div>
-      )}
+      ) : null}
       {importDialog}
     </div>
   )
