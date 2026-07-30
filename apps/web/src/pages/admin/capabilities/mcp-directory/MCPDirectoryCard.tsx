@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Server } from "lucide-react"
+import { ArrowRight, Check, Server, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "../../../../components/ui/badge"
@@ -56,10 +56,13 @@ export function DirectoryCard({ item, canImport, onOpen, onImport, onConnect, on
   )
 }
 
-export function MarketplaceMCPCard({ capability, onOpen, onInstall }: {
+export function MarketplaceMCPCard({ capability, canManage, onOpen, onInstall, onDelete, onViewCapability }: {
   capability: MarketplaceCapability
+  canManage: boolean
   onOpen: () => void
   onInstall: () => void
+  onDelete: () => void
+  onViewCapability: () => void
 }) {
   const { t } = useTranslation("admin")
   const source = marketplaceSourceName(capability)
@@ -86,13 +89,18 @@ export function MarketplaceMCPCard({ capability, onOpen, onInstall }: {
         </div>
       </button>
       <div className="mt-3 border-t border-line pt-3">
-        <Button className="w-full" size="sm" disabled={capability.self_published} onClick={onInstall}>
-          {capability.self_published
-            ? t("capabilities.marketplace.card.selfPublished")
-            : capability.installed
+        {capability.self_published ? (
+          <div className="flex gap-2">
+            <Button className="min-w-0 flex-1" variant="outline" size="sm" onClick={onViewCapability}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
+            {canManage ? <Button variant="destructive" size="sm" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" />{t("capabilities.rowActions.delete")}</Button> : null}
+          </div>
+        ) : (
+          <Button className="w-full" size="sm" onClick={onInstall}>
+            {capability.installed
               ? t("capabilities.marketplace.card.installed", { count })
               : t("capabilities.marketplace.card.install")}
-        </Button>
+          </Button>
+        )}
       </div>
     </article>
   )

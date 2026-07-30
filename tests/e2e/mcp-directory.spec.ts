@@ -19,6 +19,10 @@ test("browses and imports a hosted MCP connector", async ({ page }) => {
   await expect(marketplaceGrid.getByRole("heading", { name: "Context7" })).toBeVisible();
   await expect(marketplaceGrid.getByRole("heading", { name: "My MCP" })).toBeVisible();
   await expect(page.getByTestId("marketplace-mcp-card")).toHaveCount(1);
+  await marketplaceGrid.getByRole("button", { name: "Delete", exact: true }).click();
+  const deleteDialog = page.getByRole("alertdialog", { name: 'Delete capability "My MCP"' });
+  await expect(deleteDialog).toBeVisible();
+  await deleteDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
   const search = page.getByPlaceholder("Search capability name / description");
   await search.fill("exa");
