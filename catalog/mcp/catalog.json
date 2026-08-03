@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-07-23T00:00:00Z",
+  "updated_at": "2026-08-01T00:00:00Z",
   "items": [
     {
       "id": "context7",
@@ -87,6 +87,52 @@
       "server": {
         "name": "notion",
         "url": "https://mcp.notion.com/mcp"
+      }
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "description": "Manage issues, projects, and comments in Linear through the hosted MCP server.",
+      "publisher": {
+        "name": "Linear",
+        "url": "https://linear.app"
+      },
+      "homepage_url": "https://linear.app/docs/mcp",
+      "verified": true,
+      "categories": ["Productivity", "Project Management"],
+      "featured_rank": 5,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "authentication": {
+        "type": "oauth2",
+        "scopes": ["read", "write"]
+      },
+      "server": {
+        "name": "linear",
+        "url": "https://mcp.linear.app/mcp"
+      }
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "description": "Inspect Sentry projects, teams, and events through the hosted MCP server.",
+      "publisher": {
+        "name": "Sentry",
+        "url": "https://sentry.io"
+      },
+      "homepage_url": "https://docs.sentry.io/product/sentry-mcp/",
+      "verified": true,
+      "categories": ["Developer Tools", "Monitoring"],
+      "featured_rank": 6,
+      "version": "1.0.0",
+      "transport": "streamable-http",
+      "authentication": {
+        "type": "oauth2",
+        "scopes": ["org:read", "project:write", "team:write", "event:write"]
+      },
+      "server": {
+        "name": "sentry",
+        "url": "https://mcp.sentry.dev/mcp"
       }
     }
   ]

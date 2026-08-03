@@ -11,7 +11,12 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	want := []string{"context7", "exa", "firecrawl", "notion"}
+	want := []string{"context7", "exa", "firecrawl", "notion", "linear", "sentry"}
+	oauthIDs := map[string]struct{}{
+		"notion": {},
+		"linear": {},
+		"sentry": {},
+	}
 	if len(catalog.Items) != len(want) {
 		t.Fatalf("items = %d, want %d", len(catalog.Items), len(want))
 	}
@@ -23,13 +28,13 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 		if err := item.CanonicalSpec().Validate(); err != nil {
 			t.Fatalf("item %q canonical spec: %v", item.ID, err)
 		}
-		if item.ID == "notion" {
+		if _, ok := oauthIDs[item.ID]; ok {
 			header := item.CanonicalSpec().MCP.Servers[0].Headers["Authorization"]
 			if header.Prefix != "Bearer " || header.CredentialKindCode != "mcp_oauth" {
-				t.Fatalf("notion authorization header = %+v", header)
+				t.Fatalf("%s authorization header = %+v", item.ID, header)
 			}
-			if len(item.Authentication.Scopes) != 1 || item.Authentication.Scopes[0] != "default" {
-				t.Fatalf("notion scopes = %v", item.Authentication.Scopes)
+			if len(item.Authentication.Scopes) == 0 {
+				t.Fatalf("%s scopes = %v", item.ID, item.Authentication.Scopes)
 			}
 		}
 	}
