@@ -2,6 +2,7 @@ package blob
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
@@ -12,6 +13,7 @@ import (
 type ossBackend interface {
 	PresignPut(ctx context.Context, key string, ttl time.Duration) (string, time.Time, error)
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, time.Time, error)
+	PutBytes(ctx context.Context, key string, data []byte) error
 	Download(ctx context.Context, key string) ([]byte, error)
 }
 
@@ -33,6 +35,16 @@ func (s *OSSStore) NewRef(kind, workspaceID, filename string) (string, error) {
 	default:
 		return "", ErrInvalidRef
 	}
+}
+
+func (s *OSSStore) PutBytes(ctx context.Context, ref, workspaceID string, data []byte) error {
+	if strings.TrimSpace(ref) == "" || !oss.KeyBelongsToWorkspace(ref, workspaceID) {
+		return ErrInvalidRef
+	}
+	if int64(len(data)) > MaxBlobBytes {
+		return ErrTooLarge
+	}
+	return s.oss.PutBytes(ctx, ref, data)
 }
 
 func (s *OSSStore) UploadURL(ctx context.Context, ref, workspaceID string, ttl time.Duration) (URLSpec, error) {

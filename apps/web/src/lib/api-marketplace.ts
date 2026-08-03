@@ -120,6 +120,45 @@ export interface MCPDirectoryImportResponse {
   capability_id: string
 }
 
+export interface SkillDirectoryFile {
+  path: string
+  content: string
+  kind: "markdown" | "script" | "asset"
+}
+
+export interface SkillDirectoryItem {
+  id: string
+  name: string
+  description: string
+  publisher: { name: string; url: string }
+  icon_url?: string
+  homepage_url?: string
+  repository_url?: string
+  verified: boolean
+  categories: string[]
+  featured_rank: number
+  version: string
+  license: string
+  source_ref?: string
+  source_path?: string
+  slug?: string
+  title?: string
+  instruction?: string
+  trigger?: string
+  files?: SkillDirectoryFile[]
+  installed: boolean
+  installed_capability_id: string | null
+}
+
+export interface SkillDirectoryListResponse {
+  items: SkillDirectoryItem[]
+}
+
+export interface SkillDirectoryImportResponse {
+  installed: boolean
+  capability_id: string
+}
+
 interface MarketplaceListResponse {
   capabilities?: MarketplaceCapability[]
   marketplace?: MarketplaceCapability[]
@@ -155,6 +194,8 @@ export const KEY_INSTALL_COUNT = (workspaceID: string, capabilityID: string) => 
 export const KEY_MARKETPLACE_ENABLED_AGENTS = (workspaceID: string, capabilityID: string) => ["admin", "marketplaceEnabledAgents", workspaceID, capabilityID] as const
 export const KEY_MCP_DIRECTORY = (workspaceID: string) => ["admin", "mcpDirectory", workspaceID] as const
 export const KEY_MCP_DIRECTORY_DETAIL = (workspaceID: string, catalogID: string) => ["admin", "mcpDirectoryDetail", workspaceID, catalogID] as const
+export const KEY_SKILL_DIRECTORY = (workspaceID: string) => ["admin", "skillDirectory", workspaceID] as const
+export const KEY_SKILL_DIRECTORY_DETAIL = (workspaceID: string, catalogID: string) => ["admin", "skillDirectoryDetail", workspaceID, catalogID] as const
 
 async function listMarketplace(workspaceID: string | null): Promise<MarketplaceCapability[]> {
   if (!workspaceID) return []
@@ -216,6 +257,20 @@ async function getMCPDirectoryItem(workspaceID: string | null, catalogID: string
 
 async function importMCPDirectoryItem(workspaceID: string, catalogID: string): Promise<MCPDirectoryImportResponse> {
   return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/mcp-directory/${encodeURIComponent(catalogID)}/import`, { method: "POST" })
+}
+
+async function listSkillDirectory(workspaceID: string | null): Promise<SkillDirectoryListResponse> {
+  if (!workspaceID) return { items: [] }
+  return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/skill-directory`)
+}
+
+async function getSkillDirectoryItem(workspaceID: string | null, catalogID: string | null): Promise<SkillDirectoryItem> {
+  if (!workspaceID || !catalogID) throw new Error("workspace and skill catalog item are required")
+  return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/skill-directory/${encodeURIComponent(catalogID)}`)
+}
+
+async function importSkillDirectoryItem(workspaceID: string, catalogID: string): Promise<SkillDirectoryImportResponse> {
+  return apiRequest(`/api/v1/workspaces/${encodeURIComponent(workspaceID)}/skill-directory/${encodeURIComponent(catalogID)}/import`, { method: "POST" })
 }
 
 export function mcpDirectoryOAuthStartURL(workspaceID: string, catalogID: string): string {
@@ -347,6 +402,50 @@ export function useImportMCPDirectoryItem(workspaceID: string | null) {
           : item),
       } : current)
       qc.setQueryData<MCPDirectoryItem>(KEY_MCP_DIRECTORY_DETAIL(workspaceID, catalogID), (current) => current
+        ? { ...current, installed: true, installed_capability_id: result.capability_id }
+        : current)
+      void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID) })
+      void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
+    },
+  })
+}
+
+export function useSkillDirectory(workspaceID: string | null) {
+  return useQuery({
+    queryKey: KEY_SKILL_DIRECTORY(workspaceID ?? "_none"),
+    queryFn: () => listSkillDirectory(workspaceID),
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
+export function useSkillDirectoryDetail(workspaceID: string | null, catalogID: string | null) {
+  return useQuery({
+    queryKey: KEY_SKILL_DIRECTORY_DETAIL(workspaceID ?? "_none", catalogID ?? "_none"),
+    queryFn: () => getSkillDirectoryItem(workspaceID, catalogID),
+    enabled: !!workspaceID && !!catalogID,
+    retry: noUnreachableRetry,
+    staleTime: 30_000,
+  })
+}
+
+export function useImportSkillDirectoryItem(workspaceID: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (catalogID: string) => {
+      if (!workspaceID) throw new Error("workspace is required")
+      return importSkillDirectoryItem(workspaceID, catalogID)
+    },
+    retry: noUnreachableRetry,
+    onSuccess: (result, catalogID) => {
+      if (!workspaceID) return
+      qc.setQueryData<SkillDirectoryListResponse>(KEY_SKILL_DIRECTORY(workspaceID), (current) => current ? {
+        ...current,
+        items: current.items.map((item) => item.id === catalogID
+          ? { ...item, installed: true, installed_capability_id: result.capability_id }
+          : item),
+      } : current)
+      qc.setQueryData<SkillDirectoryItem>(KEY_SKILL_DIRECTORY_DETAIL(workspaceID, catalogID), (current) => current
         ? { ...current, installed: true, installed_capability_id: result.capability_id }
         : current)
       void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID) })

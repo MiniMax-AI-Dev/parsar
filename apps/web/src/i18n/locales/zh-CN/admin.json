@@ -945,6 +945,58 @@
         "cancel": "取消"
       }
     },
+    "skillDirectory": {
+      "title": "Skills",
+      "description": "在同一个页面浏览经过审核的 Skill 和工作区发布的 Skill。",
+      "verified": "已验证",
+      "securityNotice": "导入只会保存经过审核的 Skill 文件包。启用前不会执行，也不会绑定到 Agent。",
+      "filters": {
+        "category": "Skill 分类",
+        "allCategories": "全部分类",
+        "verified": "仅已验证",
+        "sort": "Skill 排序"
+      },
+      "sort": {
+        "featured": "精选优先",
+        "name": "名称",
+        "newest": "最新"
+      },
+      "actions": {
+        "import": "导入",
+        "installed": "已安装",
+        "back": "返回 Skills",
+        "viewCapability": "查看 Capability"
+      },
+      "loadError": {
+        "title": "无法加载 Skill 目录",
+        "description": "无法加载经过审核的 Skill 目录。你可以直接重试，不会离开能力市场。"
+      },
+      "empty": {
+        "title": "没有符合筛选条件的 Skill",
+        "description": "请更换搜索词，或清除分类和已验证筛选。"
+      },
+      "detail": {
+        "loadError": "无法加载 Skill 详情",
+        "notFound": "未找到该 Skill",
+        "version": "版本",
+        "license": "许可证",
+        "files": "文件",
+        "supportingFiles": "个辅助文件",
+        "publisher": "发布者",
+        "homepage": "主页",
+        "repository": "代码仓库",
+        "sourceCommit": "来源提交",
+        "openLink": "打开链接"
+      },
+      "import": {
+        "title": "导入「{{name}}」？",
+        "description": "导入前请检查 Skill 文件。导入不会执行脚本，也不会绑定到 Agent。",
+        "success": "已将「{{name}}」导入为工作区 Skill Capability。",
+        "failed": "Skill 导入失败。",
+        "importing": "正在导入...",
+        "cancel": "取消"
+      }
+    },
     "marketplaceDetail": {
       "badge": "来自市场",
       "notFound": {

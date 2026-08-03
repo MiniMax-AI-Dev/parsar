@@ -945,6 +945,58 @@
         "cancel": "Cancel"
       }
     },
+    "skillDirectory": {
+      "title": "Skills",
+      "description": "Browse reviewed Skills and workspace-published Skills in one place.",
+      "verified": "Verified",
+      "securityNotice": "Import only stores the reviewed Skill package. It is not executed or bound to an Agent until you enable it.",
+      "filters": {
+        "category": "Skill categories",
+        "allCategories": "All categories",
+        "verified": "Verified only",
+        "sort": "Sort Skills"
+      },
+      "sort": {
+        "featured": "Featured",
+        "name": "Name",
+        "newest": "Newest"
+      },
+      "actions": {
+        "import": "Import",
+        "installed": "Installed",
+        "back": "Back to Skills",
+        "viewCapability": "View Capability"
+      },
+      "loadError": {
+        "title": "Couldn't load the Skill directory",
+        "description": "Couldn't load the reviewed Skill directory. Retry without leaving the Capability Marketplace."
+      },
+      "empty": {
+        "title": "No Skills match these filters",
+        "description": "Try another search term or clear the category and Verified filters."
+      },
+      "detail": {
+        "loadError": "Failed to load Skill details",
+        "notFound": "Skill not found",
+        "version": "Version",
+        "license": "License",
+        "files": "Files",
+        "supportingFiles": "supporting files",
+        "publisher": "Publisher",
+        "homepage": "Homepage",
+        "repository": "Repository",
+        "sourceCommit": "Source commit",
+        "openLink": "Open link"
+      },
+      "import": {
+        "title": "Import {{name}}?",
+        "description": "Review the Skill package before importing. Importing does not execute scripts or bind the Skill to an Agent.",
+        "success": "{{name}} was imported as a workspace Skill Capability.",
+        "failed": "The Skill could not be imported.",
+        "importing": "Importing...",
+        "cancel": "Cancel"
+      }
+    },
     "marketplaceDetail": {
       "badge": "From market",
       "notFound": {

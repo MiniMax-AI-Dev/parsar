@@ -42,6 +42,7 @@ import (
 	imhistoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/imhistoryapi"
 	mcpdirectoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/mcpdirectory"
 	runtimeapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/runtime"
+	skilldirectoryapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/skilldirectory"
 	specmemapi "github.com/MiniMax-AI-Dev/parsar/server/internal/api/specmem"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/audit"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
@@ -75,6 +76,7 @@ import (
 	runtimesweeper "github.com/MiniMax-AI-Dev/parsar/server/internal/runtime/sweeper"
 	e2bsandbox "github.com/MiniMax-AI-Dev/parsar/server/internal/sandbox/e2b"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/skillcatalog"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/specmemory"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/oss"
@@ -708,6 +710,7 @@ func main() {
 			SharedRuntimeToken: strings.TrimSpace(envLookup("PARSAR_SHARED_RUNTIME_TOKEN")),
 		}
 		mcpCatalog := mcpcatalog.New(mcpcatalog.Options{})
+		skillCatalog := skillcatalog.New(skillcatalog.Options{})
 		mcpOAuthSecrets, mcpOAuthSecretsErr := secrets.New(cfg.Secret.MasterKey)
 		if mcpOAuthSecretsErr != nil {
 			log.Bg().Warn("MCP connector OAuth disabled", "error", mcpOAuthSecretsErr)
@@ -728,6 +731,11 @@ func main() {
 				Secrets:              mcpOAuthSecrets,
 				PublicURL:            publicURL,
 				CookieSecure:         cfg.Auth.Cookie.Secure,
+			})
+			skilldirectoryapi.RegisterRoutes(r, skilldirectoryapi.Deps{
+				Catalog: skillCatalog,
+				Store:   dbStore,
+				Blobs:   blobStore,
 			})
 			runtimeapi.RegisterAdminRoutes(r, runtimeDeps)
 		})

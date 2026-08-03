@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -129,6 +130,27 @@ func (c *Client) PresignPut(ctx context.Context, key string, ttl time.Duration) 
 		return "", time.Time{}, fmt.Errorf("oss: presign put %q: %w", key, err)
 	}
 	return res.URL, res.Expiration, nil
+}
+
+// PutBytes stores a server-generated capability package directly. User
+// uploads continue to use presigned URLs.
+func (c *Client) PutBytes(ctx context.Context, key string, data []byte) error {
+	if c == nil {
+		return ErrNotConfigured
+	}
+	if strings.TrimSpace(key) == "" {
+		return ErrInvalidKey
+	}
+	_, err := c.sdk.PutObject(ctx, &aliyun.PutObjectRequest{
+		Bucket:      aliyun.Ptr(c.bucket),
+		Key:         aliyun.Ptr(key),
+		Body:        bytes.NewReader(data),
+		ContentType: aliyun.Ptr(PresignPutContentType),
+	})
+	if err != nil {
+		return fmt.Errorf("oss: put object %q: %w", key, err)
+	}
+	return nil
 }
 
 // PresignGet returns a presigned URL for HTTP GET. Same TTL

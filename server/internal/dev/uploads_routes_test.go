@@ -48,6 +48,9 @@ type fakeOSSClient struct {
 	// tests don't accidentally start receiving bytes they didn't ask
 	// for. Used by the skill / plugin zip import integration tests.
 	download func(key string) ([]byte, error)
+	// putBytesFn lets tests observe or fail server-side object writes without
+	// changing the behavior of the presigned upload tests.
+	putBytesFn func(key string, data []byte) error
 }
 
 func (f *fakeOSSClient) PresignPut(_ context.Context, key string, ttl time.Duration) (string, time.Time, error) {
@@ -69,6 +72,13 @@ func (f *fakeOSSClient) PresignGet(_ context.Context, key string, ttl time.Durat
 		return "", time.Time{}, f.returnErr
 	}
 	return f.urlFromKey(key) + "?get=1", f.expiresAt, nil
+}
+
+func (f *fakeOSSClient) PutBytes(_ context.Context, key string, data []byte) error {
+	if f.putBytesFn != nil {
+		return f.putBytesFn(key, data)
+	}
+	return nil
 }
 
 func (f *fakeOSSClient) Download(_ context.Context, key string) ([]byte, error) {

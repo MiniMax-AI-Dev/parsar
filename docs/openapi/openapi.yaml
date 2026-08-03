@@ -106,6 +106,31 @@ definitions:
       public_url:
         type: string
     type: object
+  canonical.SkillFile:
+    properties:
+      content:
+        description: Content is the file body as UTF-8 text. Binary blobs are still
+          stored as text.
+        type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/canonical.SkillFileKind'
+        description: Kind is informational; not load-bearing for validation.
+      path:
+        description: Path is relative to the skill root, forward slashes, never absolute
+          or containing "..".
+        type: string
+    type: object
+  canonical.SkillFileKind:
+    enum:
+    - markdown
+    - script
+    - asset
+    type: string
+    x-enum-varnames:
+    - SkillFileKindMarkdown
+    - SkillFileKindScript
+    - SkillFileKindAsset
   connector.PermissionDecision:
     properties:
       approved:
@@ -1297,6 +1322,81 @@ definitions:
         type: string
       workspace_id:
         type: string
+    type: object
+  skillcatalog.Publisher:
+    properties:
+      name:
+        type: string
+      url:
+        type: string
+    type: object
+  skilldirectory.errorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  skilldirectory.importResponse:
+    properties:
+      capability_id:
+        type: string
+      installed:
+        type: boolean
+    type: object
+  skilldirectory.itemResponse:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      featured_rank:
+        type: integer
+      files:
+        items:
+          $ref: '#/definitions/canonical.SkillFile'
+        type: array
+      homepage_url:
+        type: string
+      icon_url:
+        type: string
+      id:
+        type: string
+      installed:
+        type: boolean
+      installed_capability_id:
+        type: string
+      instruction:
+        type: string
+      license:
+        type: string
+      name:
+        type: string
+      publisher:
+        $ref: '#/definitions/skillcatalog.Publisher'
+      repository_url:
+        type: string
+      slug:
+        type: string
+      source_path:
+        type: string
+      source_ref:
+        type: string
+      title:
+        type: string
+      trigger:
+        type: string
+      verified:
+        type: boolean
+      version:
+        type: string
+    type: object
+  skilldirectory.listResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/skilldirectory.itemResponse'
+        type: array
     type: object
   specmem.createFragmentRequest:
     properties:
@@ -8399,6 +8499,128 @@ paths:
       summary: Update workspace settings
       tags:
       - workspaces
+  /api/v1/workspaces/{workspaceID}/skill-directory:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/skilldirectory.listResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+      summary: List Skill Directory items
+      tags:
+      - skill-directory
+  /api/v1/workspaces/{workspaceID}/skill-directory/{catalogID}:
+    get:
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: skill catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/skilldirectory.itemResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+      summary: Get a Skill Directory item
+      tags:
+      - skill-directory
+  /api/v1/workspaces/{workspaceID}/skill-directory/{catalogID}/import:
+    post:
+      description: Stores the reviewed Skill package as a private workspace Skill
+        capability. The package is not executed or bound to an Agent.
+      parameters:
+      - description: workspace id
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: skill catalog item id
+        in: path
+        name: catalogID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: already installed
+          schema:
+            $ref: '#/definitions/skilldirectory.importResponse'
+        "201":
+          description: imported
+          schema:
+            $ref: '#/definitions/skilldirectory.importResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/skilldirectory.errorResponse'
+      summary: Import a Skill Directory item
+      tags:
+      - skill-directory
   /api/v1/workspaces/{workspaceID}/spec/fragments:
     get:
       description: Returns spec fragments visible to the workspace. Optional source/tag
