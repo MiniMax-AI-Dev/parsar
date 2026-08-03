@@ -3590,18 +3590,17 @@ where c.workspace_id = @workspace_id::uuid
   and c.deleted_at is null
 order by c.name asc, c.created_at desc;
 
--- name: ListMCPDirectoryInstalls :many
--- Catalog provenance lives on capability versions rather than the capability
--- row. Keep the newest matching provenance per catalog id.
+-- name: ListCapabilityDirectoryInstalls :many
+-- Shared provenance lookup for built-in MCP and Skill directories.
 select distinct on (cv.source_payload->>'catalog_id')
   coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
   c.id::text as capability_id
 from capability c
 join capability_version cv on cv.capability_id = c.id
 where c.workspace_id = @workspace_id::uuid
-  and c.type = 'mcp'
+  and c.type = @capability_type
   and c.deleted_at is null
-  and cv.source_payload->>'source_format' = 'mcp_catalog'
+  and cv.source_payload->>'source_format' = @source_format::text
   and coalesce(cv.source_payload->>'catalog_id', '') <> ''
 order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc;
 

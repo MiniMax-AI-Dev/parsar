@@ -11,6 +11,7 @@ import (
 type fakeOSS struct {
 	putURL, getURL string
 	downloaded     []byte
+	putBytes       []byte
 	lastKey        string
 }
 
@@ -21,6 +22,11 @@ func (f *fakeOSS) PresignPut(ctx context.Context, key string, ttl time.Duration)
 func (f *fakeOSS) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, time.Time, error) {
 	f.lastKey = key
 	return f.getURL, time.Now().Add(ttl), nil
+}
+func (f *fakeOSS) PutBytes(_ context.Context, key string, data []byte) error {
+	f.lastKey = key
+	f.putBytes = append([]byte(nil), data...)
+	return nil
 }
 func (f *fakeOSS) Download(ctx context.Context, key string) ([]byte, error) {
 	f.lastKey = key
@@ -74,5 +80,16 @@ func TestOSSStoreBelongsToWorkspaceUsesKeyShape(t *testing.T) {
 	ok, _ = s.BelongsToWorkspace(context.Background(), "capabilities/plugins/ws-1/x/p.zip", "ws-2")
 	if ok {
 		t.Fatal("key under ws-1 must not belong to ws-2")
+	}
+}
+
+func TestOSSStorePutBytes(t *testing.T) {
+	f := &fakeOSS{}
+	s := NewOSSStore(f)
+	if err := s.PutBytes(context.Background(), "capabilities/skills/ws-1/x.zip", "ws-1", []byte("zip")); err != nil {
+		t.Fatalf("PutBytes: %v", err)
+	}
+	if string(f.putBytes) != "zip" {
+		t.Fatalf("stored bytes = %q, want zip", f.putBytes)
 	}
 }

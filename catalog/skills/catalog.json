@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-03T00:00:00Z",
+  "items": [
+    {
+      "id": "frontend-design",
+      "name": "Frontend Design",
+      "description": "Create distinctive, production-quality frontend interfaces with deliberate visual direction and strong interaction design.",
+      "publisher": {
+        "name": "Anthropic",
+        "url": "https://github.com/anthropics/skills"
+      },
+      "icon_url": "https://github.com/anthropics.png?size=128",
+      "homepage_url": "https://github.com/anthropics/skills/tree/main/skills/frontend-design",
+      "repository_url": "https://github.com/anthropics/skills",
+      "verified": true,
+      "categories": ["Design", "Frontend"],
+      "featured_rank": 1,
+      "version": "b29e7cf",
+      "license": "Apache-2.0",
+      "source_ref": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "source_path": "skills/frontend-design",
+      "content_path": "items/frontend-design"
+    },
+    {
+      "id": "webapp-testing",
+      "name": "Webapp Testing",
+      "description": "Test local web applications with browser automation, inspect behavior, and diagnose frontend issues with repeatable workflows.",
+      "publisher": {
+        "name": "Anthropic",
+        "url": "https://github.com/anthropics/skills"
+      },
+      "icon_url": "https://github.com/anthropics.png?size=128",
+      "homepage_url": "https://github.com/anthropics/skills/tree/main/skills/webapp-testing",
+      "repository_url": "https://github.com/anthropics/skills",
+      "verified": true,
+      "categories": ["Developer Tools", "Testing", "Web"],
+      "featured_rank": 2,
+      "version": "b29e7cf",
+      "license": "Apache-2.0",
+      "source_ref": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "source_path": "skills/webapp-testing",
+      "content_path": "items/webapp-testing"
+    },
+    {
+      "id": "composition-patterns",
+      "name": "React Composition Patterns",
+      "description": "Design flexible React components with composition, compound components, and scalable state boundaries instead of prop-heavy APIs.",
+      "publisher": {
+        "name": "Vercel Engineering",
+        "url": "https://github.com/vercel-labs/agent-skills"
+      },
+      "icon_url": "https://github.com/vercel.png?size=128",
+      "homepage_url": "https://github.com/vercel-labs/agent-skills/tree/main/skills/composition-patterns",
+      "repository_url": "https://github.com/vercel-labs/agent-skills",
+      "verified": true,
+      "categories": ["Developer Tools", "React", "Architecture"],
+      "featured_rank": 3,
+      "version": "7c180d9",
+      "license": "MIT",
+      "source_ref": "7c180d9044c9ae2b442b567aad4e42a28dd5ed62",
+      "source_path": "skills/composition-patterns",
+      "content_path": "items/composition-patterns"
+    }
+  ]
+}

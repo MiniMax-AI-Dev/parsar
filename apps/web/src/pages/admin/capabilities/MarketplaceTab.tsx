@@ -12,6 +12,7 @@ import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
 import type { Capability } from "../../../lib/api-types"
 import { MCPDirectory } from "./mcp-directory/MCPDirectory"
+import { SkillDirectory } from "./skill-directory/SkillDirectory"
 
 interface MarketplaceTabProps {
   itemID: string | null
@@ -27,6 +28,7 @@ interface MarketplaceTabProps {
 
 export function MarketplaceTab(props: MarketplaceTabProps) {
   const mcpItemID = props.itemID?.startsWith("mcp:") ? props.itemID.slice(4) : null
+  const skillItemID = props.itemID?.startsWith("skill:") ? props.itemID.slice(6) : null
   if (mcpItemID !== null) {
     return <MCPDirectory
       itemID={mcpItemID}
@@ -41,7 +43,35 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
     />
   }
 
-  if (props.itemID || props.typeFilter === "skill") {
+  if (skillItemID !== null) {
+    return <SkillDirectory
+      itemID={skillItemID}
+      query={props.query}
+      canImport={props.canImport}
+      onSelectItem={(id) => props.onSelectItem(id ? `skill:${id}` : null)}
+      onSelectMarketplaceItem={props.onSelectItem}
+      onInstallMarketplace={props.onInstall}
+      canManageMarketplace={props.canManage}
+      onDeleteMarketplace={props.onDelete}
+      onViewCapability={props.onViewCapability}
+    />
+  }
+
+  if (props.typeFilter === "skill") {
+    return <SkillDirectory
+      itemID={null}
+      query={props.query}
+      canImport={props.canImport}
+      onSelectItem={(id) => props.onSelectItem(id ? `skill:${id}` : null)}
+      onSelectMarketplaceItem={props.onSelectItem}
+      onInstallMarketplace={props.onInstall}
+      canManageMarketplace={props.canManage}
+      onDeleteMarketplace={props.onDelete}
+      onViewCapability={props.onViewCapability}
+    />
+  }
+
+  if (props.itemID) {
     return <PublishedMarketplaceTab {...props} />
   }
 

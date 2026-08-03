@@ -45,6 +45,10 @@ type Store interface {
 	// OSS keys (PG ignores them and returns "pg:<uuid>").
 	NewRef(kind, workspaceID, filename string) (string, error)
 
+	// PutBytes stores a server-owned object without requiring a browser
+	// presign round trip. The reference must belong to workspaceID.
+	PutBytes(ctx context.Context, ref, workspaceID string, data []byte) error
+
 	// UploadURL returns where/how the browser PUTs the zip bytes for ref.
 	// workspaceID is bound into the PG proxy token so the eventual write
 	// persists ownership; OSS ignores it (the key already encodes it).

@@ -27,7 +27,7 @@ type catalogLoader interface {
 
 type directoryStore interface {
 	auth.RoleStore
-	ListMCPDirectoryInstalls(ctx context.Context, workspaceID string) ([]store.MCPDirectoryInstall, error)
+	ListCapabilityDirectoryInstalls(ctx context.Context, workspaceID, capabilityType, sourceFormat string) ([]store.CapabilityDirectoryInstall, error)
 	ImportCapability(ctx context.Context, input store.ImportCapabilityInput) (store.ImportCapabilityResult, error)
 }
 
@@ -89,6 +89,11 @@ type sourcePayload struct {
 	CatalogID      string `json:"catalog_id"`
 	CatalogVersion string `json:"catalog_version"`
 }
+
+const (
+	directoryCapabilityType = "mcp"
+	directorySourceFormat   = "mcp_catalog"
+)
 
 func RegisterRoutes(r chi.Router, deps Deps) {
 	h := &handler{deps: deps}
@@ -234,7 +239,7 @@ func (h *handler) importItem(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrCapabilityNameTaken) {
 			// A concurrent identical import can lose the capability name race.
 			// Re-read provenance before reporting a real name conflict.
-			if current, listErr := h.deps.Store.ListMCPDirectoryInstalls(r.Context(), workspaceID); listErr == nil {
+			if current, listErr := h.deps.Store.ListCapabilityDirectoryInstalls(r.Context(), workspaceID, directoryCapabilityType, directorySourceFormat); listErr == nil {
 				if existing, installed := installMap(current)[item.ID]; installed {
 					writeJSON(w, http.StatusOK, importResponse{Installed: true, CapabilityID: existing.CapabilityID})
 					return
@@ -280,13 +285,13 @@ func (h *handler) authorizeRoles(w http.ResponseWriter, r *http.Request, allowed
 	return workspaceID, true
 }
 
-func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID string) (mcpcatalog.Catalog, []store.MCPDirectoryInstall, bool) {
+func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID string) (mcpcatalog.Catalog, []store.CapabilityDirectoryInstall, bool) {
 	catalog, err := h.deps.Catalog.Load()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "mcp_catalog_unavailable")
 		return mcpcatalog.Catalog{}, nil, false
 	}
-	installs, err := h.deps.Store.ListMCPDirectoryInstalls(r.Context(), workspaceID)
+	installs, err := h.deps.Store.ListCapabilityDirectoryInstalls(r.Context(), workspaceID, directoryCapabilityType, directorySourceFormat)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "directory_install_state_failed")
 		return mcpcatalog.Catalog{}, nil, false
@@ -294,15 +299,15 @@ func (h *handler) load(w http.ResponseWriter, r *http.Request, workspaceID strin
 	return catalog, installs, true
 }
 
-func installMap(installs []store.MCPDirectoryInstall) map[string]store.MCPDirectoryInstall {
-	result := make(map[string]store.MCPDirectoryInstall, len(installs))
+func installMap(installs []store.CapabilityDirectoryInstall) map[string]store.CapabilityDirectoryInstall {
+	result := make(map[string]store.CapabilityDirectoryInstall, len(installs))
 	for _, install := range installs {
 		result[install.CatalogID] = install
 	}
 	return result
 }
 
-func summarizeItem(item mcpcatalog.Item, install store.MCPDirectoryInstall, connected bool) itemResponse {
+func summarizeItem(item mcpcatalog.Item, install store.CapabilityDirectoryInstall, connected bool) itemResponse {
 	var installedCapabilityID *string
 	if install.CapabilityID != "" {
 		id := install.CapabilityID

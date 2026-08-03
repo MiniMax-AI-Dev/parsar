@@ -7737,6 +7737,52 @@ func (q *Queries) ListCapabilityCredentialMissingForRun(ctx context.Context, arg
 	return items, nil
 }
 
+const listCapabilityDirectoryInstalls = `-- name: ListCapabilityDirectoryInstalls :many
+select distinct on (cv.source_payload->>'catalog_id')
+  coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
+  c.id::text as capability_id
+from capability c
+join capability_version cv on cv.capability_id = c.id
+where c.workspace_id = $1::uuid
+  and c.type = $2
+  and c.deleted_at is null
+  and cv.source_payload->>'source_format' = $3::text
+  and coalesce(cv.source_payload->>'catalog_id', '') <> ''
+order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc
+`
+
+type ListCapabilityDirectoryInstallsParams struct {
+	WorkspaceID    pgtype.UUID `json:"workspace_id"`
+	CapabilityType string      `json:"capability_type"`
+	SourceFormat   string      `json:"source_format"`
+}
+
+type ListCapabilityDirectoryInstallsRow struct {
+	CatalogID    string `json:"catalog_id"`
+	CapabilityID string `json:"capability_id"`
+}
+
+// Shared provenance lookup for built-in MCP and Skill directories.
+func (q *Queries) ListCapabilityDirectoryInstalls(ctx context.Context, arg ListCapabilityDirectoryInstallsParams) ([]ListCapabilityDirectoryInstallsRow, error) {
+	rows, err := q.db.Query(ctx, listCapabilityDirectoryInstalls, arg.WorkspaceID, arg.CapabilityType, arg.SourceFormat)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCapabilityDirectoryInstallsRow{}
+	for rows.Next() {
+		var i ListCapabilityDirectoryInstallsRow
+		if err := rows.Scan(&i.CatalogID, &i.CapabilityID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCapabilityVersionsByCapability = `-- name: ListCapabilityVersionsByCapability :many
 select id::text as id, capability_id::text as capability_id, version,
   git_repo_url, git_ref, path, content,
@@ -8270,47 +8316,6 @@ func (q *Queries) ListIdleSandboxBindings(ctx context.Context, arg ListIdleSandb
 			&i.KilledAt,
 			&i.Metadata,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMCPDirectoryInstalls = `-- name: ListMCPDirectoryInstalls :many
-select distinct on (cv.source_payload->>'catalog_id')
-  coalesce(cv.source_payload->>'catalog_id', '')::text as catalog_id,
-  c.id::text as capability_id
-from capability c
-join capability_version cv on cv.capability_id = c.id
-where c.workspace_id = $1::uuid
-  and c.type = 'mcp'
-  and c.deleted_at is null
-  and cv.source_payload->>'source_format' = 'mcp_catalog'
-  and coalesce(cv.source_payload->>'catalog_id', '') <> ''
-order by cv.source_payload->>'catalog_id', cv.created_at desc, cv.id desc
-`
-
-type ListMCPDirectoryInstallsRow struct {
-	CatalogID    string `json:"catalog_id"`
-	CapabilityID string `json:"capability_id"`
-}
-
-// Catalog provenance lives on capability versions rather than the capability
-// row. Keep the newest matching provenance per catalog id.
-func (q *Queries) ListMCPDirectoryInstalls(ctx context.Context, workspaceID pgtype.UUID) ([]ListMCPDirectoryInstallsRow, error) {
-	rows, err := q.db.Query(ctx, listMCPDirectoryInstalls, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListMCPDirectoryInstallsRow{}
-	for rows.Next() {
-		var i ListMCPDirectoryInstallsRow
-		if err := rows.Scan(&i.CatalogID, &i.CapabilityID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
