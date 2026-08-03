@@ -13,10 +13,19 @@ func TestBuiltinCatalogLoadsPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(catalog.Items) != 3 {
-		t.Fatalf("items = %d, want 3", len(catalog.Items))
+	if len(catalog.Items) != 7 {
+		t.Fatalf("items = %d, want 7", len(catalog.Items))
+	}
+	wantNewItems := map[string]bool{
+		"algorithmic-art": false,
+		"internal-comms":  false,
+		"mcp-builder":     false,
+		"skill-creator":   false,
 	}
 	for _, item := range catalog.Items {
+		if _, ok := wantNewItems[item.ID]; ok {
+			wantNewItems[item.ID] = true
+		}
 		_, pkg, err := loader.LoadItem(item.ID)
 		if err != nil {
 			t.Fatalf("LoadItem(%q): %v", item.ID, err)
@@ -29,6 +38,11 @@ func TestBuiltinCatalogLoadsPackages(t *testing.T) {
 		}
 		if !bytes.Contains(pkg.Zip, []byte("SKILL.md")) {
 			t.Fatalf("LoadItem(%q) zip does not contain SKILL.md", item.ID)
+		}
+	}
+	for id, found := range wantNewItems {
+		if !found {
+			t.Errorf("catalog is missing %q", id)
 		}
 	}
 }

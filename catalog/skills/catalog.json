@@ -61,6 +61,98 @@
       "source_ref": "7c180d9044c9ae2b442b567aad4e42a28dd5ed62",
       "source_path": "skills/composition-patterns",
       "content_path": "items/composition-patterns"
+    },
+    {
+      "id": "mcp-builder",
+      "name": "MCP Builder",
+      "description": "Design and implement high-quality MCP servers in Python or TypeScript with focused tools, validation, and evaluation workflows.",
+      "publisher": {
+        "name": "Anthropic",
+        "url": "https://github.com/anthropics/skills"
+      },
+      "icon_url": "https://github.com/anthropics.png?size=128",
+      "homepage_url": "https://github.com/anthropics/skills/tree/main/skills/mcp-builder",
+      "repository_url": "https://github.com/anthropics/skills",
+      "verified": true,
+      "categories": [
+        "Developer Tools",
+        "MCP"
+      ],
+      "featured_rank": 4,
+      "version": "b29e7cf",
+      "license": "Apache-2.0",
+      "source_ref": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "source_path": "skills/mcp-builder",
+      "content_path": "items/mcp-builder"
+    },
+    {
+      "id": "skill-creator",
+      "name": "Skill Creator",
+      "description": "Create, evaluate, package, and improve reusable Agent Skills with structured tests and benchmark feedback.",
+      "publisher": {
+        "name": "Anthropic",
+        "url": "https://github.com/anthropics/skills"
+      },
+      "icon_url": "https://github.com/anthropics.png?size=128",
+      "homepage_url": "https://github.com/anthropics/skills/tree/main/skills/skill-creator",
+      "repository_url": "https://github.com/anthropics/skills",
+      "verified": true,
+      "categories": [
+        "Developer Tools",
+        "Agent Skills"
+      ],
+      "featured_rank": 5,
+      "version": "b29e7cf",
+      "license": "Apache-2.0",
+      "source_ref": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "source_path": "skills/skill-creator",
+      "content_path": "items/skill-creator"
+    },
+    {
+      "id": "internal-comms",
+      "name": "Internal Communications",
+      "description": "Draft structured status updates, leadership communications, newsletters, FAQs, incident reports, and project updates.",
+      "publisher": {
+        "name": "Anthropic",
+        "url": "https://github.com/anthropics/skills"
+      },
+      "icon_url": "https://github.com/anthropics.png?size=128",
+      "homepage_url": "https://github.com/anthropics/skills/tree/main/skills/internal-comms",
+      "repository_url": "https://github.com/anthropics/skills",
+      "verified": true,
+      "categories": [
+        "Productivity",
+        "Writing"
+      ],
+      "featured_rank": 6,
+      "version": "b29e7cf",
+      "license": "Apache-2.0",
+      "source_ref": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "source_path": "skills/internal-comms",
+      "content_path": "items/internal-comms"
+    },
+    {
+      "id": "algorithmic-art",
+      "name": "Algorithmic Art",
+      "description": "Create original seeded generative art with p5.js, interactive parameters, and reproducible visual systems.",
+      "publisher": {
+        "name": "Anthropic",
+        "url": "https://github.com/anthropics/skills"
+      },
+      "icon_url": "https://github.com/anthropics.png?size=128",
+      "homepage_url": "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art",
+      "repository_url": "https://github.com/anthropics/skills",
+      "verified": true,
+      "categories": [
+        "Design",
+        "Creative Coding"
+      ],
+      "featured_rank": 7,
+      "version": "b29e7cf",
+      "license": "Apache-2.0",
+      "source_ref": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+      "source_path": "skills/algorithmic-art",
+      "content_path": "items/algorithmic-art"
     }
   ]
 }
