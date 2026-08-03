@@ -31,7 +31,7 @@ func (f fakeCatalog) Load() (mcpcatalog.Catalog, error) { return f.catalog, f.er
 type fakeDirectoryStore struct {
 	role              string
 	roleErr           error
-	installs          []store.MCPDirectoryInstall
+	installs          []store.CapabilityDirectoryInstall
 	listErr           error
 	importErr         error
 	concurrentInstall bool
@@ -61,19 +61,19 @@ func (f *fakeDirectoryStore) GetWorkspaceMemberRole(context.Context, string, str
 	return f.role, nil
 }
 
-func (f *fakeDirectoryStore) ListMCPDirectoryInstalls(context.Context, string) ([]store.MCPDirectoryInstall, error) {
-	return append([]store.MCPDirectoryInstall(nil), f.installs...), f.listErr
+func (f *fakeDirectoryStore) ListCapabilityDirectoryInstalls(context.Context, string, string, string) ([]store.CapabilityDirectoryInstall, error) {
+	return append([]store.CapabilityDirectoryInstall(nil), f.installs...), f.listErr
 }
 
 func (f *fakeDirectoryStore) ImportCapability(_ context.Context, input store.ImportCapabilityInput) (store.ImportCapabilityResult, error) {
 	f.imported = &input
 	if f.importErr != nil {
 		if f.concurrentInstall {
-			f.installs = append(f.installs, store.MCPDirectoryInstall{CatalogID: "context7", CapabilityID: testCapabilityID})
+			f.installs = append(f.installs, store.CapabilityDirectoryInstall{CatalogID: "context7", CapabilityID: testCapabilityID})
 		}
 		return store.ImportCapabilityResult{}, f.importErr
 	}
-	f.installs = append(f.installs, store.MCPDirectoryInstall{CatalogID: "context7", CapabilityID: testCapabilityID})
+	f.installs = append(f.installs, store.CapabilityDirectoryInstall{CatalogID: "context7", CapabilityID: testCapabilityID})
 	return store.ImportCapabilityResult{Capability: store.CapabilityRead{ID: testCapabilityID, Name: input.Name, Type: input.Type}}, nil
 }
 
@@ -128,7 +128,7 @@ func TestDirectoryImportUsesServerCatalogAndCreatesNoSecretsOrBindings(t *testin
 }
 
 func TestDirectoryImportIsIdempotent(t *testing.T) {
-	fs := &fakeDirectoryStore{role: "admin", installs: []store.MCPDirectoryInstall{{CatalogID: "context7", CapabilityID: testCapabilityID}}}
+	fs := &fakeDirectoryStore{role: "admin", installs: []store.CapabilityDirectoryInstall{{CatalogID: "context7", CapabilityID: testCapabilityID}}}
 	rec := request(t, fs, http.MethodPost, "/api/v1/workspaces/"+testWorkspaceID+"/mcp-directory/context7/import")
 	if rec.Code != http.StatusOK || fs.imported != nil {
 		t.Fatalf("status=%d imported=%v body=%s", rec.Code, fs.imported != nil, rec.Body.String())
