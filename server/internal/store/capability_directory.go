@@ -14,10 +14,6 @@ type CapabilityDirectoryInstall struct {
 	CapabilityID string
 }
 
-// MCPDirectoryInstall is retained as a source-compatible name for the MCP
-// Directory handler and its existing callers.
-type MCPDirectoryInstall = CapabilityDirectoryInstall
-
 func (s *Store) ListCapabilityDirectoryInstalls(ctx context.Context, workspaceID, capabilityType, sourceFormat string) ([]CapabilityDirectoryInstall, error) {
 	wid, err := uuid(workspaceID)
 	if err != nil {
@@ -36,8 +32,4 @@ func (s *Store) ListCapabilityDirectoryInstalls(ctx context.Context, workspaceID
 		installs = append(installs, CapabilityDirectoryInstall{CatalogID: row.CatalogID, CapabilityID: row.CapabilityID})
 	}
 	return installs, nil
-}
-
-func (s *Store) ListMCPDirectoryInstalls(ctx context.Context, workspaceID string) ([]MCPDirectoryInstall, error) {
-	return s.ListCapabilityDirectoryInstalls(ctx, workspaceID, "mcp", "mcp_catalog")
 }

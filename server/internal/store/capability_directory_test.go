@@ -50,9 +50,9 @@ func TestMCPDirectoryImportPersistsProvenanceWithoutSecretsOrBindings(t *testing
 		t.Fatalf("created secrets=%v", result.CreatedSecretIDs)
 	}
 
-	installs, err := st.ListMCPDirectoryInstalls(ctx, ids.WorkspaceID)
+	installs, err := st.ListCapabilityDirectoryInstalls(ctx, ids.WorkspaceID, "mcp", "mcp_catalog")
 	if err != nil {
-		t.Fatalf("ListMCPDirectoryInstalls: %v", err)
+		t.Fatalf("ListCapabilityDirectoryInstalls: %v", err)
 	}
 	if len(installs) != 1 || installs[0].CatalogID != "filesystem" || installs[0].CapabilityID != result.Capability.ID {
 		t.Fatalf("installs=%+v", installs)
