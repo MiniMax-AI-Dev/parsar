@@ -67,15 +67,20 @@ export function SkillDirectory({
   const publishedSkills = useMemo(() => {
     if (category || verifiedOnly) return []
     const installedIDs = new Set(items.flatMap((item) => item.installed_capability_id ? [item.installed_capability_id] : []))
+    const directoryNames = new Set(items.map((item) => normalizeSkillName(item.name)))
     const needle = query.trim().toLocaleLowerCase()
     return (marketplaceQ.data ?? [])
       .filter((item) => {
         if (item.type !== "skill" || installedIDs.has(item.id)) return false
+        // Older self-published skills may not have catalog metadata, so their
+        // capability ID cannot be used to deduplicate them with a catalog item.
+        // Keep skills from other workspaces visible even when their names match.
+        if ((item.self_published || item.source_workspace_id === workspaceID) && directoryNames.has(normalizeSkillName(item.name))) return false
         if (!needle) return true
         return [item.name, item.description ?? "", marketplaceSourceName(item)].join(" ").toLocaleLowerCase().includes(needle)
       })
       .sort((left, right) => left.name.localeCompare(right.name))
-  }, [category, items, marketplaceQ.data, query, verifiedOnly])
+  }, [category, items, marketplaceQ.data, query, verifiedOnly, workspaceID])
   const cards = useMemo(() => [
     ...filtered.map((item) => ({ kind: "directory" as const, item })),
     ...publishedSkills.map((item) => ({ kind: "marketplace" as const, item })),
@@ -196,6 +201,10 @@ function filterItems(items: SkillDirectoryItem[], query: string, category: strin
     if (sort === "newest") return right.version.localeCompare(left.version) || left.featured_rank - right.featured_rank
     return left.featured_rank - right.featured_rank || left.name.localeCompare(right.name)
   })
+}
+
+function normalizeSkillName(name: string): string {
+  return name.trim().toLocaleLowerCase().replace(/[\s_-]+/g, " ")
 }
 
 function SuccessBanner({ success, onViewCapability }: { success: { name: string; capabilityID: string }; onViewCapability: (capabilityID: string) => void }) {

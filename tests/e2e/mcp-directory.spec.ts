@@ -9,6 +9,10 @@ const directoryItems = [
   connector("firecrawl", "Firecrawl", "Web", 3),
 ];
 
+const skillDirectoryItems = [
+  skill("frontend-design", "Frontend Design", 1),
+];
+
 test("browses and imports a hosted MCP connector", async ({ page }) => {
   await mockApp(page);
   await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
@@ -69,6 +73,24 @@ test("retries a failed connector directory request", async ({ page }) => {
   await expect(page.getByTestId("mcp-directory-card")).toHaveCount(3);
 });
 
+test("keeps the skill marketplace selected and hides a duplicate self-published skill", async ({ page }) => {
+  await mockApp(page);
+  await page.goto(`/?admin=capabilities&tab=marketplace&marketplace=skill&ws=${WORKSPACE_ID}`);
+
+  await expect(page.getByTestId("skill-directory")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Frontend Design", exact: true })).toHaveCount(1);
+  await expect(page.getByTestId("marketplace-skill-card")).toHaveCount(1);
+
+  await page.getByRole("heading", { name: "Frontend Design", exact: true }).click();
+  await expect(page.getByTestId("skill-directory-detail")).toBeVisible();
+  await expect(page).toHaveURL(/marketplace=skill/);
+
+  await page.getByRole("button", { name: "Back to Skills", exact: true }).click();
+  await expect(page.getByTestId("skill-directory")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connectors", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Frontend Design", exact: true })).toHaveCount(1);
+});
+
 function connector(id: string, name: string, category: string, featuredRank: number) {
   return {
     id,
@@ -81,6 +103,27 @@ function connector(id: string, name: string, category: string, featuredRank: num
     featured_rank: featuredRank,
     version: "1.0.0",
     transport: "streamable-http",
+    installed: false,
+    installed_capability_id: null,
+  };
+}
+
+function skill(id: string, name: string, featuredRank: number) {
+  return {
+    id,
+    name,
+    description: `${name} catalog skill.`,
+    publisher: { name: "Anthropic", url: "https://www.anthropic.com" },
+    repository_url: "https://github.com/anthropics/skills",
+    verified: true,
+    categories: ["Developer Tools"],
+    featured_rank: featuredRank,
+    version: "1.0.0",
+    license: "Apache-2.0",
+    slug: id,
+    title: name,
+    instruction: "Use this skill when the user asks for a design task.",
+    files: [{ path: "SKILL.md", content: "# Frontend Design", kind: "markdown" }],
     installed: false,
     installed_capability_id: null,
   };
@@ -139,6 +182,20 @@ async function mockApp(
             self_published: false,
           },
           {
+            id: "00000000-0000-0000-0000-000000000066",
+            type: "skill",
+            name: "Frontend Design",
+            description: "A legacy workspace-published copy.",
+            visibility: "public",
+            status: "active",
+            required_credentials: [],
+            latest_version: "1.0.0",
+            source_workspace_id: WORKSPACE_ID,
+            source_workspace_name: "Directory Test",
+            installed: false,
+            self_published: true,
+          },
+          {
             id: "00000000-0000-0000-0000-000000000055",
             type: "mcp",
             name: "My MCP",
@@ -153,6 +210,10 @@ async function mockApp(
           },
         ],
       });
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/skill-directory`)
+      return json(route, { items: skillDirectoryItems });
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/skill-directory/frontend-design`)
+      return json(route, skillDirectoryItems[0]);
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory`) {
       if (directoryOverride && (await directoryOverride(route))) return;
       return json(route, { items: directoryItems });

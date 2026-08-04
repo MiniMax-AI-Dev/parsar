@@ -90,9 +90,13 @@ type PageTab = "workspace" | "marketplace"
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
   const wid = useWorkspaceId()
-  const { navigate } = useAdminView()
+  const { navigate, tab: routeTab } = useAdminView()
+  const itemParam = useUrlParam("item")
+  const marketplaceParam = useUrlParam("marketplace")
+  const routedTypeFilter = marketplaceTypeFromRoute(marketplaceParam, itemParam)
   const [query, setQuery] = useState("")
-  const [typeFilter, setTypeFilter] = useState<CapabilityTypeFilter>("mcp")
+  const [localTypeFilter, setLocalTypeFilter] = useState<CapabilityTypeFilter>("mcp")
+  const typeFilter = routedTypeFilter ?? localTypeFilter
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const debouncedQuery = useDebouncedValue(query, 250)
@@ -135,13 +139,17 @@ export function CapabilitiesPage() {
     })),
   })
 
-  const routeTab = useAdminView().tab
-  const itemParam = useUrlParam("item")
   // Tab is URL-driven; default lands on workspace. Marketplace tab also
   // owns the selected-detail state via the `item` URL param.
   const pageTab: PageTab = routeTab === "marketplace" || itemParam ? "marketplace" : "workspace"
   const setPageTab = (next: PageTab) => {
-    navigate("capabilities", { tab: next === "marketplace" ? "marketplace" : null, item: null })
+    navigate("capabilities", { tab: next === "marketplace" ? "marketplace" : null, marketplace: typeFilter, item: null })
+  }
+  const setCapabilityTypeFilter = (next: CapabilityTypeFilter) => {
+    setLocalTypeFilter(next)
+    if (pageTab === "marketplace") {
+      navigate("capabilities", { tab: "marketplace", marketplace: next, item: null })
+    }
   }
   const marketplaceItem = pageTab === "marketplace" ? itemParam : null
   const goToAgentsForCapability = (capability: MarketplaceCapability) => {
@@ -264,7 +272,7 @@ export function CapabilitiesPage() {
           query={query}
           onQueryChange={setQuery}
           typeFilter={typeFilter}
-          onTypeFilterChange={setTypeFilter}
+          onTypeFilterChange={setCapabilityTypeFilter}
         />
       )}
 
@@ -282,7 +290,11 @@ export function CapabilitiesPage() {
           typeFilter={typeFilter}
           canImport={canImportDirectory}
           canManage={isAdmin}
-          onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
+          onSelectItem={(item) => navigate("capabilities", {
+            tab: "marketplace",
+            marketplace: marketplaceTypeFromRoute(null, item) ?? typeFilter,
+            item,
+          })}
           onInstall={goToAgentsForCapability}
           onDelete={setDeleteTarget}
           onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
@@ -579,6 +591,13 @@ function useUrlParam(name: string): string | null {
     }
   }, [name])
   return value
+}
+
+function marketplaceTypeFromRoute(marketplace: string | null, item: string | null): CapabilityTypeFilter | null {
+  if (item?.startsWith("skill:")) return "skill"
+  if (item?.startsWith("mcp:")) return "mcp"
+  if (marketplace === "skill" || marketplace === "mcp") return marketplace
+  return null
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
