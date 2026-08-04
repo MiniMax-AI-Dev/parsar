@@ -2,6 +2,8 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const WORKSPACE_ID = "00000000-0000-0000-0000-000000000011";
 const CAPABILITY_ID = "00000000-0000-0000-0000-000000000033";
+const WORKSPACE_SKILL_ID = "00000000-0000-0000-0000-000000000077";
+const WORKSPACE_SKILL_VERSION_ID = "00000000-0000-0000-0000-000000000078";
 
 const directoryItems = [
   connector("context7", "Context7", "Documentation", 1),
@@ -10,8 +12,37 @@ const directoryItems = [
 ];
 
 const skillDirectoryItems = [
-  skill("frontend-design", "Frontend Design", 1),
+  {
+    ...skill("frontend-design", "Frontend Design", 1),
+    installed: true,
+    installed_capability_id: WORKSPACE_SKILL_ID,
+  },
 ];
+
+const workspaceSkill = {
+  id: WORKSPACE_SKILL_ID,
+  workspace_id: WORKSPACE_ID,
+  type: "skill",
+  name: "Frontend Design",
+  description: "Workspace Frontend Design skill.",
+  scope: "private",
+  status: "active",
+  required_credentials: [],
+  creator_id: "user-1",
+  created_at: "2026-07-23T00:00:00Z",
+  updated_at: "2026-07-23T00:00:00Z",
+};
+
+const workspaceSkillVersion = {
+  id: WORKSPACE_SKILL_VERSION_ID,
+  capability_id: WORKSPACE_SKILL_ID,
+  version: "1.0.0",
+  git_repo_url: "https://github.com/anthropics/skills",
+  git_ref: "main",
+  path: "skills/frontend-design",
+  creator_id: "user-1",
+  created_at: "2026-07-23T00:00:00Z",
+};
 
 test("browses and imports a hosted MCP connector", async ({ page }) => {
   await mockApp(page);
@@ -89,6 +120,25 @@ test("keeps the skill marketplace selected and hides a duplicate self-published 
   await expect(page.getByTestId("skill-directory")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Connectors", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Frontend Design", exact: true })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Installed", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Frontend Design/ })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("tab")).toBe("marketplace");
+  await page.locator("#main-content").getByRole("button", { name: "Capabilities", exact: true }).click();
+  await expect(page.getByTestId("skill-directory")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Workspace", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Frontend Design Workspace/ })).toBeVisible();
+  await page.getByRole("button", { name: /Frontend Design Workspace/ }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("tab")).toBe("workspace");
+  await page.locator("#main-content").getByRole("button", { name: "Capabilities", exact: true }).click();
+  await expect(page.getByTestId("skill-directory")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Frontend Design Workspace/ })).toBeVisible();
+
+  await page.getByRole("tab", { name: "MCP", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("marketplace")).toBe("mcp");
+  await page.getByRole("tab", { name: "Marketplace", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Connectors", exact: true })).toBeVisible();
 });
 
 function connector(id: string, name: string, category: string, featuredRank: number) {
@@ -135,7 +185,8 @@ async function mockApp(
 ) {
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
+    const requestURL = new URL(request.url());
+    const path = requestURL.pathname;
 
     if (path === "/api/v1/me")
       return json(route, {
@@ -162,7 +213,13 @@ async function mockApp(
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/agents`)
       return json(route, { agents: [] });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/capabilities`)
-      return json(route, { capabilities: [], marketplace_installs: [], total: 0 });
+      return requestURL.searchParams.get("type") === "mcp"
+        ? json(route, { capabilities: [], marketplace_installs: [], total: 0 })
+        : json(route, { capabilities: [workspaceSkill], marketplace_installs: [], total: 1 });
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/capabilities/${WORKSPACE_SKILL_ID}`)
+      return json(route, workspaceSkill);
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/capabilities/${WORKSPACE_SKILL_ID}/versions`)
+      return json(route, { capability_id: WORKSPACE_SKILL_ID, versions: [workspaceSkillVersion] });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/capabilities/marketplace-installs`)
       return json(route, { capabilities: [] });
     if (path === "/api/v1/capabilities/marketplace")

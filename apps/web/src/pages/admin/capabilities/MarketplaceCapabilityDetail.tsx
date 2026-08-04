@@ -14,7 +14,7 @@ import { requiredCredentialsLabel } from "../capability-ui"
 import type { Capability } from "../../../lib/api-types"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 
-export function MarketplaceCapabilityDetail({ id }: { id: string }) {
+export function MarketplaceCapabilityDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const installsQ = useTargetMarketplaceInstalls(workspaceID)
@@ -31,7 +31,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
   }
 
   if (!capability) {
-    return <EmptyState icon={PackageCheck} title={t("capabilities.marketplaceDetail.notFound.title")} description={t("capabilities.marketplaceDetail.notFound.description")} action={<Button variant="outline" size="sm" onClick={() => navigateAdmin("capabilities")}>{t("capabilities.detail.backToList")}</Button>} />
+    return <EmptyState icon={PackageCheck} title={t("capabilities.marketplaceDetail.notFound.title")} description={t("capabilities.marketplaceDetail.notFound.description")} action={<Button variant="outline" size="sm" onClick={onBack}>{t("capabilities.detail.backToList")}</Button>} />
   }
 
   const source = marketplaceSourceName(capability)
@@ -41,7 +41,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 text-sm text-fg-subtle hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>
+          <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-fg-subtle hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-semibold tracking-display text-fg">{capability.name}</h2>
             <CapabilityTypeBadge type={capability.type} />
@@ -105,7 +105,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
           setUninstallOpen(open)
           if (!open) uninstallMut.reset()
         }}
-        onConfirm={() => uninstallMut.mutate(capability.id, { onSuccess: () => navigateAdmin("capabilities") })}
+        onConfirm={() => uninstallMut.mutate(capability.id, { onSuccess: onBack })}
       />
     </div>
   )

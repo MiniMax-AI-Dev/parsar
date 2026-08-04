@@ -147,9 +147,11 @@ export function CapabilitiesPage() {
   }
   const setCapabilityTypeFilter = (next: CapabilityTypeFilter) => {
     setLocalTypeFilter(next)
-    if (pageTab === "marketplace") {
-      navigate("capabilities", { tab: "marketplace", marketplace: next, item: null })
-    }
+    navigate("capabilities", {
+      tab: pageTab === "marketplace" ? "marketplace" : null,
+      marketplace: next,
+      item: null,
+    })
   }
   const marketplaceItem = pageTab === "marketplace" ? itemParam : null
   const goToAgentsForCapability = (capability: MarketplaceCapability) => {
@@ -297,7 +299,12 @@ export function CapabilitiesPage() {
           })}
           onInstall={goToAgentsForCapability}
           onDelete={setDeleteTarget}
-          onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
+          onViewCapability={(capabilityID) => navigate("capabilities", {
+            id: capabilityID,
+            tab: "marketplace",
+            marketplace: typeFilter,
+            item: null,
+          })}
         />
       ) : err ? (
         <ErrorState
@@ -367,7 +374,12 @@ export function CapabilitiesPage() {
                             <TableCell className="max-w-[420px]">
                               <button
                                 type="button"
-                                onClick={() => navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })}
+                                onClick={() => navigate("capabilities", {
+                                  id: cap.id,
+                                  tab: "workspace",
+                                  marketplace: typeFilter,
+                                  from: fromMarketplace ? "marketplace" : null,
+                                })}
                                 className="flex w-full flex-col items-start text-left transition-colors hover:text-fg"
                               >
                                 <span className="flex flex-wrap items-center gap-2 text-base font-medium text-fg hover:underline">
@@ -409,7 +421,12 @@ export function CapabilitiesPage() {
                                 marketPending={marketPendingID === cap.id}
                                 uninstallPending={uninstallPendingID === cap.id}
                                 deletePending={deletePendingID === cap.id}
-                                onView={() => navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })}
+                                onView={() => navigate("capabilities", {
+                                  id: cap.id,
+                                  tab: "workspace",
+                                  marketplace: typeFilter,
+                                  from: fromMarketplace ? "marketplace" : null,
+                                })}
                                 onAddVersion={() => setAddVersionCapability(cap)}
                                 onMarketAction={(action) => requestMarketAction(action, cap)}
                                 onUninstall={() => setUninstallTarget(marketCap)}
@@ -852,10 +869,19 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versionsQ.data?.versions ?? [])
   const enabledCount = installationSummary.installations.length
 
-  const fromMarketplace = new URLSearchParams(window.location.search).get("from") === "marketplace"
+  const routeParams = new URLSearchParams(window.location.search)
+  const fromMarketplace = routeParams.get("from") === "marketplace"
+  const returnTab: PageTab = routeParams.get("tab") === "marketplace" ? "marketplace" : "workspace"
+  const returnType = marketplaceTypeFromRoute(routeParams.get("marketplace"), null)
+  const backToList = () => navigateAdmin("capabilities", {
+    tab: returnTab === "marketplace" ? "marketplace" : null,
+    marketplace: returnType,
+    item: null,
+    from: null,
+  })
 
   if (fromMarketplace) {
-    return <AdminLayout activeMenu="capabilities"><MarketplaceCapabilityDetail id={id} /></AdminLayout>
+    return <AdminLayout activeMenu="capabilities"><MarketplaceCapabilityDetail id={id} onBack={backToList} /></AdminLayout>
   }
 
   if (capQ.isLoading) {
@@ -869,7 +895,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
           icon={Wrench}
           title={t("capabilities.detail.notFound.title")}
           description={capQ.error instanceof Error ? capQ.error.message : t("capabilities.detail.notFound.description")}
-          action={<Button size="sm" variant="outline" onClick={() => navigateAdmin("capabilities")}>{t("capabilities.detail.backToList")}</Button>}
+          action={<Button size="sm" variant="outline" onClick={backToList}>{t("capabilities.detail.backToList")}</Button>}
         />
       </AdminLayout>
     )
@@ -911,7 +937,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   return (
     <AdminLayout activeMenu="capabilities">
       <PageHeader
-        backLink={<button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>}
+        backLink={<button onClick={backToList} className="inline-flex items-center gap-1 hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>}
         title={<span className="inline-flex items-center gap-2">{capability.name}<CapabilityTypeBadge type={capability.type} /></span>}
         description={capability.description || t("capabilities.detail.noDescription")}
         action={
