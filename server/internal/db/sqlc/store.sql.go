@@ -8356,7 +8356,7 @@ join lateral (
   limit 1
 ) cv on true
 left join installed on installed.capability_id = c.id
-where c.workspace_id = $1::uuid
+where c.visibility = 'public'
   and c.status = 'active'
   and c.deprecated_at is null
   and c.deleted_at is null

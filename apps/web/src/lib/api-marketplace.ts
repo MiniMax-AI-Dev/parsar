@@ -159,7 +159,8 @@ export const KEY_MCP_DIRECTORY_DETAIL = (workspaceID: string, catalogID: string)
 async function listMarketplace(workspaceID: string | null): Promise<MarketplaceCapability[]> {
   if (!workspaceID) return []
   const data = await apiRequest<MarketplaceListResponse | MarketplaceCapability[]>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/marketplace/capabilities`,
+    `/api/v1/capabilities/marketplace`,
+    { query: { workspace_id: workspaceID } },
   )
   if (Array.isArray(data)) return data
   return (data.capabilities ?? data.marketplace ?? data.items ?? []).map(normalizeMarketplaceCapability)
@@ -171,7 +172,8 @@ async function getMarketplaceDetail(
 ): Promise<MarketplaceCapabilityDetail> {
   if (!workspaceID || !capabilityID) throw new Error("workspace and capability are required")
   const data = await apiRequest<MarketplaceDetailResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/marketplace/capabilities/${encodeURIComponent(capabilityID)}`,
+    `/api/v1/capabilities/marketplace/${encodeURIComponent(capabilityID)}`,
+    { query: { workspace_id: workspaceID } },
   )
   return data.capability
 }
