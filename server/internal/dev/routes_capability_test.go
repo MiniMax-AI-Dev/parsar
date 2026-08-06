@@ -205,7 +205,7 @@ func TestCapabilityAgentWriteRBACWorkspaceAndUniqueUpdate(t *testing.T) {
 	}
 	foreign := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+foreignV1+"/enable", `{}`, testUserAID)
 	if foreign.Code != http.StatusForbidden {
-		t.Fatalf("unpublished foreign capability expected 403, got %d: %s", foreign.Code, foreign.Body.String())
+		t.Fatalf("foreign workspace capability expected 403, got %d: %s", foreign.Code, foreign.Body.String())
 	}
 	updated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+ownedPA+"/capabilities/"+v2+"/enable", `{}`, testUserAID)
 	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), v2) {
@@ -363,123 +363,99 @@ func TestAgentVisibilityRejectsPersonalCapabilityCredential(t *testing.T) {
 	}
 }
 
-func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *testing.T) {
+func TestCapabilityWorkspaceAvailabilityAndDeleteRollback(t *testing.T) {
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
-	capID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Marketplace Secret")
-	if _, err := db.Exec(context.Background(), `update capability_version set content = '{"mcpServers":{"github":{"command":"npx","env":{"GITHUB_PERSONAL_ACCESS_TOKEN":"ghp_123456789012345678901234567890123456"}}}}' where capability_id = $1`, capID); err != nil {
-		t.Fatal(err)
+	capID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Workspace Availability")
+
+	publish := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/publish", "{}", store.DefaultDevFixtureIDs().UserID)
+	if publish.Code != http.StatusNotFound {
+		t.Fatalf("publish endpoint expected 404, got %d: %s", publish.Code, publish.Body.String())
 	}
-	rejected := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/publish", `{}`, store.DefaultDevFixtureIDs().UserID)
-	if rejected.Code != http.StatusBadRequest || !strings.Contains(rejected.Body.String(), "plaintext secret pattern") {
-		t.Fatalf("publish with plaintext secret expected 400, got %d: %s", rejected.Code, rejected.Body.String())
+	unpublish := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/unpublish", "{}", store.DefaultDevFixtureIDs().UserID)
+	if unpublish.Code != http.StatusNotFound {
+		t.Fatalf("unpublish endpoint expected 404, got %d: %s", unpublish.Code, unpublish.Body.String())
 	}
-	if _, err := db.Exec(context.Background(), `update capability_version set content = '{"mcpServers":{"github":{"command":"npx","env":{"GITHUB_PERSONAL_ACCESS_TOKEN":"${PARSAR_CREDENTIAL:github_pat}"}}}}' where capability_id = $1`, capID); err != nil {
-		t.Fatal(err)
+	installCount := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/install-count", "", store.DefaultDevFixtureIDs().UserID)
+	if installCount.Code != http.StatusNotFound {
+		t.Fatalf("install-count endpoint expected 404, got %d: %s", installCount.Code, installCount.Body.String())
 	}
-	published := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/publish", `{}`, store.DefaultDevFixtureIDs().UserID)
-	if published.Code != http.StatusOK || !strings.Contains(published.Body.String(), `"visibility":"public"`) {
-		t.Fatalf("publish expected 200/public, got %d: %s", published.Code, published.Body.String())
+
+	deprecated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/deprecate", "{}", store.DefaultDevFixtureIDs().UserID)
+	if deprecated.Code != http.StatusOK || !strings.Contains(deprecated.Body.String(), "deprecated_at") || !strings.Contains(deprecated.Body.String(), "\"visibility\":\"workspace\"") {
+		t.Fatalf("deprecate expected workspace capability timestamp, got %d: %s", deprecated.Code, deprecated.Body.String())
 	}
-	deprecated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/deprecate", `{}`, store.DefaultDevFixtureIDs().UserID)
-	if deprecated.Code != http.StatusOK || !strings.Contains(deprecated.Body.String(), "deprecated_at") {
-		t.Fatalf("deprecate expected timestamp, got %d: %s", deprecated.Code, deprecated.Body.String())
-	}
-	undeprecated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/undeprecate", `{}`, store.DefaultDevFixtureIDs().UserID)
-	if undeprecated.Code != http.StatusOK || strings.Contains(undeprecated.Body.String(), "deprecated_at") {
+	undeprecated := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/undeprecate", "{}", store.DefaultDevFixtureIDs().UserID)
+	if undeprecated.Code != http.StatusOK || strings.Contains(undeprecated.Body.String(), "deprecated_at") || !strings.Contains(undeprecated.Body.String(), "\"visibility\":\"workspace\"") {
 		t.Fatalf("undeprecate expected no deprecated_at, got %d: %s", undeprecated.Code, undeprecated.Body.String())
 	}
-	unpublished := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/unpublish", `{}`, store.DefaultDevFixtureIDs().UserID)
-	if unpublished.Code != http.StatusOK || !strings.Contains(unpublished.Body.String(), `"visibility":"workspace"`) {
-		t.Fatalf("unpublish expected workspace, got %d: %s", unpublished.Code, unpublished.Body.String())
-	}
-	deleted := serveCapabilityRoute(t, r, http.MethodDelete, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID, ``, store.DefaultDevFixtureIDs().UserID)
-	if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body.String(), `"deleted_at"`) {
+	deleted := serveCapabilityRoute(t, r, http.MethodDelete, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID, "", store.DefaultDevFixtureIDs().UserID)
+	if deleted.Code != http.StatusOK || !strings.Contains(deleted.Body.String(), "\"deleted_at\"") {
 		t.Fatalf("delete expected 200 with deleted_at, got %d: %s", deleted.Code, deleted.Body.String())
 	}
 }
 
-func TestWorkspaceMarketplaceListIsWorkspaceScopedAndIgnoresVisibility(t *testing.T) {
-	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
-	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserAID: "member"}, nil)
-	workspaceCapID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Workspace Private MCP")
-	insertForeignWorkspace(t, db, foreignWorkspaceID)
-	foreignCapID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP")
-	publishForeignCapability(t, db, foreignCapID)
-
-	list := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities", ``, testUserAID)
-	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "Workspace Private MCP") || strings.Contains(list.Body.String(), "Foreign Public MCP") || strings.Contains(list.Body.String(), foreignWorkspaceID) {
-		t.Fatalf("workspace marketplace list expected only local capabilities regardless of visibility, got %d: %s", list.Code, list.Body.String())
-	}
-
-	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities/"+workspaceCapID, ``, testUserAID)
-	if detail.Code != http.StatusOK {
-		t.Fatalf("workspace marketplace detail expected private local capability, got %d: %s", detail.Code, detail.Body.String())
-	}
-
-	foreignDetail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities/"+foreignCapID, ``, testUserAID)
-	if foreignDetail.Code != http.StatusNotFound {
-		t.Fatalf("foreign marketplace detail expected 404, got %d: %s", foreignDetail.Code, foreignDetail.Body.String())
-	}
-
-	nonMemberID := "00000000-0000-0000-0000-000000000777"
-	blocked := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities", ``, nonMemberID)
-	if blocked.Code != http.StatusNotFound {
-		t.Fatalf("non-member marketplace list expected 404, got %d: %s", blocked.Code, blocked.Body.String())
-	}
-}
-
-func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQueries(t *testing.T) {
+func TestCapabilityMarketplaceIsWorkspaceScopedAndRejectsCrossWorkspaceBinding(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserAID: "admin"}, map[string]string{testUserAID: "member"})
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
 	capID, v1, v2 := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP")
-	publishForeignCapability(t, db, capID)
 	hiddenPluginID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public Plugin")
-	if _, err := db.Exec(context.Background(), `update capability set type = 'plugin' where id = $1`, hiddenPluginID); err != nil {
+	if _, err := db.Exec(context.Background(), "update capability set type = 'plugin' where id = $1", hiddenPluginID); err != nil {
 		t.Fatal(err)
 	}
-	publishForeignCapability(t, db, hiddenPluginID)
+	if _, err := db.Exec(context.Background(), "update capability set visibility = 'public' where id in ($1, $2)", capID, hiddenPluginID); err != nil {
+		t.Fatal(err)
+	}
+	localCapID, localV1, localV2 := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Workspace Library MCP")
 	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-a")
 	agentB := insertAgentForOwner(t, db, testUserAID, "market-agent-b")
 
-	enabledA := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	foreignEnable := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", "{}", testUserAID)
+	if foreignEnable.Code != http.StatusForbidden || !strings.Contains(foreignEnable.Body.String(), "capability is not in this workspace") {
+		t.Fatalf("cross-workspace enable expected 403, got %d: %s", foreignEnable.Code, foreignEnable.Body.String())
+	}
+	enabledA := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+localV1+"/enable", "{}", testUserAID)
 	if enabledA.Code != http.StatusOK {
-		t.Fatalf("enable marketplace A expected 200, got %d: %s", enabledA.Code, enabledA.Body.String())
+		t.Fatalf("enable workspace capability A expected 200, got %d: %s", enabledA.Code, enabledA.Body.String())
 	}
-	enabledB := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
+	enabledB := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+localV1+"/enable", "{}", testUserAID)
 	if enabledB.Code != http.StatusOK {
-		t.Fatalf("enable marketplace B expected 200, got %d: %s", enabledB.Code, enabledB.Body.String())
+		t.Fatalf("enable workspace capability B expected 200, got %d: %s", enabledB.Code, enabledB.Body.String())
 	}
-	list := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities", ``, testUserAID)
-	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"enabled_agent_count":2`) || !strings.Contains(list.Body.String(), `"from_marketplace":true`) {
-		t.Fatalf("reverse marketplace list expected count=2, got %d: %s", list.Code, list.Body.String())
+	list := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities", "", testUserAID)
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "\"enabled_agent_count\":2") || strings.Contains(list.Body.String(), "\"from_marketplace\":true") {
+		t.Fatalf("workspace capability list expected count=2 without marketplace install rows, got %d: %s", list.Code, list.Body.String())
 	}
-	market := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities", ``, testUserAID)
-	if market.Code != http.StatusOK || strings.Contains(market.Body.String(), "Foreign Public MCP") || strings.Contains(market.Body.String(), foreignWorkspaceID) || strings.Contains(market.Body.String(), "Foreign Public Plugin") {
-		t.Fatalf("workspace marketplace list expected no foreign capabilities, got %d: %s", market.Code, market.Body.String())
+	market := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, "", testUserAID)
+	if market.Code != http.StatusOK || !strings.Contains(market.Body.String(), localCapID) || strings.Contains(market.Body.String(), foreignWorkspaceID) || strings.Contains(market.Body.String(), "Foreign Public MCP") || strings.Contains(market.Body.String(), "Foreign Public Plugin") {
+		t.Fatalf("workspace marketplace list expected only current workspace capabilities, got %d: %s", market.Code, market.Body.String())
 	}
-	if _, err := db.Exec(context.Background(), `update capability_version set creator_id = null where id = $1`, v2); err != nil {
+	foreignDetail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capID+"?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, "", testUserAID)
+	if foreignDetail.Code != http.StatusNotFound {
+		t.Fatalf("foreign marketplace detail expected 404, got %d: %s", foreignDetail.Code, foreignDetail.Body.String())
+	}
+	if _, err := db.Exec(context.Background(), "update capability_version set creator_id = null where id = $1", localV2); err != nil {
 		t.Fatal(err)
 	}
-	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities/"+capID, ``, testUserAID)
-	if detail.Code != http.StatusNotFound {
-		t.Fatalf("workspace marketplace detail for foreign capability expected 404, got %d: %s", detail.Code, detail.Body.String())
+	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+localCapID+"?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, "", testUserAID)
+	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), "\"version\":\"v2\"") {
+		t.Fatalf("marketplace detail with nullable creator expected 200/v2, got %d: %s", detail.Code, detail.Body.String())
 	}
-	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
-	if upgraded.Code != http.StatusOK || !strings.Contains(upgraded.Body.String(), v2) {
-		t.Fatalf("upgrade expected 200/v2, got %d: %s", upgraded.Code, upgraded.Body.String())
+	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+localCapID+"/upgrade", "{\"new_version_id\":\""+localV2+"\"}", testUserAID)
+	if upgraded.Code != http.StatusOK || !strings.Contains(upgraded.Body.String(), localV2) {
+		t.Fatalf("upgrade workspace capability expected 200/v2, got %d: %s", upgraded.Code, upgraded.Body.String())
 	}
-	assertSingleAgentCapability(t, db, agentA, capID, v2)
-	if _, err := db.Exec(context.Background(), `update capability set deprecated_at = now() where id = $1`, capID); err != nil {
+	assertSingleAgentCapability(t, db, agentA, localCapID, localV2)
+	foreignUpgrade := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", "{\"new_version_id\":\""+v2+"\"}", testUserAID)
+	if foreignUpgrade.Code != http.StatusForbidden || !strings.Contains(foreignUpgrade.Body.String(), "capability is not in this workspace") {
+		t.Fatalf("cross-workspace upgrade expected 403, got %d: %s", foreignUpgrade.Code, foreignUpgrade.Body.String())
+	}
+	if _, err := db.Exec(context.Background(), "update capability set deprecated_at = now() where id = $1", localCapID); err != nil {
 		t.Fatal(err)
 	}
-	blocked := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
+	blocked := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentB+"/capabilities/"+localCapID+"/upgrade", "{\"new_version_id\":\""+localV2+"\"}", testUserAID)
 	if blocked.Code != http.StatusForbidden {
 		t.Fatalf("upgrade deprecated expected 403, got %d: %s", blocked.Code, blocked.Body.String())
-	}
-	uninstalled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/uninstall", `{"source_capability_id":"`+capID+`"}`, testUserAID)
-	if uninstalled.Code != http.StatusOK || !strings.Contains(uninstalled.Body.String(), `"removed_agent_count":2`) {
-		t.Fatalf("uninstall expected remove 2, got %d: %s", uninstalled.Code, uninstalled.Body.String())
 	}
 }
 
@@ -526,7 +502,7 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
 		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "Render a clear SVG") || !strings.Contains(res.Body.String(), "references/svg.md") {
 			t.Fatalf("skill detail expected content, got %d: %s", res.Code, res.Body.String())
 		}
@@ -556,7 +532,7 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
 		body := res.Body.String()
 		if res.Code != http.StatusOK || !strings.Contains(body, `"redacted":true`) || !strings.Contains(body, `"credential_kind_code":"github_pat"`) || !strings.Contains(body, "https://api.example.com") {
 			t.Fatalf("MCP detail expected sanitized config, got %d: %s", res.Code, body)
@@ -566,16 +542,16 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 	})
 
-	t.Run("workspace visibility capability is visible", func(t *testing.T) {
+	t.Run("workspace capability is visible", func(t *testing.T) {
 		runtimeStore := marketplaceDetailStore{
 			capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "skill", Visibility: "workspace", Status: "active", LatestVersionID: versionID},
 			version:    store.CapabilityVersionRead{ID: versionID, CapabilityID: capabilityID, Version: "v1"},
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
 		if res.Code != http.StatusOK {
-			t.Fatalf("workspace visibility capability expected 200, got %d: %s", res.Code, res.Body.String())
+			t.Fatalf("workspace capability expected 200, got %d: %s", res.Code, res.Body.String())
 		}
 	})
 
@@ -586,49 +562,11 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
 		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"git_repo_url":"https://example.com/legacy"`) {
 			t.Fatalf("legacy detail expected source metadata, got %d: %s", res.Code, res.Body.String())
 		}
 	})
-}
-
-// TestInstallCountRejectsCrossWorkspace verifies that GET
-// /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/install-count
-// rejects with 404 when the capability does not belong to the URL
-// workspace, even if the caller is a legitimate member of that
-// workspace. Prevents leaking marketplace install counts of foreign
-// workspaces' capabilities (Decision #7 isolation).
-func TestInstallCountRejectsCrossWorkspace(t *testing.T) {
-	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
-	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserAID: "admin"}, map[string]string{testUserAID: "member"})
-	insertForeignWorkspace(t, db, foreignWorkspaceID)
-	capID, v1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP install-count")
-	publishForeignCapability(t, db, capID)
-	agentA := insertAgentForOwner(t, db, testUserAID, "market-agent-install-count")
-	enabled := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+v1+"/enable", `{}`, testUserAID)
-	if enabled.Code != http.StatusOK {
-		t.Fatalf("enable marketplace cap expected 200, got %d: %s", enabled.Code, enabled.Body.String())
-	}
-
-	// The caller (testUserAID) is admin of DefaultDevFixtureIDs().WorkspaceID
-	// but the capability is owned by foreignWorkspaceID. The install-count
-	// endpoint MUST reject with 404 — caller cannot pivot through their own
-	// workspace URL to read foreign capability metrics.
-	leaked := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/capabilities/"+capID+"/install-count", ``, testUserAID)
-	if leaked.Code != http.StatusNotFound {
-		t.Fatalf("cross-workspace install-count leak: expected 404, got %d: %s", leaked.Code, leaked.Body.String())
-	}
-
-	// Source workspace owner (DefaultDevFixtureIDs().UserID is admin of foreignWorkspaceID
-	// via the test setup) querying via foreign workspace URL must work.
-	if _, err := db.Exec(context.Background(), `insert into workspace_members(id, workspace_id, user_id, role, created_at, updated_at) values (gen_random_uuid(), $1, $2, 'admin', now(), now())`, foreignWorkspaceID, store.DefaultDevFixtureIDs().UserID); err != nil {
-		t.Fatal(err)
-	}
-	owned := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+foreignWorkspaceID+"/capabilities/"+capID+"/install-count", ``, store.DefaultDevFixtureIDs().UserID)
-	if owned.Code != http.StatusOK || !strings.Contains(owned.Body.String(), `"install_count":1`) {
-		t.Fatalf("source workspace owner install-count expected 200/install_count=1, got %d: %s", owned.Code, owned.Body.String())
-	}
 }
 
 func capabilityTestRouter(t *testing.T, workspaceRoles map[string]string, _ map[string]string) (http.Handler, *pgxpool.Pool) {
@@ -724,13 +662,6 @@ func insertCapabilityVersions(t *testing.T, db *pgxpool.Pool, workspaceID, name 
 		t.Fatal(err)
 	}
 	return capID, v1, v2
-}
-
-func publishForeignCapability(t *testing.T, db *pgxpool.Pool, capabilityID string) {
-	t.Helper()
-	if _, err := db.Exec(context.Background(), `update capability set visibility = 'public', deprecated_at = null, status = 'active', deleted_at = null where id = $1`, capabilityID); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func insertAgentForOwner(t *testing.T, db *pgxpool.Pool, userID, slug string) string {
@@ -961,22 +892,26 @@ func insertAgentCapability(t *testing.T, db *pgxpool.Pool, agentID, capabilityID
 	}
 }
 
-// TestSyncAgentCapabilitiesDoesNotBindForeignMarketplaceByName covers the
-// workspace-scoped marketplace model: a public capability from another
-// workspace is no longer part of this workspace's marketplace pool.
-func TestSyncAgentCapabilitiesDoesNotBindForeignMarketplaceByName(t *testing.T) {
+// TestSyncAgentCapabilitiesBindsWorkspaceCapabilityByName covers the edit-dialog
+// path where the user checks a capability by name. The agent payload only
+// carries names, so syncAgentCapabilities has to resolve the name against the
+// workspace-scoped capability library without reaching into other workspaces.
+func TestSyncAgentCapabilitiesBindsWorkspaceCapabilityByName(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
 	_, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
-	capID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Marketplace MCP")
-	publishForeignCapability(t, db, capID)
+	foreignCapID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Marketplace MCP")
+	if _, err := db.Exec(context.Background(), "update capability set visibility = 'public' where id = $1", foreignCapID); err != nil {
+		t.Fatal(err)
+	}
 
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
 	uid := store.DefaultDevFixtureIDs().UserID
-	agentID := insertAgentForSyncTest(t, db, wid, uid, "sync-marketplace-target")
+	capID, _, v2 := insertCapabilityVersions(t, db, wid, "Workspace Library MCP")
+	agentID := insertAgentForSyncTest(t, db, wid, uid, "sync-workspace-library-target")
 
 	s := store.New(db)
-	if err := syncAgentCapabilities(context.Background(), s, wid, agentID, []string{"Foreign Marketplace MCP"}); err != nil {
+	if err := syncAgentCapabilities(context.Background(), s, wid, agentID, []string{"Foreign Marketplace MCP", "Workspace Library MCP"}); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
@@ -984,10 +919,15 @@ func TestSyncAgentCapabilitiesDoesNotBindForeignMarketplaceByName(t *testing.T) 
 	if err != nil {
 		t.Fatalf("list bindings: %v", err)
 	}
-	for _, b := range bindings {
-		if b.CapabilityID == capID {
-			t.Fatalf("foreign marketplace capability binding should not be created (capID=%s); bindings=%+v", capID, bindings)
-		}
+	if len(bindings) != 1 {
+		t.Fatalf("expected exactly one workspace binding, got %+v", bindings)
+	}
+	matched := bindings[0]
+	if matched.CapabilityID != capID {
+		t.Fatalf("expected workspace capability %s, got %+v", capID, matched)
+	}
+	if matched.CapabilityVersionID != v2 {
+		t.Fatalf("expected latest workspace version %s, got %s", v2, matched.CapabilityVersionID)
 	}
 }
 

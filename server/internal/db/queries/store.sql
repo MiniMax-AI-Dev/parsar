@@ -3642,10 +3642,9 @@ returning id::text as id, workspace_id::text as workspace_id, type, name,
   description, visibility, status, creator_id::text as creator_id,
   created_at, updated_at, deleted_at, deprecated_at;
 
--- name: UpdateCapabilityMarketplaceState :one
+-- name: UpdateCapabilityDeprecation :one
 update capability
-set visibility = @visibility,
-    deprecated_at = sqlc.narg('deprecated_at')::timestamptz,
+set deprecated_at = sqlc.narg('deprecated_at')::timestamptz,
     updated_at = @now
 where id = @id::uuid
   and workspace_id = @workspace_id::uuid
@@ -3731,17 +3730,9 @@ join lateral (
 ) latest on true
 where a.workspace_id = @target_workspace_id::uuid
   and c.workspace_id != @target_workspace_id::uuid
-  and c.visibility = 'public'
+  and false
   and c.deleted_at is null
 order by c.name asc, cv.version asc;
-
--- name: CountInstalls :one
-select count(distinct a.workspace_id)::bigint
-from agent_capabilities ac
-join agents a on ac.agent_id = a.id
-join capability c on c.id = ac.capability_id
-where ac.capability_id = @source_capability_id::uuid
-  and a.workspace_id != c.workspace_id;
 
 -- Counts every agent_capabilities reference -- including in-workspace
 -- agent bindings and cross-workspace marketplace installs. Used as a
@@ -3951,7 +3942,6 @@ where ac.agent_id = @agent_id::uuid
   and cv.id = @new_version_id::uuid
   and cv.capability_id = ac.capability_id
   and c.id = ac.capability_id
-  and c.visibility = 'public'
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null
@@ -4018,8 +4008,8 @@ join lateral (
   from capability_version
   where capability_id = c.id
     -- After a capability is deprecated, latest bindings should freeze
-    -- on the newest version published before deprecation rather than
-    -- keep auto-tracking versions published afterwards (those are no
+    -- on the newest version created before deprecation rather than
+    -- keep auto-tracking versions created afterwards (those are no
     -- longer supported, matching UpgradeAgentCapability's explicit
     -- rejection of deprecated upgrades). When c.deprecated_at IS NULL
     -- this predicate is always true and behaves like the previous

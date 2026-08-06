@@ -47,7 +47,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
   }
 
   if (props.itemID) {
-    return <PublishedMarketplaceTab {...props} />
+    return <WorkspaceCapabilityLibrary {...props} />
   }
 
   return <MCPDirectory
@@ -63,7 +63,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
   />
 }
 
-function PublishedMarketplaceTab({ itemID, query, typeFilter, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
+function WorkspaceCapabilityLibrary({ itemID, query, typeFilter, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const marketplaceQ = useMarketplaceList(workspaceID)
@@ -75,9 +75,7 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, canManage, onSelec
     const needle = query.trim().toLowerCase()
     return items.filter((item) => {
       if (item.type !== typeFilter) return false
-      // "Hide what's already in this workspace" — both rows you published
-      // and rows you installed from elsewhere are available locally.
-      if (hideInstalled && (item.installed || item.self_published)) return false
+      if (hideInstalled && item.installed) return false
       if (!needle) return true
       return `${item.name} ${item.description ?? ""}`.toLowerCase().includes(needle)
     })
@@ -167,7 +165,6 @@ function MarketplaceCard({ capability, language, canManage, onOpen, onInstall, o
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-medium text-fg">{capability.name}</h3>
               <CapabilityTypeBadge type={capability.type} />
-              {capability.self_published && <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge>}
               {!capability.self_published && capability.installed && <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge>}
             </div>
             {source && <p className="mt-1 text-sm text-fg-subtle">{t("capabilities.marketplace.card.source", { source })}</p>}
@@ -178,7 +175,7 @@ function MarketplaceCard({ capability, language, canManage, onOpen, onInstall, o
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-fg-subtle">
           <span>{t("capabilities.marketplace.card.latest", { version: capability.latest_version ?? "—" })}</span>
           <span>·</span>
-          <span>{t("capabilities.marketplace.card.added", { count })}</span>
+          <span>{t("capabilities.marketplace.card.usedByAgents", { count })}</span>
           <span>·</span>
           <span>{t("capabilities.marketplace.card.credential", { kind: requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none")) })}</span>
         </div>
@@ -231,7 +228,7 @@ function MarketplaceItemDetail({ capability, language, canManage, onBack, onInst
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <Detail label={t("capabilities.table.latestVersion")} value={capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")} mono />
           <Detail label={t("capabilities.table.credentials")} value={requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))} />
-          <Detail label={t("capabilities.marketplace.detail.addedCount")} value={String(capability.install_count ?? capability.installed_workspace_count ?? 0)} />
+          <Detail label={t("capabilities.marketplace.detail.agentCount")} value={String(capability.installed_agent_count ?? capability.enabled_agent_count ?? capability.install_count ?? 0)} />
         </div>
         {previewable && (
           <div className="mt-5 border-t border-line pt-5">

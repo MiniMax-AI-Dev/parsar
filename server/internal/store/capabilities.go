@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/db/sqlc"
 )
 
 type RequiredCredential struct {
@@ -20,10 +20,10 @@ type RequiredCredential struct {
 }
 
 type EnabledCapabilityRead struct {
-	AgentCapabilityID      string               `json:"agent_capability_id"`
-	AgentID                string               `json:"agent_id"`
-	Enabled                bool                 `json:"enabled"`
-	Configuration          map[string]any       `json:"configuration"`
+	AgentCapabilityID string         `json:"agent_capability_id"`
+	AgentID           string         `json:"agent_id"`
+	Enabled           bool           `json:"enabled"`
+	Configuration     map[string]any `json:"configuration"`
 	// PinningMode is 'latest' or 'pinned'. In 'latest' mode the daemon
 	// resolver ignores OssKey/SHA256/CanonicalSpec/Version on this struct
 	// and uses LatestOssKey/LatestSHA256/LatestCanonicalSpec/LatestVersion
@@ -333,14 +333,6 @@ func (s *Store) ListWorkspaceMarketplaceInstalls(ctx context.Context, targetWork
 	return out, nil
 }
 
-func (s *Store) CountInstalls(ctx context.Context, sourceCapabilityID string) (int64, error) {
-	capabilityUUID, err := uuid(sourceCapabilityID)
-	if err != nil {
-		return 0, err
-	}
-	return sqlc.New(s.db).CountInstalls(ctx, capabilityUUID)
-}
-
 func (s *Store) ListEnabledAgents(ctx context.Context, targetWorkspaceID string, sourceCapabilityID string) ([]EnabledMarketplaceAgentRead, error) {
 	workspaceUUID, err := uuid(targetWorkspaceID)
 	if err != nil {
@@ -466,28 +458,16 @@ func (s *Store) UpdateCapability(ctx context.Context, input UpdateCapabilityInpu
 	return updated, nil
 }
 
-func (s *Store) PublishCapability(ctx context.Context, workspaceID string, capabilityID string) (CapabilityRead, error) {
-	return s.updateCapabilityMarketplaceState(ctx, workspaceID, capabilityID, "public", nil)
-}
-
-func (s *Store) UnpublishCapability(ctx context.Context, workspaceID string, capabilityID string) (CapabilityRead, error) {
-	return s.updateCapabilityMarketplaceState(ctx, workspaceID, capabilityID, "workspace", nil)
-}
-
 func (s *Store) DeprecateCapability(ctx context.Context, workspaceID string, capabilityID string) (CapabilityRead, error) {
 	now := time.Now().UTC()
-	return s.updateCapabilityMarketplaceState(ctx, workspaceID, capabilityID, "public", &now)
+	return s.updateCapabilityDeprecation(ctx, workspaceID, capabilityID, &now)
 }
 
 func (s *Store) UndeprecateCapability(ctx context.Context, workspaceID string, capabilityID string) (CapabilityRead, error) {
-	existing, err := s.GetCapability(ctx, capabilityID)
-	if err != nil {
-		return CapabilityRead{}, err
-	}
-	return s.updateCapabilityMarketplaceState(ctx, workspaceID, capabilityID, existing.Visibility, nil)
+	return s.updateCapabilityDeprecation(ctx, workspaceID, capabilityID, nil)
 }
 
-func (s *Store) updateCapabilityMarketplaceState(ctx context.Context, workspaceID string, capabilityID string, visibility string, deprecatedAt *time.Time) (CapabilityRead, error) {
+func (s *Store) updateCapabilityDeprecation(ctx context.Context, workspaceID string, capabilityID string, deprecatedAt *time.Time) (CapabilityRead, error) {
 	workspaceUUID, err := uuid(workspaceID)
 	if err != nil {
 		return CapabilityRead{}, err
@@ -500,14 +480,14 @@ func (s *Store) updateCapabilityMarketplaceState(ctx context.Context, workspaceI
 	if deprecatedAt != nil {
 		deprecated = timestamptz(*deprecatedAt)
 	}
-	row, err := sqlc.New(s.db).UpdateCapabilityMarketplaceState(ctx, sqlc.UpdateCapabilityMarketplaceStateParams{ID: capabilityUUID, WorkspaceID: workspaceUUID, Visibility: normalizeCapabilityVisibility(visibility), DeprecatedAt: deprecated, Now: timestamptz(time.Now().UTC())})
+	row, err := sqlc.New(s.db).UpdateCapabilityDeprecation(ctx, sqlc.UpdateCapabilityDeprecationParams{ID: capabilityUUID, WorkspaceID: workspaceUUID, DeprecatedAt: deprecated, Now: timestamptz(time.Now().UTC())})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CapabilityRead{}, fmt.Errorf("%w: %s", ErrUnknownCapability, capabilityID)
 		}
 		return CapabilityRead{}, err
 	}
-	return capabilityFromMarketplaceStateRow(row), nil
+	return capabilityFromDeprecationRow(row), nil
 }
 
 // SoftDeleteCapability writes capability.deleted_at atomically: the UPDATE carries
@@ -1015,7 +995,7 @@ func capabilityFromSoftDeleteRow(row sqlc.SoftDeleteCapabilityRow) CapabilityRea
 	return CapabilityRead{ID: row.ID, WorkspaceID: row.WorkspaceID, Type: row.Type, Name: row.Name, Description: row.Description, Visibility: row.Visibility, Status: row.Status, RequiredCredentials: []RequiredCredential{}, CreatorID: row.CreatorID, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt), DeletedAt: pgOptionalTime(row.DeletedAt), DeprecatedAt: pgOptionalTime(row.DeprecatedAt)}
 }
 
-func capabilityFromMarketplaceStateRow(row sqlc.UpdateCapabilityMarketplaceStateRow) CapabilityRead {
+func capabilityFromDeprecationRow(row sqlc.UpdateCapabilityDeprecationRow) CapabilityRead {
 	return CapabilityRead{ID: row.ID, WorkspaceID: row.WorkspaceID, Type: row.Type, Name: row.Name, Description: row.Description, Visibility: row.Visibility, Status: row.Status, RequiredCredentials: []RequiredCredential{}, CreatorID: row.CreatorID, CreatedAt: pgTime(row.CreatedAt), UpdatedAt: pgTime(row.UpdatedAt), DeletedAt: pgOptionalTime(row.DeletedAt), DeprecatedAt: pgOptionalTime(row.DeprecatedAt)}
 }
 

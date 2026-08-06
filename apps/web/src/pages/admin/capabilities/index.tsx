@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowUpRight, Eye, Loader2, MoreHorizontal, PackageCheck, Pencil, Plus, Search, Share2, Trash2, Wrench } from "lucide-react"
+import { ArrowLeft, ArrowUpRight, Eye, Loader2, MoreHorizontal, PackageCheck, Pencil, Plus, Search, Trash2, Wrench } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 
@@ -49,14 +49,9 @@ import {
 } from "../../../lib/api-capabilities"
 import {
   useDelete,
-  useDeprecate,
-  useInstallCount,
   useMarketplaceEnabledAgents,
-  usePublish,
   useTargetMarketplaceInstalls,
-  useUndeprecate,
   useUninstall,
-  useUnpublish,
   type MarketplaceCapability,
   type TargetMarketplaceInstall,
   marketplaceSourceName,
@@ -68,14 +63,10 @@ import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
 import { MarketplaceCapabilityDetail } from "./MarketplaceCapabilityDetail"
 import { MarketplaceTab } from "./MarketplaceTab"
-import { DeprecateCapabilityDialog } from "./DeprecateCapabilityDialog"
 import { DeleteCapabilityDialog } from "./DeleteCapabilityDialog"
 import { ImportCapabilityDialog } from "./ImportCapabilityDialog"
 import { AddCapabilityVersionDialog } from "./AddCapabilityVersionDialog"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
-
-type MarketAction = "publish" | "unpublish" | "deprecate" | "undeprecate" | null
-type MarketCapabilityAction = Exclude<MarketAction, null>
 
 interface AgentInstallation {
   agentID: string
@@ -105,23 +96,16 @@ export function CapabilitiesPage() {
   const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
   const marketplaceInstallsQ = useTargetMarketplaceInstalls(wid)
-  const publishMut = usePublish(wid)
-  const unpublishMut = useUnpublish(wid)
-  const deprecateMut = useDeprecate(wid)
-  const undeprecateMut = useUndeprecate(wid)
   const uninstallMut = useUninstall(wid)
   const deleteMut = useDelete(wid)
   const [importOpen, setImportOpen] = useState(false)
   const [addVersionCapability, setAddVersionCapability] = useState<Capability | null>(null)
-  const [marketTarget, setMarketTarget] = useState<{ action: MarketCapabilityAction; capability: Capability } | null>(null)
-  const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<TargetMarketplaceInstall | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Capability | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const canImportDirectory = isAdmin || workspaceRole === "member"
-  const marketInstallCountQ = useInstallCount(wid, marketTarget?.capability.id ?? null)
   const uninstallAgentsQ = useMarketplaceEnabledAgents(wid, uninstallTarget?.id ?? null)
 
   const agents = useMemo(() => agentsQ.data?.agents ?? [], [agentsQ.data])
@@ -188,42 +172,8 @@ export function CapabilitiesPage() {
 
   const err = capsQ.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
-  const marketPendingID = marketTarget && (publishMut.isPending || unpublishMut.isPending || deprecateMut.isPending || undeprecateMut.isPending)
-    ? marketTarget.capability.id
-    : null
   const uninstallPendingID = uninstallTarget && uninstallMut.isPending ? uninstallTarget.id : null
   const deletePendingID = deleteTarget && deleteMut.isPending ? deleteTarget.id : null
-
-
-  const requestMarketAction = (action: MarketCapabilityAction, capability: Capability) => {
-    setMarketClientError(null)
-    if (action === "publish" && capability.type === "mcp") {
-      const leakingVersion = (versionSummary.byCapability.get(capability.id) ?? []).find((version) => containsPlaintextSecretPattern(JSON.stringify(version.content ?? {})))
-      if (leakingVersion) {
-        setMarketClientError(t("capabilities.errors.plaintextSecretPattern", { version: leakingVersion.version }))
-        return
-      }
-    }
-    setMarketTarget({ action, capability })
-  }
-
-  const submitMarketAction = () => {
-    if (!marketTarget) return
-    const { action, capability } = marketTarget
-    const mutation = action === "publish"
-      ? publishMut
-      : action === "unpublish"
-        ? unpublishMut
-        : action === "deprecate"
-          ? deprecateMut
-          : undeprecateMut
-    mutation.mutate(capability.id, {
-      onSuccess: () => {
-        setToast(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
-        setMarketTarget(null)
-      },
-    })
-  }
 
   return (
     <AdminLayout activeMenu="capabilities">
@@ -257,7 +207,6 @@ export function CapabilitiesPage() {
       />
 
       {toast && <ToastBanner message={toast} />}
-      {marketClientError && <ErrorBanner message={marketClientError} />}
 
       {!marketplaceItem && (
         <CapabilitiesFilterBar
@@ -394,12 +343,10 @@ export function CapabilitiesPage() {
                                 capability={cap}
                                 fromMarketplace={fromMarketplace}
                                 isAdmin={isAdmin}
-                                marketPending={marketPendingID === cap.id}
                                 uninstallPending={uninstallPendingID === cap.id}
                                 deletePending={deletePendingID === cap.id}
                                 onView={() => navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })}
                                 onAddVersion={() => setAddVersionCapability(cap)}
-                                onMarketAction={(action) => requestMarketAction(action, cap)}
                                 onUninstall={() => setUninstallTarget(marketCap)}
                                 onDelete={() => setDeleteTarget(cap)}
                               />
@@ -448,24 +395,6 @@ export function CapabilitiesPage() {
             setAddVersionCapability(null)
             setToast(t("capabilities.toast.versionAdded", { name }))
           }}
-        />
-      )}
-      {marketTarget && (
-        <DeprecateCapabilityDialog
-          action={marketTarget.action}
-          capability={marketTarget.capability}
-          installCount={marketInstallCountQ.data ?? 0}
-          pending={publishMut.isPending || unpublishMut.isPending || deprecateMut.isPending || undeprecateMut.isPending}
-          error={publishMut.error ?? unpublishMut.error ?? deprecateMut.error ?? undeprecateMut.error}
-          onOpenChange={(open) => {
-            if (open) return
-            setMarketTarget(null)
-            publishMut.reset()
-            unpublishMut.reset()
-            deprecateMut.reset()
-            undeprecateMut.reset()
-          }}
-          onConfirm={submitMarketAction}
         />
       )}
       <DeleteCapabilityDialog
@@ -634,29 +563,24 @@ function CapabilityRowActions({
   capability,
   fromMarketplace,
   isAdmin,
-  marketPending,
   uninstallPending,
   deletePending,
   onView,
   onAddVersion,
-  onMarketAction,
   onUninstall,
   onDelete,
 }: {
   capability: Capability
   fromMarketplace: boolean
   isAdmin: boolean
-  marketPending: boolean
   uninstallPending: boolean
   deletePending: boolean
   onView: () => void
   onAddVersion: () => void
-  onMarketAction: (action: MarketCapabilityAction) => void
   onUninstall: () => void
   onDelete: () => void
 }) {
   const { t } = useTranslation("admin")
-  const published = capability.visibility === "public" || capability.scope === "public"
   const disabledByRole = !isAdmin
 
   // Marketplace rows only support uninstall.
@@ -679,7 +603,6 @@ function CapabilityRowActions({
   // Edit-as-new-version: clicking the primary action opens AddCapabilityVersionDialog,
   // which now carries name/description fields too. The old standalone Pencil
   // (PATCH-only metadata edit) was removed in favor of this single surface.
-  const someMenuPending = marketPending || deletePending
 
   return (
     <RowActions>
@@ -691,11 +614,9 @@ function CapabilityRowActions({
         onClick={onAddVersion}
       />
       <CapabilityRowMoreMenu
-        published={published}
         disabledByRole={disabledByRole}
-        menuPending={someMenuPending}
+        menuPending={deletePending}
         onView={onView}
-        onMarketAction={onMarketAction}
         onDelete={onDelete}
       />
     </RowActions>
@@ -703,22 +624,17 @@ function CapabilityRowActions({
 }
 
 /**
- * "More actions" menu for cross-workspace marketplace actions (publish,
- * deprecate). View-detail also lives here as a fallback entry point.
+ * "More actions" menu for capability detail and delete.
  */
 function CapabilityRowMoreMenu({
-  published,
   disabledByRole,
   menuPending,
   onView,
-  onMarketAction,
   onDelete,
 }: {
-  published: boolean
   disabledByRole: boolean
   menuPending: boolean
   onView: () => void
-  onMarketAction: (action: MarketCapabilityAction) => void
   onDelete: () => void
 }) {
   const { t } = useTranslation("admin")
@@ -745,21 +661,6 @@ function CapabilityRowMoreMenu({
             <>
               <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
 
-              <CapabilityMenuItem
-                icon={Share2}
-                label={t(published ? "capabilities.rowActions.unpublish" : "capabilities.rowActions.publish")}
-                tone={published ? "danger" : "success"}
-                onSelect={() => onMarketAction(published ? "unpublish" : "publish")}
-              />
-              {/*
-                "Delete" releases the capability.name workspace-unique index,
-                allowing a same-name capability to be re-imported. The server
-                rejects deletes that still have bound agents (409).
-                "Deprecate" is a separate concept — the author signals that
-                maintenance has stopped and existing installs freeze on the
-                current version. That entry point lives on the detail page's
-                marketplace panel.
-              */}
               <CapabilityMenuItem
                 icon={Trash2}
                 label={t("capabilities.rowActions.delete")}
@@ -815,15 +716,8 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
   const updateMut = useUpdateCapability(wid)
-  const publishMut = usePublish(wid)
-  const unpublishMut = useUnpublish(wid)
-  const deprecateMut = useDeprecate(wid)
-  const undeprecateMut = useUndeprecate(wid)
-  const installCountQ = useInstallCount(wid, id)
   const [editOpen, setEditOpen] = useState(false)
   const [addVersionOpen, setAddVersionOpen] = useState(false)
-  const [marketAction, setMarketAction] = useState<MarketAction>(null)
-  const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [viewVersion, setViewVersion] = useState<CapabilityVersion | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
@@ -856,39 +750,6 @@ export function CapabilityDetailPage({ id }: { id: string }) {
     )
   }
 
-  const submitMarketAction = () => {
-    const mutation = marketAction === "publish"
-      ? publishMut
-      : marketAction === "unpublish"
-        ? unpublishMut
-        : marketAction === "deprecate"
-          ? deprecateMut
-          : marketAction === "undeprecate"
-            ? undeprecateMut
-            : null
-    if (!mutation) return
-    const action = marketAction
-    if (!action) return
-    mutation.mutate(capability.id, {
-      onSuccess: () => {
-        setToast(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
-        setMarketAction(null)
-      },
-    })
-  }
-
-  const requestMarketAction = (action: MarketAction) => {
-    setMarketClientError(null)
-    if (action === "publish" && capability.type === "mcp") {
-      const leakingVersion = (versionsQ.data?.versions ?? []).find((version) => containsPlaintextSecretPattern(JSON.stringify(version.content ?? {})))
-      if (leakingVersion) {
-        setMarketClientError(t("capabilities.errors.plaintextSecretPattern", { version: leakingVersion.version }))
-        return
-      }
-    }
-    setMarketAction(action)
-  }
-
   return (
     <AdminLayout activeMenu="capabilities">
       <PageHeader
@@ -905,7 +766,6 @@ export function CapabilityDetailPage({ id }: { id: string }) {
       />
 
       {toast && <ToastBanner message={toast} />}
-      {marketClientError && <ErrorBanner message={marketClientError} />}
 
       <div className="space-y-4">
         <Card title={t("capabilities.detail.basic.title")}>
@@ -977,57 +837,6 @@ export function CapabilityDetailPage({ id }: { id: string }) {
             </div>
           )}
         </Card>
-
-        {isAdmin && (
-          <Card title={t("capabilities.marketStatus.title")}>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={capability.visibility === "public" || capability.scope === "public" ? "success" : "neutral"} dot>
-                    {capability.visibility === "public" || capability.scope === "public" ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
-                  </Badge>
-                  {capability.deprecated_at && <Badge variant="destructive">{t("capabilities.deprecated.badgeSource")}</Badge>}
-                </div>
-                <p className="text-sm text-fg-subtle">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {/*
-                  The deprecate / undeprecate toggle now applies to ALL
-                  capabilities, not just published-marketplace ones —
-                  it's the single "stop offering this" admin signal
-                  since the standalone disable button was removed.
-                  Existing agent bindings keep working either way;
-                  the tooltip below makes that contract explicit so
-                  admins don't fear they're about to break running
-                  agents. Marketplace publish / unpublish remain a
-                  separate concern.
-                */}
-                <Tooltip.Provider delayDuration={150}>
-                  <Tooltip.Root>
-                    <Tooltip.Trigger asChild>
-                      <span>
-                        <Button size="sm" variant="outline" onClick={() => requestMarketAction(capability.deprecated_at ? "undeprecate" : "deprecate")}>
-                          {capability.deprecated_at ? t("capabilities.marketStatus.actions.undeprecate") : t("capabilities.marketStatus.actions.deprecate")}
-                        </Button>
-                      </span>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content className="z-50 max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
-                        {capability.deprecated_at ? t("capabilities.marketStatus.undeprecateTooltip") : t("capabilities.marketStatus.deprecateTooltip")}
-                        <Tooltip.Arrow className="fill-white" />
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
-                {(capability.visibility === "public" || capability.scope === "public") ? (
-                  <Button size="sm" variant="ghost" onClick={() => requestMarketAction("unpublish")}>{t("capabilities.marketStatus.actions.unpublish")}</Button>
-                ) : (
-                  <Button size="sm" onClick={() => requestMarketAction("publish")}>{t("capabilities.marketStatus.actions.publish")}</Button>
-                )}
-              </div>
-            </div>
-          </Card>
-        )}
       </div>
 
       <EditCapabilityDialog
@@ -1060,15 +869,6 @@ export function CapabilityDetailPage({ id }: { id: string }) {
           setAddVersionOpen(false)
           setToast(t("capabilities.toast.versionAdded", { name: capability.name }))
         }}
-      />
-      <DeprecateCapabilityDialog
-        action={marketAction}
-        capability={capability}
-        installCount={installCountQ.data ?? 0}
-        pending={publishMut.isPending || unpublishMut.isPending || deprecateMut.isPending || undeprecateMut.isPending}
-        error={publishMut.error ?? unpublishMut.error ?? deprecateMut.error ?? undeprecateMut.error}
-        onOpenChange={(open) => !open && setMarketAction(null)}
-        onConfirm={submitMarketAction}
       />
       <ViewVersionContentDialog version={viewVersion} capability={capability} onOpenChange={(open) => !open && setViewVersion(null)} />
     </AdminLayout>
@@ -1347,19 +1147,6 @@ function countCapabilityInstalls(groups: AgentCapability[][]) {
     }
   }
   return counts
-}
-
-const plaintextSecretPatternRes = [
-  /github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,}/i,
-  /xoxb-[A-Za-z0-9-]{20,}/,
-  /AKIA[A-Z0-9]{16}/,
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
-  /postgres(?:ql)?:\/\/[^\s:@/]+:[^\s:@/]+@/i,
-  /(api[_-]?key|access[_-]?token|secret)["'\s:=]+[A-Za-z0-9_./+=-]{32,}/i,
-]
-
-function containsPlaintextSecretPattern(value: string) {
-  return plaintextSecretPatternRes.some((pattern) => pattern.test(value))
 }
 
 function FormField({ label, help, required, children }: { label: string; help?: string; required?: boolean; children: React.ReactNode }) {

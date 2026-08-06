@@ -681,10 +681,6 @@
       "more": "更多操作",
       "disable": "停用",
       "enable": "启用",
-      "publish": "发布到市场",
-      "unpublish": "取消发布",
-      "deprecate": "标记为废弃",
-      "undeprecate": "解除废弃",
       "delete": "删除",
       "uninstall": "从工作区移除"
     },
@@ -808,8 +804,7 @@
     "deleteBlocked": "请先从这些 Agent 移除装配，再删除此能力。",
     "errors": {
       "nameRequired": "请填写能力名。",
-      "nameTooLong": "能力名最多 50 个字符。",
-      "plaintextSecretPattern": "{{version}} 内容里看起来包含明文凭据。请先把 token / secret 替换成 ${PARSAR_CREDENTIAL} 占位符，再发布到市场。"
+      "nameTooLong": "能力名最多 50 个字符。"
     },
     "toast": {
       "created": "{{name}} 能力已添加。到 Agent 详情即可启用使用。",
@@ -843,7 +838,7 @@
       "drawer": {
         "breadcrumb": "Agent 管理 / 能力",
         "title": "能力市场",
-        "description": "浏览所有工作区已发布的能力。选择一个能力后，到 Agent 详情页装到具体 Agent 使用。"
+        "description": "浏览当前工作区的能力库。选择一个能力后，到 Agent 详情页装到具体 Agent 使用。"
       },
       "filters": {
         "all": "全部",
@@ -858,15 +853,15 @@
         "install": "+ 装到我的 Agent",
         "installed": "已装在 {{count}} 个 Agent",
         "installedBadge": "已添加",
-        "selfPublished": "你已发布"
+        "usedByAgents": "{{count}} 个 Agent 使用中"
       },
       "detail": {
         "back": "返回市场列表",
-        "addedCount": "已添加工作区数",
+        "agentCount": "使用中的 Agent",
         "contentTitle": "能力内容",
         "contentDescription": "添加到 Agent 前，可查看完整的 Skill 文件或 MCP 启动配置。",
         "loadErrorTitle": "无法加载能力内容",
-        "loadErrorDescription": "无法读取最新发布版本。",
+        "loadErrorDescription": "无法读取最新版本。",
         "contentUnavailable": "该旧版本未保存可预览的 Skill 或 MCP 内容。",
         "sourceRepository": "来源仓库",
         "sourceCommit": "来源提交",
@@ -881,7 +876,7 @@
       },
       "empty": {
         "title": "市场暂时没有可用的能力",
-        "description": "其它工作区发布能力后会显示在这里。你也可以进入能力详情发布自己的能力。"
+        "description": "当前工作区创建或导入的能力会显示在这里。"
       },
       "loadError": {
         "title": "无法加载能力市场",
@@ -908,7 +903,7 @@
     },
     "mcpDirectory": {
       "title": "连接器",
-      "description": "在同一个能力市场中浏览精选连接器和各工作区发布的 MCP 能力。",
+      "description": "在同一个能力库中浏览精选连接器和当前工作区的 MCP 能力。",
       "verified": "已验证",
       "securityNotice": "导入只会保存配置，不会立即运行。启用并绑定 Agent 后，该 MCP 才可能在 Runtime 中执行。",
       "filters": {
@@ -988,48 +983,6 @@
       "badgeTarget": "已废弃，建议迁移",
       "badgeSource": "已废弃",
       "bannerTarget": "此能力已被来源工作区标记废弃，建议迁移到其它能力。本工作区已装的 Agent 仍可使用锁定版本，但无法升级到新版本。"
-    },
-    "marketStatus": {
-      "title": "市场状态",
-      "published": "已发布到市场",
-      "unpublished": "未发布",
-      "installCount": "{{count}} 个工作区已添加",
-      "actions": {
-        "publish": "发布到市场",
-        "unpublish": "取消发布",
-        "deprecate": "下架",
-        "undeprecate": "上架"
-      },
-      "deprecateTooltip": "下架后该能力不再出现在新建 / 编辑 Agent 的选择列表里；已绑定的 Agent 仍可继续使用。",
-      "undeprecateTooltip": "重新上架,该能力会出现在新建 / 编辑 Agent 的选择列表里。",
-      "toast": {
-        "publish": "「{{name}}」已发布到市场。",
-        "unpublish": "「{{name}}」已从市场撤回。",
-        "deprecate": "「{{name}}」已标记为废弃。",
-        "undeprecate": "「{{name}}」已解除废弃。"
-      },
-      "dialog": {
-        "publish": {
-          "title": "发布「{{name}}」到能力市场？",
-          "description": "发布后，其它工作区 admin 可以在能力市场看到此能力，并把当前最新版本装到自己的 Agent。已发布版本会永久保留，确保引用方稳定。",
-          "confirm": "发布到市场"
-        },
-        "unpublish": {
-          "title": "从市场取消发布「{{name}}」？",
-          "description": "取消发布后，此能力不再出现在能力市场。已添加的 {{count}} 个工作区不受影响，但无法升级到后续新版本。",
-          "confirm": "取消发布"
-        },
-        "deprecate": {
-          "title": "将「{{name}}」标记为废弃？",
-          "description": "标记后，此能力会从市场列表隐藏；已添加的 {{count}} 个工作区仍可继续使用锁定版本，但会看到迁移提示且无法升级。",
-          "confirm": "标记为废弃"
-        },
-        "undeprecate": {
-          "title": "解除「{{name}}」废弃状态？",
-          "description": "解除后，此能力重新出现在能力市场，已添加工作区的迁移提示会消失，并可以再次升级。",
-          "confirm": "解除废弃"
-        }
-      }
     },
     "uninstall": {
       "sectionTitle": "从我的工作区移除",
@@ -1491,7 +1444,7 @@
           "badge": "来自市场",
           "source": "来自 {{source}} · 当前版本 v{{version}}",
           "deprecatedBanner": "此能力已被来源工作区标记废弃。本 Agent 可以继续使用锁定的 v{{version}}，但无法升级到新版本。",
-          "upgradeAvailable": "来源工作区发布了新版本 v{{version}}。",
+          "upgradeAvailable": "有新版本可用：v{{version}}。",
           "upgradeBlocked": "源能力已废弃，无法升级。"
         }
       },
@@ -1687,7 +1640,7 @@
       "versionPicker": {
         "latest": "latest",
         "localHint": "选 latest 时,后续重新上传会自动生效;选具体版本会锁定到该版本",
-        "marketplaceHint": "市场能力:latest 会自动跟随发布者的最新版本(可能引入不兼容改动)"
+        "marketplaceHint": "市场能力:latest 会自动跟随最新可用版本(可能引入不兼容改动)"
       },
       "wizard": {
         "stepOf": "第 {{current}} / {{total}} 步",
