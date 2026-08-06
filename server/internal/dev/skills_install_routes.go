@@ -60,7 +60,7 @@ type skillInstallHTTPDoer interface {
 //	@Produce		json
 //	@Param			workspaceID	path	string				true	"Workspace UUID"
 //	@Param			body		body	installSkillRequest	true	"Skills.sh install payload"
-//	@Success		201 {object} commitCapabilityImportResponse
+//	@Success		201 {object} map[string]interface{} "Created capability, version, and secret ids"
 //	@Failure		400 {object} map[string]string
 //	@Failure		403 {object} map[string]string
 //	@Failure		422 {object} map[string]string

@@ -631,6 +631,17 @@ definitions:
           type: string
         type: array
     type: object
+  dev.installSkillRequest:
+    properties:
+      registry:
+        type: string
+      registry_id:
+        type: string
+      slug:
+        type: string
+      source:
+        type: string
+    type: object
   dev.listAgentInteractionsResponse:
     properties:
       interactions:
@@ -8399,6 +8410,67 @@ paths:
       summary: Update workspace settings
       tags:
       - workspaces
+  /api/v1/workspaces/{workspaceID}/skills/install:
+    post:
+      consumes:
+      - application/json
+      description: Downloads a Skills.sh Skill with npx skills add, stores the Skill
+        folder as a zip, and reuses the existing Skill zip import flow. Owner/admin
+        only.
+      operationId: installSkillsShSkill
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Skills.sh install payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.installSkillRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created capability, version, and secret ids
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Install a Skills.sh Skill as a capability
+      tags:
+      - capabilities
   /api/v1/workspaces/{workspaceID}/spec/fragments:
     get:
       description: Returns spec fragments visible to the workspace. Optional source/tag
