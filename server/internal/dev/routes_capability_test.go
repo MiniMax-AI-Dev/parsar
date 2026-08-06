@@ -398,6 +398,36 @@ func TestCapabilityMarketplacePublishLifecycleSecretCheckAndDeleteRollback(t *te
 	}
 }
 
+func TestWorkspaceMarketplaceListIsWorkspaceScopedAndIgnoresVisibility(t *testing.T) {
+	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
+	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserAID: "member"}, nil)
+	workspaceCapID, _, _ := insertCapabilityVersions(t, db, store.DefaultDevFixtureIDs().WorkspaceID, "Workspace Private MCP")
+	insertForeignWorkspace(t, db, foreignWorkspaceID)
+	foreignCapID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Public MCP")
+	publishForeignCapability(t, db, foreignCapID)
+
+	list := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities", ``, testUserAID)
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "Workspace Private MCP") || strings.Contains(list.Body.String(), "Foreign Public MCP") || strings.Contains(list.Body.String(), foreignWorkspaceID) {
+		t.Fatalf("workspace marketplace list expected only local capabilities regardless of visibility, got %d: %s", list.Code, list.Body.String())
+	}
+
+	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities/"+workspaceCapID, ``, testUserAID)
+	if detail.Code != http.StatusOK {
+		t.Fatalf("workspace marketplace detail expected private local capability, got %d: %s", detail.Code, detail.Body.String())
+	}
+
+	foreignDetail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities/"+foreignCapID, ``, testUserAID)
+	if foreignDetail.Code != http.StatusNotFound {
+		t.Fatalf("foreign marketplace detail expected 404, got %d: %s", foreignDetail.Code, foreignDetail.Body.String())
+	}
+
+	nonMemberID := "00000000-0000-0000-0000-000000000777"
+	blocked := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities", ``, nonMemberID)
+	if blocked.Code != http.StatusNotFound {
+		t.Fatalf("non-member marketplace list expected 404, got %d: %s", blocked.Code, blocked.Body.String())
+	}
+}
+
 func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQueries(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
 	r, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin", testUserAID: "admin"}, map[string]string{testUserAID: "member"})
@@ -424,16 +454,16 @@ func TestCapabilityMarketplaceCrossWorkspaceEnableUpgradeUninstallAndReverseQuer
 	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"enabled_agent_count":2`) || !strings.Contains(list.Body.String(), `"from_marketplace":true`) {
 		t.Fatalf("reverse marketplace list expected count=2, got %d: %s", list.Code, list.Body.String())
 	}
-	market := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, ``, testUserAID)
-	if market.Code != http.StatusOK || !strings.Contains(market.Body.String(), `"installed":true`) || strings.Contains(market.Body.String(), foreignWorkspaceID) || strings.Contains(market.Body.String(), "Foreign Public Plugin") {
-		t.Fatalf("marketplace list expected installed without source workspace id leak, got %d: %s", market.Code, market.Body.String())
+	market := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities", ``, testUserAID)
+	if market.Code != http.StatusOK || strings.Contains(market.Body.String(), "Foreign Public MCP") || strings.Contains(market.Body.String(), foreignWorkspaceID) || strings.Contains(market.Body.String(), "Foreign Public Plugin") {
+		t.Fatalf("workspace marketplace list expected no foreign capabilities, got %d: %s", market.Code, market.Body.String())
 	}
 	if _, err := db.Exec(context.Background(), `update capability_version set creator_id = null where id = $1`, v2); err != nil {
 		t.Fatal(err)
 	}
-	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capID+"?workspace_id="+store.DefaultDevFixtureIDs().WorkspaceID, ``, testUserAID)
-	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), `"version":"v2"`) {
-		t.Fatalf("marketplace detail with nullable creator expected 200/v2, got %d: %s", detail.Code, detail.Body.String())
+	detail := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/marketplace/capabilities/"+capID, ``, testUserAID)
+	if detail.Code != http.StatusNotFound {
+		t.Fatalf("workspace marketplace detail for foreign capability expected 404, got %d: %s", detail.Code, detail.Body.String())
 	}
 	upgraded := serveCapabilityRoute(t, r, http.MethodPost, "/api/v1/workspaces/"+store.DefaultDevFixtureIDs().WorkspaceID+"/agents/"+agentA+"/capabilities/"+capID+"/upgrade", `{"new_version_id":"`+v2+`"}`, testUserAID)
 	if upgraded.Code != http.StatusOK || !strings.Contains(upgraded.Body.String(), v2) {
@@ -496,7 +526,7 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
 		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "Render a clear SVG") || !strings.Contains(res.Body.String(), "references/svg.md") {
 			t.Fatalf("skill detail expected content, got %d: %s", res.Code, res.Body.String())
 		}
@@ -526,7 +556,7 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
 		body := res.Body.String()
 		if res.Code != http.StatusOK || !strings.Contains(body, `"redacted":true`) || !strings.Contains(body, `"credential_kind_code":"github_pat"`) || !strings.Contains(body, "https://api.example.com") {
 			t.Fatalf("MCP detail expected sanitized config, got %d: %s", res.Code, body)
@@ -536,13 +566,16 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 	})
 
-	t.Run("private capability is hidden", func(t *testing.T) {
-		runtimeStore := marketplaceDetailStore{capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "skill", Visibility: "workspace", Status: "active", LatestVersionID: versionID}}
+	t.Run("workspace visibility capability is visible", func(t *testing.T) {
+		runtimeStore := marketplaceDetailStore{
+			capability: store.MarketplaceCapabilityRead{CapabilityID: capabilityID, Type: "skill", Visibility: "workspace", Status: "active", LatestVersionID: versionID},
+			version:    store.CapabilityVersionRead{ID: versionID, CapabilityID: capabilityID, Version: "v1"},
+		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
-		if res.Code != http.StatusNotFound {
-			t.Fatalf("private capability expected 404, got %d: %s", res.Code, res.Body.String())
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
+		if res.Code != http.StatusOK {
+			t.Fatalf("workspace visibility capability expected 200, got %d: %s", res.Code, res.Body.String())
 		}
 	})
 
@@ -553,7 +586,7 @@ func TestMarketplaceCapabilityDetailShowsSkillAndRedactsMCPSecret(t *testing.T) 
 		}
 		r := chi.NewRouter()
 		RegisterRoutesWithStore(r, runtimeStore)
-		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/capabilities/marketplace/"+capabilityID+"?workspace_id="+workspaceID, "", store.DefaultDevFixtureIDs().UserID)
+		res := serveCapabilityRoute(t, r, http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/marketplace/capabilities/"+capabilityID, "", store.DefaultDevFixtureIDs().UserID)
 		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"git_repo_url":"https://example.com/legacy"`) {
 			t.Fatalf("legacy detail expected source metadata, got %d: %s", res.Code, res.Body.String())
 		}
@@ -928,18 +961,14 @@ func insertAgentCapability(t *testing.T, db *pgxpool.Pool, agentID, capabilityID
 	}
 }
 
-// TestSyncAgentCapabilitiesBindsMarketplaceByName covers the edit-dialog
-// path where the user checks a marketplace capability that isn't installed
-// in their workspace yet. The agent payload only carries names — so
-// syncAgentCapabilities has to resolve the name against the marketplace
-// pool, not just ListCapabilities of the local workspace. Without this
-// the checkbox would appear to succeed in the UI but silently no-op
-// on save.
-func TestSyncAgentCapabilitiesBindsMarketplaceByName(t *testing.T) {
+// TestSyncAgentCapabilitiesDoesNotBindForeignMarketplaceByName covers the
+// workspace-scoped marketplace model: a public capability from another
+// workspace is no longer part of this workspace's marketplace pool.
+func TestSyncAgentCapabilitiesDoesNotBindForeignMarketplaceByName(t *testing.T) {
 	foreignWorkspaceID := "00000000-0000-0000-0000-000000000099"
 	_, db := capabilityTestRouter(t, map[string]string{store.DefaultDevFixtureIDs().UserID: "admin"}, nil)
 	insertForeignWorkspace(t, db, foreignWorkspaceID)
-	capID, v1, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Marketplace MCP")
+	capID, _, _ := insertCapabilityVersions(t, db, foreignWorkspaceID, "Foreign Marketplace MCP")
 	publishForeignCapability(t, db, capID)
 
 	wid := store.DefaultDevFixtureIDs().WorkspaceID
@@ -955,18 +984,10 @@ func TestSyncAgentCapabilitiesBindsMarketplaceByName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list bindings: %v", err)
 	}
-	var matched store.AgentCapabilityRead
 	for _, b := range bindings {
 		if b.CapabilityID == capID {
-			matched = b
-			break
+			t.Fatalf("foreign marketplace capability binding should not be created (capID=%s); bindings=%+v", capID, bindings)
 		}
-	}
-	if matched.CapabilityID == "" {
-		t.Fatalf("marketplace capability binding was dropped silently (capID=%s); bindings=%+v", capID, bindings)
-	}
-	if matched.CapabilityVersionID != v1 {
-		t.Fatalf("expected binding to source version %s, got %s", v1, matched.CapabilityVersionID)
 	}
 }
 
