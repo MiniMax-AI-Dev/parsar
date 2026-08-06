@@ -579,10 +579,9 @@ func syncAgentCapabilities(
 	}
 
 	// 2. Resolve desired names. A name can come from this workspace's own
-	// capabilities, OR from the marketplace (a public capability published
-	// by another workspace and surfaced in the agent picker's marketplace
-	// section). Local capabilities win on name collision: a user shadowing
-	// a marketplace name with a private one should keep using their own.
+	// capabilities, OR from the workspace-scoped marketplace pool surfaced
+	// in the agent picker. Local capabilities win on name collision: a user
+	// shadowing a marketplace name with a private one should keep using their own.
 	allCaps, err := rs.ListCapabilities(ctx, workspaceID, store.ListCapabilityFilter{})
 	if err != nil {
 		return fmt.Errorf("syncAgentCapabilities: list capabilities: %w", err)
