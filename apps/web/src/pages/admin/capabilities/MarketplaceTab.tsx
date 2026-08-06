@@ -12,6 +12,7 @@ import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
 import type { Capability } from "../../../lib/api-types"
 import { MCPDirectory } from "./mcp-directory/MCPDirectory"
+import { SkillsDirectory } from "./SkillsDirectory"
 
 interface MarketplaceTabProps {
   itemID: string | null
@@ -41,7 +42,11 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
     />
   }
 
-  if (props.itemID || props.typeFilter === "skill") {
+  if (props.typeFilter === "skill") {
+    return <SkillsDirectory query={props.query} canImport={props.canImport} onViewCapability={props.onViewCapability} />
+  }
+
+  if (props.itemID) {
     return <PublishedMarketplaceTab {...props} />
   }
 

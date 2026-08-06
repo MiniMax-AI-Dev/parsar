@@ -265,6 +265,10 @@ type routerConfig struct {
 	// Nil means the selected backend is unavailable — upload presign +
 	// import 503 rather than failing boot.
 	blobStore blob.Store
+	// skillInstallRunner downloads Skills.sh skills via the skills CLI.
+	// Nil uses npx at request time; tests inject a fake runner.
+	skillInstallRunner     skillInstallCommandRunner
+	skillInstallHTTPClient skillInstallHTTPDoer
 
 	// feishuJoinURLBuilder is invoked by the visibility=workspace
 	// rejection card so the Feishu rejection surfaces a markdown
@@ -412,6 +416,20 @@ func WithRuntimeStatus(deps RuntimeStatusDeps) RouterOption {
 func WithAuditIngester(ingester AuditIngester) RouterOption {
 	return func(cfg *routerConfig) {
 		cfg.auditIngester = ingester
+	}
+}
+
+// WithSkillInstallRunner lets tests drive /skills/install without executing
+// npx. Production leaves this unset and uses the real skills CLI via npx.
+func WithSkillInstallRunner(runner skillInstallCommandRunner) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.skillInstallRunner = runner
+	}
+}
+
+func WithSkillInstallHTTPClient(client skillInstallHTTPDoer) RouterOption {
+	return func(cfg *routerConfig) {
+		cfg.skillInstallHTTPClient = client
 	}
 }
 
@@ -628,6 +646,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			// the all-or-nothing materialization.
 			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.blobStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
+			r.Post("/workspaces/{workspaceID}/skills/install", installSkillFromRegistry(runtimeStore, cfg.blobStore, cfg.skillInstallRunner, cfg.skillInstallHTTPClient))
 			// Plugin upload presign — browser PUTs the zip directly to
 			// the blob backend, then calls import/commit with the returned
 			// ossKey. presign-download checks ossKey belongs to the calling

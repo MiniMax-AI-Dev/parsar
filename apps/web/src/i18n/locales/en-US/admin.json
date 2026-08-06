@@ -888,6 +888,24 @@
         "description": "Backend returned an error."
       }
     },
+    "skillsDirectory": {
+      "installs": "{{count}} installs",
+      "loadError": {
+        "title": "Couldn't load the Skills catalog",
+        "description": "Retry without leaving the Capability Marketplace."
+      },
+      "empty": {
+        "title": "No skills match these filters",
+        "description": "Try another search term."
+      },
+      "install": {
+        "action": "Install",
+        "installing": "Installing...",
+        "installed": "Installed",
+        "success": "{{name}} was imported as a workspace Skill Capability.",
+        "failed": "The Skill could not be installed."
+      }
+    },
     "mcpDirectory": {
       "title": "Connectors",
       "description": "Browse curated connectors and MCP capabilities published by workspaces in one marketplace.",
