@@ -2,6 +2,7 @@ package runstream
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -38,6 +39,36 @@ func TestCancelCleansUp(t *testing.T) {
 		t.Fatal("timed out waiting for subscriber cleanup")
 	}
 	if got := b.SubscriberCount("run-cancel"); got != 0 {
+		t.Fatalf("subscribers after cancel = %d, want 0", got)
+	}
+}
+
+func TestPublishConcurrentWithCancelDoesNotPanic(t *testing.T) {
+	b := NewBroker(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	const runID = "run-publish-cancel-race"
+	const subscriberCount = 4096
+	for range subscriberCount {
+		_ = b.Subscribe(ctx, runID)
+	}
+
+	start := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		<-start
+		b.Publish(runID, connector.PromptEvent{Type: connector.EventDelta, Delta: "x"})
+	}()
+	close(start)
+	runtime.Gosched()
+	cancel()
+	<-done
+
+	deadline := time.Now().Add(5 * time.Second)
+	for b.SubscriberCount(runID) != 0 && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if got := b.SubscriberCount(runID); got != 0 {
 		t.Fatalf("subscribers after cancel = %d, want 0", got)
 	}
 }

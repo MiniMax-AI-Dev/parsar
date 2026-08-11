@@ -10,7 +10,7 @@ import (
 const DefaultBufferSize = 64
 
 type Broker struct {
-	mu         sync.Mutex
+	mu         sync.Mutex // serializes subscriber sends and closes as well as run state
 	bufferSize int
 	runs       map[string]*runState
 }
@@ -33,21 +33,16 @@ func (b *Broker) Publish(runID string, ev connector.PromptEvent) {
 		return
 	}
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	st := b.stateLocked(runID)
 	if st.closed {
-		b.mu.Unlock()
 		return
 	}
 	st.events = append(st.events, ev)
 	if len(st.events) > b.bufferSize {
 		st.events = append([]connector.PromptEvent(nil), st.events[len(st.events)-b.bufferSize:]...)
 	}
-	subs := make([]chan connector.PromptEvent, 0, len(st.subscribers))
 	for ch := range st.subscribers {
-		subs = append(subs, ch)
-	}
-	b.mu.Unlock()
-	for _, ch := range subs {
 		select {
 		case ch <- ev:
 		default:
@@ -63,30 +58,19 @@ func (b *Broker) Subscribe(ctx context.Context, runID string) <-chan connector.P
 	}
 	b.mu.Lock()
 	st := b.stateLocked(runID)
-	replay := append([]connector.PromptEvent(nil), st.events...)
-	closed := st.closed
-	if !closed {
-		st.subscribers[out] = struct{}{}
+	for _, ev := range st.events {
+		out <- ev
 	}
+	if st.closed {
+		close(out)
+		b.mu.Unlock()
+		return out
+	}
+	st.subscribers[out] = struct{}{}
 	b.mu.Unlock()
 	go func() {
-		defer func() {
-			if !closed {
-				b.unsubscribe(runID, out)
-			}
-		}()
-		for _, ev := range replay {
-			select {
-			case <-ctx.Done():
-				return
-			case out <- ev:
-			}
-		}
-		if closed {
-			close(out)
-			return
-		}
 		<-ctx.Done()
+		b.unsubscribe(runID, out)
 	}()
 	return out
 }
@@ -96,19 +80,14 @@ func (b *Broker) Finish(runID string) {
 		return
 	}
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	st, ok := b.runs[runID]
 	if !ok || st.closed {
-		b.mu.Unlock()
 		return
 	}
 	st.closed = true
-	subs := make([]chan connector.PromptEvent, 0, len(st.subscribers))
 	for ch := range st.subscribers {
-		subs = append(subs, ch)
 		delete(st.subscribers, ch)
-	}
-	b.mu.Unlock()
-	for _, ch := range subs {
 		close(ch)
 	}
 }
