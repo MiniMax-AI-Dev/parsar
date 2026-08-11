@@ -45,7 +45,6 @@ import {
   useCapabilitiesQuery,
   useCapabilityQuery,
   useCapabilityVersionsQuery,
-  useUpdateCapability,
 } from "../../../lib/api-capabilities"
 import {
   useDelete,
@@ -66,7 +65,9 @@ import { MarketplaceTab } from "./MarketplaceTab"
 import { DeleteCapabilityDialog } from "./DeleteCapabilityDialog"
 import { ImportCapabilityDialog } from "./ImportCapabilityDialog"
 import { AddCapabilityVersionDialog } from "./AddCapabilityVersionDialog"
+import { SkillFileTree } from "./SkillFileTree"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
+import type { CanonicalSkillSpec } from "./types"
 
 interface AgentInstallation {
   agentID: string
@@ -715,8 +716,6 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const versionsQ = useCapabilityVersionsQuery(wid, id)
   const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
-  const updateMut = useUpdateCapability(wid)
-  const [editOpen, setEditOpen] = useState(false)
   const [addVersionOpen, setAddVersionOpen] = useState(false)
   const [viewVersion, setViewVersion] = useState<CapabilityVersion | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -759,7 +758,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         action={
           <>
             <Badge variant={capability.deprecated_at ? "neutral" : "success"} dot>{t(capability.deprecated_at ? "capabilities.status.deprecated" : "capabilities.status.active")}</Badge>
-            {isAdmin && <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>{t("capabilities.actions.edit")}</Button>}
+            {isAdmin && <Button size="sm" variant="outline" onClick={() => setAddVersionOpen(true)}>{t("capabilities.actions.edit")}</Button>}
             {isAdmin && <Button size="sm" onClick={() => setAddVersionOpen(true)}><Plus className="h-3.5 w-3.5" />{t("capabilities.actions.addVersion")}</Button>}
           </>
         }
@@ -839,24 +838,6 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         </Card>
       </div>
 
-      <EditCapabilityDialog
-        open={editOpen}
-        capability={capability}
-        pending={updateMut.isPending}
-        error={updateMut.error}
-        onOpenChange={(open) => {
-          setEditOpen(open)
-          if (!open) updateMut.reset()
-        }}
-        onSubmit={(body) => {
-          updateMut.mutate({ capabilityID: capability.id, body }, {
-            onSuccess: () => {
-              setEditOpen(false)
-              setToast(t("capabilities.toast.updated", { name: body.name ?? capability.name }))
-            },
-          })
-        }}
-      />
       <AddCapabilityVersionDialog
         workspaceID={wid}
         capability={capability}
@@ -882,73 +863,12 @@ export function CapabilityTypeBadge({ type }: { type: Capability["type"] }) {
   return <Badge variant="neutral">MCP</Badge>
 }
 
-/**
- * EditCapabilityDialog — minimal name + description editor.
- *
- * The pre-M4 page used CreateCapabilityDialog in mode="edit" for this, which
- * dragged in the full create form just to disable most of it. Now that the
- * create path goes through the import flow, this dialog is small enough to
- * inline.
- */
-function EditCapabilityDialog({ open, capability, pending, error, onOpenChange, onSubmit }: {
-  open: boolean
-  capability: Capability
-  pending: boolean
-  error: unknown
-  onOpenChange: (open: boolean) => void
-  onSubmit: (body: { name?: string; description?: string }) => void
-}) {
-  const { t } = useTranslation("admin")
-  const [name, setName] = useState(capability.name)
-  const [description, setDescription] = useState(capability.description ?? "")
-
-  useEffect(() => {
-    if (!open) return
-    setName(capability.name)
-    setDescription(capability.description ?? "")
-  }, [open, capability])
-
-  const errMsg = error instanceof ApiError ? error.envelope.message : error instanceof Error ? error.message : null
-  const trimmedName = name.trim()
-  const validationError = !trimmedName
-    ? t("capabilities.errors.nameRequired")
-    : trimmedName.length > 50
-      ? t("capabilities.errors.nameTooLong")
-      : null
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("capabilities.edit.title")}</DialogTitle>
-          <DialogDescription>{t("capabilities.edit.description")}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <FormField label={t("capabilities.fields.name.label")} help={t("capabilities.fields.name.help")} required>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("capabilities.fields.name.placeholder")} />
-          </FormField>
-          <FormField label={t("capabilities.fields.description.label")}>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("capabilities.fields.description.placeholder")} />
-          </FormField>
-          {(validationError || errMsg) && <ErrorBanner message={validationError ?? errMsg ?? ""} />}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>{t("capabilities.actions.cancel")}</Button>
-          <Button size="sm" disabled={pending || !!validationError} onClick={() => onSubmit({ name: trimmedName, description: description.trim() })}>
-            {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("capabilities.actions.save")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function ViewVersionContentDialog({ version, capability, onOpenChange }: { version: CapabilityVersion | null; capability: Capability; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation("admin")
   const body = version ? renderViewVersionBody(version, capability, t) : null
   return (
     <Dialog open={!!version} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("capabilities.versions.viewContent.title", { version: version?.version })}</DialogTitle>
           <DialogDescription>{t("capabilities.versions.viewContent.description")}</DialogDescription>
@@ -981,7 +901,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   const canonicalSpec = version.canonical_spec as
     | {
         mcp?: Record<string, unknown>
-        skill?: CanonicalSkillSpecView
+        skill?: CanonicalSkillSpec
         plugin?: CanonicalPluginSpecView
         system_prompt?: { prompt?: string; mode?: string }
       }
@@ -1040,21 +960,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
 
   // skill
   if (canonicalSpec?.skill) {
-    const skill = canonicalSpec.skill
-    return (
-      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
-        {skill.slug && <DetailField label="slug" value={skill.slug} mono />}
-        {skill.title && <DetailField label="title" value={skill.title} />}
-        {skill.description && <DetailField label="description" value={skill.description} />}
-        {skill.trigger && <DetailField label="trigger" value={skill.trigger} />}
-        {skill.instruction && (
-          <DetailField
-            label="instruction"
-            value={<pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-fg-muted">{skill.instruction}</pre>}
-          />
-        )}
-      </div>
-    )
+    return <SkillFileTree skill={canonicalSpec.skill} />
   }
   return (
     <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
@@ -1076,14 +982,6 @@ interface CanonicalPluginSpecView {
   github_repo?: string
   github_ref?: string
   github_path?: string
-}
-
-interface CanonicalSkillSpecView {
-  slug?: string
-  title?: string
-  description?: string
-  instruction?: string
-  trigger?: string
 }
 
 function useCapabilityVersionSummary(workspaceID: string | null, capabilities: Capability[]) {
@@ -1149,20 +1047,12 @@ function countCapabilityInstalls(groups: AgentCapability[][]) {
   return counts
 }
 
-function FormField({ label, help, required, children }: { label: string; help?: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="grid gap-1.5"><span className="text-sm font-medium text-fg-muted">{label}{required && <span className="text-danger"> *</span>}</span>{children}{help && <span className="text-xs leading-relaxed text-fg-subtle">{help}</span>}</label>
-}
-
 function DetailField({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return <div className="rounded-md border border-line bg-surface p-3"><p className="text-xs text-fg-subtle">{label}</p><div className={`mt-1 text-sm text-fg ${mono ? "font-mono" : ""}`}>{value}</div></div>
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="rounded-lg border border-line bg-surface p-4"><h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>{children}</section>
-}
-
-function ErrorBanner({ message }: { message: string }) {
-  return <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis" role="alert">{message}</div>
 }
 
 function ToastBanner({ message }: { message: string }) {
