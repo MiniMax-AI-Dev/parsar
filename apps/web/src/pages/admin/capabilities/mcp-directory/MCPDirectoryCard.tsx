@@ -6,9 +6,10 @@ import { Button } from "../../../../components/ui/button"
 import { marketplaceSourceName, type MCPDirectoryItem, type MarketplaceCapability } from "../../../../lib/api-marketplace"
 import { ConnectorIcon, VerifiedBadge } from "./shared"
 
-export function DirectoryCard({ item, canImport, onOpen, onImport, onConnect, onViewCapability }: {
+export function DirectoryCard({ item, canImport, canConnect, onOpen, onImport, onConnect, onViewCapability }: {
   item: MCPDirectoryItem
   canImport: boolean
+  canConnect: boolean
   onOpen: () => void
   onImport: () => void
 	onConnect: () => void
@@ -43,8 +44,8 @@ export function DirectoryCard({ item, canImport, onOpen, onImport, onConnect, on
             <Check className="h-3.5 w-3.5" /> {t("capabilities.mcpDirectory.actions.installed")}
           </Button>
         ) : item.authentication === "oauth2" && !item.connected ? (
-		  <Button className="w-full" size="sm" onClick={onConnect}>
-			{t("capabilities.mcpDirectory.oauth.connect")}
+		  <Button className="w-full" size="sm" disabled={!canConnect} title={!canConnect ? t("capabilities.permission.adminOnly") : undefined} onClick={onConnect}>
+			{canConnect ? t("capabilities.mcpDirectory.oauth.connect") : t("capabilities.permission.adminOnly")}
 		  </Button>
 		) : (
           <Button className="w-full" size="sm" disabled={!canImport} title={!canImport ? t("capabilities.permission.adminOnly") : undefined} onClick={onImport}>

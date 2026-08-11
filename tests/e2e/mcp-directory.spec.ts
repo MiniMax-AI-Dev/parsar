@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const WORKSPACE_ID = "00000000-0000-0000-0000-000000000011";
 const CAPABILITY_ID = "00000000-0000-0000-0000-000000000033";
+type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 
 const directoryItems = [
   connector("context7", "Context7", "Documentation", 1),
@@ -69,6 +70,43 @@ test("retries a failed connector directory request", async ({ page }) => {
   await expect(page.getByTestId("mcp-directory-card")).toHaveCount(3);
 });
 
+test("allows workspace admins to start MCP OAuth", async ({ page }) => {
+  await mockApp(page, oauthDirectory, "admin");
+  await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+
+  const card = page.locator('[data-catalog-id="notion"]');
+  await expect(card.getByRole("button", { name: "Connect", exact: true })).toBeEnabled();
+  await card.getByRole("heading", { name: "Notion" }).click();
+  await expect(page.getByTestId("mcp-directory-detail").getByRole("button", { name: "Connect", exact: true })).toBeEnabled();
+});
+
+for (const role of ["member", "viewer"] as const) {
+  test(`prevents ${role} users from starting MCP OAuth`, async ({ page }) => {
+    await mockApp(page, oauthDirectory, role);
+    await page.goto(`/?admin=capabilities&tab=marketplace&ws=${WORKSPACE_ID}`);
+
+    const card = page.locator('[data-catalog-id="notion"]');
+    await expect(card.getByRole("button", { name: "Owner / admin only", exact: true })).toBeDisabled();
+    await expect(card.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
+    await card.getByRole("heading", { name: "Notion" }).click();
+
+    const detail = page.getByTestId("mcp-directory-detail");
+    await expect(detail.getByRole("button", { name: "Owner / admin only", exact: true })).toBeDisabled();
+    await expect(detail.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
+  });
+}
+
+const oauthDirectoryItem = {
+  ...connector("notion", "Notion", "Productivity", 1),
+  authentication: "oauth2",
+  connected: false,
+};
+
+async function oauthDirectory(route: Route) {
+  await json(route, { items: [oauthDirectoryItem] });
+  return true;
+}
+
 function connector(id: string, name: string, category: string, featuredRank: number) {
   return {
     id,
@@ -89,6 +127,7 @@ function connector(id: string, name: string, category: string, featuredRank: num
 async function mockApp(
   page: Page,
   directoryOverride?: (route: Route) => Promise<boolean>,
+  role: WorkspaceRole = "owner",
 ) {
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -109,7 +148,7 @@ async function mockApp(
           name: "Directory Test",
           slug: "directory-test",
           visibility: "private",
-          role: "owner",
+          role,
           created_at: "2026-07-23T00:00:00Z",
           updated_at: "2026-07-23T00:00:00Z",
         }],
@@ -159,6 +198,8 @@ async function mockApp(
     }
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/context7`)
       return json(route, { ...directoryItems[0], url: "https://mcp.context7.com/mcp" });
+    if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/notion`)
+      return json(route, { ...oauthDirectoryItem, url: "https://mcp.notion.com/mcp" });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/mcp-directory/context7/import`)
       return json(route, { installed: true, capability_id: CAPABILITY_ID }, 201);
     return json(route, {});
