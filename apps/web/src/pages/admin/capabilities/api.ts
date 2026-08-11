@@ -42,7 +42,18 @@ export interface PresignUploadResponse {
   expiresAt: string
 }
 
-async function postPresignUpload(workspaceID: string, filename: string, prefix: string): Promise<PresignUploadResponse> {
+export interface PresignDownloadResponse {
+  downloadUrl: string
+  method?: string
+  headers?: Record<string, string>
+  expiresAt: string
+}
+
+async function postPresignUpload(
+  workspaceID: string,
+  filename: string,
+  prefix: string,
+): Promise<PresignUploadResponse> {
   return apiRequest<PresignUploadResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/uploads/presign-upload`,
     {
@@ -76,7 +87,7 @@ export function usePresignUploadMutation(workspaceID: string | null) {
  * older servers that don't send method/headers.
  */
 export async function putToPresignedURL(presign: PresignUploadResponse, file: File): Promise<void> {
-  const resp = await fetch(presign.uploadUrl, {
+  const resp = await fetch(resolvePresignedBlobURL(presign.uploadUrl), {
     method: presign.method ?? "PUT",
     body: file,
     headers: presign.headers ?? { "Content-Type": "application/octet-stream" },
@@ -89,6 +100,39 @@ export async function putToPresignedURL(presign: PresignUploadResponse, file: Fi
       message: `Upload failed: ${resp.status} ${resp.statusText}${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
     })
   }
+}
+
+/** Download a workspace-owned blob through the existing presign route. */
+export async function downloadStoredZip(workspaceID: string, ossKey: string): Promise<Uint8Array> {
+  const presign = await apiRequest<PresignDownloadResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/uploads/presign-download`,
+    {
+      method: "POST",
+      body: { ossKey },
+    },
+  )
+  const resp = await fetch(resolvePresignedBlobURL(presign.downloadUrl), {
+    method: presign.method ?? "GET",
+    headers: presign.headers,
+  })
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "")
+    throw new ApiError({
+      status: resp.status,
+      code: "blob_download_failed",
+      message: `Download failed: ${resp.status} ${resp.statusText}${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
+    })
+  }
+  return new Uint8Array(await resp.arrayBuffer())
+}
+
+function resolvePresignedBlobURL(blobURL: string): string {
+  if (!import.meta.env.DEV || typeof window === "undefined") return blobURL
+  const parsed = new URL(blobURL, window.location.href)
+  if (parsed.origin === window.location.origin || !parsed.pathname.startsWith("/internal/blobs/")) {
+    return blobURL
+  }
+  return `${parsed.pathname}${parsed.search}`
 }
 
 /**
@@ -147,7 +191,9 @@ export function useImportCommitMutation(workspaceID: string | null) {
       void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID ?? "_none") })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
       if (workspaceID) {
-        void qc.invalidateQueries({ queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, res.capability.id) })
+        void qc.invalidateQueries({
+          queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, res.capability.id),
+        })
       }
     },
   })
@@ -189,7 +235,9 @@ export function useImportCapabilityVersionMutation(
       void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID ?? "_none") })
       void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
       if (workspaceID) {
-        void qc.invalidateQueries({ queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, res.capability.id) })
+        void qc.invalidateQueries({
+          queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, res.capability.id),
+        })
       }
     },
   })

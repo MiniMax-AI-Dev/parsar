@@ -1,17 +1,8 @@
-/**
- * Preview panel for a multi-file Skill zip. SKILL.md expanded; others
- * collapsed by default. Renders as syntax-highlighted source (not
- * rendered markdown) so packaging mistakes — broken frontmatter,
- * indentation — stay visible. shiki is loaded lazily; the highlighter
- * is created on first expand and reused.
- */
+/** Multi-file Skill viewer with an optional plain-text edit mode. */
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ChevronRight, FileText, FolderOpen } from "lucide-react"
-import {
-  createHighlighterCore,
-  type HighlighterCore,
-} from "shiki/core"
+import { createHighlighterCore, type HighlighterCore } from "shiki/core"
 import { createOnigurumaEngine } from "shiki/engine/oniguruma"
 
 import {
@@ -21,25 +12,40 @@ import {
 } from "../../../components/ui/collapsible"
 import type { CanonicalSkillSpec, SkillFile } from "./types"
 
-interface Props {
-  skill: CanonicalSkillSpec
+export interface SkillFileTreeEntry {
+  path: string
+  content: string | null
+  kind: SkillFile["kind"]
+  size?: number
 }
 
-export function SkillFileTree({ skill }: Props) {
-  const { t } = useTranslation("admin")
-  const files = useMemo(() => skill.files ?? [], [skill.files])
+interface Props {
+  skill?: CanonicalSkillSpec
+  files?: SkillFileTreeEntry[]
+  editable?: boolean
+  onFileChange?: (path: string, content: string) => void
+}
 
-  const grouped = useMemo(() => groupFiles(files), [files])
+export function SkillFileTree({ skill, files, editable = false, onFileChange }: Props) {
+  const { t } = useTranslation("admin")
+  const entries = useMemo(() => files ?? (skill ? buildTreeEntries(skill) : []), [files, skill])
+  const skillMd = entries.find((file) => file.path.toLowerCase() === "skill.md")
+  const grouped = useMemo(
+    () => groupFiles(entries.filter((file) => file !== skillMd)),
+    [entries, skillMd],
+  )
 
   return (
     <section className="grid gap-3">
-      <SkillMdCard skill={skill} />
+      {skillMd && <SkillMdCard file={skillMd} editable={editable} onFileChange={onFileChange} />}
 
       {grouped.references.length > 0 && (
         <GroupCard
           icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
           title={t("capabilities.import.skill.fileTree.references", "references/")}
           files={grouped.references}
+          editable={editable}
+          onFileChange={onFileChange}
         />
       )}
       {grouped.scripts.length > 0 && (
@@ -47,6 +53,8 @@ export function SkillFileTree({ skill }: Props) {
           icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
           title={t("capabilities.import.skill.fileTree.scripts", "scripts/")}
           files={grouped.scripts}
+          editable={editable}
+          onFileChange={onFileChange}
         />
       )}
       {grouped.other.length > 0 && (
@@ -54,19 +62,25 @@ export function SkillFileTree({ skill }: Props) {
           icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
           title={t("capabilities.import.skill.fileTree.other", "Other files")}
           files={grouped.other}
+          editable={editable}
+          onFileChange={onFileChange}
         />
       )}
     </section>
   )
 }
 
-function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
+function SkillMdCard({
+  file,
+  editable,
+  onFileChange,
+}: {
+  file: SkillFileTreeEntry
+  editable: boolean
+  onFileChange?: (path: string, content: string) => void
+}) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(true)
-
-  // Parser drops the raw bytes; rebuild from canonical fields so what
-  // the user sees matches what's been imported.
-  const source = useMemo(() => buildSkillMdSource(skill), [skill])
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -82,7 +96,7 @@ function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
           </span>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <ShikiCode content={source} lang="markdown" />
+          <FileBody file={file} editable={editable} onFileChange={onFileChange} />
         </CollapsibleContent>
       </div>
     </Collapsible>
@@ -119,10 +133,14 @@ function GroupCard({
   icon,
   title,
   files,
+  editable,
+  onFileChange,
 }: {
   icon: React.ReactNode
   title: string
-  files: SkillFile[]
+  files: SkillFileTreeEntry[]
+  editable: boolean
+  onFileChange?: (path: string, content: string) => void
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -134,14 +152,12 @@ function GroupCard({
           />
           {icon}
           <span className="font-mono text-sm text-fg-muted">{title}</span>
-          <span className="ml-auto text-xs text-fg-subtle">
-            {files.length}
-          </span>
+          <span className="ml-auto text-xs text-fg-subtle">{files.length}</span>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <ul className="grid gap-2 p-3">
             {files.map((f) => (
-              <FileRow key={f.path} file={f} />
+              <FileRow key={f.path} file={f} editable={editable} onFileChange={onFileChange} />
             ))}
           </ul>
         </CollapsibleContent>
@@ -150,7 +166,15 @@ function GroupCard({
   )
 }
 
-function FileRow({ file }: { file: SkillFile }) {
+function FileRow({
+  file,
+  editable,
+  onFileChange,
+}: {
+  file: SkillFileTreeEntry
+  editable: boolean
+  onFileChange?: (path: string, content: string) => void
+}) {
   const [open, setOpen] = useState(false)
   return (
     <li>
@@ -161,19 +185,49 @@ function FileRow({ file }: { file: SkillFile }) {
           />
           <FileText className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
           <code className="truncate font-mono text-xs text-fg-emphasis">{file.path}</code>
-          <span className="ml-auto text-xs uppercase tracking-wide text-fg-faint">
-            {file.kind}
-          </span>
+          <span className="ml-auto text-xs uppercase tracking-wide text-fg-faint">{file.kind}</span>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <FileBody file={file} />
+          <FileBody file={file} editable={editable} onFileChange={onFileChange} />
         </CollapsibleContent>
       </Collapsible>
     </li>
   )
 }
 
-function FileBody({ file }: { file: SkillFile }) {
+function FileBody({
+  file,
+  editable,
+  onFileChange,
+}: {
+  file: SkillFileTreeEntry
+  editable: boolean
+  onFileChange?: (path: string, content: string) => void
+}) {
+  const { t } = useTranslation("admin")
+  if (file.content === null) {
+    return (
+      <div className="bg-surface-subtle px-3 py-4 text-xs text-fg-subtle">
+        {t("capabilities.versions.add.binaryPreserved", {
+          size: file.size ?? 0,
+          defaultValue: "Binary file ({{size}} bytes). It will be preserved unchanged.",
+        })}
+      </div>
+    )
+  }
+  if (editable) {
+    return (
+      <textarea
+        value={file.content}
+        onChange={(event) => onFileChange?.(file.path, event.target.value)}
+        rows={16}
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+        className="block min-h-64 w-full resize-y border-0 bg-surface-subtle px-3 py-2 font-mono text-xs leading-relaxed text-fg focus:outline-none focus:ring-2 focus:ring-inset focus:ring-line-strong"
+      />
+    )
+  }
   const lang = inferLang(file.path)
   return <ShikiCode content={file.content} lang={lang} />
 }
@@ -223,15 +277,15 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
 /* ---------- helpers ---------------------------------------------------- */
 
 interface Grouped {
-  references: SkillFile[]
-  scripts: SkillFile[]
-  other: SkillFile[]
+  references: SkillFileTreeEntry[]
+  scripts: SkillFileTreeEntry[]
+  other: SkillFileTreeEntry[]
 }
 
-function groupFiles(files: SkillFile[]): Grouped {
-  const references: SkillFile[] = []
-  const scripts: SkillFile[] = []
-  const other: SkillFile[] = []
+function groupFiles(files: SkillFileTreeEntry[]): Grouped {
+  const references: SkillFileTreeEntry[] = []
+  const scripts: SkillFileTreeEntry[] = []
+  const other: SkillFileTreeEntry[] = []
   // Stable sort makes the list reproducible across re-uploads.
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path))
   for (const f of sorted) {
@@ -242,13 +296,23 @@ function groupFiles(files: SkillFile[]): Grouped {
   return { references, scripts, other }
 }
 
+function buildTreeEntries(skill: CanonicalSkillSpec): SkillFileTreeEntry[] {
+  return [
+    {
+      path: "SKILL.md",
+      content: buildSkillMdSource(skill),
+      kind: "markdown",
+    },
+    ...(skill.files ?? []).map((file) => ({ ...file })),
+  ]
+}
+
 function inferLang(path: string): string {
   const lower = path.toLowerCase()
   if (lower.endsWith(".py")) return "python"
   if (lower.endsWith(".sh") || lower.endsWith(".bash")) return "bash"
   if (lower.endsWith(".ts") || lower.endsWith(".tsx")) return "typescript"
-  if (lower.endsWith(".js") || lower.endsWith(".jsx") || lower.endsWith(".mjs"))
-    return "javascript"
+  if (lower.endsWith(".js") || lower.endsWith(".jsx") || lower.endsWith(".mjs")) return "javascript"
   if (lower.endsWith(".json")) return "json"
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "yaml"
   if (lower.endsWith(".toml")) return "toml"

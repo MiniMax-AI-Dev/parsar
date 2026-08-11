@@ -38,6 +38,7 @@ export default defineConfig({
       '/dev': devProxy,
       '/api': devProxy,
       '/agent-daemon': devProxy,
+      '/internal/blobs': devProxy,
     },
   },
 })
