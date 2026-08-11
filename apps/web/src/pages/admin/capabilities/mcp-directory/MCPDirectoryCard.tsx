@@ -83,7 +83,6 @@ export function MarketplaceMCPCard({ capability, canManage, onOpen, onInstall, o
         {capability.description ? <p className="mt-3 line-clamp-3 text-sm leading-5 text-fg-muted">{capability.description}</p> : null}
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4">
           <Badge variant="neutral">MCP</Badge>
-          {capability.self_published ? <Badge variant="neutral">{t("capabilities.marketplace.card.selfPublished")}</Badge> : null}
           {!capability.self_published && capability.installed ? <Badge variant="success">{t("capabilities.marketplace.card.installedBadge")}</Badge> : null}
           <Badge variant="neutral">v{capability.latest_version ?? "—"}</Badge>
         </div>

@@ -1539,22 +1539,6 @@ func (q *Queries) CountInFlightRunsByAgent(ctx context.Context, agentID pgtype.U
 	return column_1, err
 }
 
-const countInstalls = `-- name: CountInstalls :one
-select count(distinct a.workspace_id)::bigint
-from agent_capabilities ac
-join agents a on ac.agent_id = a.id
-join capability c on c.id = ac.capability_id
-where ac.capability_id = $1::uuid
-  and a.workspace_id != c.workspace_id
-`
-
-func (q *Queries) CountInstalls(ctx context.Context, sourceCapabilityID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countInstalls, sourceCapabilityID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const countPendingJoinRequests = `-- name: CountPendingJoinRequests :one
 select count(*)::bigint as pending_count
 from workspace_members
@@ -5262,8 +5246,8 @@ join lateral (
   from capability_version
   where capability_id = c.id
     -- After a capability is deprecated, latest bindings should freeze
-    -- on the newest version published before deprecation rather than
-    -- keep auto-tracking versions published afterwards (those are no
+    -- on the newest version created before deprecation rather than
+    -- keep auto-tracking versions created afterwards (those are no
     -- longer supported, matching UpgradeAgentCapability's explicit
     -- rejection of deprecated upgrades). When c.deprecated_at IS NULL
     -- this predicate is always true and behaves like the previous
@@ -10055,7 +10039,7 @@ join lateral (
 ) latest on true
 where a.workspace_id = $1::uuid
   and c.workspace_id != $1::uuid
-  and c.visibility = 'public'
+  and false
   and c.deleted_at is null
 order by c.name asc, cv.version asc
 `
@@ -12139,28 +12123,26 @@ func (q *Queries) UpdateCapability(ctx context.Context, arg UpdateCapabilityPara
 	return i, err
 }
 
-const updateCapabilityMarketplaceState = `-- name: UpdateCapabilityMarketplaceState :one
+const updateCapabilityDeprecation = `-- name: UpdateCapabilityDeprecation :one
 update capability
-set visibility = $1,
-    deprecated_at = $2::timestamptz,
-    updated_at = $3
-where id = $4::uuid
-  and workspace_id = $5::uuid
+set deprecated_at = $1::timestamptz,
+    updated_at = $2
+where id = $3::uuid
+  and workspace_id = $4::uuid
   and deleted_at is null
 returning id::text as id, workspace_id::text as workspace_id, type, name,
   description, visibility, status, creator_id::text as creator_id,
   created_at, updated_at, deleted_at, deprecated_at
 `
 
-type UpdateCapabilityMarketplaceStateParams struct {
-	Visibility   string             `json:"visibility"`
+type UpdateCapabilityDeprecationParams struct {
 	DeprecatedAt pgtype.Timestamptz `json:"deprecated_at"`
 	Now          pgtype.Timestamptz `json:"now"`
 	ID           pgtype.UUID        `json:"id"`
 	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
 }
 
-type UpdateCapabilityMarketplaceStateRow struct {
+type UpdateCapabilityDeprecationRow struct {
 	ID           string             `json:"id"`
 	WorkspaceID  string             `json:"workspace_id"`
 	Type         string             `json:"type"`
@@ -12175,15 +12157,14 @@ type UpdateCapabilityMarketplaceStateRow struct {
 	DeprecatedAt pgtype.Timestamptz `json:"deprecated_at"`
 }
 
-func (q *Queries) UpdateCapabilityMarketplaceState(ctx context.Context, arg UpdateCapabilityMarketplaceStateParams) (UpdateCapabilityMarketplaceStateRow, error) {
-	row := q.db.QueryRow(ctx, updateCapabilityMarketplaceState,
-		arg.Visibility,
+func (q *Queries) UpdateCapabilityDeprecation(ctx context.Context, arg UpdateCapabilityDeprecationParams) (UpdateCapabilityDeprecationRow, error) {
+	row := q.db.QueryRow(ctx, updateCapabilityDeprecation,
 		arg.DeprecatedAt,
 		arg.Now,
 		arg.ID,
 		arg.WorkspaceID,
 	)
-	var i UpdateCapabilityMarketplaceStateRow
+	var i UpdateCapabilityDeprecationRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -12755,7 +12736,6 @@ where ac.agent_id = $4::uuid
   and cv.id = $1::uuid
   and cv.capability_id = ac.capability_id
   and c.id = ac.capability_id
-  and c.visibility = 'public'
   and c.status = 'active'
   and c.deleted_at is null
   and c.deprecated_at is null

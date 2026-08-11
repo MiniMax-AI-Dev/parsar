@@ -579,9 +579,8 @@ func syncAgentCapabilities(
 	}
 
 	// 2. Resolve desired names. A name can come from this workspace's own
-	// capabilities, OR from the workspace-scoped marketplace pool surfaced
-	// in the agent picker. Local capabilities win on name collision: a user
-	// shadowing a marketplace name with a private one should keep using their own.
+	// capabilities, or from the workspace-scoped capability library surfaced
+	// in the agent picker. Local capability rows win on name collision.
 	allCaps, err := rs.ListCapabilities(ctx, workspaceID, store.ListCapabilityFilter{})
 	if err != nil {
 		return fmt.Errorf("syncAgentCapabilities: list capabilities: %w", err)
@@ -647,12 +646,12 @@ func syncAgentCapabilities(
 		}
 
 		// Default pinning_mode depends on the source:
-		//   * Local capability: user's expectation is "check it and follow the latest". After reupload,
-		//     no need to re-edit the agent, and skill iteration in the local workshop has no
-		//     breaking-change risk (owned by the same team).
-		//   * Marketplace: the publisher's new version may carry breaking changes,
-		//     keep pinned so the UpgradeCapabilityDialog explicit-confirm path remains
-		//     valid; the user must explicitly pick latest from the picker to auto-follow.
+		//   * Workspace capability: user's expectation is "check it and follow the latest". After reupload,
+		//     no need to re-edit the agent, and skill iteration inside the workspace has no
+		//     cross-team breaking-change risk.
+		//   * Library compatibility row: keep pinned so the UpgradeCapabilityDialog
+		//     explicit-confirm path remains valid; the user must explicitly pick latest
+		//     from the picker to auto-follow.
 		mode := store.PinningModeLatest
 		if cap.fromMarketplace {
 			mode = store.PinningModePinned

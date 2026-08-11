@@ -67,7 +67,7 @@ export function MCPDirectory({
     () => filterMCPDirectoryItems(items, { query, category, verifiedOnly, sort }),
     [items, query, category, verifiedOnly, sort],
   )
-  const publishedMCPs = useMemo(() => {
+  const workspaceMCPs = useMemo(() => {
     if (category || verifiedOnly) return []
     const installedIDs = new Set(items.flatMap((item) => item.installed_capability_id ? [item.installed_capability_id] : []))
     const needle = query.trim().toLocaleLowerCase()
@@ -84,10 +84,10 @@ export function MCPDirectory({
       | { kind: "marketplace"; item: MarketplaceCapability }
     > = [
       ...filtered.map((item) => ({ kind: "directory" as const, item })),
-      ...publishedMCPs.map((item) => ({ kind: "marketplace" as const, item })),
+      ...workspaceMCPs.map((item) => ({ kind: "marketplace" as const, item })),
     ]
     return sort === "name" ? merged.sort((left, right) => left.item.name.localeCompare(right.item.name)) : merged
-  }, [filtered, publishedMCPs, sort])
+  }, [filtered, workspaceMCPs, sort])
   const selectedSummary = items.find((item) => item.id === itemID) ?? null
   const selected = detailQ.data?.id === itemID ? detailQ.data : selectedSummary
 	const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null

@@ -25,8 +25,8 @@ interface DeleteCapabilityDialogProps {
 // If any agent is still bound the server returns 409 with envelope
 // { code: "capability_in_use", message: "<localized>", binding_count: N }.
 // envelope.message is already a display-ready string, so we render it as-is.
-// Same shape as DeprecateCapabilityDialog, but a separate dialog because the
-// semantics differ: delete is one-shot, with no toggle / install count.
+// Delete is one-shot: it frees the capability name only after the server
+// confirms no agent is still bound.
 export function DeleteCapabilityDialog({ capability, pending, error, onOpenChange, onConfirm }: DeleteCapabilityDialogProps) {
   const { t } = useTranslation("admin")
   const errMsg = error instanceof ApiError ? error.envelope.message : error instanceof Error ? error.message : null

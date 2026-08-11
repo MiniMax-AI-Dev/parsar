@@ -1735,7 +1735,7 @@ function DependencyCard({ title, description, href, cta }: { title: string; desc
  * binding to pinned mode at that version_id.
  *
  * Marketplace capabilities still get a working dropdown but the default
- * stays "pinned" on a known good version: marketplace publishes may
+ * stays "pinned" on a known good version: newer releases may
  * carry breaking changes, so the existing UpgradeCapabilityDialog flow
  * (which prompts on every new major) stays the recommended path. Users
  * who explicitly opt in to "latest" via this dropdown are accepting the

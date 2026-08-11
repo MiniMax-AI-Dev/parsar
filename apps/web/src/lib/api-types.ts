@@ -360,7 +360,7 @@ export interface ListCapabilitiesResponse {
   marketplace_installs?: Capability[]
   // Public marketplace capabilities this workspace has NOT installed yet
   // — surfaced in the Agent picker's "capability marketplace" section. Filtered
-  // server-side to exclude installed and self-published rows.
+  // server-side to exclude rows already available to the workspace.
   marketplace_available?: MarketplaceCapability[]
   page?: number
   page_size?: number

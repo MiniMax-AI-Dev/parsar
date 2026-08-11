@@ -3102,6 +3102,89 @@ paths:
       summary: Bootstrap status
       tags:
       - bootstrap
+  /api/v1/capabilities/marketplace:
+    get:
+      description: Lists MCP and Skill capabilities owned by the caller's workspace.
+        Workspace is taken from ?workspace_id or the X-Parsar-Workspace-ID header.
+      operationId: listDevMarketplaceCapabilities
+      parameters:
+      - description: Workspace UUID (falls back to X-Parsar-Workspace-ID header)
+        in: query
+        name: workspace_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Workspace capabilities visible in the library
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: workspace_id must be a valid uuid
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not an active workspace member
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Database-backed capability APIs are disabled
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List marketplace capabilities
+      tags:
+      - capabilities
+  /api/v1/capabilities/marketplace/{capabilityID}:
+    get:
+      description: Returns the latest workspace MCP or Skill definition. Inline secret
+        IDs are redacted.
+      operationId: getDevMarketplaceCapabilityDetail
+      parameters:
+      - description: Capability UUID
+        in: path
+        name: capabilityID
+        required: true
+        type: string
+      - description: Workspace UUID (falls back to X-Parsar-Workspace-ID header)
+        in: query
+        name: workspace_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Marketplace capability detail
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: workspace_id or capabilityID is invalid
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not an active workspace member
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Capability is not available in this workspace
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get marketplace capability detail
+      tags:
+      - capabilities
   /api/v1/connections/github/callback:
     get:
       description: Verifies CSRF state, exchanges the code for a GitHub access token,
@@ -4860,9 +4943,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Enables (installs) a capability version on the agent. Cross-workspace
-        enable requires the source capability to be public and non-deprecated. Workspace
-        owner, admin, or member only.
+      description: Enables (installs) a workspace capability version on the agent.
+        Workspace owner, admin, or member only.
       operationId: enableDevAgentCapability
       parameters:
       - description: Workspace UUID
@@ -5761,8 +5843,8 @@ paths:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/deprecate:
     post:
-      description: Marks a published capability as deprecated so it stays reachable
-        for existing installs but is hidden from new installs. Owner/admin only.
+      description: Marks a workspace capability as deprecated so existing Agent bindings
+        keep working but new Agent picks hide it. Owner/admin only.
       operationId: deprecateDevWorkspaceCapability
       parameters:
       - description: Workspace UUID
@@ -5807,13 +5889,12 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Deprecate a marketplace capability
+      summary: Deprecate a workspace capability
       tags:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/enabled-agents:
     get:
-      description: Lists agents in the workspace that have this marketplace capability
-        enabled.
+      description: Lists agents in the workspace that have this capability enabled.
       operationId: listDevMarketplaceEnabledAgents
       parameters:
       - description: Workspace UUID
@@ -5821,7 +5902,7 @@ paths:
         name: workspaceID
         required: true
         type: string
-      - description: Source marketplace capability UUID
+      - description: Capability UUID
         in: path
         name: capabilityID
         required: true
@@ -5852,114 +5933,12 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: List agents using a marketplace capability
-      tags:
-      - capabilities
-  /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/install-count:
-    get:
-      description: Returns the marketplace install count for a capability the workspace
-        has published.
-      operationId: getDevCapabilityInstallCount
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Capability UUID
-        in: path
-        name: capabilityID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: capability_id and install_count
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: workspace_id or capability_id is not a valid uuid
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not an active workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Capability not found in this workspace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get marketplace install count
-      tags:
-      - capabilities
-  /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/publish:
-    post:
-      description: Promotes an active capability to the marketplace. Owner/admin only.
-        Rejects with 400 if any capability version contains a plaintext-looking secret.
-      operationId: publishDevWorkspaceCapability
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Capability UUID
-        in: path
-        name: capabilityID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated capability
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Plaintext secret detected or invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Capability not found in this workspace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Publish a capability to the marketplace
+      summary: List agents using a capability
       tags:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/undeprecate:
     post:
-      description: Clears the deprecated flag on a previously deprecated marketplace
+      description: Clears the deprecated flag on a previously deprecated workspace
         capability. Owner/admin only.
       operationId: undeprecateDevWorkspaceCapability
       parameters:
@@ -6005,58 +5984,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Undeprecate a marketplace capability
-      tags:
-      - capabilities
-  /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/unpublish:
-    post:
-      description: Retracts a previously published capability from the marketplace.
-        Owner/admin only.
-      operationId: unpublishDevWorkspaceCapability
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Capability UUID
-        in: path
-        name: capabilityID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated capability
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Invalid UUID
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not workspace owner/admin
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Capability not found in this workspace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Unpublish a capability from the marketplace
+      summary: Undeprecate a workspace capability
       tags:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/versions:
@@ -6925,91 +6853,6 @@ paths:
       summary: Resolve a pending approval or user question
       tags:
       - interactions
-  /api/v1/workspaces/{workspaceID}/marketplace/capabilities:
-    get:
-      description: Lists active MCP and Skill capabilities in the requested workspace
-        marketplace.
-      operationId: listDevMarketplaceCapabilities
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Marketplace capabilities visible to the workspace
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: workspace_id must be a valid uuid
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not an active workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "503":
-          description: Database-backed capability APIs are disabled
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List marketplace capabilities
-      tags:
-      - capabilities
-  /api/v1/workspaces/{workspaceID}/marketplace/capabilities/{capabilityID}:
-    get:
-      description: Returns the latest workspace-scoped MCP or Skill definition. Inline
-        secret IDs are redacted.
-      operationId: getDevMarketplaceCapabilityDetail
-      parameters:
-      - description: Workspace UUID
-        in: path
-        name: workspaceID
-        required: true
-        type: string
-      - description: Capability UUID
-        in: path
-        name: capabilityID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Marketplace capability detail
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: workspace_id or capabilityID is invalid
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: Caller is not an active workspace member
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Capability is not available in the Marketplace
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get marketplace capability detail
-      tags:
-      - capabilities
   /api/v1/workspaces/{workspaceID}/mcp-directory:
     get:
       parameters:

@@ -136,12 +136,6 @@ interface TargetInstallsResponse {
   items?: TargetMarketplaceInstall[]
 }
 
-interface InstallCountResponse {
-  count?: number
-  install_count?: number
-  workspace_count?: number
-}
-
 interface EnabledAgentsResponse {
   agents?: EnabledMarketplaceAgent[]
   items?: EnabledMarketplaceAgent[]
@@ -151,7 +145,6 @@ export const KEY_MARKETPLACE_LIST = (workspaceID: string) => ["admin", "capabili
 export const KEY_MARKETPLACE_DETAIL = (workspaceID: string, capabilityID: string) =>
   ["admin", "capabilityMarketplaceDetail", workspaceID, capabilityID] as const
 export const KEY_TARGET_MARKETPLACE_INSTALLS = (workspaceID: string) => ["admin", "targetMarketplaceInstalls", workspaceID] as const
-export const KEY_INSTALL_COUNT = (workspaceID: string, capabilityID: string) => ["admin", "capabilityInstallCount", workspaceID, capabilityID] as const
 export const KEY_MARKETPLACE_ENABLED_AGENTS = (workspaceID: string, capabilityID: string) => ["admin", "marketplaceEnabledAgents", workspaceID, capabilityID] as const
 export const KEY_MCP_DIRECTORY = (workspaceID: string) => ["admin", "mcpDirectory", workspaceID] as const
 export const KEY_MCP_DIRECTORY_DETAIL = (workspaceID: string, catalogID: string) => ["admin", "mcpDirectoryDetail", workspaceID, catalogID] as const
@@ -159,7 +152,8 @@ export const KEY_MCP_DIRECTORY_DETAIL = (workspaceID: string, catalogID: string)
 async function listMarketplace(workspaceID: string | null): Promise<MarketplaceCapability[]> {
   if (!workspaceID) return []
   const data = await apiRequest<MarketplaceListResponse | MarketplaceCapability[]>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/marketplace/capabilities`,
+    `/api/v1/capabilities/marketplace`,
+    { query: { workspace_id: workspaceID } },
   )
   if (Array.isArray(data)) return data
   return (data.capabilities ?? data.marketplace ?? data.items ?? []).map(normalizeMarketplaceCapability)
@@ -171,7 +165,8 @@ async function getMarketplaceDetail(
 ): Promise<MarketplaceCapabilityDetail> {
   if (!workspaceID || !capabilityID) throw new Error("workspace and capability are required")
   const data = await apiRequest<MarketplaceDetailResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/marketplace/capabilities/${encodeURIComponent(capabilityID)}`,
+    `/api/v1/capabilities/marketplace/${encodeURIComponent(capabilityID)}`,
+    { query: { workspace_id: workspaceID } },
   )
   return data.capability
 }
@@ -183,14 +178,6 @@ async function listTargetInstalls(workspaceID: string | null): Promise<TargetMar
   )
   const items = Array.isArray(data) ? data : data.capabilities ?? data.installs ?? data.items ?? []
   return items.map(normalizeMarketplaceInstall)
-}
-
-async function getInstallCount(workspaceID: string | null, capabilityID: string | null): Promise<number> {
-  if (!workspaceID || !capabilityID) return 0
-  const data = await apiRequest<InstallCountResponse>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/install-count`,
-  )
-  return data.install_count ?? data.workspace_count ?? data.count ?? 0
 }
 
 async function listEnabledAgents(workspaceID: string | null, capabilityID: string | null): Promise<EnabledMarketplaceAgent[]> {
@@ -231,13 +218,6 @@ function normalizeMarketplaceInstall(item: TargetMarketplaceInstall): TargetMark
 
 function normalizeEnabledAgent(item: EnabledMarketplaceAgent): EnabledMarketplaceAgent {
   return { ...item, name: item.name ?? item.agent_name ?? "—" }
-}
-
-async function postWorkspaceCapability(workspaceID: string, capabilityID: string, action: "publish" | "unpublish" | "deprecate" | "undeprecate") {
-  return apiRequest<Capability>(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/capabilities/${encodeURIComponent(capabilityID)}/${action}`,
-    { method: "POST" },
-  )
 }
 
 async function uninstallMarketplace(workspaceID: string, capabilityID: string) {
@@ -284,16 +264,6 @@ export function useTargetMarketplaceInstalls(workspaceID: string | null) {
   return useQuery({
     queryKey: KEY_TARGET_MARKETPLACE_INSTALLS(workspaceID ?? "_none"),
     queryFn: () => listTargetInstalls(workspaceID),
-    retry: noUnreachableRetry,
-    staleTime: 30_000,
-  })
-}
-
-export function useInstallCount(workspaceID: string | null, capabilityID: string | null) {
-  return useQuery({
-    queryKey: KEY_INSTALL_COUNT(workspaceID ?? "_none", capabilityID ?? "_none"),
-    queryFn: () => getInstallCount(workspaceID, capabilityID),
-    enabled: !!workspaceID && !!capabilityID,
     retry: noUnreachableRetry,
     staleTime: 30_000,
   })
@@ -359,38 +329,9 @@ function invalidateMarketplace(qc: ReturnType<typeof useQueryClient>, workspaceI
   void qc.invalidateQueries({ queryKey: KEY_CAPABILITIES_WORKSPACE(workspaceID ?? "_none") })
   void qc.invalidateQueries({ queryKey: ["admin", "capability"] })
   if (workspaceID && capabilityID) {
-    void qc.invalidateQueries({ queryKey: KEY_INSTALL_COUNT(workspaceID, capabilityID) })
     void qc.invalidateQueries({ queryKey: KEY_MARKETPLACE_ENABLED_AGENTS(workspaceID, capabilityID) })
     void qc.invalidateQueries({ queryKey: KEY_CAPABILITY_VERSIONS(workspaceID, capabilityID) })
   }
-}
-
-function useWorkspaceAction(workspaceID: string | null, action: "publish" | "unpublish" | "deprecate" | "undeprecate") {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (capabilityID: string) => {
-      if (!workspaceID) throw new Error("workspace is required")
-      return postWorkspaceCapability(workspaceID, capabilityID, action)
-    },
-    retry: noUnreachableRetry,
-    onSuccess: (capability) => invalidateMarketplace(qc, workspaceID, capability.id),
-  })
-}
-
-export function usePublish(workspaceID: string | null) {
-  return useWorkspaceAction(workspaceID, "publish")
-}
-
-export function useUnpublish(workspaceID: string | null) {
-  return useWorkspaceAction(workspaceID, "unpublish")
-}
-
-export function useDeprecate(workspaceID: string | null) {
-  return useWorkspaceAction(workspaceID, "deprecate")
-}
-
-export function useUndeprecate(workspaceID: string | null) {
-  return useWorkspaceAction(workspaceID, "undeprecate")
 }
 
 // useDelete isn't a marketplace action, but shares the capabilities route so

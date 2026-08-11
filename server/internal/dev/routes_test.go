@@ -2632,10 +2632,6 @@ func (stubRuntimeStore) ListWorkspaceMarketplaceInstalls(ctx context.Context, ta
 	return []store.MarketplaceInstallRead{}, nil
 }
 
-func (stubRuntimeStore) CountInstalls(ctx context.Context, sourceCapabilityID string) (int64, error) {
-	return 0, nil
-}
-
 func (stubRuntimeStore) ListEnabledAgents(ctx context.Context, targetWorkspaceID string, sourceCapabilityID string) ([]store.EnabledMarketplaceAgentRead, error) {
 	return []store.EnabledMarketplaceAgentRead{}, nil
 }
@@ -2656,21 +2652,13 @@ func (stubRuntimeStore) SoftDeleteCapability(ctx context.Context, workspaceID st
 	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Type: "mcp", Name: "GitHub", Visibility: "workspace", Status: "active"}, nil
 }
 
-func (stubRuntimeStore) PublishCapability(ctx context.Context, workspaceID string, capabilityID string) (store.CapabilityRead, error) {
-	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Visibility: "public", Status: "active"}, nil
-}
-
-func (stubRuntimeStore) UnpublishCapability(ctx context.Context, workspaceID string, capabilityID string) (store.CapabilityRead, error) {
-	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Visibility: "workspace", Status: "active"}, nil
-}
-
 func (stubRuntimeStore) DeprecateCapability(ctx context.Context, workspaceID string, capabilityID string) (store.CapabilityRead, error) {
 	now := time.Now().UTC()
-	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Visibility: "public", Status: "active", DeprecatedAt: &now}, nil
+	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Visibility: "workspace", Status: "active", DeprecatedAt: &now}, nil
 }
 
 func (stubRuntimeStore) UndeprecateCapability(ctx context.Context, workspaceID string, capabilityID string) (store.CapabilityRead, error) {
-	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Visibility: "public", Status: "active"}, nil
+	return store.CapabilityRead{ID: capabilityID, WorkspaceID: workspaceID, Visibility: "workspace", Status: "active"}, nil
 }
 
 func (stubRuntimeStore) ListCapabilityVersions(ctx context.Context, capabilityID string) ([]store.CapabilityVersionRead, error) {

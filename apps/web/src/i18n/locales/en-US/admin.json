@@ -681,10 +681,6 @@
       "more": "More actions",
       "disable": "Disable",
       "enable": "Enable",
-      "publish": "Publish to market",
-      "unpublish": "Cancel publishing",
-      "deprecate": "Mark deprecated",
-      "undeprecate": "Clear deprecated",
       "delete": "Delete",
       "uninstall": "Remove from workspace"
     },
@@ -808,8 +804,7 @@
     "deleteBlocked": "Remove this capability from those Agents before deleting it.",
     "errors": {
       "nameRequired": "Enter a capability name.",
-      "nameTooLong": "Capability name must be at most 50 characters.",
-      "plaintextSecretPattern": "{{version}} content appears to contain a plaintext credential. Replace tokens / secrets with the ${PARSAR_CREDENTIAL} placeholder before publishing to the market."
+      "nameTooLong": "Capability name must be at most 50 characters."
     },
     "toast": {
       "created": "{{name}} was added. Enable it from Agent detail to use it.",
@@ -843,7 +838,7 @@
       "drawer": {
         "breadcrumb": "Agent Management / Capabilities",
         "title": "Capability market",
-        "description": "Browse capabilities published by every workspace. Pick one, then enable it on a specific Agent from Agent detail."
+        "description": "Browse this workspace's capability library. Pick one, then enable it on a specific Agent from Agent detail."
       },
       "filters": {
         "all": "All",
@@ -858,15 +853,15 @@
         "install": "+ Add to my Agent",
         "installed": "Enabled on {{count}} Agent(s)",
         "installedBadge": "Added",
-        "selfPublished": "Published by you"
+        "usedByAgents": "Used by {{count}} Agent(s)"
       },
       "detail": {
         "back": "Back to market list",
-        "addedCount": "Workspaces added",
+        "agentCount": "Agents using",
         "contentTitle": "Capability contents",
         "contentDescription": "Review the exact Skill files or MCP launch configuration before adding it to an Agent.",
         "loadErrorTitle": "Failed to load capability contents",
-        "loadErrorDescription": "The latest published version could not be loaded.",
+        "loadErrorDescription": "The latest version could not be loaded.",
         "contentUnavailable": "This older version does not contain previewable Skill or MCP content.",
         "sourceRepository": "Source repository",
         "sourceCommit": "Source commit",
@@ -881,7 +876,7 @@
       },
       "empty": {
         "title": "No capabilities are available in the market yet",
-        "description": "Capabilities published by other workspaces will appear here. You can publish your own capability from its detail page."
+        "description": "Capabilities created or imported in this workspace will appear here."
       },
       "loadError": {
         "title": "Failed to load capability market",
@@ -908,7 +903,7 @@
     },
     "mcpDirectory": {
       "title": "Connectors",
-      "description": "Browse curated connectors and MCP capabilities published by workspaces in one marketplace.",
+      "description": "Browse curated connectors and this workspace's MCP capabilities in one library.",
       "verified": "Verified",
       "securityNotice": "Import only saves the configuration and does not run it immediately. The MCP can execute in a Runtime only after you enable it and bind it to an Agent.",
       "filters": {
@@ -988,48 +983,6 @@
       "badgeTarget": "Deprecated, migration recommended",
       "badgeSource": "Deprecated",
       "bannerTarget": "The source workspace marked this capability deprecated. Agents already using it can keep using the pinned version, but cannot upgrade to a newer version."
-    },
-    "marketStatus": {
-      "title": "Market status",
-      "published": "Published to market",
-      "unpublished": "Not published",
-      "installCount": "{{count}} workspace(s) added",
-      "actions": {
-        "publish": "Publish to market",
-        "unpublish": "Cancel publishing",
-        "deprecate": "Deprecate",
-        "undeprecate": "Restore"
-      },
-      "deprecateTooltip": "Once deprecated, the capability no longer appears in the picker when creating or editing agents. Existing agent bindings keep working as-is.",
-      "undeprecateTooltip": "Restoring makes the capability appear in the picker again when creating or editing agents.",
-      "toast": {
-        "publish": "\"{{name}}\" was published to the market.",
-        "unpublish": "\"{{name}}\" was removed from the market.",
-        "deprecate": "\"{{name}}\" was marked deprecated.",
-        "undeprecate": "\"{{name}}\" is no longer deprecated."
-      },
-      "dialog": {
-        "publish": {
-          "title": "Publish \"{{name}}\" to the capability market?",
-          "description": "After publishing, admins in other workspaces can see this capability in the market and enable the latest version on their Agents. Published versions are kept permanently for stability.",
-          "confirm": "Publish to market"
-        },
-        "unpublish": {
-          "title": "Cancel publishing \"{{name}}\"?",
-          "description": "After this, the capability no longer appears in the market. The {{count}} workspace(s) that already added it are unaffected, but cannot upgrade to later versions.",
-          "confirm": "Cancel publishing"
-        },
-        "deprecate": {
-          "title": "Mark \"{{name}}\" deprecated?",
-          "description": "This hides it from the market. The {{count}} workspace(s) that already added it keep using their pinned version, but will see a migration hint and cannot upgrade.",
-          "confirm": "Mark deprecated"
-        },
-        "undeprecate": {
-          "title": "Clear deprecated state for \"{{name}}\"?",
-          "description": "The capability appears in the market again, migration hints disappear, and existing workspaces can upgrade again.",
-          "confirm": "Clear deprecated"
-        }
-      }
     },
     "uninstall": {
       "sectionTitle": "Remove from my workspace",
@@ -1491,7 +1444,7 @@
           "badge": "From market",
           "source": "From {{source}} · current v{{version}}",
           "deprecatedBanner": "The source workspace marked this capability deprecated. This Agent can keep using pinned v{{version}}, but cannot upgrade.",
-          "upgradeAvailable": "The source workspace published v{{version}}.",
+          "upgradeAvailable": "A newer version is available: v{{version}}.",
           "upgradeBlocked": "Source capability is deprecated; upgrade is unavailable."
         }
       },
@@ -1687,7 +1640,7 @@
       "versionPicker": {
         "latest": "latest",
         "localHint": "Pick latest to auto-follow re-uploads. Pick a specific version to pin.",
-        "marketplaceHint": "Marketplace: latest follows the publisher's newest release, which may include breaking changes."
+        "marketplaceHint": "Marketplace: latest follows the newest available release, which may include breaking changes."
       },
       "wizard": {
         "stepOf": "Step {{current}} of {{total}}",

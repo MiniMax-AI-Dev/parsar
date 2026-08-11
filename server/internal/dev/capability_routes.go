@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -161,18 +160,6 @@ type userCredentialResponse struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
-var plaintextSecretPatterns = []struct {
-	name    string
-	pattern *regexp.Regexp
-}{
-	{name: "github personal access token", pattern: regexp.MustCompile(`(?i)(github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,})`)},
-	{name: "slack bot token", pattern: regexp.MustCompile(`xoxb-[A-Za-z0-9-]{20,}`)},
-	{name: "aws access key", pattern: regexp.MustCompile(`AKIA[A-Z0-9]{16}`)},
-	{name: "jwt", pattern: regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)},
-	{name: "postgres password url", pattern: regexp.MustCompile(`(?i)postgres(?:ql)?://[^\s:@/]+:[^\s:@/]+@`)},
-	{name: "generic api key", pattern: regexp.MustCompile(`(?i)(api[_-]?key|access[_-]?token|secret)["'\s:=]+[A-Za-z0-9_./+=-]{32,}`)},
-}
-
 // listWorkspaceCapabilities returns own capabilities plus marketplace installs
 // and available marketplace items for the workspace.
 //
@@ -248,8 +235,9 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 			filteredInstalls = append(filteredInstalls, item)
 		}
 		marketplaceInstalls = filteredInstalls
-		// Picker only wants discoverable rows — drop self-published and
-		// already-installed so they don't double up with the workspace section.
+		// Picker only wants extra library rows. In workspace-scoped mode these
+		// rows are normally the same capability records already returned above,
+		// so keep them out of the secondary bucket to avoid duplicates.
 		filteredAvailable := marketplaceAvailable[:0]
 		for _, item := range marketplaceAvailable {
 			if !isListedCapabilityType(item.Type) {
@@ -349,24 +337,35 @@ func listWorkspaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// listMarketplaceCapabilities lists active capabilities in the caller's
-// workspace marketplace.
+// listMarketplaceCapabilities lists the workspace-scoped capability library.
 //
 //	@Summary		List marketplace capabilities
-//	@Description	Lists active MCP and Skill capabilities in the requested workspace marketplace.
+//	@Description	Lists MCP and Skill capabilities owned by the caller's workspace. Workspace is taken from ?workspace_id or the X-Parsar-Workspace-ID header.
 //	@Tags			capabilities
 //	@ID				listDevMarketplaceCapabilities
 //	@Produce		json
-//	@Param			workspaceID	path	string	true	"Workspace UUID"
-//	@Success		200 {object} map[string]interface{} "Marketplace capabilities visible to the workspace"
+//	@Param			workspace_id	query	string	false	"Workspace UUID (falls back to X-Parsar-Workspace-ID header)"
+//	@Success		200 {object} map[string]interface{} "Workspace capabilities visible in the library"
 //	@Failure		400 {object} map[string]string "workspace_id must be a valid uuid"
 //	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
-//	@Router			/api/v1/workspaces/{workspaceID}/marketplace/capabilities [get]
+//	@Router			/api/v1/capabilities/marketplace [get]
 func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceCapabilityRead(w, r, runtimeStore)
-		if !ok {
+		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		if workspaceID == "" {
+			workspaceID = strings.TrimSpace(r.Header.Get("X-Parsar-Workspace-ID"))
+		}
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
+			return
+		}
+		if runtimeStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
+			return
+		}
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
 			return
 		}
 		capabilities, err := runtimeStore.ListMarketplaceCapabilities(r.Context(), workspaceID)
@@ -393,30 +392,42 @@ func isListedCapabilityType(capabilityType string) bool {
 	}
 }
 
-// getMarketplaceCapabilityDetail returns the latest workspace marketplace
-// MCP/Skill body on demand so list responses stay lightweight.
+// getMarketplaceCapabilityDetail returns the latest workspace MCP/Skill body on
+// demand so list responses stay lightweight.
 //
 //	@Summary		Get marketplace capability detail
-//	@Description	Returns the latest workspace-scoped MCP or Skill definition. Inline secret IDs are redacted.
+//	@Description	Returns the latest workspace MCP or Skill definition. Inline secret IDs are redacted.
 //	@Tags			capabilities
 //	@ID			getDevMarketplaceCapabilityDetail
 //	@Produce		json
-//	@Param			workspaceID	path	string	true	"Workspace UUID"
 //	@Param			capabilityID	path	string	true	"Capability UUID"
+//	@Param			workspace_id	query	string	false	"Workspace UUID (falls back to X-Parsar-Workspace-ID header)"
 //	@Success		200 {object} map[string]interface{} "Marketplace capability detail"
 //	@Failure		400 {object} map[string]string "workspace_id or capabilityID is invalid"
 //	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
-//	@Failure		404 {object} map[string]string "Capability is not available in the Marketplace"
-//	@Router			/api/v1/workspaces/{workspaceID}/marketplace/capabilities/{capabilityID} [get]
+//	@Failure		404 {object} map[string]string "Capability is not available in this workspace"
+//	@Router			/api/v1/capabilities/marketplace/{capabilityID} [get]
 func getMarketplaceCapabilityDetail(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceCapabilityRead(w, r, runtimeStore)
-		if !ok {
+		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		if workspaceID == "" {
+			workspaceID = strings.TrimSpace(r.Header.Get("X-Parsar-Workspace-ID"))
+		}
+		if !isUUID(workspaceID) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "workspace_id must be a valid uuid"})
 			return
 		}
 		capabilityID := strings.TrimSpace(chi.URLParam(r, "capabilityID"))
 		if !isUUID(capabilityID) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "capabilityID must be a valid uuid"})
+			return
+		}
+		if runtimeStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "database-backed capability APIs are disabled"})
+			return
+		}
+		if err := requireWorkspaceMember(r, runtimeStore, workspaceID); err != nil {
+			writeRBACError(w, err)
 			return
 		}
 
@@ -556,47 +567,16 @@ func listWorkspaceMarketplaceInstalls(runtimeStore RuntimeStore) http.HandlerFun
 	}
 }
 
-// getCapabilityInstallCount returns the marketplace install count for a
-// capability the workspace authored.
-//
-//	@Summary		Get marketplace install count
-//	@Description	Returns the marketplace install count for a capability the workspace has published.
-//	@Tags			capabilities
-//	@ID				getDevCapabilityInstallCount
-//	@Produce		json
-//	@Param			workspaceID		path	string	true	"Workspace UUID"
-//	@Param			capabilityID	path	string	true	"Capability UUID"
-//	@Success		200 {object} map[string]interface{} "capability_id and install_count"
-//	@Failure		400 {object} map[string]string "workspace_id or capability_id is not a valid uuid"
-//	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
-//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
-//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
-//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/install-count [get]
-func getCapabilityInstallCount(runtimeStore RuntimeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, false)
-		if !ok {
-			return
-		}
-		count, err := runtimeStore.CountInstalls(r.Context(), capabilityID)
-		if err != nil {
-			writeCapabilityError(w, err, "failed to count marketplace installs")
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"capability_id": capabilityID, "install_count": count})
-	}
-}
-
 // listMarketplaceEnabledAgents lists agents in the target workspace that have
-// this marketplace capability enabled.
+// this workspace capability enabled.
 //
-//	@Summary		List agents using a marketplace capability
-//	@Description	Lists agents in the workspace that have this marketplace capability enabled.
+//	@Summary		List agents using a capability
+//	@Description	Lists agents in the workspace that have this capability enabled.
 //	@Tags			capabilities
 //	@ID				listDevMarketplaceEnabledAgents
 //	@Produce		json
 //	@Param			workspaceID		path	string	true	"Workspace UUID"
-//	@Param			capabilityID	path	string	true	"Source marketplace capability UUID"
+//	@Param			capabilityID	path	string	true	"Capability UUID"
 //	@Success		200 {object} map[string]interface{} "capability_id and enabled agents"
 //	@Failure		400 {object} map[string]string "workspace_id or capability_id is not a valid uuid"
 //	@Failure		403 {object} map[string]string "Caller is not an active workspace member"
@@ -604,13 +584,8 @@ func getCapabilityInstallCount(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/enabled-agents [get]
 func listMarketplaceEnabledAgents(runtimeStore RuntimeStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID, ok := requireWorkspaceCapabilityRead(w, r, runtimeStore)
+		workspaceID, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, false)
 		if !ok {
-			return
-		}
-		capabilityID := chi.URLParam(r, "capabilityID")
-		if !isUUID(capabilityID) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "capability_id must be a valid uuid"})
 			return
 		}
 		agents, err := runtimeStore.ListEnabledAgents(r.Context(), workspaceID, capabilityID)
@@ -758,48 +733,10 @@ func patchWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 	}
 }
 
-// publishWorkspaceCapability promotes a capability to the marketplace.
+// deprecateWorkspaceCapability marks a workspace capability as deprecated.
 //
-//	@Summary		Publish a capability to the marketplace
-//	@Description	Promotes an active capability to the marketplace. Owner/admin only. Rejects with 400 if any capability version contains a plaintext-looking secret.
-//	@Tags			capabilities
-//	@ID				publishDevWorkspaceCapability
-//	@Produce		json
-//	@Param			workspaceID		path	string	true	"Workspace UUID"
-//	@Param			capabilityID	path	string	true	"Capability UUID"
-//	@Success		200 {object} map[string]interface{} "Updated capability"
-//	@Failure		400 {object} map[string]string "Plaintext secret detected or invalid UUID"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
-//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
-//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/publish [post]
-func publishWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
-	return marketplaceStateCapability(runtimeStore, "publish")
-}
-
-// unpublishWorkspaceCapability retracts a capability from the marketplace.
-//
-//	@Summary		Unpublish a capability from the marketplace
-//	@Description	Retracts a previously published capability from the marketplace. Owner/admin only.
-//	@Tags			capabilities
-//	@ID				unpublishDevWorkspaceCapability
-//	@Produce		json
-//	@Param			workspaceID		path	string	true	"Workspace UUID"
-//	@Param			capabilityID	path	string	true	"Capability UUID"
-//	@Success		200 {object} map[string]interface{} "Updated capability"
-//	@Failure		400 {object} map[string]string "Invalid UUID"
-//	@Failure		403 {object} map[string]string "Caller is not workspace owner/admin"
-//	@Failure		404 {object} map[string]string "Capability not found in this workspace"
-//	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
-//	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/unpublish [post]
-func unpublishWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
-	return marketplaceStateCapability(runtimeStore, "unpublish")
-}
-
-// deprecateWorkspaceCapability marks a marketplace capability as deprecated.
-//
-//	@Summary		Deprecate a marketplace capability
-//	@Description	Marks a published capability as deprecated so it stays reachable for existing installs but is hidden from new installs. Owner/admin only.
+//	@Summary		Deprecate a workspace capability
+//	@Description	Marks a workspace capability as deprecated so existing Agent bindings keep working but new Agent picks hide it. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				deprecateDevWorkspaceCapability
 //	@Produce		json
@@ -812,14 +749,14 @@ func unpublishWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/deprecate [post]
 func deprecateWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
-	return marketplaceStateCapability(runtimeStore, "deprecate")
+	return capabilityAvailabilityState(runtimeStore, "deprecate")
 }
 
-// undeprecateWorkspaceCapability clears the deprecated flag on a marketplace
+// undeprecateWorkspaceCapability clears the deprecated flag on a workspace
 // capability.
 //
-//	@Summary		Undeprecate a marketplace capability
-//	@Description	Clears the deprecated flag on a previously deprecated marketplace capability. Owner/admin only.
+//	@Summary		Undeprecate a workspace capability
+//	@Description	Clears the deprecated flag on a previously deprecated workspace capability. Owner/admin only.
 //	@Tags			capabilities
 //	@ID				undeprecateDevWorkspaceCapability
 //	@Produce		json
@@ -832,43 +769,28 @@ func deprecateWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 //	@Failure		503 {object} map[string]string "Database-backed capability APIs are disabled"
 //	@Router			/api/v1/workspaces/{workspaceID}/capabilities/{capabilityID}/undeprecate [post]
 func undeprecateWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
-	return marketplaceStateCapability(runtimeStore, "undeprecate")
+	return capabilityAvailabilityState(runtimeStore, "undeprecate")
 }
 
-func marketplaceStateCapability(runtimeStore RuntimeStore, action string) http.HandlerFunc {
+func capabilityAvailabilityState(runtimeStore RuntimeStore, action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID, capabilityID, ok := requireWorkspaceCapabilityByID(w, r, runtimeStore, true)
 		if !ok {
 			return
 		}
-		if action == "publish" {
-			versions, err := runtimeStore.ListCapabilityVersions(r.Context(), capabilityID)
-			if err != nil {
-				writeCapabilityError(w, err, "failed to list capability versions")
-				return
-			}
-			if err := rejectPlaintextSecretsInCapabilityVersions(versions); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-				return
-			}
-		}
 		var updated store.CapabilityRead
 		var err error
 		switch action {
-		case "publish":
-			updated, err = runtimeStore.PublishCapability(r.Context(), workspaceID, capabilityID)
-		case "unpublish":
-			updated, err = runtimeStore.UnpublishCapability(r.Context(), workspaceID, capabilityID)
 		case "deprecate":
 			updated, err = runtimeStore.DeprecateCapability(r.Context(), workspaceID, capabilityID)
 		case "undeprecate":
 			updated, err = runtimeStore.UndeprecateCapability(r.Context(), workspaceID, capabilityID)
 		default:
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unknown marketplace action"})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unknown availability action"})
 			return
 		}
 		if err != nil {
-			writeCapabilityError(w, err, "failed to update marketplace state")
+			writeCapabilityError(w, err, "failed to update capability availability")
 			return
 		}
 		writeJSON(w, http.StatusOK, updated)
@@ -1343,10 +1265,11 @@ func listAgentCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 }
 
 // enableAgentCapability enables (installs) a capability version on the agent.
-// Cross-workspace requires the source capability to be public + non-deprecated.
+// Cross-workspace capability binding is not allowed; capabilities must belong
+// to the agent's workspace.
 //
 //	@Summary		Enable a capability on an agent
-//	@Description	Enables (installs) a capability version on the agent. Cross-workspace enable requires the source capability to be public and non-deprecated. Workspace owner, admin, or member only.
+//	@Description	Enables (installs) a workspace capability version on the agent. Workspace owner, admin, or member only.
 //	@Tags			capabilities
 //	@ID				enableDevAgentCapability
 //	@Accept			json
@@ -1383,11 +1306,8 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			writeCapabilityError(w, err, "failed to get capability")
 			return
 		}
-		// Cross-workspace enable is only allowed for capabilities still
-		// on offer in the marketplace: public visibility + not soft-
-		// removed via deprecated_at.
-		if capability.WorkspaceID != agent.WorkspaceID && (capability.Visibility != "public" || capability.DeprecatedAt != nil) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "marketplace capability is unavailable"})
+		if capability.WorkspaceID != agent.WorkspaceID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "capability is not in this workspace"})
 			return
 		}
 		var body agentCapabilityBody
@@ -1562,6 +1482,15 @@ func upgradeAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		agent, err := runtimeStore.GetAgent(r.Context(), agentID)
 		if err != nil {
 			writeCapabilityError(w, err, "failed to get agent")
+			return
+		}
+		capability, err := runtimeStore.GetCapability(r.Context(), capabilityID)
+		if err != nil {
+			writeCapabilityError(w, err, "failed to get capability")
+			return
+		}
+		if capability.WorkspaceID != agent.WorkspaceID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "capability is not in this workspace"})
 			return
 		}
 		bindings, err := runtimeStore.ListAgentCapabilities(r.Context(), agentID)
@@ -1771,22 +1700,6 @@ func credentialResponses(credentials []store.UserCredentialRead) []userCredentia
 
 func credentialResponse(credential store.UserCredentialRead) userCredentialResponse {
 	return userCredentialResponse{ID: credential.ID, Kind: credential.Kind, DisplayName: credential.DisplayName, LastUsedAt: credential.LastUsedAt, CreatedAt: credential.CreatedAt, UpdatedAt: credential.UpdatedAt}
-}
-
-func rejectPlaintextSecretsInCapabilityVersions(versions []store.CapabilityVersionRead) error {
-	for _, version := range versions {
-		raw, err := json.Marshal(version.Content)
-		if err != nil {
-			return fmt.Errorf("capability version %s content is invalid", version.ID)
-		}
-		text := string(raw)
-		for _, secretPattern := range plaintextSecretPatterns {
-			if secretPattern.pattern.MatchString(text) {
-				return fmt.Errorf("capability version %s contains plaintext secret pattern: %s", version.ID, secretPattern.name)
-			}
-		}
-	}
-	return nil
 }
 
 func optionalString(value *string) string {

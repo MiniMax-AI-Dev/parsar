@@ -92,7 +92,7 @@
       "renameDescription": "修改工作区显示名称。系统标识不可修改。",
       "archiveTitle": "归档工作区",
       "archiveDescription": "确认归档「{{name}}」？归档后将从切换器中消失，原有成员和 Agent 保留在数据库中，但通过工作区维度的查询都不会再返回。",
-      "archiveMarketplaceDependents": "如果这个工作区发布的市场能力仍被其它工作区的 Agent 使用，归档会被阻止。请先取消发布并等待对方移除后再归档。",
+      "archiveMarketplaceDependents": "如果这个工作区的能力仍被其它工作区的 Agent 使用，归档会被阻止，直到那些绑定被移除。",
       "namePlaceholder": "例如：平台团队"
     },
     "join": {
