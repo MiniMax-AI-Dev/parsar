@@ -888,6 +888,24 @@
         "description": "后端返回错误。"
       }
     },
+    "skillsDirectory": {
+      "installs": "{{count}} 次安装",
+      "loadError": {
+        "title": "无法加载 Skills 目录",
+        "description": "可以直接重试，不会离开能力市场。"
+      },
+      "empty": {
+        "title": "没有符合筛选条件的 Skill",
+        "description": "请更换搜索词。"
+      },
+      "install": {
+        "action": "Install",
+        "installing": "安装中...",
+        "installed": "已安装",
+        "success": "已将 {{name}} 导入为工作区 Skill Capability。",
+        "failed": "无法安装该 Skill。"
+      }
+    },
     "mcpDirectory": {
       "title": "连接器",
       "description": "在同一个能力市场中浏览精选连接器和各工作区发布的 MCP 能力。",
