@@ -1668,8 +1668,6 @@
       "noTagsMember": "当前工作区还没有可复用的能力标签。",
       "goCapabilities": "去能力页 →",
       "noCapabilityVersion": "无可用版本",
-      "deprecatedCapabilityBadge": "已下架",
-      "deprecatedCapabilityTooltip": "该能力已下架,保留旧绑定可继续使用;取消勾选后无法再选回。",
       "capabilityTypeTabs": {
         "all": "全部",
         "mcp": "MCP",
