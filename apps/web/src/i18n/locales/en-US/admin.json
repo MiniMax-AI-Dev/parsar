@@ -1704,7 +1704,7 @@
           },
           "capabilities": {
             "title": "Capabilities",
-            "summary": "Skills and MCPs enabled by default"
+            "summary": "Skills and MCPs available to {{engine}}"
           }
         },
         "actions": {

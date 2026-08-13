@@ -1704,7 +1704,7 @@
           },
           "capabilities": {
             "title": "能力",
-            "summary": "为这个 Agent 启用 Skill / MCP"
+            "summary": "为 {{engine}} 启用 Skill / MCP"
           }
         },
         "actions": {

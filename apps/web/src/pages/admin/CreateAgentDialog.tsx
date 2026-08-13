@@ -994,7 +994,9 @@ export function CreateAgentDialog({
           totalSteps={totalSteps}
           progressPercent={progressPercent}
           title={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.title` as never)}
-          summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never)}
+          summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never, {
+            engine: t(agentEngineLabel(agentEngine)),
+          })}
           stepOfLabel={t("agents.form.wizard.stepOf", { current: step, total: totalSteps })}
           completeLabel={t("agents.form.wizard.complete", { percent: progressPercent })}
         />
