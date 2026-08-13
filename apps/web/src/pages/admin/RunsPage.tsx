@@ -61,6 +61,7 @@ import {
   useAgentRunEvents,
   useAgentRuns,
 } from "../../lib/api-agents"
+import { formatRawRunEvents } from "../../lib/agent-run-event-format"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
@@ -1016,9 +1017,12 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
                 </div>
                 {open && step.rawEvents.length > 0 && (
                   <div className="mt-2 space-y-2">
-                    {step.rawEvents.map((ev) => (
-                      <pre key={ev.id} className="whitespace-pre-wrap break-all rounded-md bg-surface-inverse p-3 text-xs leading-relaxed text-fg-on-emphasis">
-                        {`#${ev.sequence} ${ev.event_kind}\n${JSON.stringify(ev.payload ?? {}, null, 2)}`}
+                    {formatRawRunEvents(step.rawEvents).map((block) => (
+                      <pre
+                        key={block.key}
+                        className="whitespace-pre-wrap break-all rounded-md bg-surface-inverse p-3 text-xs leading-relaxed text-fg-on-emphasis"
+                      >
+                        {block.text}
                       </pre>
                     ))}
                   </div>
