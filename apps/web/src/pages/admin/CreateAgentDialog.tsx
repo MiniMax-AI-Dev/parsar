@@ -269,7 +269,7 @@ export function CreateAgentDialog({
   const [capabilityVersionChoices, setCapabilityVersionChoices] = useState<Record<string, { pinningMode: "latest" | "pinned"; versionID: string; pinnedVersion?: string }>>({})
   const [visibility, setVisibility] = useState<"workspace" | "tenant" | "public">("public")
   const [capabilitySearch, setCapabilitySearch] = useState("")
-  const [capabilityTypeFilter, setCapabilityTypeFilter] = useState<"all" | "mcp" | "skill" | "plugin" | "system_prompt">("all")
+  const [capabilityTypeFilter, setCapabilityTypeFilter] = useState<"all" | "mcp" | "skill">("all")
   const [deviceID, setDeviceID] = useState("")
   const [workDir, setWorkDir] = useState("")
   const [pairDialogOpen, setPairDialogOpen] = useState(false)
@@ -390,13 +390,11 @@ export function CreateAgentDialog({
   const capabilityTypeCounts = useMemo(() => {
     // Ghost rows have unknown type, so they're excluded from per-type tallies
     // (still count toward "all").
-    const counts = { all: capabilityOptions.length, mcp: 0, skill: 0, plugin: 0, system_prompt: 0 }
+    const counts = { all: capabilityOptions.length, mcp: 0, skill: 0 }
     for (const cap of capabilityOptions) {
       if (cap.deprecated) continue
       if (cap.type === "mcp") counts.mcp++
       else if (cap.type === "skill") counts.skill++
-      else if (cap.type === "plugin") counts.plugin++
-      else if (cap.type === "system_prompt") counts.system_prompt++
     }
     return counts
   }, [capabilityOptions])
@@ -1487,8 +1485,6 @@ export function CreateAgentDialog({
                         <TabsTrigger value="all">{t("agents.form.capabilityTypeTabs.all")} ({capabilityTypeCounts.all})</TabsTrigger>
                         <TabsTrigger value="mcp">{t("agents.form.capabilityTypeTabs.mcp")} ({capabilityTypeCounts.mcp})</TabsTrigger>
                         <TabsTrigger value="skill">{t("agents.form.capabilityTypeTabs.skill")} ({capabilityTypeCounts.skill})</TabsTrigger>
-                        <TabsTrigger value="plugin">{t("agents.form.capabilityTypeTabs.plugin")} ({capabilityTypeCounts.plugin})</TabsTrigger>
-                        <TabsTrigger value="system_prompt">{t("agents.form.capabilityTypeTabs.systemPrompt")} ({capabilityTypeCounts.system_prompt})</TabsTrigger>
                       </TabsList>
                     </Tabs>
                     <div className="max-h-56 overflow-y-auto rounded-md border border-line bg-surface">
