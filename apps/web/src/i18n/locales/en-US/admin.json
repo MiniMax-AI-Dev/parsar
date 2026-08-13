@@ -1668,8 +1668,6 @@
       "noTagsMember": "This workspace has no reusable capability tags yet.",
       "goCapabilities": "Go to Capabilities →",
       "noCapabilityVersion": "No version",
-      "deprecatedCapabilityBadge": "Deprecated",
-      "deprecatedCapabilityTooltip": "This capability has been deprecated. Existing bindings keep working; once you uncheck it you cannot re-add it.",
       "capabilityTypeTabs": {
         "all": "All",
         "mcp": "MCP",
