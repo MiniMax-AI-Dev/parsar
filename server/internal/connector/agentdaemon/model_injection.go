@@ -306,6 +306,13 @@ func injectClaudeManagedModel(opts map[string]any, modelID string, mr store.Mode
 	// (ANTHROPIC_AUTH_TOKEN). When both vars are set Claude Code prefers
 	// AUTH_TOKEN, so set only the one matching the scheme.
 	authScheme := stringFromMap(mr.ProviderConfig, "auth_scheme")
+	if authScheme == "" {
+		switch strings.ToLower(strings.TrimSpace(mr.ProviderType)) {
+		case "minimax-cn", "minimax-en":
+			// MiniMax's Claude Code setup uses Authorization: Bearer.
+			authScheme = "bearer"
+		}
+	}
 	if authScheme == "bearer" {
 		delete(env, "ANTHROPIC_API_KEY")
 		env["ANTHROPIC_AUTH_TOKEN"] = apiKey

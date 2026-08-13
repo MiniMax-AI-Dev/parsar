@@ -506,6 +506,31 @@ func TestInjectManagedModel_BearerAuthScheme_InjectsAuthToken(t *testing.T) {
 	}
 }
 
+func TestInjectManagedModel_MiniMaxDefaultsToAuthToken(t *testing.T) {
+	for _, providerType := range []string{"minimax-cn", "minimax-en"} {
+		t.Run(providerType, func(t *testing.T) {
+			opts := map[string]any{}
+			mr := store.ModelRuntime{
+				ModelID:      "model-minimax",
+				ModelKey:     "MiniMax-M3",
+				ProviderType: providerType,
+				Adapter:      "@ai-sdk/anthropic",
+				BaseURL:      "https://api.minimax.io/anthropic",
+			}
+			if err := injectClaudeManagedModel(opts, mr.ModelID, mr, "sk-minimax"); err != nil {
+				t.Fatalf("injectClaudeManagedModel: %v", err)
+			}
+			env := opts["env"].(map[string]any)
+			if got := env["ANTHROPIC_AUTH_TOKEN"]; got != "sk-minimax" {
+				t.Fatalf("ANTHROPIC_AUTH_TOKEN=%v, want sk-minimax", got)
+			}
+			if _, exists := env["ANTHROPIC_API_KEY"]; exists {
+				t.Fatal("ANTHROPIC_API_KEY should not be set for MiniMax Claude Code")
+			}
+		})
+	}
+}
+
 // ----------------------------------------------------------------------
 // applySpecMemoryInjection
 // ----------------------------------------------------------------------
