@@ -1673,9 +1673,7 @@
       "capabilityTypeTabs": {
         "all": "全部",
         "mcp": "MCP",
-        "skill": "Skill",
-        "plugin": "插件",
-        "systemPrompt": "系统提示词"
+        "skill": "Skill"
       },
       "capabilitySections": {
         "workspace": "本 Workspace",
@@ -1707,7 +1705,7 @@
           },
           "capabilities": {
             "title": "能力",
-            "summary": "为这个 Agent 启用 Skill / MCP / 插件"
+            "summary": "为这个 Agent 启用 Skill / MCP"
           }
         },
         "actions": {

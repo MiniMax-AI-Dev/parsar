@@ -1673,9 +1673,7 @@
       "capabilityTypeTabs": {
         "all": "All",
         "mcp": "MCP",
-        "skill": "Skill",
-        "plugin": "Plugin",
-        "systemPrompt": "System Prompt"
+        "skill": "Skill"
       },
       "capabilitySections": {
         "workspace": "This Workspace",
@@ -1707,7 +1705,7 @@
           },
           "capabilities": {
             "title": "Capabilities",
-            "summary": "Skills, MCPs and plugins enabled by default"
+            "summary": "Skills and MCPs enabled by default"
           }
         },
         "actions": {
