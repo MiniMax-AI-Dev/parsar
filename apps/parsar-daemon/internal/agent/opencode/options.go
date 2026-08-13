@@ -62,6 +62,12 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any) (BuildResult,
 			return result, err
 		}
 	}
+	if roots, ok := opts["skill_roots"]; ok && roots != nil {
+		rawConfig, err = mergeSkillConfig(rawConfig, roots)
+		if err != nil {
+			return result, err
+		}
+	}
 	if rawConfig != "" {
 		configHome, scratchCleanup, err := writeConfigHome(runID, rawConfig)
 		if err != nil {
@@ -76,6 +82,43 @@ func BuildArgs(runID, prompt, workDir string, opts map[string]any) (BuildResult,
 	result.WorkDir = resolvedWorkDir
 	result.Cleanup = cleanup
 	return result, nil
+}
+
+func mergeSkillConfig(rawConfig string, rawRoots any) (string, error) {
+	config := map[string]any{}
+	if strings.TrimSpace(rawConfig) != "" {
+		if err := json.Unmarshal([]byte(rawConfig), &config); err != nil {
+			return "", fmt.Errorf("opencode: opencode_json must be valid JSON: %w", err)
+		}
+		if config == nil {
+			config = map[string]any{}
+		}
+	}
+	roots, err := stringSlice(rawRoots)
+	if err != nil {
+		return "", fmt.Errorf("opencode: skill_roots: %w", err)
+	}
+	skills, ok := config["skills"].(map[string]any)
+	if !ok && config["skills"] != nil {
+		return "", fmt.Errorf("opencode: opencode_json skills must be object, got %T", config["skills"])
+	}
+	if skills == nil {
+		skills = map[string]any{}
+	}
+	existingPaths, err := stringSlice(skills["paths"])
+	if err != nil {
+		return "", fmt.Errorf("opencode: opencode_json skills.paths: %w", err)
+	}
+	paths := mergeStringSlices(existingPaths, roots)
+	if len(paths) > 0 {
+		skills["paths"] = paths
+		config["skills"] = skills
+	}
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("opencode: marshal merged skill config: %w", err)
+	}
+	return string(encoded), nil
 }
 
 func mergeMCPConfig(rawConfig string, rawServers any) (string, error) {
@@ -160,6 +203,53 @@ func stringMap(value any) map[string]string {
 		return result
 	default:
 		return nil
+	}
+}
+
+func cloneAgentOptions(opts map[string]any) map[string]any {
+	cloned := make(map[string]any, len(opts))
+	for key, value := range opts {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func mergeStringSlices(existing any, added []string) []string {
+	current, _ := stringSlice(existing)
+	seen := make(map[string]struct{}, len(current)+len(added))
+	merged := make([]string, 0, len(current)+len(added))
+	for _, item := range append(current, added...) {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		merged = append(merged, item)
+	}
+	return merged
+}
+
+func stringSlice(value any) ([]string, error) {
+	switch typed := value.(type) {
+	case nil:
+		return nil, nil
+	case []string:
+		return append([]string{}, typed...), nil
+	case []any:
+		result := make([]string, 0, len(typed))
+		for i, raw := range typed {
+			item, ok := raw.(string)
+			if !ok {
+				return nil, fmt.Errorf("item %d must be string, got %T", i, raw)
+			}
+			result = append(result, item)
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("must be array, got %T", value)
 	}
 }
 

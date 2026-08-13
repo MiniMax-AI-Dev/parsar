@@ -83,6 +83,10 @@ type InitializeResult struct {
 	PlatformOs     string `json:"platformOs,omitempty"`
 }
 
+type SkillsExtraRootsSetParams struct {
+	ExtraRoots []string `json:"extraRoots"`
+}
+
 // ---------------------------------------------------------------------------
 // Approval / sandbox policies
 // ---------------------------------------------------------------------------

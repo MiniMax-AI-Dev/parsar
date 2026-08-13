@@ -134,6 +134,39 @@ func TestBuildArgsMergesLocalAndRemoteMCPServers(t *testing.T) {
 	}
 }
 
+func TestBuildArgsMergesManagedSkillRoots(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PARSAR_HOME", home)
+	res, err := opencode.BuildArgs("run-skills", "hello", "", map[string]any{
+		"opencode_json": `{"skills":{"paths":["/preset"],"urls":["https://example.com/skills"]}}`,
+		"skill_roots":   []string{"/managed", "/preset"},
+	})
+	if err != nil {
+		t.Fatalf("BuildArgs: %v", err)
+	}
+	defer res.Cleanup()
+	path := filepath.Join(envValue(res.Env, "XDG_CONFIG_HOME"), "opencode", "opencode.json")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Skills struct {
+			Paths []string `json:"paths"`
+			URLs  []string `json:"urls"`
+		} `json:"skills"`
+	}
+	if err := json.Unmarshal(body, &config); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(config.Skills.Paths, []string{"/preset", "/managed"}) {
+		t.Fatalf("skill paths = %v", config.Skills.Paths)
+	}
+	if !slices.Equal(config.Skills.URLs, []string{"https://example.com/skills"}) {
+		t.Fatalf("skill urls = %v", config.Skills.URLs)
+	}
+}
+
 func TestBuildArgsRejectsBadEnvShape(t *testing.T) {
 	_, err := opencode.BuildArgs("run-1", "hello", "", map[string]any{"env": map[string]any{"K": 1}})
 	if err == nil || !strings.Contains(err.Error(), "env") {

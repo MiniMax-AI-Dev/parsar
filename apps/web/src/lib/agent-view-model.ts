@@ -92,7 +92,7 @@ export function agentEngineSupportsCapability(engine: AgentEngine, capabilityTyp
       return true
     case "codex":
     case "opencode":
-      return capabilityType === "mcp" || capabilityType === "system_prompt"
+      return capabilityType === "mcp" || capabilityType === "skill" || capabilityType === "system_prompt"
     case "pi":
       return capabilityType === "skill" || capabilityType === "system_prompt"
   }

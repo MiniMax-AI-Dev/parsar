@@ -4154,11 +4154,11 @@ func TestCreateAgentValidatesInitialCapabilityHarnessCompatibility(t *testing.T)
 		{agentKind: "claude_code", capabilityType: "plugin", wantStatus: http.StatusCreated},
 		{agentKind: "claude_code", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
 		{agentKind: "codex", capabilityType: "mcp", wantStatus: http.StatusCreated},
-		{agentKind: "codex", capabilityType: "skill", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "codex", capabilityType: "skill", wantStatus: http.StatusCreated},
 		{agentKind: "codex", capabilityType: "plugin", wantStatus: http.StatusUnprocessableEntity},
 		{agentKind: "codex", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
 		{agentKind: "opencode", capabilityType: "mcp", wantStatus: http.StatusCreated},
-		{agentKind: "opencode", capabilityType: "skill", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "opencode", capabilityType: "skill", wantStatus: http.StatusCreated},
 		{agentKind: "opencode", capabilityType: "plugin", wantStatus: http.StatusUnprocessableEntity},
 		{agentKind: "opencode", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
 		{agentKind: "pi", capabilityType: "mcp", wantStatus: http.StatusUnprocessableEntity},
@@ -4207,7 +4207,7 @@ func TestSyncAgentCapabilitiesSkipsNewIncompatibleBinding(t *testing.T) {
 		capabilityType string
 		wantEnabled    bool
 	}{
-		{name: "codex rejects skill", agentKind: "codex", capabilityType: "skill"},
+		{name: "codex accepts skill", agentKind: "codex", capabilityType: "skill", wantEnabled: true},
 		{name: "codex accepts mcp", agentKind: "codex", capabilityType: "mcp", wantEnabled: true},
 		{name: "pi rejects mcp", agentKind: "pi", capabilityType: "mcp"},
 		{name: "pi accepts skill", agentKind: "pi", capabilityType: "skill", wantEnabled: true},

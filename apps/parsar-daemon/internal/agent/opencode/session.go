@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 )
@@ -73,7 +74,26 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.killTimeout = 3 * time.Second
 	}
 
-	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, req.AgentOptions)
+	opts := req.AgentOptions
+	if rawSkills, ok := opts["skills"]; ok {
+		skillRoot, rootErr := agent.ManagedSkillsRoot("opencode", req.AgentStateKey, req.ConversationID, req.RunID)
+		if rootErr != nil {
+			return nil, fmt.Errorf("opencode: resolve managed skills root: %w", rootErr)
+		}
+		installResult, installErr := claudecode.InstallManagedSkills(parent, cfg.logger, skillRoot, rawSkills)
+		if installErr != nil {
+			return nil, fmt.Errorf("opencode: install skills: %w", installErr)
+		}
+		for _, warning := range installResult.Warnings {
+			cfg.logger.Warn("opencode: skill install warning", "run_id", req.RunID, "msg", warning)
+		}
+		if len(installResult.SkillDirs) > 0 {
+			opts = cloneAgentOptions(opts)
+			opts["skill_roots"] = mergeStringSlices(opts["skill_roots"], []string{skillRoot})
+		}
+	}
+
+	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, opts)
 	if err != nil {
 		return nil, fmt.Errorf("opencode: build args: %w", err)
 	}
