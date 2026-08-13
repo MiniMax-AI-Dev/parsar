@@ -928,6 +928,23 @@ function Card({ title, actions, className, children }: { title: string; actions?
   )
 }
 
+function rawEventText(events: AgentRunEvent[]): string {
+  if (events.length > 0 && events.every((event) => event.event_kind === "message.delta")) {
+    const first = events[0]
+    const last = events[events.length - 1]
+    const sequence = first.sequence === last.sequence ? `#${first.sequence}` : `#${first.sequence}-${last.sequence}`
+    const payload = {
+      ...last.payload,
+      delta: events.map((event) => String(event.payload?.delta ?? "")).join(""),
+    }
+    return `${sequence} message.delta\n${JSON.stringify(payload, null, 2)}`
+  }
+
+  return events
+    .map((event) => `#${event.sequence} ${event.event_kind}\n${JSON.stringify(event.payload ?? {}, null, 2)}`)
+    .join("\n\n")
+}
+
 function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boolean }) {
   const { t } = useTranslation("admin")
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
@@ -1009,13 +1026,9 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
                   </div>
                 </div>
                 {open && step.rawEvents.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {step.rawEvents.map((ev) => (
-                      <pre key={ev.id} className="whitespace-pre-wrap break-all rounded-md bg-surface-inverse p-3 text-xs leading-relaxed text-fg-on-emphasis">
-                        {`#${ev.sequence} ${ev.event_kind}\n${JSON.stringify(ev.payload ?? {}, null, 2)}`}
-                      </pre>
-                    ))}
-                  </div>
+                  <pre className="mt-2 whitespace-pre-wrap break-all rounded-md bg-surface-inverse p-3 text-xs leading-relaxed text-fg-on-emphasis">
+                    {rawEventText(step.rawEvents)}
+                  </pre>
                 )}
               </li>
             )
