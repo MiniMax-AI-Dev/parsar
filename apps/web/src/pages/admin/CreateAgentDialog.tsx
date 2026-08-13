@@ -17,7 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
+import { agentCodexModeOf, agentEngineLabel, agentEngineSupportsCapability, agentEnginesSupportingCapability, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
   modelSupportedEndpointTypes,
@@ -325,7 +325,7 @@ export function CreateAgentDialog({
     type PickerOption = {
       id: string
       name: string
-      type: CapabilityType | ""
+      type: CapabilityType
       description: string
       latestVersionID: string
       latestVersion: string
@@ -433,6 +433,16 @@ export function CreateAgentDialog({
     [capabilities, mode, selectedCapabilityIDs, allCapabilitiesPool]
   )
   const admin = isAdminRole(workspaceRole)
+
+  function selectAgentEngine(nextEngine: AgentEngine) {
+    setAgentEngine(nextEngine)
+    if (mode !== "create") return
+    const capabilityByID = new Map(allCapabilitiesPool.map((capability) => [capability.id, capability]))
+    setSelectedCapabilityIDs((current) => current.filter((id) => {
+      const capability = capabilityByID.get(id)
+      return !capability || agentEngineSupportsCapability(nextEngine, capability.type)
+    }))
+  }
 
   const modelFieldRef = useRef<HTMLDivElement | null>(null)
   const modelComboboxRef = useRef<HTMLDivElement | null>(null)
@@ -747,7 +757,7 @@ export function CreateAgentDialog({
     }
     if (!allCapabilitiesQ.isSuccess) return
     const selectedCapabilities = mode === "create"
-      ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id)
+      ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id && agentEngineSupportsCapability(agentEngine, cap.type))
       : []
     const selectableCapabilityNames = new Set(allCapabilitiesPool.map((cap) => cap.name))
     const capabilityNames = mode === "create"
@@ -1048,25 +1058,25 @@ export function CreateAgentDialog({
                           icon={<Cpu className="h-4 w-4" />}
                           title={t("agents.engine.claudeCode.title")}
                           selected={agentEngine === "claude_code"}
-                          onSelect={() => setAgentEngine("claude_code")}
+                          onSelect={() => selectAgentEngine("claude_code")}
                         />
                         <ChoiceCard
                           icon={<Bot className="h-4 w-4" />}
                           title={t("agents.engine.codex.title")}
                           selected={agentEngine === "codex"}
-                          onSelect={() => setAgentEngine("codex")}
+                          onSelect={() => selectAgentEngine("codex")}
                         />
                         <ChoiceCard
                           icon={<Sparkles className="h-4 w-4" />}
                           title={t("agents.engine.pi.title")}
                           selected={agentEngine === "pi"}
-                          onSelect={() => setAgentEngine("pi")}
+                          onSelect={() => selectAgentEngine("pi")}
                         />
                         <ChoiceCard
                           icon={<Server className="h-4 w-4" />}
                           title={t("agents.engine.opencode.title")}
                           selected={agentEngine === "opencode"}
-                          onSelect={() => setAgentEngine("opencode")}
+                          onSelect={() => selectAgentEngine("opencode")}
                           disabled
                         />
                       </div>
@@ -1473,9 +1483,18 @@ export function CreateAgentDialog({
                               const index = rowCounter++
                               const checked = mode === "create" ? selectedCapabilityIDs.includes(cap.id) : capabilities.includes(cap.name)
                               const lockedNoVersion = mode === "create" && !cap.latestVersionID
-                              const disabled = lockedNoVersion
+                              const incompatible = !agentEngineSupportsCapability(agentEngine, cap.type)
+                              const lockedIncompatibleAndUnchecked = incompatible && !checked
+                              const disabled = lockedNoVersion || lockedIncompatibleAndUnchecked
+                              const compatibilityTitle = incompatible
+                                ? t("agents.detail.capabilities.compatibility.unsupported", {
+                                    engine: t(agentEngineLabel(agentEngine)),
+                                    type: t(`agents.detail.capabilities.compatibility.types.${cap.type}`),
+                                    engines: agentEnginesSupportingCapability(cap.type).map((engine) => t(agentEngineLabel(engine))).join(", "),
+                                  })
+                                : undefined
                               return (
-                                <label key={`${sec}:${cap.id || cap.name}`} className={"flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left " + (disabled ? "cursor-not-allowed bg-surface-subtle text-fg-faint" : "cursor-pointer hover:bg-surface-subtle") + (index > 0 ? " border-t border-line-muted" : "")}>
+                                <label key={`${sec}:${cap.id || cap.name}`} title={compatibilityTitle} className={"flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left " + (disabled ? "cursor-not-allowed bg-surface-subtle text-fg-faint" : "cursor-pointer hover:bg-surface-subtle") + (index > 0 ? " border-t border-line-muted" : "")}>
                                   <input
                                     type="checkbox"
                                     className="mt-0.5 h-4 w-4 shrink-0"
@@ -1487,6 +1506,7 @@ export function CreateAgentDialog({
                                     <span className="flex min-w-0 items-center gap-2">
                                       <span className="min-w-0 flex-1 truncate text-sm font-medium leading-4 text-fg">{cap.name}</span>
                                       <span className="shrink-0"><Badge variant="neutral">{cap.type}</Badge></span>
+                                      {incompatible && <span className="shrink-0"><Badge variant="destructive">{t("agents.detail.capabilities.compatibility.badge")}</Badge></span>}
                                       {sec === "marketplace" && <span className="shrink-0"><Badge variant="neutral">{t("agents.form.capabilityBadges.marketplace")}</Badge></span>}
                                       {!checked && cap.latestVersion && <span className="shrink-0"><Badge variant="primary">v{cap.latestVersion}</Badge></span>}
                                       {!checked && !cap.latestVersion && <span className="shrink-0"><Badge variant="warning">{t("agents.form.noCapabilityVersion")}</Badge></span>}

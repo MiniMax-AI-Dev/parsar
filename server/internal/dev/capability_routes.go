@@ -15,7 +15,6 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
-	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/render"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/secrets"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -1425,15 +1424,8 @@ func enableAgentCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 			return
 		}
 		agentKind, _ := agentRecord.Config["agent_kind"].(string)
-		agentKind = strings.TrimSpace(agentKind)
-		target := render.TargetForAgentKind(agentKind)
-		if !render.Supports(target, canonical.Kind(capability.Type)) {
-			if agentKind == "" {
-				agentKind = "claude_code"
-			}
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
-				"error": fmt.Sprintf("agent kind %q does not support %s capabilities", agentKind, capability.Type),
-			})
+		if err := validateAgentCapabilitySupport(agentKind, capability.Type); err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
 		}
 		if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{

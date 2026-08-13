@@ -158,6 +158,10 @@ type CapabilitySystemMessageStore interface {
 // on this.
 const CapabilityCredentialMissing = "capability_credential_missing"
 
+// CapabilityUnsupported is emitted when an existing binding cannot be
+// rendered for the Agent's harness (for example, a Skill bound to Codex).
+const CapabilityUnsupported = "capability_unsupported"
+
 // CapabilityVersionUnavailable is the metadata.sub_kind value emitted
 // when the resolved capability version has no usable storage
 // breadcrumb (empty oss_key/sha256). This happens after a schema-level
@@ -189,6 +193,7 @@ func disabledForUnsupportedCapability(cap store.EnabledCapabilityRead) DisabledC
 		CapabilityID:        cap.CapabilityID,
 		CapabilityVersionID: cap.CapabilityVersionID,
 		CapabilityName:      cap.Name,
+		SubKind:             CapabilityUnsupported,
 	}
 }
 

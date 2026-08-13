@@ -349,6 +349,7 @@
       "badge": "Run failed",
       "fallbackCapability": "this capability",
       "capability_credential_missing": "Capability {{name}} failed to start: missing {{kind}} credential.",
+      "capability_unsupported": "Capability {{name}} is not supported by this Agent engine.",
       "capability_credential_decrypt_failed": "Capability {{name}} credential could not be decrypted. Please contact an administrator.",
       "capability_credential_kind_mismatch": "Capability {{name}} credential type does not match. Please set it again.",
       "capability_version_unavailable": "Capability {{name}} has no usable upload yet. Re-upload it as a zip, pick a newer version, or switch the binding to 'latest'.",

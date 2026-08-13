@@ -65,6 +65,9 @@ func TestResolveCapabilityAdditions_CodexSkillSoftDegrades(t *testing.T) {
 	if got.Disabled[0].CapabilityID != "skill-a" {
 		t.Fatalf("disabled.capability_id = %q, want skill-a", got.Disabled[0].CapabilityID)
 	}
+	if got.Disabled[0].SubKind != CapabilityUnsupported {
+		t.Fatalf("disabled.sub_kind = %q, want %q", got.Disabled[0].SubKind, CapabilityUnsupported)
+	}
 	if len(got.Disabled[0].MissingCredentials) != 0 {
 		t.Fatalf("ErrUnsupported soft-degrade must not synthesise missing credentials, got %+v",
 			got.Disabled[0].MissingCredentials)
@@ -93,6 +96,9 @@ func TestResolveCapabilityAdditions_OpenCodePluginSoftDegrades(t *testing.T) {
 	}
 	if len(got.Disabled) != 1 || got.Disabled[0].CapabilityID != "p1" {
 		t.Fatalf("expected 1 disabled plugin capability with id=p1, got %+v", got.Disabled)
+	}
+	if got.Disabled[0].SubKind != CapabilityUnsupported {
+		t.Fatalf("disabled.sub_kind = %q, want %q", got.Disabled[0].SubKind, CapabilityUnsupported)
 	}
 }
 
@@ -173,6 +179,9 @@ func TestResolveCapabilityAdditions_PiMCPSoftDegrades(t *testing.T) {
 	if len(got.Disabled) != 1 || got.Disabled[0].CapabilityID != "mcp-1" {
 		t.Fatalf("expected 1 disabled mcp capability with id=mcp-1, got %+v", got.Disabled)
 	}
+	if got.Disabled[0].SubKind != CapabilityUnsupported {
+		t.Fatalf("disabled.sub_kind = %q, want %q", got.Disabled[0].SubKind, CapabilityUnsupported)
+	}
 }
 
 // TestResolveCapabilityAdditions_EmptyAgentKindDefaultsClaudeCode pins
@@ -205,7 +214,7 @@ func TestResolveCapabilityAdditions_EmptyAgentKindDefaultsClaudeCode(t *testing.
 // production buildAgentOptions entry — not just resolveCapabilityAdditions
 // directly — to confirm that an unsupported-by-agent-kind capability
 // flows all the way through emitDisabledCapabilityNotices and lands in
-// the SystemMessages sink as a CapabilityCredentialMissing notice.
+// the SystemMessages sink as a CapabilityUnsupported notice.
 //
 // This is the contract the channel layer relies on: a codex agent
 // enabling a skill capability must produce a user-visible nudge
@@ -241,8 +250,8 @@ func TestBuildAgentOptions_CodexSkillSurfacesDisabledNotice(t *testing.T) {
 		t.Fatalf("expected exactly 1 runtime_error notice for the disabled skill, got %d: %+v", len(sm.runtimeErrors), sm.runtimeErrors)
 	}
 	notice := sm.runtimeErrors[0]
-	if notice.SubKind != CapabilityCredentialMissing {
-		t.Errorf("SubKind = %q, want %q", notice.SubKind, CapabilityCredentialMissing)
+	if notice.SubKind != CapabilityUnsupported {
+		t.Errorf("SubKind = %q, want %q", notice.SubKind, CapabilityUnsupported)
 	}
 	if notice.CapabilityID != "skill-a" {
 		t.Errorf("CapabilityID = %q, want skill-a", notice.CapabilityID)

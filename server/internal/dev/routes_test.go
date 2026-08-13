@@ -2479,6 +2479,60 @@ type createAgentOAuthValidationStore struct {
 	createCalls    int
 }
 
+type createAgentCapabilityCompatibilityStore struct {
+	stubRuntimeStore
+	capabilityType string
+	createCalls    int
+}
+
+type syncAgentCapabilityCompatibilityStore struct {
+	stubRuntimeStore
+	agentKind      string
+	capabilityType string
+	enableCalls    int
+}
+
+func (s *createAgentCapabilityCompatibilityStore) GetCapability(context.Context, string) (store.CapabilityRead, error) {
+	return store.CapabilityRead{
+		ID:          "00000000-0000-0000-0000-000000000c01",
+		WorkspaceID: "00000000-0000-0000-0000-000000000002",
+		Type:        s.capabilityType,
+		Visibility:  "workspace",
+		Status:      "active",
+	}, nil
+}
+
+func (s *createAgentCapabilityCompatibilityStore) CreateAgent(ctx context.Context, input store.CreateAgentInput) (store.CreateAgentResult, error) {
+	s.createCalls++
+	return s.stubRuntimeStore.CreateAgent(ctx, input)
+}
+
+func (s *syncAgentCapabilityCompatibilityStore) GetAgent(context.Context, string) (store.AgentSummary, error) {
+	return store.AgentSummary{
+		ID:          "00000000-0000-0000-0000-000000000901",
+		WorkspaceID: "00000000-0000-0000-0000-000000000002",
+		Visibility:  "workspace",
+		Config:      map[string]any{"agent_kind": s.agentKind},
+	}, nil
+}
+
+func (s *syncAgentCapabilityCompatibilityStore) ListCapabilities(context.Context, string, store.ListCapabilityFilter) ([]store.CapabilityRead, error) {
+	return []store.CapabilityRead{{
+		ID:   "00000000-0000-0000-0000-000000000c01",
+		Name: "test-capability",
+		Type: s.capabilityType,
+	}}, nil
+}
+
+func (s *syncAgentCapabilityCompatibilityStore) ListCapabilityVersions(context.Context, string) ([]store.CapabilityVersionRead, error) {
+	return []store.CapabilityVersionRead{{ID: "00000000-0000-0000-0000-000000000c02"}}, nil
+}
+
+func (s *syncAgentCapabilityCompatibilityStore) EnableAgentCapability(ctx context.Context, agentID, versionID string, configuration map[string]any, pinningMode string) (store.AgentCapabilityRead, error) {
+	s.enableCalls++
+	return s.stubRuntimeStore.EnableAgentCapability(ctx, agentID, versionID, configuration, pinningMode)
+}
+
 func (s *createAgentOAuthValidationStore) GetCapabilityVersion(context.Context, string) (store.CapabilityVersionRead, error) {
 	return store.CapabilityVersionRead{
 		ID:                  "00000000-0000-0000-0000-000000000c02",
@@ -4086,6 +4140,103 @@ func TestCreateAgentAPIHappyPathAndNameConflict(t *testing.T) {
 	// The admin list disambiguates collisions via the creator column.
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for duplicate agent name (no longer rejected), got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestCreateAgentValidatesInitialCapabilityHarnessCompatibility(t *testing.T) {
+	cases := []struct {
+		agentKind      string
+		capabilityType string
+		wantStatus     int
+	}{
+		{agentKind: "claude_code", capabilityType: "mcp", wantStatus: http.StatusCreated},
+		{agentKind: "claude_code", capabilityType: "skill", wantStatus: http.StatusCreated},
+		{agentKind: "claude_code", capabilityType: "plugin", wantStatus: http.StatusCreated},
+		{agentKind: "claude_code", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
+		{agentKind: "codex", capabilityType: "mcp", wantStatus: http.StatusCreated},
+		{agentKind: "codex", capabilityType: "skill", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "codex", capabilityType: "plugin", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "codex", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
+		{agentKind: "opencode", capabilityType: "mcp", wantStatus: http.StatusCreated},
+		{agentKind: "opencode", capabilityType: "skill", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "opencode", capabilityType: "plugin", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "opencode", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
+		{agentKind: "pi", capabilityType: "mcp", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "pi", capabilityType: "skill", wantStatus: http.StatusCreated},
+		{agentKind: "pi", capabilityType: "plugin", wantStatus: http.StatusUnprocessableEntity},
+		{agentKind: "pi", capabilityType: "system_prompt", wantStatus: http.StatusCreated},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.agentKind+"/"+tc.capabilityType, func(t *testing.T) {
+			storeStub := &createAgentCapabilityCompatibilityStore{capabilityType: tc.capabilityType}
+			r := chi.NewRouter()
+			RegisterRoutesWithStore(r, storeStub)
+			body := fmt.Sprintf(`{
+				"name":"Compatibility Agent",
+				"connector_type":"agent_daemon",
+				"initial_capabilities":[{"capability_version_id":"00000000-0000-0000-0000-000000000c02"}],
+				"config":{"daemon_mode":"sandbox","agent_kind":%q}
+			}`, tc.agentKind)
+			req := withTestUser(httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/00000000-0000-0000-0000-000000000002/agents", strings.NewReader(body)))
+			req.Header.Set("Content-Type", "application/json")
+			res := httptest.NewRecorder()
+			r.ServeHTTP(res, req)
+
+			if res.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tc.wantStatus, res.Code, res.Body.String())
+			}
+			wantCreateCalls := 1
+			if tc.wantStatus != http.StatusCreated {
+				wantCreateCalls = 0
+				if !strings.Contains(res.Body.String(), "does not support "+tc.capabilityType+" capabilities") {
+					t.Fatalf("expected compatibility error, got %s", res.Body.String())
+				}
+			}
+			if storeStub.createCalls != wantCreateCalls {
+				t.Fatalf("CreateAgent calls = %d, want %d", storeStub.createCalls, wantCreateCalls)
+			}
+		})
+	}
+}
+
+func TestSyncAgentCapabilitiesSkipsNewIncompatibleBinding(t *testing.T) {
+	cases := []struct {
+		name           string
+		agentKind      string
+		capabilityType string
+		wantEnabled    bool
+	}{
+		{name: "codex rejects skill", agentKind: "codex", capabilityType: "skill"},
+		{name: "codex accepts mcp", agentKind: "codex", capabilityType: "mcp", wantEnabled: true},
+		{name: "pi rejects mcp", agentKind: "pi", capabilityType: "mcp"},
+		{name: "pi accepts skill", agentKind: "pi", capabilityType: "skill", wantEnabled: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeStub := &syncAgentCapabilityCompatibilityStore{
+				agentKind:      tc.agentKind,
+				capabilityType: tc.capabilityType,
+			}
+			err := syncAgentCapabilities(
+				context.Background(),
+				storeStub,
+				"00000000-0000-0000-0000-000000000002",
+				"00000000-0000-0000-0000-000000000901",
+				[]string{"test-capability"},
+			)
+			if err != nil {
+				t.Fatalf("syncAgentCapabilities: %v", err)
+			}
+			wantCalls := 0
+			if tc.wantEnabled {
+				wantCalls = 1
+			}
+			if storeStub.enableCalls != wantCalls {
+				t.Fatalf("EnableAgentCapability calls = %d, want %d", storeStub.enableCalls, wantCalls)
+			}
+		})
 	}
 }
 

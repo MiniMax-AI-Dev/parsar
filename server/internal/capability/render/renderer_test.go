@@ -84,12 +84,20 @@ func TestSupports(t *testing.T) {
 	}{
 		{TargetClaudeCode, canonical.KindMCP, true},
 		{TargetClaudeCode, canonical.KindSkill, true},
+		{TargetClaudeCode, canonical.KindPlugin, true},
+		{TargetClaudeCode, canonical.KindSystemPrompt, true},
 		{TargetCodex, canonical.KindMCP, true},
 		{TargetCodex, canonical.KindSkill, false},
+		{TargetCodex, canonical.KindPlugin, false},
+		{TargetCodex, canonical.KindSystemPrompt, true},
 		{TargetOpenCode, canonical.KindMCP, true},
 		{TargetOpenCode, canonical.KindSkill, false},
+		{TargetOpenCode, canonical.KindPlugin, false},
+		{TargetOpenCode, canonical.KindSystemPrompt, true},
 		{TargetPi, canonical.KindMCP, false},
 		{TargetPi, canonical.KindSkill, true},
+		{TargetPi, canonical.KindPlugin, false},
+		{TargetPi, canonical.KindSystemPrompt, true},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.target)+"/"+string(tc.kind), func(t *testing.T) {
