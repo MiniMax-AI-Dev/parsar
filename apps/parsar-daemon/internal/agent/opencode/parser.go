@@ -36,6 +36,7 @@ func (t *translator) Translate(line []byte) (translation, error) {
 	var head struct {
 		Type       string          `json:"type"`
 		Properties json.RawMessage `json:"properties"`
+		Part       json.RawMessage `json:"part"`
 	}
 	if err := json.Unmarshal(line, &head); err != nil || head.Type == "" {
 		if t.plainBuf.Len() > 0 {
@@ -48,8 +49,13 @@ func (t *translator) Translate(line []byte) (translation, error) {
 	switch head.Type {
 	case "message.part.delta":
 		return t.translatePartDelta(head.Properties)
+	case "text":
+		return t.translateTextPart(head.Part)
 	case "message.updated", "message.updated.1":
 		t.captureUsage(head.Properties)
+		return translation{}, nil
+	case "step_finish":
+		t.capturePartUsage(head.Part)
 		return translation{}, nil
 	default:
 		t.captureGenericUsage(line)
@@ -76,12 +82,38 @@ func (t *translator) translatePartDelta(raw json.RawMessage) (translation, error
 	return translation{Envelopes: []proto.Envelope{env}}, nil
 }
 
+func (t *translator) translateTextPart(raw json.RawMessage) (translation, error) {
+	var p struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return translation{}, fmt.Errorf("opencode: parse text part: %w", err)
+	}
+	if p.Text == "" || (p.Type != "" && p.Type != "text") {
+		return translation{}, nil
+	}
+	t.deltaBuf.WriteString(p.Text)
+	env, err := proto.NewEnvelope(proto.TypeDelta, t.runID, proto.DeltaPayload{Delta: p.Text, Sequence: t.seq.Add(1)})
+	if err != nil {
+		return translation{}, err
+	}
+	return translation{Envelopes: []proto.Envelope{env}}, nil
+}
+
 func (t *translator) captureUsage(raw json.RawMessage) {
 	var p struct {
 		Info usageInfo `json:"info"`
 	}
 	if err := json.Unmarshal(raw, &p); err == nil {
 		t.mergeUsage(p.Info)
+	}
+}
+
+func (t *translator) capturePartUsage(raw json.RawMessage) {
+	var p usageInfo
+	if err := json.Unmarshal(raw, &p); err == nil {
+		t.mergeUsage(p)
 	}
 }
 
@@ -112,9 +144,19 @@ type usageTokens struct {
 	CacheRead  int32 `json:"cacheRead"`
 	CacheWrite int32 `json:"cacheWrite"`
 	Total      int32 `json:"total"`
+	Cache      struct {
+		Read  int32 `json:"read"`
+		Write int32 `json:"write"`
+	} `json:"cache"`
 }
 
 func (t *translator) mergeUsage(info usageInfo) {
+	if info.Tokens.CacheRead == 0 {
+		info.Tokens.CacheRead = info.Tokens.Cache.Read
+	}
+	if info.Tokens.CacheWrite == 0 {
+		info.Tokens.CacheWrite = info.Tokens.Cache.Write
+	}
 	if info.Tokens.Input != 0 {
 		t.usage.InputTokens = info.Tokens.Input
 	}

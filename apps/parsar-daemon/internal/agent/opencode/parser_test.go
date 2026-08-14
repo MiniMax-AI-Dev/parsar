@@ -33,6 +33,27 @@ func TestTranslatePartDeltaEmitsDeltaAndDone(t *testing.T) {
 	}
 }
 
+func TestTranslateTextEventEmitsDeltaAndDone(t *testing.T) {
+	tr := opencode.NewTranslatorForTest("run-text")
+	tx, err := tr.Translate([]byte(`{"type":"text","timestamp":1785838824775,"sessionID":"ses_1","part":{"id":"prt_1","messageID":"msg_1","sessionID":"ses_1","type":"text","text":"OK"}}`))
+	if err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+	if len(tx.Envelopes) != 1 || tx.Envelopes[0].Type != proto.TypeDelta {
+		t.Fatalf("delta envelopes = %#v", tx.Envelopes)
+	}
+	delta := decodePayload[proto.DeltaPayload](t, tx.Envelopes[0])
+	if delta.Delta != "OK" || delta.Sequence == 0 {
+		t.Fatalf("delta payload = %#v", delta)
+	}
+
+	envs := tr.TerminalEnvelopes(nil, "", false)
+	done := decodePayload[proto.DonePayload](t, envs[len(envs)-1])
+	if done.Content != "OK" {
+		t.Fatalf("done content = %q", done.Content)
+	}
+}
+
 func TestTranslateCapturesUsage(t *testing.T) {
 	tr := opencode.NewTranslatorForTest("run-u")
 	_, err := tr.Translate([]byte(`{"type":"message.updated","properties":{"info":{"cost":0.25,"tokens":{"input":10,"output":7,"reasoning":3,"cacheRead":2,"cacheWrite":1,"total":23}}}}`))
@@ -54,6 +75,31 @@ func TestTranslateCapturesUsage(t *testing.T) {
 		t.Fatalf("usage = %#v", got)
 	}
 	if got.Raw["total_tokens"] != float64(23) {
+		t.Fatalf("usage raw = %#v", got.Raw)
+	}
+}
+
+func TestTranslateStepFinishCapturesUsage(t *testing.T) {
+	tr := opencode.NewTranslatorForTest("run-step-finish")
+	_, err := tr.Translate([]byte(`{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":12576,"input":11803,"output":645,"reasoning":0,"cache":{"write":4,"read":128}},"cost":0.00432258}}`))
+	if err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+	envs := tr.TerminalEnvelopes(nil, "", false)
+	var got *proto.UsagePayload
+	for _, env := range envs {
+		if env.Type == proto.TypeUsage {
+			payload := decodePayload[proto.UsagePayload](t, env)
+			got = &payload
+		}
+	}
+	if got == nil {
+		t.Fatalf("usage env missing: %#v", envs)
+	}
+	if got.InputTokens != 11803 || got.OutputTokens != 645 || got.CostUSD != 0.00432258 {
+		t.Fatalf("usage = %#v", got)
+	}
+	if got.Raw["total_tokens"] != float64(12576) || got.Raw["cache_read_tokens"] != float64(128) || got.Raw["cache_write_tokens"] != float64(4) {
 		t.Fatalf("usage raw = %#v", got.Raw)
 	}
 }
