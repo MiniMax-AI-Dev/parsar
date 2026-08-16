@@ -107,6 +107,9 @@ description and keep ownership on the side listed here.
 - Local development images stay opt-in through installer overrides such as
   `--image parsar:local` / `--sandbox-image parsar-sandbox:local`; do not make
   local tags the default path for end users.
+- Dev listens on 18081 (one above the operator port 18080) so the two can
+  coexist on one host. Override via `PARSAR_DEV_SERVER_PORT`; keep the
+  `+1` separation rather than collapsing the ports.
 
 ### Runtime and execution concepts
 

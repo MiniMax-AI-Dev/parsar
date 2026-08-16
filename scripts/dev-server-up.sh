@@ -20,7 +20,7 @@
 # detects the live Postgres port automatically, and runs it inside a
 # tmux session that survives sandbox bash exits.
 #
-# Usage: scripts/dev-server-up.sh [--rebuild] [--port 18080]
+# Usage: scripts/dev-server-up.sh [--rebuild] [--port 18081]
 set -euo pipefail
 
 # Single source of dev defaults (PG creds/db, default ports, dev_auth).

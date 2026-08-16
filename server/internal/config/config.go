@@ -291,7 +291,7 @@ func (c Config) BuildPublicURL(path string) string {
 		return publicURL + ensureLeadingSlash(path)
 	}
 	if c.Profile() == ProfileDev {
-		return "http://127.0.0.1:18080" + ensureLeadingSlash(path)
+		return "http://127.0.0.1:18081" + ensureLeadingSlash(path)
 	}
 	panic(fmt.Sprintf("%s is required in production to build public URLs", EnvPublicURL))
 }

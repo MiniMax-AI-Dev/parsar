@@ -11,7 +11,7 @@ func TestDockerDialBackURLRewritesLoopback(t *testing.T) {
 		wantURL     string
 		wantGateway bool
 	}{
-		"http://127.0.0.1:18080":     {"http://host.docker.internal:18080", true},
+		"http://127.0.0.1:18081":     {"http://host.docker.internal:18081", true},
 		"http://localhost:18080":     {"http://host.docker.internal:18080", true},
 		"http://[::1]:8080":          {"http://host.docker.internal:8080", true},
 		"http://parsar-server:8080":  {"http://parsar-server:8080", false},

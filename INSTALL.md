@@ -1,4 +1,7 @@
-# INSTALL - Parsar Local Quickstart
+# INSTALL — Parsar Local Quickstart
+
+This is the **operator-facing** quickstart. Want to work on Parsar itself?
+Skip to [CONTRIBUTING.md § Development workflow](./CONTRIBUTING.md).
 
 ## One-command install
 
@@ -30,8 +33,12 @@ user is the administrator.
   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
   PARSAR_SANDBOX_IMAGE=parsar-sandbox:local ./install.sh
   ```
+- Linux is required for the sandbox container. On macOS or Windows the
+  installer still runs Postgres + the server; the runtime service stays
+  stopped. Skip the runtimes with `--no-sandbox` once that flag lands in
+  a subsequent release (today: the sandbox profile is included by default).
 
-## What The Installer Does
+## What the installer does
 
 The script:
 
@@ -47,7 +54,7 @@ The script:
 It does not write runtime state into the repository or the current working
 directory.
 
-## Common Options
+## Common options
 
 ```bash
 # Use a different web port.
@@ -59,14 +66,12 @@ curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.
   | bash -s -- --image ghcr.io/minimax-ai-dev/parsar-server:parsar-server-v0.1.0
 ```
 
-For local development from a checkout:
+The installer preserves generated secrets across reruns. It intentionally
+exposes only the common port, bind address, and image options; add uncommon
+Compose overrides directly to `~/.parsar/.env` instead of adding more
+installer flags.
 
-```bash
-make docker-build
-./install.sh --image parsar:dev
-```
-
-## Manage The Stack
+## Manage the stack
 
 ```bash
 docker compose -f ~/.parsar/docker-compose.yml --env-file ~/.parsar/.env ps
@@ -76,17 +81,17 @@ docker compose -f ~/.parsar/docker-compose.yml --env-file ~/.parsar/.env down
 
 To remove all local data, stop the stack first and then delete `~/.parsar/`.
 
-## Advanced Configuration
+## Upgrade
 
-Edit `~/.parsar/.env` and rerun:
+Re-run the same one-liner; the installer is also the upgrade path. Existing
+`~/.parsar/.env` keys (including auto-generated `PARSAR_MASTER_KEY` and
+`PARSAR_SHARED_RUNTIME_TOKEN`) are kept. New options that the script wants to
+add to `.env` are appended only when missing.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
-```
+## Advanced configuration
 
-The installer preserves generated secrets. It intentionally exposes only the
-common port, bind address, and image options; add uncommon Compose overrides
-directly to `.env` instead of adding more installer flags.
+Edit `~/.parsar/.env` and rerun the installer. The rerun picks up the new
+values and pulls a fresh image so `:latest` does not reuse a stale tag.
 
 When a platform such as Dokploy adds its ingress network to `parsar-server`,
 keep the service attached to the Compose `default` network as well. Postgres
@@ -95,7 +100,17 @@ service discovery.
 
 The Feishu WebSocket inbound manager and outbound worker are driven by the
 workspace connector saved in the admin UI. No additional deployment flag is
-required after enabling the connector.
+required after enabling the connector. Feishu, Slack, and Discord credentials
+are configured in the workspace admin UI, not in `docker-compose.yml` or the
+installer environment.
 
-Feishu, Slack, and Discord credentials are configured in the workspace admin
-UI, not in `docker-compose.yml` or the installer environment.
+## Working on Parsar from a checkout
+
+Developers building the server, web, or CLI itself use the
+`make help` workflow in [CONTRIBUTING.md](./CONTRIBUTING.md). The installer is
+still useful for verifying that a freshly built image boots cleanly:
+
+```bash
+make docker-build           # builds parsar:dev and parsar-sandbox:dev locally
+./install.sh --image parsar:dev --sandbox-image parsar-sandbox:dev
+```

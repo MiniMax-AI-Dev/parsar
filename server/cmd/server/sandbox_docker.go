@@ -124,7 +124,7 @@ func buildDockerAgentDaemonSandboxProvider(
 
 	publicURL := strings.TrimSpace(cfg.Server.PublicURL)
 	if publicURL == "" {
-		publicURL = "http://127.0.0.1:18080"
+		publicURL = "http://127.0.0.1:18081"
 	}
 	network := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_DOCKER_NETWORK"))
 	serverURL, hostGateway := dockerDialBackURL(publicURL)
