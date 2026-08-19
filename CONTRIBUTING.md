@@ -116,7 +116,9 @@ description and keep ownership on the side listed here.
 - `runtime_id` chooses the concrete paired runtime/device/sandbox that will
   receive a run. It is a routing handle, not agent configuration.
 - `agent_kind` chooses the daemon-side engine (`claude_code`, `codex`,
-  `pi`, `opencode`). It is interpreted only by `parsar-daemon`.
+  `pi`, `opencode`, `deepseek_harness`). It is interpreted only by
+  `parsar-daemon`. The wire value is `snake_case`; the web layer normalizes
+  dashes and aliases in `apps/web/src/lib/agent-view-model.ts`.
 - Placement labels such as local device, cloud sandbox, and external agent
   are UI/product concepts. Do not branch business logic on display copy.
   Derive placement from typed runtime/provider/config fields in one shared
@@ -160,6 +162,26 @@ description and keep ownership on the side listed here.
 - Adapter-specific state directories must be derived from `AgentStateKey`
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.
+- Engine discovery is one table: `apps/parsar-daemon/internal/cli/agent_cli.go`
+  owns the per-engine capability descriptor, version probe, and operator
+  preflight output. Add an engine by extending that table, not by copying
+  another probe-and-report block.
+- The heartbeat capability descriptor states what the adapter actually
+  delivers. An engine whose only supported automation surface is one-shot
+  (no event stream, token accounting, resume flag, or approval channel —
+  `deepseek_harness` today) advertises none of them and must not synthesize a
+  `done` session id, a fake usage total, or an auto-approved permission.
+- Conversation continuity for an engine that advertises
+  `Capabilities.Resume=false` is the server's job, not the adapter's: the
+  connector folds a bounded transcript tail into the system-prompt slot
+  (`server/internal/connector/agentdaemon/history_injection.go`). Gate that
+  behaviour on the device's live descriptor rather than a list of engine
+  names, and keep it bounded — these engines re-send the whole prompt every
+  turn with no cache reuse. Adapters must not invent their own history.
+- When an adapter materializes engine config per prompt, scope that file to
+  the run and delete it on cleanup if the engine watches its config layers
+  for live edits. A shared, rewritten-in-place config would re-apply one
+  run's model onto another run of the same conversation.
 
 ### Human interaction lifecycle
 

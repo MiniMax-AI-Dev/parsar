@@ -24,8 +24,8 @@
 # one does).
 #
 # Contents:
-#   - Claude Code CLI + Codex CLI + Pi CLI (installed by
-#     infra/sandbox/scripts/install-agents.sh)
+#   - Claude Code CLI + Codex CLI + Pi CLI + DeepSeek Harness CLI
+#     (installed by infra/sandbox/scripts/install-agents.sh)
 #   - parsar-daemon + parsar CLI (spec/memory hook injection), both
 #     compiled from source in the builder stage below — no dependency on
 #     a published parsar-daemon release or the parsar:local server image
@@ -42,6 +42,7 @@
 #   --build-arg CLAUDE_CODE_VERSION=<version>  pin claude code (default: latest)
 #   --build-arg CODEX_VERSION=<version>        pin codex-rs (default: 0.141.0)
 #   --build-arg PI_VERSION=<version>           pin pi CLI (default: 0.80.6)
+#   --build-arg DSH_VERSION=<version>          pin DeepSeek Harness CLI (default: 0.1.0-rc.7)
 
 ###############################################################################
 # Stage 1: go-builder — compile parsar-daemon + parsar CLI for TARGETARCH.
@@ -97,14 +98,16 @@ RUN apt-get update -y \
       curl ca-certificates jq git ripgrep \
  && rm -rf /var/lib/apt/lists/*
 
-# --- Agent CLIs (Node + Claude Code + Codex + Pi) ---
+# --- Agent CLIs (Node + Claude Code + Codex + Pi + DeepSeek Harness) ---
 # See infra/sandbox/scripts/install-agents.sh for the install logic and
 # version-pin build args.
 ARG CLAUDE_CODE_VERSION=""
 ARG CODEX_VERSION="0.141.0"
 ARG PI_VERSION="0.80.6"
+ARG DSH_VERSION="0.1.0-rc.7"
 COPY infra/sandbox/scripts/install-agents.sh /tmp/install-agents.sh
 RUN CLAUDE_CODE_VERSION="$CLAUDE_CODE_VERSION" CODEX_VERSION="$CODEX_VERSION" PI_VERSION="$PI_VERSION" \
+    DSH_VERSION="$DSH_VERSION" \
     /tmp/install-agents.sh "$TARGETARCH" \
  && rm -f /tmp/install-agents.sh
 

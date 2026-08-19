@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server, Sparkles } from "lucide-react"
+import { ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server, Sparkles, Waves } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -17,7 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
+import { agentCodexModeOf, type AgentEngine, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
   modelSupportedEndpointTypes,
@@ -46,7 +46,6 @@ import type {
 const DEFAULT_WORK_DIR = "/workspace"
 
 type ExecutionMode = "sandbox" | "local_device" | "external"
-type AgentEngine = "claude_code" | "opencode" | "codex" | "pi"
 type SandboxSize = "standard" | "xl"
 type RuntimeChoice = AgentRuntime
 type WizardStep = 1 | 2
@@ -70,6 +69,7 @@ function agentEngineFromAgent(a?: Agent | null): AgentEngine {
   if (v === "opencode") return "opencode"
   if (v === "codex") return "codex"
   if (v === "pi") return "pi"
+  if (v === "deepseek_harness") return "deepseek_harness"
   return "claude_code"
 }
 
@@ -83,6 +83,7 @@ function engineSupportsProtocol(engine: AgentEngine, protocol: WireProtocol | nu
     case "codex":
       return protocol === "openai"
     case "pi":
+    case "deepseek_harness":
       return protocol === "anthropic" || protocol === "openai" || protocol === "google"
     case "opencode":
       return true
@@ -98,6 +99,7 @@ function engineSupportsModel(engine: AgentEngine, model: Model): boolean {
       case "codex":
         return endpointTypes.includes("openai") || endpointTypes.includes("openai-response")
       case "pi":
+      case "deepseek_harness":
         return (
           endpointTypes.includes("anthropic") ||
           endpointTypes.includes("openai") ||
@@ -686,7 +688,12 @@ export function CreateAgentDialog({
   const hasConnector = true
   const connector = mode === "edit" && agent ? agent.connector_type : connectorForExecutionMode(executionMode)
   const hasModel = activeModels.length > 0
-  const requiresModel = connector !== "agent_daemon" || agentEngine === "claude_code" || agentEngine === "codex" || agentEngine === "pi"
+  const requiresModel =
+    connector !== "agent_daemon" ||
+    agentEngine === "claude_code" ||
+    agentEngine === "codex" ||
+    agentEngine === "pi" ||
+    agentEngine === "deepseek_harness"
   const selectedModelUnavailable = mode === "edit" && requiresModel && selectedModelID !== "" && selectedModel === null
   const hasRequiredModel = !requiresModel || (selectedModel !== null && !incompatibleModelIDs.has(selectedModel.id))
   // Create opens model binding on a pending "shared" pick because secrets may
@@ -1092,6 +1099,13 @@ export function CreateAgentDialog({
                           title={t("agents.engine.pi.title")}
                           selected={agentEngine === "pi"}
                           onSelect={() => setAgentEngine("pi")}
+                        />
+                        <ChoiceCard
+                          icon={<Waves className="h-4 w-4" />}
+                          title={t("agents.engine.deepseekHarness.title")}
+                          description={t("agents.engine.deepseekHarness.cardHint")}
+                          selected={agentEngine === "deepseek_harness"}
+                          onSelect={() => setAgentEngine("deepseek_harness")}
                         />
                         <ChoiceCard
                           icon={<Server className="h-4 w-4" />}

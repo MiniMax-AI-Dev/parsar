@@ -25,6 +25,7 @@ func TestTargetForAgentKind(t *testing.T) {
 		{"opencode", render.TargetOpenCode},
 		{"codex", render.TargetCodex},
 		{"pi", render.TargetPi},
+		{"deepseek_harness", render.TargetDeepseekHarness},
 		{"", render.TargetClaudeCode},
 		{"  claude_code  ", render.TargetClaudeCode},
 		{"unknown_engine", render.TargetClaudeCode},

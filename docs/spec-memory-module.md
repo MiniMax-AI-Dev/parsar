@@ -331,7 +331,7 @@ PARSAR_RUNTIME_ID=<uuid>
 PARSAR_WORKSPACE_ID=<uuid>
 PARSAR_USER_ID=<uuid>
 PARSAR_PROJECT_ID=<uuid>            # may be empty
-PARSAR_CONNECTOR=claude|opencode|codex
+PARSAR_CONNECTOR=claude|opencode|codex|pi|deepseek-harness
 PARSAR_PROJECT_AGENT_ID=<uuid>
 PARSAR_CONVERSATION_ID=<uuid>
 ```

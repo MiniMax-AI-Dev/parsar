@@ -286,6 +286,18 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 			"provider_slug", mr.ProviderType,
 			"pi_model", stringFromMap(opts, "model"))
 		return nil
+	case "deepseek_harness":
+		if err := injectDeepseekHarnessManagedModel(opts, modelID, mr, apiKey); err != nil {
+			return err
+		}
+		c.log.Info("agent_daemon: injectManagedModel ok",
+			"run_id", in.RunID,
+			"agent_kind", agentKind,
+			"model_id", modelID,
+			"model_key", mr.ModelKey,
+			"provider_slug", mr.ProviderType,
+			"dsh_model", stringFromMap(opts, "model"))
+		return nil
 	default:
 		return fmt.Errorf("%w: %q", ErrUnsupportedAgentKind, agentKind)
 	}
