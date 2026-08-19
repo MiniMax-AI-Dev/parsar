@@ -37,8 +37,12 @@
 ARG NODE_VERSION=22-alpine
 ARG GO_VERSION=1.25-bookworm
 ARG RUNTIME_BASE=debian:bookworm-slim
+# Full builder references so a host that cannot reach docker.io can point
+# them at a mirror, the way RUNTIME_BASE already allows for the final stage.
+ARG NODE_IMAGE=node:${NODE_VERSION}
+ARG GO_IMAGE=golang:${GO_VERSION}
 
-FROM --platform=$BUILDPLATFORM node:${NODE_VERSION} AS web-builder
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS web-builder
 ENV PNPM_HOME=/pnpm
 ENV PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
@@ -65,9 +69,14 @@ RUN pnpm --filter @parsar/web build
 # minimal runtime. trimpath strips build-host file paths from the
 # binary (defence-in-depth against operator info leaks).
 ###############################################################################
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS go-builder
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS go-builder
 ARG TARGETOS
 ARG TARGETARCH
+# Overridable module proxy: the default matches Go's own, but a build host
+# that cannot reach proxy.golang.org can point at a mirror
+# (--build-arg GOPROXY=https://goproxy.cn,direct).
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /src
 
 # Module graph first, source second — keeps `go mod download` cacheable.

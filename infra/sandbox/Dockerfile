@@ -39,6 +39,7 @@
 # Build args:
 #   --build-arg BASE_IMAGE=<image>             ubuntu:22.04 (local) or e2bdev/base:latest (e2b)
 #   --build-arg GO_VERSION=<tag>               builder Go image (default: matches repo go.work)
+#   --build-arg GO_IMAGE=<ref>                 full builder reference (default: golang:$GO_VERSION)
 #   --build-arg CLAUDE_CODE_VERSION=<version>  pin claude code (default: latest)
 #   --build-arg CODEX_VERSION=<version>        pin codex-rs (default: 0.141.0)
 #   --build-arg PI_VERSION=<version>           pin pi CLI (default: 0.80.6)
@@ -51,9 +52,18 @@
 ###############################################################################
 ARG GO_VERSION=1.25-bookworm
 ARG BASE_IMAGE=ubuntu:22.04
+# Full builder reference so a host that cannot reach docker.io can point it
+# at a mirror (--build-arg GO_IMAGE=<mirror>/library/golang:1.25-bookworm),
+# mirroring what BASE_IMAGE already allows for the runtime stage.
+ARG GO_IMAGE=golang:${GO_VERSION}
 
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS go-builder
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS go-builder
 ARG TARGETARCH
+# Overridable module proxy: the default matches Go's own, but a build host
+# that cannot reach proxy.golang.org can point at a mirror
+# (--build-arg GOPROXY=https://goproxy.cn,direct).
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /src
 
 # Module graph first, source second — keeps `go mod download` cacheable.
