@@ -135,11 +135,11 @@ func probeReady(ctx context.Context, baseURL string) error {
 func serverIdleTimeout() time.Duration {
 	raw := strings.TrimSpace(os.Getenv("PARSAR_DSH_SERVER_IDLE"))
 	if raw == "" {
-		return enginehost.DefaultIdleTimeout
+		return time.Hour
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil || d == 0 {
-		return enginehost.DefaultIdleTimeout
+		return time.Hour
 	}
 	return d
 }

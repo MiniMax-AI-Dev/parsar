@@ -138,66 +138,35 @@ func (s *serverSession) attachAndPrompt(ctx context.Context, req proto.PromptReq
 		s.isNewSession = true
 	}
 
-	content, err := promptContent(req)
+	content, err := promptContent(req, "")
 	if err != nil {
 		down.Close()
 		return err
 	}
 	if err := s.api.Prompt(ctx, s.sessionID, content); err != nil {
+		if !s.isNewSession && isSessionNotFound(err) {
+			id, createErr := s.api.CreateSession(ctx, workDir)
+			if createErr != nil {
+				down.Close()
+				return createErr
+			}
+			s.sessionID = id
+			s.isNewSession = true
+			content, contentErr := promptContent(req, req.ResumeFallbackPrompt)
+			if contentErr != nil {
+				down.Close()
+				return contentErr
+			}
+			if retryErr := s.api.Prompt(ctx, s.sessionID, content); retryErr == nil {
+				return nil
+			} else {
+				err = retryErr
+			}
+		}
 		down.Close()
 		return err
 	}
 	return nil
-}
-
-// promptContent renders the turn's text and image attachments into the
-// gateway's content-part shape. dsh accepts a narrower set of media types
-// than Parsar carries, so an attachment it cannot represent is dropped
-// with a warning rather than failing the turn.
-func promptContent(req proto.PromptRequestPayload) ([]promptContentPart, error) {
-	text := strings.TrimSpace(req.Prompt)
-	if text == "" {
-		return nil, errors.New("deepseekharness: empty prompt")
-	}
-	if system := systemPreamble(req.AgentOptions); system != "" {
-		// The gateway has no system-prompt seam, so an injected system
-		// prompt rides at the head of the turn text, as on the headless
-		// path.
-		text = system + "\n\n" + text
-	}
-	parts := []promptContentPart{{Type: "text", Text: text}}
-	for _, att := range req.Attachments {
-		if !isSupportedImageMedia(att.MIME) {
-			continue
-		}
-		parts = append(parts, promptContentPart{
-			Type:      "image",
-			MediaType: att.MIME,
-			Data:      att.DataBase64,
-		})
-	}
-	return parts, nil
-}
-
-// supportedImageMedia is the gateway's accepted raster set. A media type
-// outside it is rejected by the request schema, which would fail the whole
-// turn over an attachment.
-var supportedImageMedia = map[string]bool{
-	"image/png":  true,
-	"image/jpeg": true,
-	"image/webp": true,
-	"image/gif":  true,
-}
-
-func isSupportedImageMedia(mime string) bool {
-	return supportedImageMedia[strings.ToLower(strings.TrimSpace(mime))]
-}
-
-func systemPreamble(opts map[string]any) string {
-	if override := stringOpt(opts, "override_system_prompt"); override != "" {
-		return override
-	}
-	return stringOpt(opts, "system_prompt")
 }
 
 // pump reads the downlink until the turn ends, translating events into

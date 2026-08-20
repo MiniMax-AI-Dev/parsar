@@ -1,12 +1,4 @@
-// Package deepseekharness is the agent_kind="deepseek_harness" adapter.
-// It drives DeepSeek Harness through its one-shot surface,
-// `dsh --profile headless <task>`, which prints the final assistant text
-// on stdout and exits non-zero for any turn that did not complete.
-//
-// The harness exposes no supported machine-readable event stream, resume
-// flag, or approval channel for that surface, so this adapter advertises
-// neither streaming, usage, resume nor permissions: one prompt is one
-// fresh dsh session.
+// Package deepseekharness drives headless DSH locally and its resident API in sandboxes.
 package deepseekharness
 
 import (

@@ -158,6 +158,51 @@ func TestServerSessionResumesTheGivenSessionWithoutCreating(t *testing.T) {
 	}
 }
 
+func TestServerSessionReplacesAStaleSessionWithServerHistory(t *testing.T) {
+	gateway := newFakeGateway(t)
+	gateway.promptErr = &rpcError{Code: "not-found", Message: "session missing"}
+	req := baseRequest()
+	req.AgentSessionID = "session-stale"
+	req.ResumeFallbackPrompt = "Earlier turns:\nUser: first\nAssistant: reply"
+	out := make(chan proto.Envelope, 16)
+	s := &serverSession{
+		runID:        req.RunID,
+		cfg:          quietConfig(),
+		api:          newAPIClient(enginehost.NewClient(gateway.srv.URL, 5*time.Second)),
+		out:          out,
+		engineExited: make(chan struct{}),
+		release:      func() {},
+		diagnostics:  func() string { return "" },
+	}
+	if err := s.attachAndPrompt(context.Background(), req, "/tmp/x"); err != nil {
+		t.Fatalf("attachAndPrompt: %v", err)
+	}
+	conn := gateway.conn(t)
+	go s.pump()
+
+	prompts := gateway.promptCalls()
+	if len(prompts) != 2 {
+		t.Fatalf("prompt calls = %d, want stale attempt and replacement", len(prompts))
+	}
+	if prompts[0].SessionID != "session-stale" || strings.Contains(prompts[0].Content[0].Text, "Earlier turns") {
+		t.Fatalf("first prompt must attempt an unmodified resume: %+v", prompts[0])
+	}
+	if prompts[1].SessionID != gateway.nextSessionID || !strings.Contains(prompts[1].Content[0].Text, req.ResumeFallbackPrompt) {
+		t.Fatalf("replacement prompt lost server history: %+v", prompts[1])
+	}
+
+	emitEvent(t, conn, gateway.nextSessionID, eventTurnEnd, 1, turnEnd("completed"))
+	var done proto.DonePayload
+	for env := range out {
+		if env.Type == proto.TypeDone {
+			done = decodeEnv[proto.DonePayload](t, env)
+		}
+	}
+	if done.Metadata[proto.DoneMetaAgentSessionID] != gateway.nextSessionID {
+		t.Fatalf("replacement session was not persisted: %#v", done.Metadata)
+	}
+}
+
 func TestServerSessionStreamsTextThinkingToolsAndUsage(t *testing.T) {
 	h := newHarness(t, baseRequest())
 	sid := h.gateway.nextSessionID
@@ -464,7 +509,7 @@ func TestPromptContentCarriesSystemPromptAndSupportedImages(t *testing.T) {
 		{Kind: "image", MIME: "image/tiff", DataBase64: "BBB"},
 	}
 
-	parts, err := promptContent(req)
+	parts, err := promptContent(req, "")
 	if err != nil {
 		t.Fatalf("promptContent: %v", err)
 	}
@@ -482,7 +527,7 @@ func TestPromptContentCarriesSystemPromptAndSupportedImages(t *testing.T) {
 	}
 
 	req.AgentOptions = map[string]any{"system_prompt": "be terse", "override_system_prompt": "override wins"}
-	parts, err = promptContent(req)
+	parts, err = promptContent(req, "")
 	if err != nil {
 		t.Fatalf("promptContent: %v", err)
 	}
@@ -491,7 +536,7 @@ func TestPromptContentCarriesSystemPromptAndSupportedImages(t *testing.T) {
 	}
 
 	req.Prompt = "   "
-	if _, err := promptContent(req); err == nil {
+	if _, err := promptContent(req, ""); err == nil {
 		t.Error("an empty prompt must be rejected")
 	}
 }

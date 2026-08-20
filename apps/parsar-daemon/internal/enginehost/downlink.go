@@ -24,8 +24,10 @@ const downlinkBuffer = 256
 // Lifetime: Frames is closed exactly once, after which Err reports why.
 // Close is idempotent and unblocks the reader.
 type Downlink struct {
-	frames chan []byte
-	conn   *websocket.Conn
+	frames   chan []byte
+	conn     *websocket.Conn
+	closed   chan struct{}
+	readDone chan struct{}
 
 	closeOnce sync.Once
 	errMu     sync.Mutex
@@ -57,7 +59,12 @@ func (c *Client) Dial(ctx context.Context, path string) (*Downlink, error) {
 		_ = resp.Body.Close()
 	}
 
-	d := &Downlink{frames: make(chan []byte, downlinkBuffer), conn: conn}
+	d := &Downlink{
+		frames:   make(chan []byte, downlinkBuffer),
+		conn:     conn,
+		closed:   make(chan struct{}),
+		readDone: make(chan struct{}),
+	}
 	go d.read()
 	return d, nil
 }
@@ -75,14 +82,23 @@ func (d *Downlink) Err() error {
 
 // Close tears the connection down. Idempotent.
 func (d *Downlink) Close() {
-	d.closeOnce.Do(func() { _ = d.conn.Close() })
+	d.closeOnce.Do(func() {
+		close(d.closed)
+		_ = d.conn.Close()
+	})
 }
 
 func (d *Downlink) read() {
+	defer close(d.readDone)
 	defer close(d.frames)
 	for {
 		msgType, payload, err := d.conn.ReadMessage()
 		if err != nil {
+			select {
+			case <-d.closed:
+				return
+			default:
+			}
 			if !isCleanClose(err) {
 				d.setErr(err)
 			}
@@ -96,7 +112,11 @@ func (d *Downlink) read() {
 		// alias mutated bytes.
 		frame := make([]byte, len(payload))
 		copy(frame, payload)
-		d.frames <- frame
+		select {
+		case d.frames <- frame:
+		case <-d.closed:
+			return
+		}
 	}
 }
 

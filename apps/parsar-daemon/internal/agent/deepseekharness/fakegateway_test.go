@@ -110,6 +110,7 @@ func (g *fakeGateway) handleUnary(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal(raw, &payload)
 		g.prompts = append(g.prompts, promptCall{SessionID: payload.SessionID, Mode: payload.Mode, Content: payload.Content})
 		fail = g.promptErr
+		g.promptErr = nil
 		value = map[string]any{"accepted": true}
 	case methodSessionCancel:
 		var payload struct {

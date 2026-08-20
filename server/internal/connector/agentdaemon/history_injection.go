@@ -1,16 +1,11 @@
-// Server-side conversation history for engines that cannot resume.
+// Server-side conversation history injection and stale-session recovery.
 //
-// claude_code, codex and pi keep their own conversation state and get an
-// upstream session id back through agent_engine_sessions, so the daemon
-// replays nothing for them. opencode and deepseek_harness advertise
-// Capabilities.Resume=false: every prompt is a fresh engine session, so
-// without this injection turn two has no idea what turn one said.
+// Engines without resume receive the transcript on every turn. Engines with
+// resume receive the same bounded block separately, so an adapter can use it
+// only if the upstream session has disappeared.
 //
-// The transcript is folded into the system-prompt slot, which every adapter
-// already forwards (as --append-system-prompt, or prepended to the task for
-// the engines with no system-prompt flag). It is deliberately a bounded tail
-// rather than the whole conversation: these engines have no prompt-cache
-// reuse, so every injected byte is paid for on every turn.
+// The transcript is a bounded tail rather than the whole conversation so a
+// fallback does not turn one lost engine session into an unbounded prompt.
 package agentdaemon
 
 import (
@@ -76,13 +71,7 @@ func (c *Connector) applyConversationHistoryInjection(
 		return
 	}
 
-	messages, err := c.conversationHistory.ListRecentConversationHistory(ctx, in.ConversationID, historyTurnLimit)
-	if err != nil {
-		c.log.Warn("agent_daemon: conversation history read failed; proceeding without transcript",
-			"run_id", in.RunID, "conversation_id", in.ConversationID, "err", err.Error())
-		return
-	}
-	block := renderConversationHistory(messages, in.TriggerMessageID, in.TriggerMessageContent)
+	block, count := c.readConversationHistoryBlock(ctx, in)
 	if block == "" {
 		return
 	}
@@ -95,8 +84,35 @@ func (c *Connector) applyConversationHistoryInjection(
 	c.log.Info("agent_daemon: conversation history injected",
 		"run_id", in.RunID,
 		"agent_kind", info.Kind,
-		"turn_count", len(messages),
+		"turn_count", count,
 		"block_bytes", len(block))
+}
+
+func (c *Connector) resumeFallbackPrompt(
+	ctx context.Context,
+	in connector.PromptInput,
+	info store.AgentDaemonSupportedAgentKind,
+	sessionID string,
+	opts map[string]any,
+) string {
+	if !info.Capabilities.Resume || strings.TrimSpace(sessionID) == "" || stringFromMap(opts, "override_system_prompt") != "" {
+		return ""
+	}
+	block, _ := c.readConversationHistoryBlock(ctx, in)
+	return block
+}
+
+func (c *Connector) readConversationHistoryBlock(ctx context.Context, in connector.PromptInput) (string, int) {
+	if c.conversationHistory == nil || strings.TrimSpace(in.ConversationID) == "" {
+		return "", 0
+	}
+	messages, err := c.conversationHistory.ListRecentConversationHistory(ctx, in.ConversationID, historyTurnLimit)
+	if err != nil {
+		c.log.Warn("agent_daemon: conversation history read failed; proceeding without transcript",
+			"run_id", in.RunID, "conversation_id", in.ConversationID, "err", err.Error())
+		return "", 0
+	}
+	return renderConversationHistory(messages, in.TriggerMessageID, in.TriggerMessageContent), len(messages)
 }
 
 // renderConversationHistory renders stored turns oldest-first, excluding the

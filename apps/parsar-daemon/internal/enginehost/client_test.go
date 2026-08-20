@@ -96,6 +96,53 @@ func TestDialStreamsFramesAndClosesCleanly(t *testing.T) {
 	}
 }
 
+func TestDownlinkCloseUnblocksAFullFrameQueue(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	serverDone := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer close(serverDone)
+		defer func() { _ = conn.Close() }()
+		for i := 0; i < downlinkBuffer+32; i++ {
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"event":"burst"}`)); err != nil {
+				return
+			}
+		}
+		_, _, _ = conn.ReadMessage()
+	}))
+	defer srv.Close()
+
+	down, err := NewClient(srv.URL, 5*time.Second).Dial(context.Background(), "/api/events.mux")
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for len(down.frames) < downlinkBuffer && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(down.frames) != downlinkBuffer {
+		t.Fatalf("frame queue never filled: %d", len(down.frames))
+	}
+
+	down.Close()
+	select {
+	case <-down.readDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close did not unblock the saturated reader")
+	}
+	if err := down.Err(); err != nil {
+		t.Fatalf("local Close reported an error: %v", err)
+	}
+	select {
+	case <-serverDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not observe the closed downlink")
+	}
+}
+
 func TestDialFailsOnNonUpgradePath(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

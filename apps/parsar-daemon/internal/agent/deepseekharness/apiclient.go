@@ -3,6 +3,7 @@ package deepseekharness
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -67,6 +68,11 @@ func (e *rpcError) Error() string {
 		msg += ": " + truncate(string(e.Details), 400)
 	}
 	return msg
+}
+
+func isSessionNotFound(err error) bool {
+	var rpcErr *rpcError
+	return errors.As(err, &rpcErr) && rpcErr.Code == "not-found"
 }
 
 // apiClient speaks the dsh gateway envelope over an enginehost transport.

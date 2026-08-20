@@ -1,19 +1,12 @@
-// Package skillinstall securely materialises server-resolved Skills for
-// daemon-side agent engines.
+// Package skillinstall securely materialises server-resolved Skills for daemon-side engines.
 package skillinstall
 
 import (
-	"archive/zip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"maps"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,23 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Descriptor is the daemon-side view of one server-sent skill entry
-// under agent_options["skills"]:
-//
-//	{ "name": "...", "version": "...", "download_url": "...", "sha256": "..." }
-//
-// Markdown-only Skills use content instead of download_url + sha256.
-type Descriptor struct {
-	Name        string
-	Version     string
-	DownloadURL string
-	SHA256      string
-	Content     string
-}
-
-// Result carries installed directories plus per-skill warnings. SkillDirs is
-// populated on cache hits as well as fresh installs so engines with explicit
-// skill path configuration can reuse it on every turn.
+// Result reports the installed Skill directories and per-Skill warnings.
 type Result struct {
 	SkillDirs []string
 	Warnings  []string
@@ -47,28 +24,8 @@ type Result struct {
 
 const skillInstallTimeout = 60 * time.Second
 
-// maxSkillZipBytes mirrors the server-side cap. Defense in depth.
-const maxSkillZipBytes int64 = 32 * 1024 * 1024
-
-var skillsHTTPClient = &http.Client{Timeout: skillInstallTimeout + 10*time.Second}
-
-// Install materialises every skill under <root>/<name>/ and returns
-// the local paths. Per skill:
-//
-//  1. Cache hit (<dir>/.cache-key == name@sha256) returns the dir without
-//     a network round-trip — but still returns it, so --skill is injected
-//     on every turn.
-//  2. Fetch → verify SHA-256 → extract (single wrapping dir stripped,
-//     __MACOSX/ ignored) → stamp .cache-key.
-//
-// Errors during fetch/verify/extract demote one skill to a warning and
-// continue. A hard error means the root dir itself was uncreatable.
-func Install(
-	ctx context.Context,
-	logger *slog.Logger,
-	root string,
-	skills []Descriptor,
-) (Result, error) {
+// Install materialises every descriptor beneath root.
+func Install(ctx context.Context, logger *slog.Logger, root string, skills []Descriptor) (Result, error) {
 	if logger == nil {
 		logger = obslog.Bg()
 	}
@@ -81,7 +38,6 @@ func Install(
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return Result{}, fmt.Errorf("skill install: mkdir %s: %w", root, err)
 	}
-
 	result := Result{}
 	for _, s := range skills {
 		if err := s.validate(); err != nil {
@@ -89,17 +45,14 @@ func Install(
 			logger.Warn("skill install: invalid descriptor", "err", err.Error())
 			continue
 		}
-
 		dir := filepath.Join(root, s.Name)
 		cacheKey := filepath.Join(dir, ".cache-key")
 		expectedKey := s.cacheKey()
-
 		if existing, err := os.ReadFile(cacheKey); err == nil && string(existing) == expectedKey {
 			logger.Info("skill install: cache hit", "name", s.Name, "version", s.Version, "dir", dir)
 			result.SkillDirs = append(result.SkillDirs, dir)
 			continue
 		}
-
 		var err error
 		if s.isInline() {
 			err = installInlineSkill(dir, cacheKey, expectedKey, s.Content)
@@ -137,8 +90,7 @@ func installInlineSkill(dir, cacheKey, expectedKey, content string) error {
 	return nil
 }
 
-// Prune removes installer-owned skill directories that are no longer present
-// in the server-resolved descriptor set.
+// Prune removes installer-owned directories absent from skills.
 func Prune(root string, skills []Descriptor) error {
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, os.ErrNotExist) {
@@ -172,32 +124,19 @@ func Prune(root string, skills []Descriptor) error {
 	return nil
 }
 
-func installOneSkill(
-	ctx context.Context,
-	logger *slog.Logger,
-	root, dir, cacheKey, expectedKey string,
-	s Descriptor,
-) error {
+func installOneSkill(ctx context.Context, logger *slog.Logger, root, dir, cacheKey, expectedKey string, s Descriptor) error {
 	tmpDir := filepath.Join(root, ".tmp")
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir tmp: %w", err)
 	}
-
-	// Per-call uuid so concurrent installs of the same (name, version)
-	// don't truncate each other's bytes, and nothing on disk between
-	// verify and extract can be a different file than the one hashed.
+	// A unique path prevents concurrent installs from truncating verified bytes.
 	zipPath := filepath.Join(tmpDir, fmt.Sprintf("%s-%s-%s.zip", s.Name, s.Version, uuid.NewString()))
 	defer func() { _ = os.Remove(zipPath) }()
-
 	fd, err := fetchSkillZip(ctx, s.DownloadURL, zipPath)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
-
-	// Verify and extract BOTH read through the same FD (not the path):
-	// Unix file semantics pin the inode, so a swap on disk between
-	// hashing and extraction cannot change the bytes we use.
 	if err := verifySHA256FromFD(fd, s.SHA256); err != nil {
 		return err
 	}
@@ -208,7 +147,6 @@ func installOneSkill(
 	if err != nil {
 		return fmt.Errorf("stat: %w", err)
 	}
-
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("rm old dir: %w", err)
 	}
@@ -219,381 +157,8 @@ func installOneSkill(
 		_ = os.RemoveAll(dir)
 		return err
 	}
-
 	if err := os.WriteFile(cacheKey, []byte(expectedKey), 0o644); err != nil {
 		logger.Warn("skill install: write cache key failed", "path", cacheKey, "err", err.Error())
 	}
 	return nil
-}
-
-// fetchSkillZip GETs url into dst, capping the body at maxSkillZipBytes.
-// Returns an OPEN file descriptor at offset 0; the caller closes it.
-// Holding the FD across verify + extract closes the TOCTOU between
-// hashing the on-disk bytes and reading them for extract.
-//
-// Only http/https are accepted to defend against a future download_url
-// reaching this code with file:// or http://internal-ip/... values.
-func fetchSkillZip(ctx context.Context, downloadURL, dst string) (*os.File, error) {
-	parsed, err := url.Parse(downloadURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, errors.New("download_url must be http(s)")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	if err != nil {
-		return nil, errors.New("build request failed")
-	}
-	resp, err := skillsHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("get failed: %s", sanitizeHTTPClientError(err))
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
-		return nil, fmt.Errorf("get: status %d", resp.StatusCode)
-	}
-
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open dst: %w", err)
-	}
-
-	limited := io.LimitReader(resp.Body, maxSkillZipBytes+1)
-	written, err := io.Copy(f, limited)
-	if err != nil {
-		_ = f.Close()
-		return nil, fmt.Errorf("copy body: %w", err)
-	}
-	if written > maxSkillZipBytes {
-		_ = f.Close()
-		return nil, fmt.Errorf("zip exceeds %d byte cap", maxSkillZipBytes)
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		_ = f.Close()
-		return nil, fmt.Errorf("seek after write: %w", err)
-	}
-	return f, nil
-}
-
-// sanitizeHTTPClientError strips the URL embedded by *url.Error so a
-// presigned download_url (OSSAccessKeyId + Signature) never lands in the
-// daemon log. Format is `<method> "<url>": <inner>`.
-func sanitizeHTTPClientError(err error) string {
-	if err == nil {
-		return ""
-	}
-	msg := err.Error()
-	open := strings.Index(msg, `"`)
-	if open < 0 {
-		return msg
-	}
-	closeRel := strings.Index(msg[open+1:], `"`)
-	if closeRel < 0 {
-		return msg
-	}
-	closeAbs := open + 1 + closeRel
-	if closeAbs+2 > len(msg) {
-		return msg
-	}
-	return msg[:open] + "<redacted-url>" + msg[closeAbs+1:]
-}
-
-func verifySHA256FromFD(fd *os.File, want string) error {
-	want = strings.ToLower(strings.TrimSpace(want))
-	if want == "" {
-		return errors.New("verify: empty expected sha256")
-	}
-	if _, err := fd.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("verify: seek: %w", err)
-	}
-	h := sha256.New()
-	if _, err := io.Copy(h, fd); err != nil {
-		return fmt.Errorf("verify: hash: %w", err)
-	}
-	got := hex.EncodeToString(h.Sum(nil))
-	if got != want {
-		return fmt.Errorf("verify: sha256 mismatch (want=%s got=%s)", want, got)
-	}
-	return nil
-}
-
-// extractSkillZipFromFD reads via io.NewSectionReader rather than
-// re-opening the path so the byte stream stays identical to the verified
-// one (TOCTOU defense).
-func extractSkillZipFromFD(fd *os.File, size int64, dst string) error {
-	zr, err := zip.NewReader(io.NewSectionReader(fd, 0, size), size)
-	if err != nil {
-		return fmt.Errorf("extract: open zip: %w", err)
-	}
-
-	root := detectSingleZipRoot(zr.File)
-	absDst, err := filepath.Abs(dst)
-	if err != nil {
-		return fmt.Errorf("extract: abs dst: %w", err)
-	}
-
-	for _, f := range zr.File {
-		name := normaliseZipPath(f.Name)
-		if name == "" || strings.HasPrefix(name, "__MACOSX/") || name == "__MACOSX" {
-			continue
-		}
-		// Skip non-regular entries (symlinks, devices). A symlink entry
-		// would otherwise be written as a plain file holding the link
-		// target string — an exfil vector.
-		mode := f.Mode()
-		if !f.FileInfo().IsDir() && !mode.IsRegular() {
-			continue
-		}
-		if root != "" {
-			if !strings.HasPrefix(name, root) {
-				continue
-			}
-			name = strings.TrimPrefix(name, root)
-			if name == "" {
-				continue
-			}
-		}
-
-		target := filepath.Join(absDst, name)
-		rel, err := filepath.Rel(absDst, target)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("extract: entry %q escapes target", f.Name)
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0o755); err != nil {
-				return fmt.Errorf("extract: mkdir %s: %w", target, err)
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return fmt.Errorf("extract: mkdir parent of %s: %w", target, err)
-		}
-		if err := writeZipEntry(f, target); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeZipEntry(f *zip.File, target string) error {
-	rc, err := f.Open()
-	if err != nil {
-		return fmt.Errorf("extract: open entry %s: %w", f.Name, err)
-	}
-	defer rc.Close()
-
-	mode := f.Mode().Perm()
-	if mode == 0 {
-		mode = 0o644
-	}
-	out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil {
-		return fmt.Errorf("extract: open target %s: %w", target, err)
-	}
-	defer out.Close()
-	if _, err := io.Copy(out, rc); err != nil {
-		return fmt.Errorf("extract: copy %s: %w", target, err)
-	}
-	return nil
-}
-
-// detectSingleZipRoot returns the common wrapping directory (with
-// trailing slash) shared by every non-MACOSX entry, or "" when there is
-// none. Bare directory entries (no internal "/") are skipped when picking
-// the first candidate so `zip -r skill skill/` doesn't short-circuit on
-// its own leading directory entry. Hidden roots (".*") are NOT treated as
-// wrappers.
-func detectSingleZipRoot(files []*zip.File) string {
-	var first string
-	for _, f := range files {
-		name := normaliseZipPath(f.Name)
-		if name == "" || strings.HasPrefix(name, "__MACOSX/") || name == "__MACOSX" {
-			continue
-		}
-		if !strings.Contains(name, "/") {
-			continue
-		}
-		first = name
-		break
-	}
-	if first == "" {
-		return ""
-	}
-	idx := strings.Index(first, "/")
-	if idx <= 0 {
-		return ""
-	}
-	root := first[:idx+1]
-	if strings.HasPrefix(root, ".") {
-		return ""
-	}
-	for _, f := range files {
-		name := normaliseZipPath(f.Name)
-		if name == "" || strings.HasPrefix(name, "__MACOSX/") || name == "__MACOSX" {
-			continue
-		}
-		if name+"/" == root {
-			continue
-		}
-		if !strings.HasPrefix(name, root) {
-			return ""
-		}
-	}
-	return root
-}
-
-func normaliseZipPath(name string) string {
-	p := strings.ReplaceAll(name, "\\", "/")
-	return strings.TrimSuffix(p, "/")
-}
-
-// Decode converts agent_options["skills"] into typed
-// descriptors. Entries that fail to decode are dropped with a warning;
-// the rest may still be installable.
-func Decode(raw any) ([]Descriptor, []string) {
-	if raw == nil {
-		return nil, nil
-	}
-	items, ok := raw.([]any)
-	if !ok {
-		return nil, []string{fmt.Sprintf("agent_options[skills] must be array, got %T", raw)}
-	}
-	out := make([]Descriptor, 0, len(items))
-	warnings := make([]string, 0)
-	for i, item := range items {
-		obj, ok := item.(map[string]any)
-		if !ok {
-			warnings = append(warnings, fmt.Sprintf("skills[%d]: not an object", i))
-			continue
-		}
-		s := Descriptor{
-			Name:        stringField(obj, "name"),
-			Version:     stringField(obj, "version"),
-			DownloadURL: stringField(obj, "download_url"),
-			SHA256:      stringField(obj, "sha256"),
-			Content:     stringField(obj, "content"),
-		}
-		if err := s.validate(); err != nil {
-			warnings = append(warnings, fmt.Sprintf("skills[%d] (%s): %v", i, s.Name, err))
-			continue
-		}
-		out = append(out, s)
-	}
-	return out, warnings
-}
-
-func stringField(m map[string]any, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
-}
-
-func (s Descriptor) validate() error {
-	if strings.TrimSpace(s.Name) == "" {
-		return errors.New("name is required")
-	}
-	// Block path-traversal names before they hit filepath.Join.
-	if strings.ContainsAny(s.Name, "/\\") || s.Name == "." || s.Name == ".." {
-		return fmt.Errorf("name %q contains path separator or dot-ref", s.Name)
-	}
-	hasInline := strings.TrimSpace(s.Content) != ""
-	hasArchive := strings.TrimSpace(s.DownloadURL) != "" || strings.TrimSpace(s.SHA256) != ""
-	if hasInline == hasArchive {
-		return errors.New("exactly one of content or download_url + sha256 is required")
-	}
-	if hasArchive {
-		if strings.TrimSpace(s.DownloadURL) == "" {
-			return errors.New("download_url is required")
-		}
-		if len(s.SHA256) != 64 {
-			return fmt.Errorf("sha256 must be 64 hex chars (got %d)", len(s.SHA256))
-		}
-		if _, err := hex.DecodeString(s.SHA256); err != nil {
-			return errors.New("sha256 must be hexadecimal")
-		}
-	}
-	return nil
-}
-
-func (s Descriptor) cacheKey() string {
-	digest := strings.ToLower(s.SHA256)
-	if s.isInline() {
-		sum := sha256.Sum256([]byte(s.Content))
-		digest = hex.EncodeToString(sum[:])
-	}
-	return fmt.Sprintf("%s@%s", strings.TrimSpace(s.Name), digest)
-}
-
-func (s Descriptor) isInline() bool {
-	return strings.TrimSpace(s.Content) != ""
-}
-
-// ResolveRoot returns the absolute directory under which managed
-// skills install, one subdir per skill. Kept under ~/.parsar/ (runtime
-// state lives there, not the user's project tree) and scoped per
-// conversation so consecutive turns reuse .cache-key files without two
-// conversations racing the same skill dir. runID scopes the one-shot
-// fallback when there is no conversation.
-func ResolveRoot(runtimeName, conversationID, runID string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("skill install: resolve home: %w", err)
-	}
-	runtimeName = strings.TrimSpace(runtimeName)
-	if runtimeName == "" || strings.ContainsAny(runtimeName, "/\\") || runtimeName == "." || runtimeName == ".." {
-		return "", fmt.Errorf("skill install: invalid runtime name %q", runtimeName)
-	}
-	base := filepath.Join(home, ".parsar", "runtime", runtimeName)
-	if id := strings.TrimSpace(conversationID); id != "" {
-		return filepath.Join(base, "conv-"+id, "skills"), nil
-	}
-	return filepath.Join(base, "run-"+strings.TrimSpace(runID), "skills"), nil
-}
-
-// MergeDirs combines a caller-supplied skill_dirs override (accepted
-// as []string OR []any) with the install-resolved list, preserving order
-// and deduplicating. Override wins on collision.
-func MergeDirs(existing any, resolved []string) []string {
-	preset := coerceStringSlice(existing)
-	seen := make(map[string]bool, len(preset)+len(resolved))
-	out := make([]string, 0, len(preset)+len(resolved))
-	for _, d := range append(append([]string{}, preset...), resolved...) {
-		if d == "" || seen[d] {
-			continue
-		}
-		seen[d] = true
-		out = append(out, d)
-	}
-	return out
-}
-
-func coerceStringSlice(v any) []string {
-	switch t := v.(type) {
-	case nil:
-		return nil
-	case []string:
-		return t
-	case []any:
-		out := make([]string, 0, len(t))
-		for _, item := range t {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-// CloneOptions returns a shallow copy so we never mutate the
-// caller's map when overwriting the top-level "skill_dirs" key.
-func CloneOptions(opts map[string]any) map[string]any {
-	if opts == nil {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(opts))
-	maps.Copy(out, opts)
-	return out
 }

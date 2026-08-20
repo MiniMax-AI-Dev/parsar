@@ -3,9 +3,25 @@ package deepseekharness
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 )
+
+func TestServerIdleTimeoutDefaultsToTheDaemonContract(t *testing.T) {
+	t.Setenv("PARSAR_DSH_SERVER_IDLE", "")
+	if got := serverIdleTimeout(); got != time.Hour {
+		t.Fatalf("idle timeout = %s, want 1h", got)
+	}
+	t.Setenv("PARSAR_DSH_SERVER_IDLE", "17m")
+	if got := serverIdleTimeout(); got != 17*time.Minute {
+		t.Fatalf("override = %s", got)
+	}
+	t.Setenv("PARSAR_DSH_SERVER_IDLE", "invalid")
+	if got := serverIdleTimeout(); got != time.Hour {
+		t.Fatalf("invalid fallback = %s", got)
+	}
+}
 
 func sampleLaunch() serverLaunch {
 	return serverLaunch{

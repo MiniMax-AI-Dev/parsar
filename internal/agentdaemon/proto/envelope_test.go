@@ -54,9 +54,10 @@ func TestEnvelopeOmitsEmptyPayload(t *testing.T) {
 
 func TestPromptRequestAgentOptionsRoundTrip(t *testing.T) {
 	in := PromptRequestPayload{
-		AgentKind: "deepseek_harness",
-		RunID:     "run-capabilities",
-		Prompt:    "prove capabilities",
+		AgentKind:            "deepseek_harness",
+		RunID:                "run-capabilities",
+		Prompt:               "prove capabilities",
+		ResumeFallbackPrompt: "bounded server history",
 		AgentOptions: map[string]any{
 			"mcp_servers": map[string]any{
 				"proof": map[string]any{"command": "node", "args": []any{"proof.mjs"}},
@@ -85,6 +86,9 @@ func TestPromptRequestAgentOptionsRoundTrip(t *testing.T) {
 	}
 	if skills, ok := got.AgentOptions["skills"].([]any); !ok || len(skills) != 1 {
 		t.Fatalf("skills = %T (%v)", got.AgentOptions["skills"], got.AgentOptions["skills"])
+	}
+	if got.ResumeFallbackPrompt != in.ResumeFallbackPrompt {
+		t.Fatalf("resume fallback = %q", got.ResumeFallbackPrompt)
 	}
 }
 

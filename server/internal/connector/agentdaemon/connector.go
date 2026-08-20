@@ -465,6 +465,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	// a property of the device that will execute the run, and the heartbeat
 	// descriptor only exists once its session is resolved.
 	c.applyConversationHistoryInjection(ctx, agentOptions, in, kindInfo)
+	resumeFallbackPrompt := c.resumeFallbackPrompt(ctx, in, kindInfo, bind.AgentSessionID, agentOptions)
 
 	upstream, err := sess.Subscribe(in.RunID)
 	if err != nil {
@@ -473,15 +474,16 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	}
 
 	req, err := proto.NewEnvelope(proto.TypePromptRequest, in.RunID, proto.PromptRequestPayload{
-		AgentKind:      agentKind,
-		ConversationID: in.ConversationID,
-		RunID:          in.RunID,
-		Prompt:         in.TriggerMessageContent,
-		Attachments:    promptAttachmentsFromStore(in.TriggerAttachments),
-		WorkDir:        bind.WorkDir,
-		AgentOptions:   agentOptions,
-		AgentSessionID: bind.AgentSessionID,
-		AgentStateKey:  bind.AgentStateKey,
+		AgentKind:            agentKind,
+		ConversationID:       in.ConversationID,
+		RunID:                in.RunID,
+		Prompt:               in.TriggerMessageContent,
+		Attachments:          promptAttachmentsFromStore(in.TriggerAttachments),
+		WorkDir:              bind.WorkDir,
+		AgentOptions:         agentOptions,
+		AgentSessionID:       bind.AgentSessionID,
+		ResumeFallbackPrompt: resumeFallbackPrompt,
+		AgentStateKey:        bind.AgentStateKey,
 	})
 	if err != nil {
 		sess.Unsubscribe(in.RunID)

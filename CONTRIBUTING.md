@@ -159,6 +159,10 @@ description and keep ownership on the side listed here.
   `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
   the daemon protocol. Do not keep resume ids only in adapter memory, files
   without a server record, or frontend state.
+- The server also sends a bounded durable transcript tail for stale-session
+  recovery. A resume-capable adapter must use it only after the engine
+  explicitly rejects the stored session id, then return the replacement id;
+  normal resume must not receive duplicate history.
 - Adapter-specific state directories must be derived from `AgentStateKey`
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.

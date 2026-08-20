@@ -76,6 +76,40 @@ func TestApplyConversationHistoryInjection_ResumeCapableEngineSkipped(t *testing
 	}
 }
 
+func TestResumeFallbackPromptCarriesHistoryOnlyForAnExistingSession(t *testing.T) {
+	reader := &fakeHistoryReader{messages: historyMessages()}
+	c := &Connector{conversationHistory: reader, log: discardLogger()}
+
+	got := c.resumeFallbackPrompt(context.Background(), historyInput(), resumeKind(), "thread-1", map[string]any{})
+	if !strings.Contains(got, "Assistant: added /healthz in api.go") {
+		t.Fatalf("fallback history = %q", got)
+	}
+	if strings.Contains(got, "now add a readiness probe") {
+		t.Fatalf("fallback repeated the trigger: %q", got)
+	}
+	if reader.calls != 1 {
+		t.Fatalf("history reads = %d, want 1", reader.calls)
+	}
+
+	if got := c.resumeFallbackPrompt(context.Background(), historyInput(), resumeKind(), "", map[string]any{}); got != "" {
+		t.Fatalf("fresh session fallback = %q", got)
+	}
+	if got := c.resumeFallbackPrompt(context.Background(), historyInput(), noResumeKind(), "thread-1", map[string]any{}); got != "" {
+		t.Fatalf("non-resume fallback = %q", got)
+	}
+}
+
+func TestResumeFallbackPromptRespectsOverrideSystemPrompt(t *testing.T) {
+	reader := &fakeHistoryReader{messages: historyMessages()}
+	c := &Connector{conversationHistory: reader, log: discardLogger()}
+	got := c.resumeFallbackPrompt(context.Background(), historyInput(), resumeKind(), "thread-1", map[string]any{
+		"override_system_prompt": "only this",
+	})
+	if got != "" || reader.calls != 0 {
+		t.Fatalf("override fallback=%q reads=%d", got, reader.calls)
+	}
+}
+
 func TestApplyConversationHistoryInjection_NoResumeEngineGetsTranscript(t *testing.T) {
 	reader := &fakeHistoryReader{messages: historyMessages()}
 	c := &Connector{conversationHistory: reader, log: discardLogger()}
