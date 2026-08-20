@@ -53,6 +53,13 @@ type ServerSpec struct {
 	// with it, that engine's session store) across prompts.
 	Key string
 
+	// StateKey is the exclusive ownership identity for mutable engine state.
+	// Specs with different Key values but the same StateKey never run at the
+	// same time: the supervisor drains and stops the old variant before it
+	// launches the replacement. Leave empty when Key already names both the
+	// reusable process and its private state.
+	StateKey string
+
 	// Binary is the executable to launch, resolved through PATH.
 	Binary string
 

@@ -52,6 +52,42 @@ func TestEnvelopeOmitsEmptyPayload(t *testing.T) {
 	}
 }
 
+func TestPromptRequestAgentOptionsRoundTrip(t *testing.T) {
+	in := PromptRequestPayload{
+		AgentKind: "deepseek_harness",
+		RunID:     "run-capabilities",
+		Prompt:    "prove capabilities",
+		AgentOptions: map[string]any{
+			"mcp_servers": map[string]any{
+				"proof": map[string]any{"command": "node", "args": []any{"proof.mjs"}},
+			},
+			"skills": []any{map[string]any{"name": "proof", "download_url": "https://example.invalid/proof.zip"}},
+		},
+	}
+	env, err := NewEnvelope(TypePromptRequest, in.RunID, in)
+	if err != nil {
+		t.Fatalf("NewEnvelope: %v", err)
+	}
+	wire, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var decoded Envelope
+	if err := json.Unmarshal(wire, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	var got PromptRequestPayload
+	if err := decoded.DecodePayload(&got); err != nil {
+		t.Fatalf("DecodePayload: %v", err)
+	}
+	if _, ok := got.AgentOptions["mcp_servers"].(map[string]any); !ok {
+		t.Fatalf("mcp_servers = %T (%v)", got.AgentOptions["mcp_servers"], got.AgentOptions["mcp_servers"])
+	}
+	if skills, ok := got.AgentOptions["skills"].([]any); !ok || len(skills) != 1 {
+		t.Fatalf("skills = %T (%v)", got.AgentOptions["skills"], got.AgentOptions["skills"])
+	}
+}
+
 func TestDecodePayloadEmptyIsNoop(t *testing.T) {
 	env := Envelope{Type: TypePromptCancel, ID: "run-789"}
 	var out PromptCancelPayload

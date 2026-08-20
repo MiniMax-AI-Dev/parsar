@@ -3,6 +3,7 @@ package enginehost
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,29 +11,50 @@ import (
 )
 
 // Supervisor keeps at most one resident engine server per spec key and
-// shares it across prompts. Safe for concurrent use.
+// shares it across prompts. Specs may also declare an exclusive state key;
+// configuration variants for that state are replaced rather than overlapped.
+// Safe for concurrent use.
 //
 // Concurrency model: one mutex guards the key map, every instance's lease
 // count and every idle timer. Launching a server is slow (it waits for
 // readiness), so a launch does NOT hold the mutex; instead the launching
 // goroutine installs a pending entry that other Acquire calls for the
-// same key wait on. That keeps two simultaneous first prompts of one
-// conversation from starting two servers, which for engines with a
-// single-writer session store would corrupt state rather than merely
-// waste a process.
+// same key wait on. Calls for different configuration keys that share one
+// state key wait for the current leases to drain and for the old process to
+// exit. That protects single-writer session stores from overlap.
 type Supervisor struct {
 	mu       sync.Mutex
 	entries  map[string]*entry
+	states   map[string]*entry
 	logger   *slog.Logger
 	stopping bool
 }
 
+// processSupervisor owns resident engine servers for the daemon process.
+// Adapters use Acquire rather than creating per-engine supervisors so daemon
+// teardown stays independent of the concrete engines that are registered.
+var processSupervisor = NewSupervisor(nil)
+
+// Acquire returns a lease from the process-wide engine server supervisor.
+func Acquire(ctx context.Context, spec ServerSpec) (*Lease, error) {
+	return processSupervisor.Acquire(ctx, spec)
+}
+
+// Shutdown stops every resident engine server owned by this daemon process.
+func Shutdown() { processSupervisor.Shutdown() }
+
 // entry is either a launch in flight or a live instance. ready is closed
 // when the launch settles; inst and err are valid only after that.
 type entry struct {
-	ready chan struct{}
-	inst  *instance
-	err   error
+	key      string
+	stateKey string
+	ready    chan struct{}
+	changed  chan struct{}
+	inst     *instance
+	err      error
+	// retiring prevents a configuration variant that is being replaced from
+	// accepting a new lease while its process is still shutting down.
+	retiring bool
 
 	// spec timings are captured at launch so a later Release reclaims
 	// with the idle window the launching caller asked for.
@@ -43,7 +65,11 @@ func NewSupervisor(logger *slog.Logger) *Supervisor {
 	if logger == nil {
 		logger = obslog.Bg()
 	}
-	return &Supervisor{entries: make(map[string]*entry), logger: logger}
+	return &Supervisor{
+		entries: make(map[string]*entry),
+		states:  make(map[string]*entry),
+		logger:  logger,
+	}
 }
 
 // Lease is a live claim on a resident engine server. BaseURL is valid
@@ -116,9 +142,9 @@ func (s *Supervisor) Acquire(ctx context.Context, spec ServerSpec) (*Lease, erro
 			// Retry immediately; the next pass launches a replacement.
 			continue
 		}
-		// Another caller is launching this key. Wait for it, then retake
-		// the lock: its instance may already have died, in which case the
-		// next pass launches a replacement.
+		// Another caller is launching this key, or a different configuration
+		// still owns the same mutable state. Wait for that entry to change,
+		// then retry under the lock.
 		select {
 		case <-wait:
 		case <-ctx.Done():
@@ -136,15 +162,52 @@ func (s *Supervisor) tryAcquire(ctx context.Context, spec ServerSpec) (*Lease, <
 		s.mu.Unlock()
 		return nil, nil, context.Canceled
 	}
+	stateKey := strings.TrimSpace(spec.StateKey)
+	if stateKey == "" {
+		stateKey = spec.Key
+	}
+	if owner, ok := s.states[stateKey]; ok && owner.key != spec.Key {
+		select {
+		case <-owner.ready:
+			if owner.err != nil || owner.inst == nil || !owner.inst.alive() {
+				s.removeEntryLocked(owner)
+				s.mu.Unlock()
+				return nil, nil, nil
+			}
+			if owner.inst.leases > 0 {
+				wait := owner.changed
+				s.mu.Unlock()
+				return nil, wait, nil
+			}
+			if owner.inst.idleTimer != nil {
+				owner.inst.idleTimer.Stop()
+				owner.inst.idleTimer = nil
+			}
+			owner.retiring = true
+			wait := owner.inst.exited
+			owner.inst.stop()
+			s.mu.Unlock()
+			return nil, wait, nil
+		default:
+			wait := owner.ready
+			s.mu.Unlock()
+			return nil, wait, nil
+		}
+	}
 	if existing, ok := s.entries[spec.Key]; ok {
 		select {
 		case <-existing.ready:
 			// Settled. A failed or dead instance is discarded here so the
 			// caller's next pass launches a fresh one.
 			if existing.err != nil || existing.inst == nil || !existing.inst.alive() {
-				delete(s.entries, spec.Key)
+				s.removeEntryLocked(existing)
 				s.mu.Unlock()
 				return nil, nil, nil
+			}
+			if existing.retiring {
+				wait := existing.inst.exited
+				s.mu.Unlock()
+				return nil, wait, nil
 			}
 			lease := s.attachLocked(existing, spec.Key)
 			s.mu.Unlock()
@@ -156,8 +219,15 @@ func (s *Supervisor) tryAcquire(ctx context.Context, spec ServerSpec) (*Lease, <
 		}
 	}
 
-	e := &entry{ready: make(chan struct{}), idleTimeout: spec.idleTimeout()}
+	e := &entry{
+		key:         spec.Key,
+		stateKey:    stateKey,
+		ready:       make(chan struct{}),
+		changed:     make(chan struct{}),
+		idleTimeout: spec.idleTimeout(),
+	}
 	s.entries[spec.Key] = e
+	s.states[stateKey] = e
 	s.mu.Unlock()
 
 	// Launch outside the lock. The pending entry is already published, so
@@ -167,13 +237,14 @@ func (s *Supervisor) tryAcquire(ctx context.Context, spec ServerSpec) (*Lease, <
 	s.mu.Lock()
 	e.inst, e.err = inst, err
 	close(e.ready)
+	s.notifyChangedLocked(e)
 	if err != nil || inst == nil {
-		delete(s.entries, spec.Key)
+		s.removeEntryLocked(e)
 		s.mu.Unlock()
 		return nil, nil, err
 	}
 	if s.stopping {
-		delete(s.entries, spec.Key)
+		s.removeEntryLocked(e)
 		s.mu.Unlock()
 		inst.stop()
 		return nil, nil, context.Canceled
@@ -186,6 +257,7 @@ func (s *Supervisor) tryAcquire(ctx context.Context, spec ServerSpec) (*Lease, <
 // attachLocked adds a lease to a live instance. Caller holds s.mu.
 func (s *Supervisor) attachLocked(e *entry, key string) *Lease {
 	e.inst.leases++
+	s.notifyChangedLocked(e)
 	if e.inst.idleTimer != nil {
 		e.inst.idleTimer.Stop()
 		e.inst.idleTimer = nil
@@ -199,20 +271,23 @@ func (s *Supervisor) release(key string, inst *instance) {
 	if inst == nil {
 		return
 	}
+	e, ok := s.entries[key]
 	inst.leases--
 	if inst.leases > 0 {
+		if ok && e.inst == inst {
+			s.notifyChangedLocked(e)
+		}
 		return
 	}
 	inst.leases = 0
-
-	e, ok := s.entries[key]
 	if !ok || e.inst != inst {
 		// Already superseded or dropped; nothing keeps this process.
 		inst.stop()
 		return
 	}
+	s.notifyChangedLocked(e)
 	if s.stopping || e.idleTimeout < 0 || !inst.alive() {
-		delete(s.entries, key)
+		s.removeEntryLocked(e)
 		inst.stop()
 		return
 	}
@@ -228,7 +303,7 @@ func (s *Supervisor) reclaim(key string, inst *instance) {
 		s.mu.Unlock()
 		return
 	}
-	delete(s.entries, key)
+	s.removeEntryLocked(e)
 	inst.idleTimer = nil
 	s.mu.Unlock()
 
@@ -242,9 +317,13 @@ func (s *Supervisor) Shutdown() {
 	s.mu.Lock()
 	s.stopping = true
 	pending := make([]*entry, 0, len(s.entries))
-	for key, e := range s.entries {
+	for _, e := range s.entries {
 		pending = append(pending, e)
-		delete(s.entries, key)
+		if e.inst != nil && e.inst.idleTimer != nil {
+			e.inst.idleTimer.Stop()
+			e.inst.idleTimer = nil
+		}
+		s.removeEntryLocked(e)
 	}
 	s.mu.Unlock()
 
@@ -259,4 +338,25 @@ func (s *Supervisor) Shutdown() {
 			// stops its own instance.
 		}
 	}
+}
+
+func (s *Supervisor) removeEntryLocked(e *entry) {
+	if e == nil {
+		return
+	}
+	if s.entries[e.key] == e {
+		delete(s.entries, e.key)
+	}
+	if s.states[e.stateKey] == e {
+		delete(s.states, e.stateKey)
+	}
+	s.notifyChangedLocked(e)
+}
+
+func (s *Supervisor) notifyChangedLocked(e *entry) {
+	if e == nil || e.changed == nil {
+		return
+	}
+	close(e.changed)
+	e.changed = make(chan struct{})
 }

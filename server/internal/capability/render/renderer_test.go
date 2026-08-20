@@ -90,8 +90,8 @@ func TestSupports(t *testing.T) {
 		{TargetOpenCode, canonical.KindSkill, false},
 		{TargetPi, canonical.KindMCP, false},
 		{TargetPi, canonical.KindSkill, true},
-		{TargetDeepseekHarness, canonical.KindMCP, false},
-		{TargetDeepseekHarness, canonical.KindSkill, false},
+		{TargetDeepseekHarness, canonical.KindMCP, true},
+		{TargetDeepseekHarness, canonical.KindSkill, true},
 		{TargetDeepseekHarness, canonical.KindSystemPrompt, true},
 	}
 	for _, tc := range cases {
@@ -278,6 +278,40 @@ func TestCodexRenderer_StreamableHTTP(t *testing.T) {
 	srv := got.MCPServers["docs"]
 	if srv.Type != "http" || srv.URL != "https://docs.example.com/mcp" || srv.Command != "" {
 		t.Fatalf("server = %+v", srv)
+	}
+}
+
+func TestDeepseekHarnessRendererMCPAndSkillGolden(t *testing.T) {
+	mcpOut, err := (deepseekHarnessRenderer{}).Render(context.Background(), mcpFixture())
+	if err != nil {
+		t.Fatalf("render MCP: %v", err)
+	}
+	claudeMCP, err := (claudeCodeRenderer{}).Render(context.Background(), mcpFixture())
+	if err != nil {
+		t.Fatalf("render Claude MCP: %v", err)
+	}
+	dshCanonical, err := canonicalizeJSON(mcpOut.Content)
+	if err != nil {
+		t.Fatalf("canonicalize DSH MCP: %v", err)
+	}
+	claudeCanonical, err := canonicalizeJSON(claudeMCP.Content)
+	if err != nil {
+		t.Fatalf("canonicalize Claude MCP: %v", err)
+	}
+	if dshCanonical != claudeCanonical {
+		t.Fatalf("DSH MCP shape diverged from Claude Code: dsh=%s claude=%s", dshCanonical, claudeCanonical)
+	}
+
+	skillOut, err := (deepseekHarnessRenderer{}).Render(context.Background(), skillFixture())
+	if err != nil {
+		t.Fatalf("render Skill: %v", err)
+	}
+	var skill claudeCodeSkillDocument
+	if err := json.Unmarshal(skillOut.Content, &skill); err != nil {
+		t.Fatalf("decode Skill: %v", err)
+	}
+	if skill.Name == "" {
+		t.Fatalf("Skill name is empty: %s", skillOut.Content)
 	}
 }
 

@@ -302,6 +302,46 @@ func TestServerSessionFailsAnIncompleteTurn(t *testing.T) {
 	}
 }
 
+func TestServerSessionSurfacesTheTerminalModelFailure(t *testing.T) {
+	h := newHarness(t, baseRequest())
+	sid := h.gateway.nextSessionID
+	emitEvent(t, h.conn, sid, eventLLMRetry, 4, map[string]any{
+		"retry": 2, "maxRetries": 2,
+		"failure": map[string]any{"code": "TRANSPORT", "message": "Connection error."},
+	})
+	emitEvent(t, h.conn, sid, eventTurnEnd, 5, map[string]any{
+		"turn": 1,
+		"reason": map[string]any{
+			"kind":  "error",
+			"error": map[string]any{"code": "TRANSPORT", "message": "Connection error."},
+		},
+	})
+
+	envs := h.collect(t)
+	msg := decodeEnv[proto.ErrorPayload](t, framesOfType(envs, proto.TypeError)[0]).Error
+	if !strings.Contains(msg, "TRANSPORT: Connection error.") {
+		t.Fatalf("terminal model failure was lost: %q", msg)
+	}
+}
+
+func TestServerSessionFallsBackToLastRetryFailure(t *testing.T) {
+	h := newHarness(t, baseRequest())
+	sid := h.gateway.nextSessionID
+	emitEvent(t, h.conn, sid, eventLLMRetry, 4, map[string]any{
+		"retry": 2, "maxRetries": 2,
+		"failure": map[string]any{"code": "TRANSPORT", "message": "DNS lookup failed"},
+	})
+	emitEvent(t, h.conn, sid, eventTurnEnd, 5, map[string]any{
+		"turn": 1, "reason": map[string]any{"kind": "error"},
+	})
+
+	envs := h.collect(t)
+	msg := decodeEnv[proto.ErrorPayload](t, framesOfType(envs, proto.TypeError)[0]).Error
+	if !strings.Contains(msg, "TRANSPORT: DNS lookup failed") {
+		t.Fatalf("retry failure fallback was lost: %q", msg)
+	}
+}
+
 func TestServerSessionKeepsAResumedSessionIDAfterAFailedTurn(t *testing.T) {
 	req := baseRequest()
 	req.AgentSessionID = "session-prior-9"

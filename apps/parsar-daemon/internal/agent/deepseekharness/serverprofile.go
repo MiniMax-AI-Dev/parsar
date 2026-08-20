@@ -70,6 +70,26 @@ type webServerConfig struct {
 	Port int    `yaml:"port"`
 }
 
+type mcpStdioConfig struct {
+	Transport          string            `yaml:"transport"`
+	ServerName         string            `yaml:"serverName"`
+	Command            string            `yaml:"command"`
+	Args               []string          `yaml:"args"`
+	Env                map[string]string `yaml:"env"`
+	CWD                string            `yaml:"cwd"`
+	ToolCallTimeoutMS  int               `yaml:"toolCallTimeoutMs"`
+	FailOnStartupError bool              `yaml:"failOnStartupError"`
+}
+
+type mcpHTTPConfig struct {
+	Transport          string            `yaml:"transport"`
+	ServerName         string            `yaml:"serverName"`
+	URL                string            `yaml:"url"`
+	Headers            map[string]string `yaml:"headers"`
+	ToolCallTimeoutMS  int               `yaml:"toolCallTimeoutMs"`
+	FailOnStartupError bool              `yaml:"failOnStartupError"`
+}
+
 type clientConnectionConfig struct {
 	// TrustedHosts stays empty so the gateway's trust fence accepts only
 	// loopback callers. Adding an entry here would expose an
@@ -87,6 +107,7 @@ type serverProfileSpec struct {
 	HasProvider bool
 	Model       string
 	ProviderID  string
+	MCPRows     []pluginRow
 }
 
 // writeServerProfile materialises $DSH_HOME/profiles/<serverProfileName>
@@ -174,6 +195,9 @@ func renderServerPatch(spec serverProfileSpec) ([]byte, error) {
 		{ID: "client-connection", Name: "@deepseek-ai/dsh-client-connection",
 			Config: clientConnectionConfig{TrustedHosts: []string{}}},
 	}})
+	if len(spec.MCPRows) > 0 {
+		rows = append(rows, insertRow{Insert: append([]pluginRow{}, spec.MCPRows...)})
+	}
 
 	body, err := yaml.Marshal(rows)
 	if err != nil {

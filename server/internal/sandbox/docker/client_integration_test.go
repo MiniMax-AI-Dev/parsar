@@ -45,7 +45,7 @@ func TestIntegrationRealDockerLifecycle(t *testing.T) {
 			t.Errorf("kill: %v", err)
 		}
 		out, _ := osExecRun(context.Background(), "docker",
-			[]string{"ps", "-a", "--filter", "id=" + sb.SandboxID, "--format", "{{.ID}}"}, nil)
+			[]string{"ps", "-a", "--filter", "id=" + sb.SandboxID, "--format", "{{.ID}}"}, nil, nil)
 		if strings.TrimSpace(out.Stdout) != "" {
 			t.Errorf("expected container removed, still present: %q", out.Stdout)
 		}

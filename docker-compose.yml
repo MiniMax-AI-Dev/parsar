@@ -26,6 +26,8 @@ services:
     # Dokploy may add an ingress network; keep internal service DNS available.
     networks:
       - default
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["/bin/sh", "-c", "parsar-migrate && exec /usr/local/bin/parsar-server"]
     ports:
       - "${PARSAR_BIND_ADDR:-127.0.0.1}:${PARSAR_LOCAL_PORT:-18080}:8080"
@@ -36,6 +38,16 @@ services:
       PARSAR_MASTER_KEY: "${PARSAR_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}"
       PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
       PARSAR_AGENT_DAEMON_WS_URL: "ws://parsar-server:8080/agent-daemon/ws"
+      # Keep operator-configured egress proxies available to dynamically
+      # created Docker sandboxes. Internal Compose traffic must stay direct.
+      HTTP_PROXY: "${PARSAR_CONTAINER_HTTP_PROXY:-${HTTP_PROXY:-}}"
+      HTTPS_PROXY: "${PARSAR_CONTAINER_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+      ALL_PROXY: "${PARSAR_CONTAINER_ALL_PROXY:-${ALL_PROXY:-}}"
+      NO_PROXY: "127.0.0.1,localhost,parsar-server,postgres,${NO_PROXY:-}"
+      http_proxy: "${PARSAR_CONTAINER_HTTP_PROXY:-${http_proxy:-}}"
+      https_proxy: "${PARSAR_CONTAINER_HTTPS_PROXY:-${https_proxy:-}}"
+      all_proxy: "${PARSAR_CONTAINER_ALL_PROXY:-${all_proxy:-}}"
+      no_proxy: "127.0.0.1,localhost,parsar-server,postgres,${no_proxy:-}"
     volumes:
       - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
     healthcheck:
@@ -48,8 +60,21 @@ services:
     depends_on:
       parsar-server:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       PARSAR_SHARED_RUNTIME_TOKEN: "${PARSAR_SHARED_RUNTIME_TOKEN:-parsar-local-runtime-token-change-me}"
+      # Agent engines inherit these variables from parsar-daemon. Node-based
+      # engines need NODE_USE_ENV_PROXY to make fetch honour the proxy.
+      HTTP_PROXY: "${PARSAR_CONTAINER_HTTP_PROXY:-${HTTP_PROXY:-}}"
+      HTTPS_PROXY: "${PARSAR_CONTAINER_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+      ALL_PROXY: "${PARSAR_CONTAINER_ALL_PROXY:-${ALL_PROXY:-}}"
+      NO_PROXY: "127.0.0.1,localhost,parsar-server,postgres,${NO_PROXY:-}"
+      http_proxy: "${PARSAR_CONTAINER_HTTP_PROXY:-${http_proxy:-}}"
+      https_proxy: "${PARSAR_CONTAINER_HTTPS_PROXY:-${https_proxy:-}}"
+      all_proxy: "${PARSAR_CONTAINER_ALL_PROXY:-${all_proxy:-}}"
+      no_proxy: "127.0.0.1,localhost,parsar-server,postgres,${no_proxy:-}"
+      NODE_USE_ENV_PROXY: "${NODE_USE_ENV_PROXY:-1}"
     command: ["/opt/parsar/bin/runtime-entrypoint.sh"]
     volumes:
       - parsar-runtime-home:/root/.parsar

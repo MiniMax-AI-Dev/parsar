@@ -13,16 +13,6 @@ import (
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/enginehost"
 )
 
-// serverSupervisor is process-wide because the resident servers are: a
-// state key's engine has to be shared by every prompt of that key, and
-// agent.Factory is a plain function with nowhere to hang per-daemon
-// state. Shutdown is wired to daemon teardown by the dispatch layer.
-var serverSupervisor = enginehost.NewSupervisor(nil)
-
-// ShutdownServers stops every resident dsh server. Called on daemon
-// teardown so an engine does not outlive the process that started it.
-func ShutdownServers() { serverSupervisor.Shutdown() }
-
 // readyProbeTimeout bounds one readiness attempt. A cold dsh boot
 // compiles its plugin tree, so the overall gate is generous while each
 // individual probe stays short.
@@ -38,6 +28,7 @@ type serverLaunch struct {
 	HasProvider bool
 	Model       string
 	ProviderID  string
+	MCPRows     []pluginRow
 	Env         []string
 	StateKey    string
 }
@@ -45,9 +36,10 @@ type serverLaunch struct {
 // spec turns a launch into an enginehost.ServerSpec.
 func (l serverLaunch) spec() enginehost.ServerSpec {
 	return enginehost.ServerSpec{
-		Key:    l.key(),
-		Binary: l.Binary,
-		Dir:    l.WorkDir,
+		Key:      l.key(),
+		StateKey: l.StateKey,
+		Binary:   l.Binary,
+		Dir:      l.WorkDir,
 		Args: func(int) []string {
 			// The port reaches dsh through the generated profile, not the
 			// command line: dsh has no port flag, the webserver row owns
@@ -66,6 +58,7 @@ func (l serverLaunch) spec() enginehost.ServerSpec {
 				HasProvider: l.HasProvider,
 				Model:       l.Model,
 				ProviderID:  l.ProviderID,
+				MCPRows:     l.MCPRows,
 			})
 		},
 		Ready:       probeReady,
@@ -95,6 +88,11 @@ func (l serverLaunch) key() string {
 	}
 	for _, k := range sortedKeys(l.Provider.Headers) {
 		h.Write([]byte(k + "=" + l.Provider.Headers[k]))
+		h.Write([]byte{0})
+	}
+	mcpFingerprint, err := fingerprintMCPRows(l.MCPRows)
+	if err == nil {
+		h.Write([]byte(mcpFingerprint))
 		h.Write([]byte{0})
 	}
 	// The env is hashed, never recorded: it carries the API key value.

@@ -149,6 +149,29 @@ func TestResolveCapabilityAdditions_PiSkillRenders(t *testing.T) {
 	}
 }
 
+func TestResolveCapabilityAdditions_DeepseekHarnessSkillAndMCPRender(t *testing.T) {
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newSkillRow(t, "skill-a", "Skill A", "do a"),
+			newMCPRow(t, "mcp-1", "proof", []canonical.MCPServer{
+				{Name: "proof", Command: "node", Args: []string{"/opt/mcp/proof.mjs"}},
+			}, nil),
+		}},
+		oss: &stubPluginPresigner{},
+		log: discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "deepseek_harness")
+	if err != nil {
+		t.Fatalf("deepseek harness capabilities must render: %v", err)
+	}
+	if len(got.Skills) != 1 || got.MCPServers["proof"] == nil {
+		t.Fatalf("capabilities = %+v", got)
+	}
+	if len(got.Disabled) != 0 {
+		t.Fatalf("supported capabilities were disabled: %+v", got.Disabled)
+	}
+}
+
 // TestResolveCapabilityAdditions_PiMCPSoftDegrades is the negative half:
 // managed MCP is out of scope for pi, so the pi renderer returns
 // ErrUnsupported and the connector must skip the row as a Disabled

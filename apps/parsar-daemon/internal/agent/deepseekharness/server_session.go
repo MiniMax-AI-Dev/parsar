@@ -58,6 +58,9 @@ type serverSession struct {
 	// re-streams and would otherwise be counted twice.
 	answer strings.Builder
 	usage  proto.Usage
+	// lastRetryFailure is diagnostic only. A scheduled retry may recover, so
+	// it is surfaced only when the enclosing turn ultimately ends in error.
+	lastRetryFailure string
 
 	cancelOnce   sync.Once
 	closeOutOnce sync.Once
@@ -88,8 +91,11 @@ func newServerSession(parent context.Context, req proto.PromptRequestPayload, ou
 		return nil, err
 	}
 	launch.Binary = cfg.binary
+	if err := materializeManagedSkills(parent, launch, req.AgentOptions["skills"]); err != nil {
+		return nil, err
+	}
 
-	lease, err := serverSupervisor.Acquire(parent, launch.spec())
+	lease, err := enginehost.Acquire(parent, launch.spec())
 	if err != nil {
 		return nil, fmt.Errorf("deepseekharness: start resident dsh server: %w", err)
 	}
@@ -298,6 +304,11 @@ func (s *serverSession) handleEvent(event sessionEventPayload) (bool, string) {
 		return true, "deepseek-harness: engine asked for approval, but this run has no approver"
 	case eventAgentError:
 		return false, "deepseek-harness: " + truncate(strings.TrimSpace(string(event.Event.Data)), 400)
+	case eventLLMRetry:
+		var data llmRetryData
+		if err := json.Unmarshal(event.Event.Data, &data); err == nil {
+			s.lastRetryFailure = data.Failure.summary()
+		}
 	case eventTurnEnd:
 		var data turnEndData
 		if err := json.Unmarshal(event.Event.Data, &data); err != nil {
@@ -305,8 +316,15 @@ func (s *serverSession) handleEvent(event sessionEventPayload) (bool, string) {
 		}
 		if data.Reason.Kind != "completed" {
 			reason := data.Reason.Kind
-			if data.Reason.Message != "" {
-				reason += ": " + data.Reason.Message
+			detail := strings.TrimSpace(data.Reason.Message)
+			if detail == "" {
+				detail = data.Reason.Error.summary()
+			}
+			if detail == "" {
+				detail = s.lastRetryFailure
+			}
+			if detail != "" {
+				reason += ": " + truncate(detail, 400)
 			}
 			return true, "deepseek-harness: turn ended without completing (" + reason + ")"
 		}
@@ -460,6 +478,10 @@ func buildServerLaunch(req proto.PromptRequestPayload) (serverLaunch, error) {
 	if err != nil {
 		return serverLaunch{}, err
 	}
+	mcpRows, err := normaliseMCPRows(req.AgentOptions["mcp_servers"], workDir)
+	if err != nil {
+		return serverLaunch{}, err
+	}
 
 	stateKey := strings.TrimSpace(req.AgentStateKey)
 	if stateKey == "" {
@@ -472,6 +494,7 @@ func buildServerLaunch(req proto.PromptRequestPayload) (serverLaunch, error) {
 		HasProvider: hasProvider,
 		Model:       stringOpt(req.AgentOptions, "model"),
 		ProviderID:  stringOpt(req.AgentOptions, "provider"),
+		MCPRows:     mcpRows,
 		Env:         append(os.Environ(), extra...),
 		StateKey:    stateKey,
 	}, nil

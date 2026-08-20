@@ -208,6 +208,11 @@ names a concrete engine or speaks an engine's protocol.
   credential env, workspace, binary). Reusing a running server across a
   changed route silently runs the turn on the stale one; a changed
   fingerprint must yield a different server instead.
+- `ServerSpec.StateKey` is the exclusive ownership identity for mutable
+  engine state. Configuration variants may have different reuse keys, but the
+  supervisor must drain and stop the old variant before another process with
+  the same state key starts; two processes must never share a single-writer
+  session store or rewrite the same generated profile concurrently.
 - `Acquire`/`Release` are balanced exactly once per run. The lease keeps the
   engine alive; the last release starts the idle clock. Adapters must not
   retain a base URL past `Release`, and must not kill the process to cancel a
@@ -226,8 +231,25 @@ names a concrete engine or speaks an engine's protocol.
   by `ServerSpec.Prepare` at launch. Do not write it to a layer the engine
   watches for live edits — that re-applies one launch's config onto a running
   server.
-- Resident servers must not outlive the daemon. Wire the supervisor's
-  `Shutdown` into daemon teardown.
+- Managed capabilities for a resident engine stay adapter-owned. The sandbox
+  DeepSeek Harness adapter materialises archive-backed and inline Markdown
+  Skills under its state-scoped `DSH_HOME`, translates MCP entries into
+  `dsh-mcp-client` profile rows, and includes the normalized MCP configuration
+  in `ServerSpec.Key`. Skill reconciliation may remove only installer-stamped
+  directories. The local one-shot/headless surface continues to reject Skill
+  and MCP options because it has no isolated resident-server boundary.
+- Resident servers must not outlive the daemon. Adapters acquire from the
+  process-wide `enginehost` supervisor, whose `Shutdown` is wired once into
+  daemon teardown; adding an engine must not add another engine-specific
+  teardown call.
+- Sandbox egress proxies are operator configuration, inherited through the
+  standard upper- and lower-case HTTP proxy variables. Docker sandbox creation
+  must merge loopback and internal Compose service names into `NO_PROXY`, keep
+  proxy values out of process arguments, and enable Node's environment-proxy
+  support for Node-based engines. When the host proxy listens on loopback,
+  Compose operators use the matching `PARSAR_CONTAINER_*_PROXY` override with
+  `host.docker.internal`; do not hard-code public DNS or rewrite proxy URLs in
+  application code.
 
 ### Human interaction lifecycle
 

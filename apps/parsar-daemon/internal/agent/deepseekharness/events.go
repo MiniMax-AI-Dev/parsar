@@ -26,6 +26,7 @@ const (
 	eventToolResult       = "tool/result"
 	eventApprovalAsked    = "approval/asked"
 	eventAgentError       = "agent/error"
+	eventLLMRetry         = "llm/retry"
 )
 
 // Streaming chunk types inside assistant/chunk.
@@ -128,9 +129,35 @@ type toolResultData struct {
 type turnEndData struct {
 	Turn   int `json:"turn"`
 	Reason struct {
-		Kind    string `json:"kind"`
-		Message string `json:"message"`
+		Kind    string     `json:"kind"`
+		Message string     `json:"message"`
+		Error   llmFailure `json:"error"`
 	} `json:"reason"`
+}
+
+type llmRetryData struct {
+	Retry      int        `json:"retry"`
+	MaxRetries int        `json:"maxRetries"`
+	Failure    llmFailure `json:"failure"`
+}
+
+type llmFailure struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Status    int    `json:"status"`
+	RequestID string `json:"requestId"`
+}
+
+func (f llmFailure) summary() string {
+	message := strings.TrimSpace(f.Message)
+	code := strings.TrimSpace(f.Code)
+	if code == "" {
+		return message
+	}
+	if message == "" {
+		return code
+	}
+	return code + ": " + message
 }
 
 // textFromToolResult flattens a tool result's nested content into one

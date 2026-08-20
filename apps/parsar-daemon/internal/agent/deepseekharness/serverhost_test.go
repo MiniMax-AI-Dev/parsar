@@ -97,6 +97,9 @@ func TestServerSpecPointsAtTheGeneratedProfile(t *testing.T) {
 	if spec.Dir != "/work" {
 		t.Errorf("spec dir = %q", spec.Dir)
 	}
+	if spec.StateKey != sampleLaunch().StateKey {
+		t.Errorf("spec state key = %q, want %q", spec.StateKey, sampleLaunch().StateKey)
+	}
 	if spec.Ready == nil || spec.Prepare == nil || spec.Env == nil {
 		t.Error("spec must supply a readiness probe, a prepare step and an environment")
 	}

@@ -263,6 +263,21 @@ func TestSessionRejectsEmptyPrompt(t *testing.T) {
 	}
 }
 
+func TestHeadlessSessionRejectsResidentOnlyCapabilities(t *testing.T) {
+	t.Setenv("PARSAR_HOME", t.TempDir())
+	for _, option := range []string{"mcp_servers", "skills", "skill_dirs", "plugin_dirs"} {
+		t.Run(option, func(t *testing.T) {
+			out := make(chan proto.Envelope, 4)
+			req := dshHelperReq("run_unsupported_"+option, "hello", "success")
+			req.AgentOptions[option] = map[string]any{"configured": true}
+			_, err := deepseekharness.NewSessionForTest(context.Background(), req, out, dshHelperConfig())
+			if err == nil || !strings.Contains(err.Error(), "requires the sandbox resident runtime") {
+				t.Fatalf("error = %v, want resident-runtime rejection", err)
+			}
+		})
+	}
+}
+
 func TestSessionBadBinaryFailsToStart(t *testing.T) {
 	t.Setenv("PARSAR_HOME", t.TempDir())
 	out := make(chan proto.Envelope, 4)

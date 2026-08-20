@@ -2,6 +2,7 @@ package enginehost
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -159,6 +160,63 @@ func TestAcquireDeduplicatesConcurrentLaunches(t *testing.T) {
 	}
 	for _, l := range leases {
 		l.Release()
+	}
+}
+
+func TestAcquireReplacesConfigurationOnlyAfterSharedStateIsReleased(t *testing.T) {
+	sup := NewSupervisor(testLogger())
+	t.Cleanup(sup.Shutdown)
+
+	firstSpec := fakeSpec(t, "state-v1")
+	firstSpec.StateKey = "shared-session-store"
+	first, err := sup.Acquire(context.Background(), firstSpec)
+	if err != nil {
+		t.Fatalf("acquire first configuration: %v", err)
+	}
+	firstURL := first.BaseURL()
+	firstExited := first.Exited()
+
+	secondSpec := fakeSpec(t, "state-v2")
+	secondSpec.StateKey = firstSpec.StateKey
+	type result struct {
+		lease *Lease
+		err   error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		lease, acquireErr := sup.Acquire(context.Background(), secondSpec)
+		resultCh <- result{lease: lease, err: acquireErr}
+	}()
+
+	select {
+	case got := <-resultCh:
+		if got.lease != nil {
+			got.lease.Release()
+		}
+		t.Fatalf("replacement acquired shared state before the active lease released: %v", got.err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	first.Release()
+	var second *Lease
+	select {
+	case got := <-resultCh:
+		if got.err != nil {
+			t.Fatalf("acquire replacement: %v", got.err)
+		}
+		second = got.lease
+	case <-time.After(10 * time.Second):
+		t.Fatal("replacement did not acquire shared state")
+	}
+	defer second.Release()
+
+	select {
+	case <-firstExited:
+	default:
+		t.Fatal("replacement became ready before the old state owner exited")
+	}
+	if second.BaseURL() == firstURL {
+		t.Fatalf("configuration replacement reused old server %q", firstURL)
 	}
 }
 
@@ -323,6 +381,40 @@ func TestShutdownStopsEverything(t *testing.T) {
 	}
 	if _, err := sup.Acquire(context.Background(), fakeSpec(t, "shutdown-c")); err == nil {
 		t.Fatal("Acquire must be refused after Shutdown")
+	}
+}
+
+func TestShutdownUnblocksConfigurationReplacementWaiter(t *testing.T) {
+	sup := NewSupervisor(testLogger())
+	firstSpec := fakeSpec(t, "shutdown-state-v1")
+	firstSpec.StateKey = "shutdown-shared-state"
+	first, err := sup.Acquire(context.Background(), firstSpec)
+	if err != nil {
+		t.Fatalf("acquire first configuration: %v", err)
+	}
+
+	secondSpec := fakeSpec(t, "shutdown-state-v2")
+	secondSpec.StateKey = firstSpec.StateKey
+	errCh := make(chan error, 1)
+	go func() {
+		_, acquireErr := sup.Acquire(context.Background(), secondSpec)
+		errCh <- acquireErr
+	}()
+	select {
+	case err := <-errCh:
+		t.Fatalf("replacement returned before shutdown: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	sup.Shutdown()
+	first.Release()
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("replacement error = %v, want context.Canceled", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("replacement waiter survived supervisor shutdown")
 	}
 }
 

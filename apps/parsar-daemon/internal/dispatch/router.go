@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -249,6 +250,10 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 		"run_id", runID, "agent_kind", req.AgentKind,
 		"work_dir", req.WorkDir, "prompt_len", len(req.Prompt),
 		"has_agent_options", req.AgentOptions != nil,
+		"agent_option_count", len(req.AgentOptions),
+		"has_mcp_servers", req.AgentOptions["mcp_servers"] != nil,
+		"has_skills", req.AgentOptions["skills"] != nil,
+		"agent_option_keys", sortedOptionKeys(req.AgentOptions),
 		"agent_session_id", req.AgentSessionID,
 		"agent_state_key", req.AgentStateKey)
 
@@ -318,6 +323,15 @@ func (r *Router) handlePromptRequest(callerCtx context.Context, env proto.Envelo
 	r.shutdownWG.Add(1)
 	go r.pump(state)
 	return nil
+}
+
+func sortedOptionKeys(options map[string]any) []string {
+	keys := make([]string, 0, len(options))
+	for key := range options {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (r *Router) handlePromptCancel(ctx context.Context, env proto.Envelope) error {

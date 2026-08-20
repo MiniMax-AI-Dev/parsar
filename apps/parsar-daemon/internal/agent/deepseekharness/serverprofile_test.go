@@ -149,6 +149,33 @@ func TestServerPatchPinsLoopbackAndTheAssignedPort(t *testing.T) {
 	}
 }
 
+func TestServerPatchIncludesMCPClientWithoutLoggingSecrets(t *testing.T) {
+	spec := testProfileSpec(t.TempDir(), 45678)
+	rows, err := normaliseMCPRows(map[string]any{
+		"proof": map[string]any{
+			"url":     "https://mcp.example/mcp",
+			"headers": map[string]any{"Authorization": "Bearer secret-marker"},
+		},
+	}, "/workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.MCPRows = rows
+	body, err := renderServerPatch(spec)
+	if err != nil {
+		t.Fatalf("renderServerPatch: %v", err)
+	}
+	inserts, _ := rowsFromPatch(t, body)
+	cfg := inserts["@deepseek-ai/dsh-mcp-client"]
+	if cfg["transport"] != "streamable-http" || cfg["serverName"] != "proof" {
+		t.Fatalf("mcp config = %v", cfg)
+	}
+	launch := serverLaunch{StateKey: "conversation", MCPRows: rows}
+	if got := launch.key(); strings.Contains(got, "secret-marker") {
+		t.Fatalf("server key leaked MCP header: %q", got)
+	}
+}
+
 func TestServerPatchRootsStorageUnderTheHome(t *testing.T) {
 	home := t.TempDir()
 	body, err := renderServerPatch(testProfileSpec(home, 1234))

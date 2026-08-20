@@ -110,9 +110,8 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.killTimeout = 3 * time.Second
 	}
 	for _, key := range unsupportedOptions {
-		if value, ok := req.AgentOptions[key]; ok && value != nil {
-			cfg.logger.Warn("deepseekharness: agent option unsupported by dsh headless, ignored",
-				"run_id", req.RunID, "option", key)
+		if value, ok := req.AgentOptions[key]; ok && optionConfigured(value) {
+			return nil, fmt.Errorf("deepseekharness: agent option %q requires the sandbox resident runtime", key)
 		}
 	}
 
@@ -150,6 +149,25 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	go s.pumpStderr(proc.Stderr)
 	go s.run(proc.Stdout)
 	return s, nil
+}
+
+func optionConfigured(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case []any:
+		return len(typed) > 0
+	case []string:
+		return len(typed) > 0
+	case map[string]any:
+		return len(typed) > 0
+	case map[string]string:
+		return len(typed) > 0
+	default:
+		return true
+	}
 }
 
 func (s *Session) Cancel(context.Context) error {

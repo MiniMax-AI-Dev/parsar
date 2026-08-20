@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,8 +34,7 @@ type CapabilityRuntimeStore interface {
 // given a capability's oss_key, return a short-lived presigned GET URL
 // the daemon will fetch. Used for both plugin and skill zip downloads.
 // *oss.Client (server/internal/storage/oss) satisfies this; passing nil
-// keeps the connector silently zip-less (both plugin and skill capability
-// types are skipped with a log warning).
+// skips archive-backed capabilities while Markdown-only Skills remain inline.
 type OSSPresigner interface {
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, time.Time, error)
 }
@@ -59,19 +59,15 @@ type ResolvedPlugin struct {
 }
 
 // ResolvedSkill is the per-skill descriptor the connector embeds in
-// agent_options["skills"]. Daemon-side code reads this list, downloads
-// each Zip from DownloadURL, verifies SHA256, extracts to
-// <workDir>/.claude/skills/<name>/. Claude Code's startup auto-scans
-// that directory and registers each skill via the native Skill tool —
-// no CLI flag is needed.
-//
-// JSON shape is byte-identical to ResolvedPlugin so the daemon's
-// generic zip installer can decode both with the same code.
+// agent_options["skills"]. Archive-backed Skills carry DownloadURL +
+// SHA256. Markdown-only Skills carry Content and are materialised as a
+// generated SKILL.md without requiring object storage.
 type ResolvedSkill struct {
 	Name        string `json:"name"`
 	Version     string `json:"version"`
 	DownloadURL string `json:"download_url"`
 	SHA256      string `json:"sha256"`
+	Content     string `json:"content,omitempty"`
 }
 
 var credentialPlaceholderRe = regexp.MustCompile(`\$\{PARSAR_CREDENTIAL:([a-zA-Z0-9_]+)\}`)
@@ -167,10 +163,9 @@ const CapabilityCredentialMissing = "capability_credential_missing"
 // flip pinning_mode to "latest".
 const CapabilityVersionUnavailable = "capability_version_unavailable"
 
-// errCapabilityVersionUnavailable is the sentinel error returned by
-// resolveSkillCapability / resolvePluginCapability when the version
-// they were asked to use (pinned column or joined latest) has an empty
-// oss_key. The caller wraps it into a DisabledCapability via
+// errCapabilityVersionUnavailable is the sentinel error returned when a
+// resolved capability lacks the source required to execute it. The caller
+// wraps it into a DisabledCapability via
 // disabledForUnavailableVersion so the user sees a system-message nudge
 // instead of the historical silent skip. Returning a sentinel (rather
 // than a *DisabledCapability via a new signature) keeps the existing
@@ -909,53 +904,19 @@ type claudeCodeMCPServerEntry struct {
 	Enabled *bool             `json:"enabled,omitempty"`
 }
 
-// resolveSkillCapability mirrors resolvePluginCapability — skill and
-// plugin share the same OSS zip path and daemon-side installer.
-//
-// Returns nil + no error when OSSPresigner is missing, canonical_spec
-// is empty, or oss_key is empty (legacy markdown-paste skill the
-// operator must re-upload as a zip). All other failures bubble up;
-// silently losing a skill the user enabled is worse than a loud
-// install failure.
+// resolveSkillCapability supports both multi-file OSS archives and
+// Markdown-only canonical Skills. The latter are sent inline so the
+// import UI's Paste Markdown path remains executable at runtime.
 func (c *Connector) resolveSkillCapability(
 	ctx context.Context,
 	cap store.EnabledCapabilityRead,
 	renderer render.Renderer,
 ) (*ResolvedSkill, error) {
-	if c.oss == nil {
-		c.log.Warn("agent_daemon: skill capability skipped — OSSPresigner not configured",
-			"capability_id", cap.CapabilityID,
-			"capability_name", cap.Name)
-		return nil, nil
-	}
 	// PinningMode-aware field selection: 'latest' picks the lateral-
 	// joined latest_* fields so a reupload of the skill flows through
 	// without any agent_capabilities rewrite.
 	resolved := resolveVersionFields(cap)
-	ossKey := strings.TrimSpace(resolved.OssKey)
-	if ossKey == "" {
-		// Two cases land here:
-		//   * pinning_mode='pinned' on a pre-b77a1c1c version (column
-		//     empty);
-		//   * pinning_mode='latest' but the capability has not been
-		//     uploaded as a zip yet (only markdown-paste exists).
-		// Either way the daemon needs a system-message nudge — silent
-		// skip used to leave the user unsure why the skill never
-		// loaded. errCapabilityVersionUnavailable is converted into a
-		// DisabledCapability by the caller.
-		c.log.Warn("agent_daemon: skill capability has empty oss_key, emitting DisabledCapability",
-			"capability_id", cap.CapabilityID,
-			"capability_name", cap.Name,
-			"pinning_mode", cap.PinningMode,
-			"pinned_version_id", cap.CapabilityVersionID,
-			"latest_version_id", cap.LatestVersionID)
-		return nil, errCapabilityVersionUnavailable
-	}
 	if len(resolved.CanonicalSpec) == 0 {
-		// Same "user enabled but version isn't usable" story as the
-		// empty-oss_key branch: a row with oss_key present but
-		// canonical_spec missing is a corrupted version, not a legacy
-		// row. Treat the same way so the user sees a nudge.
 		c.log.Warn("agent_daemon: skill capability has empty canonical_spec on resolved version, emitting DisabledCapability",
 			"capability_id", cap.CapabilityID,
 			"capability_name", cap.Name,
@@ -980,6 +941,37 @@ func (c *Connector) resolveSkillCapability(
 		return nil, fmt.Errorf("agent_daemon: render skill %s: %w", cap.CapabilityID, err)
 	}
 
+	name := strings.TrimSpace(spec.Skill.Slug)
+	if name == "" {
+		name = strings.TrimSpace(cap.Name)
+	}
+	if name == "" {
+		return nil, fmt.Errorf("agent_daemon: skill capability %s has empty slug and name", cap.CapabilityID)
+	}
+
+	ossKey := strings.TrimSpace(resolved.OssKey)
+	if ossKey == "" {
+		if len(spec.Skill.Files) > 0 {
+			c.log.Warn("agent_daemon: multi-file skill capability has empty oss_key, emitting DisabledCapability",
+				"capability_id", cap.CapabilityID,
+				"capability_name", cap.Name,
+				"pinning_mode", cap.PinningMode)
+			return nil, errCapabilityVersionUnavailable
+		}
+		return &ResolvedSkill{
+			Name:    name,
+			Version: resolved.Version,
+			Content: renderInlineSkillContent(name, spec.Skill),
+		}, nil
+	}
+
+	if c.oss == nil {
+		c.log.Warn("agent_daemon: skill archive skipped — OSSPresigner not configured",
+			"capability_id", cap.CapabilityID,
+			"capability_name", cap.Name)
+		return nil, nil
+	}
+
 	url, _, err := c.oss.PresignGet(ctx, ossKey, ossPresignTTL)
 	if err != nil {
 		return nil, fmt.Errorf("agent_daemon: presign skill %s (capability_id=%s): %s", spec.Skill.Slug, cap.CapabilityID, sanitizeOSSError(err))
@@ -990,20 +982,24 @@ func (c *Connector) resolveSkillCapability(
 		return nil, fmt.Errorf("agent_daemon: skill capability %s has oss_key but empty sha256 (pinning_mode=%s)", cap.CapabilityID, cap.PinningMode)
 	}
 
-	name := strings.TrimSpace(spec.Skill.Slug)
-	if name == "" {
-		name = strings.TrimSpace(cap.Name)
-	}
-	if name == "" {
-		return nil, fmt.Errorf("agent_daemon: skill capability %s has empty slug and name", cap.CapabilityID)
-	}
-
 	return &ResolvedSkill{
 		Name:        name,
 		Version:     resolved.Version,
 		DownloadURL: url,
 		SHA256:      sha256,
 	}, nil
+}
+
+func renderInlineSkillContent(name string, skill *canonical.SkillSpec) string {
+	description := strings.TrimSpace(skill.Description)
+	if description == "" {
+		description = strings.TrimSpace(skill.Title)
+	}
+	if description == "" {
+		description = name
+	}
+	body := strings.TrimRight(skill.Instruction, " \t\r\n")
+	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n%s\n", strconv.Quote(name), strconv.Quote(description), body)
 }
 
 // resolveSystemPromptCapability decodes a capability_version.canonical_spec
@@ -1062,6 +1058,7 @@ func mergeSkillsIntoOptions(opts map[string]any, skills []ResolvedSkill) {
 			"version":      s.Version,
 			"download_url": s.DownloadURL,
 			"sha256":       s.SHA256,
+			"content":      s.Content,
 		})
 	}
 	opts["skills"] = out
