@@ -267,3 +267,32 @@ func TestRegisterAgentKindsPreservesDescriptors(t *testing.T) {
 		}
 	}
 }
+
+func TestDeepseekHarnessCapabilitiesFollowTheRunLocation(t *testing.T) {
+	// dsh's two automation surfaces are not equivalent, and the adapter can
+	// only use the resident-server one inside a sandbox. The descriptor has
+	// to say so, because the server keys its conversation-history injection
+	// off Resume: advertising Resume=true on the headless surface would
+	// silently drop continuity.
+	t.Setenv("IS_SANDBOX", "")
+	local := deepseekHarnessCapabilities()
+	if local != (proto.AgentKindCapabilities{}) {
+		t.Errorf("local device capabilities = %+v, want none", local)
+	}
+
+	t.Setenv("IS_SANDBOX", "1")
+	sandbox := deepseekHarnessCapabilities()
+	if !sandbox.Streaming || !sandbox.Usage || !sandbox.Resume {
+		t.Errorf("sandbox capabilities = %+v, want streaming, usage and resume", sandbox)
+	}
+	// The generated profile pins the unattended preset, so dsh rejects
+	// escalation itself instead of asking; there is no approver on this
+	// path and claiming otherwise would surface dead permission cards.
+	if sandbox.Permissions {
+		t.Error("the resident-server path has no approver and must not claim permissions")
+	}
+
+	if got := agentCLIDescriptors().DeepseekHarness.Capabilities; got != sandbox {
+		t.Errorf("descriptor table does not use the run-location capabilities: %+v", got)
+	}
+}

@@ -168,9 +168,17 @@ description and keep ownership on the side listed here.
   another probe-and-report block.
 - The heartbeat capability descriptor states what the adapter actually
   delivers. An engine whose only supported automation surface is one-shot
-  (no event stream, token accounting, resume flag, or approval channel —
-  `deepseek_harness` today) advertises none of them and must not synthesize a
-  `done` session id, a fake usage total, or an auto-approved permission.
+  (no event stream, token accounting, resume flag, or approval channel)
+  advertises none of them and must not synthesize a `done` session id, a fake
+  usage total, or an auto-approved permission.
+- When one engine has two automation surfaces of unequal capability, the
+  descriptor is computed from the run location, not hardcoded. `dsh` is the
+  live example: in a sandbox it runs as a resident HTTP server and reports
+  streaming, usage and resume; on a local device it runs one-shot headless and
+  reports none. Keep that decision in one function next to the descriptor
+  table (`deepseekHarnessCapabilities` in `agent_cli.go`), and keep the
+  adapter's surface choice reading the same predicate, so the advertised
+  capability and the code path cannot disagree.
 - Conversation continuity for an engine that advertises
   `Capabilities.Resume=false` is the server's job, not the adapter's: the
   connector folds a bounded transcript tail into the system-prompt slot
@@ -182,6 +190,44 @@ description and keep ownership on the side listed here.
   the run and delete it on cleanup if the engine watches its config layers
   for live edits. A shared, rewritten-in-place config would re-apply one
   run's model onto another run of the same conversation.
+
+### Resident engine servers (`internal/enginehost`)
+
+Some engines expose their full surface — streaming events, approvals,
+cross-process session resume — only through a long-lived local server rather
+than a one-shot invocation. `apps/parsar-daemon/internal/enginehost` owns that
+pattern for every engine. It is engine-agnostic by construction: nothing in it
+names a concrete engine or speaks an engine's protocol.
+
+- Adapters must not launch, port-assign, health-check, or reap a resident
+  engine server themselves. Contribute an `enginehost.ServerSpec` and take an
+  `Acquire` lease. Adding the second such engine means filling in a spec, not
+  copying a supervisor.
+- `ServerSpec.Key` is the reuse identity, and it must be a state key plus a
+  fingerprint of everything the engine reads once at boot (model route,
+  credential env, workspace, binary). Reusing a running server across a
+  changed route silently runs the turn on the stale one; a changed
+  fingerprint must yield a different server instead.
+- `Acquire`/`Release` are balanced exactly once per run. The lease keeps the
+  engine alive; the last release starts the idle clock. Adapters must not
+  retain a base URL past `Release`, and must not kill the process to cancel a
+  run — a resident server is shared, so cancellation targets the engine's own
+  session-cancel call.
+- Every resident engine binds `enginehost.LoopbackHost` only. These engines
+  authenticate nobody: they gate requests on "the peer is on loopback" and
+  nothing else. That is acceptable only where the loopback namespace is itself
+  a boundary, which means the sandbox container. Do not open such a port on a
+  local device, and do not add trusted-host entries.
+- Readiness is a protocol probe, not a TCP connect. A bound port only proves
+  the engine's web-server row came up; the gateway, its transport carrier and
+  its session store are separate rows, and a profile missing any of them
+  answers on a listening socket. `ServerSpec.Ready` must call a real method.
+- Generated engine config belongs in the engine's own profile layer, written
+  by `ServerSpec.Prepare` at launch. Do not write it to a layer the engine
+  watches for live edits — that re-applies one launch's config onto a running
+  server.
+- Resident servers must not outlive the daemon. Wire the supervisor's
+  `Shutdown` into daemon teardown.
 
 ### Human interaction lifecycle
 
@@ -270,6 +316,12 @@ description and keep ownership on the side listed here.
 - Eager acquisition must be best-effort. Failure to prewarm a sandbox should
   surface as runtime health/provisioning state, not crash unrelated startup
   paths.
+- A sandbox container may host processes besides `parsar-daemon` when an engine
+  needs a resident server (see “Resident engine servers”). Such a process is
+  the daemon's child, bound to loopback, and is never published through the
+  image's exposed ports or the runtime's port mapping. `IS_SANDBOX` is the
+  marker that distinguishes this environment from a local device; treat it as
+  the single predicate rather than sniffing for Docker.
 
 ### API, DB, and generated surfaces
 

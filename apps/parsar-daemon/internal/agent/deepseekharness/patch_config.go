@@ -110,10 +110,27 @@ type permissionPreset struct {
 	Description string `yaml:"description,omitempty"`
 }
 
-// renderPatch builds the `--patch` overlay for one prompt. The overlay is
-// the last layer dsh applies, and a patch replaces the addressed row's
-// whole config rather than merging into it.
+// renderPatch builds the `--patch` overlay for one headless prompt. The
+// overlay is the last layer dsh applies, and a patch replaces the
+// addressed row's whole config rather than merging into it.
 func renderPatch(cfg providerConfig, hasProvider bool, model, provider string) ([]byte, error) {
+	rows, err := overrideRows(cfg, hasProvider, model, provider)
+	if err != nil {
+		return nil, err
+	}
+	body, err := yaml.Marshal(rows)
+	if err != nil {
+		return nil, fmt.Errorf("deepseekharness: marshal patch overlay: %w", err)
+	}
+	return body, nil
+}
+
+// overrideRows is the permission / model / route triple both dsh surfaces
+// need. The headless path ships it as a `--patch` overlay; the resident
+// server path embeds it in the generated profile's own patch layer. It
+// lives in one function so the two surfaces cannot drift on the
+// unattended permission pairing or the managed-model route.
+func overrideRows(cfg providerConfig, hasProvider bool, model, provider string) ([]patchRow, error) {
 	// A daemon run has no human answerer for dsh's approval seam, so the
 	// shipped `ask` policy would stall every tool call that asks. Writes
 	// still stay inside the run's workspace.
@@ -166,12 +183,7 @@ func renderPatch(cfg providerConfig, hasProvider bool, model, provider string) (
 			Model:    model,
 		}})
 	}
-
-	body, err := yaml.Marshal(rows)
-	if err != nil {
-		return nil, fmt.Errorf("deepseekharness: marshal patch overlay: %w", err)
-	}
-	return body, nil
+	return rows, nil
 }
 
 func validateProvider(cfg providerConfig) error {

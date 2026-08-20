@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/deepseekharness"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/daemonize"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/dispatch"
@@ -273,6 +274,10 @@ func mainLoop(rc *runContext, profile string, prof auth.Profile, agentCLIs agent
 
 	registry := agent.NewRegistry()
 	registerAgentKinds(registry, agentCLIs)
+	// Engines the daemon keeps resident between prompts must not outlive
+	// the daemon: an orphaned server would hold a loopback port and a
+	// session store that nothing owns.
+	defer deepseekharness.ShutdownServers()
 
 	dial := func(ctx context.Context) (*transport.Conn, error) {
 		return transport.Dial(ctx, transport.DialOptions{

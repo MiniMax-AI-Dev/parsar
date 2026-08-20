@@ -18,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,9 +46,35 @@ func defaultConfig() sessionConfig {
 }
 
 // Factory implements agent.Factory for agent_kind="deepseek_harness".
+//
+// It picks between the two dsh surfaces by where the daemon runs, because
+// the resident-server surface is only acceptable in a sandbox:
+//
+//   - Sandbox: a resident `dsh --profile parsar-api` bound to a loopback
+//     port inside the container. The port does not leave the container, so
+//     the gateway's "loopback callers are trusted" model is contained by
+//     the sandbox boundary. This surface streams and resumes.
+//   - Local device: the one-shot headless CLI. dsh's web server has no
+//     authentication of any kind, so opening a port on a developer's own
+//     machine would expose an agent runtime with filesystem access to
+//     every local process. Continuity on this surface comes from the
+//     server injecting prior turns.
 func Factory(ctx context.Context, req proto.PromptRequestPayload, out chan<- proto.Envelope) (agent.Session, error) {
+	if RunsResidentServer() {
+		return newServerSession(ctx, req, out, defaultConfig())
+	}
 	return newSession(ctx, req, out, defaultConfig())
 }
+
+// RunsResidentServer reports whether this daemon should drive dsh through
+// a resident /api server. IS_SANDBOX is set by the sandbox image, so a
+// local install never trips it by accident.
+func RunsResidentServer() bool {
+	return strings.TrimSpace(os.Getenv(sandboxMarkerEnvVar)) != ""
+}
+
+// sandboxMarkerEnvVar is baked into the Parsar sandbox image.
+const sandboxMarkerEnvVar = "IS_SANDBOX"
 
 // Session wraps a single `dsh --profile headless` subprocess.
 type Session struct {

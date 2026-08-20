@@ -192,14 +192,41 @@ func agentCLIDescriptors() agentCLIDiscovery {
 			},
 		},
 		DeepseekHarness: proto.SupportedAgentKind{
-			Kind: "deepseek_harness",
-			// `dsh --profile headless` is the harness's only supported
-			// automation surface: it prints the final assistant text and
-			// exits, with no event stream, token accounting, resume flag,
-			// or approval channel to advertise.
-			Capabilities: proto.AgentKindCapabilities{},
+			Kind:         "deepseek_harness",
+			Capabilities: deepseekHarnessCapabilities(),
 		},
 	}
+}
+
+// deepseekHarnessCapabilities is the one descriptor in this table that
+// depends on where the daemon runs, because dsh's two automation surfaces
+// are not equivalent and the adapter can only use the better one inside a
+// sandbox (dsh's web server has no authentication, so Parsar will not open
+// its port on a developer's own machine).
+//
+// The distinction is load-bearing beyond UI copy: the server injects prior
+// conversation turns into the prompt precisely when a device reports
+// Resume=false, so getting this wrong would either lose continuity or
+// duplicate history the engine already has.
+func deepseekHarnessCapabilities() proto.AgentKindCapabilities {
+	if deepseekharness.RunsResidentServer() {
+		// Resident `dsh --profile parsar-api`: the /api gateway streams
+		// token-level deltas and tool events, reports per-request token
+		// usage, and continues a conversation by prompting its session id
+		// (warm from memory or loaded from disk after a restart).
+		//
+		// Permissions stays false deliberately: the generated profile pins
+		// the unattended preset, so dsh rejects escalation itself rather
+		// than asking, and there is no approver on this path.
+		return proto.AgentKindCapabilities{
+			Streaming: true,
+			Usage:     true,
+			Resume:    true,
+		}
+	}
+	// `dsh --profile headless` prints the final assistant text and exits:
+	// no event stream, no token accounting, no resume, no approval channel.
+	return proto.AgentKindCapabilities{}
 }
 
 func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery) {
