@@ -74,9 +74,35 @@ type CommandResult struct {
 	Exited bool   `json:"exited"`
 }
 
-type apiError struct {
+type apiErrorPayload struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// HTTPError is returned when E2B responds with an unexpected HTTP status.
+// Message is redacted before it is stored here.
+type HTTPError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *HTTPError) Error() string { return e.Message }
+
+// IsNotFound reports whether E2B explicitly confirmed that a resource is gone.
+func IsNotFound(err error) bool {
+	var httpErr *HTTPError
+	return errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound
+}
+
+// IsUnsupported reports whether the provider signalled that the operation
+// itself is not available (405 Method Not Allowed / 501 Not Implemented),
+// as opposed to a transient failure. Callers use this to stop retrying an
+// operation the backend fundamentally cannot perform (e.g. renew).
+func IsUnsupported(err error) bool {
+	var httpErr *HTTPError
+	return errors.As(err, &httpErr) &&
+		(httpErr.StatusCode == http.StatusMethodNotAllowed ||
+			httpErr.StatusCode == http.StatusNotImplemented)
 }
 
 func (c *Client) Create(ctx context.Context, input CreateInput) (Sandbox, error) {
@@ -275,17 +301,13 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, want
 	defer res.Body.Close()
 	if res.StatusCode != wantStatus {
 		b, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		var apiErr apiError
+		var apiErr apiErrorPayload
 		if err := json.Unmarshal(b, &apiErr); err == nil && apiErr.Message != "" {
-			return errors.New(RedactSecret(
-				fmt.Sprintf("e2b api %s %s failed: status=%d message=%s", method, path, res.StatusCode, apiErr.Message),
-				c.APIKey,
-			))
+			return &HTTPError{StatusCode: res.StatusCode, Message: RedactSecret(
+				fmt.Sprintf("e2b api %s %s failed: status=%d message=%s", method, path, res.StatusCode, apiErr.Message), c.APIKey)}
 		}
-		return errors.New(RedactSecret(
-			fmt.Sprintf("e2b api %s %s failed: status=%d body=%s", method, path, res.StatusCode, strings.TrimSpace(string(b))),
-			c.APIKey,
-		))
+		return &HTTPError{StatusCode: res.StatusCode, Message: RedactSecret(
+			fmt.Sprintf("e2b api %s %s failed: status=%d body=%s", method, path, res.StatusCode, strings.TrimSpace(string(b))), c.APIKey)}
 	}
 	if out == nil || res.StatusCode == http.StatusNoContent {
 		return nil

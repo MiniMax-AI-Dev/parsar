@@ -908,8 +908,8 @@ definitions:
         type: string
       expires_at:
         description: |-
-          ExpiresAt is fetched live from the e2b control plane. Nil when
-          the binding isn't in this pod's cache or the lookup failed.
+          ExpiresAt is fetched live from the e2b control plane. Nil when the
+          sandbox is still spawning or the provider lookup failed.
         type: string
       killed_at:
         type: string
@@ -5290,6 +5290,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "502":
+          description: Provider rejected sandbox release
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "503":
           description: Sandbox lifecycle store not wired
           schema:
@@ -5343,6 +5349,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "502":
+          description: Provider rejected sandbox release
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "503":
           description: Sandbox lifecycle store not wired
           schema:
@@ -5354,9 +5366,8 @@ paths:
       - sandboxes
   /api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/renew:
     post:
-      description: Bumps the e2b TTL on the live sandbox. 409 when this pod's cache
-        doesn't own the binding (a sibling pod cold-started it); 502 on renew failure.
-        Owner/admin only.
+      description: Bumps the provider TTL on the live sandbox, including bindings
+        created by a sibling pod. 502 on renew failure. Owner/admin only.
       operationId: renewDevAgentSandbox
       parameters:
       - description: Workspace UUID
@@ -5396,7 +5407,7 @@ paths:
               type: string
             type: object
         "409":
-          description: Sandbox not owned by this pod
+          description: Binding disappeared during renewal
           schema:
             additionalProperties:
               type: string

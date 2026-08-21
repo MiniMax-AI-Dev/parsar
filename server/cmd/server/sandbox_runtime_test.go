@@ -2,9 +2,62 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/config"
 )
+
+func TestResolveAgentDaemonSandboxTTL(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want time.Duration
+	}{
+		{name: "unset uses provider default", env: nil, want: 0},
+		{name: "duration", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL": "90m"}, want: 90 * time.Minute},
+		{name: "duration takes precedence", env: map[string]string{
+			"AGENT_DAEMON_SANDBOX_TTL":       "45m",
+			"AGENT_DAEMON_SANDBOX_TTL_HOURS": "23",
+		}, want: 45 * time.Minute},
+		{name: "legacy hours", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL_HOURS": "6"}, want: 6 * time.Hour},
+		{name: "provider specific maximum is not imposed", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL": "720h"}, want: 720 * time.Hour},
+		{name: "invalid duration", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL": "tomorrow"}, want: 0},
+		{name: "non-positive duration", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL": "0s"}, want: 0},
+		{name: "sub-second duration", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL": "500ms"}, want: 0},
+		{name: "fractional second is normalized", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL": "1500ms"}, want: time.Second},
+		{name: "legacy hours overflow", env: map[string]string{"AGENT_DAEMON_SANDBOX_TTL_HOURS": "596524"}, want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveAgentDaemonSandboxTTL(envMap(tt.env)); got != tt.want {
+				t.Fatalf("resolveAgentDaemonSandboxTTL() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveAgentDaemonSandboxAutoRenew(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "unset defaults on", want: true},
+		{name: "enabled", raw: "true", want: true},
+		{name: "disabled", raw: "false", want: false},
+		{name: "invalid defaults on", raw: "sometimes", want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveAgentDaemonSandboxAutoRenew(envMap(map[string]string{
+				"AGENT_DAEMON_SANDBOX_AUTO_RENEW": tt.raw,
+			}))
+			if got != tt.want {
+				t.Fatalf("resolveAgentDaemonSandboxAutoRenew() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 // envMap turns a Go map into the `func(string) string` shape that
 // buildAgentDaemonSandboxProvider etc. expect.
@@ -23,7 +76,7 @@ func TestResolveAgentDaemonOwnerURLPrefersExplicitValue(t *testing.T) {
 	cfg.Server.PublicURL = "https://public.example.com"
 	got, err := resolveAgentDaemonOwnerURL(envMap(map[string]string{
 		"PARSAR_AGENT_DAEMON_OWNER_URL": "http://explicit-owner:8080/",
-		"POD_IP":                          "10.1.2.3",
+		"POD_IP":                        "10.1.2.3",
 	}), cfg)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)

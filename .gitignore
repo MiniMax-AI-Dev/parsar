@@ -51,6 +51,7 @@ go.work.sum
 
 # Reviewer / verifier session artifacts (workspace-only, never commit)
 reviewer-report.md
+semantic-review/
 /.fork-point
 
 # Claude Code IDE state (per-developer scratch: plans, worktree pointers,
@@ -72,3 +73,12 @@ reviewer-report.md
 !/parsar-bootstrap/
 /httprunner
 !/httprunner/
+# `cd server && go build ./cmd/server` drops its output here.
+/server/server
+!/server/server/
+
+# Cross-compiled binaries staged for the E2B template build
+# (`make e2b-template`). E2B has no multi-stage build support, so
+# parsar-daemon / parsar are compiled on the host and COPY'd in by
+# infra/sandbox/e2b.Dockerfile. Build artefacts, never committed.
+infra/sandbox/.build/

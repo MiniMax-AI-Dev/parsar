@@ -39,7 +39,9 @@ const rpcStdoutBufferMax = 16 * 1024 * 1024
 // JSONRPCConfig configures a JSONRPCClient. Zero-value fields fall
 // through to sensible defaults.
 type JSONRPCConfig struct {
-	// Binary is the codex executable to spawn. Defaults to "codex" (PATH lookup).
+	// Binary is the codex executable to spawn. Defaults to defaultBinary():
+	// the bare name "codex" for a PATH lookup, or the PARSAR_CODEX_BIN
+	// override.
 	Binary string
 	// Args added before "app-server --stdio". Useful for `-c key=value`
 	// overrides without forcing CODEX_HOME indirection.
@@ -136,7 +138,7 @@ type rpcResponse struct {
 // Start is called.
 func NewJSONRPCClient(cfg JSONRPCConfig) *JSONRPCClient {
 	if cfg.Binary == "" {
-		cfg.Binary = defaultBinary
+		cfg.Binary = defaultBinary()
 	}
 	if cfg.LogTag == "" {
 		cfg.LogTag = "codex-rpc"

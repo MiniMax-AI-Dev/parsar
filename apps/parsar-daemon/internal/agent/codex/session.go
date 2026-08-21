@@ -32,7 +32,7 @@ type sessionConfig struct {
 
 func defaultSessionConfig() sessionConfig {
 	return sessionConfig{
-		codexBinary: defaultBinary,
+		codexBinary: defaultBinary(),
 		logger:      obslog.Bg(),
 		killTimeout: rpcKillTimeout,
 	}
@@ -100,7 +100,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.logger = obslog.Bg()
 	}
 	if cfg.codexBinary == "" {
-		cfg.codexBinary = defaultBinary
+		cfg.codexBinary = defaultBinary()
 	}
 	if cfg.killTimeout <= 0 {
 		cfg.killTimeout = rpcKillTimeout

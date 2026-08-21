@@ -29,7 +29,7 @@ type sessionConfig struct {
 }
 
 func defaultConfig() sessionConfig {
-	return sessionConfig{piBinary: defaultBinary, killTimeout: 3 * time.Second, logger: obslog.Bg()}
+	return sessionConfig{piBinary: defaultBinary(), killTimeout: 3 * time.Second, logger: obslog.Bg()}
 }
 
 // Factory implements agent.Factory for agent_kind="pi".
@@ -65,7 +65,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.logger = obslog.Bg()
 	}
 	if cfg.piBinary == "" {
-		cfg.piBinary = defaultBinary
+		cfg.piBinary = defaultBinary()
 	}
 	if cfg.killTimeout <= 0 {
 		cfg.killTimeout = 3 * time.Second

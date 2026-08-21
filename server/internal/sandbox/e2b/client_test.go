@@ -117,6 +117,20 @@ func TestRedactsAPIKeyFromAPIErrorMessage(t *testing.T) {
 	}
 }
 
+func TestIsNotFoundUsesHTTPStatus(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": "sandbox missing"})
+	}))
+	defer api.Close()
+
+	client := &Client{HTTPClient: api.Client(), APIBaseURL: api.URL, APIKey: "test-key"}
+	_, err := client.GetInfo(context.Background(), "sbx-missing")
+	if !IsNotFound(err) {
+		t.Fatalf("GetInfo error = %v, want typed 404", err)
+	}
+}
+
 func readConnectEnvelope(r io.Reader, out any) error {
 	var header [5]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {

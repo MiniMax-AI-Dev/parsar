@@ -3,6 +3,7 @@ package agentdaemon
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -337,9 +338,8 @@ func TestE2BSandboxProvider_AcquireColdStart(t *testing.T) {
 	}
 }
 
-// TestE2BSandboxProvider_AcquireWarmCacheHit: second Acquire for the
-// same agent must skip Create and return the cached
-// deviceID. Also verifies Renew is called to bump the sandbox TTL.
+// A warm Acquire only verifies and touches the runtime. Renewal is driven by
+// the scheduled lifecycle scan, even when AutoRenew is enabled.
 func TestE2BSandboxProvider_AcquireWarmCacheHit(t *testing.T) {
 	reg, _ := newTestRegistryWithDevice(t, "dev-runtime-01")
 	e2bClient := newFakeE2BClient()
@@ -350,6 +350,7 @@ func TestE2BSandboxProvider_AcquireWarmCacheHit(t *testing.T) {
 		Binder:    binding.NewInMemoryBinder(),
 		Template:  "parsar-sandbox-e2b",
 		ServerURL: "https://parsar.example.com",
+		AutoRenew: true,
 	})
 	// Pre-seed cache as if a prior cold start had populated it.
 	p.cache["pa-1"] = &sandboxEntry{
@@ -370,8 +371,131 @@ func TestE2BSandboxProvider_AcquireWarmCacheHit(t *testing.T) {
 	if e2bClient.createCalls != 0 {
 		t.Fatalf("warm cache hit should NOT call e2b Create; saw %d", e2bClient.createCalls)
 	}
-	if e2bClient.renewCalls != 1 {
-		t.Fatalf("warm cache hit should Renew sandbox TTL; saw %d calls", e2bClient.renewCalls)
+	if e2bClient.renewCalls != 0 {
+		t.Fatalf("warm cache hit should not renew directly; saw %d calls", e2bClient.renewCalls)
+	}
+}
+
+func TestE2BSandboxProvider_AcquireWarmCacheHitDoesNotRenewByDefault(t *testing.T) {
+	reg, _ := newTestRegistryWithDevice(t, "dev-runtime-01")
+	e2bClient := newFakeE2BClient()
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client:    e2bClient,
+		Store:     &fakeMinter{},
+		Registry:  reg,
+		Binder:    binding.NewInMemoryBinder(),
+		Template:  "parsar-sandbox-e2b",
+		ServerURL: "https://parsar.example.com",
+	})
+	p.cache["pa-1"] = &sandboxEntry{
+		deviceID: "dev-runtime-01",
+		sandbox:  e2b.Sandbox{SandboxID: "sbx-warm"},
+		lastUsed: time.Now().Add(-time.Minute),
+	}
+
+	if _, err := p.Acquire(context.Background(), connector.PromptInput{
+		AgentID: "pa-1", WorkspaceID: "wks-1",
+	}); err != nil {
+		t.Fatalf("Acquire (warm): %v", err)
+	}
+	if e2bClient.renewCalls != 0 {
+		t.Fatalf("warm cache hit renewed without AutoRenew enabled; saw %d calls", e2bClient.renewCalls)
+	}
+}
+
+func TestE2BSandboxProvider_AcquireWarmCacheHitSyncsLeasePolicy(t *testing.T) {
+	reg, _ := newTestRegistryWithDevice(t, "dev-runtime-01")
+	bindings := newFakeBindings()
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: newFakeE2BClient(), Store: &fakeMinter{}, Registry: reg,
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
+	})
+	p.cache["pa-1"] = &sandboxEntry{
+		deviceID: "dev-runtime-01", sandbox: e2b.Sandbox{SandboxID: "sbx-warm"},
+		bindingID: "binding-1", lastUsed: time.Now(), timeout: time.Hour,
+		expiresAt: time.Now().Add(30 * time.Minute), autoRenew: true,
+	}
+
+	if _, err := p.Acquire(context.Background(), connector.PromptInput{
+		AgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentConfig: map[string]any{"sandbox_ttl": "30m", "sandbox_auto_renew": false},
+	}); err != nil {
+		t.Fatalf("Acquire (warm): %v", err)
+	}
+	bindings.mu.Lock()
+	leaseCalls := append([]leaseConfigCall(nil), bindings.leaseConfigCalls...)
+	bindings.mu.Unlock()
+	if len(leaseCalls) != 1 || leaseCalls[0].timeoutSeconds != 1800 || leaseCalls[0].thresholdSeconds != 0 {
+		t.Fatalf("lease policy calls = %+v, want one 1800s/disabled call", leaseCalls)
+	}
+	if got := p.cache["pa-1"]; got.timeout != 30*time.Minute || got.autoRenew {
+		t.Fatalf("cached policy = timeout %s autoRenew %v", got.timeout, got.autoRenew)
+	}
+}
+
+func TestE2BSandboxProvider_AcquireWarmCacheRetriesLeasePolicySync(t *testing.T) {
+	reg, _ := newTestRegistryWithDevice(t, "dev-runtime-01")
+	bindings := newFakeBindings()
+	bindings.leaseConfigErr = errors.New("database unavailable")
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: newFakeE2BClient(), Store: &fakeMinter{}, Registry: reg,
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
+	})
+	p.cache["pa-1"] = &sandboxEntry{
+		deviceID: "dev-runtime-01", sandbox: e2b.Sandbox{SandboxID: "sbx-warm"},
+		bindingID: "binding-1", lastUsed: time.Now(), timeout: time.Hour,
+		expiresAt: time.Now().Add(time.Hour), autoRenew: true,
+	}
+	in := connector.PromptInput{
+		AgentID: "pa-1", WorkspaceID: "wks-1",
+		AgentConfig: map[string]any{"sandbox_ttl": "30m", "sandbox_auto_renew": false},
+	}
+	if _, err := p.Acquire(context.Background(), in); err != nil {
+		t.Fatalf("first Acquire: %v", err)
+	}
+	if got := p.cache["pa-1"]; got.timeout != time.Hour || !got.autoRenew {
+		t.Fatalf("failed DB sync must keep old cached policy: timeout=%s autoRenew=%v", got.timeout, got.autoRenew)
+	}
+	bindings.mu.Lock()
+	bindings.leaseConfigErr = nil
+	bindings.mu.Unlock()
+	if _, err := p.Acquire(context.Background(), in); err != nil {
+		t.Fatalf("second Acquire: %v", err)
+	}
+	if got := p.cache["pa-1"]; got.timeout != 30*time.Minute || got.autoRenew {
+		t.Fatalf("retried policy was not committed: timeout=%s autoRenew=%v", got.timeout, got.autoRenew)
+	}
+	if len(bindings.leaseConfigCalls) != 2 {
+		t.Fatalf("lease sync calls=%d, want 2", len(bindings.leaseConfigCalls))
+	}
+}
+
+func TestNormalizeSandboxTTL(t *testing.T) {
+	for _, tt := range []struct {
+		input time.Duration
+		want  time.Duration
+		ok    bool
+	}{
+		{input: 500 * time.Millisecond},
+		{input: 1500 * time.Millisecond, want: time.Second, ok: true},
+		{input: time.Hour, want: time.Hour, ok: true},
+		{input: time.Duration(maxSandboxTTLSeconds)*time.Second + time.Second},
+	} {
+		got, ok := NormalizeSandboxTTL(tt.input)
+		if got != tt.want || ok != tt.ok {
+			t.Fatalf("NormalizeSandboxTTL(%s) = %s, %v; want %s, %v", tt.input, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestAutoRenewThresholdRequiresLongerThanMaintenanceInterval(t *testing.T) {
+	if got := autoRenewThreshold(SandboxMaintenanceInterval, true); got != 0 {
+		t.Fatalf("threshold at scan interval = %d, want disabled", got)
+	}
+	if got := autoRenewThreshold(30*time.Minute, true); got != 450 {
+		t.Fatalf("threshold for 30m TTL = %d, want 450", got)
 	}
 }
 
@@ -566,6 +690,36 @@ func TestE2BSandboxProvider_Release(t *testing.T) {
 	}
 }
 
+func TestE2BSandboxProvider_ReleaseUsesDurableBindingOnCacheMiss(t *testing.T) {
+	e2bClient := newFakeE2BClient()
+	bindings := newFakeBindings()
+	bindings.activeFound = true
+	bindings.activeBinding = store.SandboxBindingRead{
+		ID: "binding-remote", SandboxID: "sbx-remote",
+		Metadata: map[string]any{"device_id": "dev-remote"},
+	}
+	binder := binding.NewInMemoryBinder()
+	_ = binder.Bind(context.Background(), binding.Binding{
+		ConversationID: "conv-remote", AgentID: "pa-remote", DeviceID: "dev-remote",
+	})
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: e2bClient, Store: &fakeMinter{}, Registry: gateway.NewRegistry(), Binder: binder,
+		Bindings: bindings, Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
+	})
+	if err := p.Release(context.Background(), "pa-remote"); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if e2bClient.killCalls != 1 {
+		t.Fatalf("cache-miss Release should kill durable sandbox; got %d calls", e2bClient.killCalls)
+	}
+	if len(bindings.markKilled) != 1 || bindings.markKilled[0] != "binding-remote" {
+		t.Fatalf("marked bindings=%v, want [binding-remote]", bindings.markKilled)
+	}
+	if _, err := binder.Resolve(context.Background(), "conv-remote", "pa-remote", "claude_code"); !errors.Is(err, binding.ErrNotBound) {
+		t.Fatalf("Release should invalidate remote binder entry; got %v", err)
+	}
+}
+
 // TestE2BSandboxProvider_Reap: entries older than the threshold are
 // evicted + killed; fresh entries survive.
 func TestE2BSandboxProvider_Reap(t *testing.T) {
@@ -589,6 +743,14 @@ func TestE2BSandboxProvider_Reap(t *testing.T) {
 		deviceID: "dev-fresh", sandbox: e2b.Sandbox{SandboxID: "sbx-fresh"},
 		lastUsed: now.Add(-10 * time.Second),
 	}
+	p.cache["pa-auto-renew"] = &sandboxEntry{
+		deviceID: "dev-auto-renew", sandbox: e2b.Sandbox{SandboxID: "sbx-auto-renew"},
+		lastUsed: now.Add(-5 * time.Minute), autoRenew: true,
+	}
+	p.cache["pa-long-ttl"] = &sandboxEntry{
+		deviceID: "dev-long-ttl", sandbox: e2b.Sandbox{SandboxID: "sbx-long-ttl"},
+		lastUsed: now.Add(-5 * time.Minute), timeout: 10 * time.Minute,
+	}
 
 	n, err := p.Reap(context.Background())
 	if err != nil {
@@ -603,8 +765,137 @@ func TestE2BSandboxProvider_Reap(t *testing.T) {
 	if _, ok := p.cache["pa-fresh"]; !ok {
 		t.Fatalf("fresh entry should survive")
 	}
+	if _, ok := p.cache["pa-auto-renew"]; !ok {
+		t.Fatalf("auto-renew entry should survive idle reap")
+	}
+	if _, ok := p.cache["pa-long-ttl"]; !ok {
+		t.Fatalf("entry-specific TTL should control idle reap")
+	}
 	if e2bClient.killCalls != 1 {
 		t.Fatalf("Reap should Kill exactly one sandbox; got %d", e2bClient.killCalls)
+	}
+}
+
+func TestE2BSandboxProvider_ReapHonorsLatestDurablePolicy(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.activeFound = true
+	bindings.activeBinding = store.SandboxBindingRead{
+		ID: "binding-1", SandboxID: "sbx-1",
+		TimeoutSeconds: 3600, AutoRenewThresholdSeconds: 900,
+		LastActiveAt: time.Now().UTC(),
+	}
+	client := newFakeE2BClient()
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
+	})
+	p.cache["pa-1"] = &sandboxEntry{
+		deviceID: "dev-1", sandbox: e2b.Sandbox{SandboxID: "sbx-1"},
+		lastUsed: time.Now().UTC().Add(-2 * time.Hour), timeout: time.Hour,
+	}
+
+	if n, err := p.Reap(context.Background()); err != nil || n != 0 {
+		t.Fatalf("Reap = %d, %v; want 0, nil", n, err)
+	}
+	if _, ok := p.cache["pa-1"]; !ok {
+		t.Fatal("durable auto-renew policy should restore the cache entry")
+	}
+	if client.killCalls != 0 {
+		t.Fatalf("durable auto-renew sandbox should not be killed; got %d calls", client.killCalls)
+	}
+}
+
+func TestE2BSandboxProvider_ReapRetriesProviderKillFailure(t *testing.T) {
+	client := newFakeE2BClient()
+	client.killErr = errors.New("provider unavailable")
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Template: "parsar-sandbox-e2b",
+		ServerURL: "https://parsar.example.com",
+	})
+	p.cache["pa-1"] = &sandboxEntry{
+		deviceID: "dev-1", sandbox: e2b.Sandbox{SandboxID: "sbx-1"},
+		lastUsed: time.Now().UTC().Add(-2 * time.Hour), timeout: time.Hour,
+	}
+	if n, err := p.Reap(context.Background()); err != nil || n != 0 {
+		t.Fatalf("Reap = %d, %v; want 0, nil", n, err)
+	}
+	if _, ok := p.cache["pa-1"]; !ok {
+		t.Fatal("failed provider kill should restore the cache entry for retry")
+	}
+}
+
+func TestE2BSandboxProvider_SandboxExistsRequiresExplicitNotFound(t *testing.T) {
+	client := newFakeE2BClient()
+	p := &E2BSandboxProvider{
+		cfg: E2BProviderConfig{Client: client},
+		cache: map[string]*sandboxEntry{
+			"pa-1": {sandbox: e2b.Sandbox{SandboxID: "sbx-1"}},
+		},
+	}
+
+	exists, confirmed, err := p.SandboxExists(context.Background(), "pa-1")
+	if err != nil || !exists || !confirmed {
+		t.Fatalf("live probe = (%v, %v, %v), want (true, true, nil)", exists, confirmed, err)
+	}
+	client.getInfoErr = errors.New("provider unavailable")
+	if _, _, err := p.SandboxExists(context.Background(), "pa-1"); err == nil {
+		t.Fatal("transient provider failure must not confirm deletion")
+	}
+	client.getInfoErr = &e2b.HTTPError{StatusCode: http.StatusNotFound, Message: "missing"}
+	exists, confirmed, err = p.SandboxExists(context.Background(), "pa-1")
+	if err != nil || exists || !confirmed {
+		t.Fatalf("404 probe = (%v, %v, %v), want (false, true, nil)", exists, confirmed, err)
+	}
+}
+
+func TestE2BSandboxProvider_RecreateStopsWhenKillFails(t *testing.T) {
+	client := newFakeE2BClient()
+	client.killErr = errors.New("provider unavailable")
+	p := &E2BSandboxProvider{
+		cfg: E2BProviderConfig{Client: client, Binder: binding.NewInMemoryBinder()},
+		cache: map[string]*sandboxEntry{
+			"pa-1": {
+				bindingID: "binding-1", deviceID: "dev-1",
+				sandbox: e2b.Sandbox{SandboxID: "sbx-1"},
+			},
+		},
+		inflight: map[string]*acquirePromise{},
+	}
+
+	if _, err := p.Recreate(context.Background(), connector.PromptInput{AgentID: "pa-1"}); err == nil {
+		t.Fatal("Recreate should fail when the old sandbox cannot be killed")
+	}
+	if client.createCalls != 0 {
+		t.Fatalf("replacement sandbox created after kill failure: %d", client.createCalls)
+	}
+	if _, ok := p.cache["pa-1"]; !ok {
+		t.Fatal("kill failure should restore the cache entry")
+	}
+}
+
+func TestE2BSandboxProvider_ReapDoesNotKillCrossPodReplacement(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.activeFound = true
+	bindings.activeBinding = store.SandboxBindingRead{
+		ID: "binding-new", SandboxID: "sbx-new", TimeoutSeconds: 3600,
+	}
+	client := newFakeE2BClient()
+	p, _ := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "parsar-sandbox-e2b", ServerURL: "https://parsar.example.com",
+	})
+	p.cache["pa-1"] = &sandboxEntry{
+		deviceID: "dev-old", sandbox: e2b.Sandbox{SandboxID: "sbx-old"},
+		bindingID: "binding-old", lastUsed: time.Now().UTC().Add(-2 * time.Hour), timeout: time.Hour,
+	}
+	if n, err := p.Reap(context.Background()); err != nil || n != 1 {
+		t.Fatalf("Reap = %d, %v; want 1 stale cache eviction", n, err)
+	}
+	if client.killCalls != 0 || len(bindings.markKilled) != 0 {
+		t.Fatalf("replacement must remain untouched: kills=%d marked=%v", client.killCalls, bindings.markKilled)
 	}
 }
 
@@ -821,14 +1112,34 @@ type fakeBindings struct {
 	waitFn func(workspaceID, agentID string) (store.SandboxBindingRead, error)
 
 	// Recorded invocations — tests assert on these.
-	createCalls   int
-	reserveCalls  int
-	finalizeCalls int
-	markKilled    []string // binding IDs
-	waitCalls     int
+	createCalls      int
+	reserveCalls     int
+	finalizeCalls    int
+	markKilled       []string // binding IDs
+	waitCalls        int
+	claims           []store.SandboxAutoRenewClaim
+	completedRenew   []string
+	failedRenew      []string
+	reclaimCalls     int
+	reclaimResult    bool
+	reclaimErr       error
+	leaseConfigCalls []leaseConfigCall
+	leaseConfigErr   error
+	activeBinding    store.SandboxBindingRead
+	activeFound      bool
+	activeErr        error
 
 	// Latest Finalize input for content asserts.
 	lastFinalize store.FinalizeSandboxBindingSpawningInput
+
+	// Latest sandbox id recorded via SetSpawningSandboxBindingSandboxID,
+	// keyed by binding id, for early-persist asserts.
+	setSandboxIDs map[string]string
+}
+
+type leaseConfigCall struct {
+	timeoutSeconds   int32
+	thresholdSeconds int32
 }
 
 func newFakeBindings() *fakeBindings { return &fakeBindings{} }
@@ -857,6 +1168,16 @@ func (f *fakeBindings) ReserveSandboxBindingSlot(_ context.Context, in store.Res
 	}, true, nil
 }
 
+func (f *fakeBindings) SetSpawningSandboxBindingSandboxID(_ context.Context, bindingID, sandboxID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.setSandboxIDs == nil {
+		f.setSandboxIDs = map[string]string{}
+	}
+	f.setSandboxIDs[bindingID] = sandboxID
+	return nil
+}
+
 func (f *fakeBindings) FinalizeSandboxBindingSpawning(_ context.Context, in store.FinalizeSandboxBindingSpawningInput) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -878,11 +1199,205 @@ func (f *fakeBindings) WaitForSandboxBindingActive(_ context.Context, workspaceI
 
 func (f *fakeBindings) TouchSandboxBinding(_ context.Context, _ string) error { return nil }
 
+func (f *fakeBindings) ConfigureSandboxBindingLease(_ context.Context, _ string, timeoutSeconds, thresholdSeconds int32, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.leaseConfigCalls = append(f.leaseConfigCalls, leaseConfigCall{timeoutSeconds: timeoutSeconds, thresholdSeconds: thresholdSeconds})
+	return f.leaseConfigErr
+}
+
+func (f *fakeBindings) ClaimSandboxBindingsDueForAutoRenew(_ context.Context, _ time.Time, _ int32) ([]store.SandboxAutoRenewClaim, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]store.SandboxAutoRenewClaim(nil), f.claims...), nil
+}
+
+func (f *fakeBindings) CompleteSandboxBindingRenew(_ context.Context, bindingID string, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.completedRenew = append(f.completedRenew, bindingID)
+	return nil
+}
+
+func (f *fakeBindings) FailSandboxBindingRenew(_ context.Context, bindingID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failedRenew = append(f.failedRenew, bindingID)
+	return nil
+}
+
+func (f *fakeBindings) GetActiveSandboxBindingByAgentID(_ context.Context, _ string) (store.SandboxBindingRead, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.activeBinding, f.activeFound, f.activeErr
+}
+
 func (f *fakeBindings) MarkSandboxBindingKilled(_ context.Context, bindingID, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.markKilled = append(f.markKilled, bindingID)
+	if f.activeBinding.ID == bindingID {
+		f.activeFound = false
+	}
 	return nil
+}
+
+func (f *fakeBindings) ReclaimAbandonedSandboxBinding(_ context.Context, _ string, _ time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reclaimCalls++
+	return f.reclaimResult, f.reclaimErr
+}
+
+func TestE2BSandboxProvider_MaintainRenewsClaimedBindings(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.claims = []store.SandboxAutoRenewClaim{{
+		BindingID: "binding-1", SandboxID: "sbx-1", AgentID: "pa-1", TimeoutSeconds: 3600,
+	}}
+	client := newFakeE2BClient()
+	client.getInfoEndAt = time.Now().UTC().Add(time.Hour)
+	p, err := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "template", ServerURL: "https://parsar.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewE2BSandboxProvider: %v", err)
+	}
+	renewed, err := p.Maintain(context.Background())
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+	if renewed != 1 || client.renewCalls != 1 {
+		t.Fatalf("Maintain renewed=%d provider calls=%d, want 1/1", renewed, client.renewCalls)
+	}
+	if len(bindings.completedRenew) != 1 || bindings.completedRenew[0] != "binding-1" {
+		t.Fatalf("completed renewals = %v, want [binding-1]", bindings.completedRenew)
+	}
+}
+
+// A transient renew failure (generic 5xx / network) must NOT permanently
+// disable auto-renew: the claim stays retryable and the cached policy is
+// left intact so the next maintenance scan tries again.
+func TestE2BSandboxProvider_MaintainKeepsRetryingOnTransientRenewError(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.claims = []store.SandboxAutoRenewClaim{{
+		BindingID: "binding-1", SandboxID: "sbx-1", AgentID: "pa-1", TimeoutSeconds: 3600,
+	}}
+	client := newFakeE2BClient()
+	client.renewErr = errors.New("e2b 503 service unavailable")
+	p, err := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "template", ServerURL: "https://parsar.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewE2BSandboxProvider: %v", err)
+	}
+	p.cache["pa-1"] = &sandboxEntry{autoRenew: true}
+	renewed, err := p.Maintain(context.Background())
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+	if renewed != 0 {
+		t.Fatalf("renewed=%d, want 0", renewed)
+	}
+	if len(bindings.failedRenew) != 0 {
+		t.Fatalf("transient error must not disable renewal; failed=%v", bindings.failedRenew)
+	}
+	if len(bindings.markKilled) != 0 {
+		t.Fatalf("transient error must not free the slot; markKilled=%v", bindings.markKilled)
+	}
+	if !p.cache["pa-1"].autoRenew {
+		t.Fatal("transient renew error must leave cached auto-renew enabled")
+	}
+}
+
+// A provider that signals the renew operation is unsupported (405/501)
+// disables auto-renew for that binding so the scan stops hammering it.
+func TestE2BSandboxProvider_MaintainDisablesRenewWhenUnsupported(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.claims = []store.SandboxAutoRenewClaim{{
+		BindingID: "binding-1", SandboxID: "sbx-1", AgentID: "pa-1", TimeoutSeconds: 3600,
+	}}
+	client := newFakeE2BClient()
+	client.renewErr = &e2b.HTTPError{StatusCode: http.StatusNotImplemented, Message: "renew not implemented"}
+	p, err := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "template", ServerURL: "https://parsar.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewE2BSandboxProvider: %v", err)
+	}
+	p.cache["pa-1"] = &sandboxEntry{autoRenew: true}
+	renewed, err := p.Maintain(context.Background())
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+	if renewed != 0 || len(bindings.failedRenew) != 1 || bindings.failedRenew[0] != "binding-1" {
+		t.Fatalf("renewed=%d failed=%v, want 0/[binding-1]", renewed, bindings.failedRenew)
+	}
+	if p.cache["pa-1"].autoRenew {
+		t.Fatal("unsupported renewal should disable cached auto-renew")
+	}
+}
+
+// A renew against a sandbox e2b reports gone (404) frees the reservation
+// slot so the next prompt cold-starts a fresh one instead of retrying a
+// dead sandbox forever.
+func TestE2BSandboxProvider_MaintainFreesSlotWhenSandboxGone(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.claims = []store.SandboxAutoRenewClaim{{
+		BindingID: "binding-1", SandboxID: "sbx-1", AgentID: "pa-1", TimeoutSeconds: 3600,
+	}}
+	client := newFakeE2BClient()
+	client.renewErr = &e2b.HTTPError{StatusCode: http.StatusNotFound, Message: "sandbox not found"}
+	p, err := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "template", ServerURL: "https://parsar.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewE2BSandboxProvider: %v", err)
+	}
+	p.cache["pa-1"] = &sandboxEntry{autoRenew: true}
+	renewed, err := p.Maintain(context.Background())
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+	if renewed != 0 {
+		t.Fatalf("renewed=%d, want 0", renewed)
+	}
+	if len(bindings.markKilled) != 1 || bindings.markKilled[0] != "binding-1" {
+		t.Fatalf("gone sandbox should free the slot; markKilled=%v", bindings.markKilled)
+	}
+	if _, ok := p.cache["pa-1"]; ok {
+		t.Fatal("gone sandbox should evict the cache entry")
+	}
+}
+
+func TestE2BSandboxProvider_MaintainLeavesInterruptedClaimRetryable(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.claims = []store.SandboxAutoRenewClaim{{
+		BindingID: "binding-1", SandboxID: "sbx-1", AgentID: "pa-1", TimeoutSeconds: 3600,
+	}}
+	client := newFakeE2BClient()
+	client.renewErr = context.DeadlineExceeded
+	p, err := NewE2BSandboxProvider(E2BProviderConfig{
+		Client: client, Store: &fakeMinter{}, Registry: gateway.NewRegistry(),
+		Binder: binding.NewInMemoryBinder(), Bindings: bindings,
+		Template: "template", ServerURL: "https://parsar.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewE2BSandboxProvider: %v", err)
+	}
+	if renewed, err := p.Maintain(context.Background()); err != nil || renewed != 0 {
+		t.Fatalf("Maintain = %d, %v; want 0, nil", renewed, err)
+	}
+	if len(bindings.failedRenew) != 0 {
+		t.Fatalf("interrupted claim must remain retryable; failed=%v", bindings.failedRenew)
+	}
 }
 
 // TestE2BSandboxProvider_AcquireWinnerFinalizesReservation drives the
@@ -956,6 +1471,15 @@ func TestE2BSandboxProvider_AcquireLoserReusesWinnerDevice(t *testing.T) {
 	minter := &fakeMinter{}
 	e2bClient := newFakeE2BClient()
 	bindings := newFakeBindings()
+	expiresAt := time.Now().UTC().Add(40 * time.Minute)
+	bindings.activeFound = true
+	bindings.activeBinding = store.SandboxBindingRead{
+		ID:                        "binding-winner",
+		SandboxID:                 "sb-winner",
+		TimeoutSeconds:            3600,
+		AutoRenewThresholdSeconds: 0,
+		ExpiresAt:                 &expiresAt,
+	}
 	bindings.reserveFn = func(in store.ReserveSandboxBindingSlotInput) (store.SandboxBindingRead, bool, error) {
 		// Another pod won the slot first.
 		return store.SandboxBindingRead{
@@ -992,6 +1516,7 @@ func TestE2BSandboxProvider_AcquireLoserReusesWinnerDevice(t *testing.T) {
 	deviceID, err := p.Acquire(context.Background(), connector.PromptInput{
 		AgentID:     "pa-1",
 		WorkspaceID: "wks-1",
+		AgentConfig: map[string]any{"sandbox_ttl": "30m", "sandbox_auto_renew": true},
 	})
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -1016,6 +1541,59 @@ func TestE2BSandboxProvider_AcquireLoserReusesWinnerDevice(t *testing.T) {
 	}
 	if bindings.finalizeCalls != 0 {
 		t.Fatalf("loser must not Finalize; got %d", bindings.finalizeCalls)
+	}
+	if len(bindings.leaseConfigCalls) != 1 || bindings.leaseConfigCalls[0].timeoutSeconds != 1800 || bindings.leaseConfigCalls[0].thresholdSeconds != 450 {
+		t.Fatalf("loser lease sync calls=%+v, want one 1800s/450s call", bindings.leaseConfigCalls)
+	}
+}
+
+func TestE2BSandboxProvider_ReclaimAbandonedSpawnCASLostDoesNotKill(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.reclaimResult = false
+	client := newFakeE2BClient()
+	p := &E2BSandboxProvider{cfg: E2BProviderConfig{
+		Client: client, Bindings: bindings, Log: discardLogger(),
+	}}
+
+	reclaimed, _, _, err := p.reclaimAbandonedSpawn(
+		context.Background(),
+		connector.PromptInput{AgentID: "pa-1", WorkspaceID: "wks-1"},
+		"agent_daemon:pa-1", "template",
+		store.SandboxBindingRead{
+			ID: "binding-old", Status: store.SandboxBindingStatusSpawning,
+			SandboxID: "sbx-old", CreatedAt: time.Now().UTC().Add(-10 * time.Minute),
+		},
+	)
+	if err != nil || reclaimed {
+		t.Fatalf("CAS-lost reclaim = %v, err=%v; want false, nil", reclaimed, err)
+	}
+	if client.killCalls != 0 || bindings.reserveCalls != 0 {
+		t.Fatalf("CAS loser must not kill or reserve: kill=%d reserve=%d", client.killCalls, bindings.reserveCalls)
+	}
+}
+
+func TestE2BSandboxProvider_ReclaimAbandonedSpawnCASWinnerKillsThenReserves(t *testing.T) {
+	bindings := newFakeBindings()
+	bindings.reclaimResult = true
+	client := newFakeE2BClient()
+	p := &E2BSandboxProvider{cfg: E2BProviderConfig{
+		Client: client, Bindings: bindings, Log: discardLogger(),
+	}}
+
+	reclaimed, row, won, err := p.reclaimAbandonedSpawn(
+		context.Background(),
+		connector.PromptInput{AgentID: "pa-1", WorkspaceID: "wks-1"},
+		"agent_daemon:pa-1", "template",
+		store.SandboxBindingRead{
+			ID: "binding-old", Status: store.SandboxBindingStatusSpawning,
+			SandboxID: "sbx-old", CreatedAt: time.Now().UTC().Add(-10 * time.Minute),
+		},
+	)
+	if err != nil || !reclaimed || !won || row.ID == "" {
+		t.Fatalf("CAS-winner reclaim=%v won=%v row=%+v err=%v", reclaimed, won, row, err)
+	}
+	if client.killCalls != 1 || bindings.reserveCalls != 1 {
+		t.Fatalf("CAS winner should kill then reserve once: kill=%d reserve=%d", client.killCalls, bindings.reserveCalls)
 	}
 }
 
