@@ -19,6 +19,7 @@ interface MarketplaceTabProps {
   query: string
   typeFilter: "mcp" | "skill"
   canImport: boolean
+  canConnect: boolean
   canManage: boolean
   onSelectItem: (id: string | null) => void
   onInstall: (capability: MarketplaceCapability) => void
@@ -33,6 +34,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
       itemID={mcpItemID}
       query={props.query}
       canImport={props.canImport}
+      canConnect={props.canConnect}
       onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
       onSelectMarketplaceItem={props.onSelectItem}
       onInstallMarketplace={props.onInstall}
@@ -54,6 +56,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
     itemID={null}
     query={props.query}
     canImport={props.canImport}
+    canConnect={props.canConnect}
     onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
     onSelectMarketplaceItem={props.onSelectItem}
     onInstallMarketplace={props.onInstall}

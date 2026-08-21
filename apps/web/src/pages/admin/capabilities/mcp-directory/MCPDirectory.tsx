@@ -25,6 +25,7 @@ interface MCPDirectoryProps {
   itemID: string | null
   query: string
   canImport: boolean
+  canConnect: boolean
   onSelectItem: (id: string | null) => void
   onSelectMarketplaceItem: (id: string | null) => void
   onInstallMarketplace: (capability: MarketplaceCapability) => void
@@ -37,6 +38,7 @@ export function MCPDirectory({
   itemID,
   query,
   canImport,
+  canConnect,
   onSelectItem,
   onSelectMarketplaceItem,
   onInstallMarketplace,
@@ -106,7 +108,7 @@ export function MCPDirectory({
 	}, [detailQ, directoryQ])
 
 	const connectOAuth = (id: string) => {
-		if (!workspaceID) return
+		if (!workspaceID || !canConnect) return
 		setOAuthError(false)
 		const width = 620
 		const height = 760
@@ -172,6 +174,7 @@ export function MCPDirectory({
           loading={detailQ.isLoading}
           error={detailQ.error}
           canImport={canImport}
+          canConnect={canConnect}
           onBack={() => onSelectItem(null)}
           onRetry={() => void detailQ.refetch()}
           onImport={() => requestImport(itemID)}
@@ -228,7 +231,7 @@ export function MCPDirectory({
       ) : cards.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-marketplace-grid">
           {cards.map((card) => card.kind === "directory" ? (
-            <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onConnect={() => connectOAuth(card.item.id)} onViewCapability={onViewCapability} />
+            <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} canConnect={canConnect} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onConnect={() => connectOAuth(card.item.id)} onViewCapability={onViewCapability} />
           ) : (
             <MarketplaceMCPCard key={`marketplace:${card.item.id}`} capability={card.item} canManage={canManageMarketplace} onOpen={() => onSelectMarketplaceItem(card.item.id)} onInstall={() => onInstallMarketplace(card.item)} onDelete={() => onDeleteMarketplace(card.item)} onViewCapability={() => onViewCapability(card.item.id)} />
           ))}

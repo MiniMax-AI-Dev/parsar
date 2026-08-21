@@ -14,6 +14,7 @@ export function DirectoryDetail({
   loading,
   error,
   canImport,
+  canConnect,
   onBack,
   onRetry,
   onImport,
@@ -24,6 +25,7 @@ export function DirectoryDetail({
   loading: boolean
   error: unknown
   canImport: boolean
+  canConnect: boolean
   onBack: () => void
   onRetry: () => void
   onImport: () => void
@@ -136,8 +138,8 @@ export function DirectoryDetail({
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
 		  {item.authentication === "oauth2" && !item.connected ? (
-			<Button size="sm" onClick={onConnect}>
-			  {t("capabilities.mcpDirectory.oauth.connect")}
+			<Button size="sm" disabled={!canConnect} title={!canConnect ? t("capabilities.permission.adminOnly") : undefined} onClick={onConnect}>
+			  {canConnect ? t("capabilities.mcpDirectory.oauth.connect") : t("capabilities.permission.adminOnly")}
 			</Button>
 		  ) : item.installed && item.installed_capability_id ? (
             <Button

@@ -281,6 +281,7 @@ export function CapabilitiesPage() {
           query={query}
           typeFilter={typeFilter}
           canImport={canImportDirectory}
+          canConnect={isAdmin}
           canManage={isAdmin}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
           onInstall={goToAgentsForCapability}
