@@ -668,8 +668,8 @@ func (s *Session) closeOut() {
 // Resolution order:
 //
 //  1. req.WorkDir wins. Local mode where the operator pinned a project
-//     root. Must be absolute (we reject relative paths instead of
-//     resolving them against daemon cwd, since the daemon's cwd is
+//     root. Must be absolute or start with ~/ (we reject relative paths
+//     instead of resolving them against daemon cwd, since the daemon's cwd is
 //     not a meaningful anchor for user-facing config) and we mkdir -p
 //     so the user can name a path that doesn't exist yet.
 //  2. conversationID present → per-conversation scratch dir under
@@ -683,7 +683,13 @@ func (s *Session) closeOut() {
 // clearer message.
 func resolveSessionWorkDir(workDir, conversationID string) (string, error) {
 	if trimmed := strings.TrimSpace(workDir); trimmed != "" {
-		if !filepath.IsAbs(trimmed) {
+		if strings.HasPrefix(trimmed, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", fmt.Errorf("resolve home dir: %w", err)
+			}
+			trimmed = filepath.Join(home, strings.TrimPrefix(trimmed, "~/"))
+		} else if !filepath.IsAbs(trimmed) {
 			return "", fmt.Errorf("work_dir must be an absolute path, got %q", trimmed)
 		}
 		if err := os.MkdirAll(trimmed, 0o755); err != nil {
