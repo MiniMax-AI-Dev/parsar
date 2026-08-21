@@ -14,6 +14,7 @@ type ConversationHistoryMessage struct {
 	ID         string    `json:"id"`
 	SenderType string    `json:"sender_type"`
 	SenderID   string    `json:"sender_id"`
+	SenderName string    `json:"sender_name"`
 	Content    string    `json:"content"`
 	CreatedAt  time.Time `json:"created_at"`
 }
@@ -43,6 +44,7 @@ func (s *Store) ListRecentConversationHistory(ctx context.Context, conversationI
 			ID:         row.MID,
 			SenderType: row.SenderType,
 			SenderID:   row.MSenderID,
+			SenderName: row.SenderName,
 			Content:    row.Content,
 			CreatedAt:  row.CreatedAt.Time,
 		})

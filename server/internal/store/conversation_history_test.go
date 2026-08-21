@@ -73,6 +73,9 @@ func TestListRecentConversationHistory(t *testing.T) {
 	if history[0].SenderType != "user" || history[1].SenderType != "agent" {
 		t.Fatalf("sender types = %q/%q, want user/agent", history[0].SenderType, history[1].SenderType)
 	}
+	if history[1].SenderID != ids.ProductAgentID || history[1].SenderName == "" {
+		t.Fatalf("agent history must retain sender identity: %+v", history[1])
+	}
 	if history[0].ID == "" || history[0].CreatedAt.IsZero() {
 		t.Fatalf("history rows must carry id + created_at: %+v", history[0])
 	}
@@ -91,6 +94,17 @@ func TestListRecentConversationHistory(t *testing.T) {
 	}
 	if tail[0].Content != "first answer" || tail[1].Content != "@product-agent second question" {
 		t.Fatalf("limit must keep the newest turns oldest-first, got %+v", tail)
+	}
+
+	if _, err := db.Exec(ctx, `update conversations set status = 'archived' where id = $1::uuid`, ids.ConversationID); err != nil {
+		t.Fatalf("archive conversation: %v", err)
+	}
+	archived, err := store.ListRecentConversationHistory(ctx, ids.ConversationID, 10)
+	if err != nil {
+		t.Fatalf("list archived conversation history: %v", err)
+	}
+	if len(archived) != 0 {
+		t.Fatalf("archived conversation history must be hidden, got %+v", archived)
 	}
 
 	if zero, err := store.ListRecentConversationHistory(ctx, ids.ConversationID, 0); err != nil || zero != nil {

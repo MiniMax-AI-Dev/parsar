@@ -8740,13 +8740,20 @@ select
   m.id::text,
   m.sender_type,
   coalesce(m.sender_id::text, ''::text)::text as m_sender_id,
+  coalesce(sender_agent.name, ''::text)::text as sender_name,
   m.content,
   m.created_at
 from messages m
 join conversations c on c.id = m.conversation_id
+left join agents sender_agent
+  on sender_agent.id = m.sender_id
+  and sender_agent.workspace_id = m.workspace_id
+  and m.sender_type = 'agent'
+  and sender_agent.deleted_at is null
 where m.conversation_id = $1::uuid
   and m.workspace_id = c.workspace_id
   and m.deleted_at is null
+  and c.status = 'active'
   and c.deleted_at is null
   and m.kind = 'message'
   and m.sender_type in ('user', 'agent', 'external')
@@ -8763,6 +8770,7 @@ type ListRecentConversationMessagesRow struct {
 	MID        string             `json:"m_id"`
 	SenderType string             `json:"sender_type"`
 	MSenderID  string             `json:"m_sender_id"`
+	SenderName string             `json:"sender_name"`
 	Content    string             `json:"content"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
@@ -8784,6 +8792,7 @@ func (q *Queries) ListRecentConversationMessages(ctx context.Context, arg ListRe
 			&i.MID,
 			&i.SenderType,
 			&i.MSenderID,
+			&i.SenderName,
 			&i.Content,
 			&i.CreatedAt,
 		); err != nil {

@@ -112,12 +112,12 @@ func (c *Connector) readConversationHistoryBlock(ctx context.Context, in connect
 			"run_id", in.RunID, "conversation_id", in.ConversationID, "err", err.Error())
 		return "", 0
 	}
-	return renderConversationHistory(messages, in.TriggerMessageID, in.TriggerMessageContent), len(messages)
+	return renderConversationHistory(messages, in.AgentID, in.TriggerMessageID, in.TriggerMessageContent), len(messages)
 }
 
 // renderConversationHistory renders stored turns oldest-first, excluding the
 // message that triggered this run. Returns "" when nothing is left to say.
-func renderConversationHistory(messages []store.ConversationHistoryMessage, triggerMessageID, triggerContent string) string {
+func renderConversationHistory(messages []store.ConversationHistoryMessage, currentAgentID, triggerMessageID, triggerContent string) string {
 	lines := make([]string, 0, len(messages))
 	for _, msg := range messages {
 		if isTriggerMessage(msg, triggerMessageID, triggerContent) {
@@ -127,7 +127,7 @@ func renderConversationHistory(messages []store.ConversationHistoryMessage, trig
 		if content == "" {
 			continue
 		}
-		lines = append(lines, historySpeaker(msg.SenderType)+": "+truncateHistoryText(content, historyMessageBudgetBytes))
+		lines = append(lines, historySpeaker(msg, currentAgentID)+": "+truncateHistoryText(content, historyMessageBudgetBytes))
 	}
 	if len(lines) == 0 {
 		return ""
@@ -169,10 +169,19 @@ func isTriggerMessage(msg store.ConversationHistoryMessage, triggerMessageID, tr
 	return stored == trigger || strings.HasSuffix(trigger, stored)
 }
 
-func historySpeaker(senderType string) string {
-	switch strings.TrimSpace(senderType) {
+func historySpeaker(msg store.ConversationHistoryMessage, currentAgentID string) string {
+	switch strings.TrimSpace(msg.SenderType) {
 	case "agent":
-		return "Assistant"
+		if id := strings.TrimSpace(currentAgentID); id != "" && msg.SenderID == id {
+			return "Assistant"
+		}
+		if name := strings.TrimSpace(msg.SenderName); name != "" {
+			return "[Agent: " + name + "]"
+		}
+		if id := strings.TrimSpace(msg.SenderID); id != "" {
+			return "[Agent: " + id + "]"
+		}
+		return "[Other agent]"
 	default:
 		// user + external (unregistered IM sender) are both humans here.
 		return "User"

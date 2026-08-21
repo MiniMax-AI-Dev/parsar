@@ -30,7 +30,7 @@ func historyMessages() []store.ConversationHistoryMessage {
 	base := time.Date(2026, 8, 19, 10, 0, 0, 0, time.UTC)
 	return []store.ConversationHistoryMessage{
 		{ID: "m1", SenderType: "user", Content: "add a health endpoint", CreatedAt: base},
-		{ID: "m2", SenderType: "agent", Content: "added /healthz in api.go", CreatedAt: base.Add(time.Minute)},
+		{ID: "m2", SenderType: "agent", SenderID: "agt-1", SenderName: "Builder", Content: "added /healthz in api.go", CreatedAt: base.Add(time.Minute)},
 		{ID: "m3", SenderType: "user", Content: "now add a readiness probe", CreatedAt: base.Add(2 * time.Minute)},
 	}
 }
@@ -200,7 +200,7 @@ func TestRenderConversationHistory_OldestFirstAndBounded(t *testing.T) {
 		{ID: "m3", SenderType: "agent", Content: long},
 		{ID: "m4", SenderType: "user", Content: "  "},
 	}
-	block := renderConversationHistory(messages, "", "unrelated trigger")
+	block := renderConversationHistory(messages, "agt-1", "", "unrelated trigger")
 
 	firstIdx := strings.Index(block, "first")
 	guestIdx := strings.Index(block, "im guest asks")
@@ -235,7 +235,7 @@ func TestRenderConversationHistory_DropsOldestUntilItFits(t *testing.T) {
 	// Mark the newest turn so we can prove it survived the trim.
 	messages[len(messages)-1].Content = "NEWEST " + chunk
 
-	block := renderConversationHistory(messages, "", "")
+	block := renderConversationHistory(messages, "agt-1", "", "")
 	if len(block) > historyTotalBudgetBytes {
 		t.Fatalf("block is %d bytes, over the %d budget", len(block), historyTotalBudgetBytes)
 	}
@@ -252,7 +252,7 @@ func TestRenderConversationHistory_TriggerFallbackHandlesQuotedPrefix(t *testing
 		{ID: "m1", SenderType: "agent", Content: "earlier answer"},
 		{ID: "m2", SenderType: "user", Content: "please retry"},
 	}
-	block := renderConversationHistory(messages, "", "[Quoted message] ...\n\nplease retry")
+	block := renderConversationHistory(messages, "agt-1", "", "[Quoted message] ...\n\nplease retry")
 	if strings.Contains(block, "please retry") {
 		t.Fatalf("quoted-prefixed trigger must still be excluded: %q", block)
 	}
@@ -262,8 +262,27 @@ func TestRenderConversationHistory_TriggerFallbackHandlesQuotedPrefix(t *testing
 }
 
 func TestRenderConversationHistory_EmptyInputRendersNothing(t *testing.T) {
-	if got := renderConversationHistory(nil, "", ""); got != "" {
+	if got := renderConversationHistory(nil, "agt-1", "", ""); got != "" {
 		t.Fatalf("expected empty render, got %q", got)
+	}
+}
+
+func TestRenderConversationHistory_AttributesOtherAgents(t *testing.T) {
+	messages := []store.ConversationHistoryMessage{
+		{ID: "m1", SenderType: "agent", SenderID: "agt-current", SenderName: "Current", Content: "my answer"},
+		{ID: "m2", SenderType: "agent", SenderID: "agt-other", SenderName: "Reviewer", Content: "their answer"},
+		{ID: "m3", SenderType: "agent", SenderID: "agt-deleted", Content: "legacy answer"},
+	}
+
+	block := renderConversationHistory(messages, "agt-current", "", "")
+	for _, want := range []string{
+		"Assistant: my answer",
+		"[Agent: Reviewer]: their answer",
+		"[Agent: agt-deleted]: legacy answer",
+	} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("history missing %q: %q", want, block)
+		}
 	}
 }
 
