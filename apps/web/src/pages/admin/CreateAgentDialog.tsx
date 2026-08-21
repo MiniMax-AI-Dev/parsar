@@ -17,7 +17,7 @@ import {
 import { Input } from "../../components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
-import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
+import { agentCodexModeOf, agentEngineLabel, agentEngineSupportsCapability, agentEnginesSupportingCapability, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
   modelSupportedEndpointTypes,
@@ -332,16 +332,13 @@ export function CreateAgentDialog({
   const selectedModelID = modelID || (mode === "create" ? firstModelID : "")
   const selectedModel = useMemo(() => activeModels.find((m) => m.id === selectedModelID) ?? null, [activeModels, selectedModelID])
   const capabilityOptions = useMemo(() => {
-    // `type: ""` is a sentinel for ghost rows (deprecated bindings whose real
-    // type is unknown); downstream filters treat it as wildcard.
     type PickerOption = {
       id: string
       name: string
-      type: CapabilityType | ""
+      type: CapabilityType
       description: string
       latestVersionID: string
       latestVersion: string
-      deprecated: boolean
       section: "workspace" | "marketplace"
       requiredCredentials: RequiredCredential[]
     }
@@ -355,7 +352,6 @@ export function CreateAgentDialog({
       description: cap.description ?? "",
       latestVersionID: cap.latest_version_id ?? "",
       latestVersion: cap.latest_version ?? cap.latest_published_version ?? "",
-      deprecated: false,
       section: "workspace",
       requiredCredentials: cap.required_credentials ?? [],
     }))
@@ -366,43 +362,15 @@ export function CreateAgentDialog({
       description: cap.description ?? "",
       latestVersionID: cap.latest_version_id ?? "",
       latestVersion: cap.latest_version ?? "",
-      deprecated: false,
       section: "marketplace",
       requiredCredentials: cap.required_credentials ?? [],
     }))
     marketplace.sort((a, b) => a.name.localeCompare(b.name))
-    const live: PickerOption[] = [...workspace, ...marketplace]
-    // Ghost bindings (edit mode): when an admin deprecates a capability the
-    // agent still binds, ListCapabilities hides it and the row would silently
-    // vanish from the picker. Merge it back as a disabled row so the user can
-    // deliberately unbind. The agent profile only stores names (not types),
-    // so type is left empty and treated as wildcard downstream.
-    if (mode === "edit") {
-      const known = new Set(live.map((c) => c.name))
-      for (const name of capabilities) {
-        if (!known.has(name)) {
-          live.push({
-            id: `ghost:${name}`,
-            name,
-            type: "",
-            description: "",
-            latestVersionID: "",
-            latestVersion: "",
-            deprecated: true,
-            section: "workspace",
-            requiredCredentials: [],
-          })
-        }
-      }
-    }
-    return live
-  }, [capabilitiesQ.data, mode, capabilities])
+    return [...workspace, ...marketplace]
+  }, [capabilitiesQ.data])
   const capabilityTypeCounts = useMemo(() => {
-    // Ghost rows have unknown type, so they're excluded from per-type tallies
-    // (still count toward "all").
     const counts = { all: capabilityOptions.length, mcp: 0, skill: 0 }
     for (const cap of capabilityOptions) {
-      if (cap.deprecated) continue
       if (cap.type === "mcp") counts.mcp++
       else if (cap.type === "skill") counts.skill++
     }
@@ -411,9 +379,7 @@ export function CreateAgentDialog({
   const visibleCapabilityOptions = useMemo(
     () => capabilityTypeFilter === "all"
       ? capabilityOptions
-      // Ghost rows surface under every type tab; hiding them on a non-matching
-      // tab would resurrect the "binding seems to have vanished" footgun.
-      : capabilityOptions.filter((cap) => cap.deprecated || cap.type === capabilityTypeFilter),
+      : capabilityOptions.filter((cap) => cap.type === capabilityTypeFilter),
     [capabilityOptions, capabilityTypeFilter]
   )
   // Models the current engine can't drive (wrong wire protocol). Kept in the
@@ -477,6 +443,16 @@ export function CreateAgentDialog({
     [capabilities, mode, selectedCapabilityIDs, allCapabilitiesPool]
   )
   const admin = isAdminRole(workspaceRole)
+
+  function selectAgentEngine(nextEngine: AgentEngine) {
+    setAgentEngine(nextEngine)
+    if (mode !== "create") return
+    const capabilityByID = new Map(allCapabilitiesPool.map((capability) => [capability.id, capability]))
+    setSelectedCapabilityIDs((current) => current.filter((id) => {
+      const capability = capabilityByID.get(id)
+      return !capability || agentEngineSupportsCapability(nextEngine, capability.type)
+    }))
+  }
 
   const modelFieldRef = useRef<HTMLDivElement | null>(null)
   const modelComboboxRef = useRef<HTMLDivElement | null>(null)
@@ -791,11 +767,14 @@ export function CreateAgentDialog({
       // the user a clearer error tied to the input instead of a stream error.
       return
     }
-    if (mode === "create" && allCapabilitiesQ.isLoading) return
+    if (!allCapabilitiesQ.isSuccess) return
     const selectedCapabilities = mode === "create"
-      ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id)
+      ? allCapabilitiesPool.filter((cap) => selectedCapabilityIDs.includes(cap.id) && cap.latest_version_id && agentEngineSupportsCapability(agentEngine, cap.type))
       : []
-    const capabilityNames = mode === "create" ? selectedCapabilities.map((cap) => cap.name) : capabilities
+    const selectableCapabilityNames = new Set(allCapabilitiesPool.map((cap) => cap.name))
+    const capabilityNames = mode === "create"
+      ? selectedCapabilities.map((cap) => cap.name)
+      : capabilities.filter((name) => selectableCapabilityNames.has(name))
     // initialCapabilities carries the per-binding pin choice. Empty
     // versionID falls back to the capability's latest_version_id so the
     // server's NOT NULL capability_version_id constraint is satisfied
@@ -973,7 +952,7 @@ export function CreateAgentDialog({
     hasRequiredModel &&
     (connector !== "agent_daemon" || executionMode !== "local_device" || deviceID !== "") &&
     workDirValid &&
-    (mode !== "create" || !allCapabilitiesQ.isLoading) &&
+    allCapabilitiesQ.isSuccess &&
     (aggregatedRequiredKinds.length === 0 || allCredentialsSatisfied)
 
   const step1Valid =
@@ -1028,7 +1007,9 @@ export function CreateAgentDialog({
           totalSteps={totalSteps}
           progressPercent={progressPercent}
           title={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.title` as never)}
-          summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never)}
+          summary={t(`agents.form.wizard.steps.${step === 1 ? "setup" : "capabilities"}.summary` as never, {
+            engine: t(agentEngineLabel(agentEngine)),
+          })}
           stepOfLabel={t("agents.form.wizard.stepOf", { current: step, total: totalSteps })}
           completeLabel={t("agents.form.wizard.complete", { percent: progressPercent })}
         />
@@ -1092,25 +1073,25 @@ export function CreateAgentDialog({
                           icon={<Cpu className="h-4 w-4" />}
                           title={t("agents.engine.claudeCode.title")}
                           selected={agentEngine === "claude_code"}
-                          onSelect={() => setAgentEngine("claude_code")}
+                          onSelect={() => selectAgentEngine("claude_code")}
                         />
                         <ChoiceCard
                           icon={<Bot className="h-4 w-4" />}
                           title={t("agents.engine.codex.title")}
                           selected={agentEngine === "codex"}
-                          onSelect={() => setAgentEngine("codex")}
+                          onSelect={() => selectAgentEngine("codex")}
                         />
                         <ChoiceCard
                           icon={<Sparkles className="h-4 w-4" />}
                           title={t("agents.engine.pi.title")}
                           selected={agentEngine === "pi"}
-                          onSelect={() => setAgentEngine("pi")}
+                          onSelect={() => selectAgentEngine("pi")}
                         />
                         <ChoiceCard
                           icon={<Server className="h-4 w-4" />}
                           title={t("agents.engine.opencode.title")}
                           selected={agentEngine === "opencode"}
-                          onSelect={() => setAgentEngine("opencode")}
+                          onSelect={() => selectAgentEngine("opencode")}
                           disabled
                         />
                       </div>
@@ -1534,11 +1515,18 @@ export function CreateAgentDialog({
                               const index = rowCounter++
                               const checked = mode === "create" ? selectedCapabilityIDs.includes(cap.id) : capabilities.includes(cap.name)
                               const lockedNoVersion = mode === "create" && !cap.latestVersionID
-                              const lockedDeprecatedAndUnchecked = cap.deprecated && !checked
-                              const disabled = lockedNoVersion || lockedDeprecatedAndUnchecked
-                              const ghostTitle = cap.deprecated ? t("agents.form.deprecatedCapabilityTooltip") : undefined
+                              const incompatible = !agentEngineSupportsCapability(agentEngine, cap.type)
+                              const lockedIncompatibleAndUnchecked = incompatible && !checked
+                              const disabled = lockedNoVersion || lockedIncompatibleAndUnchecked
+                              const compatibilityTitle = incompatible
+                                ? t("agents.detail.capabilities.compatibility.unsupported", {
+                                    engine: t(agentEngineLabel(agentEngine)),
+                                    type: t(`agents.detail.capabilities.compatibility.types.${cap.type}`),
+                                    engines: agentEnginesSupportingCapability(cap.type).map((engine) => t(agentEngineLabel(engine))).join(", "),
+                                  })
+                                : undefined
                               return (
-                                <label key={`${sec}:${cap.id || cap.name}`} title={ghostTitle} className={"flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left " + (disabled ? "cursor-not-allowed bg-surface-subtle text-fg-faint" : "cursor-pointer hover:bg-surface-subtle") + (index > 0 ? " border-t border-line-muted" : "")}>
+                                <label key={`${sec}:${cap.id || cap.name}`} title={compatibilityTitle} className={"flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left " + (disabled ? "cursor-not-allowed bg-surface-subtle text-fg-faint" : "cursor-pointer hover:bg-surface-subtle") + (index > 0 ? " border-t border-line-muted" : "")}>
                                   <input
                                     type="checkbox"
                                     className="mt-0.5 h-4 w-4 shrink-0"
@@ -1548,13 +1536,13 @@ export function CreateAgentDialog({
                                   />
                                   <span className="min-w-0 flex-1">
                                     <span className="flex min-w-0 items-center gap-2">
-                                      <span className={"min-w-0 flex-1 truncate text-sm font-medium leading-4 " + (cap.deprecated ? "text-fg-subtle" : "text-fg")}>{cap.name}</span>
-                                      {cap.type && !cap.deprecated && <span className="shrink-0"><Badge variant="neutral">{cap.type}</Badge></span>}
-                                      {sec === "marketplace" && !cap.deprecated && <span className="shrink-0"><Badge variant="neutral">{t("agents.form.capabilityBadges.marketplace")}</Badge></span>}
-                                      {cap.deprecated && <span className="shrink-0"><Badge variant="warning">{t("agents.form.deprecatedCapabilityBadge")}</Badge></span>}
-                                      {!cap.deprecated && !checked && cap.latestVersion && <span className="shrink-0"><Badge variant="primary">v{cap.latestVersion}</Badge></span>}
-                                      {!cap.deprecated && !checked && !cap.latestVersion && <span className="shrink-0"><Badge variant="warning">{t("agents.form.noCapabilityVersion")}</Badge></span>}
-                                      {!cap.deprecated && checked && cap.id && (
+                                      <span className="min-w-0 flex-1 truncate text-sm font-medium leading-4 text-fg">{cap.name}</span>
+                                      <span className="shrink-0"><Badge variant="neutral">{cap.type}</Badge></span>
+                                      {incompatible && <span className="shrink-0"><Badge variant="destructive">{t("agents.detail.capabilities.compatibility.badge")}</Badge></span>}
+                                      {sec === "marketplace" && <span className="shrink-0"><Badge variant="neutral">{t("agents.form.capabilityBadges.marketplace")}</Badge></span>}
+                                      {!checked && cap.latestVersion && <span className="shrink-0"><Badge variant="primary">v{cap.latestVersion}</Badge></span>}
+                                      {!checked && !cap.latestVersion && <span className="shrink-0"><Badge variant="warning">{t("agents.form.noCapabilityVersion")}</Badge></span>}
+                                      {checked && cap.id && (
                                         <CapabilityVersionPicker
                                           capabilityID={cap.id}
                                           fromMarketplace={sec === "marketplace"}
@@ -1566,7 +1554,7 @@ export function CreateAgentDialog({
                                         />
                                       )}
                                     </span>
-                                    {cap.description && !cap.deprecated && <span className="mt-0.5 block truncate text-sm leading-4 text-fg-subtle">{cap.description}</span>}
+                                    {cap.description && <span className="mt-0.5 block truncate text-sm leading-4 text-fg-subtle">{cap.description}</span>}
                                   </span>
                                 </label>
                               )

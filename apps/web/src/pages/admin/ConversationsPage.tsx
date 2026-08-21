@@ -1300,6 +1300,14 @@ function runtimeErrorViewModel(
     : "?admin=capabilities"
 
   switch (subKind) {
+    case "capability_unsupported":
+      return {
+        message: t("conversations.runtime_error.capability_unsupported", {
+          name: capabilityName,
+        }),
+        action: t("conversations.runtime_error.manageCapability"),
+        href: manageCapabilityHref,
+      }
     case "capability_credential_missing":
       return {
         message: t("conversations.runtime_error.capability_credential_missing", {

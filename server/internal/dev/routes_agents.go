@@ -14,6 +14,8 @@ import (
 
 	"github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/render"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/connector"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -343,6 +345,7 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 			return
 		}
 		initialCapabilities := make([]store.InitialAgentCapabilityInput, 0, len(req.InitialCapabilities))
+		agentKind, _ := req.Config["agent_kind"].(string)
 		for _, requested := range req.InitialCapabilities {
 			versionID := strings.TrimSpace(requested.CapabilityVersionID)
 			if !isUUID(versionID) {
@@ -362,6 +365,10 @@ func createAgent(runtimeStore RuntimeStore, agentDaemonSandbox AgentDaemonSandbo
 			if capabilityRecord.WorkspaceID != workspaceID &&
 				(capabilityRecord.Visibility != "public" || capabilityRecord.DeprecatedAt != nil || capabilityRecord.Status != "active") {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "marketplace capability is unavailable"})
+				return
+			}
+			if err := validateAgentCapabilitySupport(agentKind, capabilityRecord.Type); err != nil {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 				return
 			}
 			if err := validateCapabilityCredentialBindings(r.Context(), runtimeStore, capabilityCredentialBindingValidationInput{
@@ -577,6 +584,7 @@ func syncAgentCapabilities(
 	if err != nil {
 		return fmt.Errorf("syncAgentCapabilities: get agent: %w", err)
 	}
+	agentKind, _ := agent.Config["agent_kind"].(string)
 
 	// 2. Resolve desired names. A name can come from this workspace's own
 	// capabilities, OR from the marketplace (a public capability published
@@ -593,12 +601,13 @@ func syncAgentCapabilities(
 	}
 	type resolved struct {
 		capabilityID    string
+		capabilityType  string
 		latestVersionID string
 		fromMarketplace bool
 	}
 	capByName := make(map[string]resolved, len(allCaps)+len(marketplaceCaps))
 	for _, c := range allCaps {
-		capByName[c.Name] = resolved{capabilityID: c.ID}
+		capByName[c.Name] = resolved{capabilityID: c.ID, capabilityType: c.Type}
 	}
 	for _, m := range marketplaceCaps {
 		if m.SelfPublished {
@@ -607,7 +616,7 @@ func syncAgentCapabilities(
 		if _, exists := capByName[m.Name]; exists {
 			continue
 		}
-		capByName[m.Name] = resolved{capabilityID: m.CapabilityID, latestVersionID: m.LatestVersionID, fromMarketplace: true}
+		capByName[m.Name] = resolved{capabilityID: m.CapabilityID, capabilityType: m.Type, latestVersionID: m.LatestVersionID, fromMarketplace: true}
 	}
 
 	desiredCapIDs := make(map[string]bool, len(capabilityNames))
@@ -626,6 +635,11 @@ func syncAgentCapabilities(
 
 		// Already enabled — don't auto-upgrade version.
 		if _, exists := existingByCapID[cap.capabilityID]; exists {
+			continue
+		}
+		if err := validateAgentCapabilitySupport(agentKind, cap.capabilityType); err != nil {
+			log.Bg().Warn("syncAgentCapabilities: incompatible capability skipped",
+				"capability_id", cap.capabilityID, "name", name, "err", err)
 			continue
 		}
 
@@ -697,6 +711,18 @@ func syncAgentCapabilities(
 			"agent_id", agentID, "capability_id", capID, "capability_version_id", ac.CapabilityVersionID)
 	}
 	return nil
+}
+
+func validateAgentCapabilitySupport(agentKind, capabilityType string) error {
+	target := render.TargetForAgentKind(agentKind)
+	if render.Supports(target, canonical.Kind(capabilityType)) {
+		return nil
+	}
+	agentKind = strings.TrimSpace(agentKind)
+	if agentKind == "" {
+		agentKind = "claude_code"
+	}
+	return fmt.Errorf("agent kind %q does not support %s capabilities", agentKind, capabilityType)
 }
 
 // updateAgentVisibilityBody is the request body for

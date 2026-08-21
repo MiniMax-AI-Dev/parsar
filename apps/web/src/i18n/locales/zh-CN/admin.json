@@ -349,6 +349,7 @@
       "badge": "运行失败",
       "fallbackCapability": "此能力",
       "capability_credential_missing": "能力 {{name}} 启动失败：缺少 {{kind}} 凭据。",
+      "capability_unsupported": "当前 Agent 引擎不支持能力 {{name}}。",
       "capability_credential_decrypt_failed": "能力 {{name}} 凭据解密失败，请联系管理员。",
       "capability_credential_kind_mismatch": "能力 {{name}} 凭据类型不匹配，请重新设置。",
       "capability_version_unavailable": "能力 {{name}} 还没有可用的上传版本，请重新上传 zip、选择更新的版本，或将该能力切换为 latest 模式。",
@@ -1673,8 +1674,6 @@
       "noTagsMember": "当前工作区还没有可复用的能力标签。",
       "goCapabilities": "去能力页 →",
       "noCapabilityVersion": "无可用版本",
-      "deprecatedCapabilityBadge": "已下架",
-      "deprecatedCapabilityTooltip": "该能力已下架,保留旧绑定可继续使用;取消勾选后无法再选回。",
       "capabilityTypeTabs": {
         "all": "全部",
         "mcp": "MCP",
@@ -1710,7 +1709,7 @@
           },
           "capabilities": {
             "title": "能力",
-            "summary": "为这个 Agent 启用 Skill / MCP"
+            "summary": "为 {{engine}} 启用 Skill / MCP"
           }
         },
         "actions": {

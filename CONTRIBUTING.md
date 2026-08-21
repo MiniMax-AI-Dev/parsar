@@ -160,6 +160,10 @@ description and keep ownership on the side listed here.
 - Adapter-specific state directories must be derived from `AgentStateKey`
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.
+- Keep uploaded Skill archives harness-neutral. Materialize adapter-managed
+  copies below the `AgentStateKey` runtime directory and register that root
+  through the engine's native CLI, config, or RPC surface instead of coupling
+  runtime discovery to the ingestion tool's temporary directory layout.
 
 ### Human interaction lifecycle
 

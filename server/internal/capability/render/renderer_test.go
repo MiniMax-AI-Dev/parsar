@@ -84,12 +84,20 @@ func TestSupports(t *testing.T) {
 	}{
 		{TargetClaudeCode, canonical.KindMCP, true},
 		{TargetClaudeCode, canonical.KindSkill, true},
+		{TargetClaudeCode, canonical.KindPlugin, true},
+		{TargetClaudeCode, canonical.KindSystemPrompt, true},
 		{TargetCodex, canonical.KindMCP, true},
-		{TargetCodex, canonical.KindSkill, false},
+		{TargetCodex, canonical.KindSkill, true},
+		{TargetCodex, canonical.KindPlugin, false},
+		{TargetCodex, canonical.KindSystemPrompt, true},
 		{TargetOpenCode, canonical.KindMCP, true},
-		{TargetOpenCode, canonical.KindSkill, false},
+		{TargetOpenCode, canonical.KindSkill, true},
+		{TargetOpenCode, canonical.KindPlugin, false},
+		{TargetOpenCode, canonical.KindSystemPrompt, true},
 		{TargetPi, canonical.KindMCP, false},
 		{TargetPi, canonical.KindSkill, true},
+		{TargetPi, canonical.KindPlugin, false},
+		{TargetPi, canonical.KindSystemPrompt, true},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.target)+"/"+string(tc.kind), func(t *testing.T) {
@@ -135,13 +143,6 @@ func TestOpenCodeRenderer_MCPGolden(t *testing.T) {
 	}
 	if got, want := srv.Env["GITHUB_HOST"], "https://api.github.com"; got != want {
 		t.Fatalf("literal value: want %q got %q", want, got)
-	}
-}
-
-func TestOpenCodeRenderer_SkillUnsupported(t *testing.T) {
-	_, err := openCodeRenderer{}.Render(context.Background(), skillFixture())
-	if !errors.Is(err, ErrUnsupported) {
-		t.Fatalf("expected ErrUnsupported, got %v", err)
 	}
 }
 
@@ -293,34 +294,43 @@ func TestOpenCodeRenderer_StreamableHTTP(t *testing.T) {
 	}
 }
 
-// TestCodexRenderer_SkillAndPluginUnsupported pins the soft-degrade
-// contract — codex must return ErrUnsupported for Skill and Plugin so
-// the agentdaemon connector skips them with a Disabled notice instead
-// of hard-failing the prompt. Don't bundle MCP here: that case is
-// covered by TestCodexRenderer_MCPGolden and would re-regress this
-// test back into the old "always unsupported" shape if accidentally
-// edited.
-func TestCodexRenderer_SkillAndPluginUnsupported(t *testing.T) {
-	cases := []canonical.Spec{
-		skillFixture(),
-		{
-			SchemaVersion: canonical.SchemaVersionCurrent,
-			Kind:          canonical.KindPlugin,
-			Plugin: &canonical.PluginSpec{
-				Name:         "my-plugin",
-				Version:      "1.0.0",
-				Description:  "x",
-				OssKey:       "capabilities/plugins/u1/my-plugin.zip",
-				SHA256:       "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
-				UploadSource: canonical.UploadSourceZip,
-			},
+func TestCodexRenderer_PluginUnsupported(t *testing.T) {
+	spec := canonical.Spec{
+		SchemaVersion: canonical.SchemaVersionCurrent,
+		Kind:          canonical.KindPlugin,
+		Plugin: &canonical.PluginSpec{
+			Name:         "my-plugin",
+			Version:      "1.0.0",
+			Description:  "x",
+			OssKey:       "capabilities/plugins/u1/my-plugin.zip",
+			SHA256:       "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+			UploadSource: canonical.UploadSourceZip,
 		},
 	}
-	for _, spec := range cases {
-		_, err := codexRenderer{}.Render(context.Background(), spec)
-		if !errors.Is(err, ErrUnsupported) {
-			t.Fatalf("expected ErrUnsupported for kind=%s, got %v", spec.Kind, err)
-		}
+	if _, err := (codexRenderer{}).Render(context.Background(), spec); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestPortableSkillRenderersMatchClaudeCode(t *testing.T) {
+	want, err := (claudeCodeRenderer{}).Render(context.Background(), skillFixture())
+	if err != nil {
+		t.Fatalf("claudecode render: %v", err)
+	}
+	for name, renderer := range map[string]Renderer{
+		"codex":    codexRenderer{},
+		"opencode": openCodeRenderer{},
+		"pi":       piRenderer{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := renderer.Render(context.Background(), skillFixture())
+			if err != nil {
+				t.Fatalf("render: %v", err)
+			}
+			if string(got.Content) != string(want.Content) {
+				t.Fatalf("skill descriptor differs: got %s want %s", got.Content, want.Content)
+			}
+		})
 	}
 }
 

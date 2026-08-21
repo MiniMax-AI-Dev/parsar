@@ -60,10 +60,8 @@ type ResolvedPlugin struct {
 
 // ResolvedSkill is the per-skill descriptor the connector embeds in
 // agent_options["skills"]. Daemon-side code reads this list, downloads
-// each Zip from DownloadURL, verifies SHA256, extracts to
-// <workDir>/.claude/skills/<name>/. Claude Code's startup auto-scans
-// that directory and registers each skill via the native Skill tool —
-// no CLI flag is needed.
+// each Zip from DownloadURL, verifies SHA256, and extracts it into the
+// target adapter's managed skill root.
 //
 // JSON shape is byte-identical to ResolvedPlugin so the daemon's
 // generic zip installer can decode both with the same code.
@@ -158,6 +156,10 @@ type CapabilitySystemMessageStore interface {
 // on this.
 const CapabilityCredentialMissing = "capability_credential_missing"
 
+// CapabilityUnsupported is emitted when an existing binding cannot be
+// rendered for the Agent's harness (for example, a Plugin bound to Codex).
+const CapabilityUnsupported = "capability_unsupported"
+
 // CapabilityVersionUnavailable is the metadata.sub_kind value emitted
 // when the resolved capability version has no usable storage
 // breadcrumb (empty oss_key/sha256). This happens after a schema-level
@@ -181,7 +183,7 @@ var errCapabilityVersionUnavailable = errors.New("agent_daemon: capability versi
 
 // disabledForUnsupportedCapability builds the DisabledCapability surfaced
 // when a renderer returns render.ErrUnsupported — e.g. an opencode/codex
-// agent enabling a skill or plugin capability. MissingCredentials is left
+// agent enabling a plugin capability. MissingCredentials is left
 // empty; emitDisabledCapabilityNotices treats that as a "non-credential"
 // disable and posts a generic notice.
 func disabledForUnsupportedCapability(cap store.EnabledCapabilityRead) DisabledCapability {
@@ -189,6 +191,7 @@ func disabledForUnsupportedCapability(cap store.EnabledCapabilityRead) DisabledC
 		CapabilityID:        cap.CapabilityID,
 		CapabilityVersionID: cap.CapabilityVersionID,
 		CapabilityName:      cap.Name,
+		SubKind:             CapabilityUnsupported,
 	}
 }
 

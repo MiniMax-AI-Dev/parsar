@@ -38,36 +38,27 @@ func TestTargetForAgentKind(t *testing.T) {
 	}
 }
 
-// TestResolveCapabilityAdditions_CodexSkillSoftDegrades verifies that an
-// agent on the codex engine that lists a skill capability does
-// not hard-fail the prompt. The codex renderer returns render.ErrUnsupported
-// for KindSkill; the connector must skip the row and surface it as a
-// Disabled capability so the channel emits a runtime_error nudge.
-func TestResolveCapabilityAdditions_CodexSkillSoftDegrades(t *testing.T) {
-	presigner := &stubPluginPresigner{}
-	c := &Connector{
-		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
-			newSkillRow(t, "skill-a", "Skill A", "do a"),
-		}},
-		oss: presigner,
-		log: discardLogger(),
-	}
-	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "codex")
-	if err != nil {
-		t.Fatalf("codex skill must soft-degrade, got hard error: %v", err)
-	}
-	if len(got.Skills) != 0 {
-		t.Fatalf("codex must not produce skills, got %+v", got.Skills)
-	}
-	if len(got.Disabled) != 1 {
-		t.Fatalf("expected 1 disabled capability, got %d", len(got.Disabled))
-	}
-	if got.Disabled[0].CapabilityID != "skill-a" {
-		t.Fatalf("disabled.capability_id = %q, want skill-a", got.Disabled[0].CapabilityID)
-	}
-	if len(got.Disabled[0].MissingCredentials) != 0 {
-		t.Fatalf("ErrUnsupported soft-degrade must not synthesise missing credentials, got %+v",
-			got.Disabled[0].MissingCredentials)
+func TestResolveCapabilityAdditions_PortableSkillRenders(t *testing.T) {
+	for _, agentKind := range []string{"codex", "opencode"} {
+		t.Run(agentKind, func(t *testing.T) {
+			c := &Connector{
+				capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+					newSkillRow(t, "skill-a", "Skill A", "do a"),
+				}},
+				oss: &stubPluginPresigner{},
+				log: discardLogger(),
+			}
+			got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), agentKind)
+			if err != nil {
+				t.Fatalf("resolve skill: %v", err)
+			}
+			if len(got.Skills) != 1 {
+				t.Fatalf("expected 1 skill, got %+v", got.Skills)
+			}
+			if len(got.Disabled) != 0 {
+				t.Fatalf("supported skill must not be disabled, got %+v", got.Disabled)
+			}
+		})
 	}
 }
 
@@ -93,6 +84,9 @@ func TestResolveCapabilityAdditions_OpenCodePluginSoftDegrades(t *testing.T) {
 	}
 	if len(got.Disabled) != 1 || got.Disabled[0].CapabilityID != "p1" {
 		t.Fatalf("expected 1 disabled plugin capability with id=p1, got %+v", got.Disabled)
+	}
+	if got.Disabled[0].SubKind != CapabilityUnsupported {
+		t.Fatalf("disabled.sub_kind = %q, want %q", got.Disabled[0].SubKind, CapabilityUnsupported)
 	}
 }
 
@@ -125,8 +119,7 @@ func TestResolveCapabilityAdditions_OpenCodeMCPStillRenders(t *testing.T) {
 
 // TestResolveCapabilityAdditions_PiSkillRenders is the positive half of
 // pi's scope: pi delivers managed skills (via --skill), so a skill row on
-// a pi agent must render, not degrade. pi is the inverse of codex here —
-// codex rejects skills, pi accepts them.
+// a pi agent must render, not degrade.
 func TestResolveCapabilityAdditions_PiSkillRenders(t *testing.T) {
 	presigner := &stubPluginPresigner{}
 	c := &Connector{
@@ -173,6 +166,9 @@ func TestResolveCapabilityAdditions_PiMCPSoftDegrades(t *testing.T) {
 	if len(got.Disabled) != 1 || got.Disabled[0].CapabilityID != "mcp-1" {
 		t.Fatalf("expected 1 disabled mcp capability with id=mcp-1, got %+v", got.Disabled)
 	}
+	if got.Disabled[0].SubKind != CapabilityUnsupported {
+		t.Fatalf("disabled.sub_kind = %q, want %q", got.Disabled[0].SubKind, CapabilityUnsupported)
+	}
 }
 
 // TestResolveCapabilityAdditions_EmptyAgentKindDefaultsClaudeCode pins
@@ -201,16 +197,7 @@ func TestResolveCapabilityAdditions_EmptyAgentKindDefaultsClaudeCode(t *testing.
 	}
 }
 
-// TestBuildAgentOptions_CodexSkillSurfacesDisabledNotice walks the
-// production buildAgentOptions entry — not just resolveCapabilityAdditions
-// directly — to confirm that an unsupported-by-agent-kind capability
-// flows all the way through emitDisabledCapabilityNotices and lands in
-// the SystemMessages sink as a CapabilityCredentialMissing notice.
-//
-// This is the contract the channel layer relies on: a codex agent
-// enabling a skill capability must produce a user-visible nudge
-// instead of silently dropping the capability.
-func TestBuildAgentOptions_CodexSkillSurfacesDisabledNotice(t *testing.T) {
+func TestBuildAgentOptions_CodexSkillIsEnabled(t *testing.T) {
 	sm := &fakeSystemMessageStore{}
 	c := &Connector{
 		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
@@ -232,23 +219,13 @@ func TestBuildAgentOptions_CodexSkillSurfacesDisabledNotice(t *testing.T) {
 
 	opts, err := c.buildAgentOptions(context.Background(), in)
 	if err != nil {
-		t.Fatalf("buildAgentOptions must soft-degrade unsupported skill, got hard error: %v", err)
+		t.Fatalf("buildAgentOptions: %v", err)
 	}
-	if _, ok := opts["skills"]; ok {
-		t.Fatalf("opts['skills'] must be absent for codex (skill unsupported), got %+v", opts["skills"])
+	if _, ok := opts["skills"]; !ok {
+		t.Fatalf("opts['skills'] missing for codex: %+v", opts)
 	}
-	if len(sm.runtimeErrors) != 1 {
-		t.Fatalf("expected exactly 1 runtime_error notice for the disabled skill, got %d: %+v", len(sm.runtimeErrors), sm.runtimeErrors)
-	}
-	notice := sm.runtimeErrors[0]
-	if notice.SubKind != CapabilityCredentialMissing {
-		t.Errorf("SubKind = %q, want %q", notice.SubKind, CapabilityCredentialMissing)
-	}
-	if notice.CapabilityID != "skill-a" {
-		t.Errorf("CapabilityID = %q, want skill-a", notice.CapabilityID)
-	}
-	if notice.RunID != "run-1" || notice.ConversationID != "conv-1" {
-		t.Errorf("notice missing scope: %+v", notice)
+	if len(sm.runtimeErrors) != 0 {
+		t.Fatalf("supported skill must not emit runtime_error notices: %+v", sm.runtimeErrors)
 	}
 }
 

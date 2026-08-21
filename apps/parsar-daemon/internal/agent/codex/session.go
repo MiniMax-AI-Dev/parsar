@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
 )
@@ -111,6 +112,26 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		return nil, fmt.Errorf("codex: build session plan: %w", err)
 	}
 
+	var skillRoot string
+	if rawSkills, ok := req.AgentOptions["skills"]; ok {
+		skillRoot, err = agent.ManagedSkillsRoot("codex", req.AgentStateKey, req.ConversationID, req.RunID)
+		if err != nil {
+			plan.Cleanup()
+			return nil, fmt.Errorf("codex: resolve managed skills root: %w", err)
+		}
+		installResult, installErr := claudecode.InstallManagedSkills(parent, cfg.logger, skillRoot, rawSkills)
+		if installErr != nil {
+			plan.Cleanup()
+			return nil, fmt.Errorf("codex: install skills: %w", installErr)
+		}
+		for _, warning := range installResult.Warnings {
+			cfg.logger.Warn("codex: skill install warning", "run_id", req.RunID, "msg", warning)
+		}
+		if len(installResult.SkillDirs) == 0 {
+			skillRoot = ""
+		}
+	}
+
 	cancelCtx, cancelFn := context.WithCancel(parent)
 
 	rpcCfg := JSONRPCConfig{
@@ -152,6 +173,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		plan.Cleanup()
 		return nil, fmt.Errorf("codex: rpc start: %w", err)
 	}
+	if skillRoot != "" {
+		if err := setSkillExtraRoots(cancelCtx, rpc, []string{skillRoot}); err != nil {
+			cancelFn()
+			_ = rpc.Close()
+			plan.Cleanup()
+			return nil, fmt.Errorf("codex: register skill root: %w", err)
+		}
+	}
 
 	// thread/start (or resume) + turn/start happen in the run goroutine
 	// so newSession returns quickly; if any of those fail the failure
@@ -159,6 +188,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	go s.run(plan, req)
 
 	return s, nil
+}
+
+func setSkillExtraRoots(ctx context.Context, rpc *JSONRPCClient, roots []string) error {
+	if len(roots) == 0 {
+		return nil
+	}
+	_, err := rpc.Request(ctx, "skills/extraRoots/set", SkillsExtraRootsSetParams{ExtraRoots: roots})
+	return err
 }
 
 func (s *Session) Cancel(_ context.Context) error {

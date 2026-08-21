@@ -14,9 +14,7 @@ import (
 // claudecode skills with one claudeCodeSkillDocument unmarshal. Managed
 // MCP and plugin delivery are out of scope for pi, so both return
 // ErrUnsupported, which the agentdaemon connector treats as a soft
-// degrade (skip + disabled-capability notice). This makes pi the mirror
-// of codex: codex renders MCP and rejects Skill; pi renders Skill and
-// rejects MCP.
+// degrade (skip + disabled-capability notice).
 type piRenderer struct{}
 
 func (piRenderer) Target() Target { return TargetPi }
