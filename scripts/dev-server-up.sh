@@ -153,6 +153,24 @@ fi
 pkill -f "${BIN_PATH}" 2>/dev/null || true
 sleep 1
 
+# ── load .env (project-local secrets, gitignored) ────────────────────
+# Source the repo-root .env if present so operators can keep E2B keys,
+# sandbox templates, and other per-machine secrets there without
+# polluting the launch command.
+#
+# Precedence: .env WINS over an already-exported shell variable, because
+# `set -a; source` performs a plain assignment. To override a value from
+# .env for one run, edit the file or pass the var on the make/script line
+# after this point rather than exporting it beforehand.
+DOT_ENV="${REPO_ROOT}/.env"
+if [[ -f "${DOT_ENV}" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "${DOT_ENV}"
+  set +a
+  echo "[dev-server-up] loaded ${DOT_ENV}"
+fi
+
 # ── start under tmux (survives sandbox bash exit) ────────────────────
 # The server refuses to boot without either real Feishu creds or mock
 # mode, and without a resolvable agent_daemon owner URL. Supply dev
@@ -170,8 +188,24 @@ OWNER_URL="${PARSAR_AGENT_DAEMON_OWNER_URL:-http://127.0.0.1:${PORT}}"
 FEISHU_WEBSOCKET="${PARSAR_FEISHU_WEBSOCKET:-true}"
 FEISHU_OUTBOUND="${PARSAR_FEISHU_OUTBOUND:-true}"
 MASTER_KEY="${PARSAR_MASTER_KEY:-parsar-dev-master-key-2026}"
+
+# Build the env string for the tmux command. Start with the required
+# core vars, then append any E2B / sandbox vars that are set.
+TMUX_ENV="PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_FEISHU_WEBSOCKET=${FEISHU_WEBSOCKET} PARSAR_FEISHU_OUTBOUND=${FEISHU_OUTBOUND} PARSAR_MASTER_KEY='${MASTER_KEY}' PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}'"
+
+# E2B sandbox vars (from .env or pre-exported).
+[[ -n "${AGENT_DAEMON_SANDBOX_TEMPLATE:-}" ]] && TMUX_ENV+=" AGENT_DAEMON_SANDBOX_TEMPLATE='${AGENT_DAEMON_SANDBOX_TEMPLATE}'"
+[[ -n "${PARSAR_E2B_API_KEY:-}" ]] && TMUX_ENV+=" PARSAR_E2B_API_KEY='${PARSAR_E2B_API_KEY}'"
+[[ -n "${PARSAR_E2B_API_BASE_URL:-}" ]] && TMUX_ENV+=" PARSAR_E2B_API_BASE_URL='${PARSAR_E2B_API_BASE_URL}'"
+[[ -n "${PARSAR_E2B_SANDBOX_HOST:-}" ]] && TMUX_ENV+=" PARSAR_E2B_SANDBOX_HOST='${PARSAR_E2B_SANDBOX_HOST}'"
+[[ -n "${PARSAR_E2B_CA_CERT:-}" ]] && TMUX_ENV+=" PARSAR_E2B_CA_CERT='${PARSAR_E2B_CA_CERT}'"
+[[ -n "${AGENT_DAEMON_SANDBOX_TEMPLATE_XL:-}" ]] && TMUX_ENV+=" AGENT_DAEMON_SANDBOX_TEMPLATE_XL='${AGENT_DAEMON_SANDBOX_TEMPLATE_XL}'"
+[[ -n "${AGENT_DAEMON_SANDBOX_TTL:-}" ]] && TMUX_ENV+=" AGENT_DAEMON_SANDBOX_TTL='${AGENT_DAEMON_SANDBOX_TTL}'"
+[[ -n "${AGENT_DAEMON_SANDBOX_AUTO_RENEW:-}" ]] && TMUX_ENV+=" AGENT_DAEMON_SANDBOX_AUTO_RENEW='${AGENT_DAEMON_SANDBOX_AUTO_RENEW}'"
+[[ -n "${AGENT_DAEMON_SANDBOX_TTL_HOURS:-}" ]] && TMUX_ENV+=" AGENT_DAEMON_SANDBOX_TTL_HOURS='${AGENT_DAEMON_SANDBOX_TTL_HOURS}'"
+
 tmux new-session -d -s "${TMUX_SESSION}" \
-  "PARSAR_ADDR=:${PORT} DATABASE_URL='${DATABASE_URL}' PARSAR_DEV_AUTH=${PARSAR_DEV_AUTH} PARSAR_FEISHU_MOCK=${FEISHU_MOCK} PARSAR_FEISHU_WEBSOCKET=${FEISHU_WEBSOCKET} PARSAR_FEISHU_OUTBOUND=${FEISHU_OUTBOUND} PARSAR_MASTER_KEY='${MASTER_KEY}' PARSAR_AGENT_DAEMON_OWNER_URL='${OWNER_URL}' '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
+  "${TMUX_ENV} '${BIN_PATH}' 2>&1 | tee '${LOG_PATH}'"
 
 # ── readiness probe ──────────────────────────────────────────────────
 echo -n "[dev-server-up] waiting for :${PORT} "

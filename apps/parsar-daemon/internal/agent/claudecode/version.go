@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/binpath"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/versionprobe"
 )
 
@@ -18,13 +19,14 @@ const InstallURL = "https://docs.anthropic.com/claude/docs/claude-code"
 var ErrCLINotFound = errors.New("claude CLI not found")
 
 // CheckCLIAvailable runs `<binary> --version` and returns the trimmed
-// first line. Empty binary defaults to "claude". On missing binary the
-// error wraps ErrCLINotFound; on other failures the wrapped error
-// keeps the raw stderr.
+// first line. Empty binary defaults to binpath.ClaudeCode() — the same
+// resolver the session spawn uses, so probe and spawn always agree. On
+// missing binary the error wraps ErrCLINotFound; on other failures the
+// wrapped error keeps the raw stderr.
 func CheckCLIAvailable(ctx context.Context, binary string) (string, error) {
 	return versionprobe.Check(ctx, binary, versionprobe.Config{
 		Name:          "claude",
-		DefaultBinary: "claude",
+		DefaultBinary: binpath.ClaudeCode(),
 		MissingError:  ErrCLINotFound,
 	})
 }

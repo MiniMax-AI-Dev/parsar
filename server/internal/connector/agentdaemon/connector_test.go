@@ -1029,11 +1029,25 @@ func contains(s, substr string) bool {
 // assertions can check that Acquire fired (and only fired when the
 // agent was sandbox-mode).
 type stubSandboxProvider struct {
-	mu           sync.Mutex
-	acquireCalls int
-	releaseCalls int
-	deviceID     string
-	acquireErr   error
+	mu              sync.Mutex
+	acquireCalls    int
+	recreateCalls   int
+	releaseCalls    int
+	deviceID        string
+	acquireErr      error
+	probeExists     bool
+	probeConfirmed  bool
+	probeConfigured bool
+	probeErr        error
+}
+
+func (s *stubSandboxProvider) SandboxExists(_ context.Context, _ string) (bool, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.probeConfigured {
+		return false, true, nil
+	}
+	return s.probeExists, s.probeConfirmed, s.probeErr
 }
 
 func (s *stubSandboxProvider) Acquire(_ context.Context, _ connector.PromptInput) (string, error) {
@@ -1065,7 +1079,17 @@ func (s *stubSandboxProvider) SandboxRuntimeInfo(_ context.Context, _ string) (t
 	return time.Time{}, nil
 }
 
-func (s *stubSandboxProvider) Reap(_ context.Context) (int, error) { return 0, nil }
+func (s *stubSandboxProvider) Reap(_ context.Context) (int, error)     { return 0, nil }
+func (s *stubSandboxProvider) Maintain(_ context.Context) (int, error) { return 0, nil }
+func (s *stubSandboxProvider) Recreate(ctx context.Context, in connector.PromptInput) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recreateCalls++
+	if s.acquireErr != nil {
+		return "", s.acquireErr
+	}
+	return s.deviceID, nil
+}
 
 // TestStreamPrompt_LocalModeNoBindingFallsThroughToErrorChannel: when
 // the agent has no binding and no configured device, the
@@ -1231,25 +1255,16 @@ func TestStreamPrompt_LocalModeConfiguredDeviceBindsWithWorkdirKey(t *testing.T)
 	}
 }
 
-// TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired pins the
-// contract: even when AgentConfig.daemon_mode == "sandbox",
-// the connector does NOT auto-acquire a sandbox. The default dispatch
-// path requires an explicit runtime binding
-// (agents.runtime_id) surfaced via AgentConfig.device_id.
-// The sandbox provider stays compiled for a future conversation-scoped
-// ephemeral path but is disconnected from the default first-prompt flow.
-//
-// Sandbox-mode agents that hit dispatch before runtime_id is written
-// see a sandbox-aware hint ("sandbox is preparing") instead of the generic
-// "no Runtime bound" copy.
-func TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired(t *testing.T) {
+// Sandbox runs ensure the provider runtime before dispatch and attempt one
+// rebuild when the returned daemon is confirmed offline.
+func TestStreamPrompt_SandboxModeEnsuresAndRebuildsOnce(t *testing.T) {
 	reg := gateway.NewRegistry()
 	sb := &stubSandboxProvider{deviceID: "dev-sbx-abc"}
 	binder := binding.NewInMemoryBinder()
-	c := New(Config{Registry: reg, Binder: binder, Sandbox: sb})
+	sm := &fakeSystemMessageStore{}
+	c := New(Config{Registry: reg, Binder: binder, Sandbox: sb, SystemMessages: sm})
 
 	in := basicInput()
-	// daemon_mode=sandbox alone is no longer a free pass to auto-Acquire.
 	in.AgentConfig = map[string]any{"daemon_mode": "sandbox"}
 
 	ch, err := c.StreamPrompt(context.Background(), in)
@@ -1260,27 +1275,73 @@ func TestStreamPrompt_SandboxModeIsNoLongerAutoAcquired(t *testing.T) {
 	if gotErr == nil || gotDone == nil {
 		t.Fatalf("expected EventError + EventDone, got err=%v done=%v", gotErr, gotDone)
 	}
-	if sb.acquireCalls != 0 {
-		t.Fatalf("sandbox Acquire MUST NOT fire on the default path; saw %d calls", sb.acquireCalls)
+	if sb.acquireCalls != 1 {
+		t.Fatalf("sandbox Acquire calls = %d, want 1", sb.acquireCalls)
 	}
-	// Sandbox-mode unbound surfaces a sandbox-preparation hint — the
-	// createAgent goroutine is racing to write runtime_id back, and a
-	// user retry in ~10s should land on a healthy binding.
-	if !contains(gotErr.Error, "sandbox is preparing") {
-		t.Fatalf("expected sandbox-preparation hint, got %q", gotErr.Error)
+	if sb.recreateCalls != 1 {
+		t.Fatalf("sandbox Recreate calls = %d, want 1", sb.recreateCalls)
 	}
-	// And nothing got bound.
-	if _, err := binder.Resolve(context.Background(), "conv-1", "pa-1", "claude_code"); err == nil {
-		t.Fatalf("expected no binding after refusing auto-acquire; one was persisted")
+	if !contains(gotErr.Error, "could not be rebuilt") {
+		t.Fatalf("expected one-shot rebuild failure, got %q", gotErr.Error)
+	}
+	if len(sm.sandboxOfflines) != 1 {
+		t.Fatalf("sandbox offline notices = %d, want 1", len(sm.sandboxOfflines))
 	}
 }
 
-// TestStreamPrompt_SandboxModeProviderDisabled_StillRefusesAutoAcquire:
-// no sandbox provider wired + sandbox mode requested → user still sees
-// a sandbox-aware hint. Both routes converge on SandboxBindingReader's
-// nil-reader fallback which only knows about bindings, not provider
-// wiring.
-func TestStreamPrompt_SandboxModeProviderDisabled_StillRefusesAutoAcquire(t *testing.T) {
+func TestAcquireSandboxBindingPreservesSessionOnSameDevice(t *testing.T) {
+	binder := binding.NewInMemoryBinder()
+	existing := binding.Binding{
+		ConversationID:   "conv-1",
+		AgentID:          "pa-1",
+		DeviceID:         "dev-sbx",
+		AgentKind:        "claude_code",
+		AgentSessionID:   "session-1",
+		AgentSessionType: binding.SessionTypeClaude,
+		AgentStateKey:    "state-1",
+		Metadata:         map[string]any{"key": "value"},
+	}
+	if err := binder.Bind(context.Background(), existing); err != nil {
+		t.Fatal(err)
+	}
+	c := New(Config{Registry: gateway.NewRegistry(), Binder: binder, Sandbox: &stubSandboxProvider{deviceID: "dev-sbx"}})
+	in := basicInput()
+	in.AgentConfig = map[string]any{"daemon_mode": "sandbox", "agent_kind": "claude_code"}
+
+	got, err := c.acquireSandboxBinding(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AgentSessionID != existing.AgentSessionID || got.AgentSessionType != existing.AgentSessionType || got.AgentStateKey != existing.AgentStateKey {
+		t.Fatalf("session state was not preserved: %+v", got)
+	}
+}
+
+func TestStreamPrompt_SandboxRegistryMissDoesNotRebuildLiveProviderSandbox(t *testing.T) {
+	sb := &stubSandboxProvider{
+		deviceID:        "dev-sbx",
+		probeConfigured: true,
+		probeExists:     true,
+		probeConfirmed:  true,
+	}
+	c := New(Config{Registry: gateway.NewRegistry(), Binder: binding.NewInMemoryBinder(), Sandbox: sb})
+	in := basicInput()
+	in.AgentConfig = map[string]any{"daemon_mode": "sandbox"}
+
+	ch, err := c.StreamPrompt(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotErr, _ := drainEvents(ch, t)
+	if gotErr == nil || !contains(gotErr.Error, "temporarily unavailable") {
+		t.Fatalf("unexpected error event: %+v", gotErr)
+	}
+	if sb.recreateCalls != 0 {
+		t.Fatalf("live provider sandbox was rebuilt %d times", sb.recreateCalls)
+	}
+}
+
+func TestStreamPrompt_SandboxModeProviderDisabledFailsClearly(t *testing.T) {
 	reg := gateway.NewRegistry()
 	// No Sandbox in Config → New defaults to NoopSandboxProvider
 	c := New(Config{Registry: reg, Binder: binding.NewInMemoryBinder()})
@@ -1296,8 +1357,8 @@ func TestStreamPrompt_SandboxModeProviderDisabled_StillRefusesAutoAcquire(t *tes
 	if gotErr == nil || gotDone == nil {
 		t.Fatalf("expected EventError + EventDone, got err=%v done=%v", gotErr, gotDone)
 	}
-	if !contains(gotErr.Error, "sandbox is preparing") {
-		t.Fatalf("expected sandbox-preparation hint, got %q", gotErr.Error)
+	if !contains(gotErr.Error, "does not have a sandbox template configured") {
+		t.Fatalf("expected provider-disabled hint, got %q", gotErr.Error)
 	}
 }
 

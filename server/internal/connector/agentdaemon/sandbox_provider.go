@@ -23,8 +23,8 @@
 //	                  4. Registry.WaitForDevice(deviceID, 45s)     -> blocks until WS upgrade lands
 //	                  5. Binder.Bind(conversation -> deviceID)     -> persist for next turn
 //	                  6. return deviceID
-//	          subsequent prompts in same conversation -> binder hit, no sandbox work
-//	          new conversation against same agent -> Acquire reuses the cached sandbox
+//	          every sandbox prompt -> Acquire verifies/reuses the active sandbox
+//	          new conversation against same agent -> Acquire reuses the same sandbox
 //	          long idle period -> Reap() kills the sandbox + evicts cache; next Acquire cold-starts again
 //	          conversation archived / agent deleted -> Release() kills + evicts immediately
 package agentdaemon
@@ -58,22 +58,50 @@ var SandboxAcquireTimeout = 45 * time.Second
 // DNS + TLS + WS handshake.
 var SandboxConnectTimeout = 30 * time.Second
 
-// SandboxDefaultTTL is the e2b sandbox TTL requested on Create.
-// Long-lived by design: an agent_daemon sandbox carries user-installed
-// config and claude session state across conversations and must NOT
-// be silently recycled while in use. SANDBOX_TIMEOUT_MS defaults to
-// 30d so an agent stays usable through normal
-// conversational gaps without depending on a per-prompt renew loop.
-var SandboxDefaultTTL = 30 * 24 * time.Hour
-
-// SandboxIdleReapThreshold is the lastUsed cutoff Reap honours.
+// SandboxDefaultTTL is the fallback e2b sandbox TTL requested on Create
+// when E2BProviderConfig.TTL is unset.
 //
-// Kept >= SandboxDefaultTTL so Reap can never preempt e2b's own TTL
-// expiry: lastUsed is only refreshed on Acquire fast-path hits, and
-// already-bound conversations skip Acquire entirely after cold start
-// (binder.Resolve takes over). Reap is effectively a defence-in-depth
-// sweep for cache entries whose sandbox was killed out-of-band.
-var SandboxIdleReapThreshold = 30 * 24 * time.Hour
+// The default is deliberately provider-neutral. Deployments that need a
+// different lifetime can override it with AGENT_DAEMON_SANDBOX_TTL; the
+// backing provider remains authoritative about the limits it accepts.
+var SandboxDefaultTTL = time.Hour
+
+// SandboxIdleReapThreshold is the fallback lastUsed cutoff Reap honours
+// when E2BProviderConfig.TTL is unset.
+//
+// Kept >= the effective TTL so Reap does not preempt the provider lease.
+// Every run refreshes lastUsed through Acquire; Reap is a defence-in-depth
+// sweep for inactive entries whose automatic renewal is disabled.
+var SandboxIdleReapThreshold = time.Hour
+
+// SandboxSpawnAbandonedAfter is how old a `spawning` sandbox binding
+// must be before another acquire may declare it abandoned and take its
+// reservation slot (see reclaimAbandonedSpawn).
+//
+// Must stay comfortably above SandboxAcquireTimeout so a merely slow
+// cold start is never stolen mid-flight; 5m leaves ~6x headroom while
+// still self-healing long before a human would notice. Package-level so
+// tests can lower it.
+var SandboxSpawnAbandonedAfter = 5 * time.Minute
+
+// SandboxMaintenanceInterval controls how often persisted leases and idle
+// cache entries are scanned. Auto-renew requires a TTL longer than this interval.
+var SandboxMaintenanceInterval = 5 * time.Minute
+
+const (
+	maxSandboxTTLSeconds int64 = 1<<31 - 1
+	// sandboxMaintenanceBatchSize caps how many due leases one maintenance
+	// scan claims. Renewals run serially (each with a 10s per-call
+	// timeout) inside the caller's ~30s Maintain context, so under
+	// provider slowness a scan may only finish a few before the context
+	// expires; the rest stay claimed and are retried next tick, and the
+	// claim query returns soonest-to-expire first so the most urgent win.
+	// In the healthy case renewals are sub-second and the whole batch
+	// completes. Move to parallel renewals before the number of
+	// simultaneously-due agents makes the serial-under-30s cap the
+	// bottleneck.
+	sandboxMaintenanceBatchSize = 50
+)
 
 // ErrSandboxAcquireFailed is the sentinel a caller can branch on
 // when the daemon failed to come up in time. Used by tests; in
@@ -100,6 +128,10 @@ type SandboxProvider interface {
 	// context with enough headroom.
 	Acquire(ctx context.Context, in connector.PromptInput) (deviceID string, err error)
 
+	// SandboxExists probes the provider when local dispatch cannot find the
+	// daemon. confirmed is false when no durable sandbox is known.
+	SandboxExists(ctx context.Context, agentID string) (exists, confirmed bool, err error)
+
 	// SandboxStatus returns the cached sandbox info for a
 	// agent. (zero, false, nil) when not cached.
 	//
@@ -112,9 +144,9 @@ type SandboxProvider interface {
 	// Idempotent: releasing an unknown agent is a no-op.
 	Release(ctx context.Context, agentID string) error
 
-	// Renew bumps the e2b-side TTL to SandboxDefaultTTL. Returns the
-	// refreshed expires_at. (zero, false, nil) when no live cache
-	// entry exists — the admin handler maps this to 404.
+	// Renew bumps the e2b-side TTL back to its persisted or configured
+	// lifetime. It falls back to the durable binding on a cache miss so any
+	// pod can renew. (zero, false, nil) means no active binding exists.
 	Renew(ctx context.Context, agentID string) (expiresAt time.Time, found bool, err error)
 
 	// SandboxRuntimeInfo queries e2b directly for live expiry by
@@ -125,6 +157,14 @@ type SandboxProvider interface {
 	// Reap evicts sandboxes whose lastUsed is older than the
 	// configured idle threshold. Returns the count evicted.
 	Reap(ctx context.Context) (evicted int, err error)
+
+	// Maintain claims and renews provider leases that are due according to
+	// their persisted auto-renew policy.
+	Maintain(ctx context.Context) (renewed int, err error)
+
+	// Recreate terminates the current sandbox binding, if any, and performs
+	// one fresh Acquire. Used only after dispatch confirms the runtime is gone.
+	Recreate(ctx context.Context, in connector.PromptInput) (deviceID string, err error)
 }
 
 // ErrSandboxProviderDisabled is returned by NoopSandboxProvider when
@@ -138,6 +178,10 @@ type NoopSandboxProvider struct{}
 
 func (NoopSandboxProvider) Acquire(_ context.Context, _ connector.PromptInput) (string, error) {
 	return "", ErrSandboxProviderDisabled
+}
+
+func (NoopSandboxProvider) SandboxExists(_ context.Context, _ string) (bool, bool, error) {
+	return false, false, nil
 }
 
 func (NoopSandboxProvider) Release(_ context.Context, _ string) error { return nil }
@@ -154,7 +198,11 @@ func (NoopSandboxProvider) SandboxRuntimeInfo(_ context.Context, _ string) (time
 	return time.Time{}, nil
 }
 
-func (NoopSandboxProvider) Reap(_ context.Context) (int, error) { return 0, nil }
+func (NoopSandboxProvider) Reap(_ context.Context) (int, error)     { return 0, nil }
+func (NoopSandboxProvider) Maintain(_ context.Context) (int, error) { return 0, nil }
+func (NoopSandboxProvider) Recreate(ctx context.Context, in connector.PromptInput) (string, error) {
+	return NoopSandboxProvider{}.Acquire(ctx, in)
+}
 
 // ----------------------------------------------------------------------
 // E2B-backed implementation
@@ -169,10 +217,17 @@ func (NoopSandboxProvider) Reap(_ context.Context) (int, error) { return 0, nil 
 type SandboxBindingPersister interface {
 	CreateSandboxBinding(ctx context.Context, input store.CreateSandboxBindingInput) (store.SandboxBindingRead, error)
 	ReserveSandboxBindingSlot(ctx context.Context, input store.ReserveSandboxBindingSlotInput) (store.SandboxBindingRead, bool, error)
+	SetSpawningSandboxBindingSandboxID(ctx context.Context, bindingID, sandboxID string) error
 	FinalizeSandboxBindingSpawning(ctx context.Context, input store.FinalizeSandboxBindingSpawningInput) error
 	WaitForSandboxBindingActive(ctx context.Context, workspaceID, agentID string, pollInterval time.Duration) (store.SandboxBindingRead, error)
 	TouchSandboxBinding(ctx context.Context, bindingID string) error
 	MarkSandboxBindingKilled(ctx context.Context, bindingID, status string) error
+	ReclaimAbandonedSandboxBinding(ctx context.Context, bindingID string, createdBefore time.Time) (bool, error)
+	ConfigureSandboxBindingLease(ctx context.Context, bindingID string, timeoutSeconds, thresholdSeconds int32, expiresAt time.Time) error
+	ClaimSandboxBindingsDueForAutoRenew(ctx context.Context, now time.Time, limit int32) ([]store.SandboxAutoRenewClaim, error)
+	CompleteSandboxBindingRenew(ctx context.Context, bindingID string, expiresAt time.Time) error
+	FailSandboxBindingRenew(ctx context.Context, bindingID string) error
+	GetActiveSandboxBindingByAgentID(ctx context.Context, agentID string) (store.SandboxBindingRead, bool, error)
 }
 
 // E2BClient is the slice of e2b.Client the provider actually uses.
@@ -243,7 +298,107 @@ type E2BProviderConfig struct {
 	// deviceID is registered locally (Registry) or remotely (OwnerChecker).
 	// Empty in single-pod / local-dev mode.
 	SelfPodID string
+	// TTL is the sandbox lifetime requested on Create and restored by
+	// Renew. Zero falls back to SandboxDefaultTTL. Carried per-provider
+	// (rather than by reassigning the package var) so the value is
+	// explicit at the construction site and two providers in one process
+	// — or two parallel tests — cannot clobber each other.
+	//
+	TTL time.Duration
+	// AutoRenew enables periodic best-effort lease refresh. The server
+	// wires this ON by default (see resolveAgentDaemonSandboxAutoRenew);
+	// the Go zero value is off for tests and library callers. Disabled by
+	// default because provider support and limits vary.
+	AutoRenew bool
 	Log       *slog.Logger
+}
+
+// ttl is the effective sandbox lifetime for this provider: the
+// configured TTL, or SandboxDefaultTTL when unset.
+func (p *E2BSandboxProvider) ttl() time.Duration {
+	if ttl, ok := NormalizeSandboxTTL(p.cfg.TTL); ok {
+		return ttl
+	}
+	return SandboxDefaultTTL
+}
+
+// NormalizeSandboxTTL converts a provider lease to whole seconds within the database range.
+func NormalizeSandboxTTL(ttl time.Duration) (time.Duration, bool) {
+	if ttl < time.Second {
+		return 0, false
+	}
+	seconds := int64(ttl / time.Second)
+	if seconds > maxSandboxTTLSeconds {
+		return 0, false
+	}
+	return time.Duration(seconds) * time.Second, true
+}
+
+func (p *E2BSandboxProvider) ttlFor(in connector.PromptInput) time.Duration {
+	if raw, _ := in.AgentConfig["sandbox_ttl"].(string); strings.TrimSpace(raw) != "" {
+		if parsed, err := time.ParseDuration(strings.TrimSpace(raw)); err == nil {
+			if ttl, ok := NormalizeSandboxTTL(parsed); ok {
+				return ttl
+			}
+		}
+		p.cfg.Log.Warn("agent sandbox_ttl ignored: want a duration of at least one second",
+			"agent_id", in.AgentID, "value", raw)
+	}
+	return p.ttl()
+}
+
+func (p *E2BSandboxProvider) autoRenewFor(in connector.PromptInput) bool {
+	if enabled, ok := in.AgentConfig["sandbox_auto_renew"].(bool); ok {
+		return enabled
+	}
+	return p.cfg.AutoRenew
+}
+
+func (p *E2BSandboxProvider) leasePolicyFor(in connector.PromptInput) (time.Duration, bool) {
+	ttl := p.ttlFor(in)
+	autoRenew := p.autoRenewFor(in)
+	if autoRenew && ttl <= SandboxMaintenanceInterval {
+		p.cfg.Log.Warn("agent sandbox_auto_renew ignored: sandbox_ttl must exceed the maintenance interval",
+			"agent_id", in.AgentID,
+			"sandbox_ttl", ttl,
+			"maintenance_interval", SandboxMaintenanceInterval)
+		autoRenew = false
+	}
+	return ttl, autoRenew
+}
+
+func autoRenewThreshold(ttl time.Duration, enabled bool) int32 {
+	if !enabled {
+		return 0
+	}
+	ttl, ok := NormalizeSandboxTTL(ttl)
+	if !ok {
+		return 0
+	}
+	if ttl <= SandboxMaintenanceInterval {
+		return 0
+	}
+	threshold := ttl / 4
+	if threshold < SandboxMaintenanceInterval {
+		threshold = SandboxMaintenanceInterval
+	}
+	if threshold >= ttl {
+		threshold = ttl / 2
+	}
+	if threshold < time.Second {
+		threshold = time.Second
+	}
+	return int32(threshold / time.Second)
+}
+
+// idleReapCutoff is the lastUsed age past which Reap evicts a cache
+// entry. Tracks the effective TTL so Reap can never preempt e2b's own
+// expiry; falls back to SandboxIdleReapThreshold when TTL is unset.
+func (p *E2BSandboxProvider) idleReapCutoff() time.Duration {
+	if p.cfg.TTL > 0 {
+		return p.cfg.TTL
+	}
+	return SandboxIdleReapThreshold
 }
 
 // sandboxEntry is the per-agent cached sandbox handle.
@@ -259,6 +414,9 @@ type sandboxEntry struct {
 	ownerPodID string
 	createdAt  time.Time
 	lastUsed   time.Time
+	timeout    time.Duration
+	expiresAt  time.Time
+	autoRenew  bool
 }
 
 // E2BSandboxProvider is the e2b-backed SandboxProvider implementation.
@@ -362,7 +520,7 @@ func (p *E2BSandboxProvider) resolveTemplate(in connector.PromptInput) (size, te
 
 // Acquire returns a deviceID for the agent's sandbox. Cold
 // starts go through the full mint-create-login-connect dance; warm
-// hits return the cached deviceID after a touch + Renew.
+// hits return the cached deviceID after a liveness check and touch.
 //
 // Concurrency: two Acquire calls for the same agent serialise
 // on inflight[agentID] so we never create more than one sandbox
@@ -378,11 +536,19 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 	// Fast path: warm cache hit.
 	p.cacheMu.Lock()
 	if entry, ok := p.cache[in.AgentID]; ok {
-		entry.lastUsed = time.Now().UTC()
+		now := time.Now().UTC()
+		entry.lastUsed = now
+		desiredTTL, desiredAutoRenew := p.leasePolicyFor(in)
+		policyChanged := entry.timeout != desiredTTL || entry.autoRenew != desiredAutoRenew
+		cachePolicyChanged := policyChanged || entry.expiresAt.IsZero()
 		deviceID := entry.deviceID
 		sandboxID := entry.sandbox.SandboxID
 		bindingID := entry.bindingID
 		ownerPodID := entry.ownerPodID
+		expiresAt := entry.expiresAt
+		if expiresAt.IsZero() {
+			expiresAt = now.Add(desiredTTL)
+		}
 		p.cacheMu.Unlock()
 		// Best-effort: confirm the device session is still alive
 		// somewhere in the fleet. ownerPodID disambiguates:
@@ -409,14 +575,22 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 			p.evict(in.AgentID, sandboxID, bindingID)
 			// fall through to cold start
 		} else {
-			// Renew the sandbox TTL on every cache hit so an active
-			// conversation doesn't get evicted mid-thread.
-			renewCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			if err := p.cfg.Client.Renew(renewCtx, sandboxID, int(SandboxDefaultTTL.Seconds())); err != nil {
-				p.cfg.Log.Warn("agent_daemon sandbox renew failed (continuing)",
-					"sandbox_id", sandboxID, "err", err)
+			if policyChanged && bindingID != "" && p.cfg.Bindings != nil {
+				if leaseErr := p.cfg.Bindings.ConfigureSandboxBindingLease(
+					ctx,
+					bindingID,
+					int32(desiredTTL/time.Second),
+					autoRenewThreshold(desiredTTL, desiredAutoRenew),
+					expiresAt,
+				); leaseErr != nil {
+					p.cfg.Log.Warn("agent_daemon sandbox lease policy sync failed",
+						"binding_id", bindingID, "err", leaseErr)
+				} else {
+					p.commitCachedLeasePolicy(in.AgentID, entry, desiredTTL, desiredAutoRenew, expiresAt)
+				}
+			} else if cachePolicyChanged {
+				p.commitCachedLeasePolicy(in.AgentID, entry, desiredTTL, desiredAutoRenew, expiresAt)
 			}
-			cancel()
 			// Best-effort: touch the DB binding so idle sweep sees
 			// recent activity.
 			if bindingID != "" && p.cfg.Bindings != nil {
@@ -494,6 +668,16 @@ func (p *E2BSandboxProvider) Acquire(ctx context.Context, in connector.PromptInp
 	return deviceID, coldStartErr
 }
 
+func (p *E2BSandboxProvider) commitCachedLeasePolicy(agentID string, expected *sandboxEntry, ttl time.Duration, autoRenew bool, expiresAt time.Time) {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	if current := p.cache[agentID]; current == expected {
+		current.timeout = ttl
+		current.autoRenew = autoRenew
+		current.expiresAt = expiresAt
+	}
+}
+
 // acquireCrossPod runs the cross-pod Reserve/Wait dance against the
 // sandboxes table. Returns:
 //
@@ -527,6 +711,22 @@ func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.P
 			"binding_id", row.ID)
 		return row.ID, "", nil
 	}
+	// The slot is held by someone else. If that holder is an abandoned
+	// cold start, clear it and take the slot ourselves — otherwise this
+	// agent is wedged permanently (see reclaimAbandonedSpawn).
+	if reclaimed, retryRow, retryWon, retryErr := p.reclaimAbandonedSpawn(ctx, in, cacheKey, templateID, row); reclaimed {
+		if retryErr != nil {
+			return "", "", retryErr
+		}
+		if retryWon {
+			p.cfg.Log.Info("sandbox slot reserved after reclaiming abandoned cold-start",
+				"agent_id", in.AgentID,
+				"binding_id", retryRow.ID)
+			return retryRow.ID, "", nil
+		}
+		// Someone else won the freed slot; fall through and wait on them.
+		row = retryRow
+	}
 	// Loser: wait for the winner.
 	p.cfg.Log.Info("sandbox slot already held; waiting for winner to finish cold-start",
 		"agent_id", in.AgentID,
@@ -542,15 +742,137 @@ func (p *E2BSandboxProvider) acquireCrossPod(ctx context.Context, in connector.P
 	if deviceID == "" {
 		return "", "", fmt.Errorf("%w: winner row has no device_id in metadata", ErrSandboxAcquireFailed)
 	}
-	// We don't seed p.cache here: this pod never created the sandbox,
-	// has no envd token, and can't Renew/Touch it. The next Acquire
-	// will Reserve, see the existing binding (still running), and
-	// Wait again — cheap.
+	p.syncPersistedLeasePolicy(ctx, in, finalRow)
+	if touchErr := p.cfg.Bindings.TouchSandboxBinding(ctx, finalRow.ID); touchErr != nil {
+		p.cfg.Log.Warn("agent_daemon cross-pod sandbox touch failed",
+			"binding_id", finalRow.ID, "err", touchErr)
+	}
+	// We don't seed p.cache here because this pod never received the envd
+	// token. Durable lease operations remain available from any pod.
 	p.cfg.Log.Info("sandbox slot resolved via cross-pod wait",
 		"agent_id", in.AgentID,
 		"binding_id", finalRow.ID,
 		"device_id", deviceID)
 	return "", deviceID, nil
+}
+
+func (p *E2BSandboxProvider) syncPersistedLeasePolicy(ctx context.Context, in connector.PromptInput, row store.SandboxBindingRead) {
+	persisted, found, err := p.cfg.Bindings.GetActiveSandboxBindingByAgentID(ctx, in.AgentID)
+	if err != nil || !found || persisted.ID != row.ID {
+		p.cfg.Log.Warn("agent_daemon cross-pod sandbox lease lookup failed",
+			"binding_id", row.ID, "found", found, "err", err)
+		return
+	}
+	row = persisted
+	ttl, autoRenew := p.leasePolicyFor(in)
+	threshold := autoRenewThreshold(ttl, autoRenew)
+	if row.TimeoutSeconds == int32(ttl/time.Second) && row.AutoRenewThresholdSeconds == threshold {
+		return
+	}
+	expiresAt := time.Now().UTC().Add(ttl)
+	if row.ExpiresAt != nil && !row.ExpiresAt.IsZero() {
+		expiresAt = *row.ExpiresAt
+	}
+	if err := p.cfg.Bindings.ConfigureSandboxBindingLease(ctx, row.ID, int32(ttl/time.Second), threshold, expiresAt); err != nil {
+		p.cfg.Log.Warn("agent_daemon cross-pod sandbox lease policy sync failed",
+			"binding_id", row.ID, "err", err)
+	}
+}
+
+// reclaimAbandonedSpawn frees the reservation slot when it is held by a
+// cold start that can no longer be in flight, then retries the
+// reservation once.
+//
+// Why this is needed: uk_sandboxes_active_per_agent keys on
+// (workspace_id, agent_id) WHERE killed_at IS NULL, so a `spawning` row
+// holds the agent's only slot until something marks it terminal. The
+// loser path (WaitForSandboxBindingActive) treats `spawning` as
+// "keep waiting" and only exits on a terminal status or ctx timeout. So
+// if the winning process dies between Reserve and
+// Finalize/MarkKilled — crash, redeploy, OOM, pod eviction — the row
+// stays `spawning` forever and EVERY later prompt for that agent burns
+// the full acquire timeout and fails. The agent is wedged with no
+// self-healing path short of manual DB surgery.
+//
+// A cold start is bounded by SandboxAcquireTimeout, so a `spawning` row
+// older than SandboxSpawnAbandonedAfter is definitively dead rather than
+// slow.
+//
+// created_at is written from the reserving pod's Go clock, so skew would
+// have to approach the generous threshold to matter. The actual reclaim is
+// nevertheless a database CAS guarded by both state and creation cutoff.
+//
+// Returns reclaimed=false when the holder is healthy (caller should wait
+// on it as usual). When reclaimed=true the caller must use the returned
+// row/won/err instead of the original reservation result.
+func (p *E2BSandboxProvider) reclaimAbandonedSpawn(
+	ctx context.Context,
+	in connector.PromptInput,
+	cacheKey, templateID string,
+	held store.SandboxBindingRead,
+) (reclaimed bool, row store.SandboxBindingRead, won bool, err error) {
+	if held.Status != store.SandboxBindingStatusSpawning {
+		return false, store.SandboxBindingRead{}, false, nil
+	}
+	// A zero CreatedAt means "age unknown", not "infinitely old". Fail
+	// safe: never steal a slot we cannot prove is stale, otherwise an
+	// unset timestamp would let us kill a cold start that is actively
+	// in flight.
+	if held.CreatedAt.IsZero() {
+		return false, store.SandboxBindingRead{}, false, nil
+	}
+	age := time.Since(held.CreatedAt)
+	if age < SandboxSpawnAbandonedAfter {
+		return false, store.SandboxBindingRead{}, false, nil
+	}
+
+	p.cfg.Log.Warn("reclaiming abandoned sandbox cold-start; its owner never finalized the binding",
+		"agent_id", in.AgentID,
+		"binding_id", held.ID,
+		"sandbox_id", held.SandboxID,
+		"age", age,
+		"abandoned_after", SandboxSpawnAbandonedAfter)
+	reclaimed, reclaimErr := p.cfg.Bindings.ReclaimAbandonedSandboxBinding(
+		ctx, held.ID, time.Now().UTC().Add(-SandboxSpawnAbandonedAfter),
+	)
+	if reclaimErr != nil {
+		return true, store.SandboxBindingRead{}, false,
+			fmt.Errorf("%w: reclaim abandoned binding %s: %v", ErrSandboxAcquireFailed, held.ID, reclaimErr)
+	}
+	if !reclaimed {
+		// The original owner finalized or another contender reclaimed the
+		// row after our read. Do not kill its provider sandbox.
+		return false, store.SandboxBindingRead{}, false, nil
+	}
+
+	// Best-effort kill of the half-built sandbox after winning the CAS. Skipped for a
+	// reservation placeholder, which is not a real e2b id. A leaked
+	// sandbox also self-expires via the provider TTL, so a failure here
+	// must not block reclaiming the slot.
+	if sandboxID := strings.TrimSpace(held.SandboxID); sandboxID != "" && !store.IsPendingSandboxID(sandboxID) {
+		killCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if killErr := p.cfg.Client.Kill(killCtx, sandboxID); killErr != nil {
+			p.cfg.Log.Warn("abandoned sandbox kill failed (continuing; TTL will expire it)",
+				"sandbox_id", sandboxID, "err", killErr)
+		}
+		cancel()
+	}
+
+	row, won, err = p.cfg.Bindings.ReserveSandboxBindingSlot(ctx, store.ReserveSandboxBindingSlotInput{
+		WorkspaceID: in.WorkspaceID,
+		AgentID:     in.AgentID,
+		CacheKey:    cacheKey,
+		TemplateID:  templateID,
+		Metadata: map[string]any{
+			"sandbox_kind": "agent_daemon",
+			"connector":    string(p.cfg.Connector),
+		},
+	})
+	if err != nil {
+		return true, store.SandboxBindingRead{}, false,
+			fmt.Errorf("%w: re-reserve binding slot after reclaim: %v", ErrSandboxAcquireFailed, err)
+	}
+	return true, row, won, nil
 }
 
 // coldStart owns the full mint + create + login + connect + wait
@@ -622,9 +944,10 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	deviceID := pair.Runtime.ID
 
 	// 2. Create the e2b sandbox.
+	ttl, autoRenew := p.leasePolicyFor(in)
 	sandbox, err := p.cfg.Client.Create(bootCtx, e2b.CreateInput{
 		TemplateID:     templateID,
-		TimeoutSeconds: int(SandboxDefaultTTL.Seconds()),
+		TimeoutSeconds: int(ttl.Seconds()),
 		Metadata: map[string]string{
 			"parsar.workspace_id": in.WorkspaceID,
 			"parsar.agent_id":     in.AgentID,
@@ -644,6 +967,20 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		"agent_id", in.AgentID,
 		"sandbox_size", resolvedSize,
 		"template_id", templateID)
+
+	// Record the real sandbox id on the reservation immediately, before
+	// the rest of cold start (seed → connect → wait → finalize). If this
+	// pod crashes mid-cold-start, the durable row then carries a killable
+	// id instead of the pending- placeholder, so reclaimAbandonedSpawn can
+	// terminate the sandbox instead of leaving it to bill until its TTL.
+	// Best-effort: a failure here only widens the pre-existing leak window,
+	// so log and continue rather than aborting a working cold start.
+	if reservedBindingID != "" && p.cfg.Bindings != nil {
+		if idErr := p.cfg.Bindings.SetSpawningSandboxBindingSandboxID(bootCtx, reservedBindingID, sandbox.SandboxID); idErr != nil {
+			p.cfg.Log.Warn("agent_daemon sandbox: early sandbox_id persist failed (crash before finalize would orphan it until TTL)",
+				"binding_id", reservedBindingID, "sandbox_id", sandbox.SandboxID, "err", idErr)
+		}
+	}
 
 	// Resolve pod IP for direct envd access (bypasses external gateway).
 	var envdURL string
@@ -729,10 +1066,21 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 	if in.ConversationID != "" {
 		connectEnv["PARSAR_CONVERSATION_ID"] = in.ConversationID
 	}
+	// No CWD: both sandbox clients treat an empty value as "leave it to the
+	// runtime", which resolves to the image's own WORKDIR and therefore
+	// always exists.
+	//
+	// Deliberately NOT the agent's work_dir. This is only where the
+	// short-lived `parsar-daemon connect` process starts; the directory the
+	// agent actually works in travels separately as
+	// prompt_request.WorkDir. Passing work_dir here would abort cold start
+	// for any agent configured with a host path (a local device's
+	// /Users/... does not exist inside the sandbox). Hardcoding a path is
+	// no better — a custom template without that directory fails the same
+	// way.
 	connectRes, err := p.cfg.Client.RunCommand(bootCtx, e2b.RunCommandInput{
 		Sandbox: sandbox,
 		Command: connectCmd,
-		CWD:     "/workspace",
 		Env:     connectEnv,
 		Timeout: 20 * time.Second,
 		EnvdURL: envdURL,
@@ -809,6 +1157,9 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 		ownerPodID:  resolvedOwnerPodID,
 		createdAt:   now,
 		lastUsed:    now,
+		timeout:     ttl,
+		expiresAt:   now.Add(ttl),
+		autoRenew:   autoRenew,
 	}
 
 	// 5b. Persist to sandboxes table so admin endpoints, multi-pod
@@ -861,6 +1212,19 @@ func (p *E2BSandboxProvider) coldStart(ctx context.Context, in connector.PromptI
 				entry.bindingID = binding.ID
 			}
 		}
+		if entry.bindingID != "" {
+			threshold := autoRenewThreshold(ttl, autoRenew)
+			if leaseErr := p.cfg.Bindings.ConfigureSandboxBindingLease(
+				bootCtx,
+				entry.bindingID,
+				int32(ttl/time.Second),
+				threshold,
+				entry.expiresAt,
+			); leaseErr != nil {
+				p.cfg.Log.Warn("sandbox binding lease persist failed",
+					"binding_id", entry.bindingID, "err", leaseErr)
+			}
+		}
 	}
 
 	p.cacheMu.Lock()
@@ -904,10 +1268,9 @@ func (p *E2BSandboxProvider) SandboxStatus(ctx context.Context, agentID string) 
 	return info, true, nil
 }
 
-// Renew bumps the e2b TTL for the agent's sandbox to
-// SandboxDefaultTTL. (zero, false, nil) when no live cache entry exists
-// (admin panel renders "no sandbox"). Touches lastUsed so the cache
-// survives the next Reap window.
+// Renew bumps the e2b TTL for the agent's sandbox back to its cached or
+// persisted lifetime. Durable lookup lets any pod service the request.
+// (zero, false, nil) means no active sandbox exists.
 func (p *E2BSandboxProvider) Renew(ctx context.Context, agentID string) (time.Time, bool, error) {
 	if strings.TrimSpace(agentID) == "" {
 		return time.Time{}, false, nil
@@ -918,17 +1281,37 @@ func (p *E2BSandboxProvider) Renew(ctx context.Context, agentID string) (time.Ti
 		entry.lastUsed = time.Now().UTC()
 	}
 	sandboxID := ""
+	bindingID := ""
+	timeout := p.ttl()
 	if ok {
 		sandboxID = entry.sandbox.SandboxID
+		bindingID = entry.bindingID
+		if entry.timeout > 0 {
+			timeout = entry.timeout
+		}
 	}
 	p.cacheMu.Unlock()
 	if !ok {
-		return time.Time{}, false, nil
+		if p.cfg.Bindings == nil {
+			return time.Time{}, false, nil
+		}
+		bindingRow, found, lookupErr := p.cfg.Bindings.GetActiveSandboxBindingByAgentID(ctx, agentID)
+		if lookupErr != nil {
+			return time.Time{}, false, lookupErr
+		}
+		if !found || store.IsPendingSandboxID(bindingRow.SandboxID) {
+			return time.Time{}, false, nil
+		}
+		sandboxID = bindingRow.SandboxID
+		bindingID = bindingRow.ID
+		if bindingRow.TimeoutSeconds > 0 {
+			timeout = time.Duration(bindingRow.TimeoutSeconds) * time.Second
+		}
 	}
 
 	renewCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if err := p.cfg.Client.Renew(renewCtx, sandboxID, int(SandboxDefaultTTL.Seconds())); err != nil {
+	if err := p.cfg.Client.Renew(renewCtx, sandboxID, int(timeout.Seconds())); err != nil {
 		return time.Time{}, true, fmt.Errorf("e2b renew sandbox %s: %w", sandboxID, err)
 	}
 
@@ -939,16 +1322,207 @@ func (p *E2BSandboxProvider) Renew(ctx context.Context, agentID string) (time.Ti
 	getCtx, cancelGet := context.WithTimeout(ctx, 3*time.Second)
 	defer cancelGet()
 	runtime, err := p.cfg.Client.GetInfo(getCtx, sandboxID)
+	expiresAt := time.Now().UTC().Add(timeout)
 	if err != nil {
 		p.cfg.Log.Warn("agent_daemon sandbox renew: e2b GetInfo after Renew failed (renew itself succeeded)",
 			"sandbox_id", sandboxID, "err", err)
-		return time.Time{}, true, nil
+	} else {
+		expiresAt = runtime.EndAt
 	}
+	if bindingID != "" && p.cfg.Bindings != nil {
+		if persistErr := p.cfg.Bindings.CompleteSandboxBindingRenew(ctx, bindingID, expiresAt); persistErr != nil {
+			p.cfg.Log.Warn("agent_daemon sandbox renew: persist expiry failed",
+				"binding_id", bindingID, "err", persistErr)
+		}
+	}
+	p.cacheMu.Lock()
+	if cached, exists := p.cache[agentID]; exists {
+		cached.expiresAt = expiresAt
+	}
+	p.cacheMu.Unlock()
 	p.cfg.Log.Info("agent_daemon sandbox renewed",
 		"agent_id", agentID,
 		"sandbox_id", sandboxID,
-		"expires_at", runtime.EndAt)
-	return runtime.EndAt, true, nil
+		"expires_at", expiresAt)
+	return expiresAt, true, nil
+}
+
+// Maintain renews due bound sandboxes claimed atomically from Postgres. It is
+// safe to run on every server pod; only the pod that wins the renewing state
+// transition calls the provider.
+func (p *E2BSandboxProvider) Maintain(ctx context.Context) (int, error) {
+	if p.cfg.Bindings == nil {
+		return 0, nil
+	}
+	claims, err := p.cfg.Bindings.ClaimSandboxBindingsDueForAutoRenew(ctx, time.Now().UTC(), sandboxMaintenanceBatchSize)
+	if err != nil {
+		return 0, err
+	}
+	renewed := 0
+	for _, claim := range claims {
+		if err := ctx.Err(); err != nil {
+			return renewed, err
+		}
+		if store.IsPendingSandboxID(claim.SandboxID) {
+			_ = p.cfg.Bindings.FailSandboxBindingRenew(ctx, claim.BindingID)
+			continue
+		}
+		timeout := time.Duration(claim.TimeoutSeconds) * time.Second
+		renewCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		renewErr := p.cfg.Client.Renew(renewCtx, claim.SandboxID, int(claim.TimeoutSeconds))
+		cancel()
+		if renewErr != nil {
+			if errors.Is(renewErr, context.Canceled) || errors.Is(renewErr, context.DeadlineExceeded) {
+				p.cfg.Log.Warn("agent_daemon scheduled sandbox renew interrupted; claim will be retried",
+					"sandbox_id", claim.SandboxID, "agent_id", claim.AgentID, "err", renewErr)
+				if err := ctx.Err(); err != nil {
+					return renewed, err
+				}
+				continue
+			}
+			if e2b.IsNotFound(renewErr) {
+				// The sandbox is already gone (expired or killed out of
+				// band); renewing is impossible. Free the slot so the next
+				// prompt cold-starts a fresh one instead of retrying a dead
+				// sandbox forever.
+				if markErr := p.cfg.Bindings.MarkSandboxBindingKilled(ctx, claim.BindingID, store.SandboxBindingStatusKilledOrphaned); markErr != nil {
+					p.cfg.Log.Warn("agent_daemon scheduled renew: mark gone sandbox killed failed",
+						"binding_id", claim.BindingID, "err", markErr)
+				}
+				p.cacheMu.Lock()
+				delete(p.cache, claim.AgentID)
+				p.cacheMu.Unlock()
+				p.cfg.Log.Warn("agent_daemon scheduled sandbox renew: sandbox gone, freed slot",
+					"sandbox_id", claim.SandboxID, "agent_id", claim.AgentID)
+				continue
+			}
+			if e2b.IsUnsupported(renewErr) {
+				// The provider cannot renew at all. Disable auto-renew for
+				// this binding so we stop hammering it; the sandbox still
+				// lives out its original TTL.
+				_ = p.cfg.Bindings.FailSandboxBindingRenew(ctx, claim.BindingID)
+				p.cacheMu.Lock()
+				if cached, ok := p.cache[claim.AgentID]; ok {
+					cached.autoRenew = false
+				}
+				p.cacheMu.Unlock()
+				p.cfg.Log.Warn("agent_daemon scheduled sandbox renew not supported by provider; auto-renew disabled for this binding",
+					"sandbox_id", claim.SandboxID, "agent_id", claim.AgentID, "err", renewErr)
+				continue
+			}
+			// Transient provider failure (5xx, rate limit, network). Leave
+			// the row in 'renewing' so the maintenance recovery branch
+			// re-claims it (~2 min) and keeps trying. A one-off hiccup must
+			// never permanently disable renewal — that would let the
+			// sandbox expire silently mid-conversation.
+			p.cfg.Log.Warn("agent_daemon scheduled sandbox renew failed; will retry",
+				"sandbox_id", claim.SandboxID, "agent_id", claim.AgentID, "err", renewErr)
+			continue
+		}
+		expiresAt := time.Now().UTC().Add(timeout)
+		getCtx, getCancel := context.WithTimeout(ctx, 3*time.Second)
+		if runtime, infoErr := p.cfg.Client.GetInfo(getCtx, claim.SandboxID); infoErr == nil && !runtime.EndAt.IsZero() {
+			expiresAt = runtime.EndAt
+		}
+		getCancel()
+		if err := p.cfg.Bindings.CompleteSandboxBindingRenew(ctx, claim.BindingID, expiresAt); err != nil {
+			p.cfg.Log.Warn("agent_daemon scheduled sandbox renew persist failed",
+				"binding_id", claim.BindingID, "err", err)
+			continue
+		}
+		p.cacheMu.Lock()
+		if cached, ok := p.cache[claim.AgentID]; ok {
+			cached.expiresAt = expiresAt
+		}
+		p.cacheMu.Unlock()
+		renewed++
+	}
+	return renewed, nil
+}
+
+// SandboxExists distinguishes an explicitly deleted provider sandbox from a
+// transient registry or provider failure. Only an E2B 404 confirms absence.
+func (p *E2BSandboxProvider) SandboxExists(ctx context.Context, agentID string) (bool, bool, error) {
+	var sandboxID string
+	p.cacheMu.Lock()
+	if entry := p.cache[agentID]; entry != nil {
+		sandboxID = entry.sandbox.SandboxID
+	}
+	p.cacheMu.Unlock()
+	if sandboxID == "" && p.cfg.Bindings != nil {
+		row, found, err := p.cfg.Bindings.GetActiveSandboxBindingByAgentID(ctx, agentID)
+		if err != nil {
+			return false, false, err
+		}
+		if !found || store.IsPendingSandboxID(row.SandboxID) {
+			return false, false, nil
+		}
+		sandboxID = row.SandboxID
+	}
+	if strings.TrimSpace(sandboxID) == "" || store.IsPendingSandboxID(sandboxID) {
+		return false, false, nil
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, err := p.cfg.Client.GetInfo(probeCtx, sandboxID); err != nil {
+		if e2b.IsNotFound(err) {
+			return false, true, nil
+		}
+		return false, true, err
+	}
+	return true, true, nil
+}
+
+// Recreate clears a confirmed-dead binding and performs exactly one fresh
+// Acquire. It works even when the sandbox was created by a different pod.
+func (p *E2BSandboxProvider) Recreate(ctx context.Context, in connector.PromptInput) (string, error) {
+	p.cacheMu.Lock()
+	entry := p.cache[in.AgentID]
+	delete(p.cache, in.AgentID)
+	p.cacheMu.Unlock()
+
+	var row store.SandboxBindingRead
+	found := false
+	if p.cfg.Bindings != nil {
+		var err error
+		row, found, err = p.cfg.Bindings.GetActiveSandboxBindingByAgentID(ctx, in.AgentID)
+		if err != nil {
+			if entry != nil {
+				p.restoreReapCandidate(in.AgentID, entry)
+			}
+			return "", fmt.Errorf("sandbox recreate: lookup binding: %w", err)
+		}
+	}
+	if entry != nil {
+		if !found {
+			row.ID = entry.bindingID
+			row.SandboxID = entry.sandbox.SandboxID
+			row.Metadata = map[string]any{"device_id": entry.deviceID}
+			found = true
+		}
+	}
+	if found {
+		if sandboxID := strings.TrimSpace(row.SandboxID); sandboxID != "" && !store.IsPendingSandboxID(sandboxID) {
+			killCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			killErr := p.cfg.Client.Kill(killCtx, sandboxID)
+			cancel()
+			if killErr != nil && !e2b.IsNotFound(killErr) {
+				if entry != nil {
+					p.restoreReapCandidate(in.AgentID, entry)
+				}
+				return "", fmt.Errorf("sandbox recreate: kill old sandbox %s: %w", sandboxID, killErr)
+			}
+		}
+		if deviceID, _ := row.Metadata["device_id"].(string); deviceID != "" {
+			_ = p.cfg.Binder.InvalidateDevice(ctx, deviceID)
+		}
+		if row.ID != "" && p.cfg.Bindings != nil {
+			if err := p.cfg.Bindings.MarkSandboxBindingKilled(ctx, row.ID, store.SandboxBindingStatusKilledError); err != nil {
+				return "", fmt.Errorf("sandbox recreate: release old binding: %w", err)
+			}
+		}
+	}
+	return p.Acquire(ctx, in)
 }
 
 // SandboxRuntimeInfo queries e2b for a sandbox's live expiry, bypassing
@@ -967,6 +1541,14 @@ func (p *E2BSandboxProvider) SandboxRuntimeInfo(ctx context.Context, sandboxID s
 	if sandboxID == "" {
 		return time.Time{}, nil
 	}
+	// A binding that is still cold-starting carries a reservation
+	// placeholder, not a real sandbox id. The admin status poller reads
+	// sandbox_id straight off the row, so without this guard every poll
+	// (~2.5s) sends a malformed id to e2b and logs a 400 WARN until the
+	// sandbox finishes spawning. There is no expiry to report yet.
+	if store.IsPendingSandboxID(sandboxID) {
+		return time.Time{}, nil
+	}
 	getCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	runtime, err := p.cfg.Client.GetInfo(getCtx, sandboxID)
@@ -978,8 +1560,8 @@ func (p *E2BSandboxProvider) SandboxRuntimeInfo(ctx context.Context, sandboxID s
 	return runtime.EndAt, nil
 }
 
-// Release tears down the sandbox associated with a agent:
-// lookup → evict cache → kill → drop binder rows pointing at the device.
+// Release tears down the sandbox associated with an agent. It falls back to
+// the durable binding when the request lands on a pod without the cache entry.
 func (p *E2BSandboxProvider) Release(ctx context.Context, agentID string) error {
 	if agentID == "" {
 		return nil
@@ -990,40 +1572,65 @@ func (p *E2BSandboxProvider) Release(ctx context.Context, agentID string) error 
 		delete(p.cache, agentID)
 	}
 	p.cacheMu.Unlock()
-	if !ok {
+
+	var sandboxID, bindingID, deviceID string
+	if ok {
+		sandboxID = entry.sandbox.SandboxID
+		bindingID = entry.bindingID
+		deviceID = entry.deviceID
+	} else if p.cfg.Bindings != nil {
+		row, found, err := p.cfg.Bindings.GetActiveSandboxBindingByAgentID(ctx, agentID)
+		if err != nil {
+			return fmt.Errorf("agent_daemon sandbox release: lookup binding: %w", err)
+		}
+		if !found {
+			return nil
+		}
+		sandboxID = row.SandboxID
+		bindingID = row.ID
+		deviceID, _ = row.Metadata["device_id"].(string)
+	}
+	if bindingID == "" && !ok {
 		return nil
 	}
-	// Best-effort device invalidation in binder so a stale binding
-	// row doesn't keep pointing at the dead device.
-	if err := p.cfg.Binder.InvalidateDevice(ctx, entry.deviceID); err != nil {
-		p.cfg.Log.Warn("agent_daemon sandbox release: invalidate device binding failed",
-			"device_id", entry.deviceID, "err", err)
+	if sandboxID != "" && !store.IsPendingSandboxID(sandboxID) {
+		if err := p.cfg.Client.Kill(ctx, sandboxID); err != nil && !e2b.IsNotFound(err) {
+			if entry != nil {
+				p.restoreReapCandidate(agentID, entry)
+			}
+			return fmt.Errorf("agent_daemon sandbox release: kill %s: %w", sandboxID, err)
+		}
 	}
-	if err := p.cfg.Client.Kill(ctx, entry.sandbox.SandboxID); err != nil {
-		return fmt.Errorf("agent_daemon sandbox release: kill %s: %w", entry.sandbox.SandboxID, err)
+	// Invalidate session bindings only after the provider accepted the kill.
+	if deviceID != "" {
+		if err := p.cfg.Binder.InvalidateDevice(ctx, deviceID); err != nil {
+			p.cfg.Log.Warn("agent_daemon sandbox release: invalidate device binding failed",
+				"device_id", deviceID, "err", err)
+		}
 	}
 	// Best-effort: mark the DB binding killed so admin queries
 	// reflect the state change immediately.
-	if entry.bindingID != "" && p.cfg.Bindings != nil {
+	if bindingID != "" && p.cfg.Bindings != nil {
 		markCtx, markCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer markCancel()
-		if markErr := p.cfg.Bindings.MarkSandboxBindingKilled(markCtx, entry.bindingID, store.SandboxBindingStatusKilled); markErr != nil {
+		if markErr := p.cfg.Bindings.MarkSandboxBindingKilled(markCtx, bindingID, store.SandboxBindingStatusKilled); markErr != nil {
 			p.cfg.Log.Warn("agent_daemon sandbox release: mark binding killed failed",
-				"binding_id", entry.bindingID, "err", markErr)
+				"binding_id", bindingID, "err", markErr)
 		}
 	}
 	p.cfg.Log.Info("agent_daemon sandbox released",
 		"agent_id", agentID,
-		"sandbox_id", entry.sandbox.SandboxID,
-		"device_id", entry.deviceID)
+		"sandbox_id", sandboxID,
+		"device_id", deviceID)
 	return nil
 }
 
 // Reap walks the cache and evicts entries whose lastUsed is older than
-// SandboxIdleReapThreshold. Returns the count evicted. Failures on
-// individual kills are logged but never abort the rest of the sweep.
+// the provider's idle cutoff (see idleReapCutoff). Returns the count
+// evicted. Failures on individual kills are logged but never abort the
+// rest of the sweep.
 func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
-	cutoff := time.Now().UTC().Add(-SandboxIdleReapThreshold)
+	now := time.Now().UTC()
 	type victim struct {
 		agentID string
 		entry   *sandboxEntry
@@ -1031,7 +1638,13 @@ func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
 	var victims []victim
 	p.cacheMu.Lock()
 	for pid, entry := range p.cache {
-		if entry.lastUsed.Before(cutoff) {
+		idleCutoff := entry.timeout
+		if idleCutoff <= 0 {
+			idleCutoff = p.idleReapCutoff()
+		}
+		// Auto-renew is an explicit request to keep the sandbox lease alive
+		// across conversational gaps, so the idle reaper must not defeat it.
+		if !entry.autoRenew && entry.lastUsed.Before(now.Add(-idleCutoff)) {
 			victims = append(victims, victim{agentID: pid, entry: entry})
 			delete(p.cache, pid)
 		}
@@ -1040,15 +1653,56 @@ func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
 	if len(victims) == 0 {
 		return 0, nil
 	}
+	evicted := 0
 	for _, v := range victims {
+		if p.cfg.Bindings != nil {
+			row, found, lookupErr := p.cfg.Bindings.GetActiveSandboxBindingByAgentID(ctx, v.agentID)
+			if lookupErr != nil {
+				p.restoreReapCandidate(v.agentID, v.entry)
+				p.cfg.Log.Warn("agent_daemon reap: binding lookup failed; deferring eviction",
+					"agent_id", v.agentID, "err", lookupErr)
+				continue
+			}
+			if found {
+				if row.SandboxID != "" && row.SandboxID != v.entry.sandbox.SandboxID {
+					p.cfg.Log.Info("agent_daemon reap: dropped stale cache entry after cross-pod replacement",
+						"agent_id", v.agentID,
+						"cached_sandbox_id", v.entry.sandbox.SandboxID,
+						"active_sandbox_id", row.SandboxID)
+					evicted++
+					continue
+				}
+				if row.TimeoutSeconds > 0 {
+					v.entry.timeout = time.Duration(row.TimeoutSeconds) * time.Second
+				}
+				v.entry.autoRenew = row.AutoRenewThresholdSeconds > 0
+				if row.LastActiveAt.After(v.entry.lastUsed) {
+					v.entry.lastUsed = row.LastActiveAt
+				}
+				if row.ID != "" {
+					v.entry.bindingID = row.ID
+				}
+				idleCutoff := v.entry.timeout
+				if idleCutoff <= 0 {
+					idleCutoff = p.idleReapCutoff()
+				}
+				if v.entry.autoRenew || !v.entry.lastUsed.Before(now.Add(-idleCutoff)) {
+					p.restoreReapCandidate(v.agentID, v.entry)
+					continue
+				}
+			}
+		}
 		if err := p.cfg.Binder.InvalidateDevice(ctx, v.entry.deviceID); err != nil {
 			p.cfg.Log.Warn("agent_daemon reap: invalidate device binding failed",
 				"device_id", v.entry.deviceID, "err", err)
 		}
 		killCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := p.cfg.Client.Kill(killCtx, v.entry.sandbox.SandboxID); err != nil {
-			p.cfg.Log.Warn("agent_daemon reap: kill sandbox failed (already evicted from cache)",
+			cancel()
+			p.restoreReapCandidate(v.agentID, v.entry)
+			p.cfg.Log.Warn("agent_daemon reap: kill sandbox failed; eviction will be retried",
 				"sandbox_id", v.entry.sandbox.SandboxID, "err", err)
+			continue
 		}
 		cancel()
 		// Best-effort: mark the DB binding killed.
@@ -1065,8 +1719,17 @@ func (p *E2BSandboxProvider) Reap(ctx context.Context) (int, error) {
 			"sandbox_id", v.entry.sandbox.SandboxID,
 			"device_id", v.entry.deviceID,
 			"idle_for", time.Since(v.entry.lastUsed))
+		evicted++
 	}
-	return len(victims), nil
+	return evicted, nil
+}
+
+func (p *E2BSandboxProvider) restoreReapCandidate(agentID string, entry *sandboxEntry) {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	if _, exists := p.cache[agentID]; !exists {
+		p.cache[agentID] = entry
+	}
 }
 
 // checkDeviceAlive verifies that a cached deviceID still has a live WS

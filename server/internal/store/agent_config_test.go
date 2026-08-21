@@ -57,3 +57,33 @@ func TestMergeAgentProfileOwnedConfigCodexMode(t *testing.T) {
 		}
 	})
 }
+
+func TestMergeAgentProfileOwnedConfigSandboxLease(t *testing.T) {
+	config, err := mergeAgentProfileOwnedConfig(map[string]any{}, map[string]any{
+		"sandbox_ttl":        "2h",
+		"sandbox_auto_renew": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config["sandbox_ttl"] != "2h" || config["sandbox_auto_renew"] != true {
+		t.Fatalf("sandbox lease config not persisted: %#v", config)
+	}
+
+	if _, err := mergeAgentProfileOwnedConfig(config, map[string]any{"sandbox_auto_renew": "yes"}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("invalid sandbox_auto_renew returned %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestFoldAgentDaemonConfigSandboxLease(t *testing.T) {
+	config := map[string]any{}
+	if err := foldAgentDaemonConfig(config, map[string]any{
+		"sandbox_ttl":        "90m",
+		"sandbox_auto_renew": false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if config["sandbox_ttl"] != "90m" || config["sandbox_auto_renew"] != false {
+		t.Fatalf("sandbox lease config not folded: %#v", config)
+	}
+}

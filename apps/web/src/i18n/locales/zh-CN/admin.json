@@ -1613,6 +1613,7 @@
         "codexMode": "Codex 协作模式",
         "device": "本地设备",
         "sandboxSize": "沙盒规格",
+        "sandboxAutoRenew": "沙盒自动续期",
         "sandboxImage": "沙盒镜像",
         "workDir": "工作目录（可选）"
       },
@@ -1643,6 +1644,10 @@
         "hint": "改完规格后,等当前沙盒被释放才会切换到新规格。",
         "standard": "标准 (2 vCPU / 4 GiB)",
         "xl": "大规格 (4 vCPU / 8 GiB)"
+      },
+      "sandboxAutoRenew": {
+        "label": "在租约到期前自动续期沙盒",
+        "hint": "长对话期间自动延长沙盒租约，避免中途被回收。关闭后沙盒会在 TTL 到期时释放。"
       },
       "codexMode": {
         "hint": "Plan 模式允许 Codex 在对话中发起结构化提问；两种模式都支持权限审批。",

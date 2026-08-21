@@ -18,7 +18,7 @@ func mergeAgentProfileOwnedConfig(current, requested map[string]any) (map[string
 			config["profile"] = cloneAnyMap(profile)
 		}
 	}
-	for _, key := range []string{"agent_kind", "daemon_mode", "sandbox_size", "device_id"} {
+	for _, key := range []string{"agent_kind", "daemon_mode", "sandbox_size", "sandbox_ttl", "device_id"} {
 		raw, ok := profileConfig[key]
 		if !ok {
 			continue
@@ -28,6 +28,15 @@ func mergeAgentProfileOwnedConfig(current, requested map[string]any) (map[string
 			delete(config, key)
 		} else {
 			config[key] = value
+		}
+	}
+	if raw, ok := profileConfig["sandbox_auto_renew"]; ok {
+		if raw == nil {
+			delete(config, "sandbox_auto_renew")
+		} else if enabled, valid := raw.(bool); valid {
+			config["sandbox_auto_renew"] = enabled
+		} else {
+			return nil, fmt.Errorf("%w: sandbox_auto_renew must be a boolean", ErrInvalidInput)
 		}
 	}
 
@@ -81,12 +90,19 @@ func mergeAgentProfileOwnedConfig(current, requested map[string]any) (map[string
 }
 
 func foldAgentDaemonConfig(config, input map[string]any) error {
-	for _, key := range []string{"device_id", "daemon_mode", "agent_kind", "work_dir"} {
+	for _, key := range []string{"device_id", "daemon_mode", "agent_kind", "work_dir", "sandbox_ttl"} {
 		if value, ok := input[key].(string); ok {
 			if value = strings.TrimSpace(value); value != "" {
 				config[key] = value
 			}
 		}
+	}
+	if raw, ok := input["sandbox_auto_renew"]; ok {
+		enabled, valid := raw.(bool)
+		if !valid {
+			return fmt.Errorf("%w: sandbox_auto_renew must be a boolean", ErrInvalidInput)
+		}
+		config["sandbox_auto_renew"] = enabled
 	}
 
 	rawMode, modeSet := input["mode"]
