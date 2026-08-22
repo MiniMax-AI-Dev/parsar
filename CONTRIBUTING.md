@@ -348,6 +348,47 @@ names a concrete engine or speaks an engine's protocol.
   image's exposed ports or the runtime's port mapping. `IS_SANDBOX` is the
   marker that distinguishes this environment from a local device; treat it as
   the single predicate rather than sniffing for Docker.
+- Cloud sandbox maintenance runs once at server startup and every five minutes.
+  Automatic renewal requires a TTL longer than that interval; interrupted
+  renewals remain retryable, while a provider rejection disables the policy.
+- A `spawning` sandbox binding holds that agent's only reservation slot
+  (`uk_sandboxes_active_per_agent` is partial on `killed_at is null`), and the
+  loser path waits on `spawning` indefinitely. Any code that reserves a slot
+  must therefore guarantee a terminal transition, and an acquire that finds a
+  reservation older than the cold-start bound must be able to reclaim it —
+  otherwise one crashed cold start wedges the agent permanently.
+
+### Sandbox images
+
+- `infra/sandbox/Dockerfile` (local Docker + generic) and
+  `infra/sandbox/e2b.Dockerfile` (e2b.app) must keep their shared runtime
+  payload, CLI versions, and hooks aligned; provider-specific bootstrap and
+  build mechanics may differ.
+  Agent CLI installs live only in `infra/sandbox/scripts/install-agents.sh`,
+  which both images run; do not inline per-CLI `npm install -g` / download
+  steps in either Dockerfile. That script owns the version pins and the Node
+  force-relink that keeps a base image's bundled Node from shadowing ours.
+- The image must ship the hook scripts at the absolute paths
+  `server/internal/connector/agentdaemon/sandbox_seed.go` seeds into
+  `settings.json` (`/opt/parsar/hooks/claude/...`). The hooks fail open, so a
+  missing script degrades spec/memory injection silently instead of erroring —
+  changing one side means changing the other.
+- e2b's template builder is not BuildKit. It rejects multi-stage builds (hence
+  the prebuilt binaries in `infra/sandbox/.build/`, staged by
+  `make e2b-template`), it does not persist `/tmp` between layers, and it
+  lowers `ARG FOO="bar"` keeping the quotes as literal characters — so version
+  ARGs in `e2b.Dockerfile` must stay unquoted.
+- Build templates with `make e2b-template`. It writes only into
+  `infra/sandbox/.build/` (gitignored), never the repo root.
+
+### Testing cloud isolation locally
+
+- The daemon runs inside the cloud sandbox and dials back to
+  `PARSAR_PUBLIC_URL`, so a loopback URL cannot work: the sandbox resolves
+  `127.0.0.1` to itself and pairing times out. Expose the dev server through a
+  tunnel and set `PARSAR_PUBLIC_URL` to that hostname.
+- `AGENT_DAEMON_SANDBOX_TEMPLATE` + `PARSAR_E2B_API_KEY` are the two required
+  values; see `.env.example` for the full set and their defaults.
 
 ### API, DB, and generated surfaces
 

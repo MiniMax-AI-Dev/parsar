@@ -119,6 +119,13 @@ function sandboxSizeFromAgent(a?: Agent | null): SandboxSize {
   return v === "xl" ? "xl" : "standard"
 }
 
+function sandboxAutoRenewFromAgent(a?: Agent | null): boolean {
+  // Mirrors the daemon's autoRenewFor: agents.config.sandbox_auto_renew
+  // overrides the server default. Absent means "use the server default",
+  // which is on, so only an explicit false disables it.
+  return agentConfig(a).sandbox_auto_renew === false ? false : true
+}
+
 export type AgentDialogMode = "create" | "edit"
 
 export interface AgentDialogValues {
@@ -250,6 +257,9 @@ export function CreateAgentDialog({
   const [agentEngine, setAgentEngine] = useState<AgentEngine>("claude_code")
   const [codexMode, setCodexMode] = useState<CodexCollaborationMode>("default")
   const [sandboxSize, setSandboxSize] = useState<SandboxSize>("standard")
+  // Defaults to on, matching the server-wide default; only an explicit
+  // false in agent config turns it off.
+  const [sandboxAutoRenew, setSandboxAutoRenew] = useState(true)
   const [modelID, setModelID] = useState("")
   const [modelSearch, setModelSearch] = useState("")
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
@@ -496,6 +506,7 @@ export function CreateAgentDialog({
       setAgentEngine(cloneSource ? agentEngineFromAgent(cloneSource) : "claude_code")
       setCodexMode(cloneSource ? agentCodexModeOf(cloneSource) : "default")
       setSandboxSize(cloneSource ? sandboxSizeFromAgent(cloneSource) : "standard")
+      setSandboxAutoRenew(cloneSource ? sandboxAutoRenewFromAgent(cloneSource) : true)
       setModelID(cloneSource ? modelIDFromAgent(cloneSource) : "")
       setModelSearch("")
       setModelDropdownOpen(false)
@@ -528,6 +539,7 @@ export function CreateAgentDialog({
       setAgentEngine(agentEngineFromAgent(agent))
       setCodexMode(agentCodexModeOf(agent))
       setSandboxSize(sandboxSizeFromAgent(agent))
+      setSandboxAutoRenew(sandboxAutoRenewFromAgent(agent))
       setModelID(modelIDFromAgent(agent) || firstModelID)
       setModelSearch("")
       setModelDropdownOpen(false)
@@ -815,7 +827,7 @@ export function CreateAgentDialog({
       ...(connector === "agent_daemon" ? {
         agent_kind: agentEngine,
         ...(agentEngine === "codex" ? { mode: codexMode } : {}),
-        ...(executionMode === "sandbox" ? { daemon_mode: "sandbox", sandbox_size: sandboxSize } : {}),
+        ...(executionMode === "sandbox" ? { daemon_mode: "sandbox", sandbox_size: sandboxSize, sandbox_auto_renew: sandboxAutoRenew } : {}),
         ...(executionMode === "local_device" ? { daemon_mode: "local", device_id: deviceID } : {}),
         // Daemon read order is work_dir > workdir > working_directory; emit the
         // canonical key. Empty string omits the field, falling back to the
@@ -833,6 +845,7 @@ export function CreateAgentDialog({
           : {}),
       daemon_mode: executionMode === "sandbox" ? "sandbox" : "local",
       sandbox_size: executionMode === "sandbox" ? sandboxSize : null,
+      sandbox_auto_renew: executionMode === "sandbox" ? sandboxAutoRenew : null,
       device_id: executionMode === "local_device" ? deviceID : null,
       work_dir: trimmedWorkDir || null,
     }
@@ -1149,6 +1162,23 @@ export function CreateAgentDialog({
                           <option value="standard">{t("agents.form.sandboxSize.standard")}</option>
                           <option value="xl">{t("agents.form.sandboxSize.xl")}</option>
                         </select>
+                      </Field>
+                      <Field
+                        label={t("agents.form.fields.sandboxAutoRenew")}
+                        hint={t("agents.form.sandboxAutoRenew.hint")}
+                      >
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0"
+                            checked={sandboxAutoRenew}
+                            disabled={pending}
+                            onChange={(e) => setSandboxAutoRenew(e.target.checked)}
+                          />
+                          <span className="min-w-0 flex-1 text-sm leading-4 text-fg">
+                            {t("agents.form.sandboxAutoRenew.label")}
+                          </span>
+                        </label>
                       </Field>
                       {runtimeStatus.data?.sandbox_image ? (
                         <Field label={t("agents.form.fields.sandboxImage")} hint={t("agents.form.sandboxImage.hint")}>

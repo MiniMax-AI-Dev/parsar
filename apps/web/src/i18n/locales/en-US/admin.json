@@ -1613,6 +1613,7 @@
         "codexMode": "Codex collaboration mode",
         "device": "Local device",
         "sandboxSize": "Sandbox size",
+        "sandboxAutoRenew": "Auto-renew sandbox",
         "sandboxImage": "Sandbox image",
         "workDir": "Working directory (optional)"
       },
@@ -1643,6 +1644,10 @@
         "hint": "Changes take effect after the current sandbox is released.",
         "standard": "Standard (2 vCPU / 4 GiB)",
         "xl": "Large (4 vCPU / 8 GiB)"
+      },
+      "sandboxAutoRenew": {
+        "label": "Renew the sandbox before its lease expires",
+        "hint": "Keeps the sandbox alive during long conversations by extending its lease automatically. Turn off to let it expire at the end of its TTL."
       },
       "codexMode": {
         "hint": "Plan mode enables Codex to ask structured questions in the conversation. Approval requests work in both modes.",

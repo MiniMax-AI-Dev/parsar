@@ -1,5 +1,7 @@
-# Parsar sandbox image — one Dockerfile, two deployment targets selected
-# by BASE_IMAGE:
+# Parsar sandbox image for the local Docker backend and generic OCI runtimes.
+# e2b.app uses infra/sandbox/e2b.Dockerfile because its template builder does
+# not support the same multi-stage build flow. Keep the shared install script,
+# CLI payload, and runtime hooks aligned between the two images.
 #
 #   docker build -f infra/sandbox/Dockerfile -t parsar-sandbox:local .
 #     Local docker sandbox (default). For AGENT_DAEMON_SANDBOX_BACKEND=docker,
@@ -9,11 +11,6 @@
 #     e2b API — just needs the agent CLIs + parsar-daemon on PATH + a
 #     shell. Multi-arch: add --platform linux/arm64 to cross-build.
 #
-#   docker build -f infra/sandbox/Dockerfile \
-#     --build-arg BASE_IMAGE=e2bdev/base:latest -t parsar-sandbox-e2b .
-#     e2b.app SaaS template. amd64 only. After build, the SandboxProvider
-#     only needs to: Sandbox.Create("parsar-sandbox-e2b", {timeout})
-#     → RunCommand: parsar-daemon connect --device-name <deviceId> -b
 #     (URL/token via env) → wait for the gateway to see deviceId dial in.
 #
 # Everything below this point is identical for both targets — swapping

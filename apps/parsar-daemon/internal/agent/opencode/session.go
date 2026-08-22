@@ -29,7 +29,7 @@ type sessionConfig struct {
 }
 
 func defaultConfig() sessionConfig {
-	return sessionConfig{opencodeBinary: defaultBinary, killTimeout: 3 * time.Second, logger: obslog.Bg()}
+	return sessionConfig{opencodeBinary: defaultBinary(), killTimeout: 3 * time.Second, logger: obslog.Bg()}
 }
 
 // Factory implements agent.Factory for agent_kind="opencode".
@@ -67,7 +67,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.logger = obslog.Bg()
 	}
 	if cfg.opencodeBinary == "" {
-		cfg.opencodeBinary = defaultBinary
+		cfg.opencodeBinary = defaultBinary()
 	}
 	if cfg.killTimeout <= 0 {
 		cfg.killTimeout = 3 * time.Second

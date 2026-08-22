@@ -412,6 +412,13 @@ ValidateRunnerToken(ctx, token) (RuntimeIdentity, error)
 
 File: `infra/sandbox/Dockerfile`
 
+> There are now two sandbox images — `infra/sandbox/Dockerfile` and
+> `infra/sandbox/e2b.Dockerfile` — and **both** must ship these hook scripts,
+> because the hooks fail open: an image missing them degrades spec/memory
+> injection silently rather than erroring. See
+> [`CONTRIBUTING.md#sandbox-images`](../CONTRIBUTING.md#sandbox-images) for the
+> canonical rule.
+
 New content (after the existing parsar-daemon install section):
 ```dockerfile
 # parsar CLI

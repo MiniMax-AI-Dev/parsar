@@ -509,24 +509,36 @@ func main() {
 			opts = append(opts, dev.WithAgentDaemonSandbox(agentDaemonSandbox))
 			opts = append(opts, dev.WithSandboxLifecycle(dbStore, agentDaemonSandbox))
 
-			// Reap ticker: evict idle agent_daemon sandboxes so they
-			// don't leak E2B resources. 5-minute interval mirrors the
-			// opencode idle sweeper cadence.
+			// Run once at startup, then periodically renew due provider leases
+			// and evict idle agent_daemon sandboxes.
 			go func() {
-				ticker := time.NewTicker(5 * time.Minute)
+				runLifecycle := func() {
+					maintainCtx, maintainCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					if n, maintainErr := agentDaemonSandbox.Maintain(maintainCtx); maintainErr != nil {
+						log.Bg().Warn("agent_daemon sandbox maintenance failed", "err", maintainErr)
+					} else if n > 0 {
+						log.Bg().Info("agent_daemon sandbox auto-renew", "renewed", n)
+					}
+					maintainCancel()
+
+					reapCtx, reapCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					if n, reapErr := agentDaemonSandbox.Reap(reapCtx); reapErr != nil {
+						log.Bg().Warn("agent_daemon sandbox reap failed", "err", reapErr)
+					} else if n > 0 {
+						log.Bg().Info("agent_daemon sandbox reap", "evicted", n)
+					}
+					reapCancel()
+				}
+
+				runLifecycle()
+				ticker := time.NewTicker(connagentdaemon.SandboxMaintenanceInterval)
 				defer ticker.Stop()
 				for {
 					select {
 					case <-serverRootCtx.Done():
 						return
 					case <-ticker.C:
-						reapCtx, reapCancel := context.WithTimeout(context.Background(), 30*time.Second)
-						if n, reapErr := agentDaemonSandbox.Reap(reapCtx); reapErr != nil {
-							log.Bg().Warn("agent_daemon sandbox reap failed", "err", reapErr)
-						} else if n > 0 {
-							log.Bg().Info("agent_daemon sandbox reap", "evicted", n)
-						}
-						reapCancel()
+						runLifecycle()
 					}
 				}
 			}()
@@ -1518,6 +1530,8 @@ func buildAgentDaemonSandboxProvider(
 			log.Bg().Info("agent_daemon sandbox: pod IP resolver using in-cluster SA token")
 		}
 	}
+	sandboxTTL := resolveAgentDaemonSandboxTTL(env)
+	sandboxAutoRenew := resolveAgentDaemonSandboxAutoRenew(env)
 	provider, err := connagentdaemon.NewE2BSandboxProvider(connagentdaemon.E2BProviderConfig{
 		Client:        client,
 		Store:         dbStore,
@@ -1531,6 +1545,8 @@ func buildAgentDaemonSandboxProvider(
 		PodIPResolver: podIPResolver,
 		OwnerChecker:  dbStore,
 		SelfPodID:     selfPodID,
+		TTL:           sandboxTTL,
+		AutoRenew:     sandboxAutoRenew,
 		Log:           log.Bg(),
 	})
 	if err != nil {
@@ -1538,11 +1554,69 @@ func buildAgentDaemonSandboxProvider(
 			"error", err)
 		return nil
 	}
+	// Log the effective lifetime, not the raw override: a bare "0" here
+	// would leave an operator guessing what the sandbox TTL actually is.
+	effectiveTTL := sandboxTTL
+	if effectiveTTL <= 0 {
+		effectiveTTL = connagentdaemon.SandboxDefaultTTL
+	}
 	log.Bg().Info("agent_daemon sandbox provider wired",
 		"template", template,
 		"template_xl", templateXL,
-		"server_url", publicURL)
+		"server_url", publicURL,
+		"sandbox_ttl", effectiveTTL,
+		"sandbox_ttl_overridden", sandboxTTL > 0,
+		"sandbox_auto_renew", sandboxAutoRenew)
 	return provider
+}
+
+func resolveAgentDaemonSandboxAutoRenew(env func(string) string) bool {
+	raw := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_AUTO_RENEW"))
+	if raw == "" {
+		// Default ON: the default TTL is short (an hour), so without
+		// renewal a continuously-used agent's sandbox would be reaped
+		// mid-conversation and lose its in-sandbox CLI session state.
+		// Set AGENT_DAEMON_SANDBOX_AUTO_RENEW=false to opt out.
+		return true
+	}
+	enabled, err := strconv.ParseBool(raw)
+	if err != nil {
+		log.Bg().Warn("AGENT_DAEMON_SANDBOX_AUTO_RENEW ignored: want true or false; defaulting to enabled",
+			"value", raw)
+		return true
+	}
+	return enabled
+}
+
+// resolveAgentDaemonSandboxTTL reads the optional provider-neutral duration
+// override. The legacy integer-hours setting remains supported so existing
+// deployments do not change behaviour during an upgrade. The backing sandbox
+// provider is authoritative about any maximum lifetime it accepts.
+func resolveAgentDaemonSandboxTTL(env func(string) string) time.Duration {
+	if raw := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TTL")); raw != "" {
+		ttl, err := time.ParseDuration(raw)
+		normalizedTTL, ok := connagentdaemon.NormalizeSandboxTTL(ttl)
+		if err != nil || !ok {
+			log.Bg().Warn("AGENT_DAEMON_SANDBOX_TTL ignored: want a duration of at least one second such as 30m, 1h, or 24h",
+				"value", raw)
+			return 0
+		}
+		return normalizedTTL
+	}
+
+	raw := strings.TrimSpace(env("AGENT_DAEMON_SANDBOX_TTL_HOURS"))
+	if raw == "" {
+		return 0
+	}
+	hours, err := strconv.Atoi(raw)
+	if err != nil || hours <= 0 || hours > (1<<31-1)/3600 {
+		log.Bg().Warn("AGENT_DAEMON_SANDBOX_TTL_HOURS ignored: want a positive integer number of hours",
+			"value", raw)
+		return 0
+	}
+	log.Bg().Warn("AGENT_DAEMON_SANDBOX_TTL_HOURS is deprecated; use AGENT_DAEMON_SANDBOX_TTL instead",
+		"value", raw)
+	return time.Duration(hours) * time.Hour
 }
 
 // openPool opens the shared pgxpool used by both the audit ingester and

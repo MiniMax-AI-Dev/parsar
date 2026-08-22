@@ -48,6 +48,15 @@ services:
       https_proxy: "${PARSAR_CONTAINER_HTTPS_PROXY:-${https_proxy:-}}"
       all_proxy: "${PARSAR_CONTAINER_ALL_PROXY:-${all_proxy:-}}"
       no_proxy: "127.0.0.1,localhost,parsar-server,postgres,${no_proxy:-}"
+      # Optional managed cloud sandbox. Empty template/key keeps it disabled.
+      AGENT_DAEMON_SANDBOX_TEMPLATE: "${AGENT_DAEMON_SANDBOX_TEMPLATE:-}"
+      AGENT_DAEMON_SANDBOX_TEMPLATE_XL: "${AGENT_DAEMON_SANDBOX_TEMPLATE_XL:-}"
+      AGENT_DAEMON_SANDBOX_TTL: "${AGENT_DAEMON_SANDBOX_TTL:-}"
+      AGENT_DAEMON_SANDBOX_AUTO_RENEW: "${AGENT_DAEMON_SANDBOX_AUTO_RENEW:-true}"
+      PARSAR_E2B_API_KEY: "${PARSAR_E2B_API_KEY:-}"
+      PARSAR_E2B_API_BASE_URL: "${PARSAR_E2B_API_BASE_URL:-}"
+      PARSAR_E2B_SANDBOX_HOST: "${PARSAR_E2B_SANDBOX_HOST:-}"
+      PARSAR_E2B_CA_CERT: "${PARSAR_E2B_CA_CERT:-}"
     volumes:
       - ${PARSAR_DATA_DIR:-server-data}:/var/lib/parsar
     healthcheck:

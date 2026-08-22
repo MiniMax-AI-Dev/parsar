@@ -144,6 +144,114 @@ func TestTouchSandboxBinding_UnknownIDIsNoOp(t *testing.T) {
 	}
 }
 
+func TestSandboxBindingAutoRenewClaimLifecycle(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	ids := DefaultDevFixtureIDs()
+	if _, err := New(db).InsertDevFixture(ctx, ids); err != nil {
+		t.Fatalf("InsertDevFixture: %v", err)
+	}
+	s := New(db)
+	row := mustCreateBindingWithLastActive(t, ctx, s, ids.WorkspaceID, ids.ProductAgentID, "sbx-auto-renew", time.Now().UTC())
+	now := time.Now().UTC()
+	if err := s.ConfigureSandboxBindingLease(ctx, row.ID, 3600, 600, now.Add(5*time.Minute)); err != nil {
+		t.Fatalf("ConfigureSandboxBindingLease: %v", err)
+	}
+	claims, err := s.ClaimSandboxBindingsDueForAutoRenew(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("ClaimSandboxBindingsDueForAutoRenew: %v", err)
+	}
+	if len(claims) != 1 || claims[0].BindingID != row.ID || claims[0].TimeoutSeconds != 3600 {
+		t.Fatalf("claims = %+v, want binding %s", claims, row.ID)
+	}
+	claimsAgain, err := s.ClaimSandboxBindingsDueForAutoRenew(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("second claim: %v", err)
+	}
+	if len(claimsAgain) != 0 {
+		t.Fatalf("renewing binding was claimed twice: %+v", claimsAgain)
+	}
+	if _, err := s.db.Exec(ctx, `update sandboxes set last_renewed_at = $1 where id = $2::uuid`, now.Add(-3*time.Minute), row.ID); err != nil {
+		t.Fatalf("backdate abandoned renewal claim: %v", err)
+	}
+	reclaimed, err := s.ClaimSandboxBindingsDueForAutoRenew(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("reclaim abandoned renewal: %v", err)
+	}
+	if len(reclaimed) != 1 || reclaimed[0].BindingID != row.ID {
+		t.Fatalf("abandoned renewal claim was not reclaimed: %+v", reclaimed)
+	}
+	newExpiry := now.Add(time.Hour)
+	if err := s.CompleteSandboxBindingRenew(ctx, row.ID, newExpiry); err != nil {
+		t.Fatalf("CompleteSandboxBindingRenew: %v", err)
+	}
+	got, found, err := s.GetActiveSandboxBindingByAgentID(ctx, ids.ProductAgentID)
+	if err != nil || !found {
+		t.Fatalf("GetActiveSandboxBindingByAgentID found=%v err=%v", found, err)
+	}
+	if got.Status != SandboxBindingStatusActive || got.ExpiresAt == nil || got.ExpiresAt.Before(newExpiry.Add(-time.Second)) {
+		t.Fatalf("renewed binding = %+v", got)
+	}
+	if err := s.ConfigureSandboxBindingLease(ctx, row.ID, 3600, 600, now.Add(5*time.Minute)); err != nil {
+		t.Fatalf("reconfigure lease: %v", err)
+	}
+	claims, err = s.ClaimSandboxBindingsDueForAutoRenew(ctx, now, 10)
+	if err != nil || len(claims) != 1 {
+		t.Fatalf("claim before failure = %+v, err=%v", claims, err)
+	}
+	if err := s.FailSandboxBindingRenew(ctx, row.ID); err != nil {
+		t.Fatalf("FailSandboxBindingRenew: %v", err)
+	}
+	claims, err = s.ClaimSandboxBindingsDueForAutoRenew(ctx, now.Add(time.Hour), 10)
+	if err != nil || len(claims) != 0 {
+		t.Fatalf("failed renewal should be disabled, claims=%+v err=%v", claims, err)
+	}
+}
+
+func TestReclaimAbandonedSandboxBindingCAS(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	ids := DefaultDevFixtureIDs()
+	if _, err := New(db).InsertDevFixture(ctx, ids); err != nil {
+		t.Fatalf("InsertDevFixture: %v", err)
+	}
+	s := New(db)
+
+	stale, won, err := s.ReserveSandboxBindingSlot(ctx, ReserveSandboxBindingSlotInput{
+		WorkspaceID: ids.WorkspaceID, AgentID: ids.ProductAgentID,
+		CacheKey: "agent_daemon:" + ids.ProductAgentID, TemplateID: "tpl_test",
+	})
+	if err != nil || !won {
+		t.Fatalf("reserve stale row: won=%v err=%v", won, err)
+	}
+	reclaimed, err := s.ReclaimAbandonedSandboxBinding(ctx, stale.ID, time.Now().UTC().Add(time.Minute))
+	if err != nil || !reclaimed {
+		t.Fatalf("reclaim stale spawning row: reclaimed=%v err=%v", reclaimed, err)
+	}
+	reclaimedAgain, err := s.ReclaimAbandonedSandboxBinding(ctx, stale.ID, time.Now().UTC().Add(time.Minute))
+	if err != nil || reclaimedAgain {
+		t.Fatalf("second CAS must lose: reclaimed=%v err=%v", reclaimedAgain, err)
+	}
+
+	finalized, won, err := s.ReserveSandboxBindingSlot(ctx, ReserveSandboxBindingSlotInput{
+		WorkspaceID: ids.WorkspaceID, AgentID: ids.BackendAgentID,
+		CacheKey: "agent_daemon:" + ids.BackendAgentID, TemplateID: "tpl_test",
+	})
+	if err != nil || !won {
+		t.Fatalf("reserve finalized row: won=%v err=%v", won, err)
+	}
+	if err := s.FinalizeSandboxBindingSpawning(ctx, FinalizeSandboxBindingSpawningInput{
+		BindingID: finalized.ID, SandboxID: "sbx-finalized-cas",
+		Metadata: map[string]any{"sandbox_kind": "agent_daemon", "device_id": "dev-finalized"},
+	}); err != nil {
+		t.Fatalf("finalize row: %v", err)
+	}
+	reclaimedFinalized, err := s.ReclaimAbandonedSandboxBinding(ctx, finalized.ID, time.Now().UTC().Add(time.Minute))
+	if err != nil || reclaimedFinalized {
+		t.Fatalf("CAS must not retire finalized row: reclaimed=%v err=%v", reclaimedFinalized, err)
+	}
+}
+
 // mustCreateBindingWithLastActive seeds an active binding then directly
 // UPDATEs last_active_at via raw SQL so tests can simulate aged rows.
 func mustCreateBindingWithLastActive(t *testing.T, ctx context.Context, s *Store, workspaceID, agentID, sandboxID string, lastActive time.Time) SandboxBindingRead {
@@ -155,6 +263,7 @@ func mustCreateBindingWithLastActive(t *testing.T, ctx context.Context, s *Store
 		SandboxID:   sandboxID,
 		TemplateID:  "tpl_test",
 		Status:      SandboxBindingStatusActive,
+		Metadata:    map[string]any{"sandbox_kind": "agent_daemon"},
 	})
 	if err != nil {
 		t.Fatalf("CreateSandboxBinding %s: %v", sandboxID, err)

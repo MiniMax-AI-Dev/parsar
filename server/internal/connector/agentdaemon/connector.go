@@ -364,8 +364,20 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 		return errorChannel(in.RunID, err.Error()), nil
 	}
 
-	bind, err := c.binder.Resolve(ctx, in.ConversationID, in.AgentID, agentKind)
-	if err != nil {
+	var bind binding.Binding
+	if isSandboxMode(in) {
+		// Every run, including scheduled-task runs, ensures the provider
+		// sandbox exists before dispatch. Acquire is cheap on a warm entry and
+		// performs the cross-pod reservation dance on a cold start.
+		bind, err = c.acquireSandboxBinding(ctx, in)
+		if err != nil {
+			c.log.Warn("agent_daemon: ensure sandbox failed", "run_id", in.RunID, "err", err)
+			return errorChannel(in.RunID, err.Error()), nil
+		}
+	} else {
+		bind, err = c.binder.Resolve(ctx, in.ConversationID, in.AgentID, agentKind)
+	}
+	if !isSandboxMode(in) && err != nil {
 		if errors.Is(err, binding.ErrNotBound) {
 			// Lazy-bind: pick up the runtime the user picked in the
 			// agent settings page. AgentConfig.device_id is fed
@@ -401,7 +413,7 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 			c.log.Error("agent_daemon: binder.Resolve failed", "run_id", in.RunID, "err", err.Error())
 			return nil, fmt.Errorf("agent_daemon: resolve binding: %w", err)
 		}
-	} else {
+	} else if !isSandboxMode(in) {
 		c.log.Info("agent_daemon: binding resolved",
 			"run_id", in.RunID,
 			"conversation_id", in.ConversationID,
@@ -426,33 +438,69 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	if err != nil {
 		c.log.Warn("agent_daemon: device offline (registry LookupDevice failed)",
 			"run_id", in.RunID, "device_id", bind.DeviceID, "err", err.Error())
-		// Sandbox mode: surface a system message so the user
-		// understands why the run failed and what their recovery
-		// options are. We DO NOT auto-acquire a fresh sandbox — the
-		// existing one may carry installed config / Claude session
-		// state, and silently replacing it would discard that without
-		// consent. Recovery is explicit (delete + recreate the Agent
-		// in the web UI).
-		if isSandboxMode(in) && c.systemMessages != nil {
-			notice := fmt.Sprintf(
-				"⚠️ Sandbox %s is unavailable — likely reclaimed after idle timeout or a network issue. "+
-					"Wait a few minutes for it to recover, or delete and recreate the Agent in its settings to reset immediately.",
-				bind.DeviceID,
-			)
-			if _, sysErr := c.systemMessages.CreateSandboxOfflineNotice(ctx, store.CreateSandboxOfflineNoticeInput{
-				WorkspaceID:    in.WorkspaceID,
-				AgentID:        in.AgentID,
-				RunID:          in.RunID,
-				ConversationID: in.ConversationID,
-				DeviceID:       bind.DeviceID,
-				Content:        notice,
-			}); sysErr != nil {
-				c.log.Warn("agent_daemon: insert sandbox offline notice",
-					"err", sysErr, "run_id", in.RunID, "device_id", bind.DeviceID)
+		if isSandboxMode(in) {
+			// A registry miss can be a transient daemon reconnect or a request
+			// routed to the wrong pod. Rebuild only when the provider explicitly
+			// confirms that the backing sandbox no longer exists.
+			exists, confirmed, probeErr := c.sandbox.SandboxExists(ctx, in.AgentID)
+			if probeErr != nil || !confirmed || exists {
+				if probeErr != nil {
+					c.log.Warn("agent_daemon: sandbox existence probe failed",
+						"run_id", in.RunID, "agent_id", in.AgentID, "err", probeErr)
+				}
+				return errorChannel(in.RunID, "agent_daemon: sandbox runtime is temporarily unavailable; retry shortly"), nil
 			}
-			return errorChannel(in.RunID, "agent_daemon sandbox offline (deviceID="+bind.DeviceID+"); see system message for recovery"), nil
+
+			deviceID, rebuildErr := c.sandbox.Recreate(ctx, in)
+			if rebuildErr == nil {
+				_ = c.binder.InvalidateConversation(ctx, in.ConversationID)
+				bind = binding.Binding{
+					ConversationID: in.ConversationID,
+					AgentID:        in.AgentID,
+					DeviceID:       deviceID,
+					AgentKind:      agentKind,
+					AgentStateKey:  agentStateKey(in.ConversationID, in.AgentID, agentKind),
+				}
+				if bindErr := c.binder.Bind(ctx, bind); bindErr != nil {
+					rebuildErr = fmt.Errorf("persist rebuilt sandbox binding: %w", bindErr)
+				}
+			}
+			if rebuildErr == nil {
+				if ch, routed, routeErr := c.routeRemoteIfNeeded(ctx, bind, in, true); routed || routeErr != nil {
+					return ch, routeErr
+				}
+				sess, err = c.registry.LookupDevice(bind.DeviceID)
+			}
+			if rebuildErr != nil || err != nil {
+				if rebuildErr != nil {
+					err = rebuildErr
+				}
+				c.log.Warn("agent_daemon: sandbox rebuild failed",
+					"run_id", in.RunID, "agent_id", in.AgentID, "err", err)
+				if c.systemMessages != nil {
+					notice := fmt.Sprintf(
+						"⚠️ Sandbox %s is unavailable — likely reclaimed after idle timeout or a network issue. "+
+							"Wait a few minutes for it to recover, or delete and recreate the Agent in its settings to reset immediately.",
+						bind.DeviceID,
+					)
+					if _, sysErr := c.systemMessages.CreateSandboxOfflineNotice(ctx, store.CreateSandboxOfflineNoticeInput{
+						WorkspaceID:    in.WorkspaceID,
+						AgentID:        in.AgentID,
+						RunID:          in.RunID,
+						ConversationID: in.ConversationID,
+						DeviceID:       bind.DeviceID,
+						Content:        notice,
+					}); sysErr != nil {
+						c.log.Warn("agent_daemon: insert sandbox offline notice",
+							"err", sysErr, "run_id", in.RunID, "device_id", bind.DeviceID)
+					}
+				}
+				return errorChannel(in.RunID, "This Agent's sandbox was unavailable and could not be rebuilt: "+err.Error()), nil
+			}
 		}
-		return errorChannel(in.RunID, "agent_daemon device offline (deviceID="+bind.DeviceID+"); waiting for daemon to reconnect"), nil
+		if err != nil {
+			return errorChannel(in.RunID, "agent_daemon device offline (deviceID="+bind.DeviceID+"); waiting for daemon to reconnect"), nil
+		}
 	}
 	if err := c.validateAgentKindForSession(sess, agentKind); err != nil {
 		c.log.Warn("agent_daemon: unsupported agent_kind for device",
@@ -1087,15 +1135,11 @@ func agentStateKey(conversationID, agentID, agentKind string) string {
 	return strings.TrimSpace(conversationID) + "/" + strings.TrimSpace(agentID) + "/" + strings.TrimSpace(agentKind)
 }
 
-// acquireSandboxBinding is the cold-start path: ErrNotBound and the
-// agent is configured for sandbox mode. The provider blocks
+// acquireSandboxBinding ensures the sandbox exists for every sandbox-mode
+// prompt. The provider blocks
 // until the daemon's WS upgrade lands in gateway.Registry (it owns
 // WaitForDevice internally), so by the time this returns the deviceID
 // is guaranteed to resolve via registry.LookupDevice.
-//
-// Per agent_must_bind_runtime memory: this is no longer called by the
-// default dispatch path. Kept for a future conversation-scoped
-// ephemeral sandbox feature.
 func (c *Connector) acquireSandboxBinding(ctx context.Context, in connector.PromptInput) (binding.Binding, error) {
 	deviceID, err := c.sandbox.Acquire(ctx, in)
 	if err != nil {
@@ -1118,6 +1162,17 @@ func (c *Connector) acquireSandboxBinding(ctx context.Context, in connector.Prom
 		// per-conversation scratch dir and uses it for BOTH plugin
 		// installs and the subprocess cwd so they stay on the same
 		// tree regardless of the sandbox image's WORKDIR.
+	}
+	existing, resolveErr := c.binder.Resolve(ctx, in.ConversationID, in.AgentID, b.AgentKind)
+	if resolveErr == nil && existing.DeviceID == deviceID {
+		// Engine session ids are valid only while the same sandbox (and its
+		// local CLI state) remains alive.
+		b.AgentSessionID = existing.AgentSessionID
+		b.AgentSessionType = existing.AgentSessionType
+		b.AgentStateKey = existing.AgentStateKey
+		b.Metadata = existing.Metadata
+	} else if resolveErr != nil && !errors.Is(resolveErr, binding.ErrNotBound) {
+		return binding.Binding{}, fmt.Errorf("resolve existing sandbox binding: %w", resolveErr)
 	}
 	if err := c.binder.Bind(ctx, b); err != nil {
 		// Don't tear down the sandbox: the next prompt's Acquire will

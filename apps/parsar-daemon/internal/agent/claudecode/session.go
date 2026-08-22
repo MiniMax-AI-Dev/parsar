@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/binpath"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/clirunner"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
 	obslog "github.com/MiniMax-AI-Dev/parsar/internal/obs/log"
@@ -23,7 +24,8 @@ import (
 // sessionConfig customises Factory for tests (alternative binary path,
 // alternative logger, shorter SIGTERM→SIGKILL escalation).
 type sessionConfig struct {
-	// claudeBinary defaults to "claude" so os/exec resolves via PATH.
+	// claudeBinary defaults to binpath.ClaudeCode(): the bare name
+	// "claude" for a PATH lookup, or the PARSAR_CLAUDE_BIN override.
 	claudeBinary string
 
 	// extraArgs are appended after BuildArgs' output. Tests use this
@@ -48,7 +50,7 @@ const defaultAskTimeout = 10 * time.Minute
 
 func defaultConfig() sessionConfig {
 	return sessionConfig{
-		claudeBinary: "claude",
+		claudeBinary: binpath.ClaudeCode(),
 		killTimeout:  3 * time.Second,
 		askTimeout:   defaultAskTimeout,
 		logger:       obslog.Bg(),
@@ -122,7 +124,7 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.logger = obslog.Bg()
 	}
 	if cfg.claudeBinary == "" {
-		cfg.claudeBinary = "claude"
+		cfg.claudeBinary = binpath.ClaudeCode()
 	}
 	if cfg.killTimeout <= 0 {
 		cfg.killTimeout = 3 * time.Second

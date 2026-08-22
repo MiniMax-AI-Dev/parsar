@@ -56,8 +56,8 @@ type sandboxStatusResponse struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	LastActiveAt time.Time  `json:"last_active_at"`
 	KilledAt     *time.Time `json:"killed_at,omitempty"`
-	// ExpiresAt is fetched live from the e2b control plane. Nil when
-	// the binding isn't in this pod's cache or the lookup failed.
+	// ExpiresAt is fetched live from the e2b control plane. Nil when the
+	// sandbox is still spawning or the provider lookup failed.
 	ExpiresAt *time.Time     `json:"expires_at,omitempty"`
 	Metadata  map[string]any `json:"metadata"`
 }
@@ -201,6 +201,7 @@ func getSandboxStatus(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager
 //	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
 //	@Failure		403			{object}	map[string]string		"Caller is not workspace owner/admin"
 //	@Failure		404			{object}	map[string]string		"No active sandbox binding to act on"
+//	@Failure		502			{object}	map[string]string		"Provider rejected sandbox release"
 //	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store not wired"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/kill [post]
 func killSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr AgentDaemonSandboxManager) http.HandlerFunc {
@@ -222,6 +223,7 @@ func killSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr Age
 //	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
 //	@Failure		403			{object}	map[string]string		"Caller is not workspace owner/admin"
 //	@Failure		404			{object}	map[string]string		"No active sandbox binding to rebuild"
+//	@Failure		502			{object}	map[string]string		"Provider rejected sandbox release"
 //	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store not wired"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/rebuild [post]
 func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr AgentDaemonSandboxManager) http.HandlerFunc {
@@ -250,11 +252,15 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 			return
 		}
 
-		if daemonMgr != nil {
-			if releaseErr := daemonMgr.Release(r.Context(), agentID); releaseErr != nil {
-				log.Bg().Warn("sandbox rebuild: release failed",
-					"agent_id", agentID, "err", releaseErr)
-			}
+		if daemonMgr == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "sandbox provider not wired"})
+			return
+		}
+		if releaseErr := daemonMgr.Release(r.Context(), agentID); releaseErr != nil {
+			log.Bg().Warn("sandbox rebuild: release failed",
+				"agent_id", agentID, "err", releaseErr)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "sandbox release failed: " + releaseErr.Error()})
+			return
 		}
 		// Safety net for the case where Release didn't (or couldn't)
 		// mark the DB row.
@@ -264,52 +270,50 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 
 		// On successful re-Acquire, persist the new deviceID to
 		// agents.runtime_id so dispatch picks up the new sandbox.
-		if daemonMgr != nil {
-			// Load the agent's current config snapshot BEFORE the goroutine
-			// because the goroutine builds its own context — we want the
-			// caller's request context for the lookup so RBAC / cancellation
-			// still apply. The config is what feeds resolveTemplate inside
-			// E2BSandboxProvider.Acquire (sandbox_size=xl etc.); without it
-			// the new sandbox would silently fall back to the standard
-			// template even when the agent is configured for XL.
-			var agentConfig map[string]any
-			if detail, detailErr := deps.store.GetAgentDetail(r.Context(), agentID); detailErr == nil {
-				agentConfig = detail.Config
-			} else {
-				log.Bg().Warn("sandbox rebuild: load agent config failed; re-acquire will use default template",
-					"agent_id", agentID, "err", detailErr)
-			}
+		// Load the agent's current config snapshot BEFORE the goroutine
+		// because the goroutine builds its own context — we want the
+		// caller's request context for the lookup so RBAC / cancellation
+		// still apply. The config is what feeds resolveTemplate inside
+		// E2BSandboxProvider.Acquire (sandbox_size=xl etc.); without it
+		// the new sandbox would silently fall back to the standard
+		// template even when the agent is configured for XL.
+		var agentConfig map[string]any
+		if detail, detailErr := deps.store.GetAgentDetail(r.Context(), agentID); detailErr == nil {
+			agentConfig = detail.Config
+		} else {
+			log.Bg().Warn("sandbox rebuild: load agent config failed; re-acquire will use default template",
+				"agent_id", agentID, "err", detailErr)
+		}
 
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-				defer cancel()
-				deviceID, acquireErr := daemonMgr.Acquire(ctx, connector.PromptInput{
-					AgentID:     agentID,
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			deviceID, acquireErr := daemonMgr.Acquire(ctx, connector.PromptInput{
+				AgentID:     agentID,
+				WorkspaceID: workspaceID,
+				AgentConfig: agentConfig,
+			})
+			if acquireErr != nil {
+				log.Bg().Warn("sandbox rebuild re-acquire failed",
+					"agent_id", agentID, "err", acquireErr)
+				return
+			}
+			if runtimeStore != nil {
+				if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
 					WorkspaceID: workspaceID,
-					AgentConfig: agentConfig,
-				})
-				if acquireErr != nil {
-					log.Bg().Warn("sandbox rebuild re-acquire failed",
-						"agent_id", agentID, "err", acquireErr)
+					AgentID:     agentID,
+					RuntimeID:   deviceID,
+				}); bindErr != nil {
+					log.Bg().Error("sandbox rebuild: re-acquired but runtime_id persist failed",
+						"agent_id", agentID,
+						"device_id", deviceID,
+						"err", bindErr)
 					return
 				}
-				if runtimeStore != nil {
-					if _, bindErr := runtimeStore.SetAgentRuntime(ctx, store.SetAgentRuntimeInput{
-						WorkspaceID: workspaceID,
-						AgentID:     agentID,
-						RuntimeID:   deviceID,
-					}); bindErr != nil {
-						log.Bg().Error("sandbox rebuild: re-acquired but runtime_id persist failed",
-							"agent_id", agentID,
-							"device_id", deviceID,
-							"err", bindErr)
-						return
-					}
-				}
-				log.Bg().Info("sandbox rebuild re-acquire succeeded",
-					"agent_id", agentID, "device_id", deviceID)
-			}()
-		}
+			}
+			log.Bg().Info("sandbox rebuild re-acquire succeeded",
+				"agent_id", agentID, "device_id", deviceID)
+		}()
 
 		writeJSON(w, http.StatusOK, map[string]any{
 			"binding_id": binding.ID,
@@ -320,12 +324,11 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 	}
 }
 
-// renewSandbox bumps the e2b TTL on the live sandbox. 503 if daemonMgr
-// isn't wired. 409 when this pod's cache doesn't own the binding (sibling
-// pod cold-started it).
+// renewSandbox bumps the provider TTL on the live sandbox. The provider
+// resolves persisted bindings across pods; 503 means the manager is not wired.
 //
 //	@Summary		Renew an agent's sandbox TTL
-//	@Description	Bumps the e2b TTL on the live sandbox. 409 when this pod's cache doesn't own the binding (a sibling pod cold-started it); 502 on renew failure. Owner/admin only.
+//	@Description	Bumps the provider TTL on the live sandbox, including bindings created by a sibling pod. 502 on renew failure. Owner/admin only.
 //	@Tags			sandboxes
 //	@ID				renewDevAgentSandbox
 //	@Produce		json
@@ -335,7 +338,7 @@ func rebuildSandbox(deps sandboxAdminDeps, runtimeStore RuntimeStore, daemonMgr 
 //	@Failure		400			{object}	map[string]string		"workspace_id and agent_id must be UUIDs"
 //	@Failure		403			{object}	map[string]string		"Caller is not workspace owner/admin"
 //	@Failure		404			{object}	map[string]string		"No active sandbox binding to renew"
-//	@Failure		409			{object}	map[string]string		"Sandbox not owned by this pod"
+//	@Failure		409			{object}	map[string]string		"Binding disappeared during renewal"
 //	@Failure		502			{object}	map[string]string		"Renew failed at provider"
 //	@Failure		503			{object}	map[string]string		"Sandbox lifecycle store or manager not wired"
 //	@Router			/api/v1/workspaces/{workspaceID}/agents/{agentID}/sandbox/renew [post]
@@ -378,10 +381,10 @@ func renewSandbox(deps sandboxAdminDeps, daemonMgr AgentDaemonSandboxManager) ht
 			return
 		}
 		if !ok {
-			// This pod's cache doesn't own the binding; UI poll will
-			// pick up the new owner within ~15s.
+			// The binding disappeared between the workspace-scoped lookup
+			// and the provider's cross-pod lifecycle lookup.
 			writeJSON(w, http.StatusConflict, map[string]string{
-				"error":        "sandbox not owned by this pod; refresh and retry",
+				"error":        "sandbox binding changed during renewal; refresh and retry",
 				"workspace_id": workspaceID,
 				"agent_id":     agentID,
 			})
@@ -516,11 +519,15 @@ func performLifecycleAction(w http.ResponseWriter, r *http.Request, deps sandbox
 		return
 	}
 
-	if daemonMgr != nil {
-		if releaseErr := daemonMgr.Release(r.Context(), agentID); releaseErr != nil {
-			log.Bg().Warn("sandbox kill: release failed (continuing to mark DB)",
-				"agent_id", agentID, "err", releaseErr)
-		}
+	if daemonMgr == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "sandbox provider not wired"})
+		return
+	}
+	if releaseErr := daemonMgr.Release(r.Context(), agentID); releaseErr != nil {
+		log.Bg().Warn("sandbox kill: release failed",
+			"agent_id", agentID, "err", releaseErr)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "sandbox release failed: " + releaseErr.Error()})
+		return
 	}
 	// Safety net for the case where Release didn't (or couldn't) mark
 	// the DB row.
