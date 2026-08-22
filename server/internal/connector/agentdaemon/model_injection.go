@@ -104,6 +104,11 @@ func (c *Connector) buildAgentOptions(ctx context.Context, in connector.PromptIn
 	mergeSkillsIntoOptions(opts, additions.Skills)
 	mergeMCPServersIntoOptions(opts, additions.MCPServers)
 	mergePluginsIntoOptions(opts, additions.Plugins)
+	c.log.Info("agent_daemon: agent options ready",
+		"run_id", in.RunID,
+		"agent_option_count", len(opts),
+		"has_mcp_servers", opts["mcp_servers"] != nil,
+		"has_skills", opts["skills"] != nil)
 	// Surface every Disabled capability as a runtime_error system
 	// message so the channel layer can render the credential-form
 	// nudge. SystemMessages may be nil on dev / smoke contexts;
@@ -285,6 +290,18 @@ func (c *Connector) injectManagedModel(ctx context.Context, in connector.PromptI
 			"model_key", mr.ModelKey,
 			"provider_slug", mr.ProviderType,
 			"pi_model", stringFromMap(opts, "model"))
+		return nil
+	case "deepseek_harness":
+		if err := injectDeepseekHarnessManagedModel(opts, modelID, mr, apiKey); err != nil {
+			return err
+		}
+		c.log.Info("agent_daemon: injectManagedModel ok",
+			"run_id", in.RunID,
+			"agent_kind", agentKind,
+			"model_id", modelID,
+			"model_key", mr.ModelKey,
+			"provider_slug", mr.ProviderType,
+			"dsh_model", stringFromMap(opts, "model"))
 		return nil
 	default:
 		return fmt.Errorf("%w: %q", ErrUnsupportedAgentKind, agentKind)

@@ -198,6 +198,13 @@ definitions:
           prompt. The connector decides how to fold it into its own prompt
           schema.
         type: string
+      triggerMessageID:
+        description: |-
+          TriggerMessageID is the persisted message id behind
+          TriggerMessageContent. Empty for callers that synthesize a prompt
+          without a stored message. Connectors use it to tell the current
+          task apart from the conversation's stored transcript.
+        type: string
       workspaceID:
         type: string
     type: object

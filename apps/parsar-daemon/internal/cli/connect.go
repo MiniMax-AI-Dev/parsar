@@ -12,13 +12,10 @@ import (
 	"time"
 
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent"
-	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/claudecode"
-	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/codex"
-	opencodeagent "github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/opencode"
-	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/agent/pi"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/auth"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/daemonize"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/dispatch"
+	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/enginehost"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/apps/parsar-daemon/internal/transport"
 	"github.com/MiniMax-AI-Dev/parsar/internal/agentdaemon/proto"
@@ -189,158 +186,6 @@ func resolveConnectProfile(profile, serverURL, token, deviceName string) (auth.P
 	return prof, nil
 }
 
-// agentCLIDiscovery is the daemon startup snapshot advertised in heartbeat.
-type agentCLIDiscovery struct {
-	ClaudeCode proto.SupportedAgentKind
-	OpenCode   proto.SupportedAgentKind
-	Codex      proto.SupportedAgentKind
-	Pi         proto.SupportedAgentKind
-}
-
-type agentCLIChecks struct {
-	ClaudeCode func(context.Context, string) (string, error)
-	OpenCode   func(context.Context, string) (string, error)
-	Codex      func(context.Context, string) (string, error)
-	Pi         func(context.Context, string) (string, error)
-}
-
-func defaultAgentCLIChecks() agentCLIChecks {
-	return agentCLIChecks{
-		ClaudeCode: claudecode.CheckCLIAvailable,
-		OpenCode:   opencodeagent.CheckCLIAvailable,
-		Codex:      codex.CheckCLIAvailable,
-		Pi:         pi.CheckCLIAvailable,
-	}
-}
-
-func preflightAgentCLIs(rc *runContext) (agentCLIDiscovery, error) {
-	return discoverAgentCLIs(rc, defaultAgentCLIChecks())
-}
-
-func discoverAgentCLIs(rc *runContext, checks agentCLIChecks) (agentCLIDiscovery, error) {
-	if checks.ClaudeCode == nil {
-		checks.ClaudeCode = claudecode.CheckCLIAvailable
-	}
-	if checks.OpenCode == nil {
-		checks.OpenCode = opencodeagent.CheckCLIAvailable
-	}
-	if checks.Codex == nil {
-		checks.Codex = codex.CheckCLIAvailable
-	}
-	if checks.Pi == nil {
-		checks.Pi = pi.CheckCLIAvailable
-	}
-	out := agentCLIDiscovery{
-		ClaudeCode: proto.SupportedAgentKind{
-			Kind: "claude_code",
-			Capabilities: proto.AgentKindCapabilities{
-				Streaming:   true,
-				Permissions: true,
-				Usage:       true,
-				Resume:      true,
-			},
-		},
-		OpenCode: proto.SupportedAgentKind{
-			Kind: "opencode",
-			Capabilities: proto.AgentKindCapabilities{
-				Streaming: true,
-				Usage:     true,
-			},
-		},
-		Codex: proto.SupportedAgentKind{
-			Kind: "codex",
-			Capabilities: proto.AgentKindCapabilities{
-				Streaming:   true,
-				Permissions: true,
-				Usage:       true,
-				Resume:      true,
-			},
-		},
-		Pi: proto.SupportedAgentKind{
-			Kind: "pi",
-			Capabilities: proto.AgentKindCapabilities{
-				// pi runs --no-approve, so no permission cards; streaming,
-				// usage, and --session resume are all wired.
-				Streaming: true,
-				Usage:     true,
-				Resume:    true,
-			},
-		},
-	}
-
-	claudeCtx, cancelClaude := context.WithTimeout(context.Background(), cliVersionTimeout)
-	claudeVersion, claudeErr := checks.ClaudeCode(claudeCtx, "")
-	cancelClaude()
-	if claudeErr == nil {
-		out.ClaudeCode.Available = true
-		out.ClaudeCode.Version = claudeVersion
-		fmt.Fprintf(rc.stdout, "Claude Code preflight ok (%s)\n", claudeVersion)
-	} else if errors.Is(claudeErr, claudecode.ErrCLINotFound) {
-		fmt.Fprintln(rc.stderr, "parsar-daemon: Claude Code CLI not found on PATH; claude_code unavailable.")
-		fmt.Fprintf(rc.stderr, "  Install instructions: %s\n", claudecode.InstallURL)
-	} else {
-		fmt.Fprintf(rc.stderr, "parsar-daemon: `claude --version` failed; claude_code unavailable: %v\n", claudeErr)
-		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", claudecode.InstallURL)
-	}
-
-	opencodeCtx, cancelOpenCode := context.WithTimeout(context.Background(), cliVersionTimeout)
-	opencodeVersion, opencodeErr := checks.OpenCode(opencodeCtx, "")
-	cancelOpenCode()
-	if opencodeErr == nil {
-		out.OpenCode.Available = true
-		out.OpenCode.Version = opencodeVersion
-		fmt.Fprintf(rc.stdout, "OpenCode preflight ok (%s)\n", opencodeVersion)
-	} else if errors.Is(opencodeErr, opencodeagent.ErrCLINotFound) {
-		fmt.Fprintln(rc.stderr, "parsar-daemon: OpenCode CLI not found on PATH; opencode unavailable.")
-		fmt.Fprintf(rc.stderr, "  Install instructions: %s\n", opencodeagent.InstallURL)
-	} else {
-		fmt.Fprintf(rc.stderr, "parsar-daemon: `opencode --version` failed; opencode unavailable: %v\n", opencodeErr)
-		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", opencodeagent.InstallURL)
-	}
-
-	codexCtx, cancelCodex := context.WithTimeout(context.Background(), cliVersionTimeout)
-	codexVersion, codexErr := checks.Codex(codexCtx, "")
-	cancelCodex()
-	if codexErr == nil {
-		out.Codex.Available = true
-		out.Codex.Version = codexVersion
-		fmt.Fprintf(rc.stdout, "Codex preflight ok (%s)\n", codexVersion)
-	} else if errors.Is(codexErr, codex.ErrCLINotFound) {
-		fmt.Fprintln(rc.stderr, "parsar-daemon: Codex CLI not found on PATH; codex unavailable.")
-		fmt.Fprintf(rc.stderr, "  Install instructions: %s\n", codex.InstallURL)
-	} else {
-		fmt.Fprintf(rc.stderr, "parsar-daemon: `codex --version` failed; codex unavailable: %v\n", codexErr)
-		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", codex.InstallURL)
-	}
-
-	piCtx, cancelPi := context.WithTimeout(context.Background(), cliVersionTimeout)
-	piVersion, piErr := checks.Pi(piCtx, "")
-	cancelPi()
-	if piErr == nil {
-		out.Pi.Available = true
-		out.Pi.Version = piVersion
-		fmt.Fprintf(rc.stdout, "pi preflight ok (%s)\n", piVersion)
-	} else if errors.Is(piErr, pi.ErrCLINotFound) {
-		fmt.Fprintln(rc.stderr, "parsar-daemon: pi CLI not found on PATH; pi unavailable.")
-		fmt.Fprintf(rc.stderr, "  Install instructions: %s\n", pi.InstallURL)
-	} else {
-		fmt.Fprintf(rc.stderr, "parsar-daemon: `pi --version` failed; pi unavailable: %v\n", piErr)
-		fmt.Fprintf(rc.stderr, "  Re-install or upgrade: %s\n", pi.InstallURL)
-	}
-
-	if !out.ClaudeCode.Available && !out.OpenCode.Available && !out.Codex.Available && !out.Pi.Available {
-		return out, fmt.Errorf("connect: no supported agent CLI available (install Claude Code, OpenCode, Codex, or pi)")
-	}
-	return out, nil
-}
-
-func registerAgentKinds(registry *agent.Registry, agentCLIs agentCLIDiscovery) {
-	registry.RegisterKind(agentCLIs.ClaudeCode, claudecode.Factory)
-	registry.RegisterKind(agentCLIs.OpenCode, opencodeagent.Factory)
-	registry.RegisterKind(agentCLIs.Codex, codex.Factory)
-	registry.RegisterKind(agentCLIs.Pi, pi.Factory)
-}
-
 // spawnBackground forks the daemon into the background. Parent
 // returns after printing the child PID; child re-enters runConnect
 // with BackgroundSentinelEnv set so the same mainLoop runs in either
@@ -429,6 +274,10 @@ func mainLoop(rc *runContext, profile string, prof auth.Profile, agentCLIs agent
 
 	registry := agent.NewRegistry()
 	registerAgentKinds(registry, agentCLIs)
+	// Engines the daemon keeps resident between prompts must not outlive
+	// the daemon: an orphaned server would hold a loopback port and a
+	// session store that nothing owns.
+	defer enginehost.Shutdown()
 
 	dial := func(ctx context.Context) (*transport.Conn, error) {
 		return transport.Dial(ctx, transport.DialOptions{

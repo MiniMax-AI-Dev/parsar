@@ -79,11 +79,12 @@ func TestRenderClaudeSettings(t *testing.T) {
 // scripts would either error out or pick the wrong inject contract.
 func TestConnectorTagFor(t *testing.T) {
 	cases := map[SandboxConnector]string{
-		"":                       "claude",
-		SandboxConnectorClaude:   "claude",
-		SandboxConnectorOpenCode: "opencode",
-		SandboxConnectorCodex:    "codex",
-		SandboxConnectorPi:       "pi",
+		"":                              "claude",
+		SandboxConnectorClaude:          "claude",
+		SandboxConnectorOpenCode:        "opencode",
+		SandboxConnectorCodex:           "codex",
+		SandboxConnectorPi:              "pi",
+		SandboxConnectorDeepseekHarness: "deepseek-harness",
 	}
 	for in, want := range cases {
 		if got := connectorTagFor(in); got != want {
@@ -100,13 +101,14 @@ func TestConnectorTagFor(t *testing.T) {
 // (e.g. "opencode" → "open_code") would have to touch this test too.
 func TestConnectorForAgentKind(t *testing.T) {
 	cases := map[string]SandboxConnector{
-		"":            SandboxConnectorClaude,
-		"claude_code": SandboxConnectorClaude,
-		"codex":       SandboxConnectorCodex,
-		"opencode":    SandboxConnectorOpenCode,
-		"pi":          SandboxConnectorPi,
-		"  pi  ":      SandboxConnectorPi, // TrimSpace applied
-		"bogus":       SandboxConnectorClaude,
+		"":                 SandboxConnectorClaude,
+		"claude_code":      SandboxConnectorClaude,
+		"codex":            SandboxConnectorCodex,
+		"opencode":         SandboxConnectorOpenCode,
+		"pi":               SandboxConnectorPi,
+		"deepseek_harness": SandboxConnectorDeepseekHarness,
+		"  pi  ":           SandboxConnectorPi, // TrimSpace applied
+		"bogus":            SandboxConnectorClaude,
 	}
 	for in, want := range cases {
 		if got := ConnectorForAgentKind(in); got != want {
@@ -133,6 +135,7 @@ func TestSeedPlatformConfig_DispatchTable(t *testing.T) {
 		{"opencode noop until template exists", SandboxConnectorOpenCode, 0, false},
 		{"codex noop until template exists", SandboxConnectorCodex, 0, false},
 		{"pi noop until template exists", SandboxConnectorPi, 0, false},
+		{"deepseek harness needs no seed", SandboxConnectorDeepseekHarness, 0, false},
 		{"unknown connector errors", SandboxConnector("totally-bogus"), 0, true},
 	}
 	for _, tc := range cases {

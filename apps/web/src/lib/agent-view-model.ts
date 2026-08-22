@@ -1,6 +1,6 @@
 import type { Agent, AgentDetail, CapabilityType, Model } from "./api-types"
 
-export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode"
+export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode" | "deepseek_harness"
 
 export type CodexCollaborationMode = "default" | "plan"
 
@@ -11,6 +11,7 @@ export type AgentEngineLabelKey =
   | "agents.engine.codex.title"
   | "agents.engine.pi.title"
   | "agents.engine.opencode.title"
+  | "agents.engine.deepseekHarness.title"
 
 type AgentSource = Agent | AgentDetail | null | undefined
 type UnknownRecord = Record<string, unknown>
@@ -51,6 +52,9 @@ function normalizeEngine(value: string): AgentEngine | null {
     case "opencode":
     case "open_code":
       return "opencode"
+    case "deepseek_harness":
+    case "dsh":
+      return "deepseek_harness"
     default:
       return null
   }
@@ -83,6 +87,8 @@ export function agentEngineLabel(engine: AgentEngine): AgentEngineLabelKey {
       return "agents.engine.pi.title"
     case "opencode":
       return "agents.engine.opencode.title"
+    case "deepseek_harness":
+      return "agents.engine.deepseekHarness.title"
   }
 }
 
@@ -95,11 +101,13 @@ export function agentEngineSupportsCapability(engine: AgentEngine, capabilityTyp
       return capabilityType === "mcp" || capabilityType === "system_prompt"
     case "pi":
       return capabilityType === "skill" || capabilityType === "system_prompt"
+    case "deepseek_harness":
+      return capabilityType === "system_prompt"
   }
 }
 
 export function agentEnginesSupportingCapability(capabilityType: CapabilityType): AgentEngine[] {
-  return (["claude_code", "codex", "pi", "opencode"] as const).filter((engine) =>
+  return (["claude_code", "codex", "pi", "opencode", "deepseek_harness"] as const).filter((engine) =>
     agentEngineSupportsCapability(engine, capabilityType),
   )
 }
@@ -172,6 +180,26 @@ export function defaultModelOf(agent: AgentSource, models: Model[], unavailableL
   const found = models.find((model) => model.id === id)
   if (!found) return unavailableLabel
   return found.name || found.model_key || id
+}
+
+/** Display name for a raw agent_kind reported by a runtime heartbeat.
+ * Runtimes may advertise kinds this build does not model yet, so an
+ * unrecognized value falls back to the wire string. */
+export function agentKindDisplayName(kind: string): string {
+  switch (normalizeEngine(kind)) {
+    case "claude_code":
+      return "Claude Code"
+    case "opencode":
+      return "OpenCode"
+    case "codex":
+      return "Codex"
+    case "pi":
+      return "PI Agent"
+    case "deepseek_harness":
+      return "DeepSeek Harness"
+    default:
+      return kind
+  }
 }
 
 export function agentConnectorLabel(connectorType: string): string {

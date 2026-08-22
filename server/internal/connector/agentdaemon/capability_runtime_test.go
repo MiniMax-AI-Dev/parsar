@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,8 +85,7 @@ func encryptPayload(t *testing.T, svc *secrets.Service, payload map[string]any) 
 // test fixture builders
 // ---------------------------------------------------------------------------
 
-// newSkillRow builds a skill row already migrated to the OSS-zip path
-// (oss_key + sha256 columns populated). Legacy markdown-paste rows
+// newSkillRow builds a skill row on the OSS-zip path. Markdown-only rows
 // without oss_key are built via newLegacySkillRow.
 func newSkillRow(t *testing.T, id, name, instruction string) store.EnabledCapabilityRead {
 	t.Helper()
@@ -113,9 +113,8 @@ func newSkillRow(t *testing.T, id, name, instruction string) store.EnabledCapabi
 	}
 }
 
-// newLegacySkillRow builds a markdown-paste-era skill: canonical_spec
-// present, oss_key/sha256 empty. The connector should skip these with
-// a warning telling the operator to re-upload as a zip.
+// newLegacySkillRow builds a Markdown-only Skill: canonical_spec present,
+// oss_key/sha256 empty. The connector sends these inline.
 func newLegacySkillRow(t *testing.T, id, name, instruction string) store.EnabledCapabilityRead {
 	t.Helper()
 	row := newSkillRow(t, id, name, instruction)
@@ -252,36 +251,29 @@ func TestResolveCapabilityAdditions_SkillKindMismatchErrors(t *testing.T) {
 	}
 }
 
-func TestResolveCapabilityAdditions_LegacyMarkdownSkillSurfacedAsDisabled(t *testing.T) {
-	// Markdown-paste-era skill (canonical_spec present but oss_key /
-	// sha256 empty), pinning_mode 'pinned' (the migration default).
-	// The b77a1c1c-era silent skip is gone: the resolver now emits a
-	// DisabledCapability with SubKind=CapabilityVersionUnavailable so
-	// the user sees a system-message nudge instead of an invisible
-	// failure. They can fix it by switching pinning_mode to 'latest'
-	// (if a newer version exists) or re-uploading the skill.
+func TestResolveCapabilityAdditions_MarkdownSkillResolvedInline(t *testing.T) {
 	row := newLegacySkillRow(t, "old", "legacy", "stale instruction")
 	row.PinningMode = store.PinningModePinned
 	c := &Connector{
 		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{row}},
-		oss:          &stubPluginPresigner{},
 		log:          discardLogger(),
 	}
 	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "claude_code")
 	if err != nil {
-		t.Fatalf("legacy row: %v", err)
+		t.Fatalf("markdown row: %v", err)
 	}
-	if len(got.Skills) != 0 {
-		t.Fatalf("expected legacy skill not to resolve, got %+v", got.Skills)
+	if len(got.Skills) != 1 {
+		t.Fatalf("expected one inline skill, got %+v", got.Skills)
 	}
-	if len(got.Disabled) != 1 {
-		t.Fatalf("expected 1 DisabledCapability, got %d: %+v", len(got.Disabled), got.Disabled)
+	skill := got.Skills[0]
+	if skill.Name != "skill-old" || skill.DownloadURL != "" || skill.SHA256 != "" {
+		t.Fatalf("inline descriptor = %+v", skill)
 	}
-	if got.Disabled[0].SubKind != CapabilityVersionUnavailable {
-		t.Fatalf("Disabled[0].SubKind = %q, want %q", got.Disabled[0].SubKind, CapabilityVersionUnavailable)
+	if !strings.Contains(skill.Content, "name: \"skill-old\"") || !strings.Contains(skill.Content, "stale instruction") {
+		t.Fatalf("inline SKILL.md = %q", skill.Content)
 	}
-	if got.Disabled[0].CapabilityID != "old" {
-		t.Fatalf("Disabled[0].CapabilityID = %q, want %q", got.Disabled[0].CapabilityID, "old")
+	if len(got.Disabled) != 0 {
+		t.Fatalf("inline skill should not be disabled: %+v", got.Disabled)
 	}
 }
 
@@ -381,6 +373,22 @@ func TestResolveCapabilityAdditions_SkillSkippedWhenPresignerNil(t *testing.T) {
 	}
 	if len(got.Skills) != 0 {
 		t.Fatalf("skill count = %d, want 0 (nil presigner)", len(got.Skills))
+	}
+}
+
+func TestResolveCapabilityAdditions_InlineSkillDoesNotRequirePresigner(t *testing.T) {
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newLegacySkillRow(t, "inline", "Inline", "Use the inline proof marker."),
+		}},
+		log: discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "deepseek_harness")
+	if err != nil {
+		t.Fatalf("resolveCapabilityAdditions: %v", err)
+	}
+	if len(got.Skills) != 1 || got.Skills[0].Content == "" {
+		t.Fatalf("inline skill = %+v", got.Skills)
 	}
 }
 
@@ -785,7 +793,7 @@ func TestMergeSkillsIntoOptions_PopulatesOptsSkills(t *testing.T) {
 	opts := map[string]any{}
 	mergeSkillsIntoOptions(opts, []ResolvedSkill{
 		{Name: "code-review", Version: "1.0.0", DownloadURL: "https://x", SHA256: "aa"},
-		{Name: "writer", Version: "2.0.0", DownloadURL: "https://y", SHA256: "bb"},
+		{Name: "writer", Version: "2.0.0", Content: "inline body"},
 	})
 	got, ok := opts["skills"].([]any)
 	if !ok || len(got) != 2 {
@@ -794,6 +802,10 @@ func TestMergeSkillsIntoOptions_PopulatesOptsSkills(t *testing.T) {
 	first, _ := got[0].(map[string]any)
 	if first["name"] != "code-review" || first["download_url"] != "https://x" {
 		t.Fatalf("first entry shape wrong: %+v", first)
+	}
+	second, _ := got[1].(map[string]any)
+	if second["name"] != "writer" || second["content"] != "inline body" {
+		t.Fatalf("second entry shape wrong: %+v", second)
 	}
 }
 

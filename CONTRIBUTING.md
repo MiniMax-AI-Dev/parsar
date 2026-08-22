@@ -116,7 +116,9 @@ description and keep ownership on the side listed here.
 - `runtime_id` chooses the concrete paired runtime/device/sandbox that will
   receive a run. It is a routing handle, not agent configuration.
 - `agent_kind` chooses the daemon-side engine (`claude_code`, `codex`,
-  `pi`, `opencode`). It is interpreted only by `parsar-daemon`.
+  `pi`, `opencode`, `deepseek_harness`). It is interpreted only by
+  `parsar-daemon`. The wire value is `snake_case`; the web layer normalizes
+  dashes and aliases in `apps/web/src/lib/agent-view-model.ts`.
 - Placement labels such as local device, cloud sandbox, and external agent
   are UI/product concepts. Do not branch business logic on display copy.
   Derive placement from typed runtime/provider/config fields in one shared
@@ -157,9 +159,101 @@ description and keep ownership on the side listed here.
   `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
   the daemon protocol. Do not keep resume ids only in adapter memory, files
   without a server record, or frontend state.
+- The server also sends a bounded durable transcript tail for stale-session
+  recovery. A resume-capable adapter must use it only after the engine
+  explicitly rejects the stored session id, then return the replacement id;
+  normal resume must not receive duplicate history.
 - Adapter-specific state directories must be derived from `AgentStateKey`
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.
+- Engine discovery is one table: `apps/parsar-daemon/internal/cli/agent_cli.go`
+  owns the per-engine capability descriptor, version probe, and operator
+  preflight output. Add an engine by extending that table, not by copying
+  another probe-and-report block.
+- The heartbeat capability descriptor states what the adapter actually
+  delivers. An engine whose only supported automation surface is one-shot
+  (no event stream, token accounting, resume flag, or approval channel)
+  advertises none of them and must not synthesize a `done` session id, a fake
+  usage total, or an auto-approved permission.
+- When one engine has two automation surfaces of unequal capability, the
+  descriptor is computed from the run location, not hardcoded. `dsh` is the
+  live example: in a sandbox it runs as a resident HTTP server and reports
+  streaming, usage and resume; on a local device it runs one-shot headless and
+  reports none. Keep that decision in one function next to the descriptor
+  table (`deepseekHarnessCapabilities` in `agent_cli.go`), and keep the
+  adapter's surface choice reading the same predicate, so the advertised
+  capability and the code path cannot disagree.
+- Conversation continuity for an engine that advertises
+  `Capabilities.Resume=false` is the server's job, not the adapter's: the
+  connector folds a bounded transcript tail into the system-prompt slot
+  (`server/internal/connector/agentdaemon/history_injection.go`). Gate that
+  behaviour on the device's live descriptor rather than a list of engine
+  names, and keep it bounded — these engines re-send the whole prompt every
+  turn with no cache reuse. Adapters must not invent their own history.
+- When an adapter materializes engine config per prompt, scope that file to
+  the run and delete it on cleanup if the engine watches its config layers
+  for live edits. A shared, rewritten-in-place config would re-apply one
+  run's model onto another run of the same conversation.
+
+### Resident engine servers (`internal/enginehost`)
+
+Some engines expose their full surface — streaming events, approvals,
+cross-process session resume — only through a long-lived local server rather
+than a one-shot invocation. `apps/parsar-daemon/internal/enginehost` owns that
+pattern for every engine. It is engine-agnostic by construction: nothing in it
+names a concrete engine or speaks an engine's protocol.
+
+- Adapters must not launch, port-assign, health-check, or reap a resident
+  engine server themselves. Contribute an `enginehost.ServerSpec` and take an
+  `Acquire` lease. Adding the second such engine means filling in a spec, not
+  copying a supervisor.
+- `ServerSpec.Key` is the reuse identity, and it must be a state key plus a
+  fingerprint of everything the engine reads once at boot (model route,
+  credential env, workspace, binary). Reusing a running server across a
+  changed route silently runs the turn on the stale one; a changed
+  fingerprint must yield a different server instead.
+- `ServerSpec.StateKey` is the exclusive ownership identity for mutable
+  engine state. Configuration variants may have different reuse keys, but the
+  supervisor must drain and stop the old variant before another process with
+  the same state key starts; two processes must never share a single-writer
+  session store or rewrite the same generated profile concurrently.
+- `Acquire`/`Release` are balanced exactly once per run. The lease keeps the
+  engine alive; the last release starts the idle clock. Adapters must not
+  retain a base URL past `Release`, and must not kill the process to cancel a
+  run — a resident server is shared, so cancellation targets the engine's own
+  session-cancel call.
+- Every resident engine binds `enginehost.LoopbackHost` only. These engines
+  authenticate nobody: they gate requests on "the peer is on loopback" and
+  nothing else. That is acceptable only where the loopback namespace is itself
+  a boundary, which means the sandbox container. Do not open such a port on a
+  local device, and do not add trusted-host entries.
+- Readiness is a protocol probe, not a TCP connect. A bound port only proves
+  the engine's web-server row came up; the gateway, its transport carrier and
+  its session store are separate rows, and a profile missing any of them
+  answers on a listening socket. `ServerSpec.Ready` must call a real method.
+- Generated engine config belongs in the engine's own profile layer, written
+  by `ServerSpec.Prepare` at launch. Do not write it to a layer the engine
+  watches for live edits — that re-applies one launch's config onto a running
+  server.
+- Managed capabilities for a resident engine stay adapter-owned. The sandbox
+  DeepSeek Harness adapter materialises archive-backed and inline Markdown
+  Skills under its state-scoped `DSH_HOME`, translates MCP entries into
+  `dsh-mcp-client` profile rows, and includes the normalized MCP configuration
+  in `ServerSpec.Key`. Skill reconciliation may remove only installer-stamped
+  directories. The local one-shot/headless surface continues to reject Skill
+  and MCP options because it has no isolated resident-server boundary.
+- Resident servers must not outlive the daemon. Adapters acquire from the
+  process-wide `enginehost` supervisor, whose `Shutdown` is wired once into
+  daemon teardown; adding an engine must not add another engine-specific
+  teardown call.
+- Sandbox egress proxies are operator configuration, inherited through the
+  standard upper- and lower-case HTTP proxy variables. Docker sandbox creation
+  must merge loopback and internal Compose service names into `NO_PROXY`, keep
+  proxy values out of process arguments, and enable Node's environment-proxy
+  support for Node-based engines. When the host proxy listens on loopback,
+  Compose operators use the matching `PARSAR_CONTAINER_*_PROXY` override with
+  `host.docker.internal`; do not hard-code public DNS or rewrite proxy URLs in
+  application code.
 
 ### Human interaction lifecycle
 
@@ -248,6 +342,12 @@ description and keep ownership on the side listed here.
 - Eager acquisition must be best-effort. Failure to prewarm a sandbox should
   surface as runtime health/provisioning state, not crash unrelated startup
   paths.
+- A sandbox container may host processes besides `parsar-daemon` when an engine
+  needs a resident server (see “Resident engine servers”). Such a process is
+  the daemon's child, bound to loopback, and is never published through the
+  image's exposed ports or the runtime's port mapping. `IS_SANDBOX` is the
+  marker that distinguishes this environment from a local device; treat it as
+  the single predicate rather than sniffing for Docker.
 - Cloud sandbox maintenance runs once at server startup and every five minutes.
   Automatic renewal requires a TTL longer than that interval; interrupted
   renewals remain retryable, while a provider rejection disables the policy.

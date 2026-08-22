@@ -26,10 +26,11 @@ import (
 type Target string
 
 const (
-	TargetOpenCode   Target = "opencode"
-	TargetClaudeCode Target = "claudecode"
-	TargetCodex      Target = "codex"
-	TargetPi         Target = "pi"
+	TargetOpenCode        Target = "opencode"
+	TargetClaudeCode      Target = "claudecode"
+	TargetCodex           Target = "codex"
+	TargetPi              Target = "pi"
+	TargetDeepseekHarness Target = "deepseekharness"
 )
 
 // Output is what a Renderer returns. Content is the scaffold-specific JSON
@@ -62,6 +63,8 @@ func TargetForAgentKind(agentKind string) Target {
 		return TargetCodex
 	case "pi":
 		return TargetPi
+	case "deepseek_harness":
+		return TargetDeepseekHarness
 	default:
 		return TargetClaudeCode
 	}
@@ -83,6 +86,8 @@ func For(target Target) (Renderer, error) {
 		return codexRenderer{}, nil
 	case TargetPi:
 		return piRenderer{}, nil
+	case TargetDeepseekHarness:
+		return deepseekHarnessRenderer{}, nil
 	default:
 		return nil, fmt.Errorf("render: unknown target %q", target)
 	}

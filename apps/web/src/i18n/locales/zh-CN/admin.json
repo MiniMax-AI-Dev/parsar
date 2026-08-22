@@ -1788,6 +1788,11 @@
         "title": "Pi",
         "description": "通过 parsar-daemon 运行 pi coding agent CLI。"
       },
+      "deepseekHarness": {
+        "title": "DeepSeek Harness",
+        "cardHint": "单次执行：每次提问都会新建会话，不保留之前轮次的上下文。",
+        "description": "通过 parsar-daemon 以 dsh 单次无界面任务方式运行 DeepSeek Harness。每次提问都会新建一个 harness 会话并返回最终回答。"
+      },
       "opencode": {
         "title": "OpenCode",
         "description": "通过 parsar-daemon 运行 OpenCode CLI，适合本机或 sandbox daemon 的 OpenCode 工作流。"

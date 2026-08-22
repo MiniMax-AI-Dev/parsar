@@ -15,6 +15,7 @@ type recordedCall struct {
 	Name  string
 	Args  []string
 	Stdin string
+	Env   []string
 }
 
 // fakeRunner records calls and returns canned output so unit tests never
@@ -24,19 +25,21 @@ type fakeRunner struct {
 	handler func(call recordedCall) (execResult, error)
 }
 
-func (f *fakeRunner) run(_ context.Context, name string, args []string, stdin io.Reader) (execResult, error) {
+func (f *fakeRunner) run(_ context.Context, name string, args []string, stdin io.Reader, env []string) (execResult, error) {
 	var stdinStr string
 	if stdin != nil {
 		b, _ := io.ReadAll(stdin)
 		stdinStr = string(b)
 	}
-	call := recordedCall{Name: name, Args: args, Stdin: stdinStr}
+	call := recordedCall{Name: name, Args: args, Stdin: stdinStr, Env: env}
 	f.calls = append(f.calls, call)
 	if f.handler != nil {
 		return f.handler(call)
 	}
 	return execResult{}, nil
 }
+
+func containsEnv(env []string, want string) bool { return slices.Contains(env, want) }
 
 func containsArg(args []string, want string) bool {
 	return slices.Contains(args, want)
@@ -128,6 +131,32 @@ func TestCreateAppliesNetworkHostGatewayEnvAndLabels(t *testing.T) {
 	}
 }
 
+func TestCreatePassesBaseEnvironmentWithoutPuttingValuesInArgs(t *testing.T) {
+	var got recordedCall
+	fake := &fakeRunner{handler: func(call recordedCall) (execResult, error) {
+		got = call
+		return execResult{Stdout: "cid\n"}, nil
+	}}
+	client := &Client{
+		Image:        "img",
+		ContainerEnv: map[string]string{"HTTPS_PROXY": "http://proxy-secret.example"},
+		runner:       fake.run,
+	}
+	if _, err := client.Create(context.Background(), e2b.CreateInput{}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	joined := strings.Join(got.Args, " ")
+	if !strings.Contains(joined, "-e HTTPS_PROXY") {
+		t.Fatalf("expected key-only proxy env passthrough, got %v", got.Args)
+	}
+	if strings.Contains(joined, "proxy-secret") {
+		t.Fatalf("proxy value leaked into docker args: %v", got.Args)
+	}
+	if !containsEnv(got.Env, "HTTPS_PROXY=http://proxy-secret.example") {
+		t.Fatal("docker client process did not receive the proxy value")
+	}
+}
+
 func TestCreateAppliesSizeSpecificResourceLimits(t *testing.T) {
 	var got recordedCall
 	fake := &fakeRunner{handler: func(call recordedCall) (execResult, error) {
@@ -212,7 +241,7 @@ func TestGetInfoReturnsSyntheticFutureExpiry(t *testing.T) {
 }
 
 func TestOSExecRunCapturesStdoutAndZeroExit(t *testing.T) {
-	res, err := osExecRun(context.Background(), "sh", []string{"-c", "printf hello"}, nil)
+	res, err := osExecRun(context.Background(), "sh", []string{"-c", "printf hello"}, nil, nil)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -227,7 +256,7 @@ func TestOSExecRunCapturesStdoutAndZeroExit(t *testing.T) {
 func TestOSExecRunCapturesNonZeroExitWithoutError(t *testing.T) {
 	// A command exiting non-zero is a normal result, not a runner failure:
 	// RunCommand must surface it as CommandResult.Status, so err stays nil.
-	res, err := osExecRun(context.Background(), "sh", []string{"-c", "printf oops >&2; exit 7"}, nil)
+	res, err := osExecRun(context.Background(), "sh", []string{"-c", "printf oops >&2; exit 7"}, nil, nil)
 	if err != nil {
 		t.Fatalf("expected nil err for clean non-zero exit, got %v", err)
 	}
