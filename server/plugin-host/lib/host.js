@@ -15,8 +15,15 @@ import { createPluginContext } from './sdk.js';
  */
 
 /**
+ * @typedef {Object} HookHandler
+ * @property {string} pluginName - owning plugin
+ * @property {Function} handler - async (payload) => result
+ */
+
+/**
  * @typedef {Object} PluginHost
  * @property {Map<string, ToolDefinition>} tools
+ * @property {Map<string, HookHandler[]>} hooks
  * @property {string[]} loadedPlugins
  */
 
@@ -31,6 +38,7 @@ import { createPluginContext } from './sdk.js';
  */
 export async function createPluginHost(pluginsDir, opts = {}) {
   const tools = new Map();
+  const hooks = new Map();
   const loadedPlugins = [];
   const { pluginFilter } = opts;
 
@@ -39,7 +47,7 @@ export async function createPluginHost(pluginsDir, opts = {}) {
     entries = await readdir(pluginsDir, { withFileTypes: true });
   } catch (err) {
     process.stderr.write(`plugin-host: cannot read plugins-dir: ${err.message}\n`);
-    return { tools, loadedPlugins };
+    return { tools, hooks, loadedPlugins };
   }
 
   const dirs = entries.filter((e) => e.isDirectory());
@@ -70,7 +78,7 @@ export async function createPluginHost(pluginsDir, opts = {}) {
     const serverEntry = join(pluginDir, manifest.server.entry);
 
     try {
-      const ctx = createPluginContext(manifest.name, tools);
+      const ctx = createPluginContext(manifest.name, tools, hooks);
       const moduleURL = pathToFileURL(serverEntry).href;
       const mod = await import(moduleURL);
       const setup = mod.default ?? mod;
@@ -80,8 +88,10 @@ export async function createPluginHost(pluginsDir, opts = {}) {
       }
 
       loadedPlugins.push(manifest.name);
+      const hookCount = ctx.hooks.registered().length;
+      const hookSuffix = hookCount > 0 ? `, ${hookCount} hooks` : '';
       process.stderr.write(
-        `plugin-host: loaded "${manifest.name}" (${ctx.tools._count()} tools)\n`
+        `plugin-host: loaded "${manifest.name}" (${ctx.tools._count()} tools${hookSuffix})\n`
       );
     } catch (err) {
       process.stderr.write(
@@ -92,8 +102,8 @@ export async function createPluginHost(pluginsDir, opts = {}) {
   }
 
   process.stderr.write(
-    `plugin-host: ready (${loadedPlugins.length} plugins, ${tools.size} tools)\n`
+    `plugin-host: ready (${loadedPlugins.length} plugins, ${tools.size} tools, ${hooks.size} hook events)\n`
   );
 
-  return { tools, loadedPlugins };
+  return { tools, hooks, loadedPlugins };
 }

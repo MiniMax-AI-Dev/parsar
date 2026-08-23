@@ -165,6 +165,10 @@ type PromptEvent struct {
 	// of a sync Prompt result so callers do not need to re-accumulate
 	// deltas to persist the final message row.
 	Final *PromptOutput
+
+	// HookDecision is populated when a plugin hook auto-decided this
+	// permission request (Phase 3). Nil for normal flow.
+	HookDecision *HookDecisionMeta
 }
 
 // ToolCallEvent describes one tool invocation observed by the connector.
@@ -200,6 +204,15 @@ type PermissionDecision struct {
 	Approved   bool
 	Note       string
 	By         string // user id
+}
+
+// HookDecisionMeta carries the result of a plugin hook that auto-decided
+// a permission request. Used internally to communicate hook decisions
+// through the event pipeline.
+type HookDecisionMeta struct {
+	Result string // "deny" or "allow"
+	Reason string
+	Plugin string
 }
 
 // PromptForUserChoiceOption is one selectable answer the human can

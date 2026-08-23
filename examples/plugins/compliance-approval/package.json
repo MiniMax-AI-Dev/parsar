@@ -1,0 +1,8 @@
+{
+  "name": "@internal/compliance-approval",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Compliance approval plugin — auto-denies dangerous commands, forwards sensitive operations to OA",
+  "main": "server/index.js"
+}

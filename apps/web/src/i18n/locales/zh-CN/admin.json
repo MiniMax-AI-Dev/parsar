@@ -607,6 +607,8 @@
         "toolResult": "工具返回结果",
         "permission": "请求人工审批",
         "permissionReplied": "审批已回复",
+        "permissionAutoDenied": "已被插件自动拒绝",
+        "permissionAutoAllowed": "已被插件自动放行",
         "modelChanged": "切换模型",
         "error": "运行时错误",
         "completed": "运行完成",

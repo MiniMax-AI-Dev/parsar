@@ -268,6 +268,10 @@ type routerConfig struct {
 	// pluginsDir is the on-disk directory where installed plugin bundles
 	// live (<DataDir>/plugins/). Empty disables plugin client serving.
 	pluginsDir string
+	// pluginHookInvoker calls plugin hooks (e.g. before_permission_forward).
+	// Nil means hooks are disabled — all permission requests proceed
+	// to the normal approval flow.
+	pluginHookInvoker PluginHookInvoker
 	// skillInstallRunner downloads Skills.sh skills via the skills CLI.
 	// Nil uses npx at request time; tests inject a fake runner.
 	skillInstallRunner     skillInstallCommandRunner
