@@ -298,6 +298,7 @@
     "sidebar": {
       "allAgentsHint": "选择一个 Agent",
       "newConversation": "新对话",
+      "recents": "最近会话",
       "foldAria": "折叠会话列表",
       "expandAria": "展开会话列表",
       "currentAgentDesc": "当前 Agent",
@@ -388,6 +389,7 @@
       "thinking": "思考中…",
       "ready": "就绪",
       "error": "流式输出中断：{{error}}",
+      "contextRejected": "上游模型拒绝了当前会话上下文，任务已经停止，并非仍在运行。请稍后重试；如果再次出现，请新建会话并重新描述任务。",
       "retry": "重试",
       "queued": "排队中",
       "queuedWithPosition": "排队中（第 {{position}} 位）",
@@ -420,6 +422,7 @@
       "completedCount": "已完成 {{count}} 步",
       "totalLabel": "{{count}} 步",
       "doneInline": "{{count}} 完成",
+      "completedInline": "已完成 {{count}} 个",
       "runningInline": "{{count}} 进行中",
       "traceLabel": "执行轨迹 ({{count}} steps)",
       "expandAria": "展开执行轨迹",

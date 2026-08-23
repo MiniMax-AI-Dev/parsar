@@ -28,14 +28,14 @@ const KEY_TIMELINE = (cid: string) => ["admin", "conversationTimeline", cid] as 
 
 async function listConversations(
   wsId: string | null,
-  agentID: string
+  agentID: string,
 ): Promise<ListConversationsResponse> {
   if (!wsId) return { conversations: [] }
   const query: Record<string, string | number> = { limit: 200 }
   if (agentID) query.agent_id = agentID
   return apiRequest<ListConversationsResponse>(
     `/api/v1/workspaces/${encodeURIComponent(wsId)}/conversations`,
-    { query }
+    { query },
   )
 }
 
@@ -46,21 +46,25 @@ async function getConversation(cid: string): Promise<Conversation> {
 async function getTimeline(cid: string): Promise<ConversationTimeline> {
   return apiRequest<ConversationTimeline>(
     `/api/v1/conversations/${encodeURIComponent(cid)}/timeline`,
-    { query: { limit: 100 } }
+    { query: { limit: 100 } },
   )
 }
 
 export async function createConversation(
   wsId: string,
-  body: CreateConversationRequest
+  body: CreateConversationRequest,
 ): Promise<Conversation> {
-  return apiRequest<Conversation>(
-    `/api/v1/workspaces/${encodeURIComponent(wsId)}/conversations`,
-    { method: "POST", body }
-  )
+  return apiRequest<Conversation>(`/api/v1/workspaces/${encodeURIComponent(wsId)}/conversations`, {
+    method: "POST",
+    body,
+  })
 }
 
-export function createAgentConversation(wsId: string, agent: AgentConversationSource, language: string): Promise<Conversation> {
+export function createAgentConversation(
+  wsId: string,
+  agent: AgentConversationSource,
+  language: string,
+): Promise<Conversation> {
   const name = agent.name.trim()
   return createConversation(wsId, {
     title: name && language.startsWith("zh") ? `和 ${name} 对话` : name ? `Chat with ${name}` : "",
@@ -72,33 +76,30 @@ export function createAgentConversation(wsId: string, agent: AgentConversationSo
 
 export async function sendUserMessage(
   cid: string,
-  body: SendUserMessageRequest
+  body: SendUserMessageRequest,
 ): Promise<SendUserMessageResponse> {
   return apiRequest<SendUserMessageResponse>(
     `/api/v1/conversations/${encodeURIComponent(cid)}/messages`,
-    { method: "POST", body }
+    { method: "POST", body },
   )
 }
 
 export async function startAgentRun(cid: string, runId: string): Promise<StartAgentRunResponse> {
   return apiRequest<StartAgentRunResponse>(
     `/api/v1/conversations/${encodeURIComponent(cid)}/runs/${encodeURIComponent(runId)}/start`,
-    { method: "POST" }
+    { method: "POST" },
   )
 }
 
 export async function updateConversationTitle(cid: string, title: string): Promise<Conversation> {
-  return apiRequest<Conversation>(
-    `/api/v1/conversations/${encodeURIComponent(cid)}`,
-    { method: "PATCH", body: { title } }
-  )
+  return apiRequest<Conversation>(`/api/v1/conversations/${encodeURIComponent(cid)}`, {
+    method: "PATCH",
+    body: { title },
+  })
 }
 
 export async function deleteConversation(cid: string): Promise<void> {
-  await apiRequest<void>(
-    `/api/v1/conversations/${encodeURIComponent(cid)}`,
-    { method: "DELETE" }
-  )
+  await apiRequest<void>(`/api/v1/conversations/${encodeURIComponent(cid)}`, { method: "DELETE" })
 }
 
 export interface StreamingStep {
@@ -132,7 +133,10 @@ const idleStreamState: AgentRunStreamState = {
   pendingInteraction: null,
 }
 
-function parseStreamEvent(type: AgentRunStreamEvent["type"], raw: string): AgentRunStreamEvent | null {
+function parseStreamEvent(
+  type: AgentRunStreamEvent["type"],
+  raw: string,
+): AgentRunStreamEvent | null {
   try {
     const data = JSON.parse(raw) as Record<string, unknown>
     return { ...data, type } as AgentRunStreamEvent
@@ -180,7 +184,7 @@ export function useConversation(cid: string | null, _workspaceIDForMock?: string
 export function useConversationTimeline(
   cid: string | null,
   _workspaceIDForMock?: string | null,
-  opts: { pollingEnabled?: boolean } = {}
+  opts: { pollingEnabled?: boolean } = {},
 ) {
   const pollingEnabled = opts.pollingEnabled ?? true
   return useQuery({
@@ -192,43 +196,78 @@ export function useConversationTimeline(
     enabled: !!cid,
     retry: noUnreachableRetry,
     staleTime: 15_000,
-    refetchInterval: () => (pollingEnabled && document.visibilityState === "visible" ? 5_000 : false),
+    refetchInterval: () =>
+      pollingEnabled && document.visibilityState === "visible" ? 5_000 : false,
   })
 }
 
 export function useAgentRunStream(
   cid: string | null,
   runId: string | null,
-  opts: { enabled?: boolean } = {}
+  opts: { enabled?: boolean } = {},
 ): AgentRunStreamState {
   const enabled = opts.enabled ?? true
   const [state, setState] = useState<AgentRunStreamState>(idleStreamState)
 
   useEffect(() => {
     if (!cid || !runId || !enabled) {
-      setState(idleStreamState)
-      return
+      const timer = window.setTimeout(() => setState(idleStreamState), 0)
+      return () => window.clearTimeout(timer)
     }
 
     const source = new EventSource(
-      `/api/v1/conversations/${encodeURIComponent(cid)}/runs/${encodeURIComponent(runId)}/stream`
+      `/api/v1/conversations/${encodeURIComponent(cid)}/runs/${encodeURIComponent(runId)}/stream`,
     )
-    setState({ status: "streaming", deltaText: "", steps: [], final: null, error: null, pendingInteraction: null })
+    const onOpen = () => {
+      setState({
+        status: "streaming",
+        deltaText: "",
+        steps: [],
+        final: null,
+        error: null,
+        pendingInteraction: null,
+      })
+    }
+
+    // Daemons can emit many tiny token events per second. Updating React for
+    // every token makes the whole conversation tree repaint fast enough to
+    // look like it is flashing. Buffer a short visual frame while preserving
+    // every byte and flush synchronously before ordered non-delta events.
+    let deltaBuffer = ""
+    let deltaFlushTimer: number | null = null
+    const takeDeltaBuffer = () => {
+      const text = deltaBuffer
+      deltaBuffer = ""
+      if (deltaFlushTimer !== null) {
+        window.clearTimeout(deltaFlushTimer)
+        deltaFlushTimer = null
+      }
+      return text
+    }
+    const flushDeltaBuffer = () => {
+      const text = takeDeltaBuffer()
+      if (!text) return
+      setState((prev) => ({
+        ...prev,
+        status: prev.status === "done" ? prev.status : "streaming",
+        deltaText: prev.deltaText + text,
+        pendingInteraction: null,
+      }))
+    }
 
     const onDelta = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("delta", ev.data)
       if (!parsed || parsed.type !== "delta") return
-      setState((prev) => ({
-        ...prev,
-        status: prev.status === "done" ? prev.status : "streaming",
-        deltaText: prev.deltaText + (parsed.delta ?? ""),
-        pendingInteraction: null,
-      }))
+      deltaBuffer += parsed.delta ?? ""
+      if (deltaFlushTimer === null) {
+        deltaFlushTimer = window.setTimeout(flushDeltaBuffer, 50)
+      }
     }
 
     const onTool = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("tool", ev.data)
       if (!parsed || parsed.type !== "tool" || !parsed.tool) return
+      flushDeltaBuffer()
       const { id, name, stage, args } = parsed.tool
       setState((prev) => {
         const steps = [...prev.steps]
@@ -267,26 +306,41 @@ export function useAgentRunStream(
     const onDone = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("done", ev.data)
       if (!parsed || parsed.type !== "done") return
-      setState((prev) => ({
-        ...prev,
-        status: "done",
-        final: parsed.final?.content ?? "",
-        error: null,
-        pendingInteraction: null,
-      }))
+      const pendingDelta = takeDeltaBuffer()
+      setState((prev) =>
+        // Agent adapters commonly emit error followed by done. Error is the
+        // stronger terminal state and must not be erased by the trailing frame.
+        prev.status === "error"
+          ? prev
+          : {
+              ...prev,
+              status: "done",
+              deltaText: prev.deltaText + pendingDelta,
+              final: parsed.final?.content ?? "",
+              error: null,
+              pendingInteraction: null,
+            },
+      )
       source.close()
     }
 
     const onPermission = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("permission", ev.data)
       if (!parsed || parsed.type !== "permission" || !parsed.permission?.id) return
-      setState((prev) => ({ ...prev, pendingInteraction: { kind: "permission", requestId: parsed.permission.id } }))
+      setState((prev) => ({
+        ...prev,
+        pendingInteraction: { kind: "permission", requestId: parsed.permission.id },
+      }))
     }
 
     const onUserChoice = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("prompt_for_user_choice", ev.data)
-      if (!parsed || parsed.type !== "prompt_for_user_choice" || !parsed.prompt_for_user_choice?.id) return
-      setState((prev) => ({ ...prev, pendingInteraction: { kind: "user_choice", requestId: parsed.prompt_for_user_choice.id } }))
+      if (!parsed || parsed.type !== "prompt_for_user_choice" || !parsed.prompt_for_user_choice?.id)
+        return
+      setState((prev) => ({
+        ...prev,
+        pendingInteraction: { kind: "user_choice", requestId: parsed.prompt_for_user_choice.id },
+      }))
     }
 
     const onError = (ev: Event) => {
@@ -294,7 +348,13 @@ export function useAgentRunStream(
       const parsed = data ? parseStreamEvent("error", data) : null
       const message = parsed?.type === "error" ? parsed.error : "stream connection failed"
       if (isCompletedBeforeSubscribeError(message)) {
-        setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null, pendingInteraction: null }))
+        setState((prev) => ({
+          ...prev,
+          status: "done",
+          final: prev.final,
+          error: null,
+          pendingInteraction: null,
+        }))
         source.close()
         return
       }
@@ -303,7 +363,27 @@ export function useAgentRunStream(
       // abort took effect. Collapse to status='done' so the red stream-interrupted
       // banner stays hidden.
       if (isUserCancelledError(message)) {
-        setState((prev) => ({ ...prev, status: "done", final: prev.final, error: null, pendingInteraction: null }))
+        setState((prev) => ({
+          ...prev,
+          status: "done",
+          final: prev.final,
+          error: null,
+          pendingInteraction: null,
+        }))
+        source.close()
+        return
+      }
+      // A named SSE error frame is an application failure from the agent,
+      // even when the agent emitted partial text first (provider CLIs often
+      // print their API error as an assistant delta). Always surface it.
+      if (parsed?.type === "error") {
+        flushDeltaBuffer()
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          error: message || "agent execution failed",
+          pendingInteraction: null,
+        }))
         source.close()
         return
       }
@@ -312,19 +392,24 @@ export function useAgentRunStream(
       // timer / a downstream reconnect synthesizes an error. Refuse to
       // surface the red banner — collapse to done so the timeline refetch
       // picks up the persisted assistant message.
+      const pendingDelta = takeDeltaBuffer()
       setState((prev) => {
-        const sawContent =
-          prev.deltaText.length > 0 ||
-          prev.steps.length > 0 ||
-          prev.final !== null
+        const deltaText = prev.deltaText + pendingDelta
+        const sawContent = deltaText.length > 0 || prev.steps.length > 0 || prev.final !== null
         if (sawContent) {
-          return { ...prev, status: "done", error: null, pendingInteraction: null }
+          return { ...prev, status: "done", deltaText, error: null, pendingInteraction: null }
         }
-        return { ...prev, status: "error", error: message || "stream connection failed", pendingInteraction: null }
+        return {
+          ...prev,
+          status: "error",
+          error: message || "stream connection failed",
+          pendingInteraction: null,
+        }
       })
       source.close()
     }
 
+    source.addEventListener("open", onOpen)
     source.addEventListener("delta", onDelta)
     source.addEventListener("tool", onTool)
     source.addEventListener("permission", onPermission)
@@ -333,6 +418,7 @@ export function useAgentRunStream(
     source.addEventListener("error", onError)
 
     return () => {
+      if (deltaFlushTimer !== null) window.clearTimeout(deltaFlushTimer)
       source.close()
     }
   }, [cid, enabled, runId])
@@ -382,7 +468,6 @@ export function useSendUserMessage(cid: string | null) {
     },
   })
 }
-
 
 /* --- Rename / delete ---------------------------------------------------- */
 

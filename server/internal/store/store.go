@@ -7005,15 +7005,9 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 		return result, err
 	}
 
-	mentionNames := mentionPattern.FindAllString(content, -1)
+	mentionNames := userMessageMentionNames(content)
 	if len(input.MentionedAgentIDs) > 0 {
 		mentionNames = nil
-	}
-	// 1v1 fallback: when no @-mention and no explicit MentionedAgentIDs, route to the
-	// conversation's bound primary_agent so a typed message reaches it (ChatGPT-style).
-	implicitPrimary := ""
-	if len(mentionNames) == 0 && len(input.MentionedAgentIDs) == 0 {
-		implicitPrimary = strings.TrimSpace(conversation.PrimaryAgentID)
 	}
 	mentionedAgents := make([]mentionedAgent, 0, len(input.MentionedAgentIDs)+len(mentionNames)+1)
 	seenAgents := map[string]struct{}{}
@@ -7051,8 +7045,14 @@ func (s *Store) SendUserMessageToConversation(ctx context.Context, input SendUse
 		seenAgents[agent.agentID] = struct{}{}
 		mentionedAgents = append(mentionedAgents, agent)
 	}
-	// Implicit primary_agent fallback: must be active, otherwise silently drop to "no run
-	// dispatched" so the user message still lands and the UI shows the bound-agent-disabled state.
+	// Only an actual agent mention suppresses the 1v1 fallback. The mention parser
+	// excludes @ fragments embedded in email addresses and SSH repository URLs.
+	implicitPrimary := ""
+	if len(mentionNames) == 0 && len(input.MentionedAgentIDs) == 0 {
+		implicitPrimary = strings.TrimSpace(conversation.PrimaryAgentID)
+	}
+	// The implicit primary must be active; otherwise silently drop to "no run dispatched"
+	// so the user message still lands and the UI shows the bound-agent-disabled state.
 	if implicitPrimary != "" {
 		agentUUID, err := uuid(implicitPrimary)
 		if err == nil {
@@ -7655,6 +7655,19 @@ type mentionedAgent struct {
 }
 
 var mentionPattern = regexp.MustCompile(`@[\p{Han}A-Za-z0-9_-]+`)
+
+var userMessageMentionPattern = regexp.MustCompile(`(?:^|[\s\(\[\{，。！？、])@([\p{Han}A-Za-z0-9_-]+)`)
+
+func userMessageMentionNames(content string) []string {
+	matches := userMessageMentionPattern.FindAllStringSubmatch(content, -1)
+	names := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) == 2 {
+			names = append(names, "@"+match[1])
+		}
+	}
+	return names
+}
 
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 var buildLinePattern = regexp.MustCompile(`(?m)^>\s*build.*$`)

@@ -17,6 +17,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type terminalContextRuntimeStore struct {
+	stubRuntimeStore
+	ctxErr error
+}
+
+func (s *terminalContextRuntimeStore) FailAgentRun(ctx context.Context, _ store.FailAgentRunInput) error {
+	s.ctxErr = ctx.Err()
+	return nil
+}
+
+func TestFailRunRowOnlyUsesFreshContextAfterDispatchTimeout(t *testing.T) {
+	dispatchCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	runtimeStore := &terminalContextRuntimeStore{}
+
+	failRunRowOnly(dispatchCtx, runtimeStore, testRunID, "conversation_stream", context.DeadlineExceeded.Error())
+
+	if runtimeStore.ctxErr != nil {
+		t.Fatalf("FailAgentRun context error = %v, want nil", runtimeStore.ctxErr)
+	}
+}
+
 func TestConversationRunStreamStartAndLateReplayPersistsFinal(t *testing.T) {
 	db := openDevRouteTestDB(t)
 	ctx := context.Background()

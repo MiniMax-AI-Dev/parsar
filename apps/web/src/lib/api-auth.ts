@@ -96,12 +96,11 @@ export interface LoginResponse {
   name: string
 }
 
-export async function loginWithPasswordRequest(
-  req: LoginRequest,
-): Promise<LoginResponse> {
+export async function loginWithPasswordRequest(req: LoginRequest): Promise<LoginResponse> {
   return apiRequest<LoginResponse>("/api/v1/auth/login", {
     method: "POST",
     body: req,
+    redirectOnUnauthorized: false,
   })
 }
 

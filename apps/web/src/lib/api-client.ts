@@ -23,6 +23,9 @@ interface RequestOptions {
   headers?: Record<string, string>
   /** Abort signal */
   signal?: AbortSignal
+  /** Redirect an authenticated surface to /login on 401. Public auth
+   * endpoints disable this so their inline error state remains visible. */
+  redirectOnUnauthorized?: boolean
 }
 
 function buildURL(path: string, query?: RequestOptions["query"]): string {
@@ -37,10 +40,7 @@ function buildURL(path: string, query?: RequestOptions["query"]): string {
   return `${path}${sep}${parts.join("&")}`
 }
 
-export async function apiRequest<T>(
-  path: string,
-  opts: RequestOptions = {}
-): Promise<T> {
+export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const url = buildURL(path, opts.query)
   let res: Response
   try {
@@ -97,7 +97,12 @@ export async function apiRequest<T>(
     const looksLikeViteProxyMiss =
       res.status === 404 && bodyText?.toLowerCase().trim() === "not found"
 
-    if (res.status === 401 && path !== "/api/v1/me" && typeof window !== "undefined") {
+    if (
+      res.status === 401 &&
+      path !== "/api/v1/me" &&
+      opts.redirectOnUnauthorized !== false &&
+      typeof window !== "undefined"
+    ) {
       window.location.assign("/login")
     }
 
@@ -106,9 +111,7 @@ export async function apiRequest<T>(
       code: bodyCode,
       message: bodyMsg,
       unreachable:
-        res.status === 503 ||
-        bodyCode === "server_unreachable" ||
-        looksLikeViteProxyMiss,
+        res.status === 503 || bodyCode === "server_unreachable" || looksLikeViteProxyMiss,
     })
   }
 
