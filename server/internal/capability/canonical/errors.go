@@ -10,5 +10,6 @@ var (
 	ErrInvalidSkill        = errors.New("canonical: invalid skill spec")
 	ErrInvalidPlugin       = errors.New("canonical: invalid plugin spec")
 	ErrInvalidSystemPrompt = errors.New("canonical: invalid system_prompt spec")
+	ErrInvalidBundle       = errors.New("canonical: invalid bundle spec")
 	ErrInvalidEnvValue     = errors.New("canonical: invalid env value")
 )

@@ -54,7 +54,7 @@ type claudeCodePluginDocument struct {
 
 func (claudeCodeRenderer) Supports(kind canonical.Kind) bool {
 	switch kind {
-	case canonical.KindMCP, canonical.KindSkill, canonical.KindPlugin, canonical.KindSystemPrompt:
+	case canonical.KindMCP, canonical.KindSkill, canonical.KindPlugin, canonical.KindSystemPrompt, canonical.KindBundle:
 		return true
 	default:
 		return false
@@ -74,6 +74,8 @@ func (claudeCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output
 		return renderClaudeCodePlugin(spec.Plugin)
 	case canonical.KindSystemPrompt:
 		return renderSystemPrompt(spec.SystemPrompt)
+	case canonical.KindBundle:
+		return renderBundle(spec.Bundle)
 	default:
 		return Output{}, fmt.Errorf("claudecode render: unknown kind %q", spec.Kind)
 	}

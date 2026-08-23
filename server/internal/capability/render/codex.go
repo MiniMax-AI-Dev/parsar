@@ -45,7 +45,7 @@ type codexMCPServer struct {
 }
 
 func (codexRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt
+	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
 }
 
 func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -65,6 +65,8 @@ func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, err
 		return Output{}, ErrUnsupported
 	case canonical.KindSystemPrompt:
 		return renderSystemPrompt(spec.SystemPrompt)
+	case canonical.KindBundle:
+		return renderBundle(spec.Bundle)
 	default:
 		return Output{}, fmt.Errorf("codex render: unknown kind %q", spec.Kind)
 	}

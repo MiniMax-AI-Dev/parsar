@@ -84,7 +84,7 @@ interface AgentInstallation {
   latest: boolean
 }
 
-type CapabilityTypeFilter = "mcp" | "skill"
+type CapabilityTypeFilter = "mcp" | "skill" | "bundle"
 type PageTab = "workspace" | "marketplace"
 
 export function CapabilitiesPage() {
@@ -533,6 +533,7 @@ function CapabilitiesFilterBar({
         <TabsList>
           <TabsTrigger value="mcp">MCP</TabsTrigger>
           <TabsTrigger value="skill">Skill</TabsTrigger>
+          <TabsTrigger value="bundle">Plugin</TabsTrigger>
         </TabsList>
       </Tabs>
       <div className="relative ml-auto w-full max-w-[280px]">
@@ -1078,6 +1079,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
 export function CapabilityTypeBadge({ type }: { type: Capability["type"] }) {
   if (type === "skill") return <Badge variant="primary">Skill</Badge>
   if (type === "plugin") return <Badge variant="success">Plugin</Badge>
+  if (type === "bundle") return <Badge variant="success">Plugin Bundle</Badge>
   if (type === "system_prompt") return <Badge variant="warning">System Prompt</Badge>
   return <Badge variant="neutral">MCP</Badge>
 }

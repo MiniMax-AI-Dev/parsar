@@ -41,6 +41,7 @@ var commands = []command{
 	{name: "memory", summary: "Manage user / workspace memories (list / add / edit / rm)", run: runMemory},
 	{name: "inject", summary: "Print the injection bundle hook scripts stitch into the prompt", run: runInject},
 	{name: "sync", summary: "Human-readable dump of the current injection snapshot (debug)", run: runSync},
+	{name: "plugin", summary: "Manage plugin bundles (add / list / remove)", run: runPlugin},
 	{name: "version", summary: "Print the CLI version and exit", run: runVersion},
 }
 

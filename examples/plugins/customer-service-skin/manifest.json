@@ -1,0 +1,7 @@
+{
+  "name": "@internal/customer-service-skin",
+  "version": "1.0.0",
+  "description": "Transforms the Agent into a professional customer service representative with warm, solution-oriented communication style.",
+  "author": "FDE Team",
+  "skills": ["./skills/customer-service.md"]
+}
