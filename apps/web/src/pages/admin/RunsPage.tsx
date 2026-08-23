@@ -13,6 +13,8 @@ import {
   Loader2,
   Play,
   Search,
+  ShieldAlert,
+  ShieldCheck,
   TerminalSquare,
   Wrench,
   XCircle,
@@ -180,6 +182,10 @@ function eventTitle(ev: AgentRunEvent | undefined, t: AdminText): string {
       return t("runs.detail.steps.permission")
     case "permission.replied":
       return t("runs.detail.steps.permissionReplied")
+    case "permission.auto_denied":
+      return t("runs.detail.steps.permissionAutoDenied")
+    case "permission.auto_allowed":
+      return t("runs.detail.steps.permissionAutoAllowed")
     case "model.changed":
       return t("runs.detail.steps.modelChanged")
     case "session.error":
@@ -1081,6 +1087,10 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permission"), detail: payloadValue(ev, "resource") || payloadValue(ev, "action") || "approval", icon: KeyRound, color: "text-warning", ...withTime }
     case "permission.replied":
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionReplied"), detail: payloadValue(ev, "decision") || payloadValue(ev, "status"), icon: KeyRound, color: "text-success", ...withTime }
+    case "permission.auto_denied":
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionAutoDenied"), detail: payloadValue(ev, "hook_reason") || payloadValue(ev, "resource") || "denied by plugin", icon: ShieldAlert, color: "text-danger", ...withTime }
+    case "permission.auto_allowed":
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionAutoAllowed"), detail: payloadValue(ev, "hook_reason") || payloadValue(ev, "resource") || "allowed by plugin", icon: ShieldCheck, color: "text-success", ...withTime }
     case "model.changed":
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.modelChanged"), detail: [payloadValue(ev, "from"), payloadValue(ev, "to")].filter(Boolean).join(" -> "), icon: Bot, color: "text-info", ...withTime }
     case "session.error":

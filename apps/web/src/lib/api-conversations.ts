@@ -280,6 +280,8 @@ export function useAgentRunStream(
     const onPermission = (ev: MessageEvent<string>) => {
       const parsed = parseStreamEvent("permission", ev.data)
       if (!parsed || parsed.type !== "permission" || !parsed.permission?.id) return
+      // If a plugin hook auto-decided, don't show pending interaction card.
+      if (parsed.permission.hook_decision) return
       setState((prev) => ({ ...prev, pendingInteraction: { kind: "permission", requestId: parsed.permission.id } }))
     }
 

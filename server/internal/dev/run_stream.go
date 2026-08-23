@@ -392,6 +392,20 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 	var streamErr string
 	var sawFinalFailure bool
 	for ev := range events {
+		// Phase 3: Plugin hook interception for permission requests.
+		// If a hook auto-decides (deny/allow), we submit the decision
+		// back to the connector and persist a different event kind.
+		if ev.Type == connector.EventPermissionRequest && ev.Permission != nil {
+			intercepted, replacement := interceptPermissionWithHook(ctx, cfg.pluginHookInvoker, ev)
+			if intercepted {
+				ev = replacement
+				// Auto-submit the decision to the daemon so the agent
+				// unblocks immediately (without human interaction).
+				if ev.HookDecision != nil {
+					autoSubmitHookDecision(ctx, target, ev)
+				}
+			}
+		}
 		if err := recordPromptEvent(ctx, streamStore, runID, ev); err != nil {
 			reason := fmt.Sprintf("persist agent event %s: %v", ev.Type, err)
 			log.Bg().Error("dispatchConversationRun: canonical event persistence failed", "run_id", runID, "event_type", ev.Type, "err", err)
@@ -479,6 +493,26 @@ func eventPersistencePayload(ev connector.PromptEvent) (string, map[string]any, 
 	case connector.EventPermissionRequest:
 		if ev.Permission == nil {
 			return "permission.asked", map[string]any{"sequence": ev.Sequence}, true
+		}
+		// When a plugin hook auto-decided, persist a different event kind
+		// so interactionFromRunEvent does NOT create an approval interaction.
+		if ev.HookDecision != nil {
+			kind := "permission.auto_denied"
+			if ev.HookDecision.Result == "allow" {
+				kind = "permission.auto_allowed"
+			}
+			return kind, map[string]any{
+				"request_id":    ev.Permission.ID,
+				"device_id":    ev.Permission.DeviceID,
+				"action":       ev.Permission.Tool,
+				"resource":     ev.Permission.Title,
+				"detail":       ev.Permission.Detail,
+				"payload":      ev.Permission.Payload,
+				"hook_decision": ev.HookDecision.Result,
+				"hook_reason":  ev.HookDecision.Reason,
+				"hook_plugin":  ev.HookDecision.Plugin,
+				"sequence":     ev.Sequence,
+			}, true
 		}
 		return "permission.asked", map[string]any{"request_id": ev.Permission.ID, "device_id": ev.Permission.DeviceID, "action": ev.Permission.Tool, "resource": ev.Permission.Title, "detail": ev.Permission.Detail, "payload": ev.Permission.Payload, "sequence": ev.Sequence}, true
 	case connector.EventPromptForUserChoice:

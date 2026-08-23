@@ -6,9 +6,10 @@
  *
  * @param {string} pluginName - the plugin's name from manifest.json
  * @param {Map} toolRegistry - shared registry (name → ToolDefinition)
+ * @param {Map} hookRegistry - shared registry (eventName → HookHandler[])
  * @returns {Object} ctx - the plugin server context
  */
-export function createPluginContext(pluginName, toolRegistry) {
+export function createPluginContext(pluginName, toolRegistry, hookRegistry) {
   let toolCount = 0;
 
   const tools = {
@@ -54,12 +55,12 @@ export function createPluginContext(pluginName, toolRegistry) {
     },
   };
 
-  // Future phases will add ctx.hooks, ctx.credentials, ctx.api, etc.
-  // For Phase 1, only ctx.tools is implemented.
+  const hooks = createHooksContext(pluginName, hookRegistry);
+
   return {
     tools,
+    hooks,
     // Placeholder for future phases — calling these throws NotImplemented.
-    hooks: notImplementedProxy('hooks'),
     credentials: notImplementedProxy('credentials'),
     api: notImplementedProxy('api'),
   };
@@ -95,6 +96,71 @@ function normalizeParameters(params) {
     type: 'object',
     properties,
     required: required.length > 0 ? required : undefined,
+  };
+}
+
+/**
+ * Supported hook event names.
+ */
+export const HOOK_EVENTS = [
+  'before_permission_forward',
+  'after_tool_result',
+  'on_run_complete',
+  'on_run_error',
+];
+
+/**
+ * Creates the ctx.hooks namespace for a plugin.
+ *
+ * @param {string} pluginName - owning plugin name
+ * @param {Map<string, Array>} hookRegistry - shared registry (eventName → handler[])
+ * @returns {Object} hooks API
+ */
+function createHooksContext(pluginName, hookRegistry) {
+  return {
+    /**
+     * Register a hook handler for an event.
+     *
+     * @param {string} eventName - one of HOOK_EVENTS
+     * @param {Function} handler - async (payload) => { deny?, allow?, ask_human?, reason? }
+     */
+    on(eventName, handler) {
+      if (!eventName || typeof eventName !== 'string') {
+        throw new Error(`[${pluginName}] hooks.on: eventName must be a non-empty string`);
+      }
+      if (!HOOK_EVENTS.includes(eventName)) {
+        throw new Error(
+          `[${pluginName}] hooks.on: unknown event "${eventName}". Supported: ${HOOK_EVENTS.join(', ')}`
+        );
+      }
+      if (typeof handler !== 'function') {
+        throw new Error(
+          `[${pluginName}] hooks.on("${eventName}"): handler must be a function`
+        );
+      }
+
+      if (!hookRegistry.has(eventName)) {
+        hookRegistry.set(eventName, []);
+      }
+      hookRegistry.get(eventName).push({
+        pluginName,
+        handler,
+      });
+    },
+
+    /**
+     * List registered events for this plugin (introspection).
+     * @returns {string[]}
+     */
+    registered() {
+      const events = [];
+      for (const [eventName, handlers] of hookRegistry) {
+        if (handlers.some((h) => h.pluginName === pluginName)) {
+          events.push(eventName);
+        }
+      }
+      return events;
+    },
   };
 }
 

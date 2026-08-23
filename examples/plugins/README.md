@@ -86,3 +86,78 @@ Daemon prompt     → spawns plugin-host → loads server/index.js → tools reg
 Agent calls tool  → MCP tools/call → handler runs → result returned
 ```
 
+
+## compliance-approval (Phase 3)
+
+A hooks plugin that demonstrates Phase 3 event interception capabilities.
+The plugin registers a `before_permission_forward` hook that intercepts
+permission requests before they reach the human approval UI.
+
+### Prerequisites
+
+- Node.js >= 20 available on the server
+- `PARSAR_PLUGIN_HOST_PATH` set to the absolute path of
+  `server/plugin-host/index.js`
+- (Optional) `COMPLIANCE_OA_WEBHOOK` set to your internal OA system's
+  approval API endpoint for sensitive operation escalation
+
+### Install
+
+```bash
+export PARSAR_SERVER_URL=http://localhost:8080
+export PARSAR_RUNNER_TOKEN=<your-token>
+export PARSAR_WORKSPACE_ID=<your-workspace-id>
+
+parsar plugin add ./examples/plugins/compliance-approval
+```
+
+### What It Does
+
+**Hook: before_permission_forward**
+
+When the Agent requests approval for a command, the hook evaluates it:
+
+| Pattern | Decision | Example |
+|---------|----------|---------|
+| `rm -rf`, `DROP TABLE`, `mkfs` | Auto-deny | `rm -rf /tmp/data` → blocked |
+| `kubectl delete`, `curl\|bash`, `chmod 777` | Escalate to OA + ask human | Sent to internal OA webhook |
+| `ls`, `cat`, `git status` | Auto-allow | No approval needed |
+| Everything else | Ask human | Normal approval flow |
+
+**Tools:**
+
+- **compliance_check_status**: Shows active policy rules and recent audit entries
+- **compliance_audit_log**: Query the audit log by action type
+
+**Skill:**
+
+Tells the Agent about the compliance policy so it doesn't try to work
+around denied commands.
+
+### Verify
+
+1. Install the plugin and restart the server
+2. Bind it to an Agent via the admin UI
+3. Start a new conversation and ask the Agent to run `rm -rf /tmp/scratch`
+4. The command should be **auto-denied** — no approval card appears, the
+   run timeline shows "Auto-denied by plugin" with the reason
+5. Ask the Agent to run `kubectl delete pod nginx`
+6. This should trigger **OA escalation** — the approval card appears
+   AND the OA system is notified
+7. Ask the Agent to run `ls -la`
+8. This should be **auto-allowed** — no approval card, command executes
+
+### End-to-End Flow
+
+```
+Agent requests bash "rm -rf /"
+  → Daemon emits permission_request
+  → Go server receives EventPermissionRequest
+  → pluginHookInvoker calls hooks/invoke { event: "before_permission_forward", payload: {...} }
+  → Plugin-host runs compliance handler
+  → Handler matches DENY_PATTERNS → returns { deny: true, reason: "危险命令：递归强制删除" }
+  → Go server auto-submits denial to daemon (no human interaction created)
+  → Event persisted as "permission.auto_denied" with hook_reason
+  → SSE stream sends permission event with hook_decision
+  → Frontend skips approval card, shows "Auto-denied by plugin" in timeline
+```

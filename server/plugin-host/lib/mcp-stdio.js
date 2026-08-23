@@ -1,5 +1,5 @@
 // MCP stdio transport — implements the Model Context Protocol (JSON-RPC 2.0)
-// over stdin/stdout for tool invocation.
+// over stdin/stdout for tool invocation and hook interception.
 //
 // Protocol reference: https://modelcontextprotocol.io/specification
 //
@@ -7,6 +7,8 @@
 //   initialize           → server info + capabilities
 //   tools/list           → list all registered tools
 //   tools/call           → invoke a tool handler
+//   hooks/list           → list all registered hook events
+//   hooks/invoke         → invoke hook handlers for an event (Phase 3)
 //   notifications/initialized → client ack (no response)
 //   ping                 → pong
 
@@ -21,6 +23,7 @@ const SERVER_INFO = {
 
 const SERVER_CAPABILITIES = {
   tools: {},
+  hooks: {},
 };
 
 /**
@@ -79,6 +82,10 @@ async function handleRequest(host, request) {
       return handleToolsList(host);
     case 'tools/call':
       return handleToolsCall(host, params);
+    case 'hooks/list':
+      return handleHooksList(host);
+    case 'hooks/invoke':
+      return handleHooksInvoke(host, params);
     default: {
       const err = new Error(`Method not found: ${method}`);
       err.code = -32601;
@@ -189,6 +196,104 @@ function normalizeToolResult(result) {
   // Fallback: serialize as JSON.
   return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
 }
+
+// ─── Hooks Methods ───────────────────────────────────────────────────────────
+
+/**
+ * Return the list of registered hook events and their plugin sources.
+ */
+function handleHooksList(host) {
+  const hooks = [];
+  for (const [eventName, handlers] of host.hooks) {
+    hooks.push({
+      event: eventName,
+      plugins: handlers.map((h) => h.pluginName),
+    });
+  }
+  return { hooks };
+}
+
+/**
+ * Invoke all registered handlers for a hook event.
+ *
+ * Params:
+ *   { event: string, payload: object }
+ *
+ * Returns:
+ *   { decision: "deny" | "allow" | "ask_human", reason?: string, plugin?: string }
+ *
+ * Semantics:
+ *   - Handlers run sequentially in registration order.
+ *   - First handler that returns { deny: true } or { allow: true } wins.
+ *   - If all return { ask_human: true } or no handlers exist, returns ask_human.
+ *   - Per-handler timeout: 5s. Timeout → skip that handler (log warning).
+ *   - Total invocation timeout: handled by the caller (Go side).
+ */
+async function handleHooksInvoke(host, params) {
+  if (!params?.event) {
+    const err = new Error('hooks/invoke: missing params.event');
+    err.code = -32602;
+    throw err;
+  }
+
+  const handlers = host.hooks.get(params.event);
+  if (!handlers || handlers.length === 0) {
+    // No handlers registered — signal the caller to use default behavior.
+    return { decision: 'no_handler' };
+  }
+
+  const payload = params.payload ?? {};
+  const perHandlerTimeout = 5_000;
+
+  for (const entry of handlers) {
+    let result;
+    try {
+      result = await Promise.race([
+        entry.handler(payload),
+        timeout(perHandlerTimeout, `Hook handler from "${entry.pluginName}" timed out (${perHandlerTimeout}ms)`),
+      ]);
+    } catch (handlerErr) {
+      process.stderr.write(
+        `plugin-host: hook "${params.event}" handler from "${entry.pluginName}" failed: ${handlerErr.message}\n`
+      );
+      // Handler error → skip, continue to next handler.
+      continue;
+    }
+
+    if (!result || typeof result !== 'object') {
+      continue;
+    }
+
+    // First decisive answer wins.
+    if (result.deny) {
+      return {
+        decision: 'deny',
+        reason: result.reason ?? '',
+        plugin: entry.pluginName,
+      };
+    }
+    if (result.allow) {
+      return {
+        decision: 'allow',
+        reason: result.reason ?? '',
+        plugin: entry.pluginName,
+      };
+    }
+    if (result.ask_human) {
+      return {
+        decision: 'ask_human',
+        reason: result.reason ?? '',
+        plugin: entry.pluginName,
+      };
+    }
+    // Handler returned something else — treat as no-op, continue.
+  }
+
+  // All handlers either skipped or returned no decision → fallback.
+  return { decision: 'ask_human', reason: 'no decisive handler' };
+}
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 function timeout(ms, message) {
   return new Promise((_, reject) => {

@@ -1,0 +1,12 @@
+{
+  "name": "@internal/compliance-approval",
+  "version": "1.0.0",
+  "description": "Compliance approval plugin — auto-denies dangerous commands (rm -rf), forwards sensitive operations to internal OA approval flow.",
+  "author": "FDE Team",
+  "server": {
+    "entry": "./server/index.js",
+    "tools": ["compliance_check_status", "compliance_audit_log"],
+    "hooks": ["before_permission_forward"]
+  },
+  "skills": ["./skills/compliance-policy.md"]
+}
