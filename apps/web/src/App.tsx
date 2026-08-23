@@ -9,6 +9,9 @@ import { InviteAcceptPage } from "./pages/InviteAcceptPage"
 import { AuthProvider, useAuth } from "./lib/auth-context"
 import { ThemeProvider } from "./lib/theme-provider"
 import { useMyWorkspaces } from "./lib/api-workspaces"
+import { SingleSlot } from "./components/plugin/SlotRenderer"
+import { usePluginClients } from "./lib/use-plugins"
+import { useWorkspaceId } from "./lib/workspace"
 
 function LoadingScreen({ message }: { message: string }) {
   return (
@@ -21,6 +24,8 @@ function LoadingScreen({ message }: { message: string }) {
 function AuthedRoot() {
   const { t } = useTranslation("common")
   const wsQuery = useMyWorkspaces()
+  const wsId = useWorkspaceId()
+  usePluginClients(wsId)
 
   if (wsQuery.isLoading) {
     return <LoadingScreen message={t("login.loading")} />
@@ -28,7 +33,12 @@ function AuthedRoot() {
   if ((wsQuery.data?.workspaces.length ?? 0) === 0) {
     return <OnboardingPage />
   }
-  return <AdminRouter />
+  // workspace.main slot: when a plugin registers here, it takes over
+  // the entire page (full-screen). No navigation, no sidebar — the
+  // plugin owns everything.
+  return (
+    <SingleSlot slotId="workspace.main" fallback={<AdminRouter />} />
+  )
 }
 
 function Root() {

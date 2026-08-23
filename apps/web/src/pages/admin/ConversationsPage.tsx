@@ -68,6 +68,7 @@ import {
   writeConversationViewState,
 } from "../../lib/conversation-view-state"
 import { credentialKindLabel } from "./capability-ui"
+import { ToolCardSlot, SingleSlot, ListSlot } from "../../components/plugin/SlotRenderer"
 
 const FOLD_KEY = "parsar:conv:sidebarFolded"
 
@@ -715,6 +716,23 @@ function ConversationMain(p: MainProps) {
   const err = p.convError
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
 
+  // workspace.content slot: plugin can replace the conversation content
+  // area while keeping the navigation sidebar intact.
+  return (
+    <SingleSlot
+      slotId="workspace.content"
+      context={{ agent: p.agent, conversationId: p.conversationId }}
+      fallback={
+        <ConversationMainInner err={err} isUnreachable={isUnreachable ?? false} {...p} />
+      }
+    />
+  )
+}
+
+function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boolean }) {
+  const { t } = useTranslation("admin")
+  const { err, isUnreachable } = p
+
   return (
     <main className="relative flex min-w-0 flex-1 flex-col bg-surface-subtle">
       {p.folded && (
@@ -1021,6 +1039,7 @@ function ChatStream({
                 {t("conversations.detail.cancelAll", { defaultValue: "Cancel all" })}
               </Button>
             )}
+            <ListSlot slotId="conversation.header.actions" context={{ conversationId, agent }} />
           </div>
         </div>
       </div>
@@ -1121,6 +1140,7 @@ function ChatStream({
 
       <div className="border-t border-line/60 bg-surface/95 px-5 pb-4 pt-2 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-4xl">
+          <ListSlot slotId="conversation.input.dock" context={{ conversationId }} />
           {chatToast && <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />}
           <ComposerForm
             conversationId={conversationId}
@@ -1250,13 +1270,24 @@ function MessageRow({
     return steps.map((s) => (s.status === "running" ? { ...s, status: "failed" as const } : s))
   })
   const failedRun = (outputRuns ?? []).find((r) => r.status === "failed")
+  // Extract presentation from: 1) message metadata, or 2) tool step results.
+  // Plugin-host embeds __parsar_presentation in the MCP tool_result content
+  // blocks; the daemon forwards it in the step result.content array.
+  const presentation = (metadata?.presentation as { kind?: string; data?: unknown } | undefined)
+    ?? extractPresentationFromSteps(allSteps)
   return (
     <div className="flex">
       <div className="max-w-[82%] border-l border-line pl-4">
         <div className="mb-1.5 text-xs font-medium text-fg-faint">{agentName || "Agent"}</div>
-        <div className="text-base leading-[1.7] text-fg">
-          <p className="whitespace-pre-wrap">{content}</p>
-        </div>
+        <ToolCardSlot
+          presentation={presentation}
+          content={content}
+          fallback={
+            <div className="text-base leading-[1.7] text-fg">
+              <p className="whitespace-pre-wrap">{content}</p>
+            </div>
+          }
+        />
         {allSteps.length > 0 && <StepTrace steps={allSteps} />}
         {failedRun && onOpenRun && (
           <button
@@ -1544,6 +1575,35 @@ function ComposerForm({
 /* ============================================================== */
 /*  Utilities                                                        */
 /* ============================================================== */
+
+/**
+ * Extract __parsar_presentation from tool step results.
+ * Plugin-host embeds presentation as a content block in the MCP tool_result:
+ *   result.content = [{type:'text', text:'...'}, {type:'text', text:'{"__parsar_presentation":...}'}]
+ * Returns the first presentation found across all steps, or undefined.
+ */
+function extractPresentationFromSteps(steps: ToolStep[]): { kind?: string; data?: unknown } | undefined {
+  for (const step of steps) {
+    if (!step.result) continue
+    const content = step.result.content
+    if (!Array.isArray(content)) continue
+    for (const block of content) {
+      if (typeof block !== "object" || block === null) continue
+      const text = (block as { text?: string }).text
+      if (typeof text !== "string") continue
+      if (!text.includes("__parsar_presentation")) continue
+      try {
+        const parsed = JSON.parse(text)
+        if (parsed.__parsar_presentation) {
+          return parsed.__parsar_presentation as { kind?: string; data?: unknown }
+        }
+      } catch {
+        // Not valid JSON, skip.
+      }
+    }
+  }
+  return undefined
+}
 
 function truncate(s: string, n: number): string {
   if (!s) return ""

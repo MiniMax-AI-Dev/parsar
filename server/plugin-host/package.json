@@ -10,5 +10,8 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.0"
   }
 }

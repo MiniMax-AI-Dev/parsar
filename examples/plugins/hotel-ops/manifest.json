@@ -7,5 +7,8 @@
     "entry": "./server/index.js",
     "tools": ["check_room_status", "suggest_pricing"]
   },
+  "client": {
+    "entry": "./client/index.tsx"
+  },
   "skills": ["./skills/hotel-workflow.md"]
 }

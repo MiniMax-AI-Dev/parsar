@@ -188,6 +188,33 @@ description and keep ownership on the side listed here.
   phases will add `ctx.hooks`, `ctx.credentials`, and `ctx.api`.
 - Plugin tool handlers have a 30-second timeout. Errors are returned as
   MCP tool-level errors (`isError: true`), not JSON-RPC errors.
+- **Client UI** uses a slot-based extension system
+  (`apps/web/src/lib/plugin-slots.ts`). Plugins register React components
+  to named slots via `ctx.slots.register(slotId, { key, component, match? })`.
+- Slot types: `single` (last registration replaces), `list` (all render
+  in order), `chain` (first match wins — used for tool-card rendering).
+- Client bundles are built by the CLI during `parsar plugin add` using
+  esbuild (`server/plugin-host/build-client.js`). Output goes to
+  `<plugins_dir>/<name>/dist/client.js`. Served via
+  `GET /api/v1/plugins/{name}/client.js`.
+- React is shared via `window.__PARSAR_PLUGIN_API__` (exposed in
+  `plugin-init.ts`). Plugins must NOT bundle their own React.
+- Plugin client bundles use IIFE format with a `require()` shim and an
+  esbuild `externalize-react` plugin. Standard `import React` works;
+  `react-dom` specific APIs (`createPortal`, etc.) are not yet supported.
+- The frontend loads plugin clients on page load via `usePluginClients`
+  hook. Binding/unbinding a capability triggers an immediate reload
+  through React Query invalidation.
+- Predefined slot IDs (add new ones as FDE needs arise):
+  `workspace.main`, `workspace.content`, `layout.header.actions`,
+  `layout.nav.bottom`, `conversation.tool-card`,
+  `conversation.header.actions`, `conversation.input.dock`,
+  `conversation.composer.left/right`, `agent.workspace`,
+  `agent.settings.section`.
+- Adding a new slot point: wrap the target area with
+  `<SingleSlot slotId="..." fallback={<OriginalContent />} />` or insert
+  `<ListSlot slotId="..." />` at the desired position. Each new slot is
+  3–5 lines of code.
 
 ### Human interaction lifecycle
 

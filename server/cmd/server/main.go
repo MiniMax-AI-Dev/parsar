@@ -625,6 +625,7 @@ func main() {
 	if blobStore != nil {
 		opts = append(opts, dev.WithBlobStore(blobStore))
 	}
+	opts = append(opts, dev.WithPluginsDir(cfg.PluginsDir()))
 
 	// Wire the audit ingester for dev handlers that emit directly.
 	// Nil-safe: nil store treats it as "audit not wired" (best-effort).

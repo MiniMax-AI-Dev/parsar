@@ -19,6 +19,7 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
 import { ThemeMenu } from "./ThemeMenu"
 import { UserMenu } from "./UserMenu"
 import { useTheme } from "../../lib/theme"
+import { ListSlot } from "../plugin/SlotRenderer"
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -102,6 +103,7 @@ export function AdminLayout({
         <WorkspaceSwitcher />
 
         <div className="ml-auto flex items-center gap-2">
+          <ListSlot slotId="layout.header.actions" />
           <ThemeMenu />
           <UserMenu />
         </div>
@@ -162,6 +164,7 @@ export function AdminLayout({
                 </ul>
               </nav>
             ))}
+            <ListSlot slotId="layout.nav.bottom" />
           </aside>
         )}
 

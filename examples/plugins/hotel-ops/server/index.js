@@ -118,6 +118,19 @@ export default (ctx) => {
           recommendation:
             multiplier > 1 ? 'Raise price (high demand)' : multiplier < 1 ? 'Lower price (low occupancy)' : 'Keep current price',
         },
+        presentation: {
+          kind: 'pricing-suggestion',
+          data: {
+            room_type,
+            date: date || new Date().toISOString().slice(0, 10),
+            base_price: basePrice,
+            occupancy_rate: `${Math.round(occupancyRate * 100)}%`,
+            multiplier,
+            suggested_price: suggested,
+            recommendation:
+              multiplier > 1 ? 'Raise price (high demand)' : multiplier < 1 ? 'Lower price (low occupancy)' : 'Keep current price',
+          },
+        },
       };
     },
   });
