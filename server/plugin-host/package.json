@@ -1,0 +1,14 @@
+{
+  "name": "@parsar/plugin-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Parsar Plugin Host — loads plugin server modules and exposes tools via MCP stdio protocol",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

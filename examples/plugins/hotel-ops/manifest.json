@@ -1,0 +1,11 @@
+{
+  "name": "@internal/hotel-ops",
+  "version": "1.0.0",
+  "description": "Hotel operations plugin — check room status, suggest pricing adjustments based on occupancy.",
+  "author": "FDE Team",
+  "server": {
+    "entry": "./server/index.js",
+    "tools": ["check_room_status", "suggest_pricing"]
+  },
+  "skills": ["./skills/hotel-workflow.md"]
+}

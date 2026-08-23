@@ -47,7 +47,6 @@ func printPluginHelp(w io.Writer) {
 // ----- plugin add -----------------------------------------------------------
 
 // pluginManifest mirrors the user-authored manifest.json in a plugin directory.
-// Only the fields needed for Phase 0 are defined.
 type pluginManifest struct {
 	Name        string               `json:"name"`
 	Version     string               `json:"version"`
@@ -156,6 +155,16 @@ func runPluginAdd(ctx *runContext, args []string) error {
 		"visibility":  "workspace",
 		"version":     manifest.Version,
 		"canonical_spec": canonicalSpec,
+	}
+
+	// Phase 1: if the plugin has a server entry, copy the plugin directory
+	// to the plugins storage dir BEFORE the API call. If copy fails, we
+	// leave harmless files on disk rather than a DB record with no loadable
+	// server code (which would cause runtime spawn errors).
+	if manifest.Server != nil && manifest.Server.Entry != "" {
+		if err := copyPluginToStorage(pluginDir, manifest.Name); err != nil {
+			return fmt.Errorf("plugin add: copy server files: %w", err)
+		}
 	}
 
 	cfg, err := ctx.resolveConfig()
@@ -295,6 +304,108 @@ func runPluginRemove(ctx *runContext, args []string) error {
 	if err := c.do(context.Background(), "DELETE", "/api/v1/workspaces/"+cfg.WorkspaceID+"/capabilities/"+capabilityID, nil, nil, nil); err != nil {
 		return fmt.Errorf("plugin remove: %w", err)
 	}
+
+	// Clean up on-disk plugin files (best-effort; failure is logged but
+	// doesn't fail the command since the DB record is already gone).
+	if pluginsDir, err := resolvePluginsDir(); err == nil {
+		dirName := pluginDirName(name)
+		_ = os.RemoveAll(filepath.Join(pluginsDir, dirName))
+	}
+
 	fmt.Fprintf(ctx.stdout, "plugin %q removed\n", name)
+	return nil
+}
+
+// ----- plugin storage -------------------------------------------------------
+
+// resolvePluginsDir determines the plugins storage directory.
+// Reads PARSAR_DATA_DIR (same env the server uses), defaults to ~/.parsar.
+func resolvePluginsDir() (string, error) {
+	dataDir := strings.TrimSpace(os.Getenv("PARSAR_DATA_DIR"))
+	if dataDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot determine home directory: %w", err)
+		}
+		dataDir = filepath.Join(home, ".parsar")
+	}
+	return filepath.Join(dataDir, "plugins"), nil
+}
+
+// pluginDirName converts a bundle name (possibly scoped) to the directory
+// name under plugins/. Strips the "@scope/" prefix.
+// NOTE: duplicated in server/internal/connector/agentdaemon/capability_runtime.go
+// (bundleNameToDirName). Keep both in sync until a shared package is extracted.
+func pluginDirName(name string) string {
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		return name[idx+1:]
+	}
+	return name
+}
+
+// copyPluginToStorage copies the plugin source directory into
+// <plugins_dir>/<dir-name>/, creating the target if needed. Existing
+// contents are replaced (simple rm + copy).
+func copyPluginToStorage(srcDir, pluginName string) error {
+	pluginsDir, err := resolvePluginsDir()
+	if err != nil {
+		return err
+	}
+	dirName := pluginDirName(pluginName)
+	dstDir := filepath.Join(pluginsDir, dirName)
+
+	// Remove previous install (idempotent upgrade).
+	_ = os.RemoveAll(dstDir)
+
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return fmt.Errorf("create plugin dir: %w", err)
+	}
+
+	return copyDir(srcDir, dstDir)
+}
+
+// copyDir recursively copies src into dst. Both must exist.
+// Skips node_modules, .git, and symlinks.
+func copyDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		// Skip symlinks — avoid traversing outside the plugin tree.
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Skip node_modules — never copy dependency trees.
+			if entry.Name() == "node_modules" || entry.Name() == ".git" {
+				continue
+			}
+			if err := os.MkdirAll(dstPath, 0o755); err != nil {
+				return err
+			}
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			// Preserve execute bit for scripts.
+			info, _ := entry.Info()
+			mode := os.FileMode(0o644)
+			if info != nil && info.Mode()&0o111 != 0 {
+				mode = 0o755
+			}
+			if err := os.WriteFile(dstPath, data, mode); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }

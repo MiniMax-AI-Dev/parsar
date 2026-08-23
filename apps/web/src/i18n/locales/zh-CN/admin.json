@@ -1423,7 +1423,8 @@
             "mcp": "MCP",
             "skill": "Skill",
             "plugin": "Plugin",
-            "system_prompt": "System Prompt"
+            "system_prompt": "System Prompt",
+            "bundle": "插件包"
           }
         },
         "builtin": {

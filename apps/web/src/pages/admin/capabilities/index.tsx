@@ -279,7 +279,7 @@ export function CapabilitiesPage() {
         <MarketplaceTab
           itemID={marketplaceItem}
           query={query}
-          typeFilter={typeFilter}
+          typeFilter={typeFilter === "bundle" ? "mcp" : typeFilter}
           canImport={canImportDirectory}
           canManage={isAdmin}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}

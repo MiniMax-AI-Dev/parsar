@@ -393,7 +393,7 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 			}
 			result.SystemPrompts = append(result.SystemPrompts, *sp)
 		case "bundle":
-			prompts, err := c.resolveBundleCapability(ctx, cap, renderer)
+			bundle, err := c.resolveBundleCapability(ctx, cap, renderer)
 			if err != nil {
 				if errors.Is(err, render.ErrUnsupported) {
 					c.log.Warn("agent_daemon: bundle capability not supported by agent_kind, skipping",
@@ -406,7 +406,15 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 				}
 				return result, err
 			}
-			result.SystemPrompts = append(result.SystemPrompts, prompts...)
+			result.SystemPrompts = append(result.SystemPrompts, bundle.SystemPrompts...)
+			if len(bundle.MCPServers) > 0 {
+				if result.MCPServers == nil {
+					result.MCPServers = map[string]any{}
+				}
+				for name, config := range bundle.MCPServers {
+					result.MCPServers[name] = config
+				}
+			}
 		default:
 			c.log.Warn("agent_daemon: skip unknown capability type",
 				"capability_id", cap.CapabilityID,
@@ -1059,55 +1067,101 @@ func (c *Connector) resolveSystemPromptCapability(
 }
 
 // resolveBundleCapability extracts inline skills from a KindBundle capability
-// and returns them as ResolvedSystemPrompt entries in append mode. Phase 0
-// only injects skills; server tools, client UI, and hooks are handled in
-// later phases.
+// and returns them as ResolvedSystemPrompt entries in append mode. When the
+// bundle declares a server_entry and the plugin-host path is configured, it
+// also returns an MCP server config that spawns the plugin-host for this
+// bundle's tools.
 func (c *Connector) resolveBundleCapability(
 	ctx context.Context,
 	cap store.EnabledCapabilityRead,
 	renderer render.Renderer,
-) ([]ResolvedSystemPrompt, error) {
+) (bundleResolution, error) {
+	var res bundleResolution
 	resolved := resolveVersionFields(cap)
 	if len(resolved.CanonicalSpec) == 0 {
 		c.log.Warn("agent_daemon: bundle capability has empty canonical_spec, skipping",
 			"capability_id", cap.CapabilityID,
 			"capability_name", cap.Name)
-		return nil, nil
+		return res, nil
 	}
 	var spec canonical.Spec
 	if err := json.Unmarshal(resolved.CanonicalSpec, &spec); err != nil {
-		return nil, fmt.Errorf("agent_daemon: bundle capability %s canonical_spec decode: %w", cap.CapabilityID, err)
+		return res, fmt.Errorf("agent_daemon: bundle capability %s canonical_spec decode: %w", cap.CapabilityID, err)
 	}
 	if spec.Kind != canonical.KindBundle {
-		return nil, fmt.Errorf("agent_daemon: capability %s has type=bundle but canonical_spec.kind=%q", cap.CapabilityID, spec.Kind)
+		return res, fmt.Errorf("agent_daemon: capability %s has type=bundle but canonical_spec.kind=%q", cap.CapabilityID, spec.Kind)
 	}
 	if spec.Bundle == nil {
-		return nil, fmt.Errorf("agent_daemon: capability %s canonical_spec.bundle is nil", cap.CapabilityID)
+		return res, fmt.Errorf("agent_daemon: capability %s canonical_spec.bundle is nil", cap.CapabilityID)
 	}
 	// Render call for wire-shape consistency (matches other resolve* funcs).
 	if _, err := renderer.Render(ctx, spec); err != nil {
-		return nil, fmt.Errorf("agent_daemon: render bundle %s: %w", cap.CapabilityID, err)
+		return res, fmt.Errorf("agent_daemon: render bundle %s: %w", cap.CapabilityID, err)
 	}
 	// Inject each inline skill as a system prompt in append mode.
-	var prompts []ResolvedSystemPrompt
 	for _, skill := range spec.Bundle.Skills {
 		instruction := strings.TrimSpace(skill.Instruction)
 		if instruction == "" {
 			continue
 		}
-		prompts = append(prompts, ResolvedSystemPrompt{
+		res.SystemPrompts = append(res.SystemPrompts, ResolvedSystemPrompt{
 			Name:    fmt.Sprintf("bundle:%s/%s", spec.Bundle.Name, skill.Slug),
 			Mode:    canonical.SystemPromptModeAppend,
 			Content: instruction,
 		})
 	}
-	if len(prompts) > 0 {
+	if len(res.SystemPrompts) > 0 {
 		c.log.Info("agent_daemon: bundle capability resolved skills",
 			"capability_id", cap.CapabilityID,
 			"bundle_name", spec.Bundle.Name,
-			"skill_count", len(prompts))
+			"skill_count", len(res.SystemPrompts))
 	}
-	return prompts, nil
+	// Phase 1: when the bundle has a server_entry AND the plugin-host
+	// is configured, emit an MCP server entry that spawns plugin-host
+	// for this bundle.
+	serverEntry := strings.TrimSpace(spec.Bundle.ServerEntry)
+	if serverEntry != "" && c.pluginHostPath != "" && c.pluginsDir != "" {
+		// Derive the on-disk plugin directory name from the bundle name.
+		// e.g. "@internal/hotel-ops" → "hotel-ops" (strip scope prefix).
+		dirName := bundleNameToDirName(spec.Bundle.Name)
+		mcpName := "plugin:" + spec.Bundle.Name
+		res.MCPServers = map[string]any{
+			mcpName: map[string]any{
+				"command": "node",
+				"args":    []any{c.pluginHostPath, "--plugins-dir", c.pluginsDir, "--plugin", spec.Bundle.Name},
+			},
+		}
+		c.log.Info("agent_daemon: bundle capability resolved server tools as MCP",
+			"capability_id", cap.CapabilityID,
+			"bundle_name", spec.Bundle.Name,
+			"mcp_server_name", mcpName,
+			"plugin_dir_name", dirName)
+	} else if serverEntry != "" && c.pluginHostPath == "" {
+		c.log.Warn("agent_daemon: bundle has server_entry but PARSAR_PLUGIN_HOST_PATH is not configured; server tools skipped",
+			"capability_id", cap.CapabilityID,
+			"bundle_name", spec.Bundle.Name)
+	}
+	return res, nil
+}
+
+// bundleResolution holds the outputs of resolveBundleCapability: skill
+// injections (system prompts) and optional MCP server configs for bundles
+// that declare a server_entry.
+type bundleResolution struct {
+	SystemPrompts []ResolvedSystemPrompt
+	MCPServers    map[string]any // server_name → {command, args, env}
+}
+
+// bundleNameToDirName converts a bundle name (possibly scoped with @)
+// to the directory name used under plugins/. Strips the "@scope/" prefix.
+// NOTE: duplicated in apps/parsar/internal/cli/plugin.go (pluginDirName).
+// Keep both in sync until a shared package is extracted.
+func bundleNameToDirName(name string) string {
+	// "@internal/hotel-ops" → "hotel-ops"
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		return name[idx+1:]
+	}
+	return name
 }
 
 // mergeSkillsIntoOptions folds resolved skill descriptors into
