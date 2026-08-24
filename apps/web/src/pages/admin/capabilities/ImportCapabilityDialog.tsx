@@ -21,6 +21,7 @@ import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { ApiError } from "../../../lib/api-client"
+import { preventDialogDismissForCredentialMenu } from "../../../lib/dialog-interactions"
 
 import { useImportCommitMutation } from "./api"
 import { ImportMCPForm } from "./ImportMCPForm"
@@ -44,12 +45,7 @@ interface Props {
 
 type AddCapabilityKind = "mcp" | "skill"
 
-export function ImportCapabilityDialog({
-  workspaceID,
-  open,
-  onOpenChange,
-  onCreated,
-}: Props) {
+export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCreated }: Props) {
   const { t } = useTranslation("admin")
   const commitMut = useImportCommitMutation(workspaceID)
 
@@ -77,16 +73,19 @@ export function ImportCapabilityDialog({
   // previous run doesn't bleed in.
   useEffect(() => {
     if (!open) return
-    setKind("mcp")
-    setName("")
-    setDescription("")
-    setSpec(null)
-    setInlineSecrets([])
-    setRawText("")
-    setSourceFormat("json")
-    setSkillOssKey(null)
-    nameTouched.current = false
-    commitMut.reset()
+    const resetTimer = window.setTimeout(() => {
+      setKind("mcp")
+      setName("")
+      setDescription("")
+      setSpec(null)
+      setInlineSecrets([])
+      setRawText("")
+      setSourceFormat("json")
+      setSkillOssKey(null)
+      nameTouched.current = false
+      commitMut.reset()
+    }, 0)
+    return () => window.clearTimeout(resetTimer)
     // intentionally only on the open transition
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -128,11 +127,12 @@ export function ImportCapabilityDialog({
     setDescription(suggested)
   }
 
-  const errMsg = commitMut.error instanceof ApiError
-    ? commitMut.error.envelope.message
-    : commitMut.error instanceof Error
-      ? commitMut.error.message
-      : null
+  const errMsg =
+    commitMut.error instanceof ApiError
+      ? commitMut.error.envelope.message
+      : commitMut.error instanceof Error
+        ? commitMut.error.message
+        : null
 
   const canSubmit =
     !commitMut.isPending &&
@@ -150,12 +150,10 @@ export function ImportCapabilityDialog({
       description: description.trim() || undefined,
       canonical_spec: spec,
       inline_secrets: inlineSecrets.length === 0 ? undefined : inlineSecrets,
-      source_payload: rawText
-        ? { raw_text: rawText, source_format: sourceFormat }
-        : undefined,
+      source_payload: rawText ? { raw_text: rawText, source_format: sourceFormat } : undefined,
       // Skill zip commits: server uses oss_key to re-fetch the zip and
       // re-parse files[] into canonical_spec.skill.files.
-      oss_key: kind === "skill" ? skillOssKey ?? undefined : undefined,
+      oss_key: kind === "skill" ? (skillOssKey ?? undefined) : undefined,
       upload_source: kind === "skill" && skillOssKey ? "zip" : undefined,
     }
     commitMut.mutate(payload, {
@@ -170,15 +168,10 @@ export function ImportCapabilityDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl overflow-x-hidden overflow-y-auto"
-        // Keep typing in the textareas from triggering submit on Enter etc.
-        onInteractOutside={(e) => {
-          if (commitMut.isPending) e.preventDefault()
-        }}
+        onInteractOutside={preventDialogDismissForCredentialMenu}
       >
         <DialogHeader>
-          <DialogTitle>
-            {t("capabilities.import.dialog.title", "Import capability")}
-          </DialogTitle>
+          <DialogTitle>{t("capabilities.import.dialog.title", "Import capability")}</DialogTitle>
           <DialogDescription>
             {kind === "skill"
               ? t(
@@ -194,12 +187,8 @@ export function ImportCapabilityDialog({
 
         <Tabs value={kind} onValueChange={onTabChange}>
           <TabsList>
-            <TabsTrigger value="mcp">
-              {t("capabilities.import.tab.mcp", "MCP")}
-            </TabsTrigger>
-            <TabsTrigger value="skill">
-              {t("capabilities.import.tab.skill", "Skill")}
-            </TabsTrigger>
+            <TabsTrigger value="mcp">{t("capabilities.import.tab.mcp", "MCP")}</TabsTrigger>
+            <TabsTrigger value="skill">{t("capabilities.import.tab.skill", "Skill")}</TabsTrigger>
           </TabsList>
 
           {/* ---- shared meta fields (MCP only) -----------------------
@@ -208,25 +197,17 @@ export function ImportCapabilityDialog({
               the source-of-truth markdown and silently overwrite it. */}
           {kind !== "skill" && (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Field
-                label={t("capabilities.import.dialog.name", "Name")}
-                required
-              >
+              <Field label={t("capabilities.import.dialog.name", "Name")} required>
                 <Input
                   value={name}
                   onChange={(e) => {
                     nameTouched.current = true
                     setName(e.target.value)
                   }}
-                  placeholder={t(
-                    "capabilities.import.dialog.namePlaceholder",
-                    "e.g. github-mcp",
-                  )}
+                  placeholder={t("capabilities.import.dialog.namePlaceholder", "e.g. github-mcp")}
                 />
               </Field>
-              <Field
-                label={t("capabilities.import.dialog.descriptionLabel", "Description")}
-              >
+              <Field label={t("capabilities.import.dialog.descriptionLabel", "Description")}>
                 <Input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -293,9 +274,7 @@ export function ImportCapabilityDialog({
             {t("capabilities.actions.cancel", "Cancel")}
           </Button>
           <Button size="sm" disabled={!canSubmit} onClick={submit}>
-            {commitMut.isPending && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            )}
+            {commitMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {t("capabilities.import.dialog.submit", "Import")}
           </Button>
         </DialogFooter>
