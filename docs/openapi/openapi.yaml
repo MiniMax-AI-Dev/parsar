@@ -631,6 +631,8 @@ definitions:
           type: string
         type: array
     type: object
+  dev.installPluginBody:
+    type: object
   dev.installSkillRequest:
     properties:
       registry:
@@ -6492,6 +6494,54 @@ paths:
               type: string
             type: object
       summary: List workspace marketplace installs
+      tags:
+      - capabilities
+  /api/v1/workspaces/{workspaceID}/capabilities/plugins/install:
+    post:
+      consumes:
+      - application/json
+      description: Creates a KindBundle capability and its first version. The canonical_spec
+        must have kind=bundle with inline skills embedded. Owner/admin only.
+      operationId: installPluginBundle
+      parameters:
+      - description: Workspace UUID
+        in: path
+        name: workspaceID
+        required: true
+        type: string
+      - description: Plugin install payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dev.installPluginBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created capability and version
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Missing name/version, invalid canonical_spec
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Caller is not workspace owner/admin
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Database-backed capability APIs are disabled
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Install a plugin bundle
       tags:
       - capabilities
   /api/v1/workspaces/{workspaceID}/capabilities/uninstall:

@@ -140,7 +140,11 @@ export function CapabilitiesPage() {
   // Tab is URL-driven; default lands on workspace. Marketplace tab also
   // owns the selected-detail state via the `item` URL param.
   const pageTab: PageTab = routeTab === "marketplace" || itemParam ? "marketplace" : "workspace"
+  const marketplaceTypeFilter: "mcp" | "skill" = typeFilter === "skill" ? "skill" : "mcp"
   const setPageTab = (next: PageTab) => {
+    if (next === "marketplace" && typeFilter === "bundle") {
+      setTypeFilter("mcp")
+    }
     navigate("capabilities", { tab: next === "marketplace" ? "marketplace" : null, item: null })
   }
   const marketplaceItem = pageTab === "marketplace" ? itemParam : null
@@ -263,8 +267,9 @@ export function CapabilitiesPage() {
         <CapabilitiesFilterBar
           query={query}
           onQueryChange={setQuery}
-          typeFilter={typeFilter}
+          typeFilter={pageTab === "marketplace" ? marketplaceTypeFilter : typeFilter}
           onTypeFilterChange={setTypeFilter}
+          showBundle={pageTab === "workspace"}
         />
       )}
 
@@ -279,7 +284,7 @@ export function CapabilitiesPage() {
         <MarketplaceTab
           itemID={marketplaceItem}
           query={query}
-          typeFilter={typeFilter === "bundle" ? "mcp" : typeFilter}
+          typeFilter={marketplaceTypeFilter}
           canImport={canImportDirectory}
           canManage={isAdmin}
           onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
@@ -520,11 +525,13 @@ function CapabilitiesFilterBar({
   onQueryChange,
   typeFilter,
   onTypeFilterChange,
+  showBundle,
 }: {
   query: string
   onQueryChange: (value: string) => void
   typeFilter: CapabilityTypeFilter
   onTypeFilterChange: (value: CapabilityTypeFilter) => void
+  showBundle: boolean
 }) {
   const { t } = useTranslation("admin")
   return (
@@ -533,7 +540,7 @@ function CapabilitiesFilterBar({
         <TabsList>
           <TabsTrigger value="mcp">MCP</TabsTrigger>
           <TabsTrigger value="skill">Skill</TabsTrigger>
-          <TabsTrigger value="bundle">Plugin</TabsTrigger>
+          {showBundle && <TabsTrigger value="bundle">Plugin</TabsTrigger>}
         </TabsList>
       </Tabs>
       <div className="relative ml-auto w-full max-w-[280px]">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Copy } from "lucide-react"
+import { Check, Copy, X } from "lucide-react"
 
 import { Button } from "../ui/button"
 import {
@@ -13,6 +13,7 @@ import {
 } from "../ui/dialog"
 import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
+import { copyText } from "../../lib/clipboard"
 
 interface PairDaemonDialogProps {
   open: boolean
@@ -26,12 +27,7 @@ interface PairDaemonDialogProps {
   onPaired?: (runtimeID: string) => void
 }
 
-export function PairDaemonDialog({
-  open,
-  onClose,
-  workspaceID,
-  onPaired,
-}: PairDaemonDialogProps) {
+export function PairDaemonDialog({ open, onClose, workspaceID, onPaired }: PairDaemonDialogProps) {
   const { t } = useTranslation("admin")
   const create = useCreateRuntimePairing(workspaceID)
   // Prefer the server's configured public URL (PARSAR_PUBLIC_URL) over the
@@ -43,9 +39,11 @@ export function PairDaemonDialog({
   // flips online, even when opened from a form with its own non-polling list.
   const listQ = useWorkspaceRuntimes(workspaceID, "agent_daemon")
   const [name, setName] = useState("")
-  const [result, setResult] = useState<
-    { token: string; runtimeName: string; runtimeID: string } | null
-  >(null)
+  const [result, setResult] = useState<{
+    token: string
+    runtimeName: string
+    runtimeID: string
+  } | null>(null)
   const [paired, setPaired] = useState(false)
 
   const allRuntimes = listQ.data ?? []
@@ -57,8 +55,11 @@ export function PairDaemonDialog({
   // re-firing on every 5s list refetch.
   useEffect(() => {
     if (!connected || !result || paired) return
-    setPaired(true)
-    onPaired?.(result.runtimeID)
+    const timer = window.setTimeout(() => {
+      setPaired(true)
+      onPaired?.(result.runtimeID)
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [connected, paired, result, onPaired])
 
   function reset() {
@@ -76,15 +77,20 @@ export function PairDaemonDialog({
     const trimmed = name.trim()
     if (!trimmed) return
     const res = await create.mutateAsync({ name: trimmed, type: "agent_daemon" })
-    setResult({ token: res.pairing_token, runtimeName: res.runtime.name, runtimeID: res.runtime.id })
-  }
-
-  function copyToClipboard(s: string) {
-    void navigator.clipboard.writeText(s)
+    setResult({
+      token: res.pairing_token,
+      runtimeName: res.runtime.name,
+      runtimeID: res.runtime.id,
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) close()
+      }}
+    >
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
@@ -114,12 +120,15 @@ export function PairDaemonDialog({
             </label>
             <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
               <p className="mb-1 font-medium">
-                {t("runtime.agentDaemon.pair.safetyTitle", { defaultValue: "How the connection works" })}
+                {t("runtime.agentDaemon.pair.safetyTitle", {
+                  defaultValue: "How the connection works",
+                })}
               </p>
               <ul className="space-y-1 pl-4">
                 <li>
                   {t("runtime.agentDaemon.pair.safetyOutbound", {
-                    defaultValue: "This host opens an outbound connection — no inbound ports required.",
+                    defaultValue:
+                      "This host opens an outbound connection — no inbound ports required.",
                   })}
                 </li>
                 <li>
@@ -129,15 +138,14 @@ export function PairDaemonDialog({
                 </li>
                 <li>
                   {t("runtime.agentDaemon.pair.safetyOnce", {
-                    defaultValue: "The token is shown once — it cannot be recovered after this dialog closes.",
+                    defaultValue:
+                      "The token is shown once — it cannot be recovered after this dialog closes.",
                   })}
                 </li>
               </ul>
             </div>
             {create.error && (
-              <p className="text-sm text-danger">
-                {(create.error as Error).message}
-              </p>
+              <p className="text-sm text-danger">{(create.error as Error).message}</p>
             )}
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={close}>
@@ -177,7 +185,6 @@ export function PairDaemonDialog({
                 defaultValue:
                   "The target machine must have one of Claude Code / OpenCode / Codex installed. Once connected, this device flips to “Online”.",
               })}
-              onCopy={copyToClipboard}
               testId="agent-daemon-pair-copy-oneline"
             />
             <div className="flex items-center gap-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm">
@@ -192,7 +199,9 @@ export function PairDaemonDialog({
                 <>
                   <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-warning" />
                   <span className="text-fg-muted">
-                    {t("runtime.agentDaemon.pair.waitingConnection", { defaultValue: "Waiting for the device to connect…" })}
+                    {t("runtime.agentDaemon.pair.waitingConnection", {
+                      defaultValue: "Waiting for the device to connect…",
+                    })}
                   </span>
                 </>
               )}
@@ -213,16 +222,22 @@ function DaemonCommandBlock({
   command,
   description,
   label,
-  onCopy,
   testId,
 }: {
   command: string
   description: string
   label: string
-  onCopy: (command: string) => void
   testId: string
 }) {
   const { t } = useTranslation("admin")
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle")
+
+  async function copyCommand() {
+    const copied = await copyText(command)
+    setCopyStatus(copied ? "copied" : "failed")
+    window.setTimeout(() => setCopyStatus("idle"), 2000)
+  }
+
   return (
     <div className="rounded-md border border-line bg-surface-subtle p-3 text-xs text-fg-muted">
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -232,13 +247,25 @@ function DaemonCommandBlock({
         </div>
         <button
           type="button"
-          onClick={() => onCopy(command)}
+          onClick={() => void copyCommand()}
           className="inline-flex shrink-0 items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-xs text-fg-muted hover:bg-surface-muted"
           data-testid={testId}
           title={t("runtime.agentDaemon.pair.copyCommand", { defaultValue: "Copy command" })}
         >
-          <Copy className="h-3 w-3" />
-          {t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
+          {copyStatus === "copied" ? (
+            <Check className="h-3 w-3 text-success" />
+          ) : copyStatus === "failed" ? (
+            <X className="h-3 w-3 text-danger" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+          {copyStatus === "copied"
+            ? t("runtime.agentDaemon.pair.copied", { defaultValue: "Copied" })
+            : copyStatus === "failed"
+              ? t("runtime.agentDaemon.pair.copyFailed", {
+                  defaultValue: "Select the command below",
+                })
+              : t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
         </button>
       </div>
       <code className="block break-all rounded bg-surface p-2 font-mono text-xs leading-relaxed text-fg-emphasis">

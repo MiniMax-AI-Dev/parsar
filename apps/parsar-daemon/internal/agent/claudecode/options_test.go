@@ -31,6 +31,9 @@ func TestBuildArgsBaseHasStreamFlags(t *testing.T) {
 	if !slices.Contains(res.Args, "--verbose") {
 		t.Errorf("missing --verbose in %v", res.Args)
 	}
+	if !slices.Contains(res.Args, "--include-partial-messages") {
+		t.Errorf("missing --include-partial-messages in %v", res.Args)
+	}
 }
 
 // IS_SANDBOX=1 must be in every env passthrough. Without it Claude

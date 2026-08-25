@@ -298,6 +298,7 @@
     "sidebar": {
       "allAgentsHint": "Choose an Agent",
       "newConversation": "New conversation",
+      "recents": "Recents",
       "foldAria": "Fold conversation list",
       "expandAria": "Expand conversation list",
       "currentAgentDesc": "Current Agent",
@@ -388,6 +389,7 @@
       "thinking": "Thinking…",
       "ready": "Ready",
       "error": "Streaming interrupted: {{error}}",
+      "contextRejected": "The upstream model rejected the current conversation context. The task has stopped and is not still running. Try again later; if it happens again, start a new conversation and restate the task.",
       "retry": "Retry",
       "queued": "Queued",
       "queuedWithPosition": "Queued (position {{position}})",
@@ -420,6 +422,7 @@
       "completedCount": "{{count}} steps completed",
       "totalLabel": "{{count}} steps",
       "doneInline": "{{count}} done",
+      "completedInline": "{{count}} completed",
       "runningInline": "{{count}} running",
       "traceLabel": "Execution trace ({{count}} steps)",
       "expandAria": "Expand execution trace",
@@ -1423,8 +1426,8 @@
             "mcp": "MCP",
             "skill": "Skill",
             "plugin": "Plugin",
-            "system_prompt": "System Prompt",
-            "bundle": "Plugin Bundle"
+            "bundle": "Plugin Bundle",
+            "system_prompt": "System Prompt"
           }
         },
         "builtin": {

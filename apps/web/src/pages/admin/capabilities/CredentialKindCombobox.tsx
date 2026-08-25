@@ -58,11 +58,12 @@ export function CredentialKindCombobox({
     )
   }, [items, search])
 
-  const errMsg = kindsQ.error instanceof ApiError
-    ? kindsQ.error.envelope.message
-    : kindsQ.error instanceof Error
-      ? kindsQ.error.message
-      : null
+  const errMsg =
+    kindsQ.error instanceof ApiError
+      ? kindsQ.error.envelope.message
+      : kindsQ.error instanceof Error
+        ? kindsQ.error.message
+        : null
 
   return (
     <>
@@ -71,11 +72,7 @@ export function CredentialKindCombobox({
           <Button
             variant="outline"
             size="sm"
-            className={cn(
-              "justify-between font-normal",
-              !selected && "text-fg-subtle",
-              className,
-            )}
+            className={cn("justify-between font-normal", !selected && "text-fg-subtle", className)}
           >
             <span className="truncate text-sm">
               {selected
@@ -99,6 +96,7 @@ export function CredentialKindCombobox({
         <DropdownMenu.Content
           align="start"
           sideOffset={4}
+          data-credential-kind-menu
           className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
         >
           <div className="border-b border-line-muted p-1">
@@ -179,10 +177,7 @@ function KindRow({
 }) {
   return (
     <DropdownMenu.Item
-      onSelect={(e) => {
-        e.preventDefault()
-        onSelect()
-      }}
+      onSelect={onSelect}
       className={cn(
         "flex cursor-pointer items-start justify-between gap-2 rounded px-3 py-2 outline-none",
         selected ? "bg-surface-muted" : "hover:bg-surface-subtle focus:bg-surface-subtle",
