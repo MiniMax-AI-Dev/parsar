@@ -101,6 +101,28 @@ func TestInstallSkills_EmptyListIsNoop(t *testing.T) {
 	}
 }
 
+func TestInstallSkills_InlineMarkdown(t *testing.T) {
+	t.Parallel()
+	workDir := t.TempDir()
+	content := "---\nname: inline\ndescription: inline\n---\nBody\n"
+	res, err := installSkills(context.Background(), discardLogger(), workDir, []skillDescriptor{
+		{Name: "inline", Version: "1.0.0", Content: content},
+	})
+	if err != nil {
+		t.Fatalf("inline install: %v", err)
+	}
+	if len(res.Warnings) != 0 {
+		t.Fatalf("warnings = %v", res.Warnings)
+	}
+	got, err := os.ReadFile(filepath.Join(workDir, ".claude", "skills", "inline", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read SKILL.md: %v", err)
+	}
+	if string(got) != content {
+		t.Fatalf("SKILL.md = %q, want %q", got, content)
+	}
+}
+
 func TestDecodeSkillDescriptors_ArrayShape(t *testing.T) {
 	raw := []any{
 		map[string]any{

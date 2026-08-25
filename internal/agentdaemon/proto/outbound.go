@@ -73,6 +73,10 @@ type PromptRequestPayload struct {
 	// AgentSessionID is the upstream engine session id to resume.
 	AgentSessionID string `json:"agent_session_id,omitempty"`
 
+	// ResumeFallbackPrompt is server-owned conversation context that an
+	// adapter may use only when the upstream session id is stale.
+	ResumeFallbackPrompt string `json:"resume_fallback_prompt,omitempty"`
+
 	// AgentStateKey is the stable daemon-side state directory key.
 	AgentStateKey string `json:"agent_state_key,omitempty"`
 }

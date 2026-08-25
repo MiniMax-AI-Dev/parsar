@@ -111,6 +111,11 @@ type Config struct {
 	// the master key). Nil disables the tool injection.
 	IMHistoryTokenSigner func(conversationID string) string
 
+	// ConversationHistory enables the server-side transcript injection for
+	// engines that advertise Capabilities.Resume=false (opencode,
+	// deepseek_harness). Nil leaves those engines stateless across turns.
+	ConversationHistory ConversationHistoryReader
+
 	// ExecutionRecorder persists the per-run execution snapshot. Nil
 	// keeps tests on the pre-snapshot behavior.
 	ExecutionRecorder ExecutionSnapshotRecorder
@@ -159,26 +164,27 @@ type Config struct {
 // "agent_daemon". One instance lives for the lifetime of the server
 // process; concurrency is delegated to gateway.Registry + binding.Binder.
 type Connector struct {
-	registry          *gateway.Registry
-	binder            binding.Binder
-	sandbox           SandboxProvider
-	ownerResolver     DeviceOwnerResolver
-	ownerPodID        string
-	remote            RemoteStreamer
-	remoteSubmit      RemoteSubmitter
-	submitSlots       SubmitSlotResolver
-	modelResolver     ModelResolver
-	executionRecorder ExecutionSnapshotRecorder
-	runStatus         AgentRunStatusReader
-	secrets           *secrets.Service
-	capabilities      CapabilityRuntimeStore
-	specMemory        SpecMemoryInjector
-	oss               OSSPresigner
-	systemMessages    CapabilitySystemMessageStore
-	sandboxBindings   SandboxBindingReader
-	imHistoryEndpoint string
-	imHistoryToken    func(conversationID string) string
-	log               *slog.Logger
+	registry            *gateway.Registry
+	binder              binding.Binder
+	sandbox             SandboxProvider
+	ownerResolver       DeviceOwnerResolver
+	ownerPodID          string
+	remote              RemoteStreamer
+	remoteSubmit        RemoteSubmitter
+	submitSlots         SubmitSlotResolver
+	modelResolver       ModelResolver
+	conversationHistory ConversationHistoryReader
+	executionRecorder   ExecutionSnapshotRecorder
+	runStatus           AgentRunStatusReader
+	secrets             *secrets.Service
+	capabilities        CapabilityRuntimeStore
+	specMemory          SpecMemoryInjector
+	oss                 OSSPresigner
+	systemMessages      CapabilitySystemMessageStore
+	sandboxBindings     SandboxBindingReader
+	imHistoryEndpoint   string
+	imHistoryToken      func(conversationID string) string
+	log                 *slog.Logger
 }
 
 // ExecutionSnapshotRecorder is satisfied by *store.Store.
@@ -242,26 +248,27 @@ func New(cfg Config) *Connector {
 		}
 	}
 	return &Connector{
-		registry:          cfg.Registry,
-		binder:            cfg.Binder,
-		sandbox:           cfg.Sandbox,
-		ownerResolver:     cfg.OwnerResolver,
-		ownerPodID:        cfg.OwnerPodID,
-		remote:            cfg.Remote,
-		remoteSubmit:      cfg.RemoteSubmit,
-		submitSlots:       cfg.SubmitSlots,
-		modelResolver:     cfg.ModelResolver,
-		executionRecorder: cfg.ExecutionRecorder,
-		runStatus:         cfg.RunStatusReader,
-		secrets:           cfg.Secrets,
-		capabilities:      cfg.Capabilities,
-		specMemory:        cfg.SpecMemory,
-		oss:               cfg.OSS,
-		systemMessages:    cfg.SystemMessages,
-		sandboxBindings:   cfg.SandboxBindingReader,
-		imHistoryEndpoint: cfg.IMHistoryEndpoint,
-		imHistoryToken:    cfg.IMHistoryTokenSigner,
-		log:               cfg.Log,
+		registry:            cfg.Registry,
+		binder:              cfg.Binder,
+		sandbox:             cfg.Sandbox,
+		ownerResolver:       cfg.OwnerResolver,
+		ownerPodID:          cfg.OwnerPodID,
+		remote:              cfg.Remote,
+		remoteSubmit:        cfg.RemoteSubmit,
+		submitSlots:         cfg.SubmitSlots,
+		modelResolver:       cfg.ModelResolver,
+		conversationHistory: cfg.ConversationHistory,
+		executionRecorder:   cfg.ExecutionRecorder,
+		runStatus:           cfg.RunStatusReader,
+		secrets:             cfg.Secrets,
+		capabilities:        cfg.Capabilities,
+		specMemory:          cfg.SpecMemory,
+		oss:                 cfg.OSS,
+		systemMessages:      cfg.SystemMessages,
+		sandboxBindings:     cfg.SandboxBindingReader,
+		imHistoryEndpoint:   cfg.IMHistoryEndpoint,
+		imHistoryToken:      cfg.IMHistoryTokenSigner,
+		log:                 cfg.Log,
 	}
 }
 
@@ -502,6 +509,11 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	}
 	kindInfo, _, _ := sess.AgentKindStatus(agentKind)
 	c.recordExecutionSnapshot(ctx, in, bind, agentKind, kindInfo)
+	// Runs here rather than in buildAgentOptions: the resume capability is
+	// a property of the device that will execute the run, and the heartbeat
+	// descriptor only exists once its session is resolved.
+	c.applyConversationHistoryInjection(ctx, agentOptions, in, kindInfo)
+	resumeFallbackPrompt := c.resumeFallbackPrompt(ctx, in, kindInfo, bind.AgentSessionID, agentOptions)
 
 	upstream, err := sess.Subscribe(in.RunID)
 	if err != nil {
@@ -510,15 +522,16 @@ func (c *Connector) streamPrompt(ctx context.Context, in connector.PromptInput, 
 	}
 
 	req, err := proto.NewEnvelope(proto.TypePromptRequest, in.RunID, proto.PromptRequestPayload{
-		AgentKind:      agentKind,
-		ConversationID: in.ConversationID,
-		RunID:          in.RunID,
-		Prompt:         in.TriggerMessageContent,
-		Attachments:    promptAttachmentsFromStore(in.TriggerAttachments),
-		WorkDir:        bind.WorkDir,
-		AgentOptions:   agentOptions,
-		AgentSessionID: bind.AgentSessionID,
-		AgentStateKey:  bind.AgentStateKey,
+		AgentKind:            agentKind,
+		ConversationID:       in.ConversationID,
+		RunID:                in.RunID,
+		Prompt:               in.TriggerMessageContent,
+		Attachments:          promptAttachmentsFromStore(in.TriggerAttachments),
+		WorkDir:              bind.WorkDir,
+		AgentOptions:         agentOptions,
+		AgentSessionID:       bind.AgentSessionID,
+		ResumeFallbackPrompt: resumeFallbackPrompt,
+		AgentStateKey:        bind.AgentStateKey,
 	})
 	if err != nil {
 		sess.Unsubscribe(in.RunID)

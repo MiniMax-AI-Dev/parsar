@@ -52,6 +52,12 @@ type PromptInput struct {
 	AgentName      string
 	AgentSlug      string
 
+	// TriggerMessageID is the persisted message id behind
+	// TriggerMessageContent. Empty for callers that synthesize a prompt
+	// without a stored message. Connectors use it to tell the current
+	// task apart from the conversation's stored transcript.
+	TriggerMessageID string
+
 	// TriggerMessageContent is the user-facing message that drives this
 	// prompt. The connector decides how to fold it into its own prompt
 	// schema.
@@ -192,7 +198,7 @@ type PermissionRequest struct {
 // PermissionDecision is the human verdict for a PermissionRequest,
 // submitted via AgentConnector.SubmitPermission.
 type PermissionDecision struct {
-	RequestID  string
+	RequestID string
 	// DeliveryID is the caller's stable idempotency base. The agent-daemon
 	// connector adds a unique suffix for each wire attempt before awaiting ack.
 	DeliveryID string
@@ -285,7 +291,7 @@ type PromptForUserChoiceQuestionAnswer struct {
 //   - Cancelled=true marks a non-answer (timeout, /cancel) so the
 //     daemon can emit a "stop, don't retry" tool_result.
 type PromptForUserChoiceDecision struct {
-	RequestID       string
+	RequestID string
 	// DeliveryID follows PermissionDecision's stable-base semantics.
 	DeliveryID      string
 	DeviceID        string

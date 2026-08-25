@@ -4641,6 +4641,7 @@ select
   -- the config->>'runtime' connector override is dead.
   r.connector_type as connector_type,
   r.status,
+  coalesce(r.trigger_message_id::text, ''::text)::text as trigger_message_id,
   coalesce(m.content, ''::text)::text as trigger_message_content,
   coalesce(m.metadata, '{}'::jsonb)::jsonb as trigger_message_metadata,
   a.config::jsonb as agent_config,
@@ -4681,6 +4682,7 @@ type GetAgentRunInvocationRow struct {
 	RequestedByID          string `json:"requested_by_id"`
 	ConnectorType          string `json:"connector_type"`
 	Status                 string `json:"status"`
+	TriggerMessageID       string `json:"trigger_message_id"`
 	TriggerMessageContent  string `json:"trigger_message_content"`
 	TriggerMessageMetadata []byte `json:"trigger_message_metadata"`
 	AgentConfig            []byte `json:"agent_config"`
@@ -4701,6 +4703,7 @@ func (q *Queries) GetAgentRunInvocation(ctx context.Context, id pgtype.UUID) (Ge
 		&i.RequestedByID,
 		&i.ConnectorType,
 		&i.Status,
+		&i.TriggerMessageID,
 		&i.TriggerMessageContent,
 		&i.TriggerMessageMetadata,
 		&i.AgentConfig,
@@ -8720,6 +8723,77 @@ func (q *Queries) ListPendingWorkspaceInvitationsByInviter(ctx context.Context, 
 			&i.InvitedBy,
 			&i.InvitedByName,
 			&i.ExpiresAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentConversationMessages = `-- name: ListRecentConversationMessages :many
+select
+  m.id::text,
+  m.sender_type,
+  coalesce(m.sender_id::text, ''::text)::text as m_sender_id,
+  coalesce(sender_agent.name, ''::text)::text as sender_name,
+  m.content,
+  m.created_at
+from messages m
+join conversations c on c.id = m.conversation_id
+left join agents sender_agent
+  on sender_agent.id = m.sender_id
+  and sender_agent.workspace_id = m.workspace_id
+  and m.sender_type = 'agent'
+  and sender_agent.deleted_at is null
+where m.conversation_id = $1::uuid
+  and m.workspace_id = c.workspace_id
+  and m.deleted_at is null
+  and c.status = 'active'
+  and c.deleted_at is null
+  and m.kind = 'message'
+  and m.sender_type in ('user', 'agent', 'external')
+order by m.created_at desc, m.id desc
+limit $2
+`
+
+type ListRecentConversationMessagesParams struct {
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	ItemLimit      int32       `json:"item_limit"`
+}
+
+type ListRecentConversationMessagesRow struct {
+	MID        string             `json:"m_id"`
+	SenderType string             `json:"sender_type"`
+	MSenderID  string             `json:"m_sender_id"`
+	SenderName string             `json:"sender_name"`
+	Content    string             `json:"content"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// Newest-first slice of the human/agent chat turns in one conversation.
+// Feeds the server-side history injection for daemon engines that cannot
+// resume their own session; ordered desc + limit so a long conversation
+// does not stream every row into the prompt path.
+func (q *Queries) ListRecentConversationMessages(ctx context.Context, arg ListRecentConversationMessagesParams) ([]ListRecentConversationMessagesRow, error) {
+	rows, err := q.db.Query(ctx, listRecentConversationMessages, arg.ConversationID, arg.ItemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentConversationMessagesRow{}
+	for rows.Next() {
+		var i ListRecentConversationMessagesRow
+		if err := rows.Scan(
+			&i.MID,
+			&i.SenderType,
+			&i.MSenderID,
+			&i.SenderName,
+			&i.Content,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

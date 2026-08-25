@@ -384,16 +384,20 @@ type DeleteAgentResult struct {
 type HTTPAgentRunInvocation = AgentRunInvocation
 
 type AgentRunInvocation struct {
-	RunID                 string `json:"run_id"`
-	WorkspaceID           string `json:"workspace_id"`
-	ConversationID        string `json:"conversation_id"`
-	AgentID               string `json:"agent_id"`
-	AgentName             string `json:"agent_name"`
-	AgentSlug             string `json:"agent_slug"`
-	RequestedByType       string `json:"requested_by_type"`
-	RequestedByID         string `json:"requested_by_id"`
-	ConnectorType         string `json:"connector_type"`
-	Status                string `json:"status"`
+	RunID           string `json:"run_id"`
+	WorkspaceID     string `json:"workspace_id"`
+	ConversationID  string `json:"conversation_id"`
+	AgentID         string `json:"agent_id"`
+	AgentName       string `json:"agent_name"`
+	AgentSlug       string `json:"agent_slug"`
+	RequestedByType string `json:"requested_by_type"`
+	RequestedByID   string `json:"requested_by_id"`
+	ConnectorType   string `json:"connector_type"`
+	Status          string `json:"status"`
+	// TriggerMessageID identifies the persisted message that started this
+	// run, so a prompt-side transcript can exclude it instead of echoing
+	// the task back to the engine.
+	TriggerMessageID      string `json:"trigger_message_id,omitempty"`
 	TriggerMessageContent string `json:"trigger_message_content"`
 	// TriggerAttachments carries non-text payloads alongside
 	// TriggerMessageContent. Connectors that don't forward attachments
@@ -2067,6 +2071,7 @@ func (s *Store) GetAgentRunInvocation(ctx context.Context, runID string) (AgentR
 		RequestedByID:         row.RequestedByID,
 		ConnectorType:         row.ConnectorType,
 		Status:                row.Status,
+		TriggerMessageID:      row.TriggerMessageID,
 		TriggerMessageContent: applyTriggerMessagePrefix(triggerMetadata, row.TriggerMessageContent),
 		TriggerAttachments:    DecodeMessageAttachments(triggerMetadata),
 		AgentConfig:           mergeRuntimeIntoAgentConfig(decodeJSONMap(row.AgentConfig), row.RuntimeID),

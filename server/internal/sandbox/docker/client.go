@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -27,7 +28,7 @@ type execResult struct {
 
 // runnerFunc is the injection seam: production wires an os/exec-backed
 // runner, tests wire a fake so no real docker daemon is required.
-type runnerFunc func(ctx context.Context, name string, args []string, stdin io.Reader) (execResult, error)
+type runnerFunc func(ctx context.Context, name string, args []string, stdin io.Reader, env []string) (execResult, error)
 
 type Client struct {
 	Image       string
@@ -41,6 +42,10 @@ type Client struct {
 	CPUs         string // --cpus, e.g. "1.5"
 	PidsLimit    string // --pids-limit, e.g. "512"
 	LimitsBySize map[string]ResourceLimits
+	// ContainerEnv is inherited by every created sandbox. Values are placed
+	// in the docker client's environment and passed with key-only `-e` flags,
+	// so proxy credentials do not appear in the docker command line.
+	ContainerEnv map[string]string
 	runner       runnerFunc
 }
 
@@ -71,12 +76,17 @@ func (c *Client) Create(ctx context.Context, input e2b.CreateInput) (e2b.Sandbox
 	for k, v := range input.Metadata {
 		args = append(args, "--label", k+"="+v)
 	}
+	for k := range c.ContainerEnv {
+		if _, overridden := input.Env[k]; !overridden {
+			args = append(args, "-e", k)
+		}
+	}
 	for k, v := range input.Env {
 		args = append(args, "-e", k+"="+v)
 	}
 	args = append(args, c.Image, "infinity")
 
-	res, err := c.runnerOrDefault()(ctx, "docker", args, nil)
+	res, err := c.runnerOrDefault()(ctx, "docker", args, nil, mergeProcessEnv(c.ContainerEnv))
 	if err != nil {
 		return e2b.Sandbox{}, err
 	}
@@ -127,7 +137,7 @@ func (c *Client) RunCommand(ctx context.Context, input e2b.RunCommandInput) (e2b
 	}
 	args = append(args, input.Sandbox.SandboxID, "/bin/bash", "-l", "-c", input.Command)
 
-	res, err := c.runnerOrDefault()(ctx, "docker", args, nil)
+	res, err := c.runnerOrDefault()(ctx, "docker", args, nil, nil)
 	if err != nil {
 		return e2b.CommandResult{}, err
 	}
@@ -144,7 +154,7 @@ func (c *Client) Kill(ctx context.Context, sandboxID string) error {
 	if sandboxID == "" {
 		return errors.New("dockersandbox: sandbox id is empty")
 	}
-	res, err := c.runnerOrDefault()(ctx, "docker", []string{"rm", "-f", sandboxID}, nil)
+	res, err := c.runnerOrDefault()(ctx, "docker", []string{"rm", "-f", sandboxID}, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -188,8 +198,11 @@ func (c *Client) runnerOrDefault() runnerFunc {
 // osExecRun runs a local process. A non-zero exit is a normal result
 // (ExitCode set, err nil) so RunCommand can report it as Status; only a
 // launch failure or context cancellation returns a non-nil error.
-func osExecRun(ctx context.Context, name string, args []string, stdin io.Reader) (execResult, error) {
+func osExecRun(ctx context.Context, name string, args []string, stdin io.Reader, env []string) (execResult, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if env != nil {
+		cmd.Env = env
+	}
 	if stdin != nil {
 		cmd.Stdin = stdin
 	}
@@ -210,4 +223,24 @@ func osExecRun(ctx context.Context, name string, args []string, stdin io.Reader)
 		return res, err
 	}
 	return res, nil
+}
+
+func mergeProcessEnv(overrides map[string]string) []string {
+	if len(overrides) == 0 {
+		return nil
+	}
+	merged := make(map[string]string, len(os.Environ())+len(overrides))
+	for _, entry := range os.Environ() {
+		if key, _, ok := strings.Cut(entry, "="); ok {
+			merged[key] = entry
+		}
+	}
+	for key, value := range overrides {
+		merged[key] = key + "=" + value
+	}
+	out := make([]string, 0, len(merged))
+	for _, entry := range merged {
+		out = append(out, entry)
+	}
+	return out
 }

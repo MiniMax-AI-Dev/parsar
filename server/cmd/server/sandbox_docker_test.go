@@ -46,6 +46,43 @@ func TestDockerClientFromEnvReadsResourceLimits(t *testing.T) {
 	}
 }
 
+func TestDockerClientFromEnvPropagatesProxyAndMergesNoProxy(t *testing.T) {
+	env := dockerBackendEnv(map[string]string{
+		"HTTPS_PROXY": "http://proxy.example",
+		"NO_PROXY":    "localhost,custom.internal,POSTGRES",
+	})
+	c := dockerClientFromEnv(env, "img", "net", false)
+	if c.ContainerEnv["HTTPS_PROXY"] != "http://proxy.example" {
+		t.Fatal("HTTPS_PROXY was not propagated")
+	}
+	if c.ContainerEnv["NODE_USE_ENV_PROXY"] != "1" {
+		t.Fatal("Node environment proxy activation was not enabled")
+	}
+	if got := c.ContainerEnv["NO_PROXY"]; got != "127.0.0.1,localhost,parsar-server,postgres,custom.internal" {
+		t.Fatalf("NO_PROXY = %q", got)
+	}
+}
+
+func TestDockerSandboxNetworkEnvHonoursExplicitNodeSetting(t *testing.T) {
+	env := dockerBackendEnv(map[string]string{
+		"HTTP_PROXY":         "http://proxy.example",
+		"NODE_USE_ENV_PROXY": "0",
+	})
+	if got := dockerSandboxNetworkEnv(env)["NODE_USE_ENV_PROXY"]; got != "0" {
+		t.Fatalf("NODE_USE_ENV_PROXY = %q, want explicit 0", got)
+	}
+}
+
+func TestDockerClientAddsHostGatewayForContainerProxy(t *testing.T) {
+	env := dockerBackendEnv(map[string]string{
+		"HTTPS_PROXY": "http://host.docker.internal:7890",
+	})
+	c := dockerClientFromEnv(env, "img", "parsar_default", false)
+	if !c.HostGateway {
+		t.Fatal("container proxy through host.docker.internal requires a host-gateway mapping")
+	}
+}
+
 func TestDockerClientFromEnvAppliesBuiltInDefaults(t *testing.T) {
 	// With the env unset the operator gets the smaller advertised standard size.
 	// PidsLimit stays unset: a low pids cap is a classic build-breaker

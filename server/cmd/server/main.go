@@ -438,19 +438,22 @@ func main() {
 		agentDaemonSandbox := buildAgentDaemonSandboxProvider(envLookup, cfg, dbStore, agentDaemonRegistry, agentDaemonBinder, agentDaemonPodID)
 		agentDaemonRemote := connagentdaemon.HTTPRemoteStreamer{Token: agentDaemonInternalToken}
 		agentDaemonCfg := connagentdaemon.Config{
-			Registry:          agentDaemonRegistry,
-			Binder:            agentDaemonBinder,
-			Sandbox:           agentDaemonSandbox,
-			OwnerResolver:     dbStore,
-			OwnerPodID:        agentDaemonPodID,
-			Remote:            agentDaemonRemote,
-			RemoteSubmit:      agentDaemonRemote,
-			SubmitSlots:       dbStore,
-			ModelResolver:     dbStore,
-			ExecutionRecorder: dbStore,
-			RunStatusReader:   dbStore,
-			Capabilities:      dbStore,
-			MasterKey:         cfg.Secret.MasterKey,
+			Registry:      agentDaemonRegistry,
+			Binder:        agentDaemonBinder,
+			Sandbox:       agentDaemonSandbox,
+			OwnerResolver: dbStore,
+			OwnerPodID:    agentDaemonPodID,
+			Remote:        agentDaemonRemote,
+			RemoteSubmit:  agentDaemonRemote,
+			SubmitSlots:   dbStore,
+			ModelResolver: dbStore,
+			// Transcript injection for engines that cannot resume their
+			// own session (opencode, deepseek_harness).
+			ConversationHistory: dbStore,
+			ExecutionRecorder:   dbStore,
+			RunStatusReader:     dbStore,
+			Capabilities:        dbStore,
+			MasterKey:           cfg.Secret.MasterKey,
 			// Auto-mounted fetch_chat_history tool: the endpoint URL the
 			// sandbox calls back into, plus the per-conversation token signer.
 			// Nil signer (empty master key) disables the injection.

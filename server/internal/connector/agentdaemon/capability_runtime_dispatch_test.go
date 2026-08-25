@@ -25,6 +25,7 @@ func TestTargetForAgentKind(t *testing.T) {
 		{"opencode", render.TargetOpenCode},
 		{"codex", render.TargetCodex},
 		{"pi", render.TargetPi},
+		{"deepseek_harness", render.TargetDeepseekHarness},
 		{"", render.TargetClaudeCode},
 		{"  claude_code  ", render.TargetClaudeCode},
 		{"unknown_engine", render.TargetClaudeCode},
@@ -145,6 +146,29 @@ func TestResolveCapabilityAdditions_PiSkillRenders(t *testing.T) {
 	}
 	if len(got.Disabled) != 0 {
 		t.Fatalf("pi skill must not be disabled, got %+v", got.Disabled)
+	}
+}
+
+func TestResolveCapabilityAdditions_DeepseekHarnessSkillAndMCPRender(t *testing.T) {
+	c := &Connector{
+		capabilities: stubCapabilityStore{rows: []store.EnabledCapabilityRead{
+			newSkillRow(t, "skill-a", "Skill A", "do a"),
+			newMCPRow(t, "mcp-1", "proof", []canonical.MCPServer{
+				{Name: "proof", Command: "node", Args: []string{"/opt/mcp/proof.mjs"}},
+			}, nil),
+		}},
+		oss: &stubPluginPresigner{},
+		log: discardLogger(),
+	}
+	got, err := c.resolveCapabilityAdditions(context.Background(), defaultPromptInput(), "deepseek_harness")
+	if err != nil {
+		t.Fatalf("deepseek harness capabilities must render: %v", err)
+	}
+	if len(got.Skills) != 1 || got.MCPServers["proof"] == nil {
+		t.Fatalf("capabilities = %+v", got)
+	}
+	if len(got.Disabled) != 0 {
+		t.Fatalf("supported capabilities were disabled: %+v", got.Disabled)
 	}
 }
 

@@ -364,6 +364,7 @@ func dispatchConversationRun(ctx context.Context, runtimeStore RuntimeStore, cfg
 		AgentName:               invocation.AgentName,
 		AgentSlug:               invocation.AgentSlug,
 		ConversationInitiatorID: userConversationInitiatorID(invocation),
+		TriggerMessageID:        invocation.TriggerMessageID,
 		TriggerMessageContent:   invocation.TriggerMessageContent,
 		TriggerAttachments:      invocation.TriggerAttachments,
 		AgentConfig:             invocation.AgentConfig,

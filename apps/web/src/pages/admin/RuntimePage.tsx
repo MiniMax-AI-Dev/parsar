@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "../../components/ui/table"
 import { useAdminView } from "../../lib/admin-router"
+import { agentKindDisplayName } from "../../lib/agent-view-model"
 import { ApiError } from "../../lib/api-client"
 import {
   useRuntimeStatus,
@@ -837,24 +838,10 @@ function runtimeConfigText(runtime: Runtime, key: string): string {
 function formatRuntimeAgentKinds(runtime: Runtime): string {
   const labels = supportedAgentKinds(runtime)
     .filter((kind) => kind.available)
-    .map((kind) => formatAgentKindLabel(kind.kind))
+    .map((kind) => agentKindDisplayName(kind.kind))
   return labels.length > 0 ? labels.join(" · ") : "—"
 }
 
-function formatAgentKindLabel(kind: string): string {
-  switch (kind) {
-    case "claude_code":
-      return "Claude Code"
-    case "opencode":
-      return "OpenCode"
-    case "codex":
-      return "Codex"
-    case "pi":
-      return "PI Agent"
-    default:
-      return kind
-  }
-}
 
 function shortID(id: string): string {
   return id.length > 12 ? id.slice(0, 12) : id

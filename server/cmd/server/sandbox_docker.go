@@ -102,6 +102,8 @@ func agentDaemonWSURLFromBase(base string) string {
 //     _XL_MEMORY / _XL_CPUS — optional per-size overrides.
 //   - AGENT_DAEMON_SANDBOX_DOCKER_PIDS_LIMIT — optional pids cap; unset = no
 //     cap (docker default).
+//   - Standard HTTP_PROXY / HTTPS_PROXY / ALL_PROXY variables are inherited
+//     by the sandbox. NO_PROXY is merged with loopback and Compose services.
 func buildDockerAgentDaemonSandboxProvider(
 	env func(string) string,
 	cfg config.Config,
@@ -194,15 +196,86 @@ const (
 // resolveDockerLimit for the 0/unlimited escape hatch.
 func dockerClientFromEnv(env func(string) string, image, network string, hostGateway bool) *dockersandbox.Client {
 	standardLimits, xlLimits := dockerLimitsFromEnv(env)
+	networkEnv := dockerSandboxNetworkEnv(env)
 	return &dockersandbox.Client{
 		Image:        image,
 		Network:      network,
-		HostGateway:  hostGateway,
+		HostGateway:  hostGateway || proxyUsesHostGateway(networkEnv),
 		Memory:       standardLimits.Memory,
 		CPUs:         standardLimits.CPUs,
 		PidsLimit:    standardLimits.PidsLimit,
 		LimitsBySize: map[string]dockersandbox.ResourceLimits{"standard": standardLimits, "xl": xlLimits},
+		ContainerEnv: networkEnv,
 	}
+}
+
+var dockerSandboxProxyEnvKeys = []string{
+	"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+	"http_proxy", "https_proxy", "all_proxy",
+}
+
+var dockerSandboxNoProxyHosts = []string{"127.0.0.1", "localhost", "parsar-server", "postgres"}
+
+// dockerSandboxNetworkEnv keeps Docker sandbox egress consistent with the
+// server process while preserving direct loopback and Compose service traffic.
+// NODE_USE_ENV_PROXY activates standard proxy variables for Node fetch, used by
+// DSH and reusable by other Node-based resident engines.
+func dockerSandboxNetworkEnv(env func(string) string) map[string]string {
+	out := make(map[string]string)
+	hasProxy := false
+	for _, key := range dockerSandboxProxyEnvKeys {
+		if value := strings.TrimSpace(env(key)); value != "" {
+			out[key] = value
+			hasProxy = true
+		}
+	}
+	for _, key := range []string{"NO_PROXY", "no_proxy"} {
+		out[key] = mergeNoProxy(env(key), dockerSandboxNoProxyHosts...)
+	}
+	if value := strings.TrimSpace(env("NODE_USE_ENV_PROXY")); value != "" {
+		out["NODE_USE_ENV_PROXY"] = value
+	} else if hasProxy {
+		out["NODE_USE_ENV_PROXY"] = "1"
+	}
+	return out
+}
+
+func mergeNoProxy(raw string, required ...string) string {
+	seen := make(map[string]bool)
+	merged := make([]string, 0, len(required)+4)
+	appendEntry := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		key := strings.ToLower(value)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		merged = append(merged, value)
+	}
+	for _, value := range required {
+		appendEntry(value)
+	}
+	for _, value := range strings.Split(raw, ",") {
+		appendEntry(value)
+	}
+	return strings.Join(merged, ",")
+}
+
+func proxyUsesHostGateway(env map[string]string) bool {
+	for _, key := range dockerSandboxProxyEnvKeys {
+		raw := strings.TrimSpace(env[key])
+		if raw == "" {
+			continue
+		}
+		parsed, err := url.Parse(raw)
+		if err == nil && strings.EqualFold(parsed.Hostname(), "host.docker.internal") {
+			return true
+		}
+	}
+	return false
 }
 
 func dockerLimitsFromEnv(env func(string) string) (standard dockersandbox.ResourceLimits, xl dockersandbox.ResourceLimits) {

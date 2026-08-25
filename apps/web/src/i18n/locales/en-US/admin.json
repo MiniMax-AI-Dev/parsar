@@ -1791,6 +1791,11 @@
         "title": "Pi",
         "description": "Run the pi coding agent CLI through parsar-daemon."
       },
+      "deepseekHarness": {
+        "title": "DeepSeek Harness",
+        "cardHint": "One-shot runs: each prompt starts a fresh session with no memory of earlier turns.",
+        "description": "Run DeepSeek Harness (dsh) one-shot headless tasks through parsar-daemon. Each prompt starts a fresh harness session and returns its final answer."
+      },
       "opencode": {
         "title": "OpenCode",
         "description": "Run OpenCode CLI through parsar-daemon for local or sandbox daemon workflows."

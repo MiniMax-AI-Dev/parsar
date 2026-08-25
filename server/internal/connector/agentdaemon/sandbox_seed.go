@@ -28,10 +28,11 @@ import (
 type SandboxConnector string
 
 const (
-	SandboxConnectorClaude   SandboxConnector = "claude"
-	SandboxConnectorOpenCode SandboxConnector = "opencode"
-	SandboxConnectorCodex    SandboxConnector = "codex"
-	SandboxConnectorPi       SandboxConnector = "pi"
+	SandboxConnectorClaude          SandboxConnector = "claude"
+	SandboxConnectorOpenCode        SandboxConnector = "opencode"
+	SandboxConnectorCodex           SandboxConnector = "codex"
+	SandboxConnectorPi              SandboxConnector = "pi"
+	SandboxConnectorDeepseekHarness SandboxConnector = "deepseek-harness"
 )
 
 // In-image absolute paths to the hook scripts baked by
@@ -116,6 +117,8 @@ func ConnectorForAgentKind(agentKind string) SandboxConnector {
 		return SandboxConnectorOpenCode
 	case "pi":
 		return SandboxConnectorPi
+	case "deepseek_harness":
+		return SandboxConnectorDeepseekHarness
 	default:
 		// claude_code, "", and anything unknown → Claude
 		return SandboxConnectorClaude
@@ -150,6 +153,11 @@ func seedPlatformConfig(ctx context.Context, client E2BClient, sb e2b.Sandbox, c
 		// TODO: wire spec/memory injection for pi. CLI binary is
 		// available in the image; daemon discovers and registers it
 		// via heartbeat.
+		return nil
+	case SandboxConnectorDeepseekHarness:
+		// dsh has no per-turn hook surface, and the daemon adapter
+		// prepends the spec/memory bundle to the task text instead, so
+		// nothing has to be seeded into the sandbox filesystem.
 		return nil
 	default:
 		return fmt.Errorf("sandbox_seed: unknown connector %q", conn)

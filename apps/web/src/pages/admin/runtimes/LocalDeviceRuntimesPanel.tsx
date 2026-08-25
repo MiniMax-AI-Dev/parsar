@@ -32,6 +32,7 @@ import {
   type Runtime,
   type SupportedAgentKind,
 } from "../../../lib/api-runtimes"
+import { agentKindDisplayName } from "../../../lib/agent-view-model"
 import { useWorkspaceId } from "../../../lib/workspace"
 
 export function LocalDeviceRuntimesPanel() {
@@ -229,7 +230,7 @@ function AgentKindBadges({ runtime }: { runtime: Runtime }) {
             className={kind.available ? "" : "opacity-70"}
             title={formatAgentKindTitle(kind, t)}
           >
-            {formatAgentKindLabel(kind.kind)}
+            {agentKindDisplayName(kind.kind)}
           </Badge>
         ))}
       </div>
@@ -243,24 +244,10 @@ function AgentKindBadges({ runtime }: { runtime: Runtime }) {
   )
 }
 
-function formatAgentKindLabel(kind: string): string {
-  switch (kind) {
-    case "claude_code":
-      return "Claude Code"
-    case "opencode":
-      return "OpenCode"
-    case "codex":
-      return "Codex"
-    case "pi":
-      return "PI Agent"
-    default:
-      return kind
-  }
-}
 
 function formatAgentKindTitle(kind: SupportedAgentKind, t: TFunction<"admin">): string {
   const parts = [
-    formatAgentKindLabel(kind.kind),
+    agentKindDisplayName(kind.kind),
     kind.available
       ? t("runtime.agentDaemon.agentKind.available", { defaultValue: "available" })
       : t("runtime.agentDaemon.agentKind.unavailable", { defaultValue: "unavailable" }),
@@ -270,7 +257,7 @@ function formatAgentKindTitle(kind: SupportedAgentKind, t: TFunction<"admin">): 
 }
 
 function formatAgentKindSnapshot(kind: SupportedAgentKind, t: TFunction<"admin">): string {
-  const label = formatAgentKindLabel(kind.kind)
+  const label = agentKindDisplayName(kind.kind)
   if (!kind.available) {
     return t("runtime.agentDaemon.agentKind.notDetected", { label, defaultValue: "{{label}} not detected" })
   }
