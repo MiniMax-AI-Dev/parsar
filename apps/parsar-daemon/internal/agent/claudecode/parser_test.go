@@ -110,6 +110,100 @@ func TestTranslateAssistantThinkingEmitsThinking(t *testing.T) {
 	}
 }
 
+func TestTranslatePartialMessagesStreamIncrementallyWithoutAssistantDuplicates(t *testing.T) {
+	tr := claudecode.NewTranslatorForTest("run_partial", nil, counterMinter())
+	frames := [][]byte{
+		[]byte(`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello "}}}`),
+		[]byte(`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"world"}}}`),
+		[]byte(`{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"thinking_delta","thinking":"checking"}}}`),
+	}
+
+	var got []proto.Envelope
+	for _, frame := range frames {
+		out, err := tr.Translate(frame)
+		if err != nil {
+			t.Fatalf("Translate partial frame: %v", err)
+		}
+		got = append(got, out.Envelopes...)
+	}
+	if len(got) != 3 {
+		t.Fatalf("want 3 partial envelopes, got %d", len(got))
+	}
+	if got[0].Type != proto.TypeDelta || got[1].Type != proto.TypeDelta || got[2].Type != proto.TypeThinking {
+		t.Fatalf("partial envelope types = %q, %q, %q", got[0].Type, got[1].Type, got[2].Type)
+	}
+
+	full, err := tr.Translate([]byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello world"},{"type":"thinking","thinking":"checking"}]}}`))
+	if err != nil {
+		t.Fatalf("Translate complete assistant frame: %v", err)
+	}
+	if len(full.Envelopes) != 0 {
+		t.Fatalf("complete assistant frame duplicated partial content: %#v", full.Envelopes)
+	}
+
+	next, err := tr.Translate([]byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"next turn without partial frames"}]}}`))
+	if err != nil {
+		t.Fatalf("Translate next complete assistant frame: %v", err)
+	}
+	if len(next.Envelopes) != 1 || next.Envelopes[0].Type != proto.TypeDelta {
+		t.Fatalf("next assistant frame was suppressed by stale partial state: %#v", next.Envelopes)
+	}
+}
+
+func TestTranslateStreamEventIgnoresNonTextDeltas(t *testing.T) {
+	tr := claudecode.NewTranslatorForTest("run_partial", nil, counterMinter())
+	out, err := tr.Translate([]byte(`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"path\":"}}}`))
+	if err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+	if len(out.Envelopes) != 0 {
+		t.Fatalf("input JSON delta should not emit an envelope: %#v", out.Envelopes)
+	}
+}
+
+func TestTranslatePartialMessagesSuppressOnlyMatchingContentBlock(t *testing.T) {
+	tr := claudecode.NewTranslatorForTest("run_partial_blocks", nil, counterMinter())
+	_, err := tr.Translate([]byte(`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"streamed"}}}`))
+	if err != nil {
+		t.Fatalf("Translate partial frame: %v", err)
+	}
+
+	out, err := tr.Translate([]byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"streamed"},{"type":"text","text":"complete-only"}]}}`))
+	if err != nil {
+		t.Fatalf("Translate complete frame: %v", err)
+	}
+	if len(out.Envelopes) != 1 || out.Envelopes[0].Type != proto.TypeDelta {
+		t.Fatalf("complete-only block should be preserved: %#v", out.Envelopes)
+	}
+	got := mustDecode[struct {
+		Delta string `json:"delta"`
+	}](t, out.Envelopes[0].Payload)
+	if got.Delta != "complete-only" {
+		t.Fatalf("delta = %q, want complete-only", got.Delta)
+	}
+}
+
+func TestTranslateResultClearsPartialBlocksBeforeNextTurn(t *testing.T) {
+	tr := claudecode.NewTranslatorForTest("run_partial_error", nil, counterMinter())
+	_, err := tr.Translate([]byte(`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial before failure"}}}`))
+	if err != nil {
+		t.Fatalf("Translate partial frame: %v", err)
+	}
+
+	_, err = tr.Translate([]byte(`{"type":"result","subtype":"error_during_execution","is_error":true,"error":"provider failed"}`))
+	if err != nil {
+		t.Fatalf("Translate error result: %v", err)
+	}
+
+	next, err := tr.Translate([]byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"next turn"}]}}`))
+	if err != nil {
+		t.Fatalf("Translate next assistant frame: %v", err)
+	}
+	if len(next.Envelopes) != 1 || next.Envelopes[0].Type != proto.TypeDelta {
+		t.Fatalf("next assistant frame was suppressed by result state: %#v", next.Envelopes)
+	}
+}
+
 func TestTranslateAssistantToolUseEmitsBeforeStage(t *testing.T) {
 	tr := claudecode.NewTranslatorForTest("run_t", nil, counterMinter())
 	line := []byte(`{"type":"assistant","message":{"role":"assistant","content":[
@@ -386,6 +480,21 @@ func TestTranslateResultErrorWithoutMessageFallsBackToSubtype(t *testing.T) {
 	}](t, out.Envelopes[0].Payload)
 	if !strings.Contains(got.Error, "error_max_turns") {
 		t.Errorf("error fallback should mention subtype, got %q", got.Error)
+	}
+}
+
+func TestTranslateResultIsErrorSuccessSubtypeUsesResultMessage(t *testing.T) {
+	tr := claudecode.NewTranslatorForTest("run_99", nil, counterMinter())
+	line := []byte(`{"type":"result","subtype":"success","is_error":true,"result":"API Error: 400 content rejected"}`)
+	out, err := tr.Translate(line)
+	if err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+	got := mustDecode[struct {
+		Error string `json:"error"`
+	}](t, out.Envelopes[0].Payload)
+	if got.Error != "API Error: 400 content rejected" {
+		t.Errorf("error text = %q", got.Error)
 	}
 }
 

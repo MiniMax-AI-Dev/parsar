@@ -3646,6 +3646,44 @@ func TestSendUserMessageImplicitPrimaryAgentDispatchesWithoutMention(t *testing.
 		t.Fatalf("explicit @primary + bound primary should still be 1 run, got %d", len(sent2.RunIDs))
 	}
 
+	// An SSH repository URL contains an @ but is not an agent mention. It must
+	// still route to the bound primary agent.
+	sentSSH, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
+		ConversationID: conv.ID,
+		UserID:         ids.UserID,
+		Content:        "git@github.com:sandbaseai/deepseek-harness-handbook.git",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sentSSH.RunIDs) != 1 {
+		t.Fatalf("SSH URL should dispatch to the implicit primary, got %d runs", len(sentSSH.RunIDs))
+	}
+
+	sentEmail, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
+		ConversationID: conv.ID,
+		UserID:         ids.UserID,
+		Content:        "contact david@example.com for details",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sentEmail.RunIDs) != 1 {
+		t.Fatalf("email address should dispatch to the implicit primary, got %d runs", len(sentEmail.RunIDs))
+	}
+
+	sentUnknownMention, err := store.SendUserMessageToConversation(ctx, SendUserMessageToConversationInput{
+		ConversationID: conv.ID,
+		UserID:         ids.UserID,
+		Content:        "@missing-agent please handle this",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sentUnknownMention.RunIDs) != 0 {
+		t.Fatalf("unknown explicit mention should not fall back to primary, got %d runs", len(sentUnknownMention.RunIDs))
+	}
+
 	// Unbound conversation + bare message → no dispatch.
 	convNoPrimary, err := store.CreateWorkspaceConversation(ctx, CreateWorkspaceConversationInput{
 		WorkspaceID: ids.WorkspaceID,

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import {
@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  CircleDot,
   Clock,
   MessageSquarePlus,
   Pencil,
@@ -333,7 +332,6 @@ interface SidebarProps {
 
 function ConversationSidebar(p: SidebarProps) {
   const { t } = useTranslation("admin")
-  const fmtAgo = useRelativeTime()
   const [pickerOpen, setPickerOpen] = useState(false)
   const selectedAgent = p.agents.find((a) => a.id === p.selectedAgentId)
 
@@ -462,14 +460,15 @@ function ConversationSidebar(p: SidebarProps) {
         </div>
       )}
 
-      {/* New conversation */}
+      {/* Primary action */}
       <button
         type="button"
         onClick={p.onNewConversation}
         disabled={!p.selectedAgentId}
         className={cn(
-          "mt-2 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-surface-emphasis px-2.5 text-base font-medium text-white shadow-sm transition-colors",
-          "hover:bg-surface-emphasis",
+          "mt-3 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-sm font-medium text-fg shadow-sm transition-[color,background-color,border-color,box-shadow]",
+          "hover:border-line-strong hover:bg-surface-muted",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/30",
           "disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
@@ -477,8 +476,15 @@ function ConversationSidebar(p: SidebarProps) {
         {t("conversations.sidebar.newConversation")}
       </button>
 
-      {/* Conversation list */}
-      <div className="mt-1 flex-1 space-y-0.5 overflow-y-auto pb-1">
+      {/* Recent conversations are secondary navigation, visually separated
+          from the agent context and primary action above. */}
+      <div className="mb-1 mt-5 flex items-center px-2">
+        <span className="text-xs font-semibold text-fg-faint">
+          {t("conversations.sidebar.recents")}
+        </span>
+      </div>
+
+      <div className="flex-1 space-y-0.5 overflow-y-auto pb-1">
         {p.convsLoading ? (
           <div className="space-y-2 px-2 pt-2">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -510,10 +516,10 @@ function ConversationSidebar(p: SidebarProps) {
                   }
                 }}
                 className={cn(
-                  "group/row relative block w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
+                  "group/row relative flex min-h-10 w-full items-center rounded-md px-2.5 py-2 text-left transition-colors",
                   isActive
-                    ? "border-line bg-surface shadow-sm"
-                    : "border-transparent hover:border-line hover:bg-surface/80",
+                    ? "bg-surface-muted text-fg"
+                    : "text-fg-muted hover:bg-surface-muted/70 hover:text-fg",
                   isRenaming ? "cursor-default" : "cursor-pointer",
                 )}
               >
@@ -576,28 +582,19 @@ function ConversationSidebar(p: SidebarProps) {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-1.5 pr-12">
-                      {isActive && (
-                        <CircleDot className="h-3 w-3 shrink-0 text-success" strokeWidth={2.4} />
-                      )}
+                    <div className="min-w-0 flex-1 pr-12">
                       <div
                         className={cn(
                           "truncate text-sm",
-                          isActive ? "font-semibold text-fg" : "font-medium text-fg-muted",
+                          isActive ? "font-medium text-fg" : "font-normal",
                         )}
                       >
-                        {truncate(c.title || "", 18)}
+                        {truncate(c.title || "", 24)}
                       </div>
-                    </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-faint">
-                      <span className="min-w-0 flex-1 truncate">
-                        {c.last_message_preview ||
-                          (c.last_message_at ? fmtAgo(c.last_message_at) : fmtAgo(c.created_at))}
-                      </span>
                     </div>
                     {/* Hover-only action cluster. opacity-0 → */}
                     {/* group-hover:opacity-100 keeps the resting state clean. */}
-                    <div className="absolute right-2 top-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+                    <div className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -895,6 +892,7 @@ function ChatStream({
   const fmtAgo = useRelativeTime()
   const { navigate } = useAdminView()
   const qc = useQueryClient()
+  const openRun = useCallback((runID: string) => navigate("runs", { id: runID }), [navigate])
 
   // /cancel infra: per-run cancel (X on the working card) + bulk
   // cancel (header button when at least one queued/running run exists).
@@ -917,12 +915,29 @@ function ChatStream({
   const [chatToast, setChatToast] = useState<string | null>(null)
   const stream = useAgentRunStream(conversationId, activeRunId, { enabled: !!activeRunId })
   const hasActiveStream = !!activeRunId && stream.status !== "error" && stream.status !== "done"
+  const streamErrorMessage = stream.error
+    ? isContextRejectedStreamError(stream.error)
+      ? t("conversations.stream.contextRejected")
+      : t("conversations.stream.error", { error: stream.error })
+    : null
 
   const timelineQ = useConversationTimeline(conversationId, undefined, {
     pollingEnabled: !hasActiveStream,
   })
   const messages = useMemo(() => timelineQ.data?.messages ?? [], [timelineQ.data?.messages])
   const runs = useMemo(() => timelineQ.data?.agent_runs ?? [], [timelineQ.data?.agent_runs])
+
+  // Recover the live SSE subscription after a page refresh or when opening a
+  // conversation that already has a running task. The stream endpoint replays
+  // persisted events before following new ones, so steps and partial output
+  // catch up instead of falling back indefinitely to "Agent is replying…".
+  useEffect(() => {
+    if (activeRunId) return
+    const runningRun = runs.find((r) => r.status === "running")
+    if (!runningRun) return
+    const timer = window.setTimeout(() => setActiveRunId(runningRun.id), 0)
+    return () => window.clearTimeout(timer)
+  }, [activeRunId, runs])
 
   // Map output_message_id → runs[] so MessageRow can render StepTrace
   const runsByOutputMessage = useMemo(() => {
@@ -953,9 +968,17 @@ function ChatStream({
     if (!activeRunId) return
     if (stream.status !== "done" && stream.status !== "error") return
     qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conversationId] })
-    const timer = window.setTimeout(() => setActiveRunId(null), 0)
+    const timer = window.setTimeout(() => {
+      if (stream.status === "error" && streamErrorMessage) {
+        // activeRunId is cleared below, which resets the stream hook to idle.
+        // Keep a durable, dismissible copy so a fast provider rejection does
+        // not disappear before the user can read it and look like a stalled run.
+        setChatToast(streamErrorMessage)
+      }
+      setActiveRunId(null)
+    }, 0)
     return () => window.clearTimeout(timer)
-  }, [stream.status, activeRunId, conversationId, qc])
+  }, [stream.status, streamErrorMessage, activeRunId, conversationId, qc])
 
   return (
     <>
@@ -1045,7 +1068,7 @@ function ChatStream({
                 stamp={fmtAgo(m.created_at)}
                 agentName={agent?.name ?? ""}
                 conversationId={conversationId}
-                onOpenRun={(runID) => navigate("runs", { id: runID })}
+                onOpenRun={openRun}
               />
             ))
           )}
@@ -1066,35 +1089,37 @@ function ChatStream({
           />
           {stream.status === "error" && (
             <div className="rounded-lg border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {t("conversations.stream.error", { error: stream.error ?? "" })}
+              {streamErrorMessage}
             </div>
           )}
-          {someRunActive &&
-            !stream.deltaText &&
-            (stream.steps.length > 0 ? (
-              <WorkingSteps
-                steps={stream.steps}
-                cancelling={cancelRunMut.isPending}
-                onCancel={
-                  activeRunId
-                    ? () => {
-                        cancelRunMut.mutate({ runID: activeRunId, reason: "user_clicked_cancel" })
-                      }
-                    : undefined
-                }
+          {someRunActive && (
+            <div
+              className="flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-line/70"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2
+                className="h-3.5 w-3.5 shrink-0 animate-spin text-success motion-reduce:animate-none"
+                strokeWidth={2.25}
+                aria-hidden="true"
               />
-            ) : (
-              <div className="flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-line/70">
-                <span className="flex items-center gap-1" aria-hidden="true">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-300ms]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-150ms]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success" />
-                </span>
-                {hasActiveStream
-                  ? t("conversations.stream.thinking")
-                  : t("conversations.detail.agentTyping")}
-              </div>
-            ))}
+              <span>{t("conversations.stream.thinking")}</span>
+            </div>
+          )}
+          {someRunActive && stream.steps.length > 0 && (
+            <WorkingSteps
+              steps={stream.steps}
+              active={someRunActive}
+              cancelling={cancelRunMut.isPending}
+              onCancel={
+                activeRunId
+                  ? () => {
+                      cancelRunMut.mutate({ runID: activeRunId, reason: "user_clicked_cancel" })
+                    }
+                  : undefined
+              }
+            />
+          )}
           {/*
             Queued runs render an independent "queued" chip per run,
             distinct from the inflight working/thinking indicator
@@ -1175,7 +1200,17 @@ function ChatErrorToast({ message, onDismiss }: { message: string; onDismiss: ()
   )
 }
 
-function MessageRow({
+function isContextRejectedStreamError(error: string): boolean {
+  const normalized = error.toLowerCase()
+  return (
+    normalized.includes("inappropriate content") ||
+    normalized.includes("content rejected") ||
+    normalized.includes("content policy") ||
+    (normalized.includes("invalidparameter") && normalized.includes("input data"))
+  )
+}
+
+const MessageRow = memo(function MessageRow({
   senderType,
   messageType,
   content,
@@ -1271,7 +1306,7 @@ function MessageRow({
       </div>
     </div>
   )
-}
+})
 
 function runtimeErrorViewModel(
   metadata: Record<string, unknown> | undefined,

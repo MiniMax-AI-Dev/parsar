@@ -58,12 +58,13 @@ func defaultAskIDMinter() string {
 // translator converts one NDJSON line from claude stdout into zero or
 // more proto.Envelope frames. One translator lives per session.
 type translator struct {
-	runID      string
-	pending    pendingRecorder
-	askPending askRecorder
-	seq        atomic.Uint64
-	mint       permIDMinter
-	askMint    askIDMinter
+	runID         string
+	pending       pendingRecorder
+	askPending    askRecorder
+	seq           atomic.Uint64
+	mint          permIDMinter
+	askMint       askIDMinter
+	partialBlocks map[int]string
 }
 
 func newTranslator(runID string, pending pendingRecorder, askPending askRecorder, mint permIDMinter, askMint askIDMinter) *translator {
@@ -116,6 +117,8 @@ func (t *translator) Translate(line []byte) (translation, error) {
 		return t.translateSystem(line)
 	case "assistant":
 		return t.translateAssistant(line)
+	case "stream_event":
+		return t.translateStreamEvent(line)
 	case "user":
 		return t.translateUser(line)
 	case "control_request":
@@ -124,6 +127,67 @@ func (t *translator) Translate(line []byte) (translation, error) {
 		return t.translateControlCancel(line)
 	case "result":
 		return t.translateResult(line, head.Subtype)
+	default:
+		return translation{}, nil
+	}
+}
+
+// translateStreamEvent handles the raw Anthropic events emitted by Claude
+// Code with --include-partial-messages. Claude still emits a complete
+// assistant frame after these events, so translateAssistant suppresses its
+// text/thinking copies once a corresponding partial delta has been observed.
+func (t *translator) translateStreamEvent(line []byte) (translation, error) {
+	var msg struct {
+		Event struct {
+			Type  string `json:"type"`
+			Index int    `json:"index"`
+			Delta struct {
+				Type     string `json:"type"`
+				Text     string `json:"text"`
+				Thinking string `json:"thinking"`
+			} `json:"delta"`
+		} `json:"event"`
+	}
+	if err := json.Unmarshal(line, &msg); err != nil {
+		return translation{}, fmt.Errorf("claudecode: parse stream_event frame: %w", err)
+	}
+	if msg.Event.Type != "content_block_delta" {
+		return translation{}, nil
+	}
+
+	switch msg.Event.Delta.Type {
+	case "text_delta":
+		if msg.Event.Delta.Text == "" {
+			return translation{}, nil
+		}
+		if t.partialBlocks == nil {
+			t.partialBlocks = make(map[int]string)
+		}
+		t.partialBlocks[msg.Event.Index] = "text"
+		env, err := proto.NewEnvelope(proto.TypeDelta, t.runID, proto.DeltaPayload{
+			Delta:    msg.Event.Delta.Text,
+			Sequence: t.seq.Add(1),
+		})
+		if err != nil {
+			return translation{}, err
+		}
+		return translation{Envelopes: []proto.Envelope{env}}, nil
+	case "thinking_delta":
+		if msg.Event.Delta.Thinking == "" {
+			return translation{}, nil
+		}
+		if t.partialBlocks == nil {
+			t.partialBlocks = make(map[int]string)
+		}
+		t.partialBlocks[msg.Event.Index] = "thinking"
+		env, err := proto.NewEnvelope(proto.TypeThinking, t.runID, proto.ThinkingPayload{
+			Text:     msg.Event.Delta.Thinking,
+			Sequence: t.seq.Add(1),
+		})
+		if err != nil {
+			return translation{}, err
+		}
+		return translation{Envelopes: []proto.Envelope{env}}, nil
 	default:
 		return translation{}, nil
 	}
@@ -150,7 +214,7 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 	}
 
 	var envs []proto.Envelope
-	for _, raw := range msg.Message.Content {
+	for index, raw := range msg.Message.Content {
 		var head struct {
 			Type string `json:"type"`
 		}
@@ -159,6 +223,9 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 		}
 		switch head.Type {
 		case "text":
+			if t.partialBlocks[index] == "text" {
+				continue
+			}
 			var item struct {
 				Text string `json:"text"`
 			}
@@ -174,6 +241,9 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 			}
 			envs = append(envs, env)
 		case "thinking":
+			if t.partialBlocks[index] == "thinking" {
+				continue
+			}
 			var item struct {
 				Thinking string `json:"thinking"`
 			}
@@ -220,6 +290,10 @@ func (t *translator) translateAssistant(line []byte) (translation, error) {
 			envs = append(envs, env)
 		}
 	}
+	// Partial flags apply only to the complete assistant frame that follows
+	// those stream_event deltas. Reset them so a later assistant turn that is
+	// delivered without partial frames is not accidentally suppressed.
+	clear(t.partialBlocks)
 	return translation{Envelopes: envs}, nil
 }
 
@@ -370,6 +444,8 @@ type resultUsage struct {
 }
 
 func (t *translator) translateResult(line []byte, subtype string) (translation, error) {
+	defer clear(t.partialBlocks)
+
 	var msg struct {
 		IsError      bool        `json:"is_error"`
 		Result       string      `json:"result"`
@@ -424,7 +500,14 @@ func (t *translator) translateResult(line []byte, subtype string) (translation, 
 	// else (error_during_execution, error_max_turns, ...) is a failure.
 	isError := msg.IsError || (subtype != "" && subtype != "success" && strings.HasPrefix(subtype, "error"))
 	if isError {
-		errMsg := msg.Error
+		errMsg := strings.TrimSpace(msg.Error)
+		// Claude Code sometimes reports provider/API failures with
+		// subtype="success" and is_error=true, placing the useful error in
+		// result instead of error. Preserve that message rather than emitting
+		// the misleading fallback "claude_code: success".
+		if errMsg == "" && msg.IsError {
+			errMsg = strings.TrimSpace(msg.Result)
+		}
 		if errMsg == "" {
 			if subtype != "" {
 				errMsg = "claude_code: " + subtype

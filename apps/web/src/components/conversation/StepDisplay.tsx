@@ -26,9 +26,19 @@ const TOOL_ICONS: Record<string, typeof TerminalSquare> = {
   glob: Search,
 }
 
-function toolIcon(name: string) {
+function ToolIcon({ name }: { name: string }) {
   const key = name.toLowerCase()
-  return TOOL_ICONS[key] ?? Wrench
+  const iconClassName = "h-3 w-3 shrink-0 text-fg-subtle"
+  switch (TOOL_ICONS[key]) {
+    case TerminalSquare:
+      return <TerminalSquare className={iconClassName} strokeWidth={2} />
+    case FileText:
+      return <FileText className={iconClassName} strokeWidth={2} />
+    case Search:
+      return <Search className={iconClassName} strokeWidth={2} />
+    default:
+      return <Wrench className={iconClassName} strokeWidth={2} />
+  }
 }
 
 const SUMMARY_MAX = 80
@@ -77,13 +87,18 @@ function formatElapsed(ms: number): string {
 // 1Hz ticker, only while `active`, so the live working card redraws
 // elapsed counters; stops cleanly to avoid leaking timers post-run.
 function useElapsedTicker(active: boolean): number {
-  const [, setTick] = useState(0)
+  const [now, setNow] = useState(0)
   useEffect(() => {
     if (!active) return
-    const id = window.setInterval(() => setTick((n) => n + 1), 1000)
-    return () => window.clearInterval(id)
+    const update = () => setNow(performance.now())
+    const startID = window.setTimeout(update, 0)
+    const id = window.setInterval(update, 1000)
+    return () => {
+      window.clearTimeout(startID)
+      window.clearInterval(id)
+    }
   }, [active])
-  return performance.now()
+  return now
 }
 
 export function StepItem({
@@ -99,7 +114,6 @@ export function StepItem({
   /** Pass for completed steps; live-tick from caller for running ones. */
   durationMs?: number
 }) {
-  const Icon = toolIcon(name)
   const upper = (name || "tool").toUpperCase()
   const summary = detail ? ellipsizeMiddle(detail) : ""
   return (
@@ -111,7 +125,7 @@ export function StepItem({
       ) : (
         <CheckCircle2 className="h-3 w-3 shrink-0 text-success" strokeWidth={2.5} />
       )}
-      <Icon className="h-3 w-3 shrink-0 text-fg-subtle" strokeWidth={2} />
+      <ToolIcon name={name} />
       <span
         className={cn(
           "shrink-0 font-medium",
@@ -125,10 +139,7 @@ export function StepItem({
         {upper}
       </span>
       {summary && (
-        <span
-          className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle"
-          title={detail}
-        >
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle" title={detail}>
           {summary}
         </span>
       )}
@@ -144,18 +155,19 @@ export function StepItem({
 
 export function WorkingSteps({
   steps,
+  active,
   onCancel,
   cancelling,
 }: {
   steps: StreamingStep[]
+  active: boolean
   /** When set, render an X button next to the spinner. Parent owns the runID. */
   onCancel?: () => void
   cancelling?: boolean
 }) {
   const { t } = useTranslation("admin")
   const [expanded, setExpanded] = useState(false)
-  const anyRunning = steps.some((s) => s.status === "running")
-  const now = useElapsedTicker(anyRunning)
+  const now = useElapsedTicker(active)
 
   const runningSteps = steps.filter((s) => s.status === "running")
   const completedSteps = steps.filter((s) => s.status === "completed")
@@ -166,11 +178,10 @@ export function WorkingSteps({
 
   // From first step's started_at until now (if running) or last ended_at.
   const firstStart = steps.length > 0 ? steps[0].started_at : null
-  const lastEnded = !anyRunning
+  const lastEnded = !active
     ? Math.max(...completedSteps.map((s) => s.ended_at ?? s.started_at), 0)
     : null
-  const overallMs =
-    firstStart === null ? 0 : (lastEnded ?? now) - firstStart
+  const overallMs = firstStart === null ? 0 : (lastEnded ?? now) - firstStart
 
   return (
     <div className="flex w-fit min-w-[240px] flex-col gap-1 rounded-md bg-surface px-3 py-2 text-sm shadow-sm ring-1 ring-slate-200/70">
@@ -179,9 +190,7 @@ export function WorkingSteps({
           type="button"
           aria-expanded={expanded}
           aria-label={
-            expanded
-              ? t("conversations.steps.collapseAria")
-              : t("conversations.steps.expandAria")
+            expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")
           }
           onClick={() => setExpanded((v) => !v)}
           className="flex shrink-0 items-center text-fg-faint transition-colors hover:text-fg-muted"
@@ -193,7 +202,28 @@ export function WorkingSteps({
           )}
         </button>
         <div className="min-w-0 flex-1">
-          {total > 0 ? (
+          {active ? (
+            <div className="flex items-center gap-2 text-sm">
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-info" strokeWidth={2.5} />
+              <span className="font-medium text-fg-muted">{t("conversations.steps.working")}</span>
+              {completedCount > 0 && (
+                <span className="text-fg-subtle">
+                  {t("conversations.steps.completedInline", {
+                    count: completedCount,
+                    defaultValue: "{{count}} completed",
+                  })}
+                </span>
+              )}
+              {runningCount > 0 && (
+                <span className="text-info">
+                  {t("conversations.steps.runningInline", {
+                    count: runningCount,
+                    defaultValue: "{{count}} running",
+                  })}
+                </span>
+              )}
+            </div>
+          ) : total > 0 ? (
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-fg-muted">
                 {t("conversations.steps.totalLabel", {
@@ -206,14 +236,6 @@ export function WorkingSteps({
                   {t("conversations.steps.doneInline", {
                     count: completedCount,
                     defaultValue: "{{count}} done",
-                  })}
-                </span>
-              )}
-              {runningCount > 0 && (
-                <span className="text-info">
-                  {t("conversations.steps.runningInline", {
-                    count: runningCount,
-                    defaultValue: "{{count}} running",
                   })}
                 </span>
               )}
@@ -235,7 +257,9 @@ export function WorkingSteps({
             type="button"
             onClick={onCancel}
             disabled={cancelling}
-            aria-label={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
+            aria-label={t("conversations.steps.cancelAria", {
+              defaultValue: "Cancel current task",
+            })}
             title={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
             className="rounded p-0.5 text-fg-faint transition-colors hover:bg-surface-muted hover:text-danger disabled:opacity-40"
           >
@@ -292,7 +316,9 @@ export function StepTrace({ steps }: { steps: ToolStep[] }) {
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")}
+        aria-label={
+          expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")
+        }
         onClick={() => setExpanded((v) => !v)}
         className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg-muted"
       >

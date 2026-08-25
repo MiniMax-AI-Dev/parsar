@@ -576,15 +576,17 @@ func stringFromMap(values map[string]any, key string) string {
 	}
 }
 
-func persistFinal(ctx context.Context, runtimeStore RuntimeStore, streamStore runStreamStore, runID string, source string, final *connector.PromptOutput) {
+func persistFinal(_ context.Context, runtimeStore RuntimeStore, streamStore runStreamStore, runID string, source string, final *connector.PromptOutput) {
+	terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer terminalCancel()
 	if final == nil {
 		final = &connector.PromptOutput{Content: ""}
 	}
-	_, err := streamStore.SendAssistantMessageFromRun(ctx, store.SendAssistantMessageFromRunInput{RunID: runID, Source: source, Content: final.Content, Transcript: final.Transcript, Usage: final.Usage})
+	_, err := streamStore.SendAssistantMessageFromRun(terminalCtx, store.SendAssistantMessageFromRunInput{RunID: runID, Source: source, Content: final.Content, Transcript: final.Transcript, Usage: final.Usage})
 	if err != nil {
 		log.Bg().Warn("persist streamed agent final failed", "run_id", runID, "error", err)
 		// failRunWithVisibleMessage records run.failed internally.
-		failRunWithVisibleMessage(ctx, runtimeStore, runID, source, err.Error())
+		failRunWithVisibleMessage(terminalCtx, runtimeStore, runID, source, err.Error())
 	}
 }
 
@@ -594,8 +596,10 @@ func persistFinal(ctx context.Context, runtimeStore RuntimeStore, streamStore ru
 //
 // The in-band path (EventError / empty EventDone) goes through
 // eventPersistencePayload + failRunRowOnly to avoid double-emit.
-func failRunWithVisibleMessage(ctx context.Context, runtimeStore RuntimeStore, runID string, source string, reason string) {
-	if err := runtimeStore.FailAgentRun(ctx, store.FailAgentRunInput{RunID: runID, Source: source, Reason: reason}); err != nil {
+func failRunWithVisibleMessage(_ context.Context, runtimeStore RuntimeStore, runID string, source string, reason string) {
+	terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer terminalCancel()
+	if err := runtimeStore.FailAgentRun(terminalCtx, store.FailAgentRunInput{RunID: runID, Source: source, Reason: reason}); err != nil {
 		log.Bg().Warn("failed to mark streamed agent run failed", "run_id", runID, "error", err)
 		return
 	}
@@ -617,15 +621,19 @@ func failRunWithVisibleMessage(ctx context.Context, runtimeStore RuntimeStore, r
 // lifecycle event. Used by the in-band stream-error path where
 // eventPersistencePayload has already emitted run.failed from the
 // connector's terminal frame.
-func failRunRowOnly(ctx context.Context, runtimeStore RuntimeStore, runID string, source string, reason string) {
-	if err := runtimeStore.FailAgentRun(ctx, store.FailAgentRunInput{RunID: runID, Source: source, Reason: reason}); err != nil {
+func failRunRowOnly(_ context.Context, runtimeStore RuntimeStore, runID string, source string, reason string) {
+	terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer terminalCancel()
+	if err := runtimeStore.FailAgentRun(terminalCtx, store.FailAgentRunInput{RunID: runID, Source: source, Reason: reason}); err != nil {
 		log.Bg().Warn("failed to mark streamed agent run failed", "run_id", runID, "error", err)
 	}
 }
 
-func publishAndFailRun(ctx context.Context, runtimeStore RuntimeStore, broker interface {
+func publishAndFailRun(_ context.Context, runtimeStore RuntimeStore, broker interface {
 	Publish(string, connector.PromptEvent)
 }, runID string, source string, err error) {
+	terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer terminalCancel()
 	msg := err.Error()
 	errorEvent := connector.PromptEvent{Type: connector.EventError, Error: msg}
 	doneEvent := connector.PromptEvent{Type: connector.EventDone, Final: &connector.PromptOutput{Content: "", Metadata: map[string]any{"source": source, "error": msg}}}
@@ -635,10 +643,10 @@ func publishAndFailRun(ctx context.Context, runtimeStore RuntimeStore, broker in
 		// EventDone-empty already records run.failed via
 		// eventPersistencePayload; use failRunRowOnly to avoid a
 		// duplicate event row.
-		_ = recordPromptEvent(ctx, streamStore, runID, errorEvent)
-		_ = recordPromptEvent(ctx, streamStore, runID, doneEvent)
+		_ = recordPromptEvent(terminalCtx, streamStore, runID, errorEvent)
+		_ = recordPromptEvent(terminalCtx, streamStore, runID, doneEvent)
 	}
-	failRunRowOnly(ctx, runtimeStore, runID, source, msg)
+	failRunRowOnly(terminalCtx, runtimeStore, runID, source, msg)
 }
 
 func conversationRunParams(w http.ResponseWriter, r *http.Request) (string, string, bool) {

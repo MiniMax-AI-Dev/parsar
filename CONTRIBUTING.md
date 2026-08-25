@@ -153,6 +153,10 @@ description and keep ownership on the side listed here.
   conversation has received no new prompt for one hour. A new prompt for the
   same `AgentStateKey` renews that idle window. Explicit cancellation, device
   shutdown, and daemon shutdown still terminate processes immediately.
+- Run terminal-state persistence must use a short independent context. A
+  dispatch deadline or cancellation may stop connector work, but it must not
+  prevent the server from recording the resulting completed, failed, or
+  cancelled state.
 - When an engine supports resume, persist the upstream session id through
   `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
   the daemon protocol. Do not keep resume ids only in adapter memory, files
