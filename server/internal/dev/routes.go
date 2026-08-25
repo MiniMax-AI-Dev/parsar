@@ -265,6 +265,9 @@ type routerConfig struct {
 	// Nil means the selected backend is unavailable — upload presign +
 	// import 503 rather than failing boot.
 	blobStore blob.Store
+	// pluginsDir is the on-disk directory where installed plugin bundles
+	// live (<DataDir>/plugins/). Empty disables plugin client serving.
+	pluginsDir string
 	// skillInstallRunner downloads Skills.sh skills via the skills CLI.
 	// Nil uses npx at request time; tests inject a fake runner.
 	skillInstallRunner     skillInstallCommandRunner
@@ -648,6 +651,9 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
 			r.Post("/workspaces/{workspaceID}/skills/install", installSkillFromRegistry(runtimeStore, cfg.blobStore, cfg.skillInstallRunner, cfg.skillInstallHTTPClient))
 			r.Post("/workspaces/{workspaceID}/capabilities/plugins/install", installPlugin(runtimeStore))
+			// Plugin client bundle serving — browser fetches the built
+			// client.js for each enabled plugin.
+			r.Get("/plugins/{pluginName}/client.js", servePluginClient(cfg.pluginsDir))
 			// Plugin upload presign — browser PUTs the zip directly to
 			// the blob backend, then calls import/commit with the returned
 			// ossKey. presign-download checks ossKey belongs to the calling

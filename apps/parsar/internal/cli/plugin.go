@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -164,6 +165,14 @@ func runPluginAdd(ctx *runContext, args []string) error {
 	if manifest.Server != nil && manifest.Server.Entry != "" {
 		if err := copyPluginToStorage(pluginDir, manifest.Name); err != nil {
 			return fmt.Errorf("plugin add: copy server files: %w", err)
+		}
+	}
+
+	// Phase 2: if the plugin has a client entry, build it with esbuild
+	// and copy the built bundle to the plugins storage dir.
+	if manifest.Client != nil && manifest.Client.Entry != "" {
+		if err := buildAndCopyClient(pluginDir, manifest.Name, manifest.Client.Entry); err != nil {
+			return fmt.Errorf("plugin add: build client: %w", err)
 		}
 	}
 
@@ -408,4 +417,56 @@ func copyDir(src, dst string) error {
 		}
 	}
 	return nil
+}
+
+// ----- client build ---------------------------------------------------------
+
+// buildAndCopyClient builds the plugin's client entry with esbuild and
+// copies the output to <plugins_dir>/<dir-name>/dist/client.js.
+//
+// Requires: node + esbuild available (esbuild is loaded as ESM import in
+// the build-client.js script). The build script lives next to plugin-host.
+func buildAndCopyClient(pluginDir, pluginName, clientEntry string) error {
+	pluginsDir, err := resolvePluginsDir()
+	if err != nil {
+		return err
+	}
+	dirName := pluginDirName(pluginName)
+	dstDir := filepath.Join(pluginsDir, dirName, "dist")
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return fmt.Errorf("create dist dir: %w", err)
+	}
+
+	entryPath := filepath.Join(pluginDir, clientEntry)
+	outPath := filepath.Join(dstDir, "client.js")
+
+	// Locate the build-client.js script. It lives alongside plugin-host.
+	// Try PARSAR_PLUGIN_HOST_PATH directory first, then fallback to relative.
+	buildScript := resolveBuildScript()
+	if buildScript == "" {
+		return fmt.Errorf("cannot locate build-client.js; ensure PARSAR_PLUGIN_HOST_PATH is set")
+	}
+
+	// Run: node build-client.js <entry> <outfile>
+	cmd := osexec.Command("node", buildScript, entryPath, outPath)
+	cmd.Dir = pluginDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("esbuild failed: %s\n%s", err, string(output))
+	}
+	return nil
+}
+
+// resolveBuildScript finds the build-client.js script path.
+func resolveBuildScript() string {
+	// From PARSAR_PLUGIN_HOST_PATH (same dir as plugin-host/index.js).
+	hostPath := strings.TrimSpace(os.Getenv("PARSAR_PLUGIN_HOST_PATH"))
+	if hostPath != "" {
+		dir := filepath.Dir(hostPath)
+		candidate := filepath.Join(dir, "build-client.js")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
 }

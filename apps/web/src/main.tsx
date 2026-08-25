@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from './App'
 import { bootstrapWorkspace } from './lib/bootstrap'
 import { prefetchProviderCatalog } from './lib/model-presets'
+import './lib/plugin-init' // expose window.__PARSAR_PLUGIN_API__ before plugins load
 import './style.css'
 import './i18n' // bootstrap i18next
 import './i18n/types' // type-augment t() keys

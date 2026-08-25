@@ -328,6 +328,7 @@ export function useEnableAgentCapabilityMutation(
     onSuccess: () => {
       if (workspaceID && agentID) {
         qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
+        qc.invalidateQueries({ queryKey: ["plugins", "bundles", workspaceID] })
       }
     },
   })
@@ -377,6 +378,7 @@ export function useDeleteAgentCapabilityMutation(
     onSuccess: () => {
       if (workspaceID && agentID) {
         qc.invalidateQueries({ queryKey: KEY_AGENT_CAPABILITIES(workspaceID, agentID) })
+        qc.invalidateQueries({ queryKey: ["plugins", "bundles", workspaceID] })
       }
     },
   })
