@@ -32,6 +32,7 @@ func BuildArgs(opts map[string]any, resumeSessionID string) (BuildResult, error)
 	args := []string{
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
+		"--include-partial-messages",
 		"--verbose",
 		"--permission-prompt-tool", "stdio",
 	}

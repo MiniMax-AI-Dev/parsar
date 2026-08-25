@@ -153,6 +153,10 @@ description and keep ownership on the side listed here.
   conversation has received no new prompt for one hour. A new prompt for the
   same `AgentStateKey` renews that idle window. Explicit cancellation, device
   shutdown, and daemon shutdown still terminate processes immediately.
+- Run terminal-state persistence must use a short independent context. A
+  dispatch deadline or cancellation may stop connector work, but it must not
+  prevent the server from recording the resulting completed, failed, or
+  cancelled state.
 - When an engine supports resume, persist the upstream session id through
   `agent_engine_sessions` and pass `AgentSessionID` plus `AgentStateKey` over
   the daemon protocol. Do not keep resume ids only in adapter memory, files
@@ -572,7 +576,7 @@ any drift.
 
 **sqlc pinned to v1.29.0.** v1.30+ declares `go >= 1.26` in its
 go.mod, which would force `go run` to fetch a newer toolchain than
-this repo builds under (go 1.25.12). If you bump sqlc, update
+this repo builds under (go 1.25.13). If you bump sqlc, update
 `SQLC_VERSION` in both `Makefile` and `.github/workflows/check.yml` in
 the same commit. CI caches a small sqlc binary for `make check-go` and
 passes it via the `SQLC` make override; local development defaults to
