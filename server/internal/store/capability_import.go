@@ -682,6 +682,9 @@ func validateImportSpecPreCommit(s canonical.Spec) error {
 			return fmt.Errorf("kind=plugin but another body is set")
 		}
 		return s.Validate()
+	case canonical.KindBundle:
+		// Bundle has no inline secrets or env map; full Validate() is sufficient.
+		return s.Validate()
 	case "":
 		return fmt.Errorf("missing kind")
 	default:

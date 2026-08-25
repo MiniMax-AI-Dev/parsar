@@ -647,6 +647,7 @@ func RegisterRoutesWithStore(r chi.Router, runtimeStore RuntimeStore, opts ...Ro
 			r.Post("/workspaces/{workspaceID}/capabilities/import/preview", previewCapabilityImport(runtimeStore, cfg.blobStore))
 			r.Post("/workspaces/{workspaceID}/capabilities/import/commit", commitCapabilityImport(runtimeStore, cfg.blobStore))
 			r.Post("/workspaces/{workspaceID}/skills/install", installSkillFromRegistry(runtimeStore, cfg.blobStore, cfg.skillInstallRunner, cfg.skillInstallHTTPClient))
+			r.Post("/workspaces/{workspaceID}/capabilities/plugins/install", installPlugin(runtimeStore))
 			// Plugin upload presign — browser PUTs the zip directly to
 			// the blob backend, then calls import/commit with the returned
 			// ossKey. presign-download checks ossKey belongs to the calling

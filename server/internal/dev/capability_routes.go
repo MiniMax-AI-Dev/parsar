@@ -398,7 +398,7 @@ func listMarketplaceCapabilities(runtimeStore RuntimeStore) http.HandlerFunc {
 
 func isListedCapabilityType(capabilityType string) bool {
 	switch strings.ToLower(strings.TrimSpace(capabilityType)) {
-	case "mcp", "skill":
+	case "mcp", "skill", "bundle":
 		return true
 	default:
 		return false
@@ -683,7 +683,7 @@ func createWorkspaceCapability(runtimeStore RuntimeStore) http.HandlerFunc {
 		}
 		body.Type = strings.ToLower(strings.TrimSpace(body.Type))
 		if !isListedCapabilityType(body.Type) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp or skill"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "type must be mcp, skill, or bundle"})
 			return
 		}
 		input := store.CreateCapabilityInput{WorkspaceID: workspaceID, Type: body.Type, Name: body.Name, Description: body.Description, Visibility: capabilityVisibility(body.Visibility, body.Scope), CreatorID: actorID}

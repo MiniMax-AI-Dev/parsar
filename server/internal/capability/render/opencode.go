@@ -35,7 +35,7 @@ type openCodeMCPServer struct {
 }
 
 func (openCodeRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt
+	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
 }
 
 func (openCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -54,6 +54,8 @@ func (openCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output, 
 		return Output{}, ErrUnsupported
 	case canonical.KindSystemPrompt:
 		return renderSystemPrompt(spec.SystemPrompt)
+	case canonical.KindBundle:
+		return renderBundle(spec.Bundle)
 	default:
 		return Output{}, fmt.Errorf("opencode render: unknown kind %q", spec.Kind)
 	}

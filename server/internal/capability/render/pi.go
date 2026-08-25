@@ -22,7 +22,7 @@ type piRenderer struct{}
 func (piRenderer) Target() Target { return TargetPi }
 
 func (piRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindSkill || kind == canonical.KindSystemPrompt
+	return kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
 }
 
 func (piRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -34,6 +34,8 @@ func (piRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error)
 		return renderClaudeCodeSkill(spec.Skill)
 	case canonical.KindSystemPrompt:
 		return renderSystemPrompt(spec.SystemPrompt)
+	case canonical.KindBundle:
+		return renderBundle(spec.Bundle)
 	case canonical.KindMCP:
 		return Output{}, ErrUnsupported
 	case canonical.KindPlugin:

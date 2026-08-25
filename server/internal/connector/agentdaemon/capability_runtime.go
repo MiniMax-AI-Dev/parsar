@@ -392,6 +392,21 @@ func (c *Connector) resolveCapabilityAdditions(ctx context.Context, in connector
 				continue
 			}
 			result.SystemPrompts = append(result.SystemPrompts, *sp)
+		case "bundle":
+			prompts, err := c.resolveBundleCapability(ctx, cap, renderer)
+			if err != nil {
+				if errors.Is(err, render.ErrUnsupported) {
+					c.log.Warn("agent_daemon: bundle capability not supported by agent_kind, skipping",
+						"capability_id", cap.CapabilityID,
+						"capability_name", cap.Name,
+						"agent_kind", agentKind,
+						"target", string(target))
+					result.Disabled = append(result.Disabled, disabledForUnsupportedCapability(cap))
+					continue
+				}
+				return result, err
+			}
+			result.SystemPrompts = append(result.SystemPrompts, prompts...)
 		default:
 			c.log.Warn("agent_daemon: skip unknown capability type",
 				"capability_id", cap.CapabilityID,
@@ -1041,6 +1056,58 @@ func (c *Connector) resolveSystemPromptCapability(
 		Mode:    spec.SystemPrompt.ResolvedMode(),
 		Content: spec.SystemPrompt.Prompt,
 	}, nil
+}
+
+// resolveBundleCapability extracts inline skills from a KindBundle capability
+// and returns them as ResolvedSystemPrompt entries in append mode. Phase 0
+// only injects skills; server tools, client UI, and hooks are handled in
+// later phases.
+func (c *Connector) resolveBundleCapability(
+	ctx context.Context,
+	cap store.EnabledCapabilityRead,
+	renderer render.Renderer,
+) ([]ResolvedSystemPrompt, error) {
+	resolved := resolveVersionFields(cap)
+	if len(resolved.CanonicalSpec) == 0 {
+		c.log.Warn("agent_daemon: bundle capability has empty canonical_spec, skipping",
+			"capability_id", cap.CapabilityID,
+			"capability_name", cap.Name)
+		return nil, nil
+	}
+	var spec canonical.Spec
+	if err := json.Unmarshal(resolved.CanonicalSpec, &spec); err != nil {
+		return nil, fmt.Errorf("agent_daemon: bundle capability %s canonical_spec decode: %w", cap.CapabilityID, err)
+	}
+	if spec.Kind != canonical.KindBundle {
+		return nil, fmt.Errorf("agent_daemon: capability %s has type=bundle but canonical_spec.kind=%q", cap.CapabilityID, spec.Kind)
+	}
+	if spec.Bundle == nil {
+		return nil, fmt.Errorf("agent_daemon: capability %s canonical_spec.bundle is nil", cap.CapabilityID)
+	}
+	// Render call for wire-shape consistency (matches other resolve* funcs).
+	if _, err := renderer.Render(ctx, spec); err != nil {
+		return nil, fmt.Errorf("agent_daemon: render bundle %s: %w", cap.CapabilityID, err)
+	}
+	// Inject each inline skill as a system prompt in append mode.
+	var prompts []ResolvedSystemPrompt
+	for _, skill := range spec.Bundle.Skills {
+		instruction := strings.TrimSpace(skill.Instruction)
+		if instruction == "" {
+			continue
+		}
+		prompts = append(prompts, ResolvedSystemPrompt{
+			Name:    fmt.Sprintf("bundle:%s/%s", spec.Bundle.Name, skill.Slug),
+			Mode:    canonical.SystemPromptModeAppend,
+			Content: instruction,
+		})
+	}
+	if len(prompts) > 0 {
+		c.log.Info("agent_daemon: bundle capability resolved skills",
+			"capability_id", cap.CapabilityID,
+			"bundle_name", spec.Bundle.Name,
+			"skill_count", len(prompts))
+	}
+	return prompts, nil
 }
 
 // mergeSkillsIntoOptions folds resolved skill descriptors into

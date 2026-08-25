@@ -977,7 +977,7 @@ func pgNullableText(value string) pgtype.Text {
 // canonical.Kind MUST be added to this allowlist as well.
 func normalizeCapabilityType(value string) string {
 	switch strings.TrimSpace(value) {
-	case "skill", "mcp", "plugin", "system_prompt":
+	case "skill", "mcp", "plugin", "system_prompt", "bundle":
 		return strings.TrimSpace(value)
 	default:
 		return "mcp"

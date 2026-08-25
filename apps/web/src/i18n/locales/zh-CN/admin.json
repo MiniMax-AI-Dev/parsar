@@ -1426,6 +1426,7 @@
             "mcp": "MCP",
             "skill": "Skill",
             "plugin": "Plugin",
+            "bundle": "插件包",
             "system_prompt": "System Prompt"
           }
         },
