@@ -43,6 +43,10 @@ const (
 	EnvOpenCodeBin    = "PARSAR_OPENCODE_BIN"
 	EnvOpenCodeRunner = "PARSAR_OPENCODE_RUNNER"
 
+	// EnvPluginHostPath is the absolute path to the Node.js
+	// plugin-host entry point. Empty disables plugin server tools.
+	EnvPluginHostPath = "PARSAR_PLUGIN_HOST_PATH"
+
 	// EnvPlatformAdminUserIDs lists user UUIDs that bypass workspace
 	// membership checks. Comma-separated. Empty disables.
 	EnvPlatformAdminUserIDs = "PARSAR_PLATFORM_ADMIN_USER_IDS"
@@ -187,6 +191,7 @@ func applyEnv(cfg *Config, env EnvFunc) {
 
 	stringSetter(EnvOpenCodeBin, &cfg.Model.OpenCodeBin)
 	stringSetter(EnvOpenCodeRunner, &cfg.Sandbox.Runner)
+	stringSetter(EnvPluginHostPath, &cfg.Server.PluginHostPath)
 
 	boolSetter(EnvAuditOTLPEnabled, &cfg.Audit.OTLP.Enabled)
 	stringSetter(EnvAuditOTLPAddr, &cfg.Audit.OTLP.Addr)

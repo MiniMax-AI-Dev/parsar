@@ -151,6 +151,18 @@ type Config struct {
 	// generic line. Nil keeps legacy behaviour for tests.
 	SandboxBindingReader SandboxBindingReader
 
+	// PluginHostPath is the absolute path to the Node.js plugin-host
+	// entry point (server/plugin-host/index.js). When non-empty,
+	// bundles with a server_entry are resolved into MCP server
+	// entries that spawn this script. Empty disables plugin server
+	// tools.
+	PluginHostPath string
+
+	// PluginsDir is the on-disk directory where installed plugin
+	// bundles are stored (<DataDir>/plugins/). Required when
+	// PluginHostPath is set.
+	PluginsDir string
+
 	// Log is the structured logger; nil falls back to slog.Default().
 	Log *slog.Logger
 }
@@ -176,6 +188,8 @@ type Connector struct {
 	oss               OSSPresigner
 	systemMessages    CapabilitySystemMessageStore
 	sandboxBindings   SandboxBindingReader
+	pluginHostPath    string
+	pluginsDir        string
 	imHistoryEndpoint string
 	imHistoryToken    func(conversationID string) string
 	log               *slog.Logger
@@ -259,6 +273,8 @@ func New(cfg Config) *Connector {
 		oss:               cfg.OSS,
 		systemMessages:    cfg.SystemMessages,
 		sandboxBindings:   cfg.SandboxBindingReader,
+		pluginHostPath:    cfg.PluginHostPath,
+		pluginsDir:        cfg.PluginsDir,
 		imHistoryEndpoint: cfg.IMHistoryEndpoint,
 		imHistoryToken:    cfg.IMHistoryTokenSigner,
 		log:               cfg.Log,

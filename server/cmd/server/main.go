@@ -472,7 +472,11 @@ func main() {
 			// generic "Agent not bound to Runtime" hint into a precise
 			// spawning / failed / never-attempted message.
 			SandboxBindingReader: dbStore,
-			Log:                  log.Bg(),
+			// Plugin host: when set, bundles with server_entry resolve
+			// into MCP server entries that spawn this script.
+			PluginHostPath: cfg.Server.PluginHostPath,
+			PluginsDir:     cfg.PluginsDir(),
+			Log:            log.Bg(),
 		}
 		// The daemon only needs a short-lived GET URL per capability ref.
 		// blobDownloadAdapter bridges blob.Store onto the daemon's existing

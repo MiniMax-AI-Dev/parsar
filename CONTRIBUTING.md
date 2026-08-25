@@ -165,6 +165,34 @@ description and keep ownership on the side listed here.
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.
 
+### Plugin Bundle (KindBundle) architecture
+
+- A Plugin Bundle is a `KindBundle` capability that packages server tools,
+  client UI, skills, and hooks as a single deployable unit installed via
+  `parsar plugin add`.
+- **Server tools** run inside `server/plugin-host/` — a Node.js process
+  speaking MCP stdio protocol (JSON-RPC 2.0). The daemon spawns it like
+  any other MCP server (`{ command: "node", args: [...] }`).
+- The plugin-host process is configured via `PARSAR_PLUGIN_HOST_PATH` (env
+  var pointing at `server/plugin-host/index.js`). When unset, bundles with
+  `server_entry` are silently skipped with a log warning.
+- Plugin server code lives on disk at `<PARSAR_DATA_DIR>/plugins/<dir>/`.
+  The CLI copies files during `parsar plugin add`; the server reads them
+  at prompt time via the plugin-host `--plugins-dir` argument.
+- Directory names strip the `@scope/` prefix from bundle names
+  (`@internal/hotel-ops` → `hotel-ops`). This logic is duplicated in
+  `apps/parsar/internal/cli/plugin.go` (`pluginDirName`) and
+  `server/internal/connector/agentdaemon/capability_runtime.go`
+  (`bundleNameToDirName`) — keep both in sync.
+- `resolveBundleCapability` returns a `bundleResolution` struct containing
+  both system prompt injections (skills) and MCP server configs (tools).
+  The MCP server name is `"plugin:<bundle_name>"`.
+- Plugin SDK (`server/plugin-host/lib/sdk.js`) provides
+  `ctx.tools.define(name, { description, parameters, handler })`. Future
+  phases will add `ctx.hooks`, `ctx.credentials`, and `ctx.api`.
+- Plugin tool handlers have a 30-second timeout. Errors are returned as
+  MCP tool-level errors (`isError: true`), not JSON-RPC errors.
+
 ### Human interaction lifecycle
 
 - `agent_interactions` is the canonical durable record for permission prompts

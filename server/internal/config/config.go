@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -51,6 +52,13 @@ type ServerConfig struct {
 	// outside the repo / CWD. Default "~/.parsar" expanded at
 	// load time. Env PARSAR_DATA_DIR.
 	DataDir string `yaml:"data_dir"`
+
+	// PluginHostPath is the absolute path to the Node.js plugin-host
+	// entry point (server/plugin-host/index.js). The daemon spawns
+	// this as an MCP server for bundles that declare a server_entry.
+	// Empty means plugin server tools are disabled. Env
+	// PARSAR_PLUGIN_HOST_PATH.
+	PluginHostPath string `yaml:"plugin_host_path"`
 }
 
 type DatabaseConfig struct {
@@ -281,6 +289,12 @@ func isLoopback(publicURL string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback() // 127.0.0.0/8 and ::1
+}
+
+// PluginsDir returns the on-disk directory where plugin bundles are stored.
+// Derived from DataDir: <DataDir>/plugins/.
+func (c Config) PluginsDir() string {
+	return filepath.Join(c.Server.DataDir, "plugins")
 }
 
 // BuildPublicURL returns an absolute URL for a Parsar-owned path.
