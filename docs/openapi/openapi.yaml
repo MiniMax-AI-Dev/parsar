@@ -4031,6 +4031,39 @@ paths:
       summary: Serve parsar-daemon install script
       tags:
       - runtimes
+  /api/v1/plugins/{pluginName}/client.js:
+    get:
+      description: Returns the built client.js for a plugin. Used by the web UI to
+        load plugin UI components at runtime.
+      operationId: servePluginClientBundle
+      parameters:
+      - description: Plugin directory name (scope-stripped, e.g. hotel-ops)
+        in: path
+        name: pluginName
+        required: true
+        type: string
+      produces:
+      - application/javascript
+      responses:
+        "200":
+          description: JavaScript bundle
+          schema:
+            type: string
+        "404":
+          description: Plugin or client bundle not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Plugin serving not configured
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Serve plugin client bundle
+      tags:
+      - plugins
   /api/v1/runtimes/{runtimeID}/heartbeat:
     post:
       description: Called by the runner daemon to refresh last_heartbeat_at and flip
