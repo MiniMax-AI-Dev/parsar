@@ -536,6 +536,8 @@ export type AgentRunEventKind =
   | "tool.result"
   | "permission.asked"
   | "permission.replied"
+  | "permission.auto_denied"
+  | "permission.auto_allowed"
   | "model.changed"
   | "session.error"
   | "run.started"
@@ -585,6 +587,11 @@ export interface StreamPermissionRequest {
   title?: string
   detail?: string
   payload?: Record<string, unknown>
+  hook_decision?: {
+    result: "deny" | "allow"
+    reason?: string
+    plugin?: string
+  }
 }
 
 export interface AgentInteractionOption {

@@ -82,7 +82,15 @@ export function AgentsPage() {
   const updateProfileMut = useUpdateAgentProfile(wid)
   const deleteMut = useDeleteAgent(wid)
   const workspacesQ = useMyWorkspaces()
-  const agents = useMemo(() => query.data?.agents ?? [], [query.data])
+  const agents = useMemo(() => {
+    const list = query.data?.agents ?? []
+    // Sort: newest first (by enabled_at / created_at descending)
+    return [...list].sort((a, b) => {
+      const ta = a.enabled_at ?? ""
+      const tb = b.enabled_at ?? ""
+      return tb.localeCompare(ta)
+    })
+  }, [query.data])
   const models = modelsQ.data?.models ?? []
   const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
   const workspaceRole = currentWorkspace?.role

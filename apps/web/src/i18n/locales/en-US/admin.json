@@ -607,6 +607,8 @@
         "toolResult": "Tool returned a result",
         "permission": "Asked for approval",
         "permissionReplied": "Approval replied",
+        "permissionAutoDenied": "Auto-denied by plugin",
+        "permissionAutoAllowed": "Auto-allowed by plugin",
         "modelChanged": "Model changed",
         "error": "Runtime error",
         "completed": "Run completed",

@@ -934,7 +934,7 @@ left join sandboxes sb on sb.agent_id = a.id
   and sb.killed_at is null
 where a.workspace_id = @workspace_id::uuid
   and a.deleted_at is null
-order by case when a.status = 'active' then 0 else 1 end, a.name asc;
+order by case when a.status = 'active' then 0 else 1 end, a.created_at desc;
 
 -- name: ListConversationMessages :many
 select

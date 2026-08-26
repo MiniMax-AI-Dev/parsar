@@ -233,11 +233,19 @@ type wireToolCall struct {
 
 // wirePermReq mirrors connector.PermissionRequest in lower_snake_case.
 type wirePermReq struct {
-	ID      string         `json:"id,omitempty"`
-	Tool    string         `json:"tool,omitempty"`
-	Title   string         `json:"title,omitempty"`
-	Detail  string         `json:"detail,omitempty"`
-	Payload map[string]any `json:"payload,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	Tool         string          `json:"tool,omitempty"`
+	Title        string          `json:"title,omitempty"`
+	Detail       string          `json:"detail,omitempty"`
+	Payload      map[string]any  `json:"payload,omitempty"`
+	HookDecision *wireHookDecision `json:"hook_decision,omitempty"`
+}
+
+// wireHookDecision carries plugin hook auto-decision metadata on the SSE wire.
+type wireHookDecision struct {
+	Result string `json:"result"`           // "deny" or "allow"
+	Reason string `json:"reason,omitempty"`
+	Plugin string `json:"plugin,omitempty"`
 }
 
 type wireUserChoiceOption struct {
@@ -274,17 +282,25 @@ func toWireToolCall(t *connector.ToolCallEvent) *wireToolCall {
 	}
 }
 
-func toWirePermReq(p *connector.PermissionRequest) *wirePermReq {
+func toWirePermReq(p *connector.PermissionRequest, hookDecision *connector.HookDecisionMeta) *wirePermReq {
 	if p == nil {
 		return nil
 	}
-	return &wirePermReq{
+	wire := &wirePermReq{
 		ID:      p.ID,
 		Tool:    p.Tool,
 		Title:   p.Title,
 		Detail:  p.Detail,
 		Payload: p.Payload,
 	}
+	if hookDecision != nil {
+		wire.HookDecision = &wireHookDecision{
+			Result: hookDecision.Result,
+			Reason: hookDecision.Reason,
+			Plugin: hookDecision.Plugin,
+		}
+	}
+	return wire
 }
 
 func toWireUserChoiceReq(request *connector.PromptForUserChoiceRequest) *wireUserChoiceReq {
@@ -315,7 +331,7 @@ func newStreamEventWire(ev connector.PromptEvent) streamEventWire {
 			Thinking: ev.Thinking,
 			Error:    ev.Error,
 			Tool:     toWireToolCall(ev.Tool),
-			Perm:     toWirePermReq(ev.Permission),
+			Perm:     toWirePermReq(ev.Permission, ev.HookDecision),
 			Choice:   toWireUserChoiceReq(ev.PromptForUserChoice),
 		},
 		EmittedAt: time.Now().UTC().Format(time.RFC3339Nano),
