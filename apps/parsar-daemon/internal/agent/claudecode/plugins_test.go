@@ -581,6 +581,27 @@ func TestResolveSessionWorkDir_RespectsExplicitDir(t *testing.T) {
 	}
 }
 
+func TestResolveSessionWorkDir_ExpandsHomeRelativeDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	got, err := resolveSessionWorkDir("~/projects/demo", "conv-ignored")
+	if err != nil {
+		t.Fatalf("resolveSessionWorkDir: %v", err)
+	}
+	want := filepath.Join(home, "projects", "demo")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	info, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("stat home-relative dir: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("home-relative dir %q is not a directory", got)
+	}
+}
+
 // TestResolveSessionWorkDir_RejectsRelativeDir: relative paths are
 // ambiguous (resolved against daemon cwd, which is not a stable anchor
 // for user-facing config). The user gets a clear error instead of a
