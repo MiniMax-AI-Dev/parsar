@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Tailwind v4 does not emit a utility for this custom scale entry unless it
    is declared explicitly. Keep the compact file-tree size in the design

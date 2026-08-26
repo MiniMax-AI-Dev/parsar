@@ -50,17 +50,8 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
     return <PublishedMarketplaceTab {...props} />
   }
 
-  return <MCPDirectory
-    itemID={null}
-    query={props.query}
-    canImport={props.canImport}
-    onSelectItem={(id) => props.onSelectItem(id ? `mcp:${id}` : null)}
-    onSelectMarketplaceItem={props.onSelectItem}
-    onInstallMarketplace={props.onInstall}
-    canManageMarketplace={props.canManage}
-    onDeleteMarketplace={props.onDelete}
-    onViewCapability={props.onViewCapability}
-  />
+  // Default: show the published marketplace listing (not the MCP directory)
+  return <PublishedMarketplaceTab {...props} />
 }
 
 function PublishedMarketplaceTab({ itemID, query, typeFilter, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
