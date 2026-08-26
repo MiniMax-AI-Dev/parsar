@@ -191,6 +191,7 @@ export function ParsarChatView({
           <div className="mt-3">
             <WorkingSteps
               steps={streamingSteps}
+              active={isRunning}
               cancelling={cancelRunMut.isPending}
               onCancel={activeRunId ? handleStop : undefined}
             />
