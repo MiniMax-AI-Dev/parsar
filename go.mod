@@ -4,7 +4,7 @@ go 1.25.13
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.3
+	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.6.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/httprate v0.16.0
@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/larksuite/oapi-sdk-go/v3 v3.10.0
+	github.com/larksuite/oapi-sdk-go/v3 v3.11.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/slack-go/slack v0.29.0
