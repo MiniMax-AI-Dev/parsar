@@ -63,6 +63,7 @@ import {
 } from "../../lib/api-agents"
 import { formatRawRunEvents } from "../../lib/agent-run-event-format"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 
@@ -583,6 +584,7 @@ export function RunDetailPage({ id }: { id: string }) {
   const { t: tc } = useTranslation("common")
   const { navigate } = useAdminView()
   const wsId = useWorkspaceId()
+  const workspacesQ = useMyWorkspaces()
 
   const runQ = useAgentRun(id, wsId)
   const cancelRun = useCancelRun(wsId)
@@ -627,8 +629,13 @@ export function RunDetailPage({ id }: { id: string }) {
   const translateDetail = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
   const diagnosis = buildRunDiagnosis(run, events, translateDetail)
   const runtimeDiagnosis = buildRuntimeDiagnosis(run, translateDetail)
+  const role = workspacesQ.data?.workspaces.find((workspace) => workspace.id === run.workspace_id)?.role
+  const isCancellable =
+    (role === "owner" || role === "admin" || role === "member") &&
+    (run.status === "running" || run.status === "queued")
 
   function handleCancel() {
+    if (!isCancellable) return
     setCancelError(null)
     cancelRun.mutate(
       { runID: run.id, reason: "user_clicked_cancel" },
@@ -638,8 +645,6 @@ export function RunDetailPage({ id }: { id: string }) {
       }
     )
   }
-
-  const isCancellable = run.status === "running" || run.status === "queued"
 
   return (
     <AdminLayout activeMenu="runs">
@@ -857,12 +862,14 @@ export function RunDetailPage({ id }: { id: string }) {
           </Card>
         </TabsContent>
       </Tabs>
-      <RunCancelDialog
-        open={confirmCancel}
-        loading={cancelRun.isPending}
-        onCancel={() => setConfirmCancel(false)}
-        onConfirm={handleCancel}
-      />
+      {isCancellable && (
+        <RunCancelDialog
+          open={confirmCancel}
+          loading={cancelRun.isPending}
+          onCancel={() => setConfirmCancel(false)}
+          onConfirm={handleCancel}
+        />
+      )}
     </AdminLayout>
   )
 }
