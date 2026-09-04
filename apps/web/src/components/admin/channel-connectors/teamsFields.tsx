@@ -95,11 +95,10 @@ function TeamsConnectorFieldsInner({
   const saving = mut.isPending || createSecretMut.isPending
 
   const missingRequired = missingRequiredFor(draft, secretInputs)
-  const missingRequiredToEnable = missingRequiredFor({ ...draft, enabled: true }, secretInputs)
   const missingDraftIdentity = !draft.app_id.trim()
 
-  const onSave = async (nextEnabled = draft.enabled) => {
-    const nextDraft = { ...draft, enabled: nextEnabled }
+  const onSave = async () => {
+    const nextDraft = draft
     if (missingRequiredFor(nextDraft, secretInputs)) {
       setErrorMsg(t("connections.connector.teams.errors.incomplete"))
       return
@@ -249,18 +248,6 @@ function TeamsConnectorFieldsInner({
             ? t("connections.connector.actions.save")
             : t("connections.connector.actions.saveDraft")}
         </button>
-        {!draft.enabled && (
-          <button
-            type="button"
-            onClick={() => void onSave(true)}
-            disabled={!canEdit || saving || Boolean(missingRequiredToEnable)}
-            className="inline-flex items-center gap-2 rounded-md bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:opacity-60"
-            data-testid="teams-save-enable-button"
-          >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {t("connections.connector.actions.saveAndEnable")}
-          </button>
-        )}
       </div>
     </Card>
   )

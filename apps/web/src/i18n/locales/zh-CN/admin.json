@@ -2954,7 +2954,6 @@
       "actions": {
         "save": "保存",
         "saveDraft": "保存草稿",
-        "saveAndEnable": "保存并启用",
         "reset": "重置"
       },
       "status": {

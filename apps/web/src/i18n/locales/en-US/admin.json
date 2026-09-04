@@ -2954,7 +2954,6 @@
       "actions": {
         "save": "Save",
         "saveDraft": "Save draft",
-        "saveAndEnable": "Save and enable",
         "reset": "Reset"
       },
       "status": {
