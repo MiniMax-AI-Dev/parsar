@@ -9,11 +9,8 @@ import (
 )
 
 // codexRenderer serializes capability specs for the Codex agent runtime
-// (`codex app-server --stdio`). Today only KindMCP is supported; Codex
-// has its own Agent Skills convention that is not interchangeable with
-// Claude Code's, and Codex has no plugin concept at all — both return
-// ErrUnsupported, which the agentdaemon connector treats as a soft
-// degrade (skip + surface a disabled-capability notice).
+// (`codex app-server --stdio`). The daemon materializes portable Skill
+// archives in managed state and registers that root with the app server.
 //
 // The KindMCP wire shape is intentionally identical to
 // claudeCodeRenderer's (`{"mcpServers": {"<name>": {"command","args","env"}}}`)
@@ -45,7 +42,7 @@ type codexMCPServer struct {
 }
 
 func (codexRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
+	return kind == canonical.KindMCP || kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
 }
 
 func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -56,10 +53,7 @@ func (codexRenderer) Render(_ context.Context, spec canonical.Spec) (Output, err
 	case canonical.KindMCP:
 		return renderCodexMCP(spec.MCP)
 	case canonical.KindSkill:
-		// Codex Agent Skills live under .agents/skills/SKILL.md, parsed
-		// by the runtime. Materialising a Claude-Code skill zip into
-		// that layout would mis-render — bail.
-		return Output{}, ErrUnsupported
+		return renderClaudeCodeSkill(spec.Skill)
 	case canonical.KindPlugin:
 		// No plugin concept in Codex.
 		return Output{}, ErrUnsupported

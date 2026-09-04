@@ -35,7 +35,7 @@ type openCodeMCPServer struct {
 }
 
 func (openCodeRenderer) Supports(kind canonical.Kind) bool {
-	return kind == canonical.KindMCP || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
+	return kind == canonical.KindMCP || kind == canonical.KindSkill || kind == canonical.KindSystemPrompt || kind == canonical.KindBundle
 }
 
 func (openCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output, error) {
@@ -46,9 +46,7 @@ func (openCodeRenderer) Render(_ context.Context, spec canonical.Spec) (Output, 
 	case canonical.KindMCP:
 		return renderOpenCodeMCP(spec.MCP)
 	case canonical.KindSkill:
-		// OpenCode materializes skills via git clone at session-spawn time
-		// (see capability_runtime.go buildSkillCloneCommand).
-		return Output{}, ErrUnsupported
+		return renderClaudeCodeSkill(spec.Skill)
 	case canonical.KindPlugin:
 		// Plugins are Claude Code only; OpenCode has no plugin concept.
 		return Output{}, ErrUnsupported

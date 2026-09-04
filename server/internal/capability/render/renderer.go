@@ -41,8 +41,8 @@ type Output struct {
 }
 
 // ErrUnsupported indicates the renderer cannot serialize this Spec for its
-// Target (e.g. OpenCode/Codex can't render Skill or Plugin). Callers should
-// treat it as "skip this capability for this target".
+// Target (for example, Codex and OpenCode cannot render Plugin). Callers
+// should treat it as "skip this capability for this target".
 var ErrUnsupported = errors.New("render: spec kind unsupported for target")
 
 // Renderer implementations must be pure and side-effect free.
