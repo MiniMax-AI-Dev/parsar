@@ -29,7 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table"
-import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import {
   useRuntimeStatus,
@@ -122,7 +121,6 @@ function useConnectivityCheckLabel(): (name: string) => string {
 
 export function RuntimePage() {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
   const workspaceID = useWorkspaceId()
   const statusQuery = useRuntimeStatus(workspaceID)
   const sandboxesQuery = useWorkspaceSandboxes(workspaceID)
@@ -236,7 +234,6 @@ export function RuntimePage() {
           onSortChange={setSortKey}
           onToggleOne={toggleOne}
           onToggleAll={toggleAll}
-          onOpenDetail={(sandboxID) => navigate("runtime", { id: sandboxID })}
           onClearBulkErrors={() => setBulkErrors([])}
           onConfirmBulkKill={() => setConfirming(true)}
         />
@@ -285,7 +282,6 @@ function CloudSandboxPanel({
   onSortChange,
   onToggleOne,
   onToggleAll,
-  onOpenDetail,
   onClearBulkErrors,
   onConfirmBulkKill,
 }: {
@@ -308,7 +304,6 @@ function CloudSandboxPanel({
   onSortChange: (next: SortKey) => void
   onToggleOne: (bindingID: string) => void
   onToggleAll: () => void
-  onOpenDetail: (sandboxID: string) => void
   onClearBulkErrors: () => void
   onConfirmBulkKill: () => void
 }) {
@@ -366,7 +361,6 @@ function CloudSandboxPanel({
           onSortChange={onSortChange}
           onToggleOne={onToggleOne}
           onToggleAll={onToggleAll}
-          onOpenDetail={onOpenDetail}
           onClearBulkErrors={onClearBulkErrors}
           onConfirmBulkKill={onConfirmBulkKill}
         />
@@ -389,7 +383,6 @@ function CloudInstancesPanel({
   onSortChange,
   onToggleOne,
   onToggleAll,
-  onOpenDetail,
   onClearBulkErrors,
   onConfirmBulkKill,
 }: {
@@ -406,7 +399,6 @@ function CloudInstancesPanel({
   onSortChange: (next: SortKey) => void
   onToggleOne: (bindingID: string) => void
   onToggleAll: () => void
-  onOpenDetail: (sandboxID: string) => void
   onClearBulkErrors: () => void
   onConfirmBulkKill: () => void
 }) {
@@ -558,31 +550,13 @@ function CloudInstancesPanel({
               const showResult = testResult?.bindingId === b.binding_id
               return (
                 <React.Fragment key={b.binding_id}>
-                  <TableRow
-                    onClick={() => onOpenDetail(b.sandbox_id)}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        const target = e.target as HTMLElement
-                        if (target.tagName === "INPUT" || target.tagName === "BUTTON") return
-                        e.preventDefault()
-                        onOpenDetail(b.sandbox_id)
-                      }
-                    }}
-                    role="link"
-                    aria-label={t("runtime.list.table.rowLabel", {
-                      agent: b.agent_id ?? b.sandbox_id,
-                    })}
-                    className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
-                    data-testid={`runtime-row-${b.binding_id}`}
-                  >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableRow data-testid={`runtime-row-${b.binding_id}`}>
+                    <TableCell>
                       <input
                         type="checkbox"
                         aria-label={t("runtime.list.table.selectOne", { id: b.sandbox_id })}
                         checked={selected.has(b.binding_id)}
                         onChange={() => onToggleOne(b.binding_id)}
-                        onClick={(e) => e.stopPropagation()}
                         data-testid={`runtime-select-${b.binding_id}`}
                       />
                     </TableCell>
@@ -609,7 +583,7 @@ function CloudInstancesPanel({
                         {relativeAgo(b.created_at)}
                       </span>
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell>
                       <Button
                         variant="ghost"
                         size="sm"
