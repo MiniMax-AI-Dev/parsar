@@ -90,7 +90,7 @@ func TestSkillInstallFromRegistry_HappyPathReusesSkillZipImport(t *testing.T) {
 	if !runner.called {
 		t.Fatal("skills runner was not called")
 	}
-	wantArgs := []string{"--yes", "skills", "add", "googleworkspace/cli", "--skill", "gws-gmail-triage", "--agent", "claude-code", "--copy", "--yes"}
+	wantArgs := []string{"--yes", "skills@1.5.23", "add", "googleworkspace/cli", "--skill", "gws-gmail-triage", "--agent", "claude-code", "--copy", "--yes"}
 	if runner.lastName != "npx" || !reflect.DeepEqual(runner.lastArgs, wantArgs) {
 		t.Fatalf("runner command = %s %v, want npx %v", runner.lastName, runner.lastArgs, wantArgs)
 	}
@@ -156,6 +156,34 @@ func TestSkillInstallFromRegistry_HappyPathReusesSkillZipImport(t *testing.T) {
 	}
 	if _, err := os.Stat(runner.lastDir); !os.IsNotExist(err) {
 		t.Fatalf("temp dir should be removed after install, stat err=%v", err)
+	}
+}
+
+func TestSkillInstallCommandEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	env, err := skillInstallCommandEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := make(map[string]string, len(env))
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok {
+			values[key] = value
+		}
+	}
+	if values["DISABLE_TELEMETRY"] != "1" {
+		t.Fatalf("DISABLE_TELEMETRY = %q, want 1", values["DISABLE_TELEMETRY"])
+	}
+	wantCache := filepath.Join(home, ".parsar", "cache", "npm")
+	if values["NPM_CONFIG_CACHE"] != wantCache {
+		t.Fatalf("NPM_CONFIG_CACHE = %q, want %q", values["NPM_CONFIG_CACHE"], wantCache)
+	}
+	wantCompileCache := filepath.Join(home, ".parsar", "cache", "node")
+	if values["NODE_COMPILE_CACHE"] != wantCompileCache {
+		t.Fatalf("NODE_COMPILE_CACHE = %q, want %q", values["NODE_COMPILE_CACHE"], wantCompileCache)
 	}
 }
 

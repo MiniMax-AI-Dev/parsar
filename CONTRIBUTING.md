@@ -121,6 +121,10 @@ description and keep ownership on the side listed here.
 - Local development images stay opt-in through installer overrides such as
   `--image parsar:local` / `--sandbox-image parsar-sandbox:local`; do not make
   local tags the default path for end users.
+- The production server image must provide Node.js 22.20 or newer, `npx`, and
+  `git` for server-side Skills.sh installs. Keep the runtime image compatible
+  with the pinned `skills` package in `skills_install_routes.go`; the image
+  build must fail if these executables are missing.
 
 ### Runtime and execution concepts
 
