@@ -31,6 +31,9 @@ func TestInstallSkills_HappyPath_ExtractsAndStampsCacheKey(t *testing.T) {
 	}
 
 	dir := filepath.Join(workDir, ".claude", "skills", "code-review")
+	if len(res.SkillDirs) != 1 || res.SkillDirs[0] != dir {
+		t.Fatalf("skill dirs = %v, want [%s]", res.SkillDirs, dir)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
 		t.Fatalf("SKILL.md missing: %v", err)
 	}
@@ -60,11 +63,47 @@ func TestInstallSkills_CacheHitSkipsDownload(t *testing.T) {
 	if hitsAfterFirst != 1 {
 		t.Fatalf("first install hits = %d, want 1", hitsAfterFirst)
 	}
-	if _, err := installSkills(context.Background(), discardLogger(), workDir, desc); err != nil {
+	second, err := installSkills(context.Background(), discardLogger(), workDir, desc)
+	if err != nil {
 		t.Fatalf("second install: %v", err)
+	}
+	if len(second.SkillDirs) != 1 {
+		t.Fatalf("cache hit skill dirs = %v", second.SkillDirs)
 	}
 	if got := srv.Hits(); got != hitsAfterFirst {
 		t.Fatalf("cache should prevent second download; got %d extra hits", got-hitsAfterFirst)
+	}
+}
+
+func TestInstallManagedSkillsPrunesInactiveEntries(t *testing.T) {
+	body := validSkillZipBytes(t)
+	srv := startPluginServer(t, body)
+	root := t.TempDir()
+	stale := filepath.Join(root, "old-skill")
+	if err := os.MkdirAll(stale, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stale, "SKILL.md"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := InstallManagedSkills(context.Background(), discardLogger(), root, []any{
+		map[string]any{
+			"name": "code-review", "version": "1.0.0",
+			"download_url": srv.URL, "sha256": sha256Hex(body),
+		},
+	})
+	if err != nil {
+		t.Fatalf("InstallManagedSkills: %v", err)
+	}
+	if len(res.SkillDirs) != 1 || res.SkillDirs[0] != filepath.Join(root, "code-review") {
+		t.Fatalf("skill dirs = %v", res.SkillDirs)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("stale skill still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "code-review", "SKILL.md")); err != nil {
+		t.Fatalf("active skill missing: %v", err)
 	}
 }
 

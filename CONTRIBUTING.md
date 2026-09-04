@@ -49,6 +49,20 @@ git worktree add .worktrees/feature-name -b feature/name origin/main
 
 Direct development on `main` is not allowed. Every session honours this rule.
 
+## Independent blind review
+
+Substantial changes require two independent reviews after implementation and
+verification. Give each reviewer the requirements, acceptance criteria,
+project rules, and scope boundaries, but no implementation summary, suspected
+defects, or findings from the other reviewer. Each reviewer inspects the full
+diff.
+
+After material fixes, repeat the two independent reviews. Once only small
+convergence fixes remain, one independent reviewer is enough. If the same
+review-and-fix cycle keeps repeating, stop patching and reassess the design. If
+the design still does not converge, report the problem instead of expanding
+the change.
+
 ## Architecture baseline
 
 - **Server**: Go + Chi.
@@ -164,6 +178,9 @@ description and keep ownership on the side listed here.
 - Adapter-specific state directories must be derived from `AgentStateKey`
   under `~/.parsar/`; never use the repo checkout, container image working
   directory, or the process CWD as hidden state.
+- Keep uploaded Skill archives engine-neutral. Materialize adapter-managed
+  copies below the `AgentStateKey` runtime directory, then register that root
+  through the engine's native CLI, config, or RPC surface.
 
 ### Plugin Bundle (KindBundle) architecture
 
