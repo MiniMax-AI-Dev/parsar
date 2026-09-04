@@ -3201,8 +3201,6 @@
       "cronLabel": "cron expression",
       "cronPlaceholder": "0 9 * * *",
       "preview": "Schedule preview",
-      "feishu": "Push to Feishu group",
-      "feishuDisabledHint": "Coming in a later release; Web-only for now.",
       "save": "Save",
       "saving": "Saving…",
       "cancel": "Cancel",
