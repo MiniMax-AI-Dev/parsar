@@ -3201,8 +3201,6 @@
       "cronLabel": "cron 表达式",
       "cronPlaceholder": "0 9 * * *",
       "preview": "频率预览",
-      "feishu": "推送到飞书群",
-      "feishuDisabledHint": "后续版本开放，当前仅 Web 查看。",
       "save": "保存",
       "saving": "保存中…",
       "cancel": "取消",

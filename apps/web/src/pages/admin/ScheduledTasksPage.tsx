@@ -585,14 +585,6 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
             {t("scheduledTasks.dialog.preview")}: {preview}
           </p>
 
-          <div className="grid min-w-0 gap-0.5 opacity-60">
-            <label className="flex items-center gap-2 text-xs text-fg-subtle">
-              <input type="checkbox" disabled className="h-3.5 w-3.5" />
-              {t("scheduledTasks.dialog.feishu")}
-            </label>
-            <span className="pl-5 text-xs text-fg-faint">{t("scheduledTasks.dialog.feishuDisabledHint")}</span>
-          </div>
-
           {errMsg && (
             <p className="rounded-md bg-danger-subtle px-3 py-2 text-xs text-danger break-all">{errMsg}</p>
           )}
