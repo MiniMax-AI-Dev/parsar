@@ -3134,6 +3134,7 @@
     "subtitle": "At each fire time, runs the agent once in a clean session; results land in run history.",
     "new": "New task",
     "empty": "No scheduled tasks yet — create one from the top right.",
+    "emptyReadOnly": "No scheduled tasks yet.",
     "loadError": "Failed to load scheduled tasks",
     "noAgents": "This project has no available agents yet — create and enable an agent before configuring scheduled tasks.",
     "never": "—",
