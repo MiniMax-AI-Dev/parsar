@@ -3134,6 +3134,7 @@
     "subtitle": "到点用独立 session 自动触发一次 agent run，结果落到运行历史。",
     "new": "新建任务",
     "empty": "还没有定时任务，点右上角新建一个。",
+    "emptyReadOnly": "还没有定时任务。",
     "loadError": "加载定时任务失败",
     "noAgents": "当前项目还没有可用的 Agent，请先创建并启用一个 Agent 再配置定时任务。",
     "never": "—",

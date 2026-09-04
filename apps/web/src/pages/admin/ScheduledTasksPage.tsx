@@ -17,6 +17,7 @@ import {
 } from "../../components/ui/dialog"
 import { ApiError } from "../../lib/api-client"
 import { useAgents } from "../../lib/api-agents"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 import type { Agent } from "../../lib/api-types"
 import {
@@ -164,6 +165,7 @@ function fmtWhen(iso: string | null): string {
 export function ScheduledTasksPage() {
   const { t } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
+  const workspacesQ = useMyWorkspaces()
   const [offset, setOffset] = useState(0)
   const tasksQ = useScheduledTasksByWorkspace(workspaceID, { offset, limit: SCHED_PAGE_SIZE })
   const agentsQ = useAgents(workspaceID)
@@ -183,6 +185,8 @@ export function ScheduledTasksPage() {
   const weekdays = (t("scheduledTasks.weekdays", { returnObjects: true }) as unknown as string[]) ?? []
   const tasks = tasksQ.data?.scheduled_tasks ?? []
   const total = tasksQ.data?.total ?? 0
+  const role = workspacesQ.data?.workspaces.find((workspace) => workspace.id === workspaceID)?.role
+  const canManageTasks = role === "owner" || role === "admin" || role === "member"
 
   const allAgents = useMemo(() => agentsQ.data?.agents ?? [], [agentsQ.data])
   // active agents are selectable for new tasks; name lookup covers every agent
@@ -241,13 +245,15 @@ export function ScheduledTasksPage() {
             <h2 className="text-base font-semibold text-fg">{t("scheduledTasks.title")}</h2>
             <p className="mt-0.5 text-xs text-fg-faint">{t("scheduledTasks.subtitle")}</p>
           </div>
-          <Button size="sm" onClick={openCreate} disabled={noAgents} data-testid="scheduled-new">
-            <Plus className="mr-1 h-4 w-4" />
-            {t("scheduledTasks.new")}
-          </Button>
+          {canManageTasks && (
+            <Button size="sm" onClick={openCreate} disabled={noAgents} data-testid="scheduled-new">
+              <Plus className="mr-1 h-4 w-4" />
+              {t("scheduledTasks.new")}
+            </Button>
+          )}
         </div>
 
-        {noAgents && (
+        {canManageTasks && noAgents && (
           <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs text-warning break-all">
             {t("scheduledTasks.noAgents")}
           </div>
@@ -267,7 +273,7 @@ export function ScheduledTasksPage() {
           </p>
         ) : tasks.length === 0 ? (
           <p className="rounded-md bg-surface-muted px-3 py-6 text-center text-sm text-fg-faint">
-            {t("scheduledTasks.empty")}
+            {t(canManageTasks ? "scheduledTasks.empty" : "scheduledTasks.emptyReadOnly")}
           </p>
         ) : (
           <div className="overflow-hidden rounded-md border border-line">
@@ -302,34 +308,42 @@ export function ScheduledTasksPage() {
                 <div className="w-32 shrink-0 text-xs text-fg-subtle">
                   {task.next_run_at ? fmtWhen(task.next_run_at) : t("scheduledTasks.never")}
                 </div>
-                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-fg-subtle">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5"
-                    checked={task.enabled}
-                    onChange={() => void toggleEnabled(task)}
-                    disabled={updateMut.isPending}
-                  />
-                  {task.enabled ? t("scheduledTasks.enabled") : t("scheduledTasks.disabled")}
-                </label>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(task)} title={t("scheduledTasks.action.edit")}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void runNow(task)}
-                    disabled={runNowMut.isPending}
-                    data-testid="scheduled-run-now"
-                    title={t("scheduledTasks.action.runNow")}
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void remove(task)} title={t("scheduledTasks.action.delete")}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {canManageTasks ? (
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-fg-subtle">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5"
+                      checked={task.enabled}
+                      onChange={() => void toggleEnabled(task)}
+                      disabled={updateMut.isPending}
+                    />
+                    {task.enabled ? t("scheduledTasks.enabled") : t("scheduledTasks.disabled")}
+                  </label>
+                ) : (
+                  <span className="shrink-0 text-xs text-fg-subtle">
+                    {task.enabled ? t("scheduledTasks.enabled") : t("scheduledTasks.disabled")}
+                  </span>
+                )}
+                {canManageTasks && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(task)} title={t("scheduledTasks.action.edit")}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void runNow(task)}
+                      disabled={runNowMut.isPending}
+                      data-testid="scheduled-run-now"
+                      title={t("scheduledTasks.action.runNow")}
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void remove(task)} title={t("scheduledTasks.action.delete")}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -349,7 +363,7 @@ export function ScheduledTasksPage() {
           className="text-xs text-fg-subtle"
         />
 
-        {dialogOpen && (
+        {dialogOpen && canManageTasks && (
           <ScheduledTaskDialog
             open={dialogOpen}
             task={editing}
