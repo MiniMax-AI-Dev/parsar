@@ -9,6 +9,107 @@ import { cn } from "../../lib/utils"
  * (e.g. "14px 104px minmax(0,1fr) 140px 72px") so header and rows align.
  */
 
+/* ------------------------------------------------------------------
+ * Column model. A ledger declares WHAT each column holds; the primitive
+ * decides the grid. Every content column is `minmax(min, weight fr)`, so
+ * each keeps a floor wide enough for its content and the row always
+ * fills the page, with the spare width shared in proportion to the
+ * weights (title 2 · text 1 · meta 0.8 · id 0.7 · age 0.6 · num 0.5).
+ * Icons, checkboxes and action clusters stay fixed. Legacy string
+ * templates are adapted with the same rule (fixed px ≥ 56 become
+ * minmax(px, px/240 fr), fluid tracks keep twice any fixed weight) so
+ * older pages fill the page too.
+ * ---------------------------------------------------------------- */
+
+export type LedgerColumn =
+  | { kind: "icon"; width?: number }
+  | { kind: "check" }
+  | { kind: "tile" }
+  | { kind: "title"; min?: number; weight?: number }
+  | { kind: "text"; min?: number; weight?: number }
+  | { kind: "meta"; min?: number; weight?: number }
+  | { kind: "id"; min?: number; weight?: number }
+  | { kind: "num"; min?: number; weight?: number }
+  | { kind: "age"; min?: number; weight?: number }
+  | { kind: "actions"; count: number }
+  | { kind: "fixed"; width: number }
+
+const DEFAULTS: Record<string, { min: number; weight: number }> = {
+  title: { min: 200, weight: 2 },
+  text: { min: 120, weight: 1 },
+  meta: { min: 104, weight: 0.8 },
+  id: { min: 112, weight: 0.7 },
+  age: { min: 80, weight: 0.6 },
+  num: { min: 64, weight: 0.5 },
+}
+
+/** Column helpers so pages read as intent: `[col.icon(), col.id(), col.title(), col.num()]`. */
+export const col = {
+  icon: (width = 14): LedgerColumn => ({ kind: "icon", width }),
+  check: (): LedgerColumn => ({ kind: "check" }),
+  tile: (): LedgerColumn => ({ kind: "tile" }),
+  title: (min?: number, weight?: number): LedgerColumn => ({ kind: "title", min, weight }),
+  text: (min?: number, weight?: number): LedgerColumn => ({ kind: "text", min, weight }),
+  meta: (min?: number, weight?: number): LedgerColumn => ({ kind: "meta", min, weight }),
+  id: (min?: number, weight?: number): LedgerColumn => ({ kind: "id", min, weight }),
+  num: (min?: number, weight?: number): LedgerColumn => ({ kind: "num", min, weight }),
+  age: (min?: number, weight?: number): LedgerColumn => ({ kind: "age", min, weight }),
+  actions: (count = 1): LedgerColumn => ({ kind: "actions", count }),
+  fixed: (width: number): LedgerColumn => ({ kind: "fixed", width }),
+}
+
+function trackFor(c: LedgerColumn): string {
+  switch (c.kind) {
+    case "icon":
+      return `${c.width ?? 14}px`
+    case "check":
+      return "16px"
+    case "tile":
+      return "18px"
+    case "actions":
+      return `${c.count * 28 + Math.max(0, c.count - 1) * 2}px`
+    case "fixed":
+      return `${c.width}px`
+    default: {
+      const d = DEFAULTS[c.kind]
+      const min = c.min ?? d.min
+      const weight = c.weight ?? d.weight
+      return `minmax(${min}px, ${weight}fr)`
+    }
+  }
+}
+
+/** Build the grid-template-columns string from a column spec. */
+export function ledgerTemplate(columns: LedgerColumn[]): string {
+  return columns.map(trackFor).join(" ")
+}
+
+/**
+ * Adapt a legacy px template so fixed content columns also flex:
+ * `minmax(0, Xfr)` gets a content floor and double weight, fixed px ≥ 56
+ * becomes `minmax(px, px/240 fr)`; smaller tracks (icons, actions) stay fixed.
+ */
+export function adaptLegacyTemplate(template: string): string {
+  return template
+    .trim()
+    .split(/\s+(?![^()]*\))/)
+    .map((token) => {
+      const flex = token.match(/^minmax\(0(?:px)?,\s*([\d.]+)fr\)$/)
+      if (flex) {
+        // Fluid columns stay dominant: twice the weight of any fixed track.
+        const weight = Number(flex[1])
+        return `minmax(${Math.round(weight * 120)}px, ${weight * 2}fr)`
+      }
+      const px = token.match(/^(\d+)px$/)
+      if (px) {
+        const n = Number(px[1])
+        return n >= 56 ? `minmax(${n}px, ${(n / 240).toFixed(2)}fr)` : token
+      }
+      return token
+    })
+    .join(" ")
+}
+
 const LedgerContext = React.createContext<string>("minmax(0,1fr)")
 
 export function Ledger({
@@ -16,9 +117,13 @@ export function Ledger({
   className,
   children,
   ...props
-}: { columns: string } & React.HTMLAttributes<HTMLDivElement>) {
+}: { columns: string | LedgerColumn[] } & React.HTMLAttributes<HTMLDivElement>) {
+  const template = React.useMemo(
+    () => (typeof columns === "string" ? adaptLegacyTemplate(columns) : ledgerTemplate(columns)),
+    [columns],
+  )
   return (
-    <LedgerContext.Provider value={columns}>
+    <LedgerContext.Provider value={template}>
       <div className={cn("min-h-0 flex-1 overflow-y-auto", className)} {...props}>
         {children}
       </div>

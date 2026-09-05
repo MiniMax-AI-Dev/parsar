@@ -506,6 +506,8 @@ The one button (`Button`, cva): 28px tall, 6px radius, 13px/500 label, 10px hori
 - **Skip link:** ink background, white 14px/500 text, 6px radius, floating shadow; slides in from above on focus.
 
 ### Ledger (signature)
+
+**Column model.** A ledger declares what each column holds, never a pixel template: `columns={[col.icon(), col.id(132), col.title(), col.meta(104), col.num(64), col.age(80), col.actions(2)]}`. The primitive turns every content column into `minmax(min, weight fr)` (title 200px·2fr, text 120px·1fr, meta 104px·0.8fr, id 112px·0.7fr, age 80px·0.6fr, num 64px·0.5fr) and keeps icons, checkboxes, tiles and action clusters fixed, so each column has a floor sized for its content, the row always fills the page, and spare width is shared in proportion. Legacy string templates are adapted by the same rule (`adaptLegacyTemplate`) and should be migrated to `col.*` when a page is next touched.
 `Ledger` (scrolls; takes the grid template once) → `LedgerHeader` → `LedgerGroup` → `LedgerRow` with `LedgerId`, `LedgerNum`, `InitialTile` cells.
 - **Header:** sticky, 28px, paper, bottom hairline, 16px padding, 12px muted labels, `aria-hidden`; numeric columns right-aligned. It hugs the topbar: nothing sits between the 64px header and the 28px column header.
 - **Group:** a 28px full-width button, 14px padding, bottom hairline, 12px text: a 14px muted chevron (rotates -90° when collapsed, 200ms spring), the group word in ink 500, the count muted and tabular; hover tint, inset focus ring.

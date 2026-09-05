@@ -39,6 +39,7 @@ import { StatusIcon } from "../../components/ui/status-icon"
 import { DetailRail, RailSection } from "../../components/ui/detail-rail"
 import { PropertyList, Property } from "../../components/ui/property-list"
 import {
+  col,
   InitialTile,
   Ledger,
   LedgerGroup,
@@ -103,7 +104,7 @@ const GROUP_ORDER: AgentRunStatus[] = [
 ]
 
 /** status icon · run id · agent (+ failure reason) · conversation · connector · duration · age */
-const LEDGER_COLUMNS = "14px 132px minmax(0,1fr) 104px 104px 64px 80px"
+const LEDGER_COLUMNS = [col.icon(), col.id(132), col.title(), col.id(104, 0.5), col.meta(104), col.num(64), col.age(80)]
 
 export function RunsPage({ selectedId }: { selectedId?: string | null }) {
   const { t } = useTranslation("admin")

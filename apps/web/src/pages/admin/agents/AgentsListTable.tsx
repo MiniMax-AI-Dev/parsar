@@ -3,12 +3,7 @@ import { useTranslation } from "react-i18next"
 import type { KeyboardEvent } from "react"
 
 import { EmptyState } from "../../../components/ui/empty-state"
-import {
-  InitialTile,
-  Ledger,
-  LedgerHeader,
-  LedgerRow,
-} from "../../../components/ui/ledger"
+import { InitialTile, Ledger, LedgerHeader, LedgerRow, col } from "../../../components/ui/ledger"
 import {
   agentConnectorLabel,
   agentEngineLabel,
@@ -22,7 +17,7 @@ import { AgentRuntimeCell } from "./AgentRuntimeCell"
 import { AgentStatusIcon } from "./AgentStatusBadge"
 
 /** status icon · agent (+ description) · engine · runtime · connector · model · last enabled · actions */
-export const AGENTS_LEDGER_COLUMNS = "14px minmax(0,1fr) 104px 200px 104px 168px 80px 64px"
+export const AGENTS_LEDGER_COLUMNS = [col.icon(), col.title(), col.meta(104), col.text(200, 1), col.meta(104), col.id(168, 0.8), col.age(80), col.actions(2)]
 
 export function AgentsListTable({
   agents,
