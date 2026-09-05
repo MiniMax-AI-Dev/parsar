@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ExternalLink, Loader2, ShieldAlert, Users } from "lucide-react"
+import { ChevronDown, ChevronRight, Eye, EyeOff, ExternalLink, Loader2, Users } from "lucide-react"
 
+import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
+import { Field } from "../ui/label"
+import { StatusIcon } from "../ui/status-icon"
 import { CredentialBindingSelect } from "./CredentialBindingSelect"
 import { useMyCredentials } from "../../lib/api-credentials"
 import {
@@ -14,6 +17,7 @@ import {
 } from "../../lib/credential-kind-ui"
 import type { AgentInlineNewSecret, RequiredCredential, Secret } from "../../lib/api-types"
 import { hasCredentialKind, sharedSecretsForKind, type PerKindBindingChoice } from "../../lib/credential-bindings"
+import { cn } from "../../lib/utils"
 
 export type { PerKindBindingChoice } from "../../lib/credential-bindings"
 
@@ -214,6 +218,7 @@ export function CredentialCheckPanel({
   if (requiredKinds.length === 0) return null
 
   const personalDisabled = visibility === "public"
+  const toggleLabel = showPlaintext ? t("myCredentials.dialog.hide") : t("myCredentials.dialog.show")
 
   return (
     <div className="space-y-3">
@@ -224,26 +229,37 @@ export function CredentialCheckPanel({
         const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind)
 
         return (
-          <div key={rc.kind} className="rounded-md border border-line bg-surface">
-            <div className="flex items-center gap-2 border-b border-line-muted px-3 py-2">
-              <span className="text-sm font-medium text-fg">{displayName}</span>
-              <span className="text-xs text-fg-subtle">({rc.kind})</span>
-              {rc.required && <span className="ml-auto rounded bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">{t("credentialCheck.requiredBadge")}</span>}
-            </div>
-            <div className="space-y-1.5 px-3 py-2">
+          <section key={rc.kind} className="border-t border-line pt-2 first:border-t-0 first:pt-0">
+            <h4 className="flex h-8 items-center gap-2 text-sm">
+              <span className="font-medium text-fg">{displayName}</span>
+              <span className="font-mono text-xs text-fg-muted">{rc.kind}</span>
+              {rc.required && (
+                <Badge variant="warning" dot className="ml-auto">
+                  {t("credentialCheck.requiredBadge")}
+                </Badge>
+              )}
+            </h4>
+
+            <div className="space-y-0.5">
               {/* Option 1: personal */}
-              <label className={`flex items-start gap-2 rounded px-2 py-1.5 ${personalDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-surface-subtle"}`}>
+              <label
+                className={cn(
+                  "flex items-start gap-2 rounded-md px-2 py-1.5 text-sm",
+                  personalDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:app-hover",
+                )}
+              >
                 <input
                   type="radio"
                   name={`cred-${rc.kind}`}
-                  className="mt-0.5"
+                  className="mt-1 accent-accent"
                   checked={choice?.source === "personal"}
                   disabled={personalDisabled}
                   onChange={() => setKindChoice(rc.kind, { source: "personal" })}
                 />
-                <span className="text-sm">
-                  <span className="block text-fg-emphasis">{t("credentialCheck.sourcePersonal")}</span>
-                  <span className="block text-xs text-fg-subtle">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-fg">{t("credentialCheck.sourcePersonal")}</span>
+                  <span className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-muted">
+                    {!personalDisabled && <StatusIcon status={hasPersonalCredential ? "completed" : "failed"} />}
                     {personalDisabled
                       ? t("credentialCheck.personalDisabledHint")
                       : hasPersonalCredential
@@ -251,20 +267,25 @@ export function CredentialCheckPanel({
                         : t("credentialCheck.personalYouMissing")}
                   </span>
                   {!personalDisabled && !hasPersonalCredential && getUrl && (
-                    <a href={getUrl} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-warning underline underline-offset-2">
+                    <a
+                      href={getUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-fg underline underline-offset-4"
+                    >
                       {t("credentialCheck.form.getToken")}
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink className="h-3 w-3" strokeWidth={1.5} aria-hidden="true" />
                     </a>
                   )}
                 </span>
               </label>
 
               {/* Option 2: shared (combines existing-secret picker + new-secret form) */}
-              <label className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-subtle cursor-pointer">
+              <label className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:app-hover">
                 <input
                   type="radio"
                   name={`cred-${rc.kind}`}
-                  className="mt-0.5"
+                  className="mt-1 accent-accent"
                   checked={choice?.source === "shared"}
                   onChange={() => {
                     if (kindSecrets[0]) {
@@ -287,13 +308,13 @@ export function CredentialCheckPanel({
                     }
                   }}
                 />
-                <span className="flex-1 text-sm">
-                  <span className="flex items-center gap-1 text-fg-emphasis">
-                    <Users className="h-3 w-3" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 text-fg">
+                    <Users className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
                     {t("credentialCheck.sourceShared")}
                   </span>
                   {choice?.source === "shared" && (
-                    <div className="mt-1 space-y-1.5">
+                    <div className="mt-1.5 space-y-1.5">
                       {kindSecrets.length > 0 && (
                         <CredentialBindingSelect
                           value={"existing_secret_id" in choice ? choice.existing_secret_id : "__new__"}
@@ -316,13 +337,13 @@ export function CredentialCheckPanel({
                               if (expandedNewSecretFor === rc.kind) setExpandedNewSecretFor(null)
                             }
                           }}
-                          className="h-7 w-full rounded border border-line bg-surface px-2 text-sm"
                         />
                       )}
                       {kindSecrets.length === 0 && expandedNewSecretFor !== rc.kind && !("new_secret" in choice) && (
-                        <button
+                        <Button
                           type="button"
-                          className="inline-flex h-7 items-center gap-1 rounded border border-dashed border-line-strong px-2 text-sm text-fg-muted hover:bg-surface-subtle"
+                          variant="outline"
+                          size="sm"
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
@@ -331,19 +352,20 @@ export function CredentialCheckPanel({
                             setNewSecretPlaintext("")
                           }}
                         >
-                          <ShieldAlert className="h-3 w-3" />
                           {t("credentialCheck.createNewShared")}
-                        </button>
+                        </Button>
                       )}
                       {"new_secret" in choice && expandedNewSecretFor !== rc.kind && (
-                        <div className="flex items-center gap-2 rounded border border-success-border bg-success-subtle px-2 py-1 text-xs text-success-emphasis">
-                          <Check className="h-3 w-3 shrink-0" />
-                          <span className="flex-1 truncate">
+                        <div className="flex items-center gap-1.5 text-xs text-fg">
+                          <StatusIcon status="completed" />
+                          <span className="min-w-0 flex-1 truncate">
                             {t("credentialCheck.sharedNewQueued", { name: choice.new_secret.display_name || rc.kind })}
                           </span>
-                          <button
+                          <Button
                             type="button"
-                            className="text-fg-muted underline"
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs"
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
@@ -353,7 +375,7 @@ export function CredentialCheckPanel({
                             }}
                           >
                             {t("credentialCheck.sharedNewEdit")}
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -362,44 +384,40 @@ export function CredentialCheckPanel({
               </label>
 
               {expandedNewSecretFor === rc.kind && (
-                <div className="ml-6 mt-1 space-y-2 rounded border border-line bg-surface-subtle p-2" onClick={(e) => e.stopPropagation()}>
-                  <div className="grid gap-1">
-                    <label className="text-xs font-medium text-fg-muted">{t("credentialCheck.form.displayName")}</label>
+                <div className="ml-6 space-y-3 border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
+                  <Field label={t("credentialCheck.form.displayName")}>
                     <Input
                       value={newSecretDisplayName}
                       onChange={(e) => setNewSecretDisplayName(e.target.value)}
                       placeholder={displayName}
-                      className="h-7 text-sm"
                     />
-                  </div>
-                  <div className="grid gap-1">
-                    <label className="text-xs font-medium text-fg-muted">
-                      {t("credentialCheck.form.value")}
-                      <span className="ml-0.5 text-danger">*</span>
-                    </label>
+                  </Field>
+                  <Field label={t("credentialCheck.form.value")}>
                     <div className="relative">
                       <Input
                         type={showPlaintext ? "text" : "password"}
                         value={newSecretPlaintext}
                         onChange={(e) => setNewSecretPlaintext(e.target.value)}
                         placeholder={placeholder}
-                        className="h-7 pr-8 text-sm"
+                        className="pr-8"
+                        required
                       />
                       <button
                         type="button"
+                        aria-label={toggleLabel}
+                        title={toggleLabel}
                         onClick={() => setShowPlaintext(!showPlaintext)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-faint hover:text-fg-muted"
+                        className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
-                        {showPlaintext ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        {showPlaintext ? <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} /> : <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />}
                       </button>
                     </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
+                  </Field>
+                  <div className="flex justify-end gap-2 border-t border-line pt-3">
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-6 text-xs"
                       onClick={() => {
                         setExpandedNewSecretFor(null)
                         // Same fallback as the model binding cancel: if the user cancels and no
@@ -428,7 +446,6 @@ export function CredentialCheckPanel({
                     <Button
                       type="button"
                       size="sm"
-                      className="h-6 text-xs"
                       disabled={!newSecretPlaintext.trim()}
                       onClick={() => commitNewSecret(rc.kind)}
                     >
@@ -438,7 +455,7 @@ export function CredentialCheckPanel({
                 </div>
               )}
             </div>
-          </div>
+          </section>
         )
       })}
     </div>

@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { CheckCircle2, Loader2, Search } from "lucide-react"
+import { Loader2, Search } from "lucide-react"
 
+import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
+import { RailSection } from "../../components/ui/detail-rail"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog"
+import { ErrorState } from "../../components/ui/error-state"
+import { Field } from "../../components/ui/label"
 import { Input } from "../../components/ui/input"
+import { Select } from "../../components/ui/select"
+import { StatusIcon } from "../../components/ui/status-icon"
 import { ApiError } from "../../lib/api-client"
 import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
 import {
@@ -199,245 +204,206 @@ export function BulkImportModelsDialog({
       ? credentialKindCode.trim() !== ""
       : apiKey.trim() !== "" || existingSecretID !== "")
 
+  const failed = importResult?.failed ?? []
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("models.bulkImport.title")}</DialogTitle>
-          <DialogDescription>{t("models.bulkImport.description")}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4">
-          <div className="grid gap-3">
-            <div className="grid gap-1.5 min-w-0">
-              <label className="text-sm font-medium text-fg-muted" htmlFor="bulk-model-base-url">
-                {t("models.createProvider.fields.baseURL")}
-              </label>
-              <Input
-                id="bulk-model-base-url"
-                value={baseURL}
-                onChange={(event) => {
-                  setBaseURL(event.target.value)
-                  resetDiscovery()
-                }}
-                placeholder="https://api.example.com/v1"
-                className="font-mono text-sm"
-              />
-            </div>
-          </div>
+        <div className="flex flex-col">
+          <Field label={t("models.createProvider.fields.baseURL")} htmlFor="bulk-model-base-url">
+            <Input
+              id="bulk-model-base-url"
+              value={baseURL}
+              onChange={(event) => {
+                setBaseURL(event.target.value)
+                resetDiscovery()
+              }}
+              placeholder="https://api.example.com/v1"
+              className="font-mono text-xs"
+            />
+          </Field>
 
-          <fieldset className="rounded-md border border-line p-3">
-            <legend className="px-1 text-sm font-medium text-fg-muted">
-              {t("models.createModel.fields.credentialMode")}
-            </legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="bulk-credential-mode"
-                  value="inline_secret"
-                  checked={credentialMode === "inline_secret"}
-                  onChange={() => setCredentialMode("inline_secret")}
-                />
-                <span className="font-medium text-fg-emphasis">
-                  {t("models.createModel.credentialMode.inlineSecret.title")}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="bulk-credential-mode"
-                  value="credential_ref"
-                  checked={credentialMode === "credential_ref"}
-                  onChange={() => setCredentialMode("credential_ref")}
-                />
-                <span className="font-medium text-fg-emphasis">
-                  {t("models.createModel.credentialMode.credentialRef.title")}
-                </span>
-              </label>
-            </div>
-          </fieldset>
-
-          <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
-            <div className="grid gap-1.5">
-              <label className="text-sm font-medium text-fg-muted" htmlFor="bulk-model-api-key">
-                {t("models.createProvider.fields.apiKey")}
-              </label>
-              <Input
-                id="bulk-model-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKey(event.target.value)
-                  if (event.target.value.trim() !== "") setExistingSecretID("")
-                  resetDiscovery()
-                }}
-                placeholder="sk-..."
-              />
-              <span className="text-xs text-fg-faint">
-                {credentialMode === "inline_secret"
-                  ? t("models.bulkImport.apiKeyHintInline")
-                  : t("models.bulkImport.apiKeyHintPersonal")}
-              </span>
-            </div>
-
-            {credentialMode === "inline_secret" && activeSecrets.length > 0 && (
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="bulk-model-secret">
-                  {t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
+          <RailSection title={t("models.createModel.fields.credentialMode")}>
+            <div className="flex flex-col">
+              {(["inline_secret", "credential_ref"] as ModelCredentialMode[]).map((mode) => (
+                <label key={mode} className="flex h-7 items-center gap-2 text-sm text-fg">
+                  <input
+                    type="radio"
+                    name="bulk-credential-mode"
+                    value={mode}
+                    className="h-3.5 w-3.5 accent-accent"
+                    checked={credentialMode === mode}
+                    onChange={() => setCredentialMode(mode)}
+                  />
+                  {mode === "inline_secret"
+                    ? t("models.createModel.credentialMode.inlineSecret.title")
+                    : t("models.createModel.credentialMode.credentialRef.title")}
                 </label>
-                <select
-                  id="bulk-model-secret"
-                  value={existingSecretID}
+              ))}
+            </div>
+
+            <div className="mt-2 grid gap-3">
+              <Field label={t("models.createProvider.fields.apiKey")} htmlFor="bulk-model-api-key">
+                <Input
+                  id="bulk-model-api-key"
+                  type="password"
+                  value={apiKey}
                   onChange={(event) => {
-                    setExistingSecretID(event.target.value)
-                    if (event.target.value !== "") setApiKey("")
+                    setApiKey(event.target.value)
+                    if (event.target.value.trim() !== "") setExistingSecretID("")
                     resetDiscovery()
                   }}
-                  className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
-                >
-                  <option value="">
-                    {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
-                  </option>
-                  {activeSecrets.map((secret) => (
-                    <option key={secret.id} value={secret.id}>
-                      {secret.name} ({secret.masked})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {credentialMode === "credential_ref" && (
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="bulk-model-kind">
-                  {t("models.createModel.credentialMode.credentialRef.kindLabel")}
-                </label>
-                <CredentialKindCombobox
-                  workspaceID={workspaceID}
-                  value={credentialKindCode}
-                  onChange={setCredentialKindCode}
-                  className="w-full"
+                  placeholder="sk-..."
                 />
-              </div>
-            )}
-          </div>
+              </Field>
 
-          <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="outline" size="sm" onClick={discover} disabled={!canDiscover}>
+              {credentialMode === "inline_secret" && activeSecrets.length > 0 && (
+                <Field
+                  label={t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
+                  htmlFor="bulk-model-secret"
+                >
+                  <Select
+                    id="bulk-model-secret"
+                    value={existingSecretID}
+                    onChange={(event) => {
+                      setExistingSecretID(event.target.value)
+                      if (event.target.value !== "") setApiKey("")
+                      resetDiscovery()
+                    }}
+                  >
+                    <option value="">
+                      {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
+                    </option>
+                    {activeSecrets.map((secret) => (
+                      <option key={secret.id} value={secret.id}>
+                        {secret.name} ({secret.masked})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
+
+              {credentialMode === "credential_ref" && (
+                <Field
+                  label={t("models.createModel.credentialMode.credentialRef.kindLabel")}
+                  htmlFor="bulk-model-kind"
+                >
+                  <CredentialKindCombobox
+                    workspaceID={workspaceID}
+                    value={credentialKindCode}
+                    onChange={setCredentialKindCode}
+                    className="w-full"
+                  />
+                </Field>
+              )}
+            </div>
+          </RailSection>
+
+          <div className="mt-5 flex items-center gap-3">
+            <Button type="button" variant="outline" onClick={discover} disabled={!canDiscover}>
               {previewMut.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />
               ) : (
-                <Search className="h-3.5 w-3.5" />
+                <Search strokeWidth={1.5} aria-hidden="true" />
               )}
               {previewMut.isPending ? t("models.bulkImport.discovering") : t("models.bulkImport.discover")}
             </Button>
             {previewModels.length > 0 && (
-              <span className="text-xs text-fg-faint">
+              <span className="text-xs tabular-nums text-fg-muted">
                 {t("models.bulkImport.selectedCount", { count })}
               </span>
             )}
           </div>
 
           {previewModels.length > 0 && (
-            <div className="rounded-md border border-line">
-              <div className="border-b border-line-muted p-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t("models.bulkImport.search")}
-                    className="pl-8"
-                  />
-                </div>
+            <div className="mt-3">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={t("models.bulkImport.search")}
+                  aria-label={t("models.bulkImport.search")}
+                  className="pl-7"
+                />
               </div>
-              <div className="max-h-64 overflow-y-auto">
+              <ul className="m-0 mt-2 max-h-64 list-none overflow-y-auto border-t border-line p-0">
                 {visibleModels.map((model) => {
                   const checked = selected.has(model.id)
                   return (
-                    <label
-                      key={model.id}
-                      className="flex min-w-0 items-center gap-3 border-b border-line-muted px-3 py-2 last:border-b-0"
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5"
-                        disabled={model.exists}
-                        checked={!model.exists && checked}
-                        onChange={(event) => {
-                          const next = new Set(selected)
-                          if (event.target.checked) next.add(model.id)
-                          else next.delete(model.id)
-                          setSelected(next)
-                        }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-fg" title={model.id}>
+                    <li key={model.id}>
+                      <label className="flex h-9 items-center gap-2.5 border-b border-line text-sm text-fg hover:app-hover">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 accent-accent"
+                          disabled={model.exists}
+                          checked={!model.exists && checked}
+                          onChange={(event) => {
+                            const next = new Set(selected)
+                            if (event.target.checked) next.add(model.id)
+                            else next.delete(model.id)
+                            setSelected(next)
+                          }}
+                        />
+                        <span className="min-w-0 flex-1 truncate font-medium" title={model.id}>
                           {modelLabel(model.id)}
                         </span>
-                        <span className="block truncate font-mono text-xs text-fg-faint" title={model.id}>
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted" title={model.id}>
                           {model.id}
                         </span>
                         {model.supported_endpoint_types && model.supported_endpoint_types.length > 0 && (
-                          <span className="mt-1 flex flex-wrap gap-1">
-                            {model.supported_endpoint_types.map((endpointType) => (
-                              <span
-                                key={endpointType}
-                                className="rounded border border-line-muted px-1.5 py-0.5 font-mono text-xs text-fg-subtle"
-                              >
-                                {endpointType}
-                              </span>
-                            ))}
+                          <span className="shrink-0 truncate font-mono text-xs text-fg-muted">
+                            {model.supported_endpoint_types.join(" · ")}
                           </span>
                         )}
-                      </span>
-                      {model.exists && (
-                        <span className="shrink-0 rounded border border-line-muted px-1.5 py-0.5 text-xs text-fg-subtle">
-                          {t("models.bulkImport.exists")}
-                        </span>
-                      )}
-                    </label>
+                        {model.exists && <Badge variant="neutral">{t("models.bulkImport.exists")}</Badge>}
+                      </label>
+                    </li>
                   )
                 })}
-              </div>
+              </ul>
             </div>
           )}
 
           {importResult && (
-            <div className="flex items-start gap-2 rounded-md bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <p className="mt-3 flex items-center gap-2 text-sm text-fg">
+              <StatusIcon status={failed.length === 0 ? "completed" : "failed"} />
               <span>
                 {t("models.bulkImport.resultSummary", {
                   created: importResult.created?.length ?? 0,
                   skipped: importResult.skipped?.length ?? 0,
-                  failed: importResult.failed?.length ?? 0,
+                  failed: failed.length,
                 })}
               </span>
-            </div>
-          )}
-          {importResult?.failed?.length ? (
-            <div className="max-h-28 overflow-y-auto rounded-md bg-danger-subtle px-3 py-2 text-xs text-danger-emphasis">
-              {importResult.failed.map((failure) => (
-                <div key={failure.model_key} className="break-all">
-                  {failure.model_key}: {failure.error}
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {errMsg && (
-            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis break-all">
-              {errMsg}
             </p>
           )}
+          {failed.length > 0 && (
+            <ul className="m-0 mt-1 max-h-28 list-none overflow-y-auto p-0 pl-5 font-mono text-xs text-fg">
+              {failed.map((failure) => (
+                <li key={failure.model_key} className="break-all">
+                  {failure.model_key}: {failure.error}
+                </li>
+              ))}
+            </ul>
+          )}
+          {errMsg && <ErrorState title={errMsg} className="pb-0" />}
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             {tc("actions.cancel")}
           </Button>
-          <Button type="button" size="sm" onClick={importSelected} disabled={!canImport}>
-            {importMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button type="button" onClick={importSelected} disabled={!canImport}>
+            {importMut.isPending && <Loader2 className="animate-spin" />}
             {t("models.bulkImport.importSelected")}
           </Button>
         </DialogFooter>

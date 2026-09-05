@@ -28,7 +28,11 @@
     "search": "搜索",
     "viewDetail": "查看详情",
     "viewAuditLog": "查看审计日志",
-    "retry": "重试"
+    "retry": "重试",
+    "close": "关闭",
+    "done": "完成",
+    "expand": "展开",
+    "collapse": "收起"
   },
   "states": {
     "loading": "加载中…",
@@ -62,7 +66,8 @@
     "discoverNoMatch": "没有匹配「{{q}}」的工作区",
     "discoverRange": "{{start}}–{{end}} / 共 {{total}}",
     "paginationPrev": "上一页",
-    "paginationNext": "下一页"
+    "paginationNext": "下一页",
+    "membersColumn": "成员"
   },
   "workspaceCrud": {
     "actions": {
@@ -236,5 +241,28 @@
       "title": "选择 Workspace 查看{{resource}}",
       "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。"
     }
+  },
+  "invite": {
+    "loading": "邀请加载中...",
+    "invalidTitle": "邀请无效",
+    "invalidDescription": "该邀请链接无效、已过期或已被使用。",
+    "title": "加入 {{name}}",
+    "description": "你被邀请为 {{role}}。设置密码以激活账号。",
+    "confirmLabel": "确认密码",
+    "confirmPlaceholder": "再次输入密码",
+    "mismatch": "两次输入的密码不一致",
+    "acceptFailed": "接受邀请失败",
+    "submitting": "加入中...",
+    "submit": "设置密码并加入"
+  },
+  "layout": {
+    "adjusted": "已调整宽度",
+    "temporary": "临时",
+    "restore": "恢复"
+  },
+  "pagination": {
+    "range": "第 {{from}}-{{to}} 条，共 {{total}} 条",
+    "prev": "上一页",
+    "next": "下一页"
   }
 }

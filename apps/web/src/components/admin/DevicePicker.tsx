@@ -2,6 +2,10 @@ import { useEffect, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { Plus } from "lucide-react"
 
+import { Button } from "../ui/button"
+import { Select } from "../ui/select"
+import { Skeleton } from "../ui/skeleton"
+import { InlineError } from "../runtime/InlineError"
 import {
   isLocalDeviceRuntime,
   isRuntimeSelectableForDispatch,
@@ -73,23 +77,19 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
   }, [onChange, q.error, q.isFetching, q.isLoading, selectableDevices, value])
 
   if (q.isLoading) {
-    return (
-      <div className="h-9 animate-pulse rounded-md border border-line bg-surface-subtle" />
-    )
+    return <Skeleton className="h-7 w-full" />
   }
   if (q.error) {
-    return (
-      <p className="text-sm text-danger">
-        {(q.error as Error).message}
-      </p>
-    )
+    return <InlineError>{(q.error as Error).message}</InlineError>
   }
+
+  const addLabel = t("agents.form.devicePicker.addDevice", { defaultValue: "Pair a new device" })
 
   if (selectableDevices.length === 0) {
     const hasOnlineDevices = onlineDevices.length > 0
     return (
-      <div className="rounded-lg border border-dashed border-line-strong bg-surface-subtle p-3">
-        <p className="text-sm font-medium text-fg">
+      <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="text-fg">
           {t(
             hasOnlineDevices
               ? "agents.form.devicePicker.noCompatibleTitle"
@@ -100,22 +100,21 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
                 : "No agent daemons connected yet",
             },
           )}
-        </p>
+        </span>
         {onAddDevice ? (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onAddDevice}
             disabled={disabled}
             data-testid="device-picker-add-empty"
-            className="mt-2 inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus className="h-3 w-3" />
-            {t("agents.form.devicePicker.addDevice", {
-              defaultValue: "Pair a new device",
-            })}
-          </button>
+            <Plus strokeWidth={1.5} aria-hidden="true" />
+            {addLabel}
+          </Button>
         ) : (
-          <p className="mt-1 text-sm text-fg-subtle">
+          <span className="text-xs text-fg-muted">
             {t(
               hasOnlineDevices
                 ? "agents.form.devicePicker.noCompatibleDescription"
@@ -126,7 +125,7 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
                   : "Open Runtime → Local devices to generate a pairing token, then run `parsar-daemon connect --url ... --token ...` on the target machine before returning here.",
               },
             )}
-          </p>
+          </span>
         )}
       </div>
     )
@@ -134,36 +133,34 @@ export function DevicePicker({ workspaceID, value, onChange, agentKind, preserve
 
   return (
     <div className="flex gap-2">
-      <select
+      <Select
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         data-testid="agent-daemon-device-picker"
-        className="h-9 min-w-0 flex-1 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
+        wrapperClassName="min-w-0 flex-1"
       >
         <option value="">
-          {t("agents.form.devicePicker.placeholder", {
-            defaultValue: "Pick a device…",
-          })}
+          {t("agents.form.devicePicker.placeholder", { defaultValue: "Pick a device…" })}
         </option>
         {selectableDevices.map((r) => (
           <option key={r.id} value={r.id}>
             {formatDeviceLabel(r)}
           </option>
         ))}
-      </select>
+      </Select>
       {onAddDevice && (
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={onAddDevice}
           disabled={disabled}
           data-testid="device-picker-add"
-          title={t("agents.form.devicePicker.addDevice", { defaultValue: "Pair a new device" })}
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-line bg-surface px-3 text-sm text-fg-muted shadow-sm hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          title={addLabel}
         >
-          <Plus className="h-3 w-3" />
-          {t("agents.form.devicePicker.addDevice", { defaultValue: "Pair a new device" })}
-        </button>
+          <Plus strokeWidth={1.5} aria-hidden="true" />
+          {addLabel}
+        </Button>
       )}
     </div>
   )

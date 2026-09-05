@@ -1,18 +1,26 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, ArrowLeft, ArrowUpRight, PackageCheck } from "lucide-react"
+import { ArrowUpRight, PackageCheck } from "lucide-react"
 
+import { PageHeader } from "../../../components/layout/PageHeader"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
+import { RailSection } from "../../../components/ui/detail-rail"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
+import { InitialTile, Ledger, LedgerRow } from "../../../components/ui/ledger"
+import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { useTargetMarketplaceInstalls, useMarketplaceEnabledAgents, useUninstall, type TargetMarketplaceInstall, marketplaceSourceName } from "../../../lib/api-marketplace"
 import { navigateAdmin } from "../../../lib/admin-router"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { requiredCredentialsLabel } from "../capability-ui"
-import type { Capability } from "../../../lib/api-types"
+import { CapabilityTypeBadge } from "./CapabilityTypeBadge"
+import { BackLink, InlineNotice } from "./notices"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
+
+/** agent · version · open */
+const AGENT_COLUMNS = "minmax(0,1fr) 120px 14px"
 
 export function MarketplaceCapabilityDetail({ id }: { id: string }) {
   const { t, i18n } = useTranslation("admin")
@@ -23,77 +31,108 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
   const [uninstallOpen, setUninstallOpen] = useState(false)
   const capability = useMemo(() => (installsQ.data ?? []).find((item) => item.id === id) ?? null, [installsQ.data, id])
   const agents = agentsQ.data ?? capability?.enabled_agents ?? []
+  const backLabel = t("capabilities.detail.backToList")
+  const back = () => navigateAdmin("capabilities")
 
-  if (installsQ.isLoading) return <div className="space-y-4"><Skeleton className="h-16 w-full" /><Skeleton className="h-40 w-full" /></div>
+  if (installsQ.isLoading) {
+    return (
+      <>
+        <PageHeader className="static mx-0 mb-0" backLink={<BackLink label={backLabel} onClick={back} />} title={<Skeleton className="h-4 w-40" />} />
+        <div className="space-y-3 px-6 pt-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-3 w-full max-w-lg" />)}</div>
+      </>
+    )
+  }
 
   if (installsQ.error) {
-    return <ErrorState title={t("capabilities.marketplaceDetail.loadError.title")} description={installsQ.error instanceof Error ? installsQ.error.message : t("capabilities.marketplaceDetail.loadError.description")} onRetry={() => void installsQ.refetch()} />
+    return (
+      <>
+        <PageHeader className="static mx-0 mb-0" backLink={<BackLink label={backLabel} onClick={back} />} title={t("capabilities.marketplaceDetail.loadError.title")} />
+        <div className="px-6 pt-4">
+          <ErrorState title={t("capabilities.marketplaceDetail.loadError.title")} description={installsQ.error instanceof Error ? installsQ.error.message : t("capabilities.marketplaceDetail.loadError.description")} onRetry={() => void installsQ.refetch()} />
+        </div>
+      </>
+    )
   }
 
   if (!capability) {
-    return <EmptyState icon={PackageCheck} title={t("capabilities.marketplaceDetail.notFound.title")} description={t("capabilities.marketplaceDetail.notFound.description")} action={<Button variant="outline" size="sm" onClick={() => navigateAdmin("capabilities")}>{t("capabilities.detail.backToList")}</Button>} />
+    return (
+      <>
+        <PageHeader className="static mx-0 mb-0" backLink={<BackLink label={backLabel} onClick={back} />} title={t("capabilities.marketplaceDetail.notFound.title")} />
+        <EmptyState icon={PackageCheck} title={t("capabilities.marketplaceDetail.notFound.title")} description={t("capabilities.marketplaceDetail.notFound.description")} />
+      </>
+    )
   }
 
   const source = marketplaceSourceName(capability)
   const deprecated = !!capability.deprecated_at
+  const latest = capability.latest_version ?? capability.latest_published_version
+  const agentCount = agents.length || capability.enabled_agent_count
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 text-sm text-fg-subtle hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-display text-fg">{capability.name}</h2>
+    <>
+      <PageHeader
+        className="static mx-0 mb-0"
+        backLink={<BackLink label={backLabel} onClick={back} />}
+        title={
+          <span className="inline-flex min-w-0 items-center gap-2">
+            <span className="truncate">{capability.name}</span>
             <CapabilityTypeBadge type={capability.type} />
-            <Badge variant="primary">{t("capabilities.marketplaceDetail.badge")}</Badge>
-            {deprecated && <Badge variant="destructive">{t("capabilities.deprecated.badgeTarget")}</Badge>}
-          </div>
-          <p className="mt-1 text-sm text-fg-subtle">{capability.description || t("capabilities.detail.noDescription")}</p>
-        </div>
+            {deprecated ? (
+              <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeTarget")}</Badge>
+            ) : (
+              <Badge variant="neutral" dot>{t("capabilities.marketplaceDetail.badge")}</Badge>
+            )}
+          </span>
+        }
+        action={<Button variant="outline" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>}
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4">
+        {deprecated && <InlineNotice tone="warning" className="mb-4">{t("capabilities.deprecated.bannerTarget")}</InlineNotice>}
+        {capability.description && <p className="mb-4 max-w-3xl text-sm text-fg">{capability.description}</p>}
+
+        <RailSection title={t("capabilities.marketplaceDetail.source.title")}>
+          <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+            <Property label={t("capabilities.marketplaceDetail.source.workspace")}>{source || t("capabilities.none")}</Property>
+            <Property label={t("capabilities.marketplaceDetail.source.pinnedVersion")} mono>{capability.pinned_version ? `v${capability.pinned_version}` : t("capabilities.none")}</Property>
+            <Property label={t("capabilities.marketplaceDetail.source.latestVersion")} mono>{latest ? `v${latest}` : t("capabilities.none")}</Property>
+            <Property label={t("capabilities.table.credentials")}>{requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}</Property>
+          </PropertyList>
+        </RailSection>
+
+        <RailSection title={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })} className="mt-6">
+          {agentsQ.isLoading ? (
+            <Skeleton className="mt-2 h-3 w-full max-w-lg" />
+          ) : agents.length === 0 ? (
+            <p className="pt-1 text-sm text-fg-muted">{t("capabilities.marketplaceDetail.enabledAgents.empty")}</p>
+          ) : (
+            <Ledger columns={AGENT_COLUMNS} role="listbox" aria-label={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })}>
+              <ul className="m-0 list-none p-0">
+                {agents.map((agent) => {
+                  const agentID = agent.agent_id ?? agent.id
+                  const name = agent.name ?? agent.agent_name ?? "—"
+                  const open = () => agentID && navigateAdmin("agents", { id: agentID, tab: "capabilities" })
+                  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      open()
+                    }
+                  }
+                  return (
+                    <LedgerRow key={agentID ?? name} onClick={open} onKeyDown={onKeyDown}>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <InitialTile name={name} />
+                        <span className="truncate font-medium">{name}</span>
+                      </span>
+                      <span className="truncate font-mono text-xs text-fg">v{agent.version ?? capability.pinned_version ?? "—"}</span>
+                      <ArrowUpRight className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+                    </LedgerRow>
+                  )
+                })}
+              </ul>
+            </Ledger>
+          )}
+        </RailSection>
       </div>
-
-      {deprecated && (
-        <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm leading-5 text-danger-emphasis">
-          <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />{t("capabilities.deprecated.bannerTarget")}
-        </div>
-      )}
-
-      <Card title={t("capabilities.marketplaceDetail.source.title")}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Detail label={t("capabilities.marketplaceDetail.source.workspace")} value={source || t("capabilities.none")} />
-          <Detail label={t("capabilities.marketplaceDetail.source.pinnedVersion")} value={capability.pinned_version ? `v${capability.pinned_version}` : t("capabilities.none")} mono />
-          <Detail label={t("capabilities.marketplaceDetail.source.latestVersion")} value={capability.latest_version || capability.latest_published_version ? `v${capability.latest_version ?? capability.latest_published_version}` : t("capabilities.none")} mono />
-          <Detail label={t("capabilities.table.credentials")} value={requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))} />
-        </div>
-      </Card>
-
-      <Card title={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agents.length || capability.enabled_agent_count })}>
-        {agentsQ.isLoading ? <Skeleton className="h-12 w-full" /> : agents.length === 0 ? (
-          <p className="text-sm text-fg-subtle">{t("capabilities.marketplaceDetail.enabledAgents.empty")}</p>
-        ) : (
-          <div className="space-y-2">
-            {agents.map((agent) => {
-              const id = agent.agent_id ?? agent.id
-              return (
-                <button key={id ?? agent.name} type="button" onClick={() => id && navigateAdmin("agents", { id, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-line p-3 text-left hover:bg-surface-subtle">
-                  <span className="text-sm font-medium text-fg">{agent.name ?? agent.agent_name ?? "—"}</span>
-                  <span className="flex items-center gap-2 text-sm text-fg-subtle"><span className="font-mono">v{agent.version ?? capability.pinned_version ?? "—"}</span><ArrowUpRight className="h-3.5 w-3.5" /></span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </Card>
-
-      <section className="rounded-lg border border-danger-border bg-danger-subtle/40 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-semibold text-danger-emphasis">{t("capabilities.uninstall.sectionTitle")}</h3>
-            <p className="mt-1 text-sm text-danger-emphasis">{t("capabilities.uninstall.sectionDescription")}</p>
-          </div>
-          <Button variant="destructive" size="sm" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>
-        </div>
-      </section>
 
       <UninstallMarketplaceDialog
         capability={capability as TargetMarketplaceInstall}
@@ -107,20 +146,6 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
         }}
         onConfirm={() => uninstallMut.mutate(capability.id, { onSuccess: () => navigateAdmin("capabilities") })}
       />
-    </div>
+    </>
   )
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-line bg-surface p-4"><h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>{children}</section>
-}
-
-function Detail({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return <div className="rounded-md border border-line bg-surface p-3"><p className="text-xs text-fg-subtle">{label}</p><div className={`mt-1 text-sm text-fg ${mono ? "font-mono" : ""}`}>{value}</div></div>
-}
-
-function CapabilityTypeBadge({ type }: { type: Capability["type"] }) {
-  if (type === "skill") return <Badge variant="primary">Skill</Badge>
-  if (type === "plugin") return <Badge variant="success">Plugin</Badge>
-  return <Badge variant="neutral">MCP</Badge>
 }

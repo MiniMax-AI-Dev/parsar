@@ -1,104 +1,64 @@
+/**
+ * The models ledger: one 36px row per catalog model, grouped by provider.
+ * Rows are multi-selectable (checkbox or row click) and feed the bulk-delete
+ * footer on ModelsPage; row actions are test / edit / duplicate / delete.
+ */
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  AlertCircle,
-  CheckCircle2,
-  Copy,
-  Globe,
-  KeyRound,
-  Loader2,
-  Pencil,
-  Trash2,
-  UserCircle,
-  Zap,
-} from "lucide-react"
+import { Copy, Database, Pencil, Trash2, Zap } from "lucide-react"
 
-import { Badge } from "../../components/ui/badge"
-import { Button } from "../../components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
-import { cn } from "../../lib/utils"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
+import { EmptyState } from "../../components/ui/empty-state"
+import { Ledger, LedgerGroup, LedgerHeader, LedgerRow } from "../../components/ui/ledger"
+import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { hostFromBaseURL } from "../../lib/model-base-url"
 import { modelHealth } from "../../lib/model-health"
 import { modelProtocols, protocolListLabel } from "../../lib/model-protocol"
-import { hostFromBaseURL } from "../../lib/model-base-url"
-import type { Model, ModelHealthStatus } from "../../lib/api-types"
+import { FALLBACK_PROVIDER_TYPES } from "../../lib/model-provider-options"
+import { useRelativeTime } from "../../lib/relative-time"
+import type { Model } from "../../lib/api-types"
 
-function ModelHealthBadge({ model, isTesting }: { model: Model; isTesting: boolean }) {
-  const { t } = useTranslation("admin")
-  if (isTesting) {
-    return (
-      <Badge variant="primary" dot pulse>
-        {t("models.health.checking")}
-      </Badge>
-    )
+/** status icon · checkbox · model key · name · endpoint host · protocol · credential mode · last test · actions */
+const LEDGER_COLUMNS = "14px 14px minmax(0,1.2fr) minmax(0,1fr) 200px 96px 72px 72px 120px"
+
+interface CredentialStatus {
+  labelKey: string
+  icon: StatusKind
+  detail?: string
+}
+
+/**
+ * Whether the model can be used, as the 14px status icon: testing › disabled ›
+ * pending credential › last test result. The word lives in the icon's title.
+ */
+function credentialStatus(model: Model, isTesting: boolean): CredentialStatus {
+  if (isTesting) return { labelKey: "models.health.checking", icon: "running" }
+  if (model.status === "disabled") return { labelKey: "models.status.disabled", icon: "cancelled" }
+  if (model.credential_mode === "inline_secret" && !model.secret_id) {
+    return { labelKey: "models.status.pending", icon: "queued" }
   }
   const health = modelHealth(model)
-  const variant: Record<ModelHealthStatus, "success" | "destructive" | "warning" | "neutral"> = {
-    healthy: "success",
-    failed: "destructive",
-    unsupported: "warning",
-    untested: "neutral",
+  const detail = health.error ?? health.endpoint_type
+  switch (health.status) {
+    case "healthy":
+      return { labelKey: "models.health.healthy", icon: "completed", detail }
+    case "failed":
+      return { labelKey: "models.health.failed", icon: "failed", detail }
+    case "unsupported":
+      return { labelKey: "models.health.unsupported", icon: "interrupted", detail }
+    default:
+      return { labelKey: "models.health.untested", icon: "queued" }
   }
-  return (
-    <Badge
-      variant={variant[health.status]}
-      dot={health.status !== "untested"}
-      title={health.error ?? health.endpoint_type ?? undefined}
-    >
-      {t(`models.health.${health.status}`)}
-    </Badge>
-  )
 }
 
-function CredentialModeBadge({ mode }: { mode: Model["credential_mode"] }) {
+function useProviderLabel() {
   const { t } = useTranslation("admin")
-  if (mode === "inline_secret") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-1.5 py-0.5 text-xs font-medium text-fg-muted">
-        <KeyRound className="h-3 w-3" />
-        {t("models.credentialMode.shared")}
-      </span>
-    )
+  return (providerType: string): string => {
+    const option = FALLBACK_PROVIDER_TYPES.find((p) => p.key === providerType)
+    if (!option) return providerType
+    if (option.label) return option.label
+    return option.labelKey ? (t(option.labelKey as never) as unknown as string) : providerType
   }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-info-subtle px-1.5 py-0.5 text-xs font-medium text-info-emphasis">
-      <UserCircle className="h-3 w-3" />
-      {t("models.credentialMode.personal")}
-    </span>
-  )
-}
-
-function ModelBaseURLCell({ baseURL }: { baseURL: string }) {
-  const host = hostFromBaseURL(baseURL)
-  return (
-    <div className="flex min-w-0 items-start gap-1.5" title={baseURL}>
-      <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-faint" />
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-medium text-fg-muted">
-          {host || "-"}
-        </span>
-        {baseURL && (
-          <span className="block truncate font-mono text-xs text-fg-faint">
-            {baseURL}
-          </span>
-        )}
-      </span>
-    </div>
-  )
-}
-
-function ModelProtocolCell({ model }: { model: Model }) {
-  const { t } = useTranslation("admin")
-  return (
-    <Badge variant="neutral" title={t("models.createProvider.fields.protocol")}>
-      {protocolListLabel(modelProtocols(model))}
-    </Badge>
-  )
 }
 
 export function ModelsTable({
@@ -106,7 +66,6 @@ export function ModelsTable({
   selectedIDs,
   testingModelIDs,
   onToggleModel,
-  onToggleAllVisible,
   onRequestEdit,
   onRequestDelete,
   onRequestDuplicate,
@@ -118,7 +77,6 @@ export function ModelsTable({
   selectedIDs: Set<string>
   testingModelIDs: Set<string>
   onToggleModel: (modelID: string, selected: boolean) => void
-  onToggleAllVisible: (selected: boolean) => void
   onRequestEdit: (m: Model) => void
   onRequestDelete: (m: Model) => void
   onRequestDuplicate: (m: Model) => void
@@ -127,165 +85,121 @@ export function ModelsTable({
   isAdmin: boolean
 }) {
   const { t } = useTranslation("admin")
+  const fmtAgo = useRelativeTime()
+  const providerLabel = useProviderLabel()
+
+  const groups = useMemo(() => {
+    const byProvider = new Map<string, Model[]>()
+    for (const m of data) {
+      const list = byProvider.get(m.provider_type) ?? []
+      list.push(m)
+      byProvider.set(m.provider_type, list)
+    }
+    return [...byProvider.entries()]
+      .map(([providerType, models]) => ({
+        providerType,
+        label: providerLabel(providerType),
+        models: [...models].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [data, providerLabel])
 
   if (data.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed border-line bg-surface px-4 py-10 text-center text-sm text-fg-subtle">
-        {t("models.empty.descriptionShort")}
-      </div>
-    )
+    return <EmptyState icon={Database} title={t("models.empty.descriptionShort")} />
   }
 
-  const selectedVisibleCount = data.filter((m) => selectedIDs.has(m.id)).length
-  const allVisibleSelected = data.length > 0 && selectedVisibleCount === data.length
-  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected
-
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-surface">
-      <Table className="table-fixed">
-        <colgroup>
-          <col className="w-[4%]" />
-          <col className="w-[14%]" />
-          <col className="w-[16%]" />
-          <col className="w-[18%]" />
-          <col className="w-[10%]" />
-          <col className="w-[13%]" />
-          <col className="w-[11%]" />
-          <col className="w-[14%]" />
-        </colgroup>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-3">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5"
-                checked={allVisibleSelected}
-                ref={(node) => {
-                  if (node) node.indeterminate = someVisibleSelected
-                }}
-                onChange={(event) => onToggleAllVisible(event.currentTarget.checked)}
-                aria-label={t("models.bulkDelete.selectAll")}
-              />
-            </TableHead>
-            <TableHead>{t("models.table.model")}</TableHead>
-            <TableHead>{t("models.table.modelKey")}</TableHead>
-            <TableHead>{t("models.table.baseURL")}</TableHead>
-            <TableHead>{t("models.createProvider.fields.protocol")}</TableHead>
-            <TableHead>{t("models.table.credentialMode")}</TableHead>
-            <TableHead>{t("models.table.health")}</TableHead>
-            <TableHead className="pr-3 text-right">{t("models.table.actions")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((m) => {
-            const canEdit = isAdmin || (currentUserID && m.created_by === currentUserID)
+    <Ledger columns={LEDGER_COLUMNS} aria-label={t("models.page.title")}>
+      <LedgerHeader>
+        <span />
+        <span />
+        <span>{t("models.table.modelKey")}</span>
+        <span>{t("models.table.model")}</span>
+        <span>{t("models.table.baseURL")}</span>
+        <span>{t("models.createProvider.fields.protocol")}</span>
+        <span>{t("models.table.credentialMode")}</span>
+        <span className="text-right">{t("models.table.lastTested")}</span>
+        <span />
+      </LedgerHeader>
+      {groups.map((g) => (
+        <LedgerGroup key={g.providerType} label={g.label} count={g.models.length}>
+          {g.models.map((m) => {
+            const canEdit = isAdmin || (!!currentUserID && m.created_by === currentUserID)
             const isTesting = testingModelIDs.has(m.id)
-            const canTest = !isTesting && m.status === "active"
+            const selected = selectedIDs.has(m.id)
+            const status = credentialStatus(m, isTesting)
+            const statusLabel = t(status.labelKey as never) as unknown as string
             const health = modelHealth(m)
+            const host = hostFromBaseURL(m.base_url)
             return (
-              <TableRow
+              <LedgerRow
                 key={m.id}
-                className={cn(health.status !== "healthy" && "bg-surface-subtle/35 text-fg-muted")}
+                role={undefined}
+                aria-selected={undefined}
+                tabIndex={-1}
+                selected={selected}
+                onClick={() => onToggleModel(m.id, !selected)}
               >
-                <TableCell className="pl-3">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5"
-                    checked={selectedIDs.has(m.id)}
-                    onChange={(event) => onToggleModel(m.id, event.currentTarget.checked)}
-                    aria-label={t("models.bulkDelete.selectOne", { name: m.name })}
+                <StatusIcon
+                  status={status.icon}
+                  title={status.detail ? `${statusLabel} · ${status.detail}` : statusLabel}
+                />
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-accent"
+                  checked={selected}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => onToggleModel(m.id, event.currentTarget.checked)}
+                  aria-label={t("models.bulkDelete.selectOne", { name: m.name })}
+                />
+                <span className="truncate font-mono text-xs text-fg" title={m.model_key}>
+                  {m.model_key}
+                </span>
+                <span className="truncate font-medium" title={m.name}>
+                  {m.name}
+                </span>
+                <span className="truncate font-mono text-xs text-fg" title={m.base_url}>
+                  {host || "—"}
+                </span>
+                <span className="truncate text-xs text-fg-muted">{protocolListLabel(modelProtocols(m))}</span>
+                <span className="truncate text-xs text-fg-muted">
+                  {m.credential_mode === "inline_secret"
+                    ? t("models.credentialMode.shared")
+                    : t("models.credentialMode.personal")}
+                </span>
+                <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(health.checked_at)}</span>
+                <RowActions>
+                  <ActionIconButton
+                    icon={Zap}
+                    label={t("models.actions.test")}
+                    busy={isTesting}
+                    disabled={m.status !== "active"}
+                    onClick={() => onTest(m)}
                   />
-                </TableCell>
-                <TableCell className="overflow-hidden">
-                  <span
-                    className={cn(
-                      "block truncate text-sm font-medium",
-                      health.status === "healthy" ? "text-fg" : "text-fg-muted",
-                    )}
-                    title={m.name}
-                  >
-                    {m.name}
-                  </span>
-                </TableCell>
-                <TableCell className="overflow-hidden">
-                  <span
-                    className="block truncate font-mono text-sm text-fg-muted"
-                    title={m.model_key}
-                  >
-                    {m.model_key}
-                  </span>
-                </TableCell>
-                <TableCell className="overflow-hidden">
-                  <ModelBaseURLCell baseURL={m.base_url} />
-                </TableCell>
-                <TableCell>
-                  <ModelProtocolCell model={m} />
-                </TableCell>
-                <TableCell>
-                  <CredentialModeBadge mode={m.credential_mode} />
-                </TableCell>
-                <TableCell>
-                  <ModelHealthBadge model={m} isTesting={isTesting} />
-                </TableCell>
-                <TableCell className="pr-3 text-right">
-                  <div className="inline-flex items-center gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      shape="circle"
-                      className="h-8 w-8"
-                      onClick={() => onTest(m)}
-                      disabled={!canTest}
-                      title={t("models.actions.test")}
-                      aria-label={t("models.actions.test")}
-                    >
-                      {isTesting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Zap className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      shape="circle"
-                      className="h-8 w-8"
-                      onClick={() => onRequestEdit(m)}
-                      disabled={!canEdit}
-                      title={canEdit ? t("models.actions.edit") : t("models.actions.editForbidden")}
-                      aria-label={t("models.actions.edit")}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      shape="circle"
-                      className="h-8 w-8"
-                      onClick={() => onRequestDuplicate(m)}
-                      title={t("models.actions.copy")}
-                      aria-label={t("models.actions.copy")}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-danger hover:bg-danger-subtle hover:text-danger-emphasis"
-                      onClick={() => onRequestDelete(m)}
-                      disabled={!canEdit}
-                      title={canEdit ? t("models.actions.delete") : t("models.actions.deleteForbidden")}
-                      aria-label={t("models.actions.delete")}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
+                  <ActionIconButton
+                    icon={Pencil}
+                    label={canEdit ? t("models.actions.edit") : t("models.actions.editForbidden")}
+                    disabled={!canEdit}
+                    onClick={() => onRequestEdit(m)}
+                  />
+                  <ActionIconButton
+                    icon={Copy}
+                    label={t("models.actions.copy")}
+                    onClick={() => onRequestDuplicate(m)}
+                  />
+                  <ActionIconButton
+                    icon={Trash2}
+                    tone="danger"
+                    label={canEdit ? t("models.actions.delete") : t("models.actions.deleteForbidden")}
+                    disabled={!canEdit}
+                    onClick={() => onRequestDelete(m)}
+                  />
+                </RowActions>
+              </LedgerRow>
             )
           })}
-        </TableBody>
-      </Table>
-    </div>
+        </LedgerGroup>
+      ))}
+    </Ledger>
   )
 }

@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { Plus, X } from "lucide-react"
 import { ApiError } from "../../lib/api-client"
 import type { Model, ModelCredentialMode, Secret } from "../../lib/api-types"
 import {
@@ -18,6 +19,7 @@ import {
   type InlineUpdateModelInput,
 } from "../../lib/api-models"
 import { Button } from "../../components/ui/button"
+import { RailSection } from "../../components/ui/detail-rail"
 import {
   Dialog,
   DialogContent,
@@ -25,7 +27,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog"
+import { ErrorState } from "../../components/ui/error-state"
+import { Field } from "../../components/ui/label"
 import { Input } from "../../components/ui/input"
+import { PropertyList, Property } from "../../components/ui/property-list"
+import { Select } from "../../components/ui/select"
 import { CredentialKindCombobox } from "./capabilities/CredentialKindCombobox"
 import { ModelKeyCombobox } from "./ModelKeyCombobox"
 import { ProviderTypeCombobox } from "./ProviderTypeCombobox"
@@ -128,37 +134,50 @@ function HeadersEditor({
   }
 
   return (
-    <div className="grid gap-1.5">
-      <label className="text-sm font-medium text-fg-muted">{label}</label>
-      {rows.map((row) => (
-        <div key={row.id} className="flex gap-2">
-          <Input
-            value={row.key}
-            onChange={(e) => updateRow(row.id, "key", e.target.value)}
-            placeholder="Header"
-            className="flex-1 font-mono text-sm"
-          />
-          <Input
-            value={row.value}
-            onChange={(e) => updateRow(row.id, "value", e.target.value)}
-            placeholder="value"
-            className="flex-1 font-mono text-sm"
-          />
-          <Button type="button" variant="outline" size="sm" onClick={() => removeRow(row.id)}>
-            {removeLabel}
+    <Field label={label}>
+      <div className="grid gap-1.5">
+        {rows.map((row) => (
+          <div key={row.id} className="flex items-center gap-2">
+            <Input
+              value={row.key}
+              onChange={(e) => updateRow(row.id, "key", e.target.value)}
+              placeholder="Header"
+              aria-label="Header"
+              className="flex-1 font-mono text-xs"
+            />
+            <Input
+              value={row.value}
+              onChange={(e) => updateRow(row.id, "value", e.target.value)}
+              placeholder="value"
+              aria-label="value"
+              className="flex-1 font-mono text-xs"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => removeRow(row.id)}
+              aria-label={removeLabel}
+              title={removeLabel}
+            >
+              <X strokeWidth={1.5} />
+            </Button>
+          </div>
+        ))}
+        <div>
+          <Button type="button" variant="outline" size="sm" onClick={addRow}>
+            <Plus strokeWidth={1.5} aria-hidden="true" />
+            {addLabel}
           </Button>
         </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" onClick={addRow}>
-        {addLabel}
-      </Button>
-    </div>
+      </div>
+    </Field>
   )
 }
 
 /* --- Tiny shared form bits ---------------------------------------------- */
 
-interface FieldProps {
+interface TextFieldProps {
   id: string
   label: string
   value: string
@@ -171,7 +190,7 @@ interface FieldProps {
   type?: string
 }
 
-function Field({
+function TextField({
   id,
   label,
   value,
@@ -182,24 +201,52 @@ function Field({
   mono,
   hint,
   type,
-}: FieldProps) {
+}: TextFieldProps) {
   return (
-    <div className="grid gap-1.5">
-      <label className="text-sm font-medium text-fg-muted" htmlFor={id}>
-        {label}
-        {required && <span className="ml-0.5 text-danger">*</span>}
-      </label>
+    <Field label={label} htmlFor={id} hint={hint}>
       <Input
         id={id}
         type={type}
         value={value}
         autoFocus={autoFocus}
         required={required}
+        aria-required={required || undefined}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={mono ? "font-mono text-sm" : undefined}
+        className={mono ? "font-mono text-xs" : undefined}
       />
-      {hint && <span className="text-xs text-fg-faint">{hint}</span>}
+    </Field>
+  )
+}
+
+function CredentialModeRadios({
+  name,
+  value,
+  onChange,
+}: {
+  name: string
+  value: ModelCredentialMode
+  onChange: (mode: ModelCredentialMode) => void
+}) {
+  const { t } = useTranslation("admin")
+  const options: ModelCredentialMode[] = ["inline_secret", "credential_ref"]
+  return (
+    <div className="flex flex-col">
+      {options.map((mode) => (
+        <label key={mode} className="flex h-7 items-center gap-2 text-sm text-fg">
+          <input
+            type="radio"
+            name={name}
+            value={mode}
+            className="h-3.5 w-3.5 accent-accent"
+            checked={value === mode}
+            onChange={() => onChange(mode)}
+          />
+          {mode === "inline_secret"
+            ? t("models.createModel.credentialMode.inlineSecret.title")
+            : t("models.createModel.credentialMode.credentialRef.title")}
+        </label>
+      ))}
     </div>
   )
 }
@@ -496,242 +543,169 @@ export function CreateModelDialog({
     onSubmit(payload)
   }
 
+  const busy = pending || detectEndpointsMut.isPending
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl"
+        className="max-h-[calc(100vh-2rem)] max-w-lg overflow-y-auto"
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>{t("models.createModel.title")}</DialogTitle>
         </DialogHeader>
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          {/* --- Identity --- */}
-          <Field
-            id="model-name"
-            label={t("models.createModel.fields.name")}
-            value={name}
-            onChange={setName}
-            placeholder={t("models.createModel.fields.namePlaceholder")}
-            required
-            autoFocus
-          />
-
-          {/* --- Provider type + endpoint --- */}
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium text-fg-muted" htmlFor="model-provider-type">
-              {t("models.createProvider.fields.providerType")}
-              <span className="ml-0.5 text-danger">*</span>
-            </label>
-            <ProviderTypeCombobox
-              id="model-provider-type"
-              value={providerType}
-              onChange={handleProviderTypeChange}
-              options={providerChoices}
+        <form className="flex flex-col" onSubmit={handleSubmit}>
+          <div className="grid gap-3">
+            <TextField
+              id="model-name"
+              label={t("models.createModel.fields.name")}
+              value={name}
+              onChange={setName}
+              placeholder={t("models.createModel.fields.namePlaceholder")}
+              required
+              autoFocus
             />
-            <span className="text-xs text-fg-faint">
-              {t("models.createProvider.fields.adapterHint", { adapter })}
-            </span>
-          </div>
 
-          {/* --- Protocol row --- */}
-          <Field
-            id="model-base-url"
-            label={t("models.createProvider.fields.baseURL")}
-            value={baseURL}
-            onChange={setBaseURL}
-            placeholder="https://api.example.com/v1"
-            required
-            mono
-          />
+            <Field
+              label={t("models.createProvider.fields.providerType")}
+              htmlFor="model-provider-type"
+              hint={t("models.createProvider.fields.adapterHint", { adapter })}
+            >
+              <ProviderTypeCombobox
+                id="model-provider-type"
+                value={providerType}
+                onChange={handleProviderTypeChange}
+                options={providerChoices}
+              />
+            </Field>
 
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium text-fg-muted" htmlFor="model-key">
-              {t("models.createModel.fields.modelKey")}
-              <span className="ml-0.5 text-danger">*</span>
-            </label>
-            <ModelKeyCombobox
-              id="model-key"
-              value={modelKey}
-              onChange={handleModelKeyChange}
-              models={providerModels}
-              placeholder={t("models.createModel.fields.modelKeyPlaceholder")}
+            <TextField
+              id="model-base-url"
+              label={t("models.createProvider.fields.baseURL")}
+              value={baseURL}
+              onChange={setBaseURL}
+              placeholder="https://api.example.com/v1"
+              required
+              mono
             />
-            {providerModels.length > 0 && (
-              <span className="text-xs text-fg-faint">
-                {t("models.createModel.fields.modelKeyCatalogHint")}
-              </span>
+
+            <Field label={t("models.createModel.fields.modelKey")} htmlFor="model-key">
+              <ModelKeyCombobox
+                id="model-key"
+                value={modelKey}
+                onChange={handleModelKeyChange}
+                models={providerModels}
+                placeholder={t("models.createModel.fields.modelKeyPlaceholder")}
+              />
+            </Field>
+
+            {showHeadersEditor && (
+              <HeadersEditor
+                value={headers}
+                onChange={setHeaders}
+                label={t("models.createProvider.fields.customHeaders")}
+                addLabel={t("models.createProvider.actions.addHeader")}
+                removeLabel={tc("actions.delete")}
+                seedKey={`create-${headersSeed}`}
+              />
+            )}
+
+            {showAuthSchemeSelector && (
+              <Field label={t("models.createProvider.fields.authScheme")} htmlFor="model-auth-scheme">
+                <Select
+                  id="model-auth-scheme"
+                  value={authScheme}
+                  onChange={(e) => setAuthScheme(e.target.value as "api-key" | "bearer")}
+                >
+                  <option value="api-key">x-api-key</option>
+                  <option value="bearer">Authorization: Bearer</option>
+                </Select>
+              </Field>
             )}
           </div>
 
-          {/* --- Custom headers (only for *-compatible gateways) --- */}
-          {showHeadersEditor && (
-            <HeadersEditor
-              value={headers}
-              onChange={setHeaders}
-              label={t("models.createProvider.fields.customHeaders")}
-              addLabel={t("models.createProvider.actions.addHeader")}
-              removeLabel={tc("actions.delete")}
-              seedKey={`create-${headersSeed}`}
-            />
-          )}
+          <RailSection title={t("models.createModel.fields.credentialMode")}>
+            <CredentialModeRadios name="credential-mode" value={credentialMode} onChange={setCredentialMode} />
 
-          {/* --- Auth scheme (only for anthropic-compatible) --- */}
-          {showAuthSchemeSelector && (
-            <div className="grid gap-1.5">
-              <label className="text-sm font-medium text-fg-muted" htmlFor="model-auth-scheme">
-                {t("models.createProvider.fields.authScheme")}
-              </label>
-              <select
-                id="model-auth-scheme"
-                value={authScheme}
-                onChange={(e) => setAuthScheme(e.target.value as "api-key" | "bearer")}
-                className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
-              >
-                <option value="api-key">x-api-key</option>
-                <option value="bearer">Authorization: Bearer</option>
-              </select>
-            </div>
-          )}
-
-          {/* --- Credential mode --- */}
-          <fieldset className="rounded-md border border-line p-3">
-            <legend className="px-1 text-sm font-medium text-fg-muted">
-              {t("models.createModel.fields.credentialMode")}
-              <span className="ml-0.5 text-danger">*</span>
-            </legend>
-            <div className="mt-2 grid gap-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="credential-mode"
-                  value="inline_secret"
-                  checked={credentialMode === "inline_secret"}
-                  onChange={() => setCredentialMode("inline_secret")}
+            {credentialMode === "inline_secret" && (
+              <div className="mt-2 grid gap-3">
+                <TextField
+                  id="model-api-key"
+                  label={t("models.createProvider.fields.apiKey")}
+                  value={apiKey}
+                  onChange={(v) => {
+                    setApiKey(v)
+                    if (v.trim() !== "") setExistingSecretID("")
+                  }}
+                  placeholder="sk-..."
+                  type="password"
                 />
-                <span className="font-medium text-fg-emphasis">
-                  {t("models.createModel.credentialMode.inlineSecret.title")}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="credential-mode"
-                  value="credential_ref"
-                  checked={credentialMode === "credential_ref"}
-                  onChange={() => setCredentialMode("credential_ref")}
-                />
-                <span className="font-medium text-fg-emphasis">
-                  {t("models.createModel.credentialMode.credentialRef.title")}
-                </span>
-              </label>
-            </div>
-          </fieldset>
-
-          {/* --- inline_secret branch fields --- */}
-          {credentialMode === "inline_secret" && (
-            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
-              <Field
-                id="model-api-key"
-                label={t("models.createProvider.fields.apiKey")}
-                value={apiKey}
-                onChange={(v) => {
-                  setApiKey(v)
-                  if (v.trim() !== "") setExistingSecretID("")
-                }}
-                placeholder="sk-..."
-                hint={t("models.createModel.credentialMode.inlineSecret.apiKeyHint")}
-                type="password"
-              />
-              {(activeSecrets.length > 0 || sourceSecretMissing) && (
-                <div className="grid gap-1.5">
-                  <label
-                    className="text-sm font-medium text-fg-muted"
+                {(activeSecrets.length > 0 || sourceSecretMissing) && (
+                  <Field
+                    label={t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
                     htmlFor="model-existing-secret"
                   >
-                    {t("models.createModel.credentialMode.inlineSecret.reuseSecret")}
-                  </label>
-                  <select
-                    id="model-existing-secret"
-                    value={existingSecretID}
-                    onChange={(e) => {
-                      setExistingSecretID(e.target.value)
-                      if (e.target.value !== "") setApiKey("")
-                    }}
-                    className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
-                  >
-                    <option value="">
-                      {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
-                    </option>
+                    <Select
+                      id="model-existing-secret"
+                      value={existingSecretID}
+                      onChange={(e) => {
+                        setExistingSecretID(e.target.value)
+                        if (e.target.value !== "") setApiKey("")
+                      }}
+                    >
+                      <option value="">
+                        {t("models.createModel.credentialMode.inlineSecret.reuseNone")}
+                      </option>
+                      {sourceSecretMissing && (
+                        // Phantom option for a duplicate whose source Secret
+                        // is not visible to the caller. Marked disabled so
+                        // submit can't proceed via this path — the user has
+                        // to either pick another visible Secret or paste a
+                        // fresh key in the field above.
+                        <option value={existingSecretID} disabled>
+                          {`${existingSecretID.slice(0, 8)}… (${t("models.copy.secretInaccessible")})`}
+                        </option>
+                      )}
+                      {activeSecrets.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.masked})
+                        </option>
+                      ))}
+                    </Select>
                     {sourceSecretMissing && (
-                      // Phantom option for a duplicate whose source Secret
-                      // is not visible to the caller. Marked disabled so
-                      // submit can't proceed via this path — the user has
-                      // to either pick another visible Secret or paste a
-                      // fresh key in the field above.
-                      <option value={existingSecretID} disabled>
-                        {`✗ ${existingSecretID.slice(0, 8)}… (${t("models.copy.secretInaccessible")})`}
-                      </option>
+                      <ErrorState title={t("models.copy.secretInaccessible")} className="py-2" />
                     )}
-                    {activeSecrets.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.masked})
-                      </option>
-                    ))}
-                  </select>
-                  {sourceSecretMissing && (
-                    <span className="text-xs text-danger">
-                      {t("models.copy.secretInaccessible")}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                  </Field>
+                )}
+              </div>
+            )}
 
-          {/* --- credential_ref branch fields --- */}
-          {credentialMode === "credential_ref" && (
-            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
-              <div className="grid gap-1.5">
-                <label
-                  className="text-sm font-medium text-fg-muted"
+            {credentialMode === "credential_ref" && (
+              <div className="mt-2 grid gap-3">
+                <Field
+                  label={t("models.createModel.credentialMode.credentialRef.kindLabel")}
                   htmlFor="model-credential-kind"
                 >
-                  {t("models.createModel.credentialMode.credentialRef.kindLabel")}
-                  <span className="ml-0.5 text-danger">*</span>
-                </label>
-                <CredentialKindCombobox
-                  workspaceID={workspaceID}
-                  value={credentialKindCode}
-                  onChange={setCredentialKindCode}
-                  className="w-full"
-                />
-                <span className="text-xs text-fg-faint">
-                  {t("models.createModel.credentialMode.credentialRef.kindHint")}
-                </span>
+                  <CredentialKindCombobox
+                    workspaceID={workspaceID}
+                    value={credentialKindCode}
+                    onChange={setCredentialKindCode}
+                    className="w-full"
+                  />
+                </Field>
               </div>
-            </div>
-          )}
+            )}
+          </RailSection>
 
-          {errMsg && (
-            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {errMsg}
-            </p>
-          )}
+          {errMsg && <ErrorState title={errMsg} className="pb-0" />}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              disabled={pending || detectEndpointsMut.isPending}
-            >
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               {tc("actions.cancel")}
             </Button>
-            <Button type="submit" size="sm" disabled={!canSubmit}>
-              {pending || detectEndpointsMut.isPending ? tc("states.loading") : t("models.createModel.submit")}
+            <Button type="submit" disabled={!canSubmit}>
+              {busy ? tc("states.loading") : t("models.createModel.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -862,94 +836,80 @@ export function EditModelDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl"
+        className="max-h-[calc(100vh-2rem)] max-w-lg overflow-y-auto"
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>{t("models.editModel.title", { name: model.name })}</DialogTitle>
         </DialogHeader>
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <form className="flex flex-col" onSubmit={handleSubmit}>
           {/* --- Locked identity --- */}
-          <div className="grid grid-cols-2 gap-3 rounded-md bg-surface-subtle/60 p-3 text-sm">
-            <div>
-              <div className="text-fg-subtle">{t("models.editModel.locked.providerType")}</div>
-              <div className="mt-0.5 font-medium text-fg-muted">{model.provider_type}</div>
-            </div>
-            <div>
-              <div className="text-fg-subtle">{t("models.editModel.locked.adapter")}</div>
-              <div className="mt-0.5 font-mono text-fg-muted">{model.adapter}</div>
-            </div>
-            <div>
-              <div className="text-fg-subtle">{t("models.editModel.locked.credentialMode")}</div>
-              <div className="mt-0.5 font-medium text-fg-muted">
-                {isInline
-                  ? t("models.createModel.credentialMode.inlineSecret.title")
-                  : t("models.createModel.credentialMode.credentialRef.title")}
-              </div>
-            </div>
-            <div>
-              <div className="text-fg-subtle">{t("models.editModel.locked.slug")}</div>
-              <div className="mt-0.5 font-mono text-fg-muted">{model.slug}</div>
-            </div>
+          <PropertyList className="mb-3">
+            <Property label={t("models.editModel.locked.providerType")}>{model.provider_type}</Property>
+            <Property label={t("models.editModel.locked.adapter")} mono>{model.adapter}</Property>
+            <Property label={t("models.editModel.locked.credentialMode")}>
+              {isInline
+                ? t("models.createModel.credentialMode.inlineSecret.title")
+                : t("models.createModel.credentialMode.credentialRef.title")}
+            </Property>
+            <Property label={t("models.editModel.locked.slug")} mono>{model.slug}</Property>
+          </PropertyList>
+
+          <div className="grid gap-3">
+            <TextField
+              id="edit-model-name"
+              label={t("models.editModel.fields.name")}
+              value={name}
+              onChange={setName}
+              required
+              autoFocus
+            />
+
+            <TextField
+              id="edit-model-key"
+              label={t("models.editModel.fields.modelKey")}
+              value={modelKey}
+              onChange={setModelKey}
+              required
+              mono
+            />
+
+            <TextField
+              id="edit-model-base-url"
+              label={t("models.editModel.fields.baseURL")}
+              value={baseURL}
+              onChange={setBaseURL}
+              mono
+            />
+
+            {supportsCustomHeaders && (
+              <HeadersEditor
+                value={headers}
+                onChange={setHeaders}
+                label={t("models.editModel.fields.customHeaders")}
+                addLabel={t("models.createProvider.actions.addHeader")}
+                removeLabel={tc("actions.delete")}
+                seedKey={`edit-${model.id}`}
+              />
+            )}
           </div>
-
-          <Field
-            id="edit-model-name"
-            label={t("models.editModel.fields.name")}
-            value={name}
-            onChange={setName}
-            required
-            autoFocus
-          />
-
-          <Field
-            id="edit-model-key"
-            label={t("models.editModel.fields.modelKey")}
-            value={modelKey}
-            onChange={setModelKey}
-            required
-            mono
-          />
-
-          <Field
-            id="edit-model-base-url"
-            label={t("models.editModel.fields.baseURL")}
-            value={baseURL}
-            onChange={setBaseURL}
-            mono
-          />
 
           <ModelEndpointBaseURLsEditor
             rows={endpointBaseURLRows}
             onChange={setEndpointBaseURLRows}
             title={t("models.editModel.endpointBaseURLs.title")}
-            description={t("models.editModel.endpointBaseURLs.description")}
           />
-
-          {supportsCustomHeaders && (
-            <HeadersEditor
-              value={headers}
-              onChange={setHeaders}
-              label={t("models.editModel.fields.customHeaders")}
-              addLabel={t("models.createProvider.actions.addHeader")}
-              removeLabel={tc("actions.delete")}
-              seedKey={`edit-${model.id}`}
-            />
-          )}
 
           {/* --- Credential binding (mode-specific) --- */}
           {isInline && (
-            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted" htmlFor="edit-model-secret">
-                  {t("models.editModel.credentialBinding.boundSecret")}
-                </label>
-                <select
+            <RailSection title={t("models.editModel.credentialBinding.boundSecret")}>
+              <div className="grid gap-3 pt-1">
+                <Select
                   id="edit-model-secret"
+                  aria-label={t("models.editModel.credentialBinding.boundSecret")}
                   value={secretID}
                   onChange={(e) => setSecretID(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                   disabled={newAPIKey.trim() !== ""}
                 >
                   <option value="">
@@ -960,60 +920,39 @@ export function EditModelDialog({
                       {s.name} ({s.masked})
                     </option>
                   ))}
-                </select>
+                </Select>
+                <TextField
+                  id="edit-model-new-key"
+                  label={t("models.editModel.credentialBinding.rotateNewKey")}
+                  value={newAPIKey}
+                  onChange={setNewAPIKey}
+                  placeholder={t("models.editModel.credentialBinding.rotateHint")}
+                  type="password"
+                />
               </div>
-              <Field
-                id="edit-model-new-key"
-                label={t("models.editModel.credentialBinding.rotateNewKey")}
-                value={newAPIKey}
-                onChange={setNewAPIKey}
-                placeholder={t("models.editModel.credentialBinding.rotateHint")}
-                hint={t("models.editModel.credentialBinding.rotateExplain")}
-                type="password"
-              />
-            </div>
+            </RailSection>
           )}
 
           {isCredentialRef && (
-            <div className="grid gap-3 rounded-md bg-surface-subtle/60 p-3">
-              <div className="grid gap-1.5">
-                <label
-                  className="text-sm font-medium text-fg-muted"
-                  htmlFor="edit-model-credential-kind"
-                >
-                  {t("models.editModel.credentialBinding.kindCode")}
-                  <span className="ml-0.5 text-danger">*</span>
-                </label>
+            <RailSection title={t("models.editModel.credentialBinding.kindCode")}>
+              <div className="pt-1">
                 <CredentialKindCombobox
                   workspaceID={workspaceID}
                   value={credentialKindCode}
                   onChange={setCredentialKindCode}
                   className="w-full"
                 />
-                <span className="text-xs text-fg-faint">
-                  {t("models.editModel.credentialBinding.kindCodeHint")}
-                </span>
               </div>
-            </div>
+            </RailSection>
           )}
 
-          {errMsg && (
-            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {errMsg}
-            </p>
-          )}
+          {errMsg && <ErrorState title={errMsg} className="pb-0" />}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              disabled={pending}
-            >
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
               {tc("actions.cancel")}
             </Button>
-            <Button type="submit" size="sm" disabled={!canSubmit}>
+            <Button type="submit" disabled={!canSubmit}>
               {pending ? tc("states.loading") : t("models.editModel.submit")}
             </Button>
           </DialogFooter>

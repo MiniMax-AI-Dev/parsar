@@ -1,136 +1,106 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, PackageCheck, Server } from "lucide-react"
+import { ArrowUpRight, Download, Link2, PackageCheck } from "lucide-react"
 
+import { ActionIconButton, RowActions } from "../../../../components/ui/action-button"
+import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import { EmptyState } from "../../../../components/ui/empty-state"
 import { ErrorState } from "../../../../components/ui/error-state"
+import { Ledger, LedgerHeader, LedgerRow } from "../../../../components/ui/ledger"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import {
-  marketplaceSourceName,
-  type MarketplaceCapability,
   useImportMCPDirectoryItem,
-  useMarketplaceList,
   useMCPDirectory,
   useMCPDirectoryDetail,
   mcpDirectoryOAuthStartURL,
+  type MCPDirectoryItem,
 } from "../../../../lib/api-marketplace"
 import { useWorkspaceId } from "../../../../lib/workspace"
-import { DirectoryCard, MarketplaceMCPCard } from "./MCPDirectoryCard"
+import { InlineNotice } from "../notices"
+import { ConnectorIcon, VerifiedBadge } from "./shared"
 import { DirectoryDetail } from "./MCPDirectoryDetail"
 import { ImportMCPDialog } from "./ImportMCPDialog"
-import { filterMCPDirectoryItems, type DirectorySort } from "./filters"
+import { filterMCPDirectoryItems, type DirectoryFilterState } from "./filters"
 
 interface MCPDirectoryProps {
   itemID: string | null
   query: string
+  filters: DirectoryFilterState
   canImport: boolean
   onSelectItem: (id: string | null) => void
-  onSelectMarketplaceItem: (id: string | null) => void
-  onInstallMarketplace: (capability: MarketplaceCapability) => void
-  canManageMarketplace: boolean
-  onDeleteMarketplace: (capability: MarketplaceCapability) => void
   onViewCapability: (capabilityID: string) => void
 }
+
+/** connector (+badges, +description) · publisher · version · categories · authentication · actions */
+const DIRECTORY_COLUMNS = "minmax(0,1fr) 132px 72px 132px 110px 64px"
 
 export function MCPDirectory({
   itemID,
   query,
+  filters,
   canImport,
   onSelectItem,
-  onSelectMarketplaceItem,
-  onInstallMarketplace,
-  canManageMarketplace,
-  onDeleteMarketplace,
   onViewCapability,
 }: MCPDirectoryProps) {
   const { t } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
   const directoryQ = useMCPDirectory(workspaceID)
-  const marketplaceQ = useMarketplaceList(itemID ? null : workspaceID)
   const importMut = useImportMCPDirectoryItem(workspaceID)
-  const [category, setCategory] = useState("")
-  const [verifiedOnly, setVerifiedOnly] = useState(false)
-  const [sort, setSort] = useState<DirectorySort>("featured")
-	const [confirmID, setConfirmID] = useState<string | null>(null)
-	const [oauthError, setOAuthError] = useState(false)
+  const [confirmID, setConfirmID] = useState<string | null>(null)
+  const [oauthError, setOAuthError] = useState(false)
   const [success, setSuccess] = useState<{ name: string; capabilityID: string } | null>(null)
   const detailID = confirmID ?? itemID
   const detailQ = useMCPDirectoryDetail(workspaceID, detailID)
 
   const items = useMemo(() => directoryQ.data?.items ?? [], [directoryQ.data?.items])
-  const categories = useMemo(
-    () => Array.from(new Set(items.flatMap((item) => item.categories))).sort((left, right) => left.localeCompare(right)),
-    [items],
-  )
   const filtered = useMemo(
-    () => filterMCPDirectoryItems(items, { query, category, verifiedOnly, sort }),
-    [items, query, category, verifiedOnly, sort],
+    () => filterMCPDirectoryItems(items, { query, ...filters }),
+    [items, query, filters],
   )
-  const publishedMCPs = useMemo(() => {
-    if (category || verifiedOnly) return []
-    const installedIDs = new Set(items.flatMap((item) => item.installed_capability_id ? [item.installed_capability_id] : []))
-    const needle = query.trim().toLocaleLowerCase()
-    const matches = (marketplaceQ.data ?? []).filter((item) => {
-      if (item.type !== "mcp" || installedIDs.has(item.id)) return false
-      if (!needle) return true
-      return [item.name, item.description ?? "", marketplaceSourceName(item)].join(" ").toLocaleLowerCase().includes(needle)
-    })
-    return matches.sort((left, right) => left.name.localeCompare(right.name))
-  }, [category, items, marketplaceQ.data, query, verifiedOnly])
-  const cards = useMemo(() => {
-    const merged: Array<
-      | { kind: "directory"; item: (typeof filtered)[number] }
-      | { kind: "marketplace"; item: MarketplaceCapability }
-    > = [
-      ...filtered.map((item) => ({ kind: "directory" as const, item })),
-      ...publishedMCPs.map((item) => ({ kind: "marketplace" as const, item })),
-    ]
-    return sort === "name" ? merged.sort((left, right) => left.item.name.localeCompare(right.item.name)) : merged
-  }, [filtered, publishedMCPs, sort])
   const selectedSummary = items.find((item) => item.id === itemID) ?? null
   const selected = detailQ.data?.id === itemID ? detailQ.data : selectedSummary
-	const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
+  const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
 
-	useEffect(() => {
-		const onMessage = (event: MessageEvent) => {
-			if (event.origin !== window.location.origin || event.data?.type !== "parsar:mcp-oauth") return
-			setOAuthError(Boolean(event.data.error))
-			if (!event.data.error) {
-				void directoryQ.refetch()
-				void detailQ.refetch()
-			}
-		}
-		window.addEventListener("message", onMessage)
-		return () => window.removeEventListener("message", onMessage)
-	}, [detailQ, directoryQ])
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== "parsar:mcp-oauth") return
+      setOAuthError(Boolean(event.data.error))
+      if (!event.data.error) {
+        void directoryQ.refetch()
+        void detailQ.refetch()
+      }
+    }
+    window.addEventListener("message", onMessage)
+    return () => window.removeEventListener("message", onMessage)
+  }, [detailQ, directoryQ])
 
-	const connectOAuth = (id: string) => {
-		if (!workspaceID) return
-		setOAuthError(false)
-		const width = 620
-		const height = 760
-		const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2))
-		const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2))
-		const popup = window.open(
-			mcpDirectoryOAuthStartURL(workspaceID, id),
-			`parsar-mcp-oauth-${id}`,
-			`popup=yes,width=${width},height=${height},left=${left},top=${top}`,
-		)
-		if (!popup) {
-			setOAuthError(true)
-			return
-		}
-		popup.focus()
-	}
+  const connectOAuth = (id: string) => {
+    if (!workspaceID) return
+    setOAuthError(false)
+    const width = 620
+    const height = 760
+    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2))
+    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2))
+    const popup = window.open(
+      mcpDirectoryOAuthStartURL(workspaceID, id),
+      `parsar-mcp-oauth-${id}`,
+      `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+    )
+    if (!popup) {
+      setOAuthError(true)
+      return
+    }
+    popup.focus()
+  }
 
   const requestImport = (id: string) => {
     if (!canImport) return
-		const item = items.find((candidate) => candidate.id === id)
-		if (item?.authentication === "oauth2" && !item.connected) {
-			connectOAuth(id)
-			return
-		}
+    const item = items.find((candidate) => candidate.id === id)
+    if (item?.authentication === "oauth2" && !item.connected) {
+      connectOAuth(id)
+      return
+    }
     importMut.reset()
     setConfirmID(id)
   }
@@ -162,20 +132,26 @@ export function MCPDirectory({
     />
   )
 
+  const notices = (
+    <>
+      {success ? <SuccessNotice success={success} onViewCapability={onViewCapability} /> : null}
+      {oauthError ? <InlineNotice tone="error" className="border-b border-line px-4 py-2">{t("capabilities.mcpDirectory.oauth.failed")}</InlineNotice> : null}
+    </>
+  )
+
   if (itemID) {
     return (
       <>
-        {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
-		{oauthError ? <p className="mb-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-danger">{t("capabilities.mcpDirectory.oauth.failed")}</p> : null}
         <DirectoryDetail
           item={selected}
           loading={detailQ.isLoading}
           error={detailQ.error}
           canImport={canImport}
+          notices={notices}
           onBack={() => onSelectItem(null)}
           onRetry={() => void detailQ.refetch()}
           onImport={() => requestImport(itemID)}
-		  onConnect={() => connectOAuth(itemID)}
+          onConnect={() => connectOAuth(itemID)}
           onViewCapability={onViewCapability}
         />
         {importDialog}
@@ -184,75 +160,131 @@ export function MCPDirectory({
   }
 
   return (
-    <div className="space-y-4" data-testid="mcp-directory">
-      <div className="rounded-xl border border-line bg-surface px-5 py-4">
-        <div className="flex flex-wrap items-start gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Server className="h-4 w-4 text-fg-subtle" />
-              <h2 className="text-lg font-semibold text-fg">{t("capabilities.mcpDirectory.title")}</h2>
-            </div>
-            <p className="mt-1 max-w-2xl text-sm leading-5 text-fg-muted">{t("capabilities.mcpDirectory.description")}</p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5" aria-label={t("capabilities.mcpDirectory.filters.category")}>
-            <FilterChip active={!category} onClick={() => setCategory("")}>{t("capabilities.mcpDirectory.filters.allCategories")}</FilterChip>
-            {categories.map((value) => <FilterChip key={value} active={category === value} onClick={() => setCategory(value)}>{value}</FilterChip>)}
-          </div>
-          <label className="inline-flex h-8 select-none items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-sm text-fg-muted">
-            <input type="checkbox" checked={verifiedOnly} onChange={(event) => setVerifiedOnly(event.target.checked)} className="h-3.5 w-3.5 rounded border-line-strong" />
-            {t("capabilities.mcpDirectory.filters.verified")}
-          </label>
-          <select aria-label={t("capabilities.mcpDirectory.filters.sort")} value={sort} onChange={(event) => setSort(event.target.value as DirectorySort)} className="h-8 rounded-md border border-line bg-surface px-2.5 text-sm text-fg-muted outline-none focus:border-line-strong">
-            <option value="featured">{t("capabilities.mcpDirectory.sort.featured")}</option>
-            <option value="name">{t("capabilities.mcpDirectory.sort.name")}</option>
-          </select>
-        </div>
-      </div>
-
-      {success ? <SuccessBanner success={success} onViewCapability={onViewCapability} /> : null}
-      {oauthError ? <p className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-danger">{t("capabilities.mcpDirectory.oauth.failed")}</p> : null}
+    <>
+      {notices}
       {directoryQ.error ? (
-        <ErrorState title={t("capabilities.mcpDirectory.loadError.title")} description={t("capabilities.mcpDirectory.loadError.description")} onRetry={() => void directoryQ.refetch()} />
-      ) : null}
-      {marketplaceQ.error ? (
-        <ErrorState title={t("capabilities.marketplace.loadError.title")} description={marketplaceQ.error instanceof Error ? marketplaceQ.error.message : t("capabilities.marketplace.loadError.description")} onRetry={() => void marketplaceQ.refetch()} />
-      ) : null}
-      {cards.length === 0 && (directoryQ.isLoading || marketplaceQ.isLoading) ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-directory-loading">
-          {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-52 w-full" />)}
+        <div className="px-4 pt-4">
+          <ErrorState title={t("capabilities.mcpDirectory.loadError.title")} description={t("capabilities.mcpDirectory.loadError.description")} onRetry={() => void directoryQ.refetch()} />
         </div>
-      ) : cards.length === 0 && !directoryQ.error && !marketplaceQ.error ? (
-        <EmptyState icon={PackageCheck} title={t("capabilities.mcpDirectory.empty.title")} description={t("capabilities.mcpDirectory.empty.description")} />
-      ) : cards.length > 0 ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="mcp-marketplace-grid">
-          {cards.map((card) => card.kind === "directory" ? (
-            <DirectoryCard key={`directory:${card.item.id}`} item={card.item} canImport={canImport} onOpen={() => onSelectItem(card.item.id)} onImport={() => requestImport(card.item.id)} onConnect={() => connectOAuth(card.item.id)} onViewCapability={onViewCapability} />
-          ) : (
-            <MarketplaceMCPCard key={`marketplace:${card.item.id}`} capability={card.item} canManage={canManageMarketplace} onOpen={() => onSelectMarketplaceItem(card.item.id)} onInstall={() => onInstallMarketplace(card.item)} onDelete={() => onDeleteMarketplace(card.item)} onViewCapability={() => onViewCapability(card.item.id)} />
+      ) : directoryQ.isLoading ? (
+        <div className="px-4 pt-3" data-testid="mcp-directory-loading">
+          <div className="mb-3 h-7 border-b border-line" />
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="flex h-9 items-center gap-3 border-b border-line">
+              <Skeleton className="h-[18px] w-[18px] rounded" />
+              <Skeleton className="h-3 w-40" />
+              <Skeleton className="h-3 flex-1" />
+              <Skeleton className="h-3 w-16" />
+            </div>
           ))}
         </div>
-      ) : null}
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={PackageCheck} title={t("capabilities.mcpDirectory.empty.title")} description={t("capabilities.mcpDirectory.empty.description")} />
+      ) : (
+        <Ledger columns={DIRECTORY_COLUMNS} role="listbox" aria-label={t("capabilities.mcpDirectory.title")} data-testid="mcp-directory">
+          <LedgerHeader>
+            <span>{t("capabilities.mcpDirectory.title")}</span>
+            <span>{t("capabilities.mcpDirectory.detail.publisher")}</span>
+            <span>{t("capabilities.mcpDirectory.detail.version")}</span>
+            <span>{t("capabilities.mcpDirectory.filters.category")}</span>
+            <span>{t("capabilities.mcpDirectory.detail.authentication")}</span>
+            <span />
+          </LedgerHeader>
+          <ul className="m-0 list-none p-0">
+            {filtered.map((item) => (
+              <DirectoryRow
+                key={item.id}
+                item={item}
+                canImport={canImport}
+                onOpen={() => onSelectItem(item.id)}
+                onImport={() => requestImport(item.id)}
+                onConnect={() => connectOAuth(item.id)}
+                onViewCapability={onViewCapability}
+              />
+            ))}
+          </ul>
+        </Ledger>
+      )}
       {importDialog}
-    </div>
+    </>
   )
 }
 
-function SuccessBanner({ success, onViewCapability }: {
+function DirectoryRow({ item, canImport, onOpen, onImport, onConnect, onViewCapability }: {
+  item: MCPDirectoryItem
+  canImport: boolean
+  onOpen: () => void
+  onImport: () => void
+  onConnect: () => void
+  onViewCapability: (capabilityID: string) => void
+}) {
+  const { t } = useTranslation("admin")
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onOpen()
+    }
+  }
+  const auth = item.authentication === "oauth2"
+    ? item.connected
+      ? t("capabilities.mcpDirectory.oauth.connected")
+      : t("capabilities.mcpDirectory.oauth.required")
+    : t("capabilities.mcpDirectory.detail.noAuthentication")
+  return (
+    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown} data-testid="mcp-directory-row" data-catalog-id={item.id}>
+      <span className="flex min-w-0 items-center gap-2">
+        <ConnectorIcon item={item} />
+        <span className="shrink-0 truncate font-medium">{item.name}</span>
+        {item.verified ? <VerifiedBadge /> : null}
+        {item.installed ? (
+          <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
+        ) : item.connected ? (
+          <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
+        ) : null}
+        {item.description && <span className="min-w-0 truncate text-xs text-fg-muted">· {item.description}</span>}
+      </span>
+      <span className="truncate text-xs text-fg-muted">{item.publisher.name}</span>
+      <span className="truncate font-mono text-xs text-fg">{item.version || "—"}</span>
+      <span className="truncate text-xs text-fg-muted">{item.categories.join(" · ") || "—"}</span>
+      <span className="truncate text-xs text-fg-muted">{auth}</span>
+      <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <RowActions>
+          {item.installed && item.installed_capability_id ? (
+            <ActionIconButton icon={ArrowUpRight} label={t("capabilities.mcpDirectory.actions.viewCapability")} onClick={() => onViewCapability(item.installed_capability_id!)} />
+          ) : item.authentication === "oauth2" && !item.connected ? (
+            <ActionIconButton icon={Link2} label={t("capabilities.mcpDirectory.oauth.connect")} onClick={onConnect} />
+          ) : (
+            <ActionIconButton
+              icon={Download}
+              label={canImport ? t("capabilities.mcpDirectory.actions.import") : t("capabilities.permission.adminOnly")}
+              disabled={!canImport}
+              onClick={onImport}
+            />
+          )}
+        </RowActions>
+      </span>
+    </LedgerRow>
+  )
+}
+
+function SuccessNotice({ success, onViewCapability }: {
   success: { name: string; capabilityID: string }
   onViewCapability: (capabilityID: string) => void
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3" role="status">
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-muted text-fg"><Check className="h-4 w-4" /></span>
-      <p className="min-w-0 flex-1 text-sm text-fg">{t("capabilities.mcpDirectory.import.success", { name: success.name })}</p>
-      <Button variant="outline" size="sm" onClick={() => onViewCapability(success.capabilityID)}>{t("capabilities.mcpDirectory.actions.viewCapability")}</Button>
-    </div>
+    <InlineNotice
+      tone="success"
+      className="border-b border-line px-4 py-2"
+      action={
+        <Button variant="link" size="sm" onClick={() => onViewCapability(success.capabilityID)}>
+          {t("capabilities.mcpDirectory.actions.viewCapability")}
+          <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+        </Button>
+      }
+    >
+      {t("capabilities.mcpDirectory.import.success", { name: success.name })}
+    </InlineNotice>
   )
-}
-
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
-  return <button type="button" aria-pressed={active} onClick={onClick} className={`h-8 rounded-md border px-2.5 text-sm transition-colors ${active ? "border-line-strong bg-surface-muted text-fg" : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg"}`}>{children}</button>
 }

@@ -1,0 +1,152 @@
+{
+  "title": "选择 Parsar 的视觉世界",
+  "question": "骰子分配了「书案控制台」。保留它、选一个备选，或者重掷。所有方向都在你钉住的 Notion / OpenAI / Multica 克制高级区间内。",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "书案控制台 · The Manuscript Desk",
+      "kicker": "THE ROLL",
+      "lineage": "openai.com 的编辑部式留白 + Notion 的「页面即工作区」 + 工程团队每天读的 RFC / 设计文档 / changelog",
+      "thesis": "控制台不是仪表盘，而是一叠关于 agent 做了什么的文档；界面是阅读面，不是面板堆。",
+      "palette": ["#FAFAF9", "#1A1A1A", "#8A8A85", "#2F4B7C"],
+      "materials": ["纸白 / 石墨两套地色", "细发丝分隔线代替卡片边框", "表格用等宽数字与斜线零", "一款有存在感的展示字体只用于页面标题"],
+      "viewport": "左侧是一列小字目录式导航（无背景块、无图标堆砌），中央是一页文档：大号页面标题、一句副标，其下是用发丝线分行的运行账本（状态词 + 小圆点、run id 等宽、时长右对齐）。点一行，右侧滑出阅读栏，把这次运行当成一篇文档呈现：摘要、步骤、diff、日志。对话页是同一世界里的手稿：正文宽度约 68 字符，唯一浮起的物体是底部的输入框。",
+      "risk": "留白与发丝线如果排版不够精确，会读成「没做完」而不是「克制」；账本密度对成员 / 模型 / 凭证这类表单页需要单独调校。",
+      "raised": [
+        { "from": "challenger-zone-sheets", "raise": "所有明暗只取自一条固定的十一阶中性灰梯，surface / line / fg 全部从同一梯上取值，light 与 dark 是同一梯的两端。" },
+        { "from": "challenger-ticket-wallet", "raise": "状态不消失，只作废：失败、取消、拒绝的记录留在账本里，用删除线与灰阶表达，绝不从列表里抹掉。" },
+        { "from": "challenger-orizuru", "raise": "运行步骤按严格的页边编号列排布，每一步可回看、可回放，编号列贯穿列表、详情与对话三个面。" },
+        { "from": "challenger-deep-dive", "raise": "一条左对齐轴统治整页：标题、副标、账本首列、阅读栏首列共用同一条 x 轴，没有第二个缩进体系。" },
+        { "from": "challenger-title-wall", "raise": "选中一行时，其余行轻微退淡，被选对象在阅读栏里放大，其他内容安静让路。" },
+        { "from": "challenger-phosphor", "raise": "运行日志与对话里的系统状态以文字行的形式打印在文本流中，不弹出横幅或彩色告示。" }
+      ],
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "目录式导航", "x": 0, "y": 0, "w": 2, "h": 10 },
+          { "label": "页面标题 + 副标", "x": 3, "y": 0, "w": 6, "h": 2 },
+          { "label": "运行账本（发丝线分行）", "x": 3, "y": 2, "w": 6, "h": 8 },
+          { "label": "阅读栏：选中的运行", "x": 9, "y": 0, "w": 3, "h": 10, "accent": true }
+        ]
+      }
+    },
+    {
+      "id": "model-pick",
+      "label": "工单账本 · The Issue Ledger",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "工程团队的 issue tracker 传统（Linear / GitHub Issues 一脉）：密集行、键盘优先、状态图标即色彩系统",
+      "thesis": "每一次 agent 运行就是一张工单：一行一条，状态是一个小图标，键盘能走完一切。",
+      "palette": ["#FCFCFD", "#141518", "#8B8D93", "#3D63DD"],
+      "materials": ["近白 / 近黑地色", "1px 极淡边框与 6px 圆角", "状态图标（圆环 / 半圆 / 实心 / 叉）承担全部彩色", "中性 UI 无衬线 + 等宽 id"],
+      "viewport": "左侧窄侧栏（工作区切换在顶部、导航项带小图标），顶部一条工具栏放筛选与视图切换，主体是密集的运行列表：状态图标、标题、agent、runtime、时长、时间，每行 36px。右侧可展开详情轨道。⌘K 命令面板。",
+      "risk": "这是高级工具类产品最常落地的地方，也是与 Linear、Height 等最容易撞脸的方向；高级感来自执行精度而不是结构。",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "侧栏", "x": 0, "y": 0, "w": 2, "h": 10 },
+          { "label": "工具栏：筛选 / 视图", "x": 2, "y": 0, "w": 7, "h": 1 },
+          { "label": "密集工单行 36px", "x": 2, "y": 1, "w": 7, "h": 9 },
+          { "label": "详情轨道", "x": 9, "y": 0, "w": 3, "h": 10, "accent": true }
+        ]
+      }
+    },
+    {
+      "id": "challenger-phosphor",
+      "label": "Phosphor Terminal",
+      "verdict": "competitive",
+      "lineage": "signals-instruments-phosphor-terminal-midnight",
+      "thesis": "整个控制台是一条连续的终端转录：位置就是历史里的位置，系统状态自己打印出来。",
+      "palette": ["#0B0F0B", "#33FF66", "#1E8F3E", "#0F1A10"],
+      "materials": ["近黑曲面玻璃", "P1 磷光绿单色", "一款位图等宽字体", "扫描线与残影"],
+      "viewport": "80 列固定宽度的转录流，agent 运行以打印行出现，光标呼吸。",
+      "case": "工程师认同终端（赢在身份认同），但单一等宽字体与无 chrome 的语法撑不起成员 / 模型 / 凭证表单，也直接违反你钉住的克制高级区间（输在产品清晰度）。",
+      "risk": "很快读成复古噱头；管理页面几乎无法在这套语法里保持可用。",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-phosphor-terminal-midnight-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/signals-instruments-phosphor-terminal-midnight.webp"
+    },
+    {
+      "id": "challenger-zone-sheets",
+      "label": "Exposure Record Zone Sheets",
+      "verdict": "competitive",
+      "lineage": "operate-b-exposure-record-zone-sheets",
+      "thesis": "暗房曝光记录卡：十一阶灰梯是唯一的色调 token，负载与冲突用排线密度表达，不用颜色。",
+      "palette": ["#F4F4F2", "#C9C9C5", "#5A5A57", "#141413", "#E0007A"],
+      "materials": ["背光十一阶中性灰梯", "透明描图纸叠层", "排线密度表示负载", "唯一一点二向色洋红"],
+      "viewport": "略微错开叠放的半透明记录卡，图例用压缩大写，数量用等宽分数。",
+      "case": "它的中性灰梯 + 单一强调色和你的 token 体系天然契合（赢在产品清晰度），但暗房印相师的世界与工程团队没有身份关联（输在认同）。",
+      "risk": "叠层错角与排线在密集表格上会变成噪音。",
+      "hero": "https://impeccable.style/worlds/cards/operate-b-exposure-record-zone-sheets-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/operate-b-exposure-record-zone-sheets.webp"
+    },
+    {
+      "id": "challenger-ticket-wallet",
+      "label": "Jet-Age Ticket Wallet",
+      "verdict": "declined",
+      "lineage": "vernacular-ephemera-jet-age-ticket-wallet",
+      "thesis": "一本航段票据簿：每一段撕下一张，作废的盖章留下，什么都不消失。",
+      "palette": ["#FFFFFF", "#1B2A52", "#C8102E", "#5B2C83"],
+      "materials": ["票据纸", "复写紫数字", "红色 VOID 章", "发丝线表格"],
+      "viewport": "分栏票据头 + 发丝线定位的字段框。",
+      "case": "怀旧票据与工程团队无身份关联；盖章隐喻在密集管理表格上损害清晰度。",
+      "kept": "状态不消失，只作废。",
+      "risk": "读成复古装饰。",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-jet-age-ticket-wallet-hero.webp"
+    },
+    {
+      "id": "challenger-orizuru",
+      "label": "Orizuru Crane Sequence",
+      "verdict": "declined",
+      "lineage": "paper-folds-pleats-deployable-orizuru-crane-sequence",
+      "thesis": "一张朱红和纸经三十二折成鹤，每一折都可回退、可重放。",
+      "palette": ["#C8322B", "#F5E9DA", "#D9A441", "#1C1A17"],
+      "materials": ["朱红和纸", "褶痕白线", "一点金", "墨黑注记"],
+      "viewport": "居中方形折纸图 + 严格页边编号列。",
+      "case": "折纸世界与控制台任务无关，朱红满铺违反克制区间。",
+      "kept": "严格的页边编号列与可回放的步骤状态。",
+      "risk": "变成装饰主题。",
+      "hero": "https://impeccable.style/worlds/cards/paper-folds-pleats-deployable-orizuru-crane-sequence-hero.webp"
+    },
+    {
+      "id": "challenger-deep-dive",
+      "label": "Mesophotic Deep Dive",
+      "verdict": "declined",
+      "lineage": "rivers-tides-ocean-depths-mesophotic-deep-dive",
+      "thesis": "沿火山岛壁下潜，一条垂直深度轴统治每一行文字。",
+      "palette": ["#06111F", "#0E2A47", "#37C6E8", "#F2F5F7"],
+      "materials": ["深渊墨蓝地色", "海雪粒子", "一条青色温跃层带"],
+      "viewport": "垂直下潜剖面配所选近景。",
+      "case": "潜水叙事与派发 agent 的任务无关，深度拓扑遮蔽管理任务。",
+      "kept": "一条轴统治全页的对齐纪律。",
+      "risk": "纯氛围。",
+      "hero": "https://impeccable.style/worlds/cards/rivers-tides-ocean-depths-mesophotic-deep-dive-hero.webp"
+    },
+    {
+      "id": "challenger-title-wall",
+      "label": "Streaming Title-Card Wall",
+      "verdict": "declined",
+      "lineage": "pop-culture-shelf-streaming-title-card-wall",
+      "thesis": "海报墙：聚焦的那一格放大并说明自己，其余安静退后。",
+      "palette": ["#0E0E10", "#1C1C1F", "#FFFFFF", "#E50914"],
+      "materials": ["深色地", "满幅海报画", "焦点边框单一强调色"],
+      "viewport": "横向滚动的固定比例海报行。",
+      "case": "运行记录没有海报艺术可承载，横向行对表格型数据清晰度极差。",
+      "kept": "选中即放大、其余退淡的焦点纪律。",
+      "risk": "没有画的海报墙是空墙。",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-streaming-title-card-wall-hero.webp"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code", "toggle": false },
+  "canon": true,
+  "canonCard": {
+    "label": "品类标准：shadcn 式管理后台",
+    "thesis": "这个品类默认交付的样子，做到极致：侧栏 + 统计卡片 + 卡片网格 + 蓝色主按钮。",
+    "palette": ["#FFFFFF", "#111827", "#2563EB"],
+    "materials": ["白底卡片", "柔和阴影", "蓝色强调", "Inter"],
+    "viewport": "侧栏在左，顶部四张统计卡，下方卡片网格与表格。",
+    "risk": "按设计就是和竞品分不出来。"
+  },
+  "steer": true
+}

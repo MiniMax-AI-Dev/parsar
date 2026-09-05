@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, MessageSquare, Play, ShieldAlert, X } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, Check, X } from "lucide-react"
 
 import { useAdminView } from "../../lib/admin-router"
 import { useResolveAgentInteraction } from "../../lib/api-interactions"
@@ -15,15 +15,24 @@ import { cn } from "../../lib/utils"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
+import { Property, PropertyList } from "../ui/property-list"
 
+/**
+ * One approval / user-input request, flat: a status badge and title, the
+ * request properties, the payload or the questions, and one footer row
+ * with the decision buttons left and the related links right.
+ */
 export function InteractionDecisionCard({
   interaction,
   workspaceID,
   className,
+  hideConversationLink = false,
 }: {
   interaction: AgentInteraction
   workspaceID: string
   className?: string
+  /** Set when the card is already rendered inside its own conversation. */
+  hideConversationLink?: boolean
 }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
@@ -56,95 +65,92 @@ export function InteractionDecisionCard({
   const submit = (body: ResolveAgentInteractionRequest) =>
     resolve.mutate({ id: interaction.id, body })
 
+  const kindLabel = t(`approvals.kind.${interaction.kind === "permission" ? "permission" : "userChoice"}`)
+  const title =
+    interaction.kind === "permission"
+      ? String(interaction.request.resource || interaction.request.action || t("approvals.kind.permission"))
+      : firstInteractionQuestion(interaction)?.question
+
   return (
     <article
-      className={cn("flex min-w-0 flex-col gap-5 p-5 sm:p-6", className)}
+      className={cn("flex min-w-0 flex-col gap-4 text-sm", className)}
       data-testid="interaction-card"
       data-interaction-kind={interaction.kind}
       data-request-id={interaction.request_id}
     >
       <div>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <Badge variant={interaction.kind === "permission" ? "warning" : "primary"}>
-            {t(`approvals.kind.${interaction.kind === "permission" ? "permission" : "userChoice"}`)}
-          </Badge>
-          <Badge variant={pending ? "warning" : "neutral"}>
+        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-fg-muted">{kindLabel}</span>
+          <Badge variant={pending ? "warning" : "neutral"} dot pulse={pending}>
             {t(`approvals.status.${interaction.status}`)}
           </Badge>
         </div>
-        <h2 className="break-words text-lg font-semibold text-fg">
-          {interaction.kind === "permission"
-            ? String(
-                interaction.request.resource ||
-                  interaction.request.action ||
-                  t("approvals.kind.permission"),
-              )
-            : firstInteractionQuestion(interaction)?.question}
-        </h2>
+        <h2 className="break-words text-sm font-medium text-fg">{title}</h2>
         {interaction.request.detail ? (
-          <p className="mt-2 whitespace-pre-wrap break-words text-sm text-fg-muted">
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg">
             {String(interaction.request.detail)}
           </p>
         ) : null}
       </div>
 
-      <dl className="grid gap-3 rounded-lg bg-surface-subtle p-4 text-sm sm:grid-cols-2">
-        <Meta label={t("approvals.detail.agent")} value={interaction.agent_name || "—"} />
-        <Meta
-          label={t("approvals.detail.conversation")}
-          value={interaction.conversation_title || interaction.conversation_id}
-        />
-        <Meta label={t("approvals.detail.createdAt")} value={fmtAgo(interaction.created_at)} />
-        <Meta label={t("approvals.detail.expiresIn")} value={fmtUntil(interaction.expires_at)} />
-      </dl>
+      <PropertyList>
+        <Property label={t("approvals.detail.agent")}>{interaction.agent_name || "—"}</Property>
+        <Property label={t("approvals.detail.conversation")}>
+          <span className="truncate" title={interaction.conversation_title || interaction.conversation_id}>
+            {interaction.conversation_title || interaction.conversation_id}
+          </span>
+        </Property>
+        <Property label={t("approvals.detail.createdAt")}>{fmtAgo(interaction.created_at)}</Property>
+        <Property label={t("approvals.detail.expiresIn")}>{fmtUntil(interaction.expires_at)}</Property>
+      </PropertyList>
 
       {interaction.kind === "permission" ? (
-        <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-surface-subtle p-3 text-xs text-fg-muted">
+        <pre className="m-0 max-h-52 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
           {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
         </pre>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {questions.map((question, index) => {
             const key = questionKey(question, index)
             const selected = answers[key] ?? []
             return (
-              <fieldset key={key} disabled={!pending || resolve.isPending} className="space-y-2">
-                <legend className="text-sm font-semibold text-fg">
+              <fieldset key={key} disabled={!pending || resolve.isPending} className="m-0 min-w-0 border-0 p-0">
+                <legend className="mb-1 text-sm font-medium text-fg">
                   {question.header ? `${question.header} · ` : ""}
                   {question.question}
                 </legend>
-                {question.options.map((option) => (
-                  <label
-                    key={option.label}
-                    className="flex cursor-pointer gap-3 rounded-lg border border-line px-3 py-2.5 hover:bg-surface-muted"
-                  >
-                    <input
-                      type={question.multi_select ? "checkbox" : "radio"}
-                      name={`${interaction.id}:${key}`}
-                      checked={selected.includes(option.label)}
-                      onChange={() => {
-                        setAnswers((current) => ({
-                          ...current,
-                          [key]: toggleAnswer(selected, option.label, !!question.multi_select),
-                        }))
-                        if (!question.multi_select)
-                          setCustom((current) => ({ ...current, [key]: "" }))
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block break-words text-sm font-medium text-fg">
-                        {option.label}
+                <div className="border-t border-line">
+                  {question.options.map((option) => (
+                    <label
+                      key={option.label}
+                      className="flex min-h-8 cursor-pointer items-start gap-2 border-b border-line py-1.5 hover:app-hover"
+                    >
+                      <input
+                        type={question.multi_select ? "checkbox" : "radio"}
+                        name={`${interaction.id}:${key}`}
+                        checked={selected.includes(option.label)}
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
+                        onChange={() => {
+                          setAnswers((current) => ({
+                            ...current,
+                            [key]: toggleAnswer(selected, option.label, !!question.multi_select),
+                          }))
+                          if (!question.multi_select)
+                            setCustom((current) => ({ ...current, [key]: "" }))
+                        }}
+                      />
+                      <span className="min-w-0">
+                        <span className="block break-words text-sm text-fg">{option.label}</span>
+                        {option.description ? (
+                          <span className="block break-words text-xs text-fg-muted">{option.description}</span>
+                        ) : null}
                       </span>
-                      {option.description ? (
-                        <span className="block break-words text-xs text-fg-subtle">
-                          {option.description}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                ))}
+                    </label>
+                  ))}
+                </div>
                 {question.is_other !== false ? (
                   <Input
+                    className="mt-2"
                     type={question.is_secret ? "password" : "text"}
                     autoComplete={question.is_secret ? "new-password" : undefined}
                     value={custom[key] ?? ""}
@@ -164,31 +170,31 @@ export function InteractionDecisionCard({
       )}
 
       {resolve.error ? (
-        <p className="break-words rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-          {resolve.error.message}
+        <p className="flex items-start gap-1.5 break-words text-sm text-fg">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <span>{resolve.error.message}</span>
         </p>
       ) : null}
-      {pending ? (
-        <div className="flex flex-wrap gap-2">
-          {interaction.kind === "permission" ? (
+
+      {!pending && <p className="text-sm text-fg-muted">{t("approvals.detail.alreadyDecided")}</p>}
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+        {pending &&
+          (interaction.kind === "permission" ? (
             <>
               <Button onClick={() => submit({ approved: true })} disabled={resolve.isPending}>
-                <Check className="h-4 w-4" />
+                <Check strokeWidth={1.5} aria-hidden="true" />
                 {t("approvals.actions.allowOnce")}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => submit({ approved: false })}
-                disabled={resolve.isPending}
-              >
-                <X className="h-4 w-4" />
+              <Button variant="outline" onClick={() => submit({ approved: false })} disabled={resolve.isPending}>
+                <X strokeWidth={1.5} aria-hidden="true" />
                 {t("approvals.actions.deny")}
               </Button>
             </>
           ) : (
             <>
               <Button onClick={submitChoice} disabled={resolve.isPending || !hasAllAnswers}>
-                <Check className="h-4 w-4" />
+                <Check strokeWidth={1.5} aria-hidden="true" />
                 {t("approvals.actions.submitAnswers")}
               </Button>
               <Button
@@ -196,46 +202,28 @@ export function InteractionDecisionCard({
                 onClick={() => submit({ cancelled: true, note: "cancelled by user" })}
                 disabled={resolve.isPending}
               >
-                <X className="h-4 w-4" />
+                <X strokeWidth={1.5} aria-hidden="true" />
                 {t("approvals.actions.cancel")}
               </Button>
             </>
+          ))}
+        <div className="ml-auto flex items-center gap-3">
+          <Button variant="link" onClick={() => navigate("runs", { id: interaction.agent_run_id })}>
+            {t("approvals.detail.openRun")}
+            <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+          {!hideConversationLink && (
+            <Button
+              variant="link"
+              onClick={() => navigate("conversations", { id: interaction.conversation_id })}
+            >
+              {t("approvals.detail.openConversation")}
+              <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+            </Button>
           )}
         </div>
-      ) : (
-        <div className="flex items-start gap-2 rounded-lg border border-line bg-surface-subtle px-3 py-3 text-sm text-fg-muted">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {t("approvals.detail.alreadyDecided")}
-        </div>
-      )}
-      <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate("runs", { id: interaction.agent_run_id })}
-        >
-          <Play className="h-4 w-4" />
-          {t("approvals.detail.openRun")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate("conversations", { id: interaction.conversation_id })}
-        >
-          <MessageSquare className="h-4 w-4" />
-          {t("approvals.detail.openConversation")}
-        </Button>
       </div>
     </article>
-  )
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-fg-faint">{label}</dt>
-      <dd className="mt-0.5 break-words font-medium text-fg">{value}</dd>
-    </div>
   )
 }
 

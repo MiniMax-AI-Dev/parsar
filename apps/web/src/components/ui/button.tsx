@@ -3,33 +3,38 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
+/**
+ * The one button. 28px tall, 6px radius, 13px/500 label, spring press.
+ * `outline` is the default look of the ledger (paper + strong hairline +
+ * control shadow); `default` is the indigo primary, reserved for the one
+ * primary action of a screen, if any.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50 active:translate-y-px motion-reduce:transition-none motion-reduce:active:translate-y-0",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97] motion-reduce:active:scale-100 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-surface-emphasis text-fg-on-emphasis shadow-sm hover:bg-surface-inverse hover:shadow-md",
+          "app-shadow-control bg-accent text-accent-fg hover:bg-accent-emphasis",
         destructive:
-          "bg-danger text-fg-on-emphasis shadow-sm hover:bg-danger-emphasis hover:shadow-md",
+          "app-shadow-control bg-danger text-fg-on-emphasis hover:bg-danger-emphasis",
         outline:
-          "border border-line bg-surface text-fg shadow-sm hover:border-line-strong hover:bg-surface-subtle hover:shadow-md",
-        secondary: "bg-surface-muted text-fg hover:bg-surface-muted/70",
-        ghost: "text-fg-muted hover:bg-surface-muted hover:text-fg",
+          "app-shadow-control border border-line-strong bg-surface text-fg hover:app-hover disabled:border-line disabled:bg-transparent disabled:shadow-none",
+        secondary: "bg-surface-muted text-fg hover:app-pressed",
+        ghost: "text-fg-muted hover:app-hover hover:text-fg",
         link: "text-fg underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-3.5 py-2",
-        sm: "h-8 px-3 text-xs",
-        lg: "h-10 px-6",
-        icon: "h-9 w-9",
+        default: "h-7 px-2.5 text-sm",
+        sm: "h-6 px-2 text-xs",
+        lg: "h-8 px-3 text-sm",
+        icon: "h-7 w-7",
       },
-      /* Shape follows function: pill for hero CTAs, circle for icon buttons,
-         square for geometric accents, rounded (default) for utility buttons.
-         Radius lives here (not the base) so shape can fully override it. */
+      /* Shape follows function: rounded (default) for controls, pill for
+         chips-as-buttons, circle for icon buttons, square for accents. */
       shape: {
         rounded: "rounded-md",
-        pill: "rounded-full px-5",
+        pill: "rounded-full px-3",
         circle: "rounded-full",
         square: "rounded-none",
       },

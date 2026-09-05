@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Bot, Pencil, Play, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarClock, Check, Loader2, Pencil, Play, Plus, Power, Trash2 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
+import { PageHeader } from "../../components/layout/PageHeader"
+import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
-import { Input } from "../../components/ui/input"
-import { OffsetPagination } from "../../components/ui/offset-pagination"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +26,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog"
+import { EmptyState } from "../../components/ui/empty-state"
+import { ErrorState } from "../../components/ui/error-state"
+import { Input } from "../../components/ui/input"
+import { Field } from "../../components/ui/label"
+import {
+  InitialTile,
+  Ledger,
+  LedgerHeader,
+  LedgerId,
+  LedgerNum,
+  LedgerRow,
+} from "../../components/ui/ledger"
+import { OffsetPagination } from "../../components/ui/offset-pagination"
+import { Property, PropertyList } from "../../components/ui/property-list"
+import { Select } from "../../components/ui/select"
+import { Skeleton } from "../../components/ui/skeleton"
+import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { Textarea } from "../../components/ui/textarea"
 import { ApiError } from "../../lib/api-client"
 import { useAgents } from "../../lib/api-agents"
 import { useWorkspaceId } from "../../lib/workspace"
@@ -31,6 +60,9 @@ import {
 type FreqType = "hourly" | "daily" | "weekly" | "monthly" | "weekday" | "custom"
 
 const SCHED_PAGE_SIZE = 20
+
+/** status icon · name · schedule · cron · agent · next run · last run · actions */
+const LEDGER_COLUMNS = "14px minmax(0,1.2fr) minmax(0,1fr) 104px 140px 120px 120px 128px"
 
 const FALLBACK_TZS = [
   "UTC",
@@ -136,33 +168,40 @@ function describeCron(cron: string, t: TFunction<"admin">, weekdays: string[]): 
   return t("scheduledTasks.desc.custom", { cron })
 }
 
-function statusVariant(status: string): "success" | "warning" | "destructive" | "neutral" | "primary" {
+/** The last run's outcome as the ledger's status icon; a task that never ran is "queued". */
+function lastStatusIcon(status: string): StatusKind {
   switch (status) {
+    case "running":
+      return "running"
     case "completed":
-      return "success"
+      return "completed"
     case "failed":
-      return "destructive"
+      return "failed"
     case "cancelled":
+    case "skipped_overlap":
+      return "cancelled"
     case "interrupted":
     case "auto_disabled":
-      return "warning"
-    case "running":
-    case "queued":
-      return "primary"
+      return "interrupted"
     default:
-      return "neutral"
+      return "queued"
   }
 }
 
 function fmtWhen(iso: string | null): string {
-  if (!iso) return ""
+  if (!iso) return "—"
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
 export function ScheduledTasksPage() {
   const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
   const workspaceID = useWorkspaceId()
   const [offset, setOffset] = useState(0)
   const tasksQ = useScheduledTasksByWorkspace(workspaceID, { offset, limit: SCHED_PAGE_SIZE })
@@ -174,11 +213,16 @@ export function ScheduledTasksPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ScheduledTask | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<ScheduledTask | null>(null)
+  const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null)
 
-  useEffect(() => {
+  // Offset is keyed by workspace: switching starts from page one so we
+  // never point past the end of the new result set.
+  const [offsetKey, setOffsetKey] = useState(workspaceID ?? "")
+  if (offsetKey !== (workspaceID ?? "")) {
+    setOffsetKey(workspaceID ?? "")
     setOffset(0)
-  }, [workspaceID])
+  }
 
   const weekdays = (t("scheduledTasks.weekdays", { returnObjects: true }) as unknown as string[]) ?? []
   const tasks = tasksQ.data?.scheduled_tasks ?? []
@@ -220,168 +264,246 @@ export function ScheduledTasksPage() {
   async function runNow(task: ScheduledTask) {
     try {
       await runNowMut.mutateAsync(task.id)
-      setNotice(t("scheduledTasks.runNowOk"))
+      setNotice({ text: t("scheduledTasks.runNowOk"), failed: false })
     } catch (err) {
-      setNotice(err instanceof ApiError ? err.envelope.message : t("scheduledTasks.runNowErr"))
+      setNotice({ text: err instanceof ApiError ? err.envelope.message : t("scheduledTasks.runNowErr"), failed: true })
     }
   }
 
-  async function remove(task: ScheduledTask) {
-    if (!window.confirm(t("scheduledTasks.deleteConfirm"))) return
-    await deleteMut.mutateAsync(task.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    try {
+      await deleteMut.mutateAsync(deleting.id)
+      setDeleting(null)
+    } catch {
+      // The dialog stays open and shows the error.
+    }
   }
 
   const noAgents = !agentsQ.isLoading && activeAgents.length === 0
+  const pageTitle = t("scheduledTasks.title")
+  const loadError = tasksQ.error
+  const unreachable = loadError instanceof ApiError && loadError.envelope.unreachable
 
   return (
-    <AdminLayout activeMenu="scheduled">
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-fg">{t("scheduledTasks.title")}</h2>
-            <p className="mt-0.5 text-xs text-fg-faint">{t("scheduledTasks.subtitle")}</p>
-          </div>
-          <Button size="sm" onClick={openCreate} disabled={noAgents} data-testid="scheduled-new">
-            <Plus className="mr-1 h-4 w-4" />
-            {t("scheduledTasks.new")}
-          </Button>
-        </div>
-
-        {noAgents && (
-          <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs text-warning break-all">
-            {t("scheduledTasks.noAgents")}
-          </div>
-        )}
-
-        {notice && (
-          <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-xs text-success break-all">
-            {notice}
-          </div>
-        )}
-
-        {tasksQ.isLoading ? (
-          <p className="text-sm text-fg-faint">…</p>
-        ) : tasksQ.error ? (
-          <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger break-all">
-            {t("scheduledTasks.loadError")}
-          </p>
-        ) : tasks.length === 0 ? (
-          <p className="rounded-md bg-surface-muted px-3 py-6 text-center text-sm text-fg-faint">
-            {t("scheduledTasks.empty")}
-          </p>
-        ) : (
-          <div className="overflow-hidden rounded-md border border-line">
-            {tasks.map((task, i) => (
-              <div
-                key={task.id}
-                data-testid="scheduled-row"
-                data-task-name={task.name}
-                className={
-                  "flex flex-wrap items-center gap-3 px-3 py-2.5 " +
-                  (i > 0 ? "border-t border-line-muted" : "")
-                }
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-medium text-fg">{task.name}</div>
-                  <div className="mt-0.5 text-xs text-fg-faint break-all">
-                    {t("scheduledTasks.desc.withTz", {
-                      desc: describeCron(task.cron_expr, t, weekdays),
-                      tz: task.timezone,
-                    })}
-                  </div>
-                </div>
-                <div className="flex w-32 shrink-0 items-center gap-1.5 text-xs text-fg-subtle" title={agentName.get(task.agent_id) ?? task.agent_id}>
-                  <Bot className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
-                  <span className="truncate">{agentName.get(task.agent_id) ?? task.agent_id}</span>
-                </div>
-                <div className="shrink-0">
-                  <Badge variant={statusVariant(task.last_status)}>
-                    {t(`scheduledTasks.status.${task.last_status || "none"}` as never)}
-                  </Badge>
-                </div>
-                <div className="w-32 shrink-0 text-xs text-fg-subtle">
-                  {task.next_run_at ? fmtWhen(task.next_run_at) : t("scheduledTasks.never")}
-                </div>
-                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-fg-subtle">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5"
-                    checked={task.enabled}
-                    onChange={() => void toggleEnabled(task)}
-                    disabled={updateMut.isPending}
-                  />
-                  {task.enabled ? t("scheduledTasks.enabled") : t("scheduledTasks.disabled")}
-                </label>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(task)} title={t("scheduledTasks.action.edit")}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void runNow(task)}
-                    disabled={runNowMut.isPending}
-                    data-testid="scheduled-run-now"
-                    title={t("scheduledTasks.action.runNow")}
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void remove(task)} title={t("scheduledTasks.action.delete")}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <OffsetPagination
-          offset={offset}
-          limit={SCHED_PAGE_SIZE}
-          total={total}
-          rangeLabel={({ from, to, total: rangeTotal }) =>
-            t("scheduledTasks.pagination.range", { from, to, total: rangeTotal })
+    <AdminLayout activeMenu="scheduled" fullBleed>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="scheduledTasks.title"
+          action={
+            <Button onClick={openCreate} disabled={!workspaceID || noAgents} data-testid="scheduled-new">
+              <Plus strokeWidth={1.5} aria-hidden="true" />
+              {t("scheduledTasks.new")}
+            </Button>
           }
-          previousLabel={t("scheduledTasks.pagination.prev")}
-          nextLabel={t("scheduledTasks.pagination.next")}
-          onPrevious={() => setOffset((cur) => Math.max(0, cur - SCHED_PAGE_SIZE))}
-          onNext={() => setOffset((cur) => cur + SCHED_PAGE_SIZE)}
-          className="text-xs text-fg-subtle"
         />
 
-        {dialogOpen && (
-          <ScheduledTaskDialog
-            open={dialogOpen}
-            task={editing}
-            agents={activeAgents}
-            agentName={agentName}
-            weekdays={weekdays}
-            pending={createMut.isPending || updateMut.isPending}
-            error={createMut.error ?? updateMut.error}
-            onOpenChange={setDialogOpen}
-            onSubmit={async (body, agentID) => {
-              if (editing) {
-                await updateMut.mutateAsync({
-                  taskID: editing.id,
-                  body: {
-                    name: body.name,
-                    prompt: body.prompt,
-                    cron_expr: body.cron_expr,
-                    timezone: body.timezone,
-                    enabled: editing.enabled,
-                  },
-                })
-              } else {
-                await createMut.mutateAsync({ agentID, body })
-              }
-              setDialogOpen(false)
-            }}
+        {(notice || (noAgents && workspaceID)) && (
+          <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
+            {notice && !notice.failed ? (
+              <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            )}
+            <span className="truncate">{notice ? notice.text : t("scheduledTasks.noAgents")}</span>
+          </div>
+        )}
+
+        {!workspaceID ? (
+          <div className="px-6"><ScopeRequiredState scope="workspace" resourceName={pageTitle} /></div>
+        ) : tasksQ.isLoading ? (
+          <TasksLoadingSkeleton />
+        ) : loadError ? (
+          <div className="px-6 pt-6">
+            <ErrorState
+              title={t("scheduledTasks.loadError")}
+              description={loadError instanceof Error ? loadError.message : undefined}
+              hint={unreachable ? t("runs.loadError.unreachable.hint") : undefined}
+              onRetry={() => void tasksQ.refetch()}
+            />
+          </div>
+        ) : tasks.length === 0 ? (
+          <EmptyState icon={CalendarClock} title={t("scheduledTasks.empty")} />
+        ) : (
+          <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={pageTitle}>
+            <LedgerHeader>
+              <span />
+              <span>{t("scheduledTasks.col.name")}</span>
+              <span>{t("scheduledTasks.col.frequency")}</span>
+              <span>{t("scheduledTasks.dialog.cronLabel")}</span>
+              <span>{t("scheduledTasks.dialog.agent")}</span>
+              <span className="text-right">{t("scheduledTasks.col.nextRun")}</span>
+              <span className="text-right">{t("scheduledTasks.col.lastRun")}</span>
+              <span />
+            </LedgerHeader>
+            <ul className="m-0 list-none p-0">
+              {tasks.map((task) => {
+                const agent = agentName.get(task.agent_id) ?? task.agent_id
+                const statusKey = task.last_status || "none"
+                return (
+                  <LedgerRow
+                    key={task.id}
+                    role="listitem"
+                    aria-selected={undefined}
+                    data-testid="scheduled-row"
+                    data-task-name={task.name}
+                  >
+                    <StatusIcon status={lastStatusIcon(task.last_status)} title={t(`scheduledTasks.status.${statusKey}` as never)} />
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-medium" title={task.prompt}>{task.name}</span>
+                      {!task.enabled && (
+                        <Badge variant="neutral" dot className="shrink-0">{t("scheduledTasks.disabled")}</Badge>
+                      )}
+                    </span>
+                    <span className="truncate" title={task.timezone}>
+                      {describeCron(task.cron_expr, t, weekdays)}
+                      <span className="text-xs text-fg-muted"> · {task.timezone}</span>
+                    </span>
+                    <LedgerId className="text-fg">{task.cron_expr}</LedgerId>
+                    <span className="flex min-w-0 items-center gap-1.5" title={agent}>
+                      <InitialTile name={agent} />
+                      <span className="truncate">{agent}</span>
+                    </span>
+                    <LedgerNum muted={!task.next_run_at}>{fmtWhen(task.next_run_at)}</LedgerNum>
+                    <LedgerNum muted={!task.last_run_at}>{fmtWhen(task.last_run_at)}</LedgerNum>
+                    <RowActions>
+                      <ActionIconButton
+                        icon={Power}
+                        label={task.enabled ? tc("actions.disable") : tc("actions.enable")}
+                        busy={updateMut.isPending && updateMut.variables?.taskID === task.id}
+                        disabled={updateMut.isPending}
+                        onClick={() => void toggleEnabled(task)}
+                      />
+                      <ActionIconButton
+                        icon={Play}
+                        label={t("scheduledTasks.action.runNow")}
+                        busy={runNowMut.isPending && runNowMut.variables === task.id}
+                        disabled={runNowMut.isPending}
+                        data-testid="scheduled-run-now"
+                        onClick={() => void runNow(task)}
+                      />
+                      <ActionIconButton icon={Pencil} label={t("scheduledTasks.action.edit")} onClick={() => openEdit(task)} />
+                      <ActionIconButton
+                        icon={Trash2}
+                        label={t("scheduledTasks.action.delete")}
+                        tone="danger"
+                        onClick={() => {
+                          deleteMut.reset()
+                          setDeleting(task)
+                        }}
+                      />
+                    </RowActions>
+                  </LedgerRow>
+                )
+              })}
+            </ul>
+          </Ledger>
+        )}
+
+        {workspaceID && !tasksQ.isLoading && !loadError && (
+          <OffsetPagination
+            offset={offset}
+            limit={SCHED_PAGE_SIZE}
+            total={total}
+            onPrevious={() => setOffset((cur) => Math.max(0, cur - SCHED_PAGE_SIZE))}
+            onNext={() => setOffset((cur) => cur + SCHED_PAGE_SIZE)}
           />
         )}
       </div>
+
+      {dialogOpen && (
+        <ScheduledTaskDialog
+          open={dialogOpen}
+          task={editing}
+          agents={activeAgents}
+          agentName={agentName}
+          weekdays={weekdays}
+          pending={createMut.isPending || updateMut.isPending}
+          error={createMut.error ?? updateMut.error}
+          onOpenChange={setDialogOpen}
+          onSubmit={async (body, agentID) => {
+            if (editing) {
+              await updateMut.mutateAsync({
+                taskID: editing.id,
+                body: {
+                  name: body.name,
+                  prompt: body.prompt,
+                  cron_expr: body.cron_expr,
+                  timezone: body.timezone,
+                  enabled: editing.enabled,
+                },
+              })
+            } else {
+              await createMut.mutateAsync({ agentID, body })
+            }
+            setDialogOpen(false)
+          }}
+        />
+      )}
+
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteMut.isPending) setDeleting(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{deleting?.name}</AlertDialogTitle>
+            <AlertDialogDescription>{t("scheduledTasks.deleteConfirm")}</AlertDialogDescription>
+            {deleteMut.error && (
+              <p className="flex items-start gap-1.5 break-words text-sm text-fg">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                <span>{deleteMut.error instanceof ApiError ? deleteMut.error.envelope.message : deleteMut.error.message}</span>
+              </p>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline" disabled={deleteMut.isPending}>{tc("actions.cancel")}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="destructive"
+                disabled={deleteMut.isPending}
+                onClick={(event) => {
+                  event.preventDefault()
+                  void confirmDelete()
+                }}
+              >
+                {deleteMut.isPending && <Loader2 className="animate-spin" />}
+                {t("scheduledTasks.action.delete")}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayout>
   )
 }
+
+function TasksLoadingSkeleton() {
+  return (
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Create / edit dialog                                               */
+/* ------------------------------------------------------------------ */
 
 interface DialogProps {
   open: boolean
@@ -442,170 +564,149 @@ function ScheduledTaskDialog({ open, task, agents, agentName, weekdays, pending,
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden sm:max-w-lg">
+    <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next) }}>
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{task ? t("scheduledTasks.dialog.editTitle") : t("scheduledTasks.dialog.createTitle")}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-3">
-          <div className="grid min-w-0 gap-1.5">
-            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.name")}</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("scheduledTasks.dialog.namePlaceholder")} data-testid="scheduled-name" />
-          </div>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void handleSave()
+          }}
+        >
+          <Field label={t("scheduledTasks.dialog.name")} htmlFor="sched-name">
+            <Input id="sched-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("scheduledTasks.dialog.namePlaceholder")} disabled={pending} data-testid="scheduled-name" />
+          </Field>
 
-          <div className="grid min-w-0 gap-1.5">
-            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.agent")}</label>
+          <Field label={t("scheduledTasks.dialog.agent")} htmlFor="sched-agent">
             {task ? (
-              <Input value={agentName.get(task.agent_id) ?? task.agent_id} disabled readOnly />
+              <Input id="sched-agent" value={agentName.get(task.agent_id) ?? task.agent_id} disabled readOnly />
             ) : (
-              <select
-                value={agentID}
-                onChange={(e) => setAgentID(e.target.value)}
-                data-testid="scheduled-agent"
-                className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
-              >
+              <Select id="sched-agent" value={agentID} onChange={(e) => setAgentID(e.target.value)} disabled={pending} data-testid="scheduled-agent">
                 {agents.length === 0 && <option value="">—</option>}
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
-              </select>
+              </Select>
             )}
-          </div>
+          </Field>
 
-          <div className="grid min-w-0 gap-1.5">
-            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.prompt")}</label>
-            <textarea
+          <Field label={t("scheduledTasks.dialog.prompt")} htmlFor="sched-prompt">
+            <Textarea
+              id="sched-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
               rows={4}
+              disabled={pending}
               data-testid="scheduled-prompt"
-              className="w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong whitespace-pre-wrap break-all"
             />
-          </div>
+          </Field>
 
-          <div className="grid min-w-0 gap-1.5">
-            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.frequency")}</label>
-            <select
-              value={freq}
-              onChange={(e) => setFreq(e.target.value as FreqType)}
-              data-testid="scheduled-freq"
-              className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
-            >
-              <option value="daily">{t("scheduledTasks.freq.daily")}</option>
-              <option value="weekday">{t("scheduledTasks.freq.weekday")}</option>
-              <option value="weekly">{t("scheduledTasks.freq.weekly")}</option>
-              <option value="monthly">{t("scheduledTasks.freq.monthly")}</option>
-              <option value="hourly">{t("scheduledTasks.freq.hourly")}</option>
-              <option value="custom">{t("scheduledTasks.freq.custom")}</option>
-            </select>
-          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("scheduledTasks.dialog.frequency")} htmlFor="sched-freq">
+              <Select id="sched-freq" value={freq} onChange={(e) => setFreq(e.target.value as FreqType)} disabled={pending} data-testid="scheduled-freq">
+                <option value="daily">{t("scheduledTasks.freq.daily")}</option>
+                <option value="weekday">{t("scheduledTasks.freq.weekday")}</option>
+                <option value="weekly">{t("scheduledTasks.freq.weekly")}</option>
+                <option value="monthly">{t("scheduledTasks.freq.monthly")}</option>
+                <option value="hourly">{t("scheduledTasks.freq.hourly")}</option>
+                <option value="custom">{t("scheduledTasks.freq.custom")}</option>
+              </Select>
+            </Field>
 
-          {freq !== "custom" && freq !== "hourly" && (
-            <div className="grid min-w-0 gap-1.5">
-              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.time")}</label>
-              <Input type="time" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} />
-            </div>
-          )}
+            {freq !== "custom" && freq !== "hourly" && (
+              <Field label={t("scheduledTasks.dialog.time")} htmlFor="sched-time">
+                <Input id="sched-time" type="time" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} disabled={pending} />
+              </Field>
+            )}
 
-          {freq === "weekly" && (
-            <div className="grid min-w-0 gap-1.5">
-              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.dayOfWeek")}</label>
-              <select
-                value={dow}
-                onChange={(e) => setDow(Number(e.target.value))}
-                className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
-              >
-                {weekdays.map((d, idx) => (
-                  <option key={idx} value={idx}>{d}</option>
+            {freq === "hourly" && (
+              <Field label={t("scheduledTasks.dialog.minute")} htmlFor="sched-minute">
+                <Input
+                  id="sched-minute"
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={minute}
+                  onChange={(e) => setMinute(Math.max(0, Math.min(59, Number(e.target.value))))}
+                  disabled={pending}
+                />
+              </Field>
+            )}
+
+            {freq === "custom" && (
+              <Field label={t("scheduledTasks.dialog.cronLabel")} htmlFor="sched-cron">
+                <Input
+                  id="sched-cron"
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  placeholder={t("scheduledTasks.dialog.cronPlaceholder")}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  className="font-mono text-xs"
+                  disabled={pending}
+                  data-testid="scheduled-cron"
+                />
+              </Field>
+            )}
+
+            {freq === "weekly" && (
+              <Field label={t("scheduledTasks.dialog.dayOfWeek")} htmlFor="sched-dow">
+                <Select id="sched-dow" value={dow} onChange={(e) => setDow(Number(e.target.value))} disabled={pending}>
+                  {weekdays.map((d, idx) => (
+                    <option key={idx} value={idx}>{d}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            {freq === "monthly" && (
+              <Field label={t("scheduledTasks.dialog.dayOfMonth")} htmlFor="sched-dom">
+                <Select id="sched-dom" value={dom} onChange={(e) => setDom(Number(e.target.value))} disabled={pending}>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            <Field label={t("scheduledTasks.dialog.timezone")} htmlFor="sched-tz" className={freq === "weekly" || freq === "monthly" ? undefined : "col-span-2"}>
+              <Select id="sched-tz" value={tz} onChange={(e) => setTz(e.target.value)} disabled={pending} data-testid="scheduled-tz">
+                {tzOptions.map((z) => (
+                  <option key={z} value={z}>{z}</option>
                 ))}
-              </select>
-            </div>
-          )}
-
-          {freq === "monthly" && (
-            <div className="grid min-w-0 gap-1.5">
-              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.dayOfMonth")}</label>
-              <select
-                value={dom}
-                onChange={(e) => setDom(Number(e.target.value))}
-                className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
-              >
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {freq === "hourly" && (
-            <div className="grid min-w-0 gap-1.5">
-              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.minute")}</label>
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                value={minute}
-                onChange={(e) => setMinute(Math.max(0, Math.min(59, Number(e.target.value))))}
-              />
-            </div>
-          )}
-
-          {freq === "custom" && (
-            <div className="grid min-w-0 gap-1.5">
-              <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.cronLabel")}</label>
-              <Input
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                placeholder={t("scheduledTasks.dialog.cronPlaceholder")}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-                data-testid="scheduled-cron"
-              />
-            </div>
-          )}
-
-          <div className="grid min-w-0 gap-1.5">
-            <label className="text-xs font-medium text-fg-muted">{t("scheduledTasks.dialog.timezone")}</label>
-            <select
-              value={tz}
-              onChange={(e) => setTz(e.target.value)}
-              data-testid="scheduled-tz"
-              className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
-            >
-              {tzOptions.map((z) => (
-                <option key={z} value={z}>{z}</option>
-              ))}
-            </select>
+              </Select>
+            </Field>
           </div>
 
-          <p className="rounded-md bg-surface-muted px-3 py-2 text-xs text-fg-subtle whitespace-pre-wrap break-all">
-            {t("scheduledTasks.dialog.preview")}: {preview}
-          </p>
-
-          <div className="grid min-w-0 gap-0.5 opacity-60">
-            <label className="flex items-center gap-2 text-xs text-fg-subtle">
-              <input type="checkbox" disabled className="h-3.5 w-3.5" />
-              {t("scheduledTasks.dialog.feishu")}
-            </label>
-            <span className="pl-5 text-xs text-fg-faint">{t("scheduledTasks.dialog.feishuDisabledHint")}</span>
-          </div>
+          <PropertyList>
+            <Property label={t("scheduledTasks.dialog.preview")} className="h-auto min-h-7 whitespace-normal py-1 [overflow-wrap:anywhere]">
+              {preview}
+            </Property>
+          </PropertyList>
 
           {errMsg && (
-            <p className="rounded-md bg-danger-subtle px-3 py-2 text-xs text-danger break-all">{errMsg}</p>
+            <p className="flex items-start gap-1.5 break-words text-sm text-fg">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+              <span>{errMsg}</span>
+            </p>
           )}
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>
-            {t("scheduledTasks.dialog.cancel")}
-          </Button>
-          <Button size="sm" onClick={() => void handleSave()} disabled={pending} data-testid="scheduled-save">
-            {pending ? t("scheduledTasks.dialog.saving") : t("scheduledTasks.dialog.save")}
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="mt-1">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+              {t("scheduledTasks.dialog.cancel")}
+            </Button>
+            <Button type="submit" disabled={pending} data-testid="scheduled-save">
+              {pending && <Loader2 className="animate-spin" />}
+              {pending ? t("scheduledTasks.dialog.saving") : t("scheduledTasks.dialog.save")}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

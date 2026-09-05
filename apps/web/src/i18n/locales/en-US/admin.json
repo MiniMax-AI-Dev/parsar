@@ -51,7 +51,8 @@
       "credentialMode": "Credential mode",
       "status": "Status",
       "health": "Health",
-      "actions": "Actions"
+      "actions": "Actions",
+      "lastTested": "Last test"
     },
     "loadError": {
       "title": "Failed to load Models",
@@ -205,6 +206,11 @@
         "kindCode": "Credential kind",
         "kindCodeHint": "Each user supplies their own credential from \"My Credentials\" under this kind."
       }
+    },
+    "ownership": {
+      "all": "All",
+      "mine": "Mine",
+      "others": "Others"
     }
   },
   "runStatus": {
@@ -288,6 +294,9 @@
     "mockBanner": {
       "title": "Choose a data scope",
       "hint": "Choose the matching Workspace in the header."
+    },
+    "table": {
+      "request": "Request"
     }
   },
   "conversations": {
@@ -344,7 +353,9 @@
       "emptyTimeline": "No messages yet",
       "agentTyping": "Agent is replying…",
       "stamp": "{{time}} · {{agent}}",
-      "viewRunLink": "View run details"
+      "viewRunLink": "View run details",
+      "cancelAll": "Cancel all",
+      "cancelAllAria": "Cancel all in-flight tasks in this conversation"
     },
     "runtime_error": {
       "badge": "Run failed",
@@ -455,7 +466,10 @@
         "next": "Next",
         "range": "Showing {{from}}-{{to}} of {{total}}",
         "empty": "No runs"
-      }
+      },
+      "agent": "Agent",
+      "connector": "Connector",
+      "age": "Time"
     },
     "actions": {
       "retry": "Retry",
@@ -617,11 +631,44 @@
         "requeued": "Requeued",
         "queued": "Queued",
         "queuedWithPosition": "Queued (position {{position}})"
-      }
+      },
+      "close": "Close",
+      "openConversation": "Open conversation",
+      "agent": "Agent",
+      "connector": "Connector",
+      "created": "Created",
+      "started": "Started",
+      "finished": "Finished",
+      "runId": "Run id",
+      "rawEvents": "Raw"
     },
     "emptyFiltered": {
       "title": "No matching runs",
       "description": "Adjust the filter or switch to the All tab to see every run."
+    },
+    "filter": {
+      "label": "Filter"
+    },
+    "enum": {
+      "claude_code": "Claude Code",
+      "opencode": "OpenCode",
+      "codex": "Codex",
+      "piagent": "Piagent",
+      "sandbox": "Sandbox",
+      "local": "Local",
+      "online": "Online",
+      "offline": "Offline",
+      "degraded": "Degraded",
+      "docker": "Docker",
+      "host": "Host",
+      "e2b": "E2B",
+      "workspace": "Workspace",
+      "agent_daemon": "Agent Daemon",
+      "http-agent": "HTTP Agent",
+      "http": "HTTP Agent",
+      "daemon": "Daemon",
+      "web": "Web",
+      "user": "User"
     }
   },
   "capabilities": {
@@ -630,7 +677,8 @@
     },
     "tabs": {
       "workspace": "Workspace",
-      "marketplace": "Marketplace"
+      "marketplace": "Marketplace",
+      "skills": "Skills"
     },
     "actions": {
       "create": "New capability",
@@ -658,7 +706,9 @@
       "latestVersion": "Latest version",
       "enabledAgents": "Enabled Agents",
       "credentials": "Credential requirement",
-      "actions": "Actions"
+      "actions": "Actions",
+      "updated": "Updated",
+      "installs": "Installs"
     },
     "pagination": {
       "perPage": "Per page",
@@ -672,7 +722,8 @@
     },
     "filters": {
       "all": "All",
-      "search": "Search capability name / description"
+      "search": "Search capability name / description",
+      "label": "Filter"
     },
     "emptyFiltered": {
       "title": "No matching capabilities",
@@ -932,12 +983,12 @@
         "back": "Back to connectors",
         "viewCapability": "View Capability"
       },
-	  "oauth": {
-		"connect": "Connect",
-		"connected": "Connected",
-		"required": "OAuth required",
-		"failed": "Authorization did not complete. Please try again."
-	  },
+      "oauth": {
+        "connect": "Connect",
+        "connected": "Connected",
+        "required": "OAuth required",
+        "failed": "Authorization did not complete. Please try again."
+      },
       "loadError": {
         "title": "Couldn't load the connectors directory",
         "description": "Couldn't load the connectors directory. Some connector details may be missing. Retry without leaving the Capability Marketplace."
@@ -961,7 +1012,7 @@
       },
       "import": {
         "title": "Import {{name}}?",
-		"description": "Review the connector configuration. OAuth connectors must be connected first; importing does not run the MCP or bind it to an Agent.",
+        "description": "Review the connector configuration. OAuth connectors must be connected first; importing does not run the MCP or bind it to an Agent.",
         "success": "{{name}} was imported as a workspace MCP Capability.",
         "failed": "The connector could not be imported.",
         "importing": "Importing...",
@@ -1856,7 +1907,10 @@
         "title": "Connector type not found",
         "description": "It may have been removed, or no Agent in the current workspace uses it."
       },
-      "agentSummary": "View {{count}} Agent(s)"
+      "agentSummary": "View {{count}} Agent(s)",
+      "tabs": {
+        "overview": "Overview"
+      }
     }
   },
   "secrets": {
@@ -2040,7 +2094,12 @@
         "url": "URL",
         "email": "Email",
         "password": "Password"
-      }
+      },
+      "tabs": {
+        "link": "Invite link",
+        "existing": "Existing users"
+      },
+      "pendingLabel": "Pending invitations"
     },
     "remove": {
       "cta": "Remove",
@@ -2296,6 +2355,9 @@
         "title": "No audit events for this resource",
         "description": "This resource has not produced any audit records yet."
       }
+    },
+    "filter": {
+      "label": "Filter"
     }
   },
   "usage": {
@@ -2905,7 +2967,8 @@
   "scopeRequired": {
     "workspace": {
       "title": "Choose a Workspace to view {{resource}}",
-      "description": "This data is managed by Workspace. Choose a Workspace in the header first."
+      "description": "This data is managed by Workspace. Choose a Workspace in the header first.",
+      "pick": "Choose a workspace"
     }
   },
   "connections": {
@@ -3128,6 +3191,9 @@
           "generic": "Failed to save the Teams connector. Please try again."
         }
       }
+    },
+    "detail": {
+      "close": "Close"
     }
   },
   "scheduledTasks": {
@@ -3145,9 +3211,14 @@
       "frequency": "Frequency",
       "status": "Status",
       "nextRun": "Next run",
-      "actions": "Actions"
+      "actions": "Actions",
+      "lastRun": "Last run"
     },
-    "action": { "edit": "Edit", "runNow": "Run now", "delete": "Delete" },
+    "action": {
+      "edit": "Edit",
+      "runNow": "Run now",
+      "delete": "Delete"
+    },
     "runNowOk": "Triggered a run",
     "runNowErr": "Failed to trigger",
     "deleteConfirm": "Delete this scheduled task? Past runs are kept.",
@@ -3184,7 +3255,15 @@
       "custom": "cron: {{cron}}",
       "withTz": "{{desc}} ({{tz}})"
     },
-    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "weekdays": [
+      "Sun",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat"
+    ],
     "dialog": {
       "createTitle": "New scheduled task",
       "editTitle": "Edit scheduled task",

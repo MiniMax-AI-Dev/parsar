@@ -1,26 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  AlertTriangle,
-  Key,
-  Plus,
-  Search,
-} from "lucide-react"
+import { ChevronDown, KeyRound, Pencil, Plus, Search, Trash2 } from "lucide-react"
 
-import { Badge } from "../../../components/ui/badge"
-import { Button } from "../../../components/ui/button"
+import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
-import { Input } from "../../../components/ui/input"
-import { Skeleton } from "../../../components/ui/skeleton"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table"
+  Ledger,
+  LedgerGroup,
+  LedgerHeader,
+  LedgerId,
+  LedgerRow,
+} from "../../../components/ui/ledger"
+import { Skeleton } from "../../../components/ui/skeleton"
 import { ApiError } from "../../../lib/api-client"
 import {
   useCreateMyCredential,
@@ -39,9 +31,10 @@ import type {
   UserCredentialCreateRequest,
   UserCredentialPatchRequest,
 } from "../../../lib/api-types"
-import { useAppRoute, safeReturnTo } from "../../../lib/admin-router"
+import { useAppRoute } from "../../../lib/admin-router"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { useWorkspaceId } from "../../../lib/workspace"
+import { cn } from "../../../lib/utils"
 import {
   CredentialDialog,
   DeleteCredentialDialog,
@@ -49,15 +42,22 @@ import {
 import {
   computeMissingCredentials,
   useCapabilitiesPerWorkspace,
+  type MissingCredentialRow,
 } from "./shared"
 
 interface PersonalCredentialsTabProps {
-  /** Render the return-to banner (used by the `?profile=credentials`
-   * deep-link entry). */
+  /** Honour the `?profile=credentials` deep-link params (kind, prefill). */
   standalone?: boolean
+  /** Header search term; matches the kind label. */
+  query?: string
+  /** Increments each time the page-level "add" button is pressed. */
+  createRequest?: number
 }
 
-export function PersonalCredentialsTab({ standalone = false }: PersonalCredentialsTabProps) {
+/** kind · code / refs · created · last used · actions */
+const LEDGER_COLUMNS = "minmax(0,1fr) 176px 148px 96px 72px"
+
+export function PersonalCredentialsTab({ standalone = false, query = "", createRequest = 0 }: PersonalCredentialsTabProps) {
   const { t, i18n } = useTranslation("admin")
   const route = useAppRoute()
   const fmtAgo = useRelativeTime()
@@ -78,7 +78,6 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
   const [editTarget, setEditTarget] = useState<UserCredential | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserCredential | null>(null)
   const [highlightedID, setHighlightedID] = useState<string | null>(null)
-  const [query, setQuery] = useState("")
   const [pendingKind, setPendingKind] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
@@ -86,7 +85,6 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
 
   const requestedKind = standalone ? route.credentialKind : null
   const initialPrefill = standalone ? route.credentialPrefill : null
-  const returnTo = standalone ? safeReturnTo(route.returnTo) : null
   const [prefillQueue, setPrefillQueue] = useState<string[]>([])
   const prefillSeededRef = useRef(false)
   useEffect(() => {
@@ -119,6 +117,13 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
     if (pendingPrefillKind && !credentialsQ.isLoading) setCreateOpen(true)
   }, [pendingPrefillKind, credentialsQ.isLoading])
 
+  // The page header owns the "add" button and bumps `createRequest`; any
+  // bump we have not yet dismissed counts as an open (unprefilled) dialog.
+  const [dismissedRequest, setDismissedRequest] = useState(createRequest)
+  const headerRequestedCreate = createRequest > dismissedRequest
+  const dialogOpen = createOpen || headerRequestedCreate
+  const dialogKind = headerRequestedCreate && !prefillQueue[0] && !requestedKind ? null : pendingPrefillKind
+
   useEffect(() => {
     if (!highlightedID) return
     const timer = window.setTimeout(() => setHighlightedID(null), 3500)
@@ -137,7 +142,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
     if (!needle) return credentials
     return credentials.filter((credential) => {
       const label = credentialKindLabel(credential.kind, i18n.language, "", kindOptions.kinds).toLowerCase()
-      return label.includes(needle)
+      return label.includes(needle) || credential.kind.toLowerCase().includes(needle)
     })
   }, [credentials, query, i18n.language, kindOptions.kinds])
 
@@ -147,205 +152,118 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
   if (credentialsQ.isLoading) return <CredentialsLoading />
   if (loadErr) {
     return (
-      <ErrorState
-        title={isUnreachable ? t("myCredentials.error.unreachable.title") : t("myCredentials.error.load.title")}
-        description={isUnreachable ? t("myCredentials.error.unreachable.description") : loadErr instanceof Error ? loadErr.message : t("myCredentials.error.load.hint")}
-        hint={isUnreachable ? t("myCredentials.error.unreachable.hint") : t("myCredentials.error.load.hint")}
-        onRetry={() => void credentialsQ.refetch()}
-      />
+      <div className="px-4 pt-4">
+        <ErrorState
+          title={isUnreachable ? t("myCredentials.error.unreachable.title") : t("myCredentials.error.load.title")}
+          description={isUnreachable ? t("myCredentials.error.unreachable.description") : loadErr instanceof Error ? loadErr.message : t("myCredentials.error.load.hint")}
+          hint={isUnreachable ? t("myCredentials.error.unreachable.hint") : t("myCredentials.error.load.hint")}
+          onRetry={() => void credentialsQ.refetch()}
+        />
+      </div>
     )
   }
 
+  const showPending = !capabilitiesScan.isLoading && missing.length > 0
+  const kindLabelOf = (kind: string, fallback: string) => credentialKindLabel(kind, i18n.language, fallback, kindOptions.kinds)
+  const createdLabel = (iso: string) => {
+    const ms = Date.parse(iso)
+    return Number.isNaN(ms) ? "—" : t("myCredentials.table.createdAt", { date: new Date(ms).toLocaleDateString() })
+  }
+
   return (
-    <div className="space-y-5">
-      {standalone && returnTo && route.returnTo && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-          <p className="text-sm text-fg-muted">{t("myCredentials.returnBanner.description")}</p>
-          <Button size="sm" variant="outline" onClick={() => window.location.assign(returnTo)}>
-            {t("myCredentials.returnBanner.action")}
-          </Button>
-        </div>
-      )}
+    <>
+      {credentials.length === 0 && !showPending ? (
+        <EmptyState
+          icon={KeyRound}
+          title={t("credentialsPage.personal.configured.empty.title")}
+          description={t("credentialsPage.personal.configured.empty.description")}
+        />
+      ) : (
+        <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("credentialsPage.tabs.personal")}>
+          <LedgerHeader>
+            <span>{t("myCredentials.table.kind")}</span>
+            <span />
+            <span />
+            <span className="text-right">{t("myCredentials.table.lastUsed")}</span>
+            <span />
+          </LedgerHeader>
 
-      {!capabilitiesScan.isLoading && missing.length > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-subtle px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-          <div className="flex-1 space-y-1">
-            <p className="text-sm font-medium text-warning-emphasis">
-              {t("credentialsPage.personal.banner.title", { count: missing.length })}
-            </p>
-            <p className="text-sm leading-relaxed text-warning-emphasis">
-              {t("credentialsPage.personal.banner.description")}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {missing.length > 0 && (
-        <section className="overflow-hidden rounded-lg border border-line bg-surface">
-          <div className="flex items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-fg">
-                {t("credentialsPage.personal.pending.title")}
-              </h3>
-              <Badge variant="warning" dot>{missing.length}</Badge>
-            </div>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {missing.map((row) => {
-              const open = !!expanded[row.kind]
-              return (
-                <div key={row.kind} className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Key className="h-4 w-4 text-fg-faint" />
-                        <span className="text-sm font-medium text-fg">
-                          {credentialKindLabel(row.kind, i18n.language, row.kind, kindOptions.kinds)}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setExpanded((prev) => ({ ...prev, [row.kind]: !prev[row.kind] }))}
-                        className="mt-1 inline-flex items-center text-sm text-fg-subtle hover:text-fg"
-                      >
-                        {t("credentialsPage.personal.pending.refCount", { count: row.refCount })}
-                        <span className="ml-1 text-fg-faint">{open ? "▾" : "▸"}</span>
-                      </button>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setPendingKind(row.kind)
-                      }}
-                    >
-                      {t("credentialsPage.personal.pending.configure")}
-                    </Button>
-                  </div>
-                  {open && (
-                    <ul className="mt-2 ml-6 list-disc space-y-0.5 text-sm text-fg-muted">
-                      {row.refs.map((ref, idx) => {
-                        if (ref.source === "model") {
-                          return (
-                            <li key={`model:${ref.modelID}:${idx}`}>
-                              <span className="text-fg-subtle">{t("credentialsPage.personal.pending.refModelPrefix")}</span>
-                              <span className="mx-1.5 text-fg-faint">/</span>
-                              <span>{ref.modelName}</span>
-                            </li>
-                          )
-                        }
-                        return (
-                          <li key={`cap:${ref.workspaceID}:${ref.capabilityID}:${idx}`}>
-                            <span className="text-fg-subtle">{ref.workspaceName}</span>
-                            <span className="mx-1.5 text-fg-faint">/</span>
-                            <span>{ref.capabilityName}</span>
+          {showPending && (
+            <LedgerGroup label={t("credentialsPage.personal.pending.title")} count={missing.length}>
+              {missing.map((row) => (
+                <Fragment key={row.kind}>
+                  <PendingRow
+                    row={row}
+                    label={kindLabelOf(row.kind, row.kind)}
+                    open={!!expanded[row.kind]}
+                    onToggle={() => setExpanded((prev) => ({ ...prev, [row.kind]: !prev[row.kind] }))}
+                    onConfigure={() => setPendingKind(row.kind)}
+                  />
+                  {expanded[row.kind] && (
+                    <li className="border-b border-line">
+                      <ul className="m-0 list-none p-0">
+                        {row.refs.map((ref, idx) => (
+                          <li
+                            key={ref.source === "model" ? `model:${ref.modelID}:${idx}` : `cap:${ref.workspaceID}:${ref.capabilityID}:${idx}`}
+                            className="flex h-8 items-center gap-1.5 border-t border-line pl-10 pr-4 text-sm text-fg first:border-t-0"
+                          >
+                            <span className="text-fg-muted">
+                              {ref.source === "model" ? t("credentialsPage.personal.pending.refModelPrefix") : ref.workspaceName}
+                            </span>
+                            <span className="text-fg-muted">/</span>
+                            <span className="truncate">{ref.source === "model" ? ref.modelName : ref.capabilityName}</span>
                           </li>
-                        )
-                      })}
-                    </ul>
+                        ))}
+                      </ul>
+                    </li>
                   )}
-                </div>
-              )
-            })}
-          </div>
-        </section>
+                </Fragment>
+              ))}
+            </LedgerGroup>
+          )}
+
+          <LedgerGroup label={t("credentialsPage.personal.configured.title")} count={credentials.length}>
+            {credentials.length === 0 ? (
+              <li className="flex h-9 items-center border-b border-line px-4 text-sm text-fg-muted">
+                {t("credentialsPage.personal.configured.empty.title")}
+              </li>
+            ) : filtered.length === 0 ? (
+              <li>
+                <EmptyState icon={Search} title={t("myCredentials.emptyFiltered.title")} description={t("myCredentials.emptyFiltered.description")} className="py-8" />
+              </li>
+            ) : (
+              filtered.map((credential) => (
+                <LedgerRow key={credential.id} role="listitem" tabIndex={-1} selected={highlightedID === credential.id}>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+                    <span className="truncate font-medium">{kindLabelOf(credential.kind, t("myCredentials.kind.unknown"))}</span>
+                  </span>
+                  <LedgerId>{credential.kind}</LedgerId>
+                  <span className="truncate text-xs text-fg-muted">{createdLabel(credential.created_at)}</span>
+                  <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(credential.last_used_at)}</span>
+                  <RowActions>
+                    <ActionIconButton icon={Pencil} label={t("myCredentials.actions.edit")} onClick={() => setEditTarget(credential)} />
+                    <ActionIconButton icon={Trash2} label={t("myCredentials.actions.delete")} tone="danger" onClick={() => setDeleteTarget(credential)} />
+                  </RowActions>
+                </LedgerRow>
+              ))
+            )}
+          </LedgerGroup>
+        </Ledger>
       )}
 
-      {/* Configured section — render header even when empty so layout
-          doesn't collapse on deletion of the last credential. */}
-      <section className="overflow-hidden rounded-lg border border-line bg-surface">
-        <div className="flex items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-fg">
-              {t("credentialsPage.personal.configured.title")}
-            </h3>
-            <span className="text-sm text-fg-faint">{credentials.length}</span>
-          </div>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            {t("credentialsPage.personal.add")}
-          </Button>
-        </div>
-
-        {credentials.length >= 5 && (
-          <div className="relative border-b border-line-muted px-4 py-2">
-            <Search className="pointer-events-none absolute left-7 top-4 h-4 w-4 text-fg-faint" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("myCredentials.search.placeholder")}
-              className="pl-9"
-            />
-          </div>
-        )}
-
-        {credentials.length === 0 ? (
-          <div className="p-4">
-            <EmptyState
-              icon={Key}
-              title={t("credentialsPage.personal.configured.empty.title")}
-              description={t("credentialsPage.personal.configured.empty.description")}
-              action={
-                <Button size="sm" onClick={() => setCreateOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("credentialsPage.personal.add")}
-                </Button>
-              }
-            />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-4">
-            <EmptyState icon={Search} title={t("myCredentials.emptyFiltered.title")} description={t("myCredentials.emptyFiltered.description")} />
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("myCredentials.table.kind")}</TableHead>
-                <TableHead>{t("myCredentials.table.lastUsed")}</TableHead>
-                <TableHead className="text-right">{t("myCredentials.table.actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((credential) => (
-                <TableRow key={credential.id} className={highlightedID === credential.id ? "bg-success-subtle/70" : undefined}>
-                  <TableCell>
-                    <div className="font-medium text-fg">
-                      {credentialKindLabel(credential.kind, i18n.language, t("myCredentials.kind.unknown"), kindOptions.kinds)}
-                    </div>
-                    <div className="mt-0.5 text-xs text-fg-faint">
-                      {t("myCredentials.table.createdAt", { date: new Date(credential.created_at).toLocaleDateString() })}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-fg-subtle">{fmtAgo(credential.last_used_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="inline-flex items-center gap-1.5">
-                      <Button variant="ghost" size="sm" onClick={() => setEditTarget(credential)}>
-                        {t("myCredentials.actions.edit")}
-                      </Button>
-                      <Button variant="ghost" size="sm" className="text-danger-emphasis hover:text-danger-emphasis" onClick={() => setDeleteTarget(credential)}>
-                        {t("myCredentials.actions.delete")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </section>
-
-      {createOpen && (
+      {dialogOpen && (
         <CredentialDialog
           // Key on the active prefill kind so when the prefill queue
           // advances React fully remounts the dialog — otherwise the
           // locked-kind label and password field carry over and the user
           // submits kind #2's value under kind #1's label.
-          key={pendingPrefillKind ?? "__no-prefill"}
+          key={dialogKind ?? "__no-prefill"}
           mode="create"
-          initialKind={pendingPrefillKind}
+          initialKind={dialogKind}
           onClose={() => {
             setCreateOpen(false)
+            setDismissedRequest(createRequest)
             createMut.reset()
             setPendingKind(null)
             if (prefillQueue.length > 0) setPrefillQueue([])
@@ -360,6 +278,7 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
             } else {
               setPrefillQueue([])
               setCreateOpen(false)
+              setDismissedRequest(createRequest)
             }
           }}
           pending={createMut.isPending}
@@ -402,15 +321,63 @@ export function PersonalCredentialsTab({ standalone = false }: PersonalCredentia
           error={deleteMut.error as ApiError | undefined}
         />
       )}
-    </div>
+    </>
+  )
+}
+
+function PendingRow({
+  row,
+  label,
+  open,
+  onToggle,
+  onConfigure,
+}: {
+  row: MissingCredentialRow
+  label: string
+  open: boolean
+  onToggle: () => void
+  onConfigure: () => void
+}) {
+  const { t } = useTranslation("admin")
+  return (
+    <LedgerRow role="listitem" tabIndex={-1}>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <KeyRound className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <span className="truncate font-medium">{label}</span>
+      </span>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="inline-flex min-w-0 items-center gap-1 truncate text-left text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-spring", !open && "-rotate-90")}
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+        <span className="truncate">{t("credentialsPage.personal.pending.refCount", { count: row.refCount })}</span>
+      </button>
+      <span />
+      <span />
+      <RowActions>
+        <ActionIconButton icon={Plus} label={t("credentialsPage.personal.pending.configure")} onClick={onConfigure} />
+      </RowActions>
+    </LedgerRow>
   )
 }
 
 function CredentialsLoading() {
   return (
-    <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
       {Array.from({ length: 4 }).map((_, idx) => (
-        <Skeleton key={idx} className="h-10 w-full" />
+        <div key={idx} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-16" />
+        </div>
       ))}
     </div>
   )

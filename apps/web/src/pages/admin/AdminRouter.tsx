@@ -11,7 +11,7 @@ import { EmptyState } from "../../components/ui/empty-state"
 import { Button } from "../../components/ui/button"
 import { ModelsPage } from "./ModelsPage"
 import { ConversationsPage } from "./ConversationsPage"
-import { RunsPage, RunDetailPage } from "./RunsPage"
+import { RunsPage } from "./RunsPage"
 import { AgentsPage, AgentDetailPage } from "./AgentsPage"
 import { ConnectorsPage, ConnectorDetailPage } from "./ConnectorsPage"
 import { SettingsPage } from "./SettingsPage"
@@ -61,7 +61,8 @@ export function AdminRouter() {
     return <ConversationsPage />
   }
   if (v === "runs") {
-    return entityId ? <RunDetailPage id={entityId} /> : <RunsPage />
+    // RunsPage owns list + detail rail; the selected run rides in ?id=.
+    return <RunsPage selectedId={entityId} />
   }
   if (v === "scheduled") return <ScheduledTasksPage />
   if (v === "connectors") {
@@ -91,8 +92,8 @@ function NotFoundView() {
         title={t("notFound.empty.title")}
         description={t("notFound.empty.description")}
         action={
-          <Button onClick={() => navigate("agents")} size="sm">
-            <Bot className="h-3.5 w-3.5" />
+          <Button variant="outline" size="sm" onClick={() => navigate("agents")}>
+            <Bot strokeWidth={1.5} aria-hidden="true" />
             {t("notFound.empty.cta")}
           </Button>
         }

@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next"
-import type { ReactNode } from "react"
-import { AlertTriangle, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Box } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
+import { Button } from "../../components/ui/button"
+import { EmptyState } from "../../components/ui/empty-state"
 import { ManagedBadge } from "../../components/ui/managed-badge"
+import { useAdminView } from "../../lib/admin-router"
 
 // Placeholder so the router can resolve `?admin=runtime&id=<sandbox_id>`.
 
@@ -15,43 +17,40 @@ interface RuntimeDetailPageProps {
 
 export function RuntimeDetailPage({ id }: RuntimeDetailPageProps) {
   const { t } = useTranslation("admin")
+  const { navigate } = useAdminView()
   return (
     <AdminLayout activeMenu="settings">
       <PageHeader
         title={t("runtime.detail.placeholderTitle")}
-        description={t("runtime.detail.placeholderDescription")}
+        backLink={
+          <Button variant="ghost" size="icon" onClick={() => navigate("runtime")} aria-label={t("runtime.page.title")}>
+            <ArrowLeft strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+        }
+        action={<SettingsTabs active="runtime" />}
       />
-      <SettingsTabs active="runtime" />
-      <div
-        className="rounded-md border border-dashed border-line bg-surface-subtle/60 p-6 text-center text-sm text-fg-subtle"
-        data-testid="runtime-detail-placeholder"
-      >
-        {t("runtime.detail.placeholderBody", { id })}
+      <div data-testid="runtime-detail-placeholder">
+        <EmptyState
+          icon={Box}
+          title={t("runtime.detail.placeholderTitle")}
+          description={t("runtime.detail.placeholderBody", { id })}
+          className="py-10"
+        />
       </div>
-      <ManagedBoundaryCard />
+      <ManagedBoundary />
     </AdminLayout>
   )
 }
 
-function ManagedBoundaryCard() {
+/** What Parsar manages vs. what stays on the operator's side: two hairline lists. */
+function ManagedBoundary() {
   const { t } = useTranslation("admin")
 
   return (
-    <section className="mt-4 rounded-lg border border-line bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-fg">
-            {t("runtime.managedBoundary.title")}
-          </h2>
-          <p className="mt-1 text-sm leading-relaxed text-fg-subtle">
-            {t("runtime.managedBoundary.description")}
-          </p>
-        </div>
-        <ManagedBadge className="shrink-0" />
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <section className="mt-6">
+      <h2 className="mb-2 text-sm font-medium text-fg">{t("runtime.managedBoundary.title")}</h2>
+      <div className="grid gap-x-8 md:grid-cols-2">
         <BoundaryColumn
-          icon={<CheckCircle2 className="h-4 w-4 text-success" />}
           title={t("runtime.managedBoundary.managedTitle")}
           items={[
             t("runtime.managedBoundary.managed.runtimeSecret"),
@@ -60,7 +59,6 @@ function ManagedBoundaryCard() {
           ]}
         />
         <BoundaryColumn
-          icon={<AlertTriangle className="h-4 w-4 text-fg-subtle" />}
           title={t("runtime.managedBoundary.unmanagedTitle")}
           items={[
             t("runtime.managedBoundary.unmanaged.userEnv"),
@@ -75,26 +73,25 @@ function ManagedBoundaryCard() {
 }
 
 function BoundaryColumn({
-  icon,
   title,
   items,
   unmanaged,
 }: {
-  icon: ReactNode
   title: string
   items: string[]
   unmanaged?: boolean
 }) {
   return (
-    <div className="rounded-md border border-line bg-surface-subtle/40 p-3">
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg-emphasis">
-        {icon}
+    <div>
+      <h3 className="flex h-7 items-center justify-between gap-2 border-b border-line text-xs font-medium text-fg">
         <span>{title}</span>
-        <ManagedBadge unmanaged={unmanaged} className="ml-auto" />
-      </div>
-      <ul className="space-y-1.5 text-sm text-fg-muted">
+        <ManagedBadge unmanaged={unmanaged} />
+      </h3>
+      <ul className="m-0 list-none p-0">
         {items.map((item) => (
-          <li key={item}>• {item}</li>
+          <li key={item} className="flex min-h-8 items-center border-b border-line text-sm text-fg">
+            {item}
+          </li>
         ))}
       </ul>
     </div>

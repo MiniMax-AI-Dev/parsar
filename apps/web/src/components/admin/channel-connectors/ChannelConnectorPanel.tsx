@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -13,6 +13,8 @@ import {
   type SlackConnectorInput,
   type TeamsConnectorInput,
 } from "../../../lib/api-connectors"
+import { Badge } from "../../ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs"
 import { FeishuConnectorFields } from "./feishuFields"
 import { SlackConnectorFields } from "./slackFields"
 import { DiscordConnectorFields } from "./discordFields"
@@ -28,6 +30,17 @@ const PLATFORMS: ConnectorPlatform[] = ["feishu", "slack", "discord", "teams"]
 
 type ConnectorStatus = "enabled" | "configured" | "incomplete" | "notConfigured"
 
+const STATUS_VARIANT: Record<ConnectorStatus, "success" | "primary" | "warning" | "neutral"> = {
+  enabled: "success",
+  configured: "primary",
+  incomplete: "warning",
+  notConfigured: "neutral",
+}
+
+/**
+ * One segmented tab per messaging platform; the active platform's form
+ * below it, with its configuration state as a dot chip in the form head.
+ */
 export function ChannelConnectorPanel({
   workspaceID,
   canEdit,
@@ -42,134 +55,83 @@ export function ChannelConnectorPanel({
   const discordConfig = useMemo(() => readDiscordConnector(connectors), [connectors])
   const teamsConfig = useMemo(() => readTeamsConnector(connectors), [connectors])
 
-  const [platform, setPlatform] = useState<ConnectorPlatform>("feishu")
-  const userPicked = useRef(false)
-  useEffect(() => {
-    if (userPicked.current) return
-    const configs = { feishu: feishuConfig, slack: slackConfig, discord: discordConfig, teams: teamsConfig }
-    const found = PLATFORMS.find((p) => configs[p]?.app_id.trim())
-    if (found) setPlatform(found)
-  }, [feishuConfig, slackConfig, discordConfig, teamsConfig])
+  // Until the user picks, the first configured platform is the active tab.
+  const [picked, setPicked] = useState<ConnectorPlatform | null>(null)
+  const configs = useMemo(
+    () => ({ feishu: feishuConfig, slack: slackConfig, discord: discordConfig, teams: teamsConfig }),
+    [feishuConfig, slackConfig, discordConfig, teamsConfig],
+  )
+  const platform: ConnectorPlatform =
+    picked ?? PLATFORMS.find((p) => configs[p]?.app_id.trim()) ?? "feishu"
 
-  const platformSummaries = useMemo(
-    () =>
+  const statusByPlatform = useMemo(() => {
+    return Object.fromEntries(
       PLATFORMS.map((option) => {
-        const config = configForPlatform(option, {
-          feishu: feishuConfig,
-          slack: slackConfig,
-          discord: discordConfig,
-          teams: teamsConfig,
-        })
-        const appID = config?.app_id.trim() ?? ""
-        const complete = isPlatformComplete(option, config)
-        const status = platformStatus(config, complete)
-        return { platform: option, appID, status }
+        const config = configs[option]
+        return [option, platformStatus(config, isPlatformComplete(option, config))]
       }),
-    [discordConfig, feishuConfig, slackConfig, teamsConfig],
+    ) as Record<ConnectorPlatform, ConnectorStatus>
+  }, [configs])
+
+  const chip = (p: ConnectorPlatform) => (
+    <Badge variant={STATUS_VARIANT[statusByPlatform[p]]} dot>
+      {t(`connections.connector.platformList.status.${statusByPlatform[p]}`)}
+    </Badge>
   )
 
   return (
-    <div
-      className="grid gap-4 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]"
+    <Tabs
+      value={platform}
+      onValueChange={(v) => setPicked(v as ConnectorPlatform)}
       data-testid="channel-connector-panel"
     >
-      <section className="min-w-0">
-        <div className="mb-3">
-          <h2 className="text-base font-semibold text-fg">
-            {t("connections.connector.platformList.title")}
-          </h2>
-          <p className="mt-1 text-sm text-fg-faint">
-            {t("connections.connector.platformList.description")}
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-          {platformSummaries.map((summary) => {
-            const active = summary.platform === platform
-            return (
-              <button
-                key={summary.platform}
-                type="button"
-                onClick={() => { userPicked.current = true; setPlatform(summary.platform) }}
-                className={`min-w-0 rounded-md border px-3 py-3 text-left transition ${
-                  active
-                    ? "border-line-strong bg-surface text-fg shadow-sm"
-                    : "border-line bg-surface text-fg-muted hover:bg-surface-subtle"
-                }`}
-                aria-current={active ? "true" : undefined}
-                data-testid={`connector-platform-${summary.platform}`}
-              >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {t(`connections.connector.platformSelect.options.${summary.platform}`)}
-                    </p>
-                    <p className="mt-1 truncate font-mono text-xs text-fg-faint">
-                      {summary.appID || t("connections.connector.platformList.noAppId")}
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(
-                      summary.status,
-                    )}`}
-                  >
-                    {t(`connections.connector.platformList.status.${summary.status}`)}
-                  </span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+      <TabsList aria-label={t("connections.connector.platformList.title")}>
+        {PLATFORMS.map((p) => (
+          <TabsTrigger key={p} value={p} data-testid={`connector-platform-${p}`}>
+            {t(`connections.connector.platformSelect.options.${p}`)}
+          </TabsTrigger>
+        ))}
+      </TabsList>
 
-      <div className="min-w-0">
-        {platform === "feishu" && (
-          <FeishuConnectorFields
-            workspaceID={workspaceID}
-            current={feishuConfig}
-            masterKeyConfigured={data?.master_key_configured}
-            canEdit={canEdit}
-            onToast={onToast}
-          />
-        )}
-        {platform === "slack" && (
-          <SlackConnectorFields
-            workspaceID={workspaceID}
-            current={slackConfig}
-            canEdit={canEdit}
-            onToast={onToast}
-          />
-        )}
-        {platform === "discord" && (
-          <DiscordConnectorFields
-            workspaceID={workspaceID}
-            current={discordConfig}
-            canEdit={canEdit}
-            onToast={onToast}
-          />
-        )}
-        {platform === "teams" && (
-          <TeamsConnectorFields
-            workspaceID={workspaceID}
-            current={teamsConfig}
-            canEdit={canEdit}
-            onToast={onToast}
-          />
-        )}
-      </div>
-    </div>
+      <TabsContent value="feishu">
+        <FeishuConnectorFields
+          workspaceID={workspaceID}
+          current={feishuConfig}
+          masterKeyConfigured={data?.master_key_configured}
+          canEdit={canEdit}
+          onToast={onToast}
+          status={chip("feishu")}
+        />
+      </TabsContent>
+      <TabsContent value="slack">
+        <SlackConnectorFields
+          workspaceID={workspaceID}
+          current={slackConfig}
+          canEdit={canEdit}
+          onToast={onToast}
+          status={chip("slack")}
+        />
+      </TabsContent>
+      <TabsContent value="discord">
+        <DiscordConnectorFields
+          workspaceID={workspaceID}
+          current={discordConfig}
+          canEdit={canEdit}
+          onToast={onToast}
+          status={chip("discord")}
+        />
+      </TabsContent>
+      <TabsContent value="teams">
+        <TeamsConnectorFields
+          workspaceID={workspaceID}
+          current={teamsConfig}
+          canEdit={canEdit}
+          onToast={onToast}
+          status={chip("teams")}
+        />
+      </TabsContent>
+    </Tabs>
   )
-}
-
-function configForPlatform(
-  platform: ConnectorPlatform,
-  configs: {
-    feishu: FeishuConnectorInput | undefined
-    slack: SlackConnectorInput | undefined
-    discord: DiscordConnectorInput | undefined
-    teams: TeamsConnectorInput | undefined
-  },
-) {
-  return configs[platform]
 }
 
 function platformStatus(
@@ -219,18 +181,5 @@ function isPlatformComplete(
       const c = config as TeamsConnectorInput
       return Boolean(c.app_password_ref.trim())
     }
-  }
-}
-
-function statusClass(status: ConnectorStatus): string {
-  switch (status) {
-    case "enabled":
-      return "bg-success-subtle text-success-emphasis"
-    case "configured":
-      return "bg-info-subtle text-info-emphasis"
-    case "incomplete":
-      return "bg-warning-subtle text-warning-emphasis"
-    case "notConfigured":
-      return "bg-surface-subtle text-fg-faint"
   }
 }

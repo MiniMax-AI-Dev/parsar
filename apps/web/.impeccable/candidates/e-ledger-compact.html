@@ -1,0 +1,479 @@
+<!doctype html>
+<!-- Parsar Runs page — Direction B: 工单账本 · The Issue Ledger. Static prototype; ALL run data below is synthetic. -->
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>运行 (Runs) · Parsar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --radius:6px;--radius-kbd:4px;--sidebar:232px;--rail:384px;
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Segoe UI","Microsoft YaHei","Noto Sans SC","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Noto Sans Mono",monospace;
+}
+html[data-theme="light"]{
+  --bg:#ffffff;--panel:#fafafa;--surface:#ffffff;
+  --fg:#37352f;--fg-muted:#787774;--fg-faint:#787774;--fg-side:#5f5e5a;
+  --line:#e9e9ec;--line-strong:#d6d7dc;
+  --accent:#4f46e5;--accent-solid:#4f46e5;--accent-fg:#ffffff;
+  --hover:rgb(24 24 27 / .03);--pressed:rgb(24 24 27 / .06);--selected:rgb(79 70 229 / .03);
+  --tile:rgb(24 24 27 / .07);--shadow:0 1px 2px rgb(0 0 0 / .06);--shadow-panel:0 1px 2px rgb(24 24 27 / .04),0 8px 24px -12px rgb(24 24 27 / .18);
+  --st-queued:#9a9ca4;--st-running:#d97706;--st-completed:#16a34a;--st-failed:#dc2626;--st-cancelled:#9a9ca4;--st-interrupted:#ea580c;
+  --st-track:#d4d4d8;--st-ink:#ffffff;
+  --selection:rgb(79 70 229 / .18);
+}
+html[data-theme="dark"]{
+  --bg:#191919;--panel:#202020;--surface:#262626;
+  --fg:#d4d4d4;--fg-muted:#9b9b9b;--fg-faint:#9b9b9b;--fg-side:#bdbdbd;
+  --line:rgb(255 255 255 / .09);--line-strong:rgb(255 255 255 / .16);
+  --accent:#8b90f6;--accent-solid:#5b5ee8;--accent-fg:#ffffff;
+  --hover:rgb(255 255 255 / .055);--pressed:rgb(255 255 255 / .10);--selected:rgb(139 144 246 / .04);
+  --tile:rgb(255 255 255 / .10);--shadow:0 1px 2px rgb(0 0 0 / .4);--shadow-panel:0 1px 2px rgb(0 0 0 / .3),0 8px 24px -12px rgb(0 0 0 / .55);
+  --st-queued:#71737b;--st-running:#f5a524;--st-completed:#3fb950;--st-failed:#f05252;--st-cancelled:#71737b;--st-interrupted:#fb8a3c;
+  --st-track:#3f3f3f;--st-ink:#191919;
+  --selection:rgb(139 144 246 / .28);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:var(--font);font-size:13px;line-height:1.45;
+  color:var(--fg);background:var(--bg);caret-color:var(--accent);
+  min-width:960px;
+  display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr) var(--rail);overflow:hidden;
+}
+::selection{background:var(--selection);color:var(--fg)}
+*{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:var(--radius)}
+button,input,a{font:inherit;letter-spacing:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+button:disabled{cursor:not-allowed}
+a{text-decoration:none}
+svg.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+svg.ic.s{width:14px;height:14px}
+kbd{font-family:var(--font);font-size:12px;line-height:1;padding:3px 5px;border:1px solid var(--line-strong);border-bottom-width:1.5px;border-radius:var(--radius-kbd);color:var(--fg-muted);background:var(--surface);min-width:20px;text-align:center;display:inline-block}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+
+/* status icons — the only place status colour lives */
+svg.st{width:14px;height:14px;flex:none;display:block}
+.st-queued{color:var(--st-queued)}.st-running{color:var(--st-running)}.st-completed{color:var(--st-completed)}
+.st-failed{color:var(--st-failed)}.st-cancelled{color:var(--st-cancelled)}.st-interrupted{color:var(--st-interrupted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.st-running{animation:spin 1.8s linear infinite;transform-origin:50% 50%}
+@media (prefers-reduced-motion:reduce){.st-running{animation:none}}
+
+/* ---------- sidebar ---------- */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px;overflow:auto;color:var(--fg-side)}
+.ws{display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;border-radius:var(--radius);width:100%;text-align:left}
+.ws:hover{background:var(--hover)}
+.ws .brand{font-weight:500}
+.ws .sep{color:var(--fg-muted)}
+.ws .name{color:var(--fg-muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws .ic{color:var(--fg-muted)}
+.grp-label{font-size:12px;font-weight:400;color:var(--fg-muted);padding:14px 8px 4px}
+.nav{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:var(--radius);color:inherit;margin-bottom:1px}
+.nav .ic{color:var(--fg-muted)}
+.nav:hover{background:var(--hover)}
+.nav[aria-current="page"]{background:var(--pressed);font-weight:500;color:var(--fg)}
+.nav[aria-current="page"] .ic{color:var(--fg)}
+.nav span{flex:1}
+.badge{font-style:normal;font-size:12px;font-weight:400;font-variant-numeric:tabular-nums;color:var(--fg-muted);background:var(--tile);border-radius:99px;padding:1px 6px;line-height:16px}
+.side-foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:10px 2px 0 6px;border-top:1px solid var(--line)}
+.side-foot .who{flex:1;min-width:0;line-height:1.25}
+.side-foot .who .n{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-foot .who .r{font-size:12px;color:var(--fg-muted)}
+.segt{display:inline-flex;padding:2px;gap:2px;border:1px solid var(--line);border-radius:6px}
+.segt button{display:inline-flex;align-items:center;justify-content:center;height:22px;min-width:26px;border-radius:4px;color:var(--fg-muted)}
+.segt button:hover{color:var(--fg)}
+.segt button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.segt .ic{width:14px;height:14px}
+
+/* ---------- main ---------- */
+.main{display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.topbar{height:48px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
+.topbar h1{font-size:20px;font-weight:600;margin:0;line-height:1;letter-spacing:-0.02em;display:flex;align-items:baseline;gap:8px}
+.topbar h1 small{font-size:12px;font-weight:400;color:var(--fg-muted);letter-spacing:0}
+.spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--radius);border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn:disabled{color:var(--fg-faint);border-color:var(--line);background:transparent}
+.btn .ic{color:var(--fg-muted)}
+.btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--accent-fg);box-shadow:var(--shadow)}
+.btn.primary .ic{color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.06)}
+.icon-btn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius);color:var(--fg-muted)}
+.icon-btn:hover{background:var(--hover);color:var(--fg)}
+.avatar{width:24px;height:24px;border-radius:6px;background:var(--tile);color:var(--fg);font-size:12px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;letter-spacing:0}
+
+.search{display:flex;align-items:center;gap:6px;width:240px;height:28px;padding:0 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);color:var(--fg-faint)}
+.search:focus-within{border-color:var(--accent);outline:1px solid var(--accent)}
+.search input{flex:1;min-width:0;border:0;background:none;outline:0;color:var(--fg)}
+.search input::placeholder{color:var(--fg-faint)}
+
+/* list */
+.list{flex:1;overflow:auto;min-height:0}
+.hdr,.row{display:grid;grid-template-columns:14px 104px minmax(0,1fr) 116px 100px 48px 44px 60px;column-gap:10px;align-items:center;padding:0 16px}
+.hdr{height:28px;font-size:12px;color:var(--fg-faint);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:1}
+.hdr .r,.row .r{text-align:right}
+.grp{list-style:none;margin:0;padding:0}
+.grp-h{display:flex;align-items:center;gap:6px;width:100%;height:28px;padding:0 16px 0 14px;font-size:12px;color:var(--fg-muted);border-bottom:1px solid var(--line);background:var(--bg);text-align:left}
+.grp-h .ic{color:var(--fg-faint);transition:transform .15s}
+.grp.collapsed .grp-h .ic{transform:rotate(-90deg)}
+.grp-h b{font-weight:500;color:var(--fg)}
+.grp-h i{font-style:normal;color:var(--fg-faint);font-variant-numeric:tabular-nums}
+.grp.collapsed .rows{display:none}
+.rows{list-style:none;margin:0;padding:0}
+.row{height:36px;position:relative;border-bottom:1px solid var(--line);cursor:default;outline-offset:-2px}
+.row:hover{background:var(--hover)}
+.row[aria-selected="true"]{background:var(--selected)}
+.row[aria-selected="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.row:focus-visible{border-radius:0}
+.rid{font-family:var(--mono);font-size:12px;color:var(--fg-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ttl{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--fg-muted);white-space:nowrap}
+.agent .name{overflow:hidden;text-overflow:ellipsis}
+.av{width:18px;height:18px;flex:none;border-radius:4px;background:var(--tile);color:var(--fg);font-style:normal;font-size:11px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;letter-spacing:0}
+.cell-model{display:flex;align-items:center;min-width:0}
+.model{display:inline-block;max-width:100%;vertical-align:middle;font-family:var(--mono);font-size:12px;color:var(--fg-muted);border:1px solid var(--line-strong);border-radius:var(--radius);padding:0 6px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .num{color:var(--fg)}
+.row .num.empty{color:var(--fg-faint)}
+.age{font-size:12px;color:var(--fg-muted);white-space:nowrap}
+
+.foot{height:40px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;border-top:1px solid var(--line);color:var(--fg-muted);font-size:12px}
+.foot .count{font-variant-numeric:tabular-nums}
+.foot .pg{display:flex;gap:4px;margin-left:8px}
+.foot .pg button{height:24px;padding:0 8px;border-radius:var(--radius);border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);font-size:12px}
+.foot .pg button:hover{background:var(--hover)}
+.foot .pg button:disabled{color:var(--fg-faint);border-color:var(--line);background:transparent}
+.foot .keys{margin-left:auto;display:flex;align-items:center;gap:4px}
+.foot .keys span{margin-right:8px}
+
+/* ---------- detail rail ---------- */
+.rail{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.rail-h{height:48px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px 0 16px;border-bottom:1px solid var(--line)}
+.rail-h .status{font-weight:500}
+.rail-h .rid{flex:1;overflow:hidden;text-overflow:ellipsis}
+.rail-body{flex:1;overflow:auto;padding:16px 16px 8px}
+.rail-title{font-size:14px;font-weight:500;margin:0 0 14px;line-height:1.4}
+.props{display:grid;grid-template-columns:84px minmax(0,1fr);row-gap:0;column-gap:12px;margin:0;font-size:13px}
+.props dt{font-size:12px;color:var(--fg-muted);height:28px;display:flex;align-items:center}
+.props dd{margin:0;height:28px;display:flex;align-items:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.props dd.mono,.props dd.num{font-size:12px}
+.props dd .agent{color:var(--fg);font-size:13px}
+.seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:var(--radius);margin:20px 0 18px;background:var(--bg)}
+.seg button{flex:1;height:24px;padding:0 4px;border-radius:calc(var(--radius) - 2px);font-size:12px;color:var(--fg-muted);white-space:nowrap}
+.seg button:hover{color:var(--fg);background:var(--hover)}
+.seg button[aria-selected="true"]{background:var(--pressed);color:var(--fg);font-weight:500}
+.steps h3{font-size:12px;font-weight:500;color:var(--fg-muted);margin:0 0 4px;display:flex;justify-content:space-between}
+.steps h3 span{font-variant-numeric:tabular-nums;color:var(--fg-faint);font-weight:400}
+.steps ol{list-style:none;margin:0;padding:0}
+.steps li{display:flex;align-items:center;gap:8px;height:32px;border-bottom:1px solid var(--line)}
+.steps li:last-child{border-bottom:0}
+.steps .n{font-family:var(--mono);font-size:12px;color:var(--fg-faint);width:12px;text-align:right;font-variant-numeric:tabular-nums}
+.steps li>span:last-of-type{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps code{font-family:var(--mono);font-size:12px;color:var(--fg);background:var(--tile);border-radius:var(--radius-kbd);padding:1px 5px}
+.steps .diff{font-family:var(--mono);font-size:12px;color:var(--fg-muted);font-variant-numeric:tabular-nums;margin-left:auto;padding-left:8px}
+.rail-f{flex:none;display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+.link{margin-left:auto;display:inline-flex;align-items:center;gap:4px;color:var(--fg-muted);font-weight:500;height:28px;padding:0 4px;border-radius:var(--radius)}
+.link:hover{color:var(--fg)}
+
+@media (max-width:1360px){
+  :root{--rail:344px}
+  .agent .name{display:none}
+  .search{width:200px}
+  .hdr,.row{grid-template-columns:14px 104px minmax(0,1fr) 18px 100px 48px 44px 60px}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-queued" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.2 1.9" stroke-linecap="round"/></symbol>
+    <symbol id="i-running" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--st-track)" stroke-width="1.5"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="25.9 34.56" transform="rotate(-90 7 7)"/></symbol>
+    <symbol id="i-completed" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.25" fill="currentColor"/><path d="m4.4 7.2 1.8 1.8 3.5-3.7" fill="none" stroke="var(--st-ink)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-failed" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.25" fill="currentColor"/><path d="m4.9 4.9 4.2 4.2M9.1 4.9 4.9 9.1" fill="none" stroke="var(--st-ink)" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-cancelled" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.9 10.1 10.1 3.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-interrupted" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.6 7h4.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<!-- ===== sidebar ===== -->
+<nav class="side" aria-label="主导航">
+  <button class="ws" aria-haspopup="menu" aria-label="切换工作区">
+    <span class="brand">Parsar</span><span class="sep">/</span><span class="name">MiniMax · Infra</span>
+    <svg class="ic" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+  </button>
+
+  <div class="grp-label">协作</div>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>对话</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>收件箱</span><em class="badge">3</em></a>
+  <a class="nav" href="#" aria-current="page"><svg class="ic" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg><span>运行</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg><span>定时任务</span></a>
+
+  <div class="grp-label">Agent</div>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span>Agent</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>能力</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg><span>模型</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg><span>连接</span></a>
+
+  <div class="grp-label">团队</div>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>成员</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>设置</span></a>
+
+  <div class="side-foot">
+    <span class="avatar" aria-hidden="true">FJ</span>
+    <div class="who"><div class="n">fanjingluo</div><div class="r">管理员</div></div>
+    <div class="segt" role="group" aria-label="主题">
+      <button type="button" id="th-light" aria-pressed="true" aria-label="浅色"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></button>
+      <button type="button" id="th-dark" aria-pressed="false" aria-label="深色"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== main ===== -->
+<main class="main">
+  <header class="topbar">
+    <h1>运行<small>Runs</small></h1>
+    <div class="spacer"></div>
+    <label class="search">
+      <svg class="ic s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="search" placeholder="搜索 run id / agent / 对话…" aria-label="搜索运行">
+      <kbd>⌘K</kbd>
+    </label>
+    <button class="btn" aria-haspopup="menu"><svg class="ic s" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>筛选</button>
+  </header>
+
+  <div class="list" role="listbox" aria-label="运行列表">
+    <div class="hdr" aria-hidden="true">
+      <span></span><span>Run</span><span>对话</span><span>Agent</span><span>模型</span><span class="r">耗时</span><span class="r">成本</span><span class="r">时间</span>
+    </div>
+
+    <section class="grp">
+      <button class="grp-h" aria-expanded="true"><svg class="ic s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><b>运行中</b><i>1</i></button>
+      <ul class="rows">
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="running" data-label="运行中">
+          <svg class="st st-running"><use href="#i-running"/></svg>
+          <span class="rid">run_01J8ZM3Q7K</span>
+          <span class="ttl">#infra-alerts · 修复 nightly 构建失败</span>
+          <span class="agent" title="reviewer-bot"><i class="av">R</i><span class="name">reviewer-bot</span></span>
+          <span class="cell-model"><span class="model">claude-opus-5</span></span>
+          <span class="num r">4m 12s</span><span class="num r">¥0.38</span><span class="age r">4 分钟前</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grp">
+      <button class="grp-h" aria-expanded="true"><svg class="ic s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><b>等待调度</b><i>1</i></button>
+      <ul class="rows">
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="queued" data-label="等待调度">
+          <svg class="st st-queued"><use href="#i-queued"/></svg>
+          <span class="rid">run_01J8ZJH6W2</span>
+          <span class="ttl">#frontend · 对话页 assistant-ui 接入</span>
+          <span class="agent" title="reviewer-bot"><i class="av">R</i><span class="name">reviewer-bot</span></span>
+          <span class="cell-model"><span class="model">claude-opus-5</span></span>
+          <span class="num r empty">—</span><span class="num r empty">—</span><span class="age r">2 小时前</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grp">
+      <button class="grp-h" aria-expanded="true"><svg class="ic s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><b>已完成</b><i>5</i></button>
+      <ul class="rows">
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="completed" data-label="已完成">
+          <svg class="st st-completed"><use href="#i-completed"/></svg>
+          <span class="rid">run_01J8ZKX2P9</span>
+          <span class="ttl">#release · v0.9.2 发布说明</span>
+          <span class="agent" title="release-notes"><i class="av">R</i><span class="name">release-notes</span></span>
+          <span class="cell-model"><span class="model">MiniMax-M2</span></span>
+          <span class="num r">2m 51s</span><span class="num r">¥0.12</span><span class="age r">26 分钟前</span>
+        </li>
+        <li class="row" role="option" tabindex="0" aria-selected="true" data-status="completed" data-label="已完成">
+          <svg class="st st-completed"><use href="#i-completed"/></svg>
+          <span class="rid">run_01J8ZKR8T4</span>
+          <span class="ttl">PR #271 · store: split routes.go</span>
+          <span class="agent" title="reviewer-bot"><i class="av">R</i><span class="name">reviewer-bot</span></span>
+          <span class="cell-model"><span class="model">claude-opus-5</span></span>
+          <span class="num r">6m 03s</span><span class="num r">¥0.71</span><span class="age r">1 小时前</span>
+        </li>
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="completed" data-label="已完成">
+          <svg class="st st-completed"><use href="#i-completed"/></svg>
+          <span class="rid">run_01J8ZJ3C5N</span>
+          <span class="ttl">#docs · CONTRIBUTING 补充 e2b 章节</span>
+          <span class="agent" title="docs-writer"><i class="av">D</i><span class="name">docs-writer</span></span>
+          <span class="cell-model"><span class="model">MiniMax-M2</span></span>
+          <span class="num r">1m 37s</span><span class="num r">¥0.06</span><span class="age r">3 小时前</span>
+        </li>
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="completed" data-label="已完成">
+          <svg class="st st-completed"><use href="#i-completed"/></svg>
+          <span class="rid">run_01J8ZH2R9Q</span>
+          <span class="ttl">PR #268 · web: marketplace tab filter</span>
+          <span class="agent" title="reviewer-bot"><i class="av">R</i><span class="name">reviewer-bot</span></span>
+          <span class="cell-model"><span class="model">claude-opus-5</span></span>
+          <span class="num r">3m 44s</span><span class="num r">¥0.42</span><span class="age r">昨天</span>
+        </li>
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="completed" data-label="已完成">
+          <svg class="st st-completed"><use href="#i-completed"/></svg>
+          <span class="rid">run_01J8ZFQ1B3</span>
+          <span class="ttl">#docs · README 快速开始</span>
+          <span class="agent" title="docs-writer"><i class="av">D</i><span class="name">docs-writer</span></span>
+          <span class="cell-model"><span class="model">MiniMax-M2</span></span>
+          <span class="num r">0m 58s</span><span class="num r">¥0.03</span><span class="age r">昨天</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grp">
+      <button class="grp-h" aria-expanded="true"><svg class="ic s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><b>失败</b><i>1</i></button>
+      <ul class="rows">
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="failed" data-label="失败">
+          <svg class="st st-failed"><use href="#i-failed"/></svg>
+          <span class="rid">run_01J8ZK9A1M</span>
+          <span class="ttl">#backend · 迁移 0042 回滚</span>
+          <span class="agent" title="migrate-helper"><i class="av">M</i><span class="name">migrate-helper</span></span>
+          <span class="cell-model"><span class="model">gpt-5-codex</span></span>
+          <span class="num r">0m 48s</span><span class="num r">¥0.05</span><span class="age r">2 小时前</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grp">
+      <button class="grp-h" aria-expanded="true"><svg class="ic s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><b>已取消</b><i>1</i></button>
+      <ul class="rows">
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="cancelled" data-label="已取消">
+          <svg class="st st-cancelled"><use href="#i-cancelled"/></svg>
+          <span class="rid">run_01J8ZHT0X8</span>
+          <span class="ttl">#backend · sqlc 重新生成</span>
+          <span class="agent" title="migrate-helper"><i class="av">M</i><span class="name">migrate-helper</span></span>
+          <span class="cell-model"><span class="model">gpt-5-codex</span></span>
+          <span class="num r">0m 12s</span><span class="num r">¥0.01</span><span class="age r">5 小时前</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grp">
+      <button class="grp-h" aria-expanded="true"><svg class="ic s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><b>已中断</b><i>1</i></button>
+      <ul class="rows">
+        <li class="row" role="option" tabindex="0" aria-selected="false" data-status="interrupted" data-label="已中断">
+          <svg class="st st-interrupted"><use href="#i-interrupted"/></svg>
+          <span class="rid">run_01J8ZGF4K7</span>
+          <span class="ttl">#release · v0.9.1 发布说明</span>
+          <span class="agent" title="release-notes"><i class="av">R</i><span class="name">release-notes</span></span>
+          <span class="cell-model"><span class="model">MiniMax-M2</span></span>
+          <span class="num r">5m 20s</span><span class="num r">¥0.19</span><span class="age r">昨天</span>
+        </li>
+      </ul>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <span class="count">第 1-10 条,共 128 条</span>
+    <div class="pg"><button disabled>上一页</button><button>下一页</button></div>
+  </footer>
+</main>
+
+<!-- ===== detail rail ===== -->
+<aside class="rail" aria-label="运行详情">
+  <header class="rail-h">
+    <svg class="st st-completed" id="d-st"><use href="#i-completed"/></svg>
+    <span class="status" id="d-status">已完成</span>
+    <span class="rid" id="d-id">run_01J8ZKR8T4</span>
+    <button class="icon-btn" aria-label="关闭详情"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </header>
+
+  <div class="rail-body">
+    <h2 class="rail-title" id="d-title">PR #271 · store: split routes.go</h2>
+    <dl class="props">
+      <dt>Agent</dt><dd><span class="agent"><i class="av">R</i><span>reviewer-bot</span></span></dd>
+      <dt>触发</dt><dd>来自飞书线程 · PR #271</dd>
+      <dt>模型</dt><dd><span class="model">claude-opus-5</span></dd>
+      <dt>运行节点</dt><dd class="mono">mbp-fanjingluo</dd>
+      <dt>引擎</dt><dd>Claude Code</dd>
+      <dt>模式</dt><dd>沙盒 (docker)</dd>
+      <dt>工作目录</dt><dd class="mono">~/dev/parsar</dd>
+      <dt>心跳</dt><dd>12 秒前</dd>
+      <dt>创建</dt><dd class="num">09:41:02</dd>
+      <dt>开始</dt><dd class="num">09:41:05</dd>
+      <dt>完成</dt><dd class="num">09:47:08</dd>
+      <dt>耗时</dt><dd class="num">6m 03s</dd>
+      <dt>成本</dt><dd class="num">¥0.71</dd>
+    </dl>
+
+    <div class="seg" role="tablist" aria-label="详情视图">
+      <button role="tab" aria-selected="false">Overview</button>
+      <button role="tab" aria-selected="false">Events</button>
+      <button role="tab" aria-selected="true">Steps</button>
+      <button role="tab" aria-selected="false">Artifacts</button>
+      <button role="tab" aria-selected="false">Permissions</button>
+      <button role="tab" aria-selected="false">Audit</button>
+    </div>
+
+    <section class="steps">
+      <h3>Steps <span>6 / 6</span></h3>
+      <ol>
+        <li><svg class="st st-completed"><use href="#i-completed"/></svg><span class="n">1</span><span>读取 PR #271 的 diff 与评论</span></li>
+        <li><svg class="st st-completed"><use href="#i-completed"/></svg><span class="n">2</span><span>搜索 store.go 中的相关调用</span></li>
+        <li><svg class="st st-completed"><use href="#i-completed"/></svg><span class="n">3</span><span>修改 3 个文件</span><span class="diff">+142 −37</span></li>
+        <li><svg class="st st-completed"><use href="#i-completed"/></svg><span class="n">4</span><span>运行 <code>make check-web</code></span></li>
+        <li><svg class="st st-completed"><use href="#i-completed"/></svg><span class="n">5</span><span>推送修订并更新 PR 描述</span></li>
+        <li><svg class="st st-completed"><use href="#i-completed"/></svg><span class="n">6</span><span>回帖到飞书线程</span></li>
+      </ol>
+    </section>
+  </div>
+
+  <footer class="rail-f">
+    <button class="btn">重试</button>
+    <button class="btn" disabled title="已完成的运行无法取消">取消运行</button>
+    <a class="link" href="#">打开对话<svg class="ic s" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a>
+  </footer>
+</aside>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  function setTheme(t){
+    root.dataset.theme=t;
+    document.getElementById('th-light').setAttribute('aria-pressed',String(t==='light'));
+    document.getElementById('th-dark').setAttribute('aria-pressed',String(t==='dark'));
+  }
+  document.getElementById('th-light').addEventListener('click',function(){setTheme('light')});
+  document.getElementById('th-dark').addEventListener('click',function(){setTheme('dark')});
+  document.querySelectorAll('[role="tablist"]').forEach(function(list){
+    var tabs=list.querySelectorAll('[role="tab"]');
+    tabs.forEach(function(t){t.addEventListener('click',function(){tabs.forEach(function(x){x.setAttribute('aria-selected',String(x===t))})})});
+  });
+  document.querySelectorAll('.grp-h').forEach(function(b){
+    b.addEventListener('click',function(){
+      var g=b.closest('.grp');g.classList.toggle('collapsed');
+      b.setAttribute('aria-expanded',String(!g.classList.contains('collapsed')));
+    });
+  });
+  var rows=Array.prototype.slice.call(document.querySelectorAll('.row'));
+  var dSt=document.getElementById('d-st'),dStatus=document.getElementById('d-status'),dId=document.getElementById('d-id'),dTitle=document.getElementById('d-title');
+  function select(r,focus){
+    rows.forEach(function(x){x.setAttribute('aria-selected',String(x===r))});
+    var s=r.dataset.status;
+    dSt.setAttribute('class','st st-'+s);dSt.querySelector('use').setAttribute('href','#i-'+s);
+    dStatus.textContent=r.dataset.label;dId.textContent=r.querySelector('.rid').textContent;dTitle.textContent=r.querySelector('.ttl').textContent;
+    if(focus){r.focus({preventScroll:true});r.scrollIntoView({block:'nearest'});}
+  }
+  rows.forEach(function(r){r.addEventListener('click',function(){select(r,false)})});
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('search').focus();return;}
+    if(e.target.matches('input,textarea')||e.metaKey||e.ctrlKey||e.altKey)return;
+    var visible=rows.filter(function(r){return r.offsetParent!==null});
+    var i=visible.findIndex(function(r){return r.getAttribute('aria-selected')==='true'});
+    if(e.key==='j'||e.key==='ArrowDown'){e.preventDefault();select(visible[Math.min(i+1,visible.length-1)],true);}
+    else if(e.key==='k'||e.key==='ArrowUp'){e.preventDefault();select(visible[Math.max(i-1,0)],true);}
+  });
+})();
+</script>
+</body>
+</html>

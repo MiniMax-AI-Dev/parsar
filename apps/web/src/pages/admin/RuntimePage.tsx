@@ -1,41 +1,38 @@
 import React, { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import type { TFunction } from "i18next"
-import { Cloud, PlugZap, Skull, Zap } from "lucide-react"
+import { AlertTriangle, Loader2, Skull, Zap } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ConnectivityResultPanel } from "../../components/runtime/ConnectivityResultPanel"
 import { RuntimeCredentialCard } from "../../components/runtime/RuntimeCredentialCard"
+import { RuntimeStatusBanner } from "../../components/runtime/RuntimeStatusBanner"
+import { PairDaemonDialog } from "../../components/admin/PairDaemonDialog"
 import { LocalDeviceRuntimesPanel } from "./runtimes/LocalDeviceRuntimesPanel"
-import { Badge } from "../../components/ui/badge"
+import { LIVENESS_STATUS, formatAgentKindLabel } from "./runtimes/runtime-status"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../components/ui/dialog"
+import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
+import { Ledger, LedgerHeader, LedgerId, LedgerRow } from "../../components/ui/ledger"
+import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
+import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
-import {
-  useRuntimeStatus,
-  type ConnectivityResult,
-  type RuntimeStatus,
-} from "../../lib/api-runtime"
+import { useRuntimeStatus, type ConnectivityResult, type RuntimeStatus } from "../../lib/api-runtime"
 import {
   isSandboxDaemonRuntime,
   supportedAgentKinds,
@@ -51,6 +48,7 @@ import {
   type SandboxStatusKind,
 } from "../../lib/api-sandbox"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
+import { useRelativeTime } from "../../lib/relative-time"
 import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
 
@@ -58,35 +56,18 @@ type RuntimeTab = "sandbox" | "local_device" | "external"
 type CloudState = "loading" | "notConfigured" | "ready" | "error" | "unknown"
 type SortKey = "last_active" | "created_at" | "agent"
 
-type BadgeVariant = "success" | "warning" | "destructive" | "neutral" | "primary"
+const TABS: RuntimeTab[] = ["local_device", "sandbox", "external"]
 
-function SandboxStatusBadge({ kind, status }: { kind: SandboxStatusKind; status: string }) {
-  if (kind === "live")
-    return (
-      <Badge variant="success" dot>
-        {status}
-      </Badge>
-    )
-  if (kind === "transient")
-    return (
-      <Badge variant="warning" dot>
-        {status}
-      </Badge>
-    )
-  return <Badge variant="neutral">{status}</Badge>
+const SANDBOX_STATUS: Record<SandboxStatusKind, StatusKind> = {
+  live: "completed",
+  transient: "running",
+  terminal: "cancelled",
 }
 
-function relativeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0 || Number.isNaN(ms)) return iso
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s ago`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 48) return `${hr}h ago`
-  return `${Math.floor(hr / 24)}d ago`
-}
+/** select · sandbox id · agent · status · image · last active · created · actions */
+const INSTANCE_COLUMNS = "16px minmax(0,1fr) 120px 112px minmax(0,160px) 80px 80px 28px"
+/** status icon · runtime · agent · sandbox kind · agent engines · last heartbeat */
+const DAEMON_COLUMNS = "14px minmax(0,1fr) 140px 96px minmax(0,200px) 88px"
 
 function sortBindings(bindings: SandboxBinding[], sortKey: SortKey): SandboxBinding[] {
   const copy = bindings.slice()
@@ -130,6 +111,7 @@ export function RuntimePage() {
   const workspacesQ = useMyWorkspaces()
 
   const [tab, setTab] = useState<RuntimeTab>("local_device")
+  const [pairOpen, setPairOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortKey, setSortKey] = useState<SortKey>("last_active")
   const [confirming, setConfirming] = useState(false)
@@ -204,51 +186,85 @@ export function RuntimePage() {
     else setSelected(new Set(activeBindings.map((b) => b.binding_id)))
   }
 
+  const tabLabel: Record<RuntimeTab, string> = {
+    local_device: t("runtime.providers.localDevice.title", { defaultValue: "Local Device" }),
+    sandbox: t("runtime.providers.sandbox.title"),
+    external: t("runtime.providers.external.title"),
+  }
+
   return (
-    <AdminLayout activeMenu="settings">
-      <PageHeader title={t("runtime.page.title")} />
-      <SettingsTabs active="runtime" />
-
-      <RuntimeTabs tab={tab} onChange={setTab} />
-
-      {tab === "sandbox" && (
-        <CloudSandboxPanel
-          workspaceID={workspaceID}
-          status={statusQuery.data}
-          statusError={Boolean(statusQuery.error)}
-          cloudState={cloudState}
-          isAdmin={isAdmin}
-          bindings={activeBindings}
-          sandboxDaemonRuntimes={sandboxDaemonRuntimes}
-          sandboxDaemonLoading={daemonRuntimesQuery.isLoading && Boolean(workspaceID)}
-          sandboxDaemonError={daemonRuntimesQuery.error}
-          listLoading={sandboxesQuery.isLoading}
-          listError={sandboxesQuery.error}
-          sortKey={sortKey}
-          selected={selected}
-          bulkPending={bulkPending}
-          bulkErrors={bulkErrors}
-          onRefresh={() => {
-            void statusQuery.refetch()
-            void sandboxesQuery.refetch()
-            void daemonRuntimesQuery.refetch()
-          }}
-          onSortChange={setSortKey}
-          onToggleOne={toggleOne}
-          onToggleAll={toggleAll}
-          onOpenDetail={(sandboxID) => navigate("runtime", { id: sandboxID })}
-          onClearBulkErrors={() => setBulkErrors([])}
-          onConfirmBulkKill={() => setConfirming(true)}
+    <AdminLayout activeMenu="settings" fullBleed>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as RuntimeTab)} className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={t("runtime.page.title")}
+          subtitleFor="runtime.page.title"
+          action={
+            <>
+              <SettingsTabs active="runtime" />
+              {tab === "local_device" && workspaceID && (
+                <Button onClick={() => setPairOpen(true)} data-testid="agent-daemon-pair-button">
+                  {t("runtime.agentDaemon.actions.pair", { defaultValue: "Pair a new device" })}
+                </Button>
+              )}
+            </>
+          }
         />
-      )}
+        <div className="flex h-10 shrink-0 items-center border-b border-line px-4">
+          <TabsList aria-label={t("runtime.page.title")}>
+            {TABS.map((id) => (
+              <TabsTrigger key={id} value={id} data-testid={`runtime-tab-${id.replace("_", "-")}`}>
+                {tabLabel[id]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
 
-      {tab === "local_device" && (
-        <section className="rounded-lg border border-line bg-surface p-4">
-          <LocalDeviceRuntimesPanel />
-        </section>
-      )}
+        <TabsContent value="local_device" className="mt-0">
+          {workspaceID && <LocalDeviceRuntimesPanel workspaceID={workspaceID} />}
+        </TabsContent>
 
-      {tab === "external" && <ExternalAgentPanel />}
+        <TabsContent value="sandbox" className="mt-0">
+          <CloudSandboxPanel
+            workspaceID={workspaceID}
+            status={statusQuery.data}
+            statusError={Boolean(statusQuery.error)}
+            cloudState={cloudState}
+            isAdmin={isAdmin}
+            bindings={activeBindings}
+            sandboxDaemonRuntimes={sandboxDaemonRuntimes}
+            sandboxDaemonLoading={daemonRuntimesQuery.isLoading && Boolean(workspaceID)}
+            sandboxDaemonError={daemonRuntimesQuery.error}
+            listLoading={sandboxesQuery.isLoading}
+            listError={sandboxesQuery.error}
+            sortKey={sortKey}
+            selected={selected}
+            bulkPending={bulkPending}
+            bulkErrors={bulkErrors}
+            onRefresh={() => {
+              void statusQuery.refetch()
+              void sandboxesQuery.refetch()
+              void daemonRuntimesQuery.refetch()
+            }}
+            onSortChange={setSortKey}
+            onToggleOne={toggleOne}
+            onToggleAll={toggleAll}
+            onOpenDetail={(sandboxID) => navigate("runtime", { id: sandboxID })}
+            onClearBulkErrors={() => setBulkErrors([])}
+            onConfirmBulkKill={() => setConfirming(true)}
+          />
+        </TabsContent>
+
+        <TabsContent value="external" className="mt-0 pt-4">
+          <p className="max-w-2xl text-sm text-fg">{t("runtime.external.body")}</p>
+        </TabsContent>
+        </div>
+      </Tabs>
+
+      {workspaceID && (
+        <PairDaemonDialog open={pairOpen} onClose={() => setPairOpen(false)} workspaceID={workspaceID} />
+      )}
 
       <ConfirmBulkKillDialog
         open={confirming}
@@ -312,37 +328,17 @@ function CloudSandboxPanel({
   onClearBulkErrors: () => void
   onConfirmBulkKill: () => void
 }) {
-  const { t } = useTranslation("admin")
-  const stateBody = cloudStateBody(t, cloudState, status)
   const showCredentialControl =
     cloudState !== "loading" && cloudState !== "unknown" && status?.profile !== "managed"
   const showInstances = !statusError && Boolean(workspaceID)
 
   return (
-    <section className="space-y-4">
-      <div className="rounded-lg border border-line bg-surface p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="rounded-md border border-line bg-surface-subtle p-2 text-fg-muted">
-              <Cloud className="h-4 w-4" strokeWidth={1.9} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-fg">
-                  {t("runtime.providers.sandbox.title")}
-                </h2>
-                <CloudStateBadge state={cloudState} />
-              </div>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-fg-muted">{stateBody}</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {showCredentialControl && (
-              <RuntimeCredentialCard workspaceID={workspaceID} isAdmin={isAdmin} variant="inline" />
-            )}
-          </div>
-        </div>
-      </div>
+    <div>
+      <RuntimeStatusBanner workspaceID={workspaceID} />
+
+      {showCredentialControl && (
+        <RuntimeCredentialCard workspaceID={workspaceID} isAdmin={isAdmin} className="mt-4" />
+      )}
 
       <CloudDaemonRuntimesPanel
         runtimes={sandboxDaemonRuntimes}
@@ -371,7 +367,36 @@ function CloudSandboxPanel({
           onConfirmBulkKill={onConfirmBulkKill}
         />
       ) : null}
-    </section>
+    </div>
+  )
+}
+
+/** 12px/500 section head with an optional control cluster on the right. */
+function SectionHead({ title, meta, children }: { title: string; meta?: number; children?: React.ReactNode }) {
+  return (
+    <div className="mt-6 flex min-h-7 items-center justify-between gap-3">
+      <h2 className="flex items-baseline gap-1.5 text-xs font-medium text-fg">
+        <span>{title}</span>
+        {meta !== undefined && <span className="font-normal tabular-nums text-fg-muted">{meta}</span>}
+      </h2>
+      {children && <div className="flex items-center gap-2">{children}</div>}
+    </div>
+  )
+}
+
+function LedgerSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="-mx-6">
+      <div className="h-7 border-b border-line" />
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line px-4">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -411,12 +436,10 @@ function CloudInstancesPanel({
   onConfirmBulkKill: () => void
 }) {
   const { t } = useTranslation("admin")
+  const fmtAgo = useRelativeTime()
   const checkLabelFor = useConnectivityCheckLabel()
   const [testingId, setTestingId] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{
-    bindingId: string
-    result: ConnectivityResult
-  } | null>(null)
+  const [testResult, setTestResult] = useState<{ bindingId: string; result: ConnectivityResult } | null>(null)
   const connTest = useSandboxConnectivityTest()
 
   function handleTestConnection(b: SandboxBinding) {
@@ -428,139 +451,116 @@ function CloudInstancesPanel({
         setTestResult({ bindingId: b.binding_id, result })
         setTestingId(null)
       },
-      () => {
-        setTestingId(null)
-      },
+      () => setTestingId(null),
     )
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <ErrorState
-        title={t("runtime.list.errors.loadFailed")}
-        description={error instanceof Error ? error.message : String(error)}
-        onRetry={onRefresh}
-      />
-    )
-  }
+  const title = t("runtime.cloud.instances.title")
 
   return (
-    <section className="rounded-lg border border-line bg-surface">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
-        <div>
-          <h3 className="text-base font-medium text-fg">{t("runtime.cloud.instances.title")}</h3>
-          <p className="mt-0.5 text-sm text-fg-subtle">
-            {t("runtime.list.summary", { count: bindings.length })}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-fg-subtle">
-            {t("runtime.list.sort.label")}
-            <select
-              className="rounded border border-line bg-surface px-2 py-1 text-sm"
+    <section>
+      <SectionHead title={title} meta={loading || error ? undefined : bindings.length}>
+        {!loading && !error && bindings.length > 0 && (
+          <>
+            <Select
               value={sortKey}
               onChange={(e) => onSortChange(e.target.value as SortKey)}
+              aria-label={t("runtime.list.sort.label")}
+              wrapperClassName="w-[180px]"
+              className="h-6 text-xs"
               data-testid="runtime-sort"
             >
               <option value="last_active">{t("runtime.list.sort.lastActive")}</option>
               <option value="created_at">{t("runtime.list.sort.createdAt")}</option>
               <option value="agent">{t("runtime.list.sort.agent")}</option>
-            </select>
-          </label>
-          <Button
-            aria-label={t("runtime.list.actions.bulkKill", { count: selected.size })}
-            className="h-8 w-8 rounded-full p-0 text-danger hover:bg-danger-subtle hover:text-danger-emphasis disabled:text-fg-faint"
-            size="icon"
-            title={t("runtime.list.actions.bulkKill", { count: selected.size })}
-            variant="ghost"
-            disabled={selected.size === 0 || bulkPending}
-            onClick={onConfirmBulkKill}
-            data-testid="runtime-bulk-kill"
-          >
-            <Skull className="h-3.5 w-3.5" strokeWidth={2} />
-          </Button>
-        </div>
-      </div>
+            </Select>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selected.size === 0 || bulkPending}
+              onClick={onConfirmBulkKill}
+              data-testid="runtime-bulk-kill"
+            >
+              <Skull strokeWidth={1.5} aria-hidden="true" />
+              {t("runtime.list.actions.bulkKill", { count: selected.size })}
+            </Button>
+          </>
+        )}
+      </SectionHead>
 
       {bulkErrors.length > 0 && (
-        <div className="mx-4 mt-3 rounded-md border border-danger-border bg-danger-subtle/70 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-danger-emphasis">
-              {t("runtime.list.errors.bulkKillPartial")} ({bulkErrors.length})
+        <div className="mt-2 text-sm" role="alert">
+          <div className="flex h-7 items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate font-medium text-fg">
+              {t("runtime.list.errors.bulkKillPartial")}
+              <span className="font-normal tabular-nums text-fg-muted"> {bulkErrors.length}</span>
             </span>
-            <button
-              type="button"
-              onClick={onClearBulkErrors}
-              className="text-xs text-danger-emphasis hover:underline"
-              data-testid="runtime-bulk-error-dismiss"
-            >
+            <Button variant="ghost" size="sm" onClick={onClearBulkErrors} data-testid="runtime-bulk-error-dismiss">
               {t("runtime.list.errors.bulkKillDismiss")}
-            </button>
+            </Button>
           </div>
-          <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-danger-emphasis">
+          <ul className="m-0 max-h-40 list-none overflow-y-auto p-0">
             {bulkErrors.map((e) => (
-              <li key={e.sandboxID} className="flex items-start gap-2 font-mono">
-                <span className="shrink-0 rounded bg-danger-subtle/70 px-1.5 py-0.5 text-xs text-danger-emphasis">
-                  {e.status}
-                </span>
-                <span className="shrink-0 text-danger-emphasis">{e.sandboxID}</span>
-                <span className="text-danger-emphasis">{e.message}</span>
+              <li key={e.sandboxID} className="flex h-8 items-center gap-2 border-t border-line font-mono text-xs">
+                <span className="w-8 shrink-0 tabular-nums text-fg-muted">{e.status}</span>
+                <span className="shrink-0 text-fg">{e.sandboxID}</span>
+                <span className="min-w-0 truncate text-fg-muted">{e.message}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {bindings.length === 0 ? (
-        <div className="px-4 py-10 text-center">
-          <p className="text-sm font-medium text-fg">{t("runtime.cloud.instances.emptyTitle")}</p>
-          <p className="mt-1 text-xs text-fg-subtle">{t("runtime.cloud.instances.emptyBody")}</p>
-        </div>
+      {loading ? (
+        <LedgerSkeleton />
+      ) : error ? (
+        <ErrorState
+          title={t("runtime.list.errors.loadFailed")}
+          description={error instanceof Error ? error.message : String(error)}
+          onRetry={onRefresh}
+        />
+      ) : bindings.length === 0 ? (
+        <EmptyState
+          title={t("runtime.cloud.instances.emptyTitle")}
+          description={t("runtime.cloud.instances.emptyBody")}
+          className="py-10"
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[36px]">
-                <input
-                  type="checkbox"
-                  aria-label={t("runtime.list.table.selectAll")}
-                  checked={selected.size > 0 && selected.size === bindings.length}
-                  ref={(el) => {
-                    if (el) el.indeterminate = selected.size > 0 && selected.size < bindings.length
-                  }}
-                  onChange={onToggleAll}
-                  data-testid="runtime-select-all"
-                />
-              </TableHead>
-              <TableHead>{t("runtime.list.table.instance")}</TableHead>
-              <TableHead>{t("runtime.list.table.agent")}</TableHead>
-              <TableHead>{t("runtime.list.table.image")}</TableHead>
-              <TableHead>{t("runtime.list.table.status")}</TableHead>
-              <TableHead>{t("runtime.list.table.lastActive")}</TableHead>
-              <TableHead>{t("runtime.list.table.createdAt")}</TableHead>
-              <TableHead className="w-[100px]">{t("runtime.list.table.actions")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <Ledger columns={INSTANCE_COLUMNS} className="-mx-6" role="listbox" aria-label={title} aria-multiselectable>
+          <LedgerHeader>
+            <span className="flex items-center">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-accent"
+                aria-label={t("runtime.list.table.selectAll")}
+                checked={selected.size > 0 && selected.size === bindings.length}
+                ref={(el) => {
+                  if (el) el.indeterminate = selected.size > 0 && selected.size < bindings.length
+                }}
+                onChange={onToggleAll}
+                data-testid="runtime-select-all"
+              />
+            </span>
+            <span>{t("runtime.list.table.instance")}</span>
+            <span>{t("runtime.list.table.agent")}</span>
+            <span>{t("runtime.list.table.status")}</span>
+            <span>{t("runtime.list.table.image")}</span>
+            <span className="text-right">{t("runtime.list.table.lastActive")}</span>
+            <span className="text-right">{t("runtime.list.table.createdAt")}</span>
+            <span />
+          </LedgerHeader>
+          <ul className="m-0 list-none p-0">
             {bindings.map((b) => {
               const isTesting = testingId === b.binding_id
               const canTest = isAdmin && b.status_kind !== "terminal" && Boolean(b.agent_id)
               const showResult = testResult?.bindingId === b.binding_id
+              const rowLabel = t("runtime.list.table.rowLabel", { agent: b.agent_id ?? b.sandbox_id })
               return (
                 <React.Fragment key={b.binding_id}>
-                  <TableRow
+                  <LedgerRow
+                    selected={selected.has(b.binding_id)}
                     onClick={() => onOpenDetail(b.sandbox_id)}
-                    tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         const target = e.target as HTMLElement
@@ -569,84 +569,54 @@ function CloudInstancesPanel({
                         onOpenDetail(b.sandbox_id)
                       }
                     }}
-                    role="link"
-                    aria-label={t("runtime.list.table.rowLabel", {
-                      agent: b.agent_id ?? b.sandbox_id,
-                    })}
-                    className="cursor-pointer hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
+                    aria-label={rowLabel}
+                    className="cursor-pointer"
                     data-testid={`runtime-row-${b.binding_id}`}
                   >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <span className="flex items-center" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
+                        className="h-3.5 w-3.5 accent-accent"
                         aria-label={t("runtime.list.table.selectOne", { id: b.sandbox_id })}
                         checked={selected.has(b.binding_id)}
                         onChange={() => onToggleOne(b.binding_id)}
-                        onClick={(e) => e.stopPropagation()}
                         data-testid={`runtime-select-${b.binding_id}`}
                       />
-                    </TableCell>
-                    <TableCell
-                      className="max-w-[180px] truncate font-mono text-sm text-fg-emphasis"
-                      title={b.sandbox_id}
-                    >
-                      {b.sandbox_id}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-fg-subtle">
-                      {b.agent_id ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-fg-muted">{b.template_id}</TableCell>
-                    <TableCell>
-                      <SandboxStatusBadge kind={b.status_kind} status={b.status} />
-                    </TableCell>
-                    <TableCell>
-                      <span title={b.last_active_at} className="text-sm text-fg-muted">
-                        {relativeAgo(b.last_active_at)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span title={b.created_at} className="text-sm text-fg-muted">
-                        {relativeAgo(b.created_at)}
-                      </span>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 px-2 text-sm"
-                        disabled={
-                          !canTest ||
-                          isTesting ||
-                          (testingId !== null && testingId !== b.binding_id)
-                        }
+                    </span>
+                    <span className="truncate font-mono text-xs text-fg" title={b.sandbox_id}>{b.sandbox_id}</span>
+                    <LedgerId>{b.agent_id ?? "—"}</LedgerId>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <StatusIcon status={SANDBOX_STATUS[b.status_kind]} />
+                      <span className="truncate">{b.status}</span>
+                    </span>
+                    <span className="truncate text-xs text-fg-muted" title={b.template_id}>{b.template_id}</span>
+                    <span className="truncate text-right text-xs text-fg-muted" title={b.last_active_at}>{fmtAgo(b.last_active_at)}</span>
+                    <span className="truncate text-right text-xs text-fg-muted" title={b.created_at}>{fmtAgo(b.created_at)}</span>
+                    <RowActions>
+                      <ActionIconButton
+                        icon={Zap}
+                        label={isTesting ? t("runtime.connectivity.testing") : t("runtime.connectivity.testButton")}
+                        busy={isTesting}
+                        disabled={!canTest || (testingId !== null && testingId !== b.binding_id)}
                         onClick={() => handleTestConnection(b)}
                         data-testid={`runtime-test-conn-${b.binding_id}`}
-                      >
-                        <Zap className="h-3 w-3" strokeWidth={2} />
-                        {isTesting
-                          ? t("runtime.connectivity.testing")
-                          : t("runtime.connectivity.testButton")}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                      />
+                    </RowActions>
+                  </LedgerRow>
                   {showResult && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={8} className="p-0">
-                        <div className="border-t border-line-muted px-4 py-3">
-                          <ConnectivityResultPanel
-                            result={testResult.result}
-                            checkLabelFor={checkLabelFor}
-                            onDismiss={() => setTestResult(null)}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <li className="border-b border-line px-4 pl-[42px]">
+                      <ConnectivityResultPanel
+                        result={testResult.result}
+                        checkLabelFor={checkLabelFor}
+                        onDismiss={() => setTestResult(null)}
+                      />
+                    </li>
                   )}
                 </React.Fragment>
               )
             })}
-          </TableBody>
-        </Table>
+          </ul>
+        </Ledger>
       )}
     </section>
   )
@@ -664,168 +634,90 @@ function CloudDaemonRuntimesPanel({
   onRefresh: () => void
 }) {
   const { t } = useTranslation("admin")
+  const fmtAgo = useRelativeTime()
+  const title = t("runtime.cloud.daemonRuntimes.title", { defaultValue: "Sandbox daemons" })
 
   if (loading) {
     return (
-      <section className="rounded-lg border border-line bg-surface p-4">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="mt-2 h-8 w-full" />
+      <section>
+        <SectionHead title={title} />
+        <LedgerSkeleton rows={2} />
       </section>
     )
   }
 
   if (error) {
     return (
-      <ErrorState
-        title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", {
-          defaultValue: "Failed to load sandbox daemons",
-        })}
-        description={error instanceof Error ? error.message : String(error)}
-        onRetry={onRefresh}
-      />
+      <section>
+        <SectionHead title={title} />
+        <ErrorState
+          title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "Failed to load sandbox daemons" })}
+          description={error instanceof Error ? error.message : String(error)}
+          onRetry={onRefresh}
+        />
+      </section>
     )
   }
 
   if (runtimes.length === 0) return null
 
   return (
-    <section className="rounded-lg border border-line bg-surface">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-muted px-4 py-3">
-        <div>
-          <h3 className="text-base font-medium text-fg">
-            {t("runtime.cloud.daemonRuntimes.title", { defaultValue: "Sandbox daemons" })}
-          </h3>
-          <p className="mt-0.5 max-w-3xl text-sm leading-relaxed text-fg-subtle">
-            {t("runtime.cloud.daemonRuntimes.description", {
-              count: runtimes.length,
-              defaultValue:
-                "parsar-daemon processes running inside cloud sandboxes — these belong to the sandbox, not a physical device.",
-            })}
-          </p>
-        </div>
-        <Button size="sm" variant="outline" onClick={onRefresh}>
-          {t("runtime.list.actions.refresh", { defaultValue: "Refresh" })}
-        </Button>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              {t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}
-            </TableHead>
-            <TableHead>
-              {t("runtime.cloud.daemonRuntimes.table.agent", { defaultValue: "Agent" })}
-            </TableHead>
-            <TableHead>
-              {t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}
-            </TableHead>
-            <TableHead>
-              {t("runtime.cloud.daemonRuntimes.table.agentEngines", {
-                defaultValue: "Agent engines",
-              })}
-            </TableHead>
-            <TableHead>
-              {t("runtime.cloud.daemonRuntimes.table.status", { defaultValue: "Status" })}
-            </TableHead>
-            <TableHead>
-              {t("runtime.cloud.daemonRuntimes.table.heartbeat", {
-                defaultValue: "Last heartbeat",
-              })}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {runtimes.map((runtime) => (
-            <TableRow key={runtime.id} data-testid={`sandbox-daemon-runtime-row-${runtime.id}`}>
-              <TableCell className="font-mono text-sm text-fg-emphasis">
-                <div className="space-y-1">
-                  <div>{runtime.name || shortID(runtime.id)}</div>
-                  <div className="text-xs text-fg-subtle">{shortID(runtime.id)}</div>
-                </div>
-              </TableCell>
-              <TableCell className="font-mono text-xs text-fg-subtle">
-                {runtimeConfigText(runtime, "agent_id") || "—"}
-              </TableCell>
-              <TableCell className="text-sm text-fg-muted">
-                {runtimeConfigText(runtime, "sandbox_kind") || runtime.provider}
-              </TableCell>
-              <TableCell className="text-sm text-fg-muted">
-                {formatRuntimeAgentKinds(runtime)}
-              </TableCell>
-              <TableCell>
-                <SandboxRuntimeStatus runtime={runtime} />
-              </TableCell>
-              <TableCell
-                className="text-sm text-fg-muted"
-                title={runtime.last_heartbeat_at ?? undefined}
-              >
-                {runtime.last_heartbeat_at ? relativeAgo(runtime.last_heartbeat_at) : "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <section>
+      <SectionHead title={title} meta={runtimes.length} />
+      <Ledger columns={DAEMON_COLUMNS} className="-mx-6" role="listbox" aria-label={title}>
+        <LedgerHeader>
+          <span />
+          <span>{t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}</span>
+          <span>{t("runtime.cloud.daemonRuntimes.table.agent", { defaultValue: "Agent" })}</span>
+          <span>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}</span>
+          <span>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent engines" })}</span>
+          <span className="text-right">{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "Last heartbeat" })}</span>
+        </LedgerHeader>
+        <ul className="m-0 list-none p-0">
+          {runtimes.map((runtime) => {
+            const state = sandboxDaemonState(runtime)
+            return (
+              <LedgerRow key={runtime.id} data-testid={`sandbox-daemon-runtime-row-${runtime.id}`} title={runtime.id}>
+                <StatusIcon status={state.status} title={t(state.labelKey, { defaultValue: state.fallback })} />
+                <span className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="truncate font-medium">{runtime.name || shortID(runtime.id)}</span>
+                  {state.status !== "completed" && (
+                    <span className="shrink-0 text-xs text-fg-muted">· {t(state.labelKey, { defaultValue: state.fallback })}</span>
+                  )}
+                </span>
+                <LedgerId>{runtimeConfigText(runtime, "agent_id") || "—"}</LedgerId>
+                <span className="truncate text-xs text-fg-muted">{runtimeConfigText(runtime, "sandbox_kind") || runtime.provider}</span>
+                <span className="truncate text-xs text-fg-muted">{formatRuntimeAgentKinds(runtime)}</span>
+                <span className="truncate text-right text-xs text-fg-muted" title={runtime.last_heartbeat_at ?? undefined}>
+                  {fmtAgo(runtime.last_heartbeat_at)}
+                </span>
+              </LedgerRow>
+            )
+          })}
+        </ul>
+      </Ledger>
     </section>
   )
 }
 
-function SandboxRuntimeStatus({ runtime }: { runtime: Runtime }) {
-  const { t } = useTranslation("admin")
-  const expired = isSandboxPairingExpired(runtime)
-  if (runtime.liveness === "pending_pairing") {
-    return (
-      <div className="space-y-1">
-        <Badge variant={expired ? "destructive" : "warning"}>
-          {expired
-            ? t("runtime.cloud.daemonRuntimes.status.timedOut", {
-                defaultValue: "Startup timed out",
-              })
-            : t("runtime.cloud.daemonRuntimes.status.preparing", { defaultValue: "Preparing" })}
-        </Badge>
-        <p className="max-w-sm text-xs leading-relaxed text-fg-subtle">
-          {expired
-            ? t("runtime.cloud.daemonRuntimes.status.timedOutDetail", {
-                defaultValue:
-                  "The sandbox did not pair before the startup token expired. Retry provisioning from the Agent detail.",
-              })
-            : t("runtime.cloud.daemonRuntimes.status.preparingDetail", {
-                defaultValue:
-                  "Starting the sandbox and waiting for parsar-daemon to pair. First local Docker startup may include pulling the sandbox image.",
-              })}
-        </p>
-      </div>
-    )
-  }
-  return <RuntimeLivenessBadge runtime={runtime} />
-}
+type DaemonStateKey =
+  | "runtime.cloud.daemonRuntimes.status.timedOut"
+  | "runtime.cloud.daemonRuntimes.status.preparing"
+  | "runtime.agentDaemon.status.online"
+  | "runtime.agentDaemon.status.offline"
+  | "runtime.agentDaemon.status.error"
+  | "runtime.agentDaemon.status.pending_pairing"
 
-function RuntimeLivenessBadge({ runtime }: { runtime: Runtime }) {
-  const { t } = useTranslation("admin")
-  switch (runtime.liveness) {
-    case "online":
-      return (
-        <Badge variant="success" dot>
-          {t("runtime.agentDaemon.status.online", { defaultValue: "Online" })}
-        </Badge>
-      )
-    case "pending_pairing":
-      return (
-        <Badge variant="warning">
-          {t("runtime.agentDaemon.status.pending_pairing", { defaultValue: "Pairing" })}
-        </Badge>
-      )
-    case "error":
-      return (
-        <Badge variant="destructive">
-          {t("runtime.agentDaemon.status.error", { defaultValue: "Error" })}
-        </Badge>
-      )
-    default:
-      return (
-        <Badge variant="neutral">
-          {t("runtime.agentDaemon.status.offline", { defaultValue: "Offline" })}
-        </Badge>
-      )
+function sandboxDaemonState(runtime: Runtime): { status: StatusKind; labelKey: DaemonStateKey; fallback: string } {
+  if (runtime.liveness === "pending_pairing") {
+    return isSandboxPairingExpired(runtime)
+      ? { status: "failed", labelKey: "runtime.cloud.daemonRuntimes.status.timedOut", fallback: "Startup timed out" }
+      : { status: "running", labelKey: "runtime.cloud.daemonRuntimes.status.preparing", fallback: "Preparing" }
+  }
+  return {
+    status: LIVENESS_STATUS[runtime.liveness],
+    labelKey: `runtime.agentDaemon.status.${runtime.liveness}` as DaemonStateKey,
+    fallback: runtime.liveness,
   }
 }
 
@@ -841,121 +733,8 @@ function formatRuntimeAgentKinds(runtime: Runtime): string {
   return labels.length > 0 ? labels.join(" · ") : "—"
 }
 
-function formatAgentKindLabel(kind: string): string {
-  switch (kind) {
-    case "claude_code":
-      return "Claude Code"
-    case "opencode":
-      return "OpenCode"
-    case "codex":
-      return "Codex"
-    case "pi":
-      return "PI Agent"
-    default:
-      return kind
-  }
-}
-
 function shortID(id: string): string {
   return id.length > 12 ? id.slice(0, 12) : id
-}
-
-function RuntimeTabs({ tab, onChange }: { tab: RuntimeTab; onChange: (next: RuntimeTab) => void }) {
-  const { t } = useTranslation("admin")
-  return (
-    <div className="mb-4 border-b border-line" role="tablist" aria-label={t("runtime.page.title")}>
-      <div className="flex flex-wrap items-end gap-1">
-        <RuntimeTabButton
-          active={tab === "local_device"}
-          onClick={() => onChange("local_device")}
-          testId="runtime-tab-local-device"
-        >
-          {t("runtime.providers.localDevice.title", { defaultValue: "Local Device" })}
-        </RuntimeTabButton>
-        <RuntimeTabButton
-          active={tab === "sandbox"}
-          onClick={() => onChange("sandbox")}
-          testId="runtime-tab-sandbox"
-        >
-          {t("runtime.providers.sandbox.title")}
-        </RuntimeTabButton>
-        <RuntimeTabButton
-          active={tab === "external"}
-          onClick={() => onChange("external")}
-          testId="runtime-tab-external"
-        >
-          {t("runtime.providers.external.title")}
-        </RuntimeTabButton>
-      </div>
-    </div>
-  )
-}
-
-function RuntimeTabButton({
-  active,
-  onClick,
-  testId,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  testId: string
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      data-testid={testId}
-      className={
-        "mb-[-1px] inline-flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong " +
-        (active
-          ? "border-line-strong text-fg"
-          : "border-transparent text-fg-subtle hover:text-fg-emphasis")
-      }
-    >
-      {children}
-    </button>
-  )
-}
-
-function CloudStateBadge({ state }: { state: CloudState }) {
-  const { t } = useTranslation("admin")
-  const variantByState: Record<CloudState, BadgeVariant> = {
-    loading: "neutral",
-    notConfigured: "warning",
-    ready: "success",
-    error: "destructive",
-    unknown: "warning",
-  }
-  return (
-    <Badge variant={variantByState[state]} dot={state === "ready"}>
-      {t(`runtime.cloud.state.${state}.label`)}
-    </Badge>
-  )
-}
-
-function ExternalAgentPanel() {
-  const { t } = useTranslation("admin")
-  return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <div className="flex items-start gap-3">
-        <div className="rounded-md border border-line bg-surface-subtle p-2 text-fg-muted">
-          <PlugZap className="h-4 w-4" strokeWidth={1.9} />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-fg">
-            {t("runtime.providers.external.title")}
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-fg-muted">
-            {t("runtime.external.body")}
-          </p>
-        </div>
-      </div>
-    </section>
-  )
 }
 
 function ConfirmBulkKillDialog({
@@ -976,58 +755,51 @@ function ConfirmBulkKillDialog({
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   return (
-    <Dialog
+    <AlertDialog
       open={open}
       onOpenChange={(next) => {
         if (!next && !loading) onCancel()
       }}
     >
-      <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-        <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
-            <Skull className="h-4 w-4" />
-          </div>
-          <div className="space-y-1.5">
-            <DialogTitle className="text-sm">
-              {t("runtime.list.confirmBulkKill.title", { count })}
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {t("runtime.list.confirmBulkKill.description")}
-            </DialogDescription>
-            {preview.length > 0 && (
-              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
-                {preview.map((id) => (
-                  <li key={id} className="font-mono">
-                    {id}
-                  </li>
-                ))}
-                {count > preview.length && (
-                  <li className="list-none text-fg-faint">
-                    {t("runtime.list.confirmBulkKill.andMore", { count: count - preview.length })}
-                  </li>
-                )}
-              </ul>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("runtime.list.confirmBulkKill.title", { count })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("runtime.list.confirmBulkKill.description")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        {preview.length > 0 && (
+          <ul className="m-0 list-none p-0">
+            {preview.map((id) => (
+              <li key={id} className="flex h-7 items-center border-b border-line font-mono text-xs text-fg last:border-b-0">
+                {id}
+              </li>
+            ))}
+            {count > preview.length && (
+              <li className="flex h-7 items-center text-xs text-fg-muted">
+                {t("runtime.list.confirmBulkKill.andMore", { count: count - preview.length })}
+              </li>
             )}
-          </div>
-        </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>
-            {tc("actions.cancel")}
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={onConfirm}
-            disabled={loading}
-            data-testid="runtime-confirm-bulk-kill"
-          >
-            {loading
-              ? t("runtime.list.actions.killingPending", { count })
-              : t("runtime.list.actions.killN", { count })}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </ul>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel asChild>
+            <Button variant="outline" disabled={loading}>{tc("actions.cancel")}</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button
+              variant="destructive"
+              onClick={(e) => { e.preventDefault(); onConfirm() }}
+              disabled={loading}
+              data-testid="runtime-confirm-bulk-kill"
+            >
+              {loading && <Loader2 className="animate-spin" />}
+              {loading
+                ? t("runtime.list.actions.killingPending", { count })
+                : t("runtime.list.actions.killN", { count })}
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
@@ -1047,19 +819,3 @@ function resolveCloudState({
   return status.available ? "ready" : "error"
 }
 
-function cloudStateBody(
-  t: TFunction<"admin">,
-  state: CloudState,
-  status: RuntimeStatus | undefined,
-): string {
-  const count = status?.sandbox_agent_count ?? 0
-  const value = status?.credential_masked ?? ""
-  if (state === "ready") return t("runtime.cloud.state.ready.body", { count })
-  if (state === "error") {
-    if (status?.profile === "managed") return t("runtime.cloud.state.error.managedBody")
-    return value
-      ? t("runtime.cloud.state.error.bodyWithCredential", { value })
-      : t("runtime.cloud.state.error.body")
-  }
-  return t(`runtime.cloud.state.${state}.body`)
-}

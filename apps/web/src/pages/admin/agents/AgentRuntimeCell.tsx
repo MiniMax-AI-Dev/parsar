@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
-import * as Tooltip from "@radix-ui/react-tooltip"
 
-import { Badge } from "../../../components/ui/badge"
+import { cn } from "../../../lib/utils"
 import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import type { Agent } from "../../../lib/api-types"
 
@@ -15,53 +14,32 @@ function runtimeLivenessTone(agent: Agent): LivenessTone | null {
   return "offline"
 }
 
-function StatusDot({ tone, title }: { tone: LivenessTone; title?: string }) {
-  const color = tone === "online"
-    ? "bg-success"
-    : tone === "pending"
-      ? "bg-warning"
-      : "bg-surface-muted"
-
-  return (
-    <span
-      className={`inline-block h-1.5 w-1.5 rounded-full ${color}`}
-      title={title}
-      aria-hidden="true"
-    />
-  )
+/* State lives in the 6px dot (the Badge dot idiom); the words stay in ink. */
+const DOT: Record<LivenessTone, string> = {
+  online: "bg-status-completed",
+  pending: "bg-status-running",
+  offline: "bg-status-queued",
 }
 
-function TruncatedName({
-  display,
-  full,
-  className,
-  maxWidthClass = "max-w-[160px]",
+function RuntimeLine({
+  tone,
+  kind,
+  name,
+  mono,
+  title,
 }: {
-  display: string
-  full?: string
-  className?: string
-  maxWidthClass?: string
+  tone: LivenessTone
+  kind?: string
+  name: string
+  mono?: boolean
+  title?: string
 }) {
-  const tip = full ?? display
   return (
-    <Tooltip.Provider delayDuration={150}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <span className={`${maxWidthClass} cursor-help truncate ${className ?? ""}`}>
-            {display}
-          </span>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            side="top"
-            className="z-50 max-w-sm break-all rounded-md border border-line bg-surface px-3 py-2 text-sm leading-relaxed text-fg-muted shadow-lg"
-          >
-            {tip}
-            <Tooltip.Arrow className="fill-white" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
+    <span className="flex min-w-0 items-center gap-1.5 text-sm text-fg" title={title}>
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT[tone])} aria-hidden="true" />
+      {kind && <span className="shrink-0 text-xs text-fg-muted">{kind} ·</span>}
+      <span className={cn("min-w-0 truncate", mono && "font-mono text-xs")}>{name}</span>
+    </span>
   )
 }
 
@@ -79,48 +57,17 @@ export function AgentRuntimeCell({ agent }: { agent: Agent }) {
           : status === "spawning" || status === "renewing"
             ? "pending"
             : "offline"
-
-      return (
-        <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-          <span className="font-medium text-fg-subtle">Sandbox</span>
-          <span className="text-fg-faint">·</span>
-          <TruncatedName
-            display={fullId}
-            className="font-mono text-fg-muted"
-            maxWidthClass="max-w-[260px]"
-          />
-          <StatusDot tone={tone} title={status || undefined} />
-        </span>
-      )
+      return <RuntimeLine tone={tone} kind="Sandbox" name={fullId} mono title={[fullId, status].filter(Boolean).join(" · ")} />
     }
-
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-subtle">
-        <span className="font-medium">Sandbox</span>
-        <span className="text-fg-faint">·</span>
-        <span>{t("agents.runtimeCell.pending")}</span>
-        <StatusDot tone="offline" />
-      </span>
-    )
+    return <RuntimeLine tone="offline" kind="Sandbox" name={t("agents.runtimeCell.pending")} />
   }
 
   const name = (agent.runtime_name ?? "").trim()
   const runtimeID = (agent.runtime_id ?? "").trim()
   if (placement === "local" && runtimeID && name) {
     const tone = runtimeLivenessTone(agent) ?? "offline"
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-        <span className="font-medium text-fg-subtle">Local</span>
-        <span className="text-fg-faint">·</span>
-        <TruncatedName display={name} />
-        <StatusDot tone={tone} title={agent.runtime_liveness || undefined} />
-      </span>
-    )
+    return <RuntimeLine tone={tone} kind="Local" name={name} title={[name, agent.runtime_liveness].filter(Boolean).join(" · ")} />
   }
 
-  return (
-    <Badge variant="warning" dot className="font-normal">
-      {t("agents.runtimeCell.unbound")}
-    </Badge>
-  )
+  return <RuntimeLine tone="pending" name={t("agents.runtimeCell.unbound")} />
 }

@@ -1,9 +1,6 @@
 import { type ReactNode, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  Bot,
-  Plus,
-} from "lucide-react"
+import { Bot, Plus, Search, Wrench } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
@@ -12,7 +9,9 @@ import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimel
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
+import { Input } from "../../components/ui/input"
 import { Skeleton } from "../../components/ui/skeleton"
+import { StatusIcon } from "../../components/ui/status-icon"
 import {
   Tabs,
   TabsContent,
@@ -44,6 +43,7 @@ import { AgentDynamicsTab } from "./agents/AgentDynamicsTab"
 import { AgentsListTable } from "./agents/AgentsListTable"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 import { DeleteAgentDialog } from "./agents/DeleteAgentDialog"
+import { DetailSection } from "./agents/DetailSection"
 
 function usePendingCapability(workspaceID: string | null) {
   const id = new URLSearchParams(window.location.search).get("pendingCapability")
@@ -52,12 +52,32 @@ function usePendingCapability(workspaceID: string | null) {
   return { id, capability }
 }
 
+/**
+ * One-line notice under the topbar: a 14px icon (state lives there), ink
+ * text, an optional control on the right. A hairline, never a tinted box.
+ */
+function InlineNotice({ icon, children, action }: { icon: ReactNode; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-line px-4 py-1.5 text-sm text-fg" role="status">
+      {icon}
+      <span className="min-w-0 flex-1">{children}</span>
+      {action}
+    </div>
+  )
+}
+
+function SuccessNotice({ children }: { children: ReactNode }) {
+  return <InlineNotice icon={<StatusIcon status="completed" />}>{children}</InlineNotice>
+}
+
 function PendingCapabilityBanner({ children, onCancel, cancelLabel }: { children: ReactNode; onCancel: () => void; cancelLabel: string }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-info-border bg-info-subtle px-3 py-2 text-sm text-info-emphasis">
-      <span>{children}</span>
-      <Button variant="outline" size="sm" onClick={onCancel}>{cancelLabel}</Button>
-    </div>
+    <InlineNotice
+      icon={<Wrench className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />}
+      action={<Button variant="outline" size="sm" onClick={onCancel}>{cancelLabel}</Button>}
+    >
+      {children}
+    </InlineNotice>
   )
 }
 
@@ -99,6 +119,7 @@ export function AgentsPage() {
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
+  const pageTitle = t("agents.page.title")
 
   async function startChatWith(a: Agent) {
     if (!wid || chatPendingID) return
@@ -114,83 +135,96 @@ export function AgentsPage() {
   }
 
   return (
-    <AdminLayout activeMenu="agents">
-      <PageHeader
-        title={t("agents.page.title")}
-        description={t("agents.page.description")}
-        action={
-          <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" strokeWidth={2} /> {t("agents.actions.create")}
-          </Button>
-        }
-      />
-      {toast && (
-        <div className="mb-4 rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
-          {toast}
-        </div>
-      )}
-      {pendingCapability.id && (
-        <PendingCapabilityBanner
-          cancelLabel={t("agents.pendingCapability.cancel")}
-          onCancel={() => navigate("agents", { pendingCapability: null })}
-        >
-          {pendingCapability.capability
-            ? t("agents.pendingCapability.banner", { name: pendingCapability.capability.name, source: pendingCapability.capability.source_workspace_name ?? "—" })
-            : t("agents.pendingCapability.loading")}
-        </PendingCapabilityBanner>
-      )}
-      {!wid ? (
-        <ScopeRequiredState scope="workspace" resourceName={t("agents.page.title")} />
-      ) : query.isLoading ? (
-        <AgentsLoadingSkeleton />
-      ) : err ? (
-        <ErrorState
-          title={
-            isUnreachable
-              ? t("agents.loadError.unreachable.title")
-              : t("agents.loadError.title")
-          }
-          description={
-            isUnreachable
-              ? t("agents.loadError.unreachable.description")
-              : err instanceof Error
-                ? err.message
-                : t("agents.loadError.description")
-          }
-          hint={
-            isUnreachable
-              ? t("agents.loadError.unreachable.hint")
-              : t("agents.loadError.hint")
-          }
-          onRetry={() => void query.refetch()}
-        />
-      ) : agents.length === 0 ? (
-        <EmptyState
-          icon={Bot}
-          title={t("agents.empty.title")}
-          description={t("agents.empty.description")}
+    <AdminLayout activeMenu="agents" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="agents.page.title"
           action={
-            <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> {t("agents.actions.create")}
-            </Button>
+            <>
+              <div className="relative w-72">
+                <Search
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  placeholder={t("agents.search.placeholder")}
+                  aria-label={t("agents.search.placeholder")}
+                  className="pl-7"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                />
+              </div>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus strokeWidth={1.5} aria-hidden="true" />
+                {t("agents.actions.create")}
+              </Button>
+            </>
           }
         />
-      ) : (
-        <AgentsListTable
-          agents={agents}
-          models={models}
-          keyword={keyword}
-          chatPendingID={chatPendingID}
-          deletePending={deleteMut.isPending}
-          formatRelativeTime={fmtAgo}
-          onKeywordChange={setKeyword}
-          onOpenAgent={(agent) => navigate("agents", { id: agent.id })}
-          onChat={(agent) => void startChatWith(agent)}
-          onEdit={setEditAgent}
-          onClone={setCloneAgent}
-          onDelete={setDeleteTarget}
-        />
-      )}
+        {toast && <SuccessNotice>{toast}</SuccessNotice>}
+        {pendingCapability.id && (
+          <PendingCapabilityBanner
+            cancelLabel={t("agents.pendingCapability.cancel")}
+            onCancel={() => navigate("agents", { pendingCapability: null })}
+          >
+            {pendingCapability.capability
+              ? t("agents.pendingCapability.banner", { name: pendingCapability.capability.name, source: pendingCapability.capability.source_workspace_name ?? "—" })
+              : t("agents.pendingCapability.loading")}
+          </PendingCapabilityBanner>
+        )}
+        {!wid ? (
+          <div className="px-6"><ScopeRequiredState scope="workspace" resourceName={pageTitle} /></div>
+        ) : query.isLoading ? (
+          <AgentsLoadingSkeleton />
+        ) : err ? (
+          <div className="px-6 pt-6">
+            <ErrorState
+              title={
+                isUnreachable
+                  ? t("agents.loadError.unreachable.title")
+                  : t("agents.loadError.title")
+              }
+              description={
+                isUnreachable
+                  ? t("agents.loadError.unreachable.description")
+                  : err instanceof Error
+                    ? err.message
+                    : t("agents.loadError.description")
+              }
+              hint={
+                isUnreachable
+                  ? t("agents.loadError.unreachable.hint")
+                  : t("agents.loadError.hint")
+              }
+              onRetry={() => void query.refetch()}
+            />
+          </div>
+        ) : agents.length === 0 ? (
+          <EmptyState
+            icon={Bot}
+            title={t("agents.empty.title")}
+            description={t("agents.empty.description")}
+          />
+        ) : (
+          <AgentsListTable
+            agents={agents}
+            models={models}
+            keyword={keyword}
+            chatPendingID={chatPendingID}
+            deletePending={deleteMut.isPending}
+            formatRelativeTime={fmtAgo}
+            onOpenAgent={(agent) => navigate("agents", { id: agent.id })}
+            onChat={(agent) => void startChatWith(agent)}
+            onEdit={setEditAgent}
+            onClone={setCloneAgent}
+            onDelete={setDeleteTarget}
+          />
+        )}
+      </div>
 
       <CreateAgentDialog
         open={createOpen}
@@ -310,22 +344,18 @@ export function AgentsPage() {
 
 function AgentsLoadingSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-8 w-72" />
-      </div>
-      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <Skeleton className="h-8 w-8 rounded" />
-            <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-3 w-1/3" />
-              <Skeleton className="h-2.5 w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-[18px] w-[18px] rounded" />
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -345,127 +375,131 @@ export function AgentDetailPage({ id }: { id: string }) {
   const workspaceRole = currentWorkspace?.role
   const pendingCapability = usePendingCapability(wid)
 
+  const backLink = (
+    <button type="button" onClick={() => navigate("agents")} className="hover:text-fg">
+      ← {t("agents.page.title")}
+    </button>
+  )
+
   if (query.isLoading) {
     return (
-      <AdminLayout activeMenu="agents">
-        <AgentsLoadingSkeleton />
+      <AdminLayout activeMenu="agents" fullBleed>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <PageHeader className="static mx-0 mb-0" backLink={backLink} title={<Skeleton className="h-4 w-40" />} />
+          <div className="flex flex-col gap-3 px-4 pt-4">
+            <Skeleton className="h-7 w-64" />
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-3 w-1/2" />)}
+          </div>
+        </div>
       </AdminLayout>
     )
   }
 
   if (query.error) {
     return (
-      <AdminLayout activeMenu="agents">
-        <ErrorState
-          title={t("agents.detail.loadError.title")}
-          description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
-          onRetry={() => void query.refetch()}
-        />
+      <AdminLayout activeMenu="agents" fullBleed>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <PageHeader className="static mx-0 mb-0" backLink={backLink} title={t("agents.page.title")} />
+          <div className="px-6 pt-6">
+            <ErrorState
+              title={t("agents.detail.loadError.title")}
+              description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
+              onRetry={() => void query.refetch()}
+            />
+          </div>
+        </div>
       </AdminLayout>
     )
   }
 
   if (!agent) {
     return (
-      <AdminLayout activeMenu="agents">
-        <EmptyState
-          icon={Bot}
-          title={t("agents.empty.title")}
-          description={t("agents.empty.description")}
-        />
+      <AdminLayout activeMenu="agents" fullBleed>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <PageHeader className="static mx-0 mb-0" backLink={backLink} title={t("agents.page.title")} />
+          <EmptyState
+            icon={Bot}
+            title={t("agents.empty.title")}
+            description={t("agents.empty.description")}
+          />
+        </div>
       </AdminLayout>
     )
   }
 
   const model = defaultModelOf(agent, models, t("agents.modelUnavailable"))
   return (
-    <AdminLayout activeMenu="agents">
-      <PageHeader
-        backLink={
-          <button
-            onClick={() => navigate("agents")}
-            className="hover:text-fg hover:underline"
+    <AdminLayout activeMenu="agents" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          backLink={backLink}
+          title={agent.name}
+          action={
+            <>
+              <AgentStatusBadge status={agent.status} />
+              <AgentDetailActions
+                agent={agent}
+                workspaceID={wid}
+                workspaceName={currentWorkspace?.name}
+                workspaceRole={workspaceRole}
+                models={models}
+                onToast={setToast}
+              />
+            </>
+          }
+        />
+
+        {toast && <SuccessNotice>{toast}</SuccessNotice>}
+        {pendingCapability.id && (
+          <PendingCapabilityBanner
+            cancelLabel={t("agents.pendingCapability.cancel")}
+            onCancel={() => navigate("agents", { id: agent.id, tab: "config", pendingCapability: null })}
           >
-            ← {t("agents.page.title")}
-          </button>
-        }
-        title={agent.name}
-        description={agent.description}
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <AgentStatusBadge status={agent.status} />
-            <AgentDetailActions
-              agent={agent}
-              workspaceID={wid}
-              workspaceName={currentWorkspace?.name}
-              workspaceRole={workspaceRole}
-              models={models}
-              onToast={setToast}
-            />
-          </div>
-        }
-      />
+            {t("agents.pendingCapability.detailBanner", {
+              name: pendingCapability.capability?.name ?? pendingCapability.id,
+              source: pendingCapability.capability?.source_workspace_name ?? "—",
+            })}
+          </PendingCapabilityBanner>
+        )}
 
-      {toast && (
-        <div className="mb-4 rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
-          {toast}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-4">
+          <Tabs
+            value={requestedTab ?? "dynamics"}
+            onValueChange={(tab) => navigate("agents", { id: agent.id, tab })}
+          >
+            <TabsList>
+              <TabsTrigger value="dynamics">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
+              <TabsTrigger value="config">{t("agents.detail.tabs.config")}</TabsTrigger>
+              <TabsTrigger value="audit">{t("agents.detail.tabs.audit")}</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="dynamics">
+              <AgentDynamicsTab workspaceID={wid} agent={agent} />
+            </TabsContent>
+
+            <TabsContent value="config">
+              <AgentConfigTab
+                agent={agent}
+                workspaceID={wid}
+                workspaceRole={workspaceRole}
+                modelLabel={model}
+                onToast={setToast}
+              />
+            </TabsContent>
+
+            <TabsContent value="audit">
+              <DetailSection title={t("agents.detail.audit.title")}>
+                <ResourceAuditTimeline
+                  wsId={wid}
+                  targetType="agent"
+                  targetID={agent.id}
+                />
+              </DetailSection>
+            </TabsContent>
+          </Tabs>
         </div>
-      )}
-      {pendingCapability.id && (
-        <PendingCapabilityBanner
-          cancelLabel={t("agents.pendingCapability.cancel")}
-          onCancel={() => navigate("agents", { id: agent.id, tab: "config", pendingCapability: null })}
-        >
-          {t("agents.pendingCapability.detailBanner", {
-            name: pendingCapability.capability?.name ?? pendingCapability.id,
-            source: pendingCapability.capability?.source_workspace_name ?? "—",
-          })}
-        </PendingCapabilityBanner>
-      )}
-
-      <Tabs
-        value={requestedTab ?? "dynamics"}
-        onValueChange={(tab) => navigate("agents", { id: agent.id, tab })}
-      >
-        <TabsList>
-          <TabsTrigger value="dynamics">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
-          <TabsTrigger value="config">{t("agents.detail.tabs.config")}</TabsTrigger>
-          <TabsTrigger value="audit">{t("agents.detail.tabs.audit")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="dynamics">
-          <AgentDynamicsTab workspaceID={wid} agent={agent} />
-        </TabsContent>
-
-        <TabsContent value="config">
-          <AgentConfigTab
-            agent={agent}
-            workspaceID={wid}
-            workspaceRole={workspaceRole}
-            modelLabel={model}
-            onToast={setToast}
-          />
-        </TabsContent>
-
-        <TabsContent value="audit">
-          <Card title={t("agents.detail.audit.title")}>
-            <ResourceAuditTimeline
-              wsId={wid}
-              targetType="agent"
-              targetID={agent.id}
-            />
-          </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
     </AdminLayout>
-  )
-}
-
-function Card({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
-      {children}
-    </section>
   )
 }

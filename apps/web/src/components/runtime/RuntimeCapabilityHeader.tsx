@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next"
-import { CheckCircle2, AlertTriangle, Cpu, KeyRound, Cloud } from "lucide-react"
 
 import { Skeleton } from "../ui/skeleton"
+import { StatusIcon, type StatusKind } from "../ui/status-icon"
 import { useRuntimeStatus } from "../../lib/api-runtime"
 
 interface RuntimeCapabilityHeaderProps {
@@ -10,35 +10,41 @@ interface RuntimeCapabilityHeaderProps {
 
 type SandboxBucket = "not-configured" | "healthy" | "misconfigured" | "unreachable"
 
+/**
+ * Two 32px hairline rows summarising local and cloud capability: a status
+ * icon, the capability name in ink, the state sentence muted.
+ */
 export function RuntimeCapabilityHeader({ workspaceID }: RuntimeCapabilityHeaderProps) {
   const { t } = useTranslation("admin")
   const statusQ = useRuntimeStatus(workspaceID)
 
   if (statusQ.isLoading) {
     return (
-      <div className="mb-4 flex flex-wrap gap-3" data-testid="runtime-capability-header-loading">
-        <Skeleton className="h-12 w-64 rounded-md" />
-        <Skeleton className="h-12 w-72 rounded-md" />
+      <div className="mb-4" data-testid="runtime-capability-header-loading">
+        <div className="flex h-8 items-center border-b border-line"><Skeleton className="h-3 w-48" /></div>
+        <div className="flex h-8 items-center border-b border-line"><Skeleton className="h-3 w-64" /></div>
       </div>
     )
   }
 
   const sandbox = classifySandbox(statusQ.data, !!statusQ.error)
+  const sandboxCopy = SANDBOX_COPY[sandbox]
 
   return (
-    <div className="mb-4 flex flex-wrap gap-3" data-testid="runtime-capability-header">
-      <Chip
-        Icon={Cpu}
+    <ul className="m-0 mb-4 list-none p-0" data-testid="runtime-capability-header">
+      <CapabilityRow
+        status="queued"
         title={t("runtime.capability.local.title")}
         body={t("runtime.capability.local.placeholder")}
-        tone="info"
         testId="runtime-capability-local"
       />
-      <SandboxChip
-        bucket={sandbox}
-        agentCount={statusQ.data?.sandbox_agent_count ?? 0}
+      <CapabilityRow
+        status={sandboxCopy.status}
+        title={t("runtime.capability.sandbox.title")}
+        body={t(sandboxCopy.bodyKey, { count: statusQ.data?.sandbox_agent_count ?? 0 })}
+        testId={`runtime-capability-sandbox-${sandbox}`}
       />
-    </div>
+    </ul>
   )
 }
 
@@ -53,99 +59,35 @@ function classifySandbox(
   return "misconfigured"
 }
 
-function SandboxChip({ bucket, agentCount }: { bucket: SandboxBucket; agentCount: number }) {
-  const { t } = useTranslation("admin")
-  switch (bucket) {
-    case "healthy":
-      return (
-        <Chip
-          Icon={CheckCircle2}
-          title={t("runtime.capability.sandbox.title")}
-          body={t("runtime.capability.sandbox.healthy", { count: agentCount })}
-          tone="ok"
-          testId="runtime-capability-sandbox-healthy"
-        />
-      )
-    case "not-configured":
-      return (
-        <Chip
-          Icon={KeyRound}
-          title={t("runtime.capability.sandbox.title")}
-          body={t("runtime.capability.sandbox.notConfigured")}
-          tone="info"
-          testId="runtime-capability-sandbox-not-configured"
-        />
-      )
-    case "misconfigured":
-      return (
-        <Chip
-          Icon={AlertTriangle}
-          title={t("runtime.capability.sandbox.title")}
-          body={t("runtime.capability.sandbox.misconfigured")}
-          tone="warn"
-          testId="runtime-capability-sandbox-misconfigured"
-        />
-      )
-    case "unreachable":
-      return (
-        <Chip
-          Icon={Cloud}
-          title={t("runtime.capability.sandbox.title")}
-          body={t("runtime.capability.sandbox.unreachable")}
-          tone="warn"
-          testId="runtime-capability-sandbox-unreachable"
-        />
-      )
-  }
+type SandboxBodyKey =
+  | "runtime.capability.sandbox.healthy"
+  | "runtime.capability.sandbox.notConfigured"
+  | "runtime.capability.sandbox.misconfigured"
+  | "runtime.capability.sandbox.unreachable"
+
+const SANDBOX_COPY: Record<SandboxBucket, { status: StatusKind; bodyKey: SandboxBodyKey }> = {
+  healthy: { status: "completed", bodyKey: "runtime.capability.sandbox.healthy" },
+  "not-configured": { status: "queued", bodyKey: "runtime.capability.sandbox.notConfigured" },
+  misconfigured: { status: "interrupted", bodyKey: "runtime.capability.sandbox.misconfigured" },
+  unreachable: { status: "failed", bodyKey: "runtime.capability.sandbox.unreachable" },
 }
 
-type ChipTone = "info" | "ok" | "warn"
-
-function Chip({
-  Icon,
+function CapabilityRow({
+  status,
   title,
   body,
-  tone,
   testId,
 }: {
-  Icon: typeof CheckCircle2
+  status: StatusKind
   title: string
   body: string
-  tone: ChipTone
   testId: string
 }) {
-  const styles = TONE_STYLES[tone]
   return (
-    <div
-      className={`flex items-start gap-2 rounded-md border px-3 py-2 ${styles.container}`}
-      data-testid={testId}
-    >
-      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`} strokeWidth={1.75} />
-      <div className="min-w-0">
-        <p className={`text-sm font-medium leading-tight ${styles.title}`}>{title}</p>
-        <p className={`mt-0.5 text-xs leading-snug ${styles.body}`}>{body}</p>
-      </div>
-    </div>
+    <li className="flex h-8 items-center gap-2 border-b border-line text-sm" data-testid={testId}>
+      <StatusIcon status={status} />
+      <span className="shrink-0 font-medium text-fg">{title}</span>
+      <span className="min-w-0 truncate text-xs text-fg-muted">{body}</span>
+    </li>
   )
-}
-
-const TONE_STYLES: Record<ChipTone, { container: string; icon: string; title: string; body: string }> = {
-  info: {
-    container: "border-line bg-surface-subtle/80",
-    icon: "text-fg-subtle",
-    title: "text-fg-emphasis",
-    body: "text-fg-muted",
-  },
-  ok: {
-    container: "border-success-border bg-success-subtle/70",
-    icon: "text-success",
-    title: "text-success-emphasis",
-    body: "text-success",
-  },
-  warn: {
-    container: "border-warning-border bg-warning-subtle/70",
-    icon: "text-warning",
-    title: "text-warning-emphasis",
-    body: "text-warning",
-  },
 }

@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { Check, Clock, Copy, Loader2, Mail, ShieldAlert, X } from "lucide-react"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import { AlertTriangle, Check, Copy, Loader2, ShieldCheck, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -9,6 +10,8 @@ import {
 } from "../../lib/api-invitations"
 import { ApiError } from "../../lib/api-client"
 import type { MemberRole } from "../../lib/api-types"
+import { useRelativeTime } from "../../lib/relative-time"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog"
 import { Button } from "../../components/ui/button"
+import { InitialTile, LedgerGroup, LedgerId, LedgerRow } from "../../components/ui/ledger"
 import { MemberRoleBadge } from "./MemberRoleBadge"
 
 const INVITATION_ROLES: MemberRole[] = ["owner", "admin", "member", "viewer"]
@@ -29,6 +33,10 @@ function formatExpiration(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
+/**
+ * The pending-invitations group of the members ledger. Rows share the
+ * parent Ledger's column template: invitee · expiry · role · age · actions.
+ */
 export function PendingInvitationsList({
   workspaceId,
   invitations,
@@ -41,6 +49,7 @@ export function PendingInvitationsList({
   canEditRole: boolean
 }) {
   const { t } = useTranslation("admin")
+  const fmtAgo = useRelativeTime()
   const revokeInvitation = useRevokeInvitation(workspaceId)
   const updateInvitationRole = useUpdateInvitationRole(workspaceId)
   const [revokeTarget, setRevokeTarget] = useState<PendingInvitation | null>(null)
@@ -92,93 +101,100 @@ export function PendingInvitationsList({
     }
   }
 
+  const inlineError = copyFailed
+    ? t("members.invite.copyError")
+    : updateInvitationRole.isError
+      ? updateInvitationRole.error instanceof ApiError
+        ? updateInvitationRole.error.message
+        : t("members.invite.updateRoleError")
+      : null
+
   return (
     <>
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold text-fg">
-          {t("members.invite.pendingTitle", { count: invitations.length })}
-        </h2>
-        <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
-          {invitations.map((invitation) => (
-            <div key={invitation.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted">
-                <Mail className="h-4 w-4 text-fg-subtle" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-fg">{invitation.email}</div>
-                <div className="flex items-center gap-1 text-xs text-fg-subtle">
-                  <Clock className="h-3 w-3" />
-                  {t("members.invite.pendingStatus")}
-                  <span aria-hidden>·</span>
-                  {t("members.invite.expiresAt", {
-                    value: formatExpiration(invitation.expires_at),
-                  })}
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 px-0"
-                disabled={!inviteLinks[invitation.id] && !invitation.invite_link}
-                onClick={() => void handleCopy(invitation)}
-                title={
-                  inviteLinks[invitation.id] || invitation.invite_link
-                    ? t("members.invite.copyLink")
-                    : t("members.invite.linkUnavailable")
-                }
-                aria-label={t("members.invite.copyLink")}
-              >
-                {copiedInvitationId === invitation.id ? (
-                  <Check className="h-3.5 w-3.5 text-success" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5 text-fg-subtle" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 px-0"
-                onClick={() => {
-                  revokeInvitation.reset()
-                  setRevokeTarget(invitation)
-                }}
-                title={t("members.invite.revoke.tooltip")}
-                aria-label={t("members.invite.revoke.tooltip")}
-              >
-                <X className="h-3.5 w-3.5 text-fg-subtle" />
-              </Button>
-              {canEditRole ? (
-                <select
-                  value={invitation.role}
-                  onChange={(event) =>
-                    void handleRoleChange(invitation, event.target.value as MemberRole)
-                  }
-                  disabled={updateInvitationRole.isPending}
-                  aria-label={t("members.invite.roleLabel")}
-                  className="h-8 rounded-md border border-line bg-surface px-2 text-xs text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                >
-                  {INVITATION_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {t(`members.role.${role}`)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <MemberRoleBadge role={invitation.role} />
-              )}
-            </div>
-          ))}
-        </div>
-        {(copyFailed || updateInvitationRole.isError) && (
-          <p className="text-sm text-danger-emphasis">
-            {copyFailed
-              ? t("members.invite.copyError")
-              : updateInvitationRole.error instanceof ApiError
-                ? updateInvitationRole.error.message
-                : t("members.invite.updateRoleError")}
-          </p>
+      <LedgerGroup label={t("members.invite.pendingLabel")} count={invitations.length}>
+        {inlineError && (
+          <li className="flex h-9 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            <span className="truncate">{inlineError}</span>
+          </li>
         )}
-      </section>
+        {invitations.map((invitation) => {
+          const link = inviteLinks[invitation.id] || invitation.invite_link
+          return (
+            <LedgerRow key={invitation.id}>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <InitialTile name={invitation.email} />
+                <span className="truncate font-medium">{invitation.email}</span>
+              </span>
+              <LedgerId>
+                {t("members.invite.expiresAt", { value: formatExpiration(invitation.expires_at) })}
+              </LedgerId>
+              <span className="flex items-center">
+                <MemberRoleBadge role={invitation.role} />
+              </span>
+              <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(invitation.created_at)}</span>
+              <RowActions>
+                <ActionIconButton
+                  icon={copiedInvitationId === invitation.id ? Check : Copy}
+                  label={link ? t("members.invite.copyLink") : t("members.invite.linkUnavailable")}
+                  disabled={!link}
+                  onClick={() => void handleCopy(invitation)}
+                />
+                {canEditRole && (
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("members.invite.roleLabel")}
+                        title={t("members.invite.roleLabel")}
+                        disabled={updateInvitationRole.isPending}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <ShieldCheck strokeWidth={1.5} aria-hidden="true" />
+                      </Button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        align="end"
+                        sideOffset={6}
+                        className="app-shadow-floating z-50 min-w-[160px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+                      >
+                        <DropdownMenu.RadioGroup
+                          value={invitation.role}
+                          onValueChange={(value) => void handleRoleChange(invitation, value as MemberRole)}
+                        >
+                          {INVITATION_ROLES.map((role) => (
+                            <DropdownMenu.RadioItem
+                              key={role}
+                              value={role}
+                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
+                            >
+                              <span className="flex-1">{t(`members.role.${role}`)}</span>
+                              <DropdownMenu.ItemIndicator>
+                                <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
+                              </DropdownMenu.ItemIndicator>
+                            </DropdownMenu.RadioItem>
+                          ))}
+                        </DropdownMenu.RadioGroup>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                )}
+                <ActionIconButton
+                  icon={X}
+                  label={t("members.invite.revoke.tooltip")}
+                  tone="danger"
+                  onClick={() => {
+                    revokeInvitation.reset()
+                    setRevokeTarget(invitation)
+                  }}
+                />
+              </RowActions>
+            </LedgerRow>
+          )
+        })}
+      </LedgerGroup>
 
       <AlertDialog
         open={revokeTarget !== null}
@@ -186,46 +202,39 @@ export function PendingInvitationsList({
           if (!open) closeRevokeDialog()
         }}
       >
-        <AlertDialogContent className="max-w-md gap-0 p-0">
-          <AlertDialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5">
-            <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
-              <ShieldAlert className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <AlertDialogTitle className="text-sm">
-                {t("members.invite.revoke.title")}
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm leading-relaxed">
-                {t("members.invite.revoke.description", {
-                  email: revokeTarget?.email,
-                })}
-              </AlertDialogDescription>
-              {revokeInvitation.isError && (
-                <p className="break-all text-sm text-danger-emphasis">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("members.invite.revoke.title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("members.invite.revoke.description", { email: revokeTarget?.email })}
+            </AlertDialogDescription>
+            {revokeInvitation.isError && (
+              <p className="flex items-start gap-1.5 break-all text-sm text-fg">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                <span>
                   {revokeInvitation.error instanceof ApiError
                     ? revokeInvitation.error.message
                     : t("members.invite.revoke.error")}
-                </p>
-              )}
-            </div>
+                </span>
+              </p>
+            )}
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
+          <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button variant="outline" size="sm" disabled={revokeInvitation.isPending}>
+              <Button variant="outline" disabled={revokeInvitation.isPending}>
                 {t("members.invite.revoke.cancel")}
               </Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button
                 variant="destructive"
-                size="sm"
                 disabled={revokeInvitation.isPending}
                 onClick={(event) => {
                   event.preventDefault()
                   void confirmRevoke()
                 }}
               >
-                {revokeInvitation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {revokeInvitation.isPending && <Loader2 className="animate-spin" />}
                 {t("members.invite.revoke.confirm")}
               </Button>
             </AlertDialogAction>

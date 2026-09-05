@@ -1,16 +1,16 @@
 /**
- * ParsarThread — Claude-style thread layout based on assistant-ui's
- * official component patterns.
+ * ParsarThread — the assistant-ui thread on the console's type system.
  *
- * - User messages: right-aligned, muted rounded bubble
- * - Assistant messages: full-width markdown, chain-of-thought grouping
- * - Composer: bottom-fixed rounded card with Send/Stop toggle
- * - Auto-scroll with floating scroll-to-bottom button
+ * - User messages: right-aligned, paper-muted block, 6px radius
+ * - Assistant messages: full-width markdown in ink, chain-of-thought grouping
+ * - Composer: hairline-topped footer with a Textarea-styled input and one
+ *   primary Send button (Stop while a run is in flight)
+ * - Auto-scroll with a scroll-to-bottom button
  */
 
 import type { FC } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, ArrowDown, ChevronDown, ChevronRight, Loader2, Wrench } from "lucide-react"
+import { AlertTriangle, ArrowDown, ChevronDown, ChevronRight, Loader2, Send, Square, Wrench } from "lucide-react"
 import { useState } from "react"
 
 import {
@@ -27,6 +27,7 @@ import {
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown"
 
 import { ParsarToolCallCard } from "./ParsarToolCallCard"
+import { Button } from "../ui/button"
 import { credentialKindLabel } from "../../lib/credential-kind-ui"
 import { cn } from "../../lib/utils"
 
@@ -61,28 +62,27 @@ export function ParsarThread({
           {/* Empty state */}
           <AuiIf condition={(s) => s.thread.isEmpty}>
             <div className="flex flex-1 items-center justify-center">
-              <p className="text-sm text-fg-faint">
-                {t("conversations.detail.emptyTimeline")}
-              </p>
+              <p className="m-0 text-sm text-fg-muted">{t("conversations.detail.emptyTimeline")}</p>
             </div>
           </AuiIf>
 
           {/* Messages */}
-          <div className="mb-8 flex flex-col gap-y-6 empty:hidden">
+          <div className="mb-6 flex flex-col gap-y-5 empty:hidden">
             <ThreadPrimitive.Messages>
               {() => <ThreadMessage />}
             </ThreadPrimitive.Messages>
 
             {/* Thinking indicator — shown when running */}
             <AuiIf condition={(s) => s.thread.isRunning}>
-              <div className="text-sm text-fg-faint font-medium">
-                Thinking
-              </div>
+              <p className="m-0 flex items-center gap-2 text-sm text-fg" role="status" aria-live="polite">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-fg-muted motion-reduce:animate-none" strokeWidth={1.5} aria-hidden="true" />
+                {t("conversations.stream.thinking")}
+              </p>
             </AuiIf>
           </div>
 
           {/* Footer: scroll-to-bottom + composer pinned at bottom */}
-          <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col gap-3 rounded-t-2xl bg-surface pb-4">
+          <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col border-t border-line bg-surface py-3">
             <ThreadScrollToBottom />
             <ParsarComposerInline
               onStop={onStop}
@@ -115,24 +115,27 @@ const ThreadMessage: FC = () => {
 const ThreadScrollToBottom: FC = () => {
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
-      <button
-        type="button"
-        className="absolute -top-10 z-10 self-center rounded-full border border-line bg-surface p-2 shadow-md transition-colors hover:bg-surface-subtle disabled:invisible"
+      <Button
+        variant="outline"
+        size="icon"
+        shape="circle"
+        className="absolute -top-10 z-10 self-center disabled:invisible"
+        aria-label="Scroll to bottom"
       >
-        <ArrowDown className="h-4 w-4 text-fg-subtle" />
-      </button>
+        <ArrowDown strokeWidth={1.5} aria-hidden="true" />
+      </Button>
     </ThreadPrimitive.ScrollToBottom>
   )
 }
 
 // ---------------------------------------------------------------------------
-// User Message — right-aligned muted bubble (Claude style)
+// User Message — right-aligned, paper-muted block
 // ---------------------------------------------------------------------------
 
 const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl bg-surface-muted px-4 py-2.5 text-fg">
+      <div className="max-w-[85%] rounded-md bg-surface-muted px-3 py-2 text-base text-fg">
         <MessagePrimitive.Content />
       </div>
     </MessagePrimitive.Root>
@@ -147,7 +150,7 @@ const UserMessage: FC = () => {
 const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="relative">
-      <div className="text-fg leading-relaxed">
+      <div className="text-base text-fg">
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
             reasoning: ["group-chainOfThought", "group-reasoning"],
@@ -163,7 +166,7 @@ const AssistantMessage: FC = () => {
                 return <ReasoningBlock running={running}>{children}</ReasoningBlock>
               }
               case "group-tool":
-                if (part.indices.length === 1) return <>{children}</>
+                if (part.indices.length === 1) return <div className="border-t border-line">{children}</div>
                 return <ToolGroup count={part.indices.length} running={part.status.type === "running"}>{children}</ToolGroup>
               case "text":
                 return <AssistantTextPart />
@@ -191,24 +194,18 @@ function ReasoningBlock({ running, children }: { running: boolean; children: Rea
 
   return (
     <div className="my-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-sm text-fg-subtle transition-colors hover:text-fg-muted"
-      >
+      <Button variant="ghost" size="sm" className="-ml-2" aria-expanded={open || running} onClick={() => setOpen((v) => !v)}>
         {running ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="animate-spin motion-reduce:animate-none" strokeWidth={1.5} aria-hidden="true" />
         ) : open ? (
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ChevronDown strokeWidth={1.5} aria-hidden="true" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight strokeWidth={1.5} aria-hidden="true" />
         )}
-        <span className="font-medium">
-          {running ? t("conversations.thinking.active", { defaultValue: "Thinking" }) : t("conversations.thinking.done", { defaultValue: "Thought" })}
-        </span>
-      </button>
+        {running ? t("conversations.thinking.active", { defaultValue: "Thinking" }) : t("conversations.thinking.done", { defaultValue: "Thought" })}
+      </Button>
       {(open || running) && (
-        <div className="mt-1 border-l-2 border-line/50 pl-3 text-sm text-fg-subtle leading-relaxed">
+        <div className="mt-1 border-l border-line pl-3 text-sm text-fg-muted">
           {children}
         </div>
       )}
@@ -231,25 +228,19 @@ function ToolGroup({ count, running, children }: { count: number; running: boole
 
   return (
     <div className="my-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-sm text-fg-subtle transition-colors hover:text-fg-muted"
-      >
-        <Wrench className="h-3.5 w-3.5" />
+      <Button variant="ghost" size="sm" className="-ml-2" aria-expanded={open || running} onClick={() => setOpen((v) => !v)}>
+        <Wrench strokeWidth={1.5} aria-hidden="true" />
         {running ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Loader2 className="animate-spin motion-reduce:animate-none" strokeWidth={1.5} aria-hidden="true" />
         ) : open ? (
-          <ChevronDown className="h-3 w-3" />
+          <ChevronDown strokeWidth={1.5} aria-hidden="true" />
         ) : (
-          <ChevronRight className="h-3 w-3" />
+          <ChevronRight strokeWidth={1.5} aria-hidden="true" />
         )}
-        <span className="font-medium">
-          {t("conversations.steps.totalLabel", { count, defaultValue: "{{count}} steps" })}
-        </span>
-      </button>
+        {t("conversations.steps.totalLabel", { count, defaultValue: "{{count}} steps" })}
+      </Button>
       {(open || running) && (
-        <div className="mt-1 ml-5">{children}</div>
+        <div className="mt-1 border-t border-line">{children}</div>
       )}
     </div>
   )
@@ -273,7 +264,7 @@ const AssistantTextPart: FC = () => {
   }
 
   return (
-    <div className="prose prose-sm max-w-none prose-p:my-1.5 prose-pre:my-3 prose-pre:rounded-lg prose-pre:bg-surface-subtle prose-pre:border prose-pre:border-line/50 prose-code:text-fg-muted prose-code:before:content-none prose-code:after:content-none prose-a:text-info prose-a:no-underline hover:prose-a:underline prose-headings:text-fg prose-strong:text-fg">
+    <div className="prose prose-sm max-w-none text-fg prose-p:my-1.5 prose-pre:my-3 prose-pre:rounded-md prose-pre:bg-surface-muted prose-pre:text-fg prose-code:text-fg prose-code:before:content-none prose-code:after:content-none prose-a:text-fg prose-a:underline prose-a:underline-offset-4 prose-headings:text-fg prose-strong:text-fg prose-strong:font-medium">
       <MarkdownTextPrimitive />
     </div>
   )
@@ -295,7 +286,7 @@ const AssistantToolCallPart: FC<ToolCallMessagePartProps> = (props) => {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime Error Card
+// Runtime error — a failed-red triangle and ink text, no red box
 // ---------------------------------------------------------------------------
 
 function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<string, unknown> }) {
@@ -333,18 +324,18 @@ function RuntimeErrorCard({ text, metadata }: { text: string; metadata: Record<s
   }
 
   return (
-    <div className="my-2 rounded-lg border border-danger-border bg-danger-subtle/50 p-4">
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-danger-emphasis">
-        <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
-        <span>{t("conversations.runtime_error.badge")}</span>
+    <div className="my-2 flex items-start gap-1.5 text-base text-fg">
+      <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="m-0 font-medium">{t("conversations.runtime_error.badge")}</p>
+        <p className="m-0 mt-1 break-words">{message}</p>
+        {href && action && (
+          <Button asChild variant="outline" size="sm" className="mt-2">
+            <a href={href}>{action}</a>
+          </Button>
+        )}
+        <p className="m-0 mt-2 text-xs text-fg-muted">{t("conversations.runtime_error.retryHint")}</p>
       </div>
-      <p className="text-sm font-medium text-danger-emphasis">{message}</p>
-      {href && action && (
-        <a href={href} className="mt-2 inline-flex items-center rounded-md border border-danger-border bg-surface px-2.5 py-1 text-sm font-medium text-danger-emphasis transition-colors hover:bg-danger-subtle">
-          {action}
-        </a>
-      )}
-      <p className="mt-2 text-xs text-danger-emphasis/70">{t("conversations.runtime_error.retryHint")}</p>
     </div>
   )
 }
@@ -378,13 +369,9 @@ function ParsarComposerInline({
   const showStop = !!onStop && composerText.trim().length === 0
 
   return (
-    <ComposerPrimitive.Root
-      className={cn(
-        "flex w-full flex-col rounded-2xl border border-line bg-surface p-2.5 shadow-sm transition-shadow",
-        "focus-within:border-line-strong focus-within:shadow-md",
-        disabled && "opacity-60",
-      )}
-    >
+    <ComposerPrimitive.Root className="flex w-full flex-col gap-2">
+      {/* assistant-ui owns this textarea, so it mirrors ui/textarea.tsx
+          rather than wrapping it. Keep the two in step. */}
       <ComposerPrimitive.Input
         autoFocus
         disabled={disabled}
@@ -393,35 +380,29 @@ function ParsarComposerInline({
             ? t("conversations.composer.placeholder", { agent: agentName })
             : t("conversations.composer.placeholderGeneric", { defaultValue: "Send a message..." })
         }
-        className="min-h-[28px] max-h-[200px] w-full resize-none bg-transparent px-2 py-1 text-sm leading-relaxed text-fg outline-none placeholder:text-fg-faint disabled:cursor-not-allowed"
-        rows={1}
+        aria-label={t("conversations.composer.label")}
+        className={cn(
+          "app-shadow-control flex max-h-[200px] min-h-[56px] w-full resize-none rounded-md border border-line-strong bg-surface px-2 py-1.5 text-sm leading-relaxed text-fg transition-[border-color,box-shadow] duration-150 ease-settle placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-60",
+        )}
+        rows={2}
       />
-      <div className="flex items-center justify-end pt-1">
+      <div className="flex items-center justify-end gap-2">
         {showStop ? (
-          <button
-            type="button"
-            onClick={onStop}
-            disabled={cancelling}
-            aria-label="Stop"
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full bg-surface-inverse text-white transition-colors hover:opacity-80",
-              cancelling && "opacity-60",
-            )}
-          >
+          <Button type="button" variant="outline" onClick={onStop} disabled={cancelling}>
             {cancelling ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="animate-spin" aria-hidden="true" />
             ) : (
-              <span className="block h-3 w-3 rounded-sm bg-white" />
+              <Square className="fill-current" strokeWidth={1.5} aria-hidden="true" />
             )}
-          </button>
+            {t("conversations.composer.stopAria")}
+          </Button>
         ) : (
           <AuiIf condition={(s) => !s.thread.isRunning}>
-            <ComposerPrimitive.Send
-              disabled={disabled}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-inverse text-white transition-colors hover:opacity-80 disabled:bg-surface-muted disabled:text-fg-faint"
-              aria-label="Send"
-            >
-              <ArrowDown className="h-4 w-4 rotate-180" strokeWidth={2.5} />
+            <ComposerPrimitive.Send asChild>
+              <Button type="submit" disabled={disabled}>
+                <Send strokeWidth={1.5} aria-hidden="true" />
+                {t("conversations.composer.send")}
+              </Button>
             </ComposerPrimitive.Send>
           </AuiIf>
         )}

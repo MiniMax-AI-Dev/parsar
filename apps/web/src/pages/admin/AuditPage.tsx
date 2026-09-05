@@ -1,43 +1,26 @@
-import { Fragment, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  Bot,
-  Cog,
-  Globe,
-  Search,
-  ShieldCheck,
-  User as UserIcon,
-} from "lucide-react"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import { ArrowUpRight, Check, Code, ListFilter, MessageSquare, Search, ShieldCheck } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
-import { Badge } from "../../components/ui/badge"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
+import { Kbd } from "../../components/ui/kbd"
+import { InitialTile, Ledger, LedgerHeader, LedgerId, LedgerRow } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "../../components/ui/tabs"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAuditRecords } from "../../lib/api-governance"
 import type { AuditRecord, AuditSource } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
-import { useRelativeTime } from "../../lib/relative-time"
+import { cn } from "../../lib/utils"
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -51,7 +34,7 @@ const SOURCES: ReadonlyArray<AuditSource> = [
   "data",
 ] as const
 
-type SourceTab = AuditSource | "all"
+type SourceFilter = AuditSource | "all"
 
 /**
  * Curated target_type options per source — only target_types that have
@@ -72,73 +55,23 @@ const SOURCE_TARGET_TYPES: Record<AuditSource, ReadonlyArray<string>> = {
   data: [],
 }
 
-/* ------------------------------------------------------------------ */
-/*  Source badge                                                       */
-/* ------------------------------------------------------------------ */
-
-type BadgeVariant = "primary" | "success" | "warning" | "destructive" | "neutral"
-
-const SOURCE_BADGE: Record<AuditSource, BadgeVariant> = {
-  identity: "neutral",
-  admin: "primary",
-  runtime: "success",
-  approval: "warning",
-  data: "neutral",
-}
-
-function SourceBadge({ source }: { source: AuditSource }) {
-  const { t } = useTranslation("admin")
-  return (
-    <Badge variant={SOURCE_BADGE[source]}>
-      {t(`audit.source.${source}`)}
-    </Badge>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Actor display                                                      */
-/* ------------------------------------------------------------------ */
+/** time · source · actor · action · target · actions */
+const LEDGER_COLUMNS = "140px 56px minmax(0,1fr) minmax(0,1.4fr) minmax(0,1.2fr) 96px"
 
 function shortId(s: string | undefined | null, n = 10): string {
   if (!s) return "—"
   return s.length <= n ? s : s.slice(0, n) + "…"
 }
 
-function ActorCell({ row }: { row: AuditRecord }) {
-  if (row.actor_type === "agent") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-        <Bot className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-        <span className="font-mono text-xs text-fg-subtle">
-          {shortId(row.actor_id, 10)}
-        </span>
-      </span>
-    )
-  }
-  if (row.actor_type === "user") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-        <UserIcon className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-        <span className="font-mono text-xs text-fg-subtle">
-          {shortId(row.actor_id, 10)}
-        </span>
-      </span>
-    )
-  }
-  if (row.actor_type === "external") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-        <Globe className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-        external
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-      <Cog className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-      system
-    </span>
-  )
+function fmtAbsTime(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, { hour12: false })
+}
+
+function payloadString(record: AuditRecord, key: string): string | null {
+  const v = record.payload?.[key]
+  return typeof v === "string" && v ? v : null
 }
 
 /* ------------------------------------------------------------------ */
@@ -147,17 +80,17 @@ function ActorCell({ row }: { row: AuditRecord }) {
 
 export function AuditPage() {
   const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
   const wsId = useWorkspaceId()
-  const [tab, setTab] = useState<SourceTab>("all")
+  const [source, setSource] = useState<SourceFilter>("all")
   const [targetType, setTargetType] = useState<string>("")
   const [keyword, setKeyword] = useState("")
   const [openRow, setOpenRow] = useState<number | null>(null)
-  const { navigate } = useAdminView()
-  const fmtAgo = useRelativeTime()
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // Backend filters server-side; client-side work is keyword search only.
   const query = useAuditRecords(wsId, {
-    source: tab === "all" ? undefined : tab,
+    source: source === "all" ? undefined : source,
     target_type: targetType || undefined,
   })
   const rows = useMemo(() => query.data?.audit_records ?? [], [query.data])
@@ -165,10 +98,10 @@ export function AuditPage() {
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
 
-  // Per-tab counts only meaningful on "all" — when a tab is active the
-  // backend filter zeroes out the others.
+  // Per-source counts only meaningful on "all" — when a source is active
+  // the backend filter zeroes out the others.
   const counts = useMemo(() => {
-    if (tab !== "all") return null
+    if (source !== "all") return null
     const c: Record<AuditSource, number> = {
       identity: 0,
       admin: 0,
@@ -178,23 +111,23 @@ export function AuditPage() {
     }
     for (const r of rows) c[r.source]++
     return c
-  }, [rows, tab])
+  }, [rows, source])
 
   // Options come from the curated map (not the visible rows) — filtering
   // itself runs server-side, so the dropdown advertises *possible* values.
   const targetTypeOptions = useMemo<ReadonlyArray<string>>(() => {
-    if (tab === "all") {
+    if (source === "all") {
       const set = new Set<string>()
       for (const s of SOURCES) {
         for (const tt of SOURCE_TARGET_TYPES[s]) set.add(tt)
       }
       return Array.from(set).sort()
     }
-    return SOURCE_TARGET_TYPES[tab]
-  }, [tab])
+    return SOURCE_TARGET_TYPES[source]
+  }, [source])
 
-  function setTabAndResetTarget(next: SourceTab) {
-    setTab(next)
+  function setSourceAndResetTarget(next: SourceFilter) {
+    setSource(next)
     setTargetType("")
   }
 
@@ -212,286 +145,264 @@ export function AuditPage() {
   }, [rows, keyword])
 
   function clearFilters() {
-    setTab("all")
+    setSource("all")
     setTargetType("")
     setKeyword("")
   }
 
-  const hasActiveFilters = tab !== "all" || !!targetType || !!keyword.trim()
+  // ⌘K focuses the search field, as on every ledger page.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [])
+
+  const hasActiveFilters = source !== "all" || !!targetType || !!keyword.trim()
+  const pageTitle = t("audit.page.title")
+  const filterLabel = t("audit.filter.label")
+  const targetTypeLabel = (tt: string) => t(`audit.targetType.${tt}`, { defaultValue: tt })
 
   return (
-    <AdminLayout activeMenu="settings">
-      <PageHeader
-        title={t("audit.page.title")}
-        description={t("audit.page.description")}
-      />
-      <SettingsTabs active="audit" />
-      {!wsId ? (
-        <ScopeRequiredState scope="workspace" resourceName={t("audit.page.title")} />
-      ) : query.isLoading ? (
-        <AuditLoadingSkeleton />
-      ) : err ? (
-        <ErrorState
-          title={isUnreachable ? t("audit.loadError.unreachable.title") : t("audit.loadError.title")}
-          description={
-            isUnreachable
-              ? t("audit.loadError.unreachable.description")
-              : err instanceof Error
-                ? err.message
-                : t("audit.loadError.description")
-          }
-          hint={isUnreachable ? t("audit.loadError.unreachable.hint") : t("audit.loadError.hint")}
-          onRetry={() => void query.refetch()}
-        />
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Tabs value={tab} onValueChange={(v) => setTabAndResetTarget(v as SourceTab)}>
-              <TabsList>
-                <TabsTrigger value="all">{t("audit.tabs.all")}</TabsTrigger>
-                {SOURCES.map((s) => (
-                  <TabsTrigger key={s} value={s}>
-                    {t(`audit.tabs.${s}`)}
-                    {counts && counts[s] > 0 && (
-                      <span className="ml-1.5 text-xs text-fg-faint tabular-nums">
-                        {counts[s]}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={targetType}
-                onChange={(e) => setTargetType(e.target.value)}
-                aria-label={t("audit.filters.targetType")}
-                disabled={targetTypeOptions.length === 0}
-                className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-              >
-                <option value="">
-                  {targetTypeOptions.length === 0
-                    ? t("audit.filters.targetTypeNone")
-                    : t("audit.filters.targetTypeAll")}
-                </option>
-                {targetTypeOptions.map((tt) => (
-                  <option key={tt} value={tt}>
-                    {t(`audit.targetType.${tt}`, { defaultValue: tt })}
-                  </option>
-                ))}
-              </select>
-
-              <div className="relative w-64">
+    <AdminLayout activeMenu="settings" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="audit.page.title"
+          action={
+            <>
+              <SettingsTabs active="audit" />
+              <div className="relative w-56">
                 <Search
-                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint"
-                  strokeWidth={1.75}
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
                 />
                 <Input
+                  ref={searchRef}
+                  type="search"
                   placeholder={t("audit.search.placeholder")}
-                  className="pl-8 text-xs"
+                  aria-label={t("audit.search.placeholder")}
+                  className="pl-7 pr-11"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                 />
+                <Kbd className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">⌘K</Kbd>
               </div>
-            </div>
-          </div>
-
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={ShieldCheck}
-              title={t("audit.empty.title")}
-              description={
-                hasActiveFilters
-                  ? t("audit.empty.filteredDescription")
-                  : t("audit.empty.description")
-              }
-              action={
-                hasActiveFilters ? (
-                  <Button size="sm" variant="outline" onClick={clearFilters}>
-                    {t("audit.empty.clearFilters")}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button variant="outline" aria-haspopup="menu">
+                    <ListFilter strokeWidth={1.5} aria-hidden="true" />
+                    {filterLabel}
+                    {source !== "all" && (
+                      <span className="text-fg-muted">· {t(`audit.tabs.${source}`)}</span>
+                    )}
+                    {targetType && (
+                      <span className="text-fg-muted">· {targetTypeLabel(targetType)}</span>
+                    )}
                   </Button>
-                ) : undefined
-              }
-            />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-40">{t("audit.table.time")}</TableHead>
-                    <TableHead className="w-24">{t("audit.table.source")}</TableHead>
-                    <TableHead className="w-44">{t("audit.table.actor")}</TableHead>
-                    <TableHead>{t("audit.table.event")}</TableHead>
-                    <TableHead>{t("audit.table.target")}</TableHead>
-                    <TableHead className="text-right pr-4 w-28">{t("audit.table.payload")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r) => {
-                    const isOpen = openRow === r.id
-                    const targetClickable =
-                      r.target_type === "agent_run" && !!r.target_id
-                    const payloadEntries = r.payload ? Object.keys(r.payload).length : 0
-                    return (
-                      <Fragment key={r.id}>
-                        <TableRow
-                          className="cursor-pointer"
-                          onClick={() => setOpenRow(isOpen ? null : r.id)}
-                        >
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="text-sm text-fg-muted">
-                                {fmtAgo(r.occurred_at)}
-                              </span>
-                              <span className="font-mono text-xs text-fg-faint tabular-nums">
-                                {fmtAbsTime(r.occurred_at)}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell><SourceBadge source={r.source} /></TableCell>
-                          <TableCell><ActorCell row={r} /></TableCell>
-                          <TableCell>
-                            <code className="text-sm text-fg-emphasis">{r.event_type}</code>
-                          </TableCell>
-                          <TableCell>
-                            {targetClickable ? (
-                              <button
-                                className="font-mono text-xs text-fg-muted hover:underline"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  navigate("runs", { id: r.target_id! })
-                                }}
-                              >
-                                {r.target_type} · {shortId(r.target_id, 10)}
-                              </button>
-                            ) : r.target_type ? (
-                              <span className="font-mono text-xs text-fg-muted">
-                                {r.target_type} · {shortId(r.target_id, 10)}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-fg-faint">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right pr-4">
-                            {payloadEntries > 0 ? (
-                              <Badge variant="neutral">
-                                {t("audit.table.payloadFields", { count: payloadEntries })}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-fg-faint">—</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        {isOpen && (
-                          <TableRow key={`${r.id}-payload`}>
-                            <TableCell colSpan={6} className="bg-surface-subtle/60">
-                              <PayloadView record={r} />
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </Fragment>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    sideOffset={6}
+                    className="app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+                  >
+                    <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-xs text-fg-muted">
+                      {t("audit.table.source")}
+                    </DropdownMenu.Label>
+                    <DropdownMenu.RadioGroup
+                      value={source}
+                      onValueChange={(v) => setSourceAndResetTarget(v as SourceFilter)}
+                    >
+                      <FilterItem value="all" label={t("audit.tabs.all")} count={counts ? rows.length : undefined} />
+                      {SOURCES.map((s) => (
+                        <FilterItem key={s} value={s} label={t(`audit.tabs.${s}`)} count={counts?.[s]} />
+                      ))}
+                    </DropdownMenu.RadioGroup>
+                    {targetTypeOptions.length > 0 && (
+                      <>
+                        <DropdownMenu.Separator className="my-1 h-px bg-line" />
+                        <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-xs text-fg-muted">
+                          {t("audit.filters.targetType")}
+                        </DropdownMenu.Label>
+                        <DropdownMenu.RadioGroup value={targetType} onValueChange={setTargetType}>
+                          <FilterItem value="" label={t("audit.filters.targetTypeAll")} />
+                          {targetTypeOptions.map((tt) => (
+                            <FilterItem key={tt} value={tt} label={targetTypeLabel(tt)} />
+                          ))}
+                        </DropdownMenu.RadioGroup>
+                      </>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </>
+          }
+        />
 
-          {rows.length > 0 && (
-            <p className="text-xs text-fg-faint">
-              {t("audit.footer.shownCount", {
-                shown: filtered.length,
-                total: rows.length,
-              })}
-            </p>
-          )}
-        </div>
-      )}
+        {!wsId ? (
+          <ScopeRequiredState scope="workspace" resourceName={pageTitle} />
+        ) : query.isLoading ? (
+          <AuditLoadingSkeleton />
+        ) : err ? (
+          <div className="px-4 pt-4">
+            <ErrorState
+              title={isUnreachable ? t("audit.loadError.unreachable.title") : t("audit.loadError.title")}
+              description={
+                isUnreachable
+                  ? t("audit.loadError.unreachable.description")
+                  : err instanceof Error
+                    ? err.message
+                    : t("audit.loadError.description")
+              }
+              hint={isUnreachable ? t("audit.loadError.unreachable.hint") : t("audit.loadError.hint")}
+              onRetry={() => void query.refetch()}
+            />
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title={t("audit.empty.title")}
+            description={hasActiveFilters ? t("audit.empty.filteredDescription") : t("audit.empty.description")}
+            action={
+              hasActiveFilters ? (
+                <Button size="sm" variant="outline" onClick={clearFilters}>
+                  {t("audit.empty.clearFilters")}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>
+            <LedgerHeader>
+              <span>{t("audit.table.time")}</span>
+              <span>{t("audit.table.source")}</span>
+              <span>{t("audit.table.actor")}</span>
+              <span>{t("audit.table.event")}</span>
+              <span>{t("audit.table.target")}</span>
+              <span />
+            </LedgerHeader>
+            <ul className="m-0 list-none p-0">
+              {filtered.map((r) => (
+                <Fragment key={r.id}>
+                  <AuditRow
+                    record={r}
+                    open={openRow === r.id}
+                    onToggle={() => setOpenRow((cur) => (cur === r.id ? null : r.id))}
+                  />
+                  {openRow === r.id && (
+                    <li className="border-b border-line px-4 py-2">
+                      <pre className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                        {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
+                      </pre>
+                    </li>
+                  )}
+                </Fragment>
+              ))}
+            </ul>
+          </Ledger>
+        )}
+
+        {wsId && !query.isLoading && !err && rows.length > 0 && (
+          <div className="flex h-10 shrink-0 items-center border-t border-line px-4 text-xs tabular-nums text-fg-muted">
+            {tc("pagination.range", { from: filtered.length > 0 ? 1 : 0, to: filtered.length, total: rows.length })}
+          </div>
+        )}
+      </div>
     </AdminLayout>
   )
 }
 
+function FilterItem({ value, label, count }: { value: string; label: string; count?: number }) {
+  return (
+    <DropdownMenu.RadioItem
+      value={value}
+      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
+    >
+      <span className="flex-1">{label}</span>
+      {count !== undefined && <span className="text-xs tabular-nums text-fg-muted">{count}</span>}
+      <DropdownMenu.ItemIndicator>
+        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
+      </DropdownMenu.ItemIndicator>
+    </DropdownMenu.RadioItem>
+  )
+}
+
 /* ------------------------------------------------------------------ */
-/*  Expanded payload row                                               */
+/*  Row                                                                */
 /* ------------------------------------------------------------------ */
 
-function PayloadView({ record }: { record: AuditRecord }) {
+function AuditRow({ record, open, onToggle }: { record: AuditRecord; open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
 
-  // Surface commonly-jumped ids as quick links so admins don't have to
+  const isId = record.actor_type === "user" || record.actor_type === "agent"
+  const actorLabel = isId && record.actor_id ? shortId(record.actor_id, 12) : record.actor_type
+  const hasPayload = !!record.payload && Object.keys(record.payload).length > 0
+  // Surface commonly-jumped ids as row actions so admins don't have to
   // read the JSON to navigate.
-  const convoId =
-    typeof record.payload?.conversation_id === "string"
-      ? (record.payload.conversation_id as string)
-      : null
-  const runId =
-    typeof record.payload?.agent_run_id === "string"
-      ? (record.payload.agent_run_id as string)
-      : null
+  const runId = record.target_type === "agent_run" && record.target_id
+    ? record.target_id
+    : payloadString(record, "agent_run_id")
+  const convoId = payloadString(record, "conversation_id")
+  const payloadLabel = t("audit.detail.payload")
+
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onToggle()
+    }
+  }
 
   return (
-    <div className="space-y-3 py-2">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Field
-          label={t("audit.detail.recordId")}
-          value={<span className="font-mono text-xs">{record.id}</span>}
-        />
-        <Field
-          label={t("audit.detail.actorType")}
-          value={<span className="font-mono text-xs">{record.actor_type}</span>}
-        />
-        <Field
-          label={t("audit.detail.target")}
-          value={
-            <span className="font-mono text-xs break-all">
-              {record.target_type ?? "—"} · {record.target_id ?? "—"}
-            </span>
-          }
-        />
-      </div>
-
-      {(convoId || runId) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {runId && (
-            <Button size="sm" variant="outline" onClick={() => navigate("runs", { id: runId })}>
-              {t("audit.detail.openRun")}
-            </Button>
-          )}
-          {convoId && (
-            <Button size="sm" variant="outline" onClick={() => navigate("conversations", { id: convoId })}>
-              {t("audit.detail.openConversation")}
-            </Button>
-          )}
-        </div>
+    <LedgerRow selected={open} onClick={onToggle} onKeyDown={onKeyDown}>
+      <span className="truncate font-mono text-xs tabular-nums text-fg-muted" title={record.occurred_at}>
+        {fmtAbsTime(record.occurred_at)}
+      </span>
+      <span className="truncate text-xs text-fg-muted">{t(`audit.source.${record.source}`)}</span>
+      <span className="flex min-w-0 items-center gap-1.5" title={record.actor_id ?? record.actor_type}>
+        <InitialTile name={actorLabel} />
+        <span className={cn("truncate", isId && "font-mono text-xs")}>{actorLabel}</span>
+      </span>
+      <span className="truncate" title={record.event_type}>{record.event_type}</span>
+      {record.target_type ? (
+        <LedgerId>{record.target_type} · {shortId(record.target_id, 10)}</LedgerId>
+      ) : (
+        <span className="text-xs text-fg-muted">—</span>
       )}
-
-      <div>
-        <p className="mb-1 text-xs uppercase tracking-wider text-fg-faint">
-          {t("audit.detail.payload")}
-        </p>
-        <pre className="whitespace-pre-wrap rounded-md bg-surface p-3 font-mono text-xs text-fg-muted ring-1 ring-slate-200">
-{JSON.stringify(record.payload ?? {}, null, 2)}
-        </pre>
-      </div>
-    </div>
+      <RowActions>
+        {runId && (
+          <ActionIconButton
+            icon={ArrowUpRight}
+            label={t("audit.detail.openRun")}
+            onClick={() => navigate("runs", { id: runId })}
+          />
+        )}
+        {convoId && (
+          <ActionIconButton
+            icon={MessageSquare}
+            label={t("audit.detail.openConversation")}
+            onClick={() => navigate("conversations", { id: convoId })}
+          />
+        )}
+        {hasPayload && (
+          <ActionIconButton
+            icon={Code}
+            label={payloadLabel}
+            aria-expanded={open}
+            className={cn(open && "text-fg")}
+            onClick={onToggle}
+          />
+        )}
+      </RowActions>
+    </LedgerRow>
   )
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className="text-sm text-fg-emphasis">{value}</dd>
-    </div>
-  )
-}
-
-function fmtAbsTime(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return d.toLocaleString(undefined, { hour12: false })
 }
 
 /* ------------------------------------------------------------------ */
@@ -500,16 +411,17 @@ function fmtAbsTime(iso: string): string {
 
 function AuditLoadingSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-8 w-96" />
-        <Skeleton className="h-8 w-64" />
-      </div>
-      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-9 w-full" />
-        ))}
-      </div>
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      ))}
     </div>
   )
 }

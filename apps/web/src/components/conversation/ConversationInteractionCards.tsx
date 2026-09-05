@@ -1,22 +1,24 @@
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
-import { Inbox, ShieldAlert } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
 
 import { useAgentInteractions } from "../../lib/api-interactions"
 import { InteractionDecisionCard } from "../admin/InteractionDecisionCard"
-import { Button } from "../ui/button"
 import { Skeleton } from "../ui/skeleton"
 
+/**
+ * Pending approval / user-input requests for this conversation, rendered
+ * in the thread as a hairline-headed section. The Inbox itself is one
+ * click away in the sidebar, so there is no second link to it here.
+ */
 export function ConversationInteractionCards({
   workspaceID,
   conversationID,
   preferredRequestID,
-  onOpenInbox,
 }: {
   workspaceID: string | null
   conversationID: string
   preferredRequestID?: string
-  onOpenInbox: () => void
 }) {
   const { t } = useTranslation("admin")
   const query = useAgentInteractions(workspaceID, "pending")
@@ -35,19 +37,16 @@ export function ConversationInteractionCards({
   if (!workspaceID) return null
   if (interactions.length === 0 && !preferredRequestID) return null
 
+  const title = t("conversations.stream.interactionTitle")
+
   return (
-    <section aria-label={t("conversations.stream.interactionTitle")} className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning-emphasis">
-        <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold">{t("conversations.stream.interactionTitle")}</p>
-          <p className="text-xs">{t("conversations.stream.interactionDescription")}</p>
-        </div>
-        <Button size="sm" variant="outline" onClick={onOpenInbox}>
-          <Inbox className="h-4 w-4" />
-          {t("conversations.stream.viewAllInteractions")}
-        </Button>
-      </div>
+    <section aria-label={title}>
+      <h2 className="flex h-8 items-center justify-between border-b border-line text-sm font-medium text-fg">
+        <span>{title}</span>
+        {interactions.length > 1 && (
+          <span className="text-xs font-normal tabular-nums text-fg-muted">{interactions.length}</span>
+        )}
+      </h2>
 
       {interactions.length > 0 ? (
         interactions.map((interaction) => (
@@ -55,20 +54,20 @@ export function ConversationInteractionCards({
             key={interaction.id}
             interaction={interaction}
             workspaceID={workspaceID}
-            className="rounded-xl border border-line bg-surface shadow-sm"
+            hideConversationLink
+            className="border-b border-line py-4 last:border-b-0"
           />
         ))
       ) : query.error ? (
-        <div className="rounded-lg border border-danger-border bg-danger-subtle px-4 py-3 text-sm text-danger-emphasis">
-          {t("conversations.stream.interactionLoadError")}
-        </div>
+        <p className="flex items-start gap-1.5 py-3 text-sm text-fg">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <span>{t("conversations.stream.interactionLoadError")}</span>
+        </p>
       ) : (
-        <div className="rounded-xl border border-line bg-surface p-5">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-4 h-24 w-full" />
-          <p className="mt-3 text-xs text-fg-subtle">
-            {t("conversations.stream.loadingInteraction")}
-          </p>
+        <div className="space-y-2 py-4" aria-busy="true" aria-label={t("conversations.stream.loadingInteraction")}>
+          <Skeleton className="h-3 w-48" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-2/3" />
         </div>
       )}
     </section>

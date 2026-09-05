@@ -3,6 +3,10 @@ import * as React from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
 import { cn } from "../../lib/utils"
 
+/**
+ * The one tab control: a segmented control. 2px inset, 24px segments,
+ * 12px labels; the active segment is the pressed tint at 500 weight.
+ */
 export const Tabs = TabsPrimitive.Root
 
 export const TabsList = React.forwardRef<
@@ -12,7 +16,7 @@ export const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center gap-1 rounded-lg bg-surface-muted/70 p-1",
+      "inline-flex h-7 items-center gap-0.5 rounded-md border border-line bg-surface p-0.5",
       className,
     )}
     {...props}
@@ -27,7 +31,7 @@ export const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium text-fg-subtle transition-[color,background-color,box-shadow] hover:bg-surface/60 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/30 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:text-fg data-[state=active]:shadow-sm",
+      "inline-flex h-6 items-center justify-center gap-1.5 whitespace-nowrap rounded px-2 text-xs text-fg-muted hover:app-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 data-[state=active]:app-pressed data-[state=active]:font-medium data-[state=active]:text-fg",
       className,
     )}
     {...props}
@@ -41,10 +45,7 @@ export const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn(
-      "mt-4 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong",
-      className,
-    )}
+    className={cn("mt-4 focus-visible:outline-none", className)}
     {...props}
   />
 ))

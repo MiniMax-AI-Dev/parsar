@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next"
 import { navigateAdmin, type AdminView } from "../../lib/admin-router"
 import { cn } from "../../lib/utils"
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
 
 export type SettingsTab =
   | "general"
@@ -31,36 +32,33 @@ const TABS: SettingsTab[] = [
 
 interface SettingsTabsProps {
   active: SettingsTab
+  className?: string
 }
 
 /**
- * Horizontal tab strip at the top of every settings sub-page. Each tab
- * navigates to its own admin view; the sidebar always highlights the
- * single "Settings" entry while the strip handles intra-settings nav.
+ * The settings sub-navigation as the shared segmented control. Each
+ * segment navigates to its own admin view; the sidebar keeps the single
+ * "Settings" entry highlighted. Rendered once per page, in the
+ * PageHeader action slot.
  */
-export function SettingsTabs({ active }: SettingsTabsProps) {
+export function SettingsTabs({ active, className }: SettingsTabsProps) {
   const { t } = useTranslation("common")
 
   return (
-    <nav className="mb-5 flex gap-1 border-b border-line">
-      {TABS.map((tab) => {
-        const isActive = tab === active
-        return (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => navigateAdmin(TAB_TO_VIEW[tab])}
-            className={cn(
-              "relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors",
-              isActive
-                ? "border-line-strong font-medium text-fg"
-                : "border-transparent font-normal text-fg-subtle hover:text-fg-emphasis",
-            )}
-          >
+    <Tabs
+      value={active}
+      onValueChange={(next) => {
+        if (next !== active) navigateAdmin(TAB_TO_VIEW[next as SettingsTab])
+      }}
+      className={cn("shrink-0", className)}
+    >
+      <TabsList aria-label={t("nav.items.settings")}>
+        {TABS.map((tab) => (
+          <TabsTrigger key={tab} value={tab}>
             {t(`nav.settingsTabs.${tab}` as never)}
-          </button>
-        )
-      })}
-    </nav>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   )
 }

@@ -1,0 +1,5 @@
+# review artifacts are regenerated; keep the scripts and fixtures
+review/*.png
+review/all/
+review/fixtures/__pycache__/
+hook.cache.json
