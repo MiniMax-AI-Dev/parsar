@@ -1482,7 +1482,7 @@ function ComposerForm({
   const [busy, setBusy] = useState(false)
   const [sendError, setSendError] = useState<{ targetId: string; message: string } | null>(null)
   const sendTargetId = conversationId || agentId || ""
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const sendMut = useSendUserMessage(conversationId || null)
 
   useEffect(() => {
@@ -1569,13 +1569,21 @@ function ComposerForm({
           disabled && "opacity-60",
         )}
       >
-        <Input
+        <textarea
           ref={inputRef}
+          rows={2}
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.shiftKey) return
+            // Safari can report IME confirmation after composition ends.
+            if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return
+            e.preventDefault()
+            if (!e.repeat) e.currentTarget.form?.requestSubmit()
+          }}
           placeholder={placeholder}
           disabled={disabled || (!conversationId && !onSendDirect)}
-          className="flex-1 border-0 bg-transparent px-2 text-base shadow-none focus-visible:ring-0"
+          className="max-h-48 min-w-0 flex-1 resize-y border-0 bg-transparent px-2 text-base outline-none focus-visible:ring-0 disabled:cursor-not-allowed"
         />
         {showStop ? (
           <button
