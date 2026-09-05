@@ -67,7 +67,9 @@ function trackFor(c: LedgerColumn): string {
     case "tile":
       return "18px"
     case "actions":
-      return `${c.count * 28 + Math.max(0, c.count - 1) * 2}px`
+      // No track: RowActions overlays the row's right end on hover, so
+      // every ledger's last content column ends at the same edge.
+      return "0px"
     case "fixed":
       return `${c.width}px`
     default: {
@@ -110,7 +112,7 @@ export function adaptLegacyTemplate(template: string): string {
     .join(" ")
 }
 
-const LedgerContext = React.createContext<string>("minmax(0,1fr)")
+const LedgerContext = React.createContext<{ template: string; trailingActions: boolean }>({ template: "minmax(0,1fr)", trailingActions: false })
 
 export function Ledger({
   columns,
@@ -118,12 +120,15 @@ export function Ledger({
   children,
   ...props
 }: { columns: string | LedgerColumn[] } & React.HTMLAttributes<HTMLDivElement>) {
-  const template = React.useMemo(
-    () => (typeof columns === "string" ? adaptLegacyTemplate(columns) : ledgerTemplate(columns)),
+  const value = React.useMemo(
+    () => ({
+      template: typeof columns === "string" ? adaptLegacyTemplate(columns) : ledgerTemplate(columns),
+      trailingActions: typeof columns !== "string" && columns[columns.length - 1]?.kind === "actions",
+    }),
     [columns],
   )
   return (
-    <LedgerContext.Provider value={template}>
+    <LedgerContext.Provider value={value}>
       <div className={cn("min-h-0 flex-1 overflow-y-auto", className)} {...props}>
         {children}
       </div>
@@ -135,14 +140,23 @@ function useColumns() {
   return React.useContext(LedgerContext)
 }
 
+/* Rows and the header share one gutter: 24px each side, the topbar's
+   padding, so the first and last columns of every ledger sit on the same
+   two edges page after page. A trailing (zero-width) actions track still
+   carries the 10px column gap, which the right padding absorbs. */
+function gutterClass(trailingActions: boolean) {
+  return trailingActions ? "pl-6 pr-3.5" : "px-6"
+}
+
 export function LedgerHeader({ children, className }: { children: React.ReactNode; className?: string }) {
-  const columns = useColumns()
+  const { template, trailingActions } = useColumns()
   return (
     <div
       aria-hidden="true"
-      style={{ gridTemplateColumns: columns }}
+      style={{ gridTemplateColumns: template }}
       className={cn(
-        "sticky top-0 z-[1] grid h-7 items-center gap-x-2.5 border-b border-line bg-surface px-4 text-xs text-fg-muted",
+        "sticky top-0 z-[1] grid h-7 items-center gap-x-2.5 border-b border-line bg-surface text-xs text-fg-muted [&>*]:min-w-0 [&>*]:truncate [&>*]:whitespace-nowrap",
+        gutterClass(trailingActions),
         className,
       )}
     >
@@ -169,7 +183,7 @@ export function LedgerGroup({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-7 w-full items-center gap-1.5 border-b border-line px-3.5 text-left text-xs text-fg-muted hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+        className="flex h-7 w-full items-center gap-1.5 border-b border-line pl-[22px] pr-6 text-left text-xs text-fg-muted hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
       >
         <ChevronDown
           className={cn(
@@ -191,16 +205,17 @@ export const LedgerRow = React.forwardRef<
   HTMLLIElement,
   React.LiHTMLAttributes<HTMLLIElement> & { selected?: boolean }
 >(({ selected, className, children, ...props }, ref) => {
-  const columns = useColumns()
+  const { template, trailingActions } = useColumns()
   return (
     <li
       ref={ref}
       role="option"
       aria-selected={selected}
       tabIndex={0}
-      style={{ gridTemplateColumns: columns }}
+      style={{ gridTemplateColumns: template }}
       className={cn(
-        "group relative grid h-9 cursor-default items-center gap-x-2.5 border-b border-line px-4 text-sm text-fg outline-none transition-colors duration-150 ease-settle hover:app-hover focus-visible:app-hover",
+        "group relative grid h-9 cursor-default items-center gap-x-2.5 border-b border-line text-sm text-fg outline-none transition-colors duration-150 ease-settle hover:app-hover focus-visible:app-hover [&>*]:min-w-0 [&>*]:self-center",
+        gutterClass(trailingActions),
         selected && "app-selected before:absolute before:bottom-0 before:left-0 before:top-0 before:w-0.5 before:bg-accent before:content-['']",
         className,
       )}

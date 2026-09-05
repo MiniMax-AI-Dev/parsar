@@ -459,6 +459,9 @@ samp,
 @utility app-pressed { background-color: var(--app-pressed); }
 @utility app-selected { background-color: var(--app-selected); }
 @utility app-tile { background-color: var(--app-tile); }
+/* Opaque twin of the hover tint, for overlays that must hide what is
+   beneath them (row action clusters) while matching the hovered row. */
+@utility app-hover-solid { background-color: color-mix(in srgb, var(--color-surface), var(--color-fg) 4%); }
 @utility app-shadow-control { box-shadow: var(--app-shadow-control); }
 @utility app-shadow-floating { box-shadow: var(--app-shadow-floating); }
 

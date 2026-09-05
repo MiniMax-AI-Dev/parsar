@@ -75,9 +75,10 @@ export function ActionIconButton({
 }
 
 /**
- * Row action cluster. Inside a `LedgerRow` (a `group`) it stays invisible
- * until the row is hovered or focused, so rows read as content, not as
- * toolbars; pass `always` for rows whose actions must be discoverable.
+ * Row action cluster. Inside a `LedgerRow` (a `group`) it floats over the
+ * row's right end, invisible until the row is hovered or focused, so the
+ * last content column of every ledger ends on the same edge and rows read
+ * as content, not as toolbars; pass `always` to keep it visible.
  */
 export function RowActions({
   children,
@@ -93,6 +94,7 @@ export function RowActions({
       <div
         className={cn(
           "flex min-h-7 items-center justify-end gap-0.5",
+          "group-[.grid]:absolute group-[.grid]:right-4 group-[.grid]:top-1/2 group-[.grid]:-translate-y-1/2 group-[.grid]:rounded-md group-[.grid]:app-hover-solid group-[.grid]:px-0.5",
           !always && "opacity-0 transition-opacity duration-150 ease-settle focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100",
           className,
         )}
