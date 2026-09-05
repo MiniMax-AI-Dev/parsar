@@ -869,6 +869,7 @@ function EmptyChat({
 
             <ComposerForm
               conversationId={conversationId ?? ""}
+              agentId={agent?.id}
               disabled={!agent || sandboxGuard?.blocked}
               autoFocus={focusComposer}
               placeholder={
@@ -1423,6 +1424,7 @@ function stringMeta(metadata: Record<string, unknown> | undefined, key: string):
 
 function ComposerForm({
   conversationId,
+  agentId,
   placeholder,
   disabled,
   autoFocus,
@@ -1436,6 +1438,7 @@ function ComposerForm({
   blockReason,
 }: {
   conversationId: string
+  agentId?: string
   placeholder: string
   disabled?: boolean
   autoFocus?: boolean
@@ -1477,7 +1480,8 @@ function ComposerForm({
   const { t } = useTranslation("admin")
   const [content, setContent] = useState("")
   const [busy, setBusy] = useState(false)
-  const [sendError, setSendError] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<{ targetId: string; message: string } | null>(null)
+  const sendTargetId = conversationId || agentId || ""
   const inputRef = useRef<HTMLInputElement | null>(null)
   const sendMut = useSendUserMessage(conversationId || null)
 
@@ -1502,21 +1506,21 @@ function ComposerForm({
     if (!canSubmit) return
     setSendError(null)
     const text = trimmed
+    const handleSendError = (err: unknown) => {
+      setSendError({ targetId: sendTargetId, message: err instanceof Error ? err.message : String(err) })
+    }
     if (onSendDirect) {
       setBusy(true)
       try {
         await onSendDirect(text)
         setContent("")
       } catch (err) {
-        setSendError(err instanceof Error ? err.message : String(err))
+        handleSendError(err)
       } finally {
         setBusy(false)
       }
     } else {
-      const resp = await sendMut.mutateAsync({ content: text }).catch((err) => {
-        setSendError(err instanceof Error ? err.message : String(err))
-        return null
-      })
+      const resp = await sendMut.mutateAsync({ content: text }).catch(handleSendError)
       if (!resp) return
       if (onAfterSend) await onAfterSend(text.slice(0, 30))
       setContent("")
@@ -1549,7 +1553,9 @@ function ComposerForm({
 
   return (
     <form onSubmit={submit}>
-      {sendError && <ChatErrorToast message={sendError} onDismiss={() => setSendError(null)} />}
+      {sendError?.targetId === sendTargetId && (
+        <ChatErrorToast message={sendError.message} onDismiss={() => setSendError(null)} />
+      )}
       {blockReason && (
         <div className="mb-2 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />

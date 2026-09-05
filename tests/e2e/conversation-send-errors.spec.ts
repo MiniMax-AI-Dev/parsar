@@ -3,6 +3,8 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const WORKSPACE_ID = "00000000-0000-0000-0000-000000000011";
 const CONVERSATION_ID = "00000000-0000-0000-0000-000000000012";
 const AGENT_ID = "00000000-0000-0000-0000-000000000013";
+const OTHER_CONVERSATION_ID = "00000000-0000-0000-0000-000000000014";
+const OTHER_AGENT_ID = "00000000-0000-0000-0000-000000000015";
 const DRAFT = "Keep this draft after a failed send";
 type Surface = "existing" | "empty" | "new";
 type Failure = "create" | "message" | "network";
@@ -62,6 +64,48 @@ test("send errors can be dismissed without losing the draft", async ({ page }) =
   await expect(composer.getByRole("textbox")).toHaveValue(DRAFT);
 });
 
+for (const surface of ["existing", "new"] as const) {
+  for (const lateFailure of [false, true]) {
+    test(`${surface} send errors stay with their target when switching ${lateFailure ? "before" : "after"} failure`, async ({ page }) => {
+      await mockApp(page, surface, "message");
+      let rejectSend!: () => void;
+      const waitForFailure = new Promise<void>((resolve) => { rejectSend = resolve; });
+      await page.route("**/api/v1/conversations/*/messages", async (route) => {
+        await waitForFailure;
+        return json(route, { error: "server_unreachable", message: "message rejected" }, 503);
+      });
+      const input = page.locator("form").getByRole("textbox");
+      if (surface === "existing") {
+        await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${OTHER_CONVERSATION_ID}`);
+        await expect(input).toBeEnabled();
+        await page.getByText("Test Conversation", { exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`id=${CONVERSATION_ID}`));
+      } else {
+        await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+      }
+      await input.fill(DRAFT);
+      const request = page.waitForRequest("**/api/v1/conversations/*/messages");
+      await page.getByRole("button", { name: "send", exact: true }).click();
+      await request;
+      if (!lateFailure) {
+        rejectSend();
+        await expect(page.locator("form").getByRole("alert")).toHaveText("message rejected×");
+      }
+      if (surface === "existing") {
+        await page.getByText("Other Conversation", { exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`id=${OTHER_CONVERSATION_ID}`));
+      } else {
+        await page.getByRole("button", { name: "Switch Agent", exact: true }).click();
+        await page.getByRole("option", { name: "Other Agent", exact: true }).click();
+      }
+      if (lateFailure) rejectSend();
+      await expect(page.getByRole("button", { name: "send", exact: true })).toBeEnabled();
+      await expect(page.locator("form").getByRole("alert")).toHaveCount(0);
+      await expect(input).toHaveValue(DRAFT);
+    });
+  }
+}
+
 test("long send errors stay within the composer", async ({ page }) => {
   await mockApp(page, "existing", "message");
   const message = "unbroken-error-".repeat(100);
@@ -119,14 +163,20 @@ async function mockApp(page: Page, surface: Surface, failure: Failure) {
     if (path === "/api/v1/me/discoverable-workspaces") return json(route, { workspaces: [], total: 0 });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/agents`) return json(route, { agents: [
       { id: AGENT_ID, workspace_id: WORKSPACE_ID, name: "Test Agent", status: "active", connector_type: "http_agent", config: {} },
+      { id: OTHER_AGENT_ID, workspace_id: WORKSPACE_ID, name: "Other Agent", status: "active", connector_type: "http_agent", config: {} },
     ] });
+    const otherConversation = { ...conversation, id: OTHER_CONVERSATION_ID, title: "Other Conversation", message_count: 1 };
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/conversations`) {
-      if (method !== "POST") return json(route, { conversations: surface === "new" && !creates ? [] : [conversation] });
+      if (method !== "POST") return json(route, { conversations: surface === "new" && !creates ? [] : [conversation, otherConversation] });
       if (state.failure === "create") return json(route, { error: "server_unreachable", message: "create rejected" }, 503);
       creates++;
       conversation = { ...conversation, id: `00000000-0000-0000-0000-${String(100 + creates).padStart(12, "0")}` };
       return json(route, conversation, 201);
     }
+    if (path === `/api/v1/conversations/${OTHER_CONVERSATION_ID}`) return json(route, otherConversation);
+    if (path === `/api/v1/conversations/${OTHER_CONVERSATION_ID}/timeline`) return json(route, {
+      conversation_id: OTHER_CONVERSATION_ID, messages: [], agent_runs: [],
+    });
     if (path === `/api/v1/conversations/${conversation.id}`) return json(route, conversation);
     if (path === `/api/v1/conversations/${conversation.id}/messages`) {
       state.messageRequests++;
