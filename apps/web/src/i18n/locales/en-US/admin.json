@@ -265,6 +265,7 @@
       "allow": "Allowed",
       "deny": "Denied",
       "alreadyDecided": "This approval has been handled — actions are no longer available.",
+      "readOnly": "Read-only access. Workspace owners, admins, and members can respond.",
       "relatedLinks": "Related",
       "openRun": "Open Run Detail",
       "openConversation": "Open Conversation",
