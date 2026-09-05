@@ -20,7 +20,7 @@ import { ThemeMenu } from "./ThemeMenu"
 import { UserMenu } from "./UserMenu"
 import { ListSlot } from "../plugin/SlotRenderer"
 import { ResizeHandle } from "../ui/resize-handle"
-import { PageTransition } from "../ui/page-transition"
+import { PageTransition, type PageLevel } from "../ui/page-transition"
 import { LayoutPrompt } from "./LayoutPrompt"
 import { useResizableWidth } from "../../lib/layout-width"
 
@@ -31,7 +31,16 @@ interface AdminLayoutProps {
   fullBleed?: boolean
   hideSidebar?: boolean
   contentClassName?: string
+  /**
+   * Entrance animation level. Defaults to "detail" when the route carries
+   * an entity id on a view that opens a separate detail page, "page"
+   * otherwise (views whose id only selects a rail stay level one).
+   */
+  level?: PageLevel
 }
+
+/** Views where `?id=` selects a rail on the same page instead of a detail page. */
+const RAIL_VIEWS = new Set<string>(["runs", "approvals", "conversations", "connections"])
 
 interface MenuItem {
   id: AdminView
@@ -86,9 +95,11 @@ export function AdminLayout({
   fullBleed = false,
   hideSidebar = false,
   contentClassName,
+  level: levelProp,
 }: AdminLayoutProps) {
   const { t } = useTranslation("common")
-  const { navigate } = useAdminView()
+  const { navigate, view, entityId } = useAdminView()
+  const level: PageLevel = levelProp ?? (entityId && view && !RAIL_VIEWS.has(view) ? "detail" : "page")
   const sidebar = useResizableWidth({ storageKey: "sidebar", defaultWidth: 232, min: 200, max: 360, edge: "right" })
 
   return (
@@ -168,7 +179,7 @@ export function AdminLayout({
         className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
         tabIndex={-1}
       >
-        <PageTransition viewKey={activeMenu}>
+        <PageTransition viewKey={level === "detail" ? `${activeMenu}:${entityId ?? ""}` : activeMenu} level={level}>
           {fullBleed ? (
             children
           ) : (

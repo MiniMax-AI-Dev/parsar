@@ -121,6 +121,7 @@
   --animate-pop-out: pop-out 150ms var(--ease-settle) both;
   --animate-rail-out: rail-out 200ms var(--ease-settle) both;
   --animate-page-in: page-in 320ms var(--ease-spring) both;
+  --animate-detail-in: detail-in 360ms var(--ease-spring) both;
   --animate-modal-in: modal-in 420ms var(--ease-spring) both;
   --animate-modal-out: modal-out 260ms var(--ease-settle) both;
   --animate-overlay-in: overlay-in 240ms var(--ease-settle) both;
@@ -244,7 +245,13 @@ html[data-theme="dark"] {
   to { transform: translate(calc(-50% + 34vw), -50%) scale(0.45); opacity: 0; }
 }
 
-/* Every page enters the same way: a short spring rise and fade. */
+/* Level-one pages (sidebar views) rise in; level-two pages (a detail
+   reached from a list) are pushed in from the right, like a stack. */
+@keyframes detail-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+
 @keyframes page-in {
   from { opacity: 0; transform: translateY(10px) scale(0.995); }
   to { opacity: 1; transform: none; }
