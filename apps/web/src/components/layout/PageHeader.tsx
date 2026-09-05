@@ -34,7 +34,7 @@ export function PageHeader({ title, subtitle, subtitleFor, action, backLink, cla
   return (
     <header
       className={cn(
-        "sticky top-0 z-10 -mx-6 mb-8 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface pl-6 pr-12",
+        "sticky top-0 z-10 -mx-6 mb-8 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface pl-6 pr-16",
         className,
       )}
     >
