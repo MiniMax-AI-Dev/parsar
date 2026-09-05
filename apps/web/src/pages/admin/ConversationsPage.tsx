@@ -202,7 +202,7 @@ export function ConversationsPage() {
   // First-send creates the conv + posts the message + navigates in.
   // Title derives from the first 30 chars so the sidebar gets a
   // meaningful name immediately (server defaults to "Untitled conversation").
-  const handleSendFromEmpty = async (content: string): Promise<void> => {
+  const handleSendFromEmpty = async (content: string): Promise<boolean> => {
     if (!wsId || !selectedAgentId) {
       throw new Error("workspace_id and agent_id required for empty-state send")
     }
@@ -231,13 +231,14 @@ export function ConversationsPage() {
       })
       qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", cid] })
     }
-    if (firstSend.current !== attempt) return
+    if (firstSend.current !== attempt) return false
     firstSend.current = null
     writeConversationViewState(wsId, {
       agentId: selectedAgentId,
       conversationId: cid,
     })
     navigate("conversations", { id: cid })
+    return true
   }
 
   const renameMutation = useUpdateConversationTitle(wsId)
@@ -725,7 +726,7 @@ interface MainProps {
   onExpand: () => void
   onPageDescription: string
   /** Empty-state send: create conv + post first message + navigate. */
-  onSendFromEmpty: (content: string) => Promise<void>
+  onSendFromEmpty: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
   sandboxGuard?: SandboxSendGuard
@@ -849,7 +850,7 @@ function EmptyChat({
   conversationId?: string
   workspaceID?: string
   /** Create-then-send flow (required when conversationId is unset). */
-  onSendFromEmpty?: (content: string) => Promise<void>
+  onSendFromEmpty?: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage?: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
   sandboxGuard?: SandboxSendGuard
@@ -1470,7 +1471,7 @@ function ComposerForm({
    * calls this instead of the conversationId-scoped send hook. Lets the
    * parent atomically createConversation + sendUserMessage + navigate.
    */
-  onSendDirect?: (content: string) => Promise<void>
+  onSendDirect?: (content: string) => Promise<boolean>
   onAfterSend?: (title: string) => Promise<void>
   /**
    * Called after a successful send with the dispatched agent_run_id (if any).
@@ -1535,8 +1536,8 @@ function ComposerForm({
     if (onSendDirect) {
       setBusy(true)
       try {
-        await onSendDirect(text)
-        setContent("")
+        const sentToCurrentConversation = await onSendDirect(text)
+        if (sentToCurrentConversation) setContent("")
       } catch (err) {
         handleSendError(err)
       } finally {

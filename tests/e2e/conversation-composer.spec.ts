@@ -190,6 +190,31 @@ test("late creation does not restore an abandoned first-send target", async ({ p
   expect(new Set(state.messageTargets).size).toBe(2);
 });
 
+test("an abandoned retry cannot clear the new conversation draft", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  await input.fill(DRAFT);
+  await send.click();
+  await expect(page.locator("form").getByRole("alert")).toBeVisible();
+  state.failure = null;
+  let releaseSend!: () => void;
+  state.waitForSend = new Promise<void>((resolve) => { releaseSend = resolve; });
+  await send.click();
+  await expect.poll(() => state.messageRequests).toBe(2);
+  await page.getByRole("button", { name: "New conversation", exact: true }).click();
+  await input.fill("A different draft");
+  releaseSend();
+  await expect.poll(() => state.sent).toEqual([DRAFT]);
+  await expect(input).toHaveValue("A different draft");
+  await expect(page).toHaveURL(/focus=compose/);
+  await send.click();
+  await expect.poll(() => state.sent).toEqual([DRAFT, "A different draft"]);
+  await expect(input).toHaveValue("");
+  expect(state.createRequests).toBe(2);
+});
+
 test("send errors can be dismissed without losing the draft", async ({ page }) => {
   await mockApp(page, "existing", "message");
   await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${CONVERSATION_ID}`);
