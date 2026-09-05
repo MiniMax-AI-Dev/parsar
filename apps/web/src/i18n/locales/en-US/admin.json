@@ -361,6 +361,7 @@
       "generic": "A runtime capability failed to start. Please retry later or contact an administrator."
     },
     "composer": {
+      "readOnly": "Read-only access. You cannot send messages.",
       "label": "Send message",
       "placeholder": "Chat with {{agent}}…",
       "addContext": "Add attachment / context",

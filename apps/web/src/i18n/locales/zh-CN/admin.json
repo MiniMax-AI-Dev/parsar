@@ -361,6 +361,7 @@
       "generic": "运行期能力启动失败，请稍后重试或联系管理员。"
     },
     "composer": {
+      "readOnly": "当前为只读权限，无法发送消息。",
       "label": "发送消息",
       "placeholder": "和 {{agent}} 聊聊…",
       "addContext": "添加附件 / 上下文",
