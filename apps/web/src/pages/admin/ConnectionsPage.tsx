@@ -10,7 +10,7 @@ import { SlackConnectorFields } from "../../components/admin/channel-connectors/
 import { TeamsConnectorFields } from "../../components/admin/channel-connectors/teamsFields"
 import { DetailRail } from "../../components/ui/detail-rail"
 import { ErrorState } from "../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerId, LedgerRow } from "../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import {
@@ -50,7 +50,7 @@ const STATUS_ICON: Record<ConnectorStatus, StatusKind> = {
 }
 
 /** status icon · platform · app id · state · updated */
-const LEDGER_COLUMNS = "14px minmax(0,1fr) 220px 128px 80px"
+const LEDGER_COLUMNS = [col.icon(), col.title(), col.id(176), col.meta(104), col.age(80)]
 
 export function ConnectionsPage() {
   const { t } = useTranslation("admin")
@@ -152,7 +152,7 @@ export function ConnectionsPage() {
                 <span>{t("connections.connector.platformSelect.label")}</span>
                 <span>App ID</span>
                 <span>{t("connectors.table.status")}</span>
-                <span />
+                <span className="text-right" />
               </LedgerHeader>
               <ul className="m-0 list-none p-0">
                 {rows.map((row) => {

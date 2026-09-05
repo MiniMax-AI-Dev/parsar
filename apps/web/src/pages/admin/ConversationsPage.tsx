@@ -38,7 +38,7 @@ import {
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState, InlineError } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
-import { InitialTile, Ledger, LedgerId, LedgerRow } from "../../components/ui/ledger"
+import { InitialTile, Ledger, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import { TurnNavRail, turnPreview, useActiveTurnKey } from "../../components/ui/turn-nav-rail"
@@ -85,7 +85,7 @@ const FOLD_KEY = "parsar:conv:sidebarFolded"
 const THREAD_STYLE = { ["--thread-max-width" as string]: "48rem" }
 
 /** title · conversation id · age (actions replace the age on hover) */
-const LIST_COLUMNS = "minmax(0,1fr) 64px 60px"
+const LIST_COLUMNS = [col.title(120, 2), col.id(56, 0.3), col.age(56, 0.3), col.actions(2)]
 
 interface SandboxSendGuard {
   blocked: boolean
@@ -525,10 +525,10 @@ function ConversationList(p: ListProps) {
                     if (!isRenaming) p.onPickConversation(c.id)
                   }}
                   onKeyDown={onKeyDown}
-                  className={cn("group/row", isRenaming && "h-auto min-h-9 py-1")}
+                  className={cn(isRenaming && "h-auto min-h-9 py-1")}
                 >
                   {isRenaming ? (
-                    <div className="col-span-3 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="col-span-4 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <Input
                           ref={renameInputRef}
@@ -549,7 +549,7 @@ function ConversationList(p: ListProps) {
                           disabled={renameBusy}
                           aria-label={t("conversations.sidebar.renameAria")}
                         />
-                        <RowActions>
+                        <RowActions inline>
                           <ActionIconButton
                             icon={X}
                             label={t("conversations.sidebar.renameCancel")}
@@ -577,27 +577,25 @@ function ConversationList(p: ListProps) {
                         {c.title || t("conversations.detail.unnamed")}
                       </span>
                       <LedgerId>{tailId(c.id)}</LedgerId>
-                      <span className="relative flex h-full items-center justify-end">
-                        <span className="truncate text-xs text-fg-muted group-focus-within/row:invisible group-hover/row:invisible">
-                          {fmtAgo(c.last_message_at ?? c.updated_at)}
-                        </span>
-                        <RowActions className="absolute inset-y-0 right-0 hidden group-focus-within/row:flex group-hover/row:flex">
-                          <ActionIconButton
-                            icon={Pencil}
-                            label={t("conversations.sidebar.renameAria")}
-                            onClick={() => startRename(c)}
-                          />
-                          <ActionIconButton
-                            icon={Trash2}
-                            tone="danger"
-                            label={t("conversations.sidebar.deleteAria")}
-                            onClick={() => {
-                              setDeleteError("")
-                              setDeleteConvId(c.id)
-                            }}
-                          />
-                        </RowActions>
+                      <span className="truncate text-right text-xs text-fg-muted">
+                        {fmtAgo(c.last_message_at ?? c.updated_at)}
                       </span>
+                      <RowActions>
+                        <ActionIconButton
+                          icon={Pencil}
+                          label={t("conversations.sidebar.renameAria")}
+                          onClick={() => startRename(c)}
+                        />
+                        <ActionIconButton
+                          icon={Trash2}
+                          tone="danger"
+                          label={t("conversations.sidebar.deleteAria")}
+                          onClick={() => {
+                            setDeleteError("")
+                            setDeleteConvId(c.id)
+                          }}
+                        />
+                      </RowActions>
                     </>
                   )}
                 </LedgerRow>

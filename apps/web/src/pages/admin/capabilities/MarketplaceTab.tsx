@@ -9,7 +9,7 @@ import { Button } from "../../../components/ui/button"
 import { RailSection } from "../../../components/ui/detail-rail"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerNum, LedgerRow } from "../../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
 import {
@@ -68,7 +68,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
 }
 
 /** name (+type, +state, +description) · source · version · workspaces added · credentials · actions */
-const MARKET_COLUMNS = "minmax(0,1fr) 132px 88px 96px 150px 64px"
+const MARKET_COLUMNS = [col.title(), col.meta(120), col.id(96, 0.5), col.num(112), col.meta(150), col.actions(2)]
 
 function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, canManage, onSelectItem, onInstall, onDelete, onViewCapability }: MarketplaceTabProps) {
   const { t, i18n } = useTranslation("admin")

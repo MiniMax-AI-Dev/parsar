@@ -9,7 +9,7 @@ import { Copy, Database, Pencil, Trash2, Zap } from "lucide-react"
 
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { EmptyState } from "../../components/ui/empty-state"
-import { Ledger, LedgerGroup, LedgerHeader, LedgerRow } from "../../components/ui/ledger"
+import { Ledger, LedgerGroup, LedgerHeader, LedgerRow, col } from "../../components/ui/ledger"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import { hostFromBaseURL } from "../../lib/model-base-url"
 import { modelHealth } from "../../lib/model-health"
@@ -19,7 +19,7 @@ import { useRelativeTime } from "../../lib/relative-time"
 import type { Model } from "../../lib/api-types"
 
 /** status icon · checkbox · model key · name · endpoint host · protocol · credential mode · last test · actions */
-const LEDGER_COLUMNS = "14px 14px minmax(0,1.2fr) minmax(0,1fr) 200px 96px 72px 72px 120px"
+const LEDGER_COLUMNS = [col.icon(), col.check(), col.id(176, 1.2), col.title(160, 1), col.id(160), col.meta(104), col.meta(112), col.age(80), col.actions(4)]
 
 interface CredentialStatus {
   labelKey: string

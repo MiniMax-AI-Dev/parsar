@@ -13,7 +13,7 @@ import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { Kbd } from "../../components/ui/kbd"
-import { InitialTile, Ledger, LedgerHeader, LedgerId, LedgerRow } from "../../components/ui/ledger"
+import { InitialTile, Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
@@ -56,7 +56,7 @@ const SOURCE_TARGET_TYPES: Record<AuditSource, ReadonlyArray<string>> = {
 }
 
 /** time · source · actor · action · target · actions */
-const LEDGER_COLUMNS = "140px 56px minmax(0,1fr) minmax(0,1.4fr) minmax(0,1.2fr) 96px"
+const LEDGER_COLUMNS = [col.id(140, 0.5), col.meta(64, 0.4), col.title(160, 1), col.text(160, 1.4), col.id(160, 1.2), col.actions(3)]
 
 function shortId(s: string | undefined | null, n = 10): string {
   if (!s) return "—"

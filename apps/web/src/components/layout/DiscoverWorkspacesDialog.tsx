@@ -18,6 +18,7 @@ import {
   LedgerId,
   LedgerNum,
   LedgerRow,
+  col,
 } from "../ui/ledger"
 import { OffsetPagination } from "../ui/offset-pagination"
 import { Skeleton } from "../ui/skeleton"
@@ -33,7 +34,7 @@ interface DiscoverWorkspacesDialogProps {
 const PAGE_SIZE = 20
 
 /** workspace (tile · name · slug · pending badge) · members · one action */
-const LEDGER_COLUMNS = "minmax(0,1fr) 64px 28px"
+const LEDGER_COLUMNS = [col.title(), col.num(64), col.actions(1)]
 
 export function DiscoverWorkspacesDialog({
   open,

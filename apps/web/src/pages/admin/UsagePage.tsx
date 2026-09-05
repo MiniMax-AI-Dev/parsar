@@ -8,7 +8,7 @@ import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerNum, LedgerRow } from "../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../components/ui/ledger"
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { useAdminView } from "../../lib/admin-router"
@@ -101,9 +101,9 @@ function fmtTime(iso: string): string {
 }
 
 /** provider · model · calls · input · output · cost */
-const MODEL_COLUMNS = "128px minmax(0,1fr) 72px 104px 104px 96px"
+const MODEL_COLUMNS = [col.meta(128), col.id(200, 2), col.num(72), col.num(104), col.num(104), col.num(96)]
 /** time · run · provider · model · input · output · cost */
-const RECENT_COLUMNS = "148px 156px 128px minmax(0,1fr) 104px 104px 96px"
+const RECENT_COLUMNS = [col.id(148, 0.5), col.id(156, 0.7), col.meta(128), col.id(200, 2), col.num(104), col.num(104), col.num(96)]
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -159,14 +159,14 @@ export function UsagePage() {
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto pb-10">
-            <PropertyList className="grid-cols-[132px_minmax(0,1fr)] px-4 pt-3">
+            <PropertyList className="grid-cols-[132px_minmax(0,1fr)] px-6 pt-3">
               <Property label={t("usage.stats.runs")} mono className="tabular-nums">{fmtInt(summary.runs.size)}</Property>
               <Property label={t("usage.stats.inputTokens")} mono className="tabular-nums">{fmtInt(summary.inputTokens)}</Property>
               <Property label={t("usage.stats.outputTokens")} mono className="tabular-nums">{fmtInt(summary.outputTokens)}</Property>
               <Property label={t("usage.stats.cost")} mono className="tabular-nums">{fmtUsd(summary.costUsd)}</Property>
             </PropertyList>
 
-            <h2 className="mb-1 mt-6 px-4 text-xs font-medium text-fg">{t("usage.byModel.title")}</h2>
+            <h2 className="mb-1 mt-6 px-6 text-xs font-medium text-fg">{t("usage.byModel.title")}</h2>
             <Ledger columns={MODEL_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.byModel.title")}>
               <LedgerHeader>
                 <span>{t("usage.byModel.provider")}</span>
@@ -190,7 +190,7 @@ export function UsagePage() {
               </ul>
             </Ledger>
 
-            <h2 className="mb-1 mt-6 px-4 text-xs font-medium text-fg">{t("usage.recent.title")}</h2>
+            <h2 className="mb-1 mt-6 px-6 text-xs font-medium text-fg">{t("usage.recent.title")}</h2>
             <Ledger columns={RECENT_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.recent.title")}>
               <LedgerHeader>
                 <span>{t("usage.recent.time")}</span>

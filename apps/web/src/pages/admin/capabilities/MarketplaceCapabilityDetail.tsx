@@ -8,7 +8,7 @@ import { Button } from "../../../components/ui/button"
 import { RailSection } from "../../../components/ui/detail-rail"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
-import { InitialTile, Ledger, LedgerRow } from "../../../components/ui/ledger"
+import { InitialTile, Ledger, LedgerRow, col } from "../../../components/ui/ledger"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { useTargetMarketplaceInstalls, useMarketplaceEnabledAgents, useUninstall, type TargetMarketplaceInstall, marketplaceSourceName } from "../../../lib/api-marketplace"
@@ -20,7 +20,7 @@ import { BackLink, InlineNotice } from "./notices"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 
 /** agent · version · open */
-const AGENT_COLUMNS = "minmax(0,1fr) 120px 14px"
+const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
 
 export function MarketplaceCapabilityDetail({ id }: { id: string }) {
   const { t, i18n } = useTranslation("admin")
@@ -105,7 +105,7 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
           ) : agents.length === 0 ? (
             <p className="pt-1 text-sm text-fg-muted">{t("capabilities.marketplaceDetail.enabledAgents.empty")}</p>
           ) : (
-            <Ledger columns={AGENT_COLUMNS} role="listbox" aria-label={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })}>
+            <Ledger columns={AGENT_COLUMNS} className="-mx-6" role="listbox" aria-label={t("capabilities.marketplaceDetail.enabledAgents.title", { count: agentCount })}>
               <ul className="m-0 list-none p-0">
                 {agents.map((agent) => {
                   const agentID = agent.agent_id ?? agent.id

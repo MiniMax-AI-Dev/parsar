@@ -25,7 +25,7 @@ import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerId, LedgerRow } from "../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
@@ -65,9 +65,9 @@ const SANDBOX_STATUS: Record<SandboxStatusKind, StatusKind> = {
 }
 
 /** select · sandbox id · agent · status · image · last active · created · actions */
-const INSTANCE_COLUMNS = "16px minmax(0,1fr) 120px 112px minmax(0,160px) 80px 80px 28px"
+const INSTANCE_COLUMNS = [col.check(), col.id(200, 2), col.id(120), col.meta(112), col.meta(120), col.age(80), col.age(80), col.actions(1)]
 /** status icon · runtime · agent · sandbox kind · agent engines · last heartbeat */
-const DAEMON_COLUMNS = "14px minmax(0,1fr) 140px 96px minmax(0,200px) 88px"
+const DAEMON_COLUMNS = [col.icon(), col.title(), col.id(140), col.meta(104), col.meta(120), col.age(96)]
 
 function sortBindings(bindings: SandboxBinding[], sortKey: SortKey): SandboxBinding[] {
   const copy = bindings.slice()
@@ -604,7 +604,7 @@ function CloudInstancesPanel({
                     </RowActions>
                   </LedgerRow>
                   {showResult && (
-                    <li className="border-b border-line px-4 pl-[42px]">
+                    <li className="border-b border-line pl-[50px] pr-6">
                       <ConnectivityResultPanel
                         result={testResult.result}
                         checkLabelFor={checkLabelFor}
@@ -679,7 +679,7 @@ function CloudDaemonRuntimesPanel({
             return (
               <LedgerRow key={runtime.id} data-testid={`sandbox-daemon-runtime-row-${runtime.id}`} title={runtime.id}>
                 <StatusIcon status={state.status} title={t(state.labelKey, { defaultValue: state.fallback })} />
-                <span className="flex min-w-0 items-baseline gap-1.5">
+                <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate font-medium">{runtime.name || shortID(runtime.id)}</span>
                   {state.status !== "completed" && (
                     <span className="shrink-0 text-xs text-fg-muted">· {t(state.labelKey, { defaultValue: state.fallback })}</span>

@@ -49,6 +49,7 @@ import {
   LedgerHeader,
   LedgerId,
   LedgerRow,
+  col,
 } from "../../components/ui/ledger"
 import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
@@ -85,7 +86,7 @@ import { PendingInvitationsList } from "./PendingInvitationsList"
 const ROLES: MemberRole[] = ["owner", "admin", "member", "viewer"]
 
 /** user · email / detail · role · age · actions */
-const LEDGER_COLUMNS = "minmax(0,1fr) minmax(0,1fr) 104px 72px 96px"
+const LEDGER_COLUMNS = [col.title(), col.id(200, 1), col.meta(104), col.age(80), col.actions(2)]
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */

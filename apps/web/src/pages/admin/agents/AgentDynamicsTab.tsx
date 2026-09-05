@@ -6,6 +6,7 @@ import {
   LedgerId,
   LedgerNum,
   LedgerRow,
+  col,
 } from "../../../components/ui/ledger"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
@@ -23,7 +24,7 @@ import { DetailSection } from "./DetailSection"
 const RECENT_RUNS_LIMIT = 10
 
 /** status icon · run id · conversation · duration · age */
-const RUNS_COLUMNS = "14px 132px minmax(0,1fr) 64px 80px"
+const RUNS_COLUMNS = [col.icon(), col.id(132), col.id(200, 2), col.num(64), col.age(80)]
 
 export function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string | null; agent: Agent }) {
   const { t } = useTranslation("admin")

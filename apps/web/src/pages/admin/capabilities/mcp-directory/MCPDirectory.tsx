@@ -7,7 +7,7 @@ import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import { EmptyState } from "../../../../components/ui/empty-state"
 import { ErrorState } from "../../../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerRow } from "../../../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerRow, col } from "../../../../components/ui/ledger"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import {
   useImportMCPDirectoryItem,
@@ -33,7 +33,7 @@ interface MCPDirectoryProps {
 }
 
 /** connector (+badges, +description) · publisher · version · categories · authentication · actions */
-const DIRECTORY_COLUMNS = "minmax(0,1fr) 132px 72px 132px 110px 64px"
+const DIRECTORY_COLUMNS = [col.title(), col.meta(132), col.id(72, 0.4), col.meta(132), col.meta(110), col.actions(1)]
 
 export function MCPDirectory({
   itemID,

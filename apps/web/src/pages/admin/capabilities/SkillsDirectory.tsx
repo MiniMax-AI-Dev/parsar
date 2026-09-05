@@ -6,7 +6,7 @@ import { ActionIconButton, RowActions } from "../../../components/ui/action-butt
 import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerId, LedgerNum, LedgerRow } from "../../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerId, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { useInstallSkill, useSkillsCatalog, type SkillsCatalogItem } from "../../../lib/api-skills"
 import { useWorkspaceId } from "../../../lib/workspace"
@@ -19,7 +19,7 @@ interface SkillsDirectoryProps {
 }
 
 /** rank · skill (+source type, +id) · source · installs · actions */
-const SKILL_COLUMNS = "40px minmax(0,1fr) 200px 88px 64px"
+const SKILL_COLUMNS = [col.fixed(40), col.title(), col.id(200, 1), col.num(72), col.actions(1)]
 
 export function SkillsDirectory({ query, canImport, onViewCapability }: SkillsDirectoryProps) {
   const { t, i18n } = useTranslation("admin")

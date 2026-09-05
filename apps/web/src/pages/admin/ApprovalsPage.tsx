@@ -18,6 +18,7 @@ import {
   LedgerHeader,
   LedgerId,
   LedgerRow,
+  col,
 } from "../../components/ui/ledger"
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
@@ -60,7 +61,7 @@ const STATUS_ICON: Record<AgentInteractionStatus, StatusKind> = {
 }
 
 /** status icon · request (+ kind) · agent · run id · age */
-const LEDGER_COLUMNS = "14px minmax(0,1fr) 160px 132px 80px"
+const LEDGER_COLUMNS = [col.icon(), col.title(), col.text(160, 1), col.id(132), col.age(80)]
 
 export function ApprovalsPage() {
   const { t } = useTranslation("admin")

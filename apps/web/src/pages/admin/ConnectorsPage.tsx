@@ -11,7 +11,7 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
-import { InitialTile, Ledger, LedgerHeader, LedgerNum, LedgerRow } from "../../components/ui/ledger"
+import { InitialTile, Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../components/ui/ledger"
 import { PropertyList, Property } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
@@ -63,7 +63,7 @@ function ConnectorStatus({ status }: { status: ConnectorSummary["status"] }) {
 /* ------------------------------------------------------------------ */
 
 /** connector (label + type chip) · status · agents */
-const LEDGER_COLUMNS = "minmax(0,1fr) 140px 72px"
+const LEDGER_COLUMNS = [col.title(), col.meta(140), col.num(72)]
 
 export function ConnectorsPage() {
   const { t } = useTranslation("admin")

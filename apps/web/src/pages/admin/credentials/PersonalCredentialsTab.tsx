@@ -11,6 +11,7 @@ import {
   LedgerHeader,
   LedgerId,
   LedgerRow,
+  col,
 } from "../../../components/ui/ledger"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { ApiError } from "../../../lib/api-client"
@@ -55,7 +56,7 @@ interface PersonalCredentialsTabProps {
 }
 
 /** kind · code / refs · created · last used · actions */
-const LEDGER_COLUMNS = "minmax(0,1fr) 176px 148px 96px 72px"
+const LEDGER_COLUMNS = [col.title(), col.id(176), col.meta(148), col.age(80), col.actions(2)]
 
 export function PersonalCredentialsTab({ standalone = false, query = "", createRequest = 0 }: PersonalCredentialsTabProps) {
   const { t, i18n } = useTranslation("admin")

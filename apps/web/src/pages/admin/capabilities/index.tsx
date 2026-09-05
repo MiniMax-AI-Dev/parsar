@@ -36,7 +36,7 @@ import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Field } from "../../../components/ui/label"
 import { Input } from "../../../components/ui/input"
-import { InitialTile, Ledger, LedgerGroup, LedgerHeader, LedgerNum, LedgerRow } from "../../../components/ui/ledger"
+import { InitialTile, Ledger, LedgerGroup, LedgerHeader, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
 import { OffsetPagination } from "../../../components/ui/offset-pagination"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
@@ -113,7 +113,7 @@ const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
 ]
 
 /** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
-const LEDGER_COLUMNS = "minmax(0,1fr) 88px 132px 96px 150px 80px 64px"
+const LEDGER_COLUMNS = [col.title(), col.id(96, 0.4), col.meta(132), col.num(96), col.meta(150), col.age(80), col.actions(2)]
 
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
@@ -886,9 +886,9 @@ function CapabilityRowMoreMenu({
 /* ------------------------------------------------------------------ */
 
 /** version · created · agents using it */
-const VERSION_COLUMNS = "160px minmax(0,1fr) 96px"
+const VERSION_COLUMNS = [col.id(160, 0.7), col.id(160, 2), col.num(96)]
 /** agent · version · open */
-const AGENT_COLUMNS = "minmax(0,1fr) 120px 14px"
+const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
 
 export function CapabilityDetailPage({ id }: { id: string }) {
   const { t, i18n } = useTranslation("admin")
@@ -1036,7 +1036,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         ) : versions.length === 0 ? (
           <EmptyState icon={PackageCheck} title={t("capabilities.versions.empty.title")} description={t("capabilities.versions.empty.description")} className="py-8" />
         ) : (
-          <Ledger columns={VERSION_COLUMNS} role="listbox" aria-label={t("capabilities.versions.title")}>
+          <Ledger columns={VERSION_COLUMNS} className="-mx-6" role="listbox" aria-label={t("capabilities.versions.title")}>
             <LedgerHeader className="static">
               <span>{t("capabilities.versions.table.version")}</span>
               <span>{t("capabilities.versions.table.createdAt")}</span>
@@ -1063,7 +1063,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         ) : enabledCount === 0 ? (
           <p className="pt-1 text-sm text-fg-muted">{t("capabilities.detail.enabledAgents.empty")}</p>
         ) : (
-          <Ledger columns={AGENT_COLUMNS} role="listbox" aria-label={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
+          <Ledger columns={AGENT_COLUMNS} className="-mx-6" role="listbox" aria-label={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
             <ul className="m-0 list-none p-0">
               {installationSummary.installations.map((item) => (
                 <AgentInstallRow

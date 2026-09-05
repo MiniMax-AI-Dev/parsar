@@ -7,7 +7,7 @@ import { PageHeader } from "../../components/layout/PageHeader"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Badge } from "../../components/ui/badge"
-import { Ledger, LedgerHeader, LedgerId, LedgerRow } from "../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
@@ -17,7 +17,7 @@ import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 
 /** provider · status · callback url · missing env · docs */
-const PROVIDER_COLUMNS = "minmax(0,1fr) 104px minmax(0,1.4fr) minmax(0,1fr) 32px"
+const PROVIDER_COLUMNS = [col.title(), col.meta(104), col.id(200, 1.4), col.id(160, 1), col.actions(1)]
 
 export function SettingsPage() {
   const { t, i18n } = useTranslation("admin")

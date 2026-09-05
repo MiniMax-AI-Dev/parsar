@@ -22,6 +22,7 @@ import {
   LedgerHeader,
   LedgerId,
   LedgerRow,
+  col,
 } from "../../../components/ui/ledger"
 import { Select } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
@@ -47,7 +48,7 @@ interface OrgSecretsTabProps {
 }
 
 /** name · kind (dot = status) · provider · masked · updated · actions */
-const LEDGER_COLUMNS = "minmax(0,1fr) 148px 112px 128px 80px 40px"
+const LEDGER_COLUMNS = [col.title(), col.meta(120), col.meta(120), col.id(128), col.age(80), col.actions(1)]
 
 function kindLabel(kind: string) {
   if (kind === "model_provider") return "Model API Key"

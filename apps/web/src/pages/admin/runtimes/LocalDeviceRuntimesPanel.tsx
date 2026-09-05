@@ -17,7 +17,7 @@ import { ActionIconButton, RowActions } from "../../../components/ui/action-butt
 import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
-import { Ledger, LedgerHeader, LedgerRow } from "../../../components/ui/ledger"
+import { Ledger, LedgerHeader, LedgerRow, col } from "../../../components/ui/ledger"
 import { Skeleton } from "../../../components/ui/skeleton"
 import { StatusIcon } from "../../../components/ui/status-icon"
 import { InlineError } from "../../../components/runtime/InlineError"
@@ -32,7 +32,7 @@ import { useRelativeTime } from "../../../lib/relative-time"
 import { LIVENESS_STATUS, formatAgentKindLabel } from "./runtime-status"
 
 /** status icon · name · hostname · version · agent engines · last heartbeat · actions */
-const LEDGER_COLUMNS = "14px minmax(0,1fr) 200px 64px minmax(0,220px) 88px 28px"
+const LEDGER_COLUMNS = [col.icon(), col.title(), col.id(160), col.id(72, 0.4), col.meta(120), col.age(96), col.actions(1)]
 
 /** Local devices paired through parsar-daemon, one 36px ledger row each. */
 export function LocalDeviceRuntimesPanel({ workspaceID }: { workspaceID: string }) {
@@ -135,7 +135,7 @@ function DaemonRuntimeRow({
   return (
     <LedgerRow data-testid={`agent-daemon-row-${runtime.id}`} title={runtime.id}>
       <StatusIcon status={LIVENESS_STATUS[runtime.liveness]} title={statusLabel} />
-      <span className="flex min-w-0 items-baseline gap-1.5">
+      <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate font-medium">{runtime.name}</span>
         {runtime.liveness !== "online" && (
           <span className="shrink-0 text-xs text-fg-muted">· {statusLabel}</span>
