@@ -5,6 +5,7 @@ const CONVERSATION_ID = "00000000-0000-0000-0000-000000000012";
 const AGENT_ID = "00000000-0000-0000-0000-000000000013";
 const OTHER_CONVERSATION_ID = "00000000-0000-0000-0000-000000000014";
 const OTHER_AGENT_ID = "00000000-0000-0000-0000-000000000015";
+const OTHER_WORKSPACE_ID = "00000000-0000-0000-0000-000000000016";
 const DRAFT = "Keep this draft\n    with indentation\nand line breaks";
 type Surface = "existing" | "empty" | "new";
 type Failure = "create" | "message" | "network";
@@ -67,6 +68,7 @@ const cases: Array<{ surface: Surface; failure: Failure }> = [
   { surface: "empty", failure: "message" },
   { surface: "new", failure: "create" },
   { surface: "new", failure: "message" },
+  { surface: "new", failure: "network" },
 ];
 
 for (const { surface, failure } of cases) {
@@ -101,8 +103,117 @@ for (const { surface, failure } of cases) {
     await expect(input).toHaveValue("");
     await expect(page.getByText(DRAFT, { exact: true })).toBeVisible();
     expect(pageErrors).toEqual([]);
+    if (surface === "new") {
+      expect(state.createRequests).toBe(failure === "create" ? 2 : 1);
+      expect(new Set(state.messageTargets).size).toBe(1);
+    }
   });
 }
+
+test("first-send retries reuse the created conversation after repeated failures", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  for (const content of [DRAFT, "Edited draft", "Final draft"]) {
+    await input.fill(content);
+    await send.click();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    await expect(send).toBeEnabled();
+  }
+  expect(state.createRequests).toBe(1);
+  expect(new Set(state.messageTargets).size).toBe(1);
+  state.failure = null;
+  await send.click();
+  await expect.poll(() => state.sent).toEqual(["Final draft"]);
+  await expect(page).toHaveURL(new RegExp(`id=${state.messageTargets[0]}`));
+  expect(state.createRequests).toBe(1);
+});
+
+for (const action of ["new", "agent", "workspace", "conversation", "delete"] as const) {
+  test(`first-send retry does not reuse a conversation after ${action}`, async ({ page }) => {
+    const state = await mockApp(page, "new", "message");
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+    const input = page.locator("form").getByRole("textbox");
+    const send = page.getByRole("button", { name: "send", exact: true });
+    await input.fill(DRAFT);
+    await send.click();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    if (action === "agent") {
+      for (const name of ["Other Agent", "Test Agent"]) {
+        await page.getByRole("button", { name: "Switch Agent", exact: true }).click();
+        await page.getByRole("option", { name, exact: true }).click();
+      }
+    } else if (action === "workspace") {
+      for (const name of ["Other Workspace", "Send Test"]) {
+        await page.getByRole("button", { name: "Switch workspace", exact: true }).click();
+        await page.getByRole("menuitem").filter({ hasText: name }).click();
+        await expect(page.getByRole("button", { name: "Switch workspace", exact: true })).toHaveText(name);
+      }
+    } else if (action === "delete") {
+      await page.getByRole("button", { name: "Delete conversation", exact: true }).first().click();
+      await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    } else {
+      if (action === "conversation") {
+        await page.getByText("Other Conversation", { exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`id=${OTHER_CONVERSATION_ID}`));
+      }
+      await page.getByRole("button", { name: "New conversation", exact: true }).click();
+    }
+    state.failure = null;
+    await input.fill("A separate message");
+    await send.click();
+    await expect.poll(() => state.sent).toEqual(["A separate message"]);
+    expect(state.createRequests).toBe(2);
+    expect(new Set(state.messageTargets).size).toBe(2);
+  });
+}
+
+test("late creation does not restore an abandoned first-send target", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  let releaseCreate!: () => void;
+  state.waitForCreate = new Promise<void>((resolve) => { releaseCreate = resolve; });
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  await input.fill(DRAFT);
+  await send.click();
+  await expect.poll(() => state.createRequests).toBe(1);
+  await page.getByRole("button", { name: "New conversation", exact: true }).click();
+  releaseCreate();
+  await expect(send).toBeEnabled();
+  state.failure = null;
+  await send.click();
+  await expect.poll(() => state.sent).toEqual([DRAFT]);
+  expect(state.createRequests).toBe(2);
+  expect(new Set(state.messageTargets).size).toBe(2);
+});
+
+test("an abandoned retry cannot clear the new conversation draft", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  await input.fill(DRAFT);
+  await send.click();
+  await expect(page.locator("form").getByRole("alert")).toBeVisible();
+  state.failure = null;
+  let releaseSend!: () => void;
+  state.waitForSend = new Promise<void>((resolve) => { releaseSend = resolve; });
+  await send.click();
+  await expect.poll(() => state.messageRequests).toBe(2);
+  await page.getByRole("button", { name: "New conversation", exact: true }).click();
+  await input.fill("A different draft");
+  releaseSend();
+  await expect.poll(() => state.sent).toEqual([DRAFT]);
+  await expect(input).toHaveValue("A different draft");
+  await expect(page).toHaveURL(/focus=compose/);
+  await send.click();
+  await expect.poll(() => state.sent).toEqual([DRAFT, "A different draft"]);
+  await expect(input).toHaveValue("");
+  expect(state.createRequests).toBe(2);
+});
 
 test("send errors can be dismissed without losing the draft", async ({ page }) => {
   await mockApp(page, "existing", "message");
@@ -196,7 +307,11 @@ for (const response of [{ agent_run_id: "run-1" }, { run_ids: ["run-1"] }]) {
 }
 
 async function mockApp(page: Page, surface: Surface, failure: Failure | null) {
-  const state = { failure: failure as Failure | null, sent: [] as string[], messageRequests: 0, waitForSend: Promise.resolve() };
+  const state = {
+    failure: failure as Failure | null, sent: [] as string[], messageRequests: 0,
+    createRequests: 0, messageTargets: [] as string[],
+    waitForSend: Promise.resolve(), waitForCreate: Promise.resolve(),
+  };
   const createdAt = new Date().toISOString();
   let creates = 0;
   let conversation = {
@@ -211,6 +326,7 @@ async function mockApp(page: Page, surface: Surface, failure: Failure | null) {
     if (path === "/api/v1/me") return json(route, { user_id: "user-1", email: "user@example.com", name: "User" });
     if (path === "/api/v1/me/workspaces") return json(route, { user_id: "user-1", workspaces: [
       { id: WORKSPACE_ID, name: "Send Test", slug: "send-test", role: "owner" },
+      { id: OTHER_WORKSPACE_ID, name: "Other Workspace", slug: "other-workspace", role: "owner" },
     ] });
     if (path === "/api/v1/me/discoverable-workspaces") return json(route, { workspaces: [], total: 0 });
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/agents`) return json(route, { agents: [
@@ -220,6 +336,8 @@ async function mockApp(page: Page, surface: Surface, failure: Failure | null) {
     const otherConversation = { ...conversation, id: OTHER_CONVERSATION_ID, title: "Other Conversation", message_count: 1 };
     if (path === `/api/v1/workspaces/${WORKSPACE_ID}/conversations`) {
       if (method !== "POST") return json(route, { conversations: surface === "new" && !creates ? [] : [conversation, otherConversation] });
+      state.createRequests++;
+      await state.waitForCreate;
       if (state.failure === "create") return json(route, { error: "server_unreachable", message: "create rejected" }, 503);
       creates++;
       conversation = { ...conversation, id: `00000000-0000-0000-0000-${String(100 + creates).padStart(12, "0")}` };
@@ -232,6 +350,7 @@ async function mockApp(page: Page, surface: Surface, failure: Failure | null) {
     if (path === `/api/v1/conversations/${conversation.id}`) return json(route, conversation);
     if (path === `/api/v1/conversations/${conversation.id}/messages`) {
       state.messageRequests++;
+      state.messageTargets.push(conversation.id);
       expect(method).toBe("POST");
       if (state.failure === "network") return route.abort("failed");
       if (state.failure === "message") return json(route, { error: "invalid_content", message: "message rejected" }, 422);
