@@ -43,7 +43,7 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
   }
 
   if (props.typeFilter === "skill") {
-    return <SkillsDirectory query={props.query} canImport={props.canImport} onViewCapability={props.onViewCapability} />
+    return <SkillsDirectory query={props.query} canImport={props.canManage} onViewCapability={props.onViewCapability} />
   }
 
   if (props.itemID) {
