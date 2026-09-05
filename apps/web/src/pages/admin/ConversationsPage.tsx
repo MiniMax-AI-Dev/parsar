@@ -869,6 +869,7 @@ function EmptyChat({
 
             <ComposerForm
               conversationId={conversationId ?? ""}
+              agentId={agent?.id}
               disabled={!agent || sandboxGuard?.blocked}
               autoFocus={focusComposer}
               placeholder={
@@ -1198,17 +1199,11 @@ function ChatStream({
   )
 }
 
-/**
- * Inline error banner above the chat composer. Ad-hoc on purpose
- * (mirrors capabilities/index.tsx:ToastBanner and AgentsPage local
- * banners): we only render one of these in one place today, and
- * extracting a shared component would force every callsite to agree
- * on dismiss / severity / icon semantics we don't actually share.
- */
+/** Inline error banner for conversation send and run failures. */
 function ChatErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
-    <div className="mb-2 flex items-start justify-between gap-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-      <span className="break-words">{message}</span>
+    <div role="alert" className="mb-2 flex items-start justify-between gap-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
+      <span className="min-w-0 break-all">{message}</span>
       <button
         type="button"
         onClick={onDismiss}
@@ -1429,6 +1424,7 @@ function stringMeta(metadata: Record<string, unknown> | undefined, key: string):
 
 function ComposerForm({
   conversationId,
+  agentId,
   placeholder,
   disabled,
   autoFocus,
@@ -1442,6 +1438,7 @@ function ComposerForm({
   blockReason,
 }: {
   conversationId: string
+  agentId?: string
   placeholder: string
   disabled?: boolean
   autoFocus?: boolean
@@ -1483,6 +1480,8 @@ function ComposerForm({
   const { t } = useTranslation("admin")
   const [content, setContent] = useState("")
   const [busy, setBusy] = useState(false)
+  const [sendError, setSendError] = useState<{ targetId: string; message: string } | null>(null)
+  const sendTargetId = conversationId || agentId || ""
   const inputRef = useRef<HTMLInputElement | null>(null)
   const sendMut = useSendUserMessage(conversationId || null)
 
@@ -1505,17 +1504,24 @@ function ComposerForm({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
+    setSendError(null)
     const text = trimmed
+    const handleSendError = (err: unknown) => {
+      setSendError({ targetId: sendTargetId, message: err instanceof Error ? err.message : String(err) })
+    }
     if (onSendDirect) {
       setBusy(true)
       try {
         await onSendDirect(text)
         setContent("")
+      } catch (err) {
+        handleSendError(err)
       } finally {
         setBusy(false)
       }
     } else {
-      const resp = await sendMut.mutateAsync({ content: text })
+      const resp = await sendMut.mutateAsync({ content: text }).catch(handleSendError)
+      if (!resp) return
       if (onAfterSend) await onAfterSend(text.slice(0, 30))
       setContent("")
       // Pick the first dispatched run id (1v1 currently dispatches at most
@@ -1547,6 +1553,9 @@ function ComposerForm({
 
   return (
     <form onSubmit={submit}>
+      {sendError?.targetId === sendTargetId && (
+        <ChatErrorToast message={sendError.message} onDismiss={() => setSendError(null)} />
+      )}
       {blockReason && (
         <div className="mb-2 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
