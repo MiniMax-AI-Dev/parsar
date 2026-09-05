@@ -115,7 +115,7 @@ export function ConnectionsPage() {
             subtitleFor="connections.page.title"
             action={
               toast ? (
-                <span className="flex items-center gap-1.5 text-sm text-fg animate-pop-in" role="status">
+                <span className="flex items-center gap-1.5 text-sm text-fg animate-pop-in data-[state=closed]:animate-pop-out" role="status">
                   <StatusIcon status="completed" />
                   {toast}
                 </span>

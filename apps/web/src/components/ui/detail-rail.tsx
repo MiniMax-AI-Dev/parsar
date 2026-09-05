@@ -37,6 +37,13 @@ export function DetailRail({
 } & Omit<React.HTMLAttributes<HTMLElement>, "title">) {
   const { t } = useTranslation("common")
   const [expanded, setExpanded] = React.useState(false)
+  // Close plays rail-out on the panel and only then unmounts via onClose.
+  const [closing, setClosing] = React.useState(false)
+  const requestClose = () => {
+    if (!onClose) return
+    setExpanded(false)
+    setClosing(true)
+  }
   const rail = useResizableWidth({ storageKey: "rail", defaultWidth: 384, min: 320, max: 640, edge: "left" })
   const expandLabel = t("actions.expand")
   const collapseLabel = t("actions.collapse")
@@ -62,10 +69,7 @@ export function DetailRail({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              setExpanded(false)
-              onClose()
-            }}
+            onClick={requestClose}
             aria-label={resolvedCloseLabel}
             title={resolvedCloseLabel}
           >
@@ -91,7 +95,14 @@ export function DetailRail({
         style={{ width: rail.width }}
       >
         <aside
-          className={cn("flex w-full flex-col overflow-hidden border-l border-line bg-surface-subtle animate-rail-in", className)}
+          className={cn(
+            "flex w-full flex-col overflow-hidden border-l border-line bg-surface-subtle",
+            closing ? "animate-rail-out" : "animate-rail-in",
+            className,
+          )}
+          onAnimationEnd={(e) => {
+            if (closing && e.target === e.currentTarget) onClose?.()
+          }}
           {...props}
         >
           {frame("rail")}

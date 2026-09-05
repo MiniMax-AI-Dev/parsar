@@ -118,6 +118,8 @@
   --animate-rail-in: rail-in 260ms var(--ease-spring) both;
   --animate-fade-out: fade-out 2s ease-out forwards;
   --animate-pop-in: pop-in 200ms var(--ease-spring) both;
+  --animate-pop-out: pop-out 150ms var(--ease-settle) both;
+  --animate-rail-out: rail-out 200ms var(--ease-settle) both;
   --animate-page-in: page-in 320ms var(--ease-spring) both;
   --animate-modal-in: modal-in 420ms var(--ease-spring) both;
   --animate-modal-out: modal-out 260ms var(--ease-settle) both;
@@ -254,6 +256,18 @@ html[data-theme="dark"] {
 /* Centre a fixed modal from its own transform; animations that end on
    translate(-50%, -50%) hand off to this resting state. */
 .app-modal-center { transform: translate(-50%, -50%); }
+
+/* Every entrance has its exit: pop-out and rail-out mirror pop-in and
+   rail-in on the settle curve, so nothing simply vanishes. */
+@keyframes pop-out {
+  from { transform: none; opacity: 1; }
+  to { transform: scale(0.97); opacity: 0; }
+}
+
+@keyframes rail-out {
+  from { transform: none; opacity: 1; }
+  to { transform: translateX(16px); opacity: 0; }
+}
 
 @keyframes pop-in {
   from { transform: scale(0.96); opacity: 0; }

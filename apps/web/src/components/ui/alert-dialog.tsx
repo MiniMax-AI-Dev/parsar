@@ -16,7 +16,7 @@ export const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-surface-inverse/30", className)}
+    className={cn("fixed inset-0 z-50 bg-surface-inverse/30 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out", className)}
     {...props}
   />
 ))
@@ -31,7 +31,7 @@ export const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        "app-shadow-floating fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-line bg-surface p-4 text-sm text-fg animate-pop-in focus:outline-none",
+        "app-shadow-floating fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-line bg-surface p-4 text-sm text-fg animate-pop-in data-[state=closed]:animate-pop-out focus:outline-none",
         className,
       )}
       {...props}
@@ -41,7 +41,12 @@ export const AlertDialogContent = React.forwardRef<
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
 export function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col gap-1", className)} {...props} />
+  return (
+    <div
+      className={cn("-mx-4 -mt-4 flex min-h-12 flex-col justify-center gap-0.5 border-b border-line px-4 py-2.5", className)}
+      {...props}
+    />
+  )
 }
 
 export function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

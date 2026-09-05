@@ -1246,7 +1246,7 @@ export function CreateAgentDialog({
                       <div
                         id={modelListboxID}
                         role="listbox"
-                        className="app-shadow-floating absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-line bg-surface p-1 text-sm animate-pop-in"
+                        className="app-shadow-floating absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-line bg-surface p-1 text-sm animate-pop-in data-[state=closed]:animate-pop-out"
                       >
                         {filteredModels.length === 0 ? (
                           <div className="px-2 py-1.5 text-sm text-fg-muted">{t("agents.form.emptyModelSearch")}</div>

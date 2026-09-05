@@ -177,7 +177,7 @@ export function AuditPage() {
           action={
             <>
               <SettingsTabs active="audit" />
-              <div className="relative w-56">
+              <div className="relative w-72">
                 <Search
                   className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
                   strokeWidth={1.5}
@@ -211,7 +211,7 @@ export function AuditPage() {
                   <DropdownMenu.Content
                     align="end"
                     sideOffset={6}
-                    className="app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+                    className="app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
                   >
                     <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-xs text-fg-muted">
                       {t("audit.table.source")}

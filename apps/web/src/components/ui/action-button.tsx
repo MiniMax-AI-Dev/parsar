@@ -65,7 +65,7 @@ export function ActionIconButton({
       <Tooltip.Portal>
         <Tooltip.Content
           sideOffset={4}
-          className="app-shadow-floating z-50 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-fg animate-pop-in"
+          className="app-shadow-floating z-50 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-fg animate-pop-in data-[state=closed]:animate-pop-out"
         >
           {label}
         </Tooltip.Content>

@@ -133,7 +133,7 @@ export function WorkspaceSwitcher() {
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            className="app-shadow-floating z-50 min-w-[300px] overflow-hidden rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in"
+            className="app-shadow-floating z-50 min-w-[300px] overflow-hidden rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
           >
             <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-fg-subtle">
               <Layers className="h-3 w-3" strokeWidth={1.75} />

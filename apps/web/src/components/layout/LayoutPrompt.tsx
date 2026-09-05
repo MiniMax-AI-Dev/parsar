@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { useTranslation } from "react-i18next"
+import { cn } from "../../lib/utils"
 import { Button } from "../ui/button"
 
 /**
@@ -19,11 +21,22 @@ export function LayoutPrompt({
   onRestore: () => void
 }) {
   const { t } = useTranslation("common")
-  if (!open || typeof document === "undefined") return null
+  // Keep the prompt mounted for its 150ms exit after `open` turns false.
+  const [mounted, setMounted] = useState(open)
+  if (open && !mounted) setMounted(true)
+  useEffect(() => {
+    if (open) return
+    const id = window.setTimeout(() => setMounted(false), 160)
+    return () => window.clearTimeout(id)
+  }, [open])
+  if (!mounted || typeof document === "undefined") return null
   return createPortal(
     <div
       role="status"
-      className="app-shadow-floating fixed left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-line bg-surface py-1.5 pl-3 pr-1.5 text-sm text-fg animate-pop-in"
+      className={cn(
+        "app-shadow-floating fixed left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-line bg-surface py-1.5 pl-3 pr-1.5 text-sm text-fg",
+        open ? "animate-pop-in" : "pointer-events-none animate-pop-out",
+      )}
     >
       <span className="mr-1">{t("layout.adjusted")}</span>
       <Button size="sm" onClick={onSave}>

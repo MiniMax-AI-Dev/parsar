@@ -72,7 +72,7 @@ export function UserMenu() {
           align="start"
           side="top"
           sideOffset={6}
-          className="app-shadow-floating z-50 min-w-[220px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+          className="app-shadow-floating z-50 min-w-[220px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
         >
           <DropdownMenu.Label className="px-2 py-1.5">
             <div className="truncate text-sm font-medium text-fg">{displayName}</div>

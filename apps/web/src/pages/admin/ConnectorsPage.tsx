@@ -95,7 +95,7 @@ export function ConnectorsPage() {
           <>
             <SettingsTabs active="connectors" />
           {wsId ? (
-            <div className="relative w-60">
+            <div className="relative w-72">
               <Search
                 className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
                 strokeWidth={1.5}

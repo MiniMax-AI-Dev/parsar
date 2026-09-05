@@ -98,7 +98,7 @@ export function CredentialKindCombobox({
           align="start"
           sideOffset={4}
           data-credential-kind-menu
-          className="app-shadow-floating z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+          className="app-shadow-floating z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
         >
           <div className="border-b border-line p-1">
             <Input

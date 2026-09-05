@@ -401,7 +401,7 @@ export function CapabilitiesPage() {
               subtitleFor="capabilities.page.title"
               action={
                 <>
-                  <div className="relative w-60">
+                  <div className="relative w-72">
                     <Search
                       className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
                       strokeWidth={1.5}
@@ -628,7 +628,7 @@ function LedgerSkeleton() {
 /*  Header filter menu                                                  */
 /* ------------------------------------------------------------------ */
 
-const MENU_CONTENT_CLASS = "app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+const MENU_CONTENT_CLASS = "app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
 const MENU_ITEM_CLASS = "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
 
 function MenuRadio({ value, label }: { value: string; label: string }) {

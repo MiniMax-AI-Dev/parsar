@@ -202,7 +202,7 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
             subtitleFor="runs.page.title"
             action={
               <>
-                <div className="relative w-60">
+                <div className="relative w-72">
                   <Search
                     className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
                     strokeWidth={1.5}
@@ -233,7 +233,7 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
                     <DropdownMenu.Content
                       align="end"
                       sideOffset={6}
-                      className="app-shadow-floating z-50 min-w-[180px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+                      className="app-shadow-floating z-50 min-w-[180px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
                     >
                       <DropdownMenu.RadioGroup value={filter} onValueChange={(v) => setFilter(v as RunFilter)}>
                         {FILTERS.map((f) => (
@@ -987,19 +987,17 @@ function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean
   const { t: tc } = useTranslation("common")
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
-      <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-        <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-          <div className="space-y-1.5">
-            <DialogTitle className="text-sm">{t("runs.actions.cancel.confirmTitle")}</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {t("runs.actions.cancel.confirmBody")}
-            </DialogDescription>
-          </div>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>{t("runs.actions.cancel.confirmTitle")}</DialogTitle>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>{tc("actions.cancel")}</Button>
-          <Button variant="destructive" size="sm" onClick={onConfirm} disabled={loading}>
+        <DialogDescription className="flex items-start gap-2 text-fg">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <span>{t("runs.actions.cancel.confirmBody")}</span>
+        </DialogDescription>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>{tc("actions.cancel")}</Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={loading}>
             {loading && <Loader2 className="animate-spin" />}
             {t("runs.actions.cancel.label")}
           </Button>

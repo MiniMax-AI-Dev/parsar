@@ -110,7 +110,7 @@ export function UserSearchCombobox({
           <DropdownMenu.Content
             align="start"
             sideOffset={4}
-            className="app-shadow-floating z-50 max-h-[360px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+            className="app-shadow-floating z-50 max-h-[360px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
             // Stay open across multiple selections — picking several
             // teammates at once is the expected flow.
             onCloseAutoFocus={(e) => e.preventDefault()}

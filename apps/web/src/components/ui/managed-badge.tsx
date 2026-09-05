@@ -31,7 +31,7 @@ export function ManagedBadge({ unmanaged, className }: ManagedBadgeProps) {
           <Tooltip.Content
             side="top"
             sideOffset={4}
-            className="app-shadow-floating z-50 max-w-xs rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-fg animate-pop-in"
+            className="app-shadow-floating z-50 max-w-xs rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-fg animate-pop-in data-[state=closed]:animate-pop-out"
           >
             {tooltip}
           </Tooltip.Content>

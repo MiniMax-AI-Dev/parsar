@@ -53,7 +53,7 @@ export function AgentRowActions({
             align="end"
             sideOffset={4}
             onClick={(event) => event.stopPropagation()}
-            className="app-shadow-floating z-50 min-w-[160px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+            className="app-shadow-floating z-50 min-w-[160px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
           >
             <MenuItem icon={Pencil} label={t("agents.actions.edit")} onSelect={onEdit} />
             <MenuItem icon={Copy} label={t("agents.actions.clone")} onSelect={onClone} />

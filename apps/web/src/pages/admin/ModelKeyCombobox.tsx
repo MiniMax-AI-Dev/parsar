@@ -32,7 +32,7 @@ export const COMBOBOX_TRIGGER_CLASS =
 
 /** Floating menu: 8px radius, hairline, floating shadow, 4px padding, pop-in. */
 export const COMBOBOX_MENU_CLASS =
-  "app-shadow-floating z-50 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+  "app-shadow-floating z-50 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
 
 /** 13px item, 4px radius, pressed tint when highlighted. */
 export const COMBOBOX_ITEM_CLASS =

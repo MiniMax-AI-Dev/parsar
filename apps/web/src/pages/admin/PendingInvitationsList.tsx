@@ -158,7 +158,7 @@ export function PendingInvitationsList({
                       <DropdownMenu.Content
                         align="end"
                         sideOffset={6}
-                        className="app-shadow-floating z-50 min-w-[160px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+                        className="app-shadow-floating z-50 min-w-[160px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
                       >
                         <DropdownMenu.RadioGroup
                           value={invitation.role}
