@@ -5,9 +5,61 @@ const CONVERSATION_ID = "00000000-0000-0000-0000-000000000012";
 const AGENT_ID = "00000000-0000-0000-0000-000000000013";
 const OTHER_CONVERSATION_ID = "00000000-0000-0000-0000-000000000014";
 const OTHER_AGENT_ID = "00000000-0000-0000-0000-000000000015";
-const DRAFT = "Keep this draft after a failed send";
+const DRAFT = "Keep this draft\n    with indentation\nand line breaks";
 type Surface = "existing" | "empty" | "new";
 type Failure = "create" | "message" | "network";
+
+for (const surface of ["existing", "empty", "new"] as const) {
+  test(`${surface} composer preserves multiline input and sends with Enter`, async ({ page }) => {
+    const state = await mockApp(page, surface, null);
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&${surface === "new" ? "focus=compose" : `id=${CONVERSATION_ID}`}`);
+    const input = page.locator("form").getByRole("textbox");
+    await input.click();
+    await page.keyboard.insertText(DRAFT);
+    await expect(input).toHaveValue(DRAFT);
+    await input.press("Shift+Enter");
+    await page.keyboard.insertText("One more line");
+    const message = `${DRAFT}\nOne more line`;
+    await expect(input).toHaveValue(message);
+    expect(state.messageRequests).toBe(0);
+    await input.press("Enter");
+    await expect.poll(() => state.sent).toEqual([message]);
+    await expect(input).toHaveValue("");
+    expect(state.messageRequests).toBe(1);
+    const rendered = page.getByText(message, { exact: true });
+    await expect(rendered).toBeVisible();
+    expect(await rendered.textContent()).toBe(message);
+  });
+
+  test(`${surface} composer does not send while confirming IME input`, async ({ page }) => {
+    const state = await mockApp(page, surface, null);
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&${surface === "new" ? "focus=compose" : `id=${CONVERSATION_ID}`}`);
+    const input = page.locator("form").getByRole("textbox");
+    await input.fill("中文输入");
+    await input.dispatchEvent("compositionstart", { data: "输入" });
+    await input.dispatchEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, isComposing: true });
+    await input.dispatchEvent("compositionend", { data: "输入" });
+    await input.dispatchEvent("keydown", { key: "Enter", code: "Enter", keyCode: 229 });
+    await expect(input).toHaveValue("中文输入");
+    expect(state.messageRequests).toBe(0);
+    await input.press("Enter");
+    await expect.poll(() => state.sent).toEqual(["中文输入"]);
+    expect(state.messageRequests).toBe(1);
+  });
+}
+
+test("blank or repeated Enter does not send", async ({ page }) => {
+  const state = await mockApp(page, "existing", null);
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${CONVERSATION_ID}`);
+  const input = page.locator("form").getByRole("textbox");
+  await input.fill(" \n ");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "send", exact: true })).toBeDisabled();
+  await input.fill(DRAFT);
+  await input.dispatchEvent("keydown", { key: "Enter", repeat: true });
+  await expect(input).toHaveValue(DRAFT);
+  expect(state.messageRequests).toBe(0);
+});
 
 const cases: Array<{ surface: Surface; failure: Failure }> = [
   { surface: "existing", failure: "message" },
@@ -143,7 +195,7 @@ for (const response of [{ agent_run_id: "run-1" }, { run_ids: ["run-1"] }]) {
   });
 }
 
-async function mockApp(page: Page, surface: Surface, failure: Failure) {
+async function mockApp(page: Page, surface: Surface, failure: Failure | null) {
   const state = { failure: failure as Failure | null, sent: [] as string[], messageRequests: 0, waitForSend: Promise.resolve() };
   const createdAt = new Date().toISOString();
   let creates = 0;
