@@ -1,15 +1,34 @@
 # Fixtures for ?admin=conversations: agents, the conversation list scoped to
-# an agent, one conversation + timeline (messages, runs with tool steps), and
-# one pending permission interaction so the approval card renders in-thread.
-# Globals WS, NOW, iso are injected by mock-api.py.
+# an agent, one conversation + timeline (messages, a completed run and a
+# running run with tool steps), one pending permission interaction with a
+# deadline (the approval bar), and the run's SSE stream so the live trace
+# replays its steps. Globals WS, NOW, iso are injected by mock-api.py.
 import importlib.util
+import json
 import os
 import re
-from datetime import timedelta  # noqa: F401  (NOW is a datetime)
+import sys
+import time
+from datetime import datetime, timedelta, timezone
+from http.server import ThreadingHTTPServer
+from urllib.parse import urlparse
+
+# Wins the /interactions and /agents routes over team.py / agents.py.
+PRIORITY = 2
 
 
 def ago(**kw):
     return iso(NOW - timedelta(**kw))
+
+
+# The browser's clock, not the frozen NOW: the trace's elapsed counter and the
+# approval countdown are computed against Date.now().
+def real_ago(**kw):
+    return iso(datetime.now(timezone.utc) - timedelta(**kw))
+
+
+def real_in(**kw):
+    return iso(datetime.now(timezone.utc) + timedelta(**kw))
 
 
 AGENTS = [
@@ -56,10 +75,10 @@ if _peer:
 R = AGENTS[0]["id"]
 CONVS = [
     {"id": "5e0a1b2c-3d4e-4f60-9a7b-8c9d0e1f2a01", "title": "Review PR #257 fix/claude-home-workdir",
-     "agent": R, "message_count": 4, "last": ago(minutes=4), "created": ago(minutes=38),
-     "preview": "Left three comments; the workdir fallback needs a test."},
+     "agent": R, "message_count": 3, "last": ago(minutes=9), "created": ago(minutes=38),
+     "preview": "Add the missing test and push it to the branch."},
     {"id": "5e0a1b2c-3d4e-4f60-9a7b-8c9d0e1f2a02", "title": "Why does make check-web fail on CI?",
-     "agent": R, "message_count": 6, "last": ago(hours=2), "created": ago(hours=3),
+     "agent": R, "message_count": 10, "last": ago(hours=2), "created": ago(hours=3),
      "preview": "The typography plugin is missing from devDependencies."},
     {"id": "5e0a1b2c-3d4e-4f60-9a7b-8c9d0e1f2a03", "title": "对比 sandbox 与 local 两种运行模式的差异",
      "agent": R, "message_count": 2, "last": ago(days=1, hours=5), "created": ago(days=1, hours=5),
@@ -91,11 +110,43 @@ MSGS = [
      "content": "I read the diff and ran the daemon tests.\n\nThe fallback to `$HOME/.parsar` is correct, but `resolveWorkdir` returns an empty string when `HOME` is also unset, and the caller then calls `os.Chdir(\"\")`. That path has no test.\n\nLeft three comments on the PR: one blocking (the empty-string case), two nits about log wording."},
     {"id": "msg_01J8ZC03", "sender_type": "user", "kind": "message", "created_at": ago(minutes=9),
      "content": "Add the missing test and push it to the branch."},
-    {"id": "msg_01J8ZC04", "sender_type": "agent", "kind": "message", "created_at": ago(minutes=4),
-     "content": "Test added in `internal/daemon/workdir_test.go` (`TestResolveWorkdir_NoHome`). It fails on the current branch and passes with a one-line guard. Pushing needs your approval since the branch is protected."},
 ]
 for m in MSGS:
     m.update({"conversation_id": C1, "content_format": "markdown"})
+
+# A longer thread for the turn rail: five user turns, each answered.
+C2 = CONVS[1]["id"]
+C2_TURNS = [
+    ("Why does make check-web fail on CI? It passes locally.",
+     "CI runs `pnpm install --frozen-lockfile`; the lockfile is behind package.json, so the install step exits 1 before tsc runs."),
+    ("Which package is out of sync?",
+     "`@tailwindcss/typography` was added to package.json in 853b744 but `pnpm-lock.yaml` was not regenerated."),
+    ("为什么本地不会失败？",
+     "本地的 `pnpm install` 没有加 `--frozen-lockfile`，会静默更新 lockfile；CI 上则直接报错。"),
+    ("Fix it and open a PR.",
+     "Regenerated the lockfile and opened #266 (chore: sync pnpm-lock for typography plugin). CI is green."),
+    ("Also add the typography plugin to devDependencies instead of dependencies.",
+     "Moved it: the plugin is only used at build time. Pushed to the same branch; #266 updated."),
+]
+C2_MSGS = []
+for i, (q, a) in enumerate(C2_TURNS):
+    base = 170 - i * 30
+    C2_MSGS.append({"id": f"msg_01J8ZD{i:02d}u", "conversation_id": C2, "sender_type": "user", "kind": "message",
+                    "content_format": "markdown", "content": q, "created_at": ago(minutes=base)})
+    C2_MSGS.append({"id": f"msg_01J8ZD{i:02d}a", "conversation_id": C2, "sender_type": "agent", "kind": "message",
+                    "content_format": "markdown", "content": a, "created_at": ago(minutes=base - 4)})
+C2_RUNS = [
+    {"id": f"run_01J8ZD{i:02d}", "status": "completed", "agent_name": "reviewer-bot", "agent_slug": "reviewer-bot",
+     "connector_type": "agent_daemon", "trigger_message_id": f"msg_01J8ZD{i:02d}u", "output_message_id": f"msg_01J8ZD{i:02d}a",
+     "created_at": ago(minutes=170 - i * 30), "started_at": ago(minutes=170 - i * 30), "finished_at": ago(minutes=166 - i * 30),
+     "steps": [
+         {"tool_call_id": f"tc_d{i}_1", "name": "bash", "status": "completed", "occurred_at": ago(minutes=169 - i * 30),
+          "args": {"command": "gh run view --log-failed"}, "result": {"exit_code": 0}},
+         {"tool_call_id": f"tc_d{i}_2", "name": "read", "status": "completed", "occurred_at": ago(minutes=168 - i * 30),
+          "args": {"file_path": "apps/web/package.json"}, "result": {"bytes": 1810}},
+     ]}
+    for i in range(len(C2_TURNS))
+]
 
 STEPS_OK = [
     {"tool_call_id": "tc_1", "name": "bash", "status": "completed", "occurred_at": ago(minutes=36),
@@ -107,21 +158,30 @@ STEPS_OK = [
     {"tool_call_id": "tc_4", "name": "grep", "status": "completed", "occurred_at": ago(minutes=32),
      "args": {"pattern": "os.Chdir", "path": "internal/"}, "result": {"matches": 3}},
 ]
+RUN_STARTED = real_ago(minutes=3, seconds=12)
 STEPS_PENDING = [
-    {"tool_call_id": "tc_5", "name": "edit", "status": "completed", "occurred_at": ago(minutes=7),
-     "args": {"file_path": "internal/daemon/workdir_test.go"}, "result": {"ok": True}},
-    {"tool_call_id": "tc_6", "name": "bash", "status": "running", "occurred_at": ago(minutes=4),
+    {"tool_call_id": "tc_5", "name": "read", "status": "completed", "occurred_at": real_ago(minutes=3, seconds=5),
+     "args": {"file_path": "internal/daemon/workdir.go"}, "result": {"bytes": 2410}},
+    {"tool_call_id": "tc_6", "name": "edit", "status": "completed", "occurred_at": real_ago(minutes=2, seconds=40),
+     "args": {"file_path": "internal/daemon/workdir_test.go", "old_string": "", "new_string": "func TestResolveWorkdir_NoHome(t *testing.T) {"},
+     "result": {"ok": True}},
+    {"tool_call_id": "tc_7", "name": "bash", "status": "completed", "occurred_at": real_ago(minutes=2, seconds=10),
+     "args": {"command": "go test ./internal/daemon/... -run TestResolveWorkdir -count=1"},
+     "result": {"exit_code": 0, "stdout": "ok  \tparsar/internal/daemon\t0.412s"}},
+    {"tool_call_id": "tc_8", "name": "bash", "status": "completed", "occurred_at": real_ago(minutes=1, seconds=30),
+     "args": {"command": "git add internal/daemon/workdir_test.go && git commit -m 'daemon: test workdir fallback without HOME'"},
+     "result": {"exit_code": 0}},
+    {"tool_call_id": "tc_9", "name": "bash", "status": "running", "occurred_at": real_ago(seconds=42),
      "args": {"command": "git push origin fix/claude-home-workdir"}},
 ]
 RUNS = [
     {"id": RUN_OK, "status": "completed", "agent_name": "reviewer-bot", "agent_slug": "reviewer-bot",
      "connector_type": "agent_daemon", "trigger_message_id": "msg_01J8ZC01", "output_message_id": "msg_01J8ZC02",
      "steps": STEPS_OK, "created_at": ago(minutes=38), "started_at": ago(minutes=37), "finished_at": ago(minutes=31)},
-    # Queued, not running: a running run would open an SSE EventSource that
-    # this JSON-only mock cannot answer (the browser would reconnect forever).
-    {"id": RUN_PENDING, "status": "queued", "queue_position": 1, "agent_name": "reviewer-bot",
+    # Running: the page opens the run's SSE stream, served below.
+    {"id": RUN_PENDING, "status": "running", "agent_name": "reviewer-bot",
      "agent_slug": "reviewer-bot", "connector_type": "agent_daemon", "trigger_message_id": "msg_01J8ZC03",
-     "output_message_id": "msg_01J8ZC04", "steps": STEPS_PENDING, "created_at": ago(minutes=9)},
+     "steps": STEPS_PENDING, "created_at": ago(minutes=9), "started_at": RUN_STARTED},
 ]
 
 INTERACTION = {
@@ -131,9 +191,73 @@ INTERACTION = {
                 "detail": "Push one commit (workdir_test.go) to the protected branch.",
                 "payload": {"tool": "bash", "command": "git push origin fix/claude-home-workdir",
                             "cwd": "~/dev/parsar", "risk": "medium"}},
-    "response": {}, "created_at": ago(minutes=4), "expires_at": iso(NOW + timedelta(minutes=26)),
-    "updated_at": ago(minutes=4), "agent_name": "reviewer-bot", "conversation_title": CONVS[0]["title"],
+    "response": {}, "created_at": real_ago(seconds=42), "expires_at": real_in(minutes=4, seconds=18),
+    "updated_at": real_ago(seconds=42), "agent_name": "reviewer-bot", "conversation_title": CONVS[0]["title"],
 }
+
+
+# --- SSE: the running run's stream -------------------------------------------
+# mock-api.py answers JSON only and serves one request at a time. A fixture
+# cannot register a streaming handler, so this one swaps in a threading server
+# whose handler answers the stream path itself: it replays the run's tool
+# events (before/after), announces the pending permission, then holds the
+# connection open with keep-alive comments so the page stays "streaming".
+STREAM_RE = re.compile(r"^/api/v1/conversations/([^/]+)/runs/([^/]+)/stream$")
+STREAM_HOLD_S = 600
+
+
+def _stream_frames():
+    frames = []
+    for s in STEPS_PENDING:
+        frames.append(("tool", {"tool": {"id": s["tool_call_id"], "name": s["name"], "stage": "before", "args": s["args"]}}))
+        if s["status"] == "completed":
+            frames.append(("tool", {"tool": {"id": s["tool_call_id"], "name": s["name"], "stage": "after", "result": s.get("result")}}))
+    frames.append(("permission", {"permission": {"id": INTERACTION["request_id"], "tool": "bash",
+                                                 "title": INTERACTION["request"]["resource"],
+                                                 "payload": INTERACTION["request"]["payload"]}}))
+    return frames
+
+
+def _serve_stream(handler):
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/event-stream")
+    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("X-Accel-Buffering", "no")
+    handler.end_headers()
+    try:
+        for event, data in _stream_frames():
+            handler.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode())
+            handler.wfile.flush()
+        deadline = time.time() + STREAM_HOLD_S
+        while time.time() < deadline:
+            time.sleep(15)
+            handler.wfile.write(b": keep-alive\n\n")
+            handler.wfile.flush()
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        pass
+
+
+class _StreamingServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def finish_request(self, request, client_address):
+        base = self.RequestHandlerClass
+        if not getattr(base, "_streams", False):
+            class Handler(base):
+                _streams = True
+
+                def do_GET(self):
+                    if STREAM_RE.match(urlparse(self.path).path):
+                        return _serve_stream(self)
+                    return super().do_GET()
+
+            self.RequestHandlerClass = Handler
+        return super().finish_request(request, client_address)
+
+
+_main = sys.modules.get("__main__")
+if _main is not None and getattr(_main, "HTTPServer", None) is not None:
+    _main.HTTPServer = _StreamingServer
 
 
 def agents(m, q):
@@ -157,6 +281,8 @@ def timeline(m, q):
     cid = m.group(1)
     if cid == C1:
         return 200, {"conversation_id": cid, "messages": MSGS, "agent_runs": RUNS}
+    if cid == C2:
+        return 200, {"conversation_id": cid, "messages": C2_MSGS, "agent_runs": C2_RUNS}
     c = next((x for x in CONVS if x["id"] == cid), None)
     if not c:
         return 404, {"error": "not_found"}

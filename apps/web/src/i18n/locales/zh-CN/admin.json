@@ -439,6 +439,31 @@
       "expandAria": "展开执行轨迹",
       "collapseAria": "折叠执行轨迹",
       "cancelAria": "取消当前任务"
+    },
+    "trace": {
+      "label": "执行轨迹",
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "interrupted": "已中断",
+      "args": "参数",
+      "result": "结果",
+      "verb": {
+        "bash": "运行",
+        "read": "读取",
+        "write": "写入",
+        "edit": "编辑",
+        "search": "搜索",
+        "tool": "调用"
+      }
+    },
+    "approval": {
+      "title": "审批请求",
+      "body": "{{agent}} 请求运行 {{tool}}"
+    },
+    "turnNav": {
+      "label": "楼层导航"
     }
   },
   "runs": {

@@ -15,16 +15,21 @@ export function ConversationInteractionCards({
   workspaceID,
   conversationID,
   preferredRequestID,
+  omitPermission = false,
 }: {
   workspaceID: string | null
   conversationID: string
   preferredRequestID?: string
+  /** Set when the thread's approval bar already owns the permission requests. */
+  omitPermission?: boolean
 }) {
   const { t } = useTranslation("admin")
   const query = useAgentInteractions(workspaceID, "pending")
   const interactions = useMemo(() => {
     const rows = (query.data?.interactions ?? []).filter(
-      (interaction) => interaction.conversation_id === conversationID,
+      (interaction) =>
+        interaction.conversation_id === conversationID &&
+        !(omitPermission && interaction.kind === "permission"),
     )
     if (!preferredRequestID) return rows
     return [...rows].sort((left, right) => {
@@ -32,7 +37,7 @@ export function ConversationInteractionCards({
       if (right.request_id === preferredRequestID) return 1
       return 0
     })
-  }, [conversationID, preferredRequestID, query.data?.interactions])
+  }, [conversationID, omitPermission, preferredRequestID, query.data?.interactions])
 
   if (!workspaceID) return null
   if (interactions.length === 0 && !preferredRequestID) return null

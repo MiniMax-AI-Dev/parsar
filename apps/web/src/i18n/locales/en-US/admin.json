@@ -439,6 +439,31 @@
       "expandAria": "Expand execution trace",
       "collapseAria": "Collapse execution trace",
       "cancelAria": "Cancel current task"
+    },
+    "trace": {
+      "label": "Work trace",
+      "running": "Running",
+      "completed": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted",
+      "args": "Arguments",
+      "result": "Result",
+      "verb": {
+        "bash": "Run",
+        "read": "Read",
+        "write": "Write",
+        "edit": "Edit",
+        "search": "Search",
+        "tool": "Call"
+      }
+    },
+    "approval": {
+      "title": "Approval request",
+      "body": "{{agent}} requests to run {{tool}}"
+    },
+    "turnNav": {
+      "label": "Turn navigation"
     }
   },
   "runs": {

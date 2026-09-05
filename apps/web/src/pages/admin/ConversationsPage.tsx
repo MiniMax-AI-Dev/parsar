@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
@@ -22,8 +22,9 @@ import {
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { ApprovalBar } from "../../components/conversation/ApprovalBar"
 import { ConversationInteractionCards } from "../../components/conversation/ConversationInteractionCards"
-import { WorkingSteps, StepTrace } from "../../components/conversation/StepDisplay"
+import { WorkTrace, type TraceStep } from "../../components/conversation/WorkTrace"
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
 import {
@@ -39,8 +40,9 @@ import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { InitialTile, Ledger, LedgerId, LedgerRow } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
-import { StatusIcon } from "../../components/ui/status-icon"
+import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import { Textarea } from "../../components/ui/textarea"
+import { TurnNavRail, turnPreview, useActiveTurnKey } from "../../components/ui/turn-nav-rail"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useAgents, useCancelRun, useCancelConversation } from "../../lib/api-agents"
@@ -56,9 +58,12 @@ import {
   useConversations,
   useSendUserMessage,
   useUpdateConversationTitle,
+  type StreamingStep,
 } from "../../lib/api-conversations"
+import { useAgentInteractions } from "../../lib/api-interactions"
 import { useSandboxBinding, type SandboxBinding } from "../../lib/api-sandbox"
 import type {
+  AgentInteraction,
   ConversationListItem,
   ConversationTimelineRun,
   Agent,
@@ -435,7 +440,7 @@ function ConversationList(p: ListProps) {
             <DropdownMenu.Content
               align="start"
               sideOffset={6}
-              className="app-shadow-floating z-50 min-w-[260px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in"
+              className="app-shadow-floating z-50 min-w-[260px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
             >
               {p.agentsLoading ? (
                 <div className="space-y-2 p-2">
@@ -924,6 +929,13 @@ function ChatStream({
   // a stream is active we pause timeline polling so the half-written
   // assistant message doesn't get clobbered by a stale GET.
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  // Wall clock of the moment the composer handed us a run id: the trace's
+  // clock until the timeline carries the run's own started_at.
+  const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null)
+  const startRun = useCallback((runId: string) => {
+    setLiveStartedAt(Date.now())
+    setActiveRunId(runId)
+  }, [])
   // Surface fire-and-forget /start failures (e.g. daemon offline,
   // network error). Server now auto-starts agent_daemon runs, so a
   // /start that returns 200 `already running` is fine; only true
@@ -955,7 +967,8 @@ function ChatStream({
     return () => window.clearTimeout(timer)
   }, [activeRunId, runs])
 
-  // Map output_message_id → runs[] so MessageRow can render StepTrace
+  // Map output_message_id → runs[] so MessageRow can read the presentation
+  // and the failed-run link from the run that produced the answer.
   const runsByOutputMessage = useMemo(() => {
     const m = new Map<string, ConversationTimelineRun[]>()
     for (const r of runs) {
@@ -966,6 +979,84 @@ function ChatStream({
     }
     return m
   }, [runs])
+
+  // Traces anchor on the user turn that triggered the run; a run the server
+  // only tied to its answer sits directly before that answer instead.
+  const runsByTrigger = useMemo(() => {
+    const m = new Map<string, ConversationTimelineRun[]>()
+    for (const r of runs) {
+      if (!r.trigger_message_id) continue
+      const arr = m.get(r.trigger_message_id)
+      if (arr) arr.push(r)
+      else m.set(r.trigger_message_id, [r])
+    }
+    return m
+  }, [runs])
+  const orphanRunsByOutput = useMemo(() => {
+    const m = new Map<string, ConversationTimelineRun[]>()
+    for (const r of runs) {
+      if (r.trigger_message_id || !r.output_message_id) continue
+      const arr = m.get(r.output_message_id)
+      if (arr) arr.push(r)
+      else m.set(r.output_message_id, [r])
+    }
+    return m
+  }, [runs])
+  const liveRunAnchored = !!activeRunId && runs.some((r) => r.id === activeRunId)
+
+  // Pending permission requests of this conversation, oldest first: they
+  // take the composer's slot as the approval bar and open the run's trace.
+  const interactionsQ = useAgentInteractions(convWorkspaceId, "pending")
+  const pendingPermissions = useMemo<AgentInteraction[]>(
+    () =>
+      (interactionsQ.data?.interactions ?? [])
+        .filter(
+          (i) => i.conversation_id === conversationId && i.kind === "permission" && i.status === "pending",
+        )
+        .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)),
+    [interactionsQ.data?.interactions, conversationId],
+  )
+  const runsAwaitingUser = useMemo(
+    () => new Set(pendingPermissions.map((i) => i.agent_run_id)),
+    [pendingPermissions],
+  )
+  // The stream announces the request before the 2s poll would: refetch now.
+  const pendingRequestId = stream.pendingInteraction?.requestId
+  useEffect(() => {
+    if (!pendingRequestId || !convWorkspaceId) return
+    qc.invalidateQueries({ queryKey: ["admin", "interactions", convWorkspaceId, "pending"] })
+  }, [pendingRequestId, convWorkspaceId, qc])
+
+  // Turn navigation: one marker per user turn, the active one follows scroll.
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null)
+  const turns = useMemo(
+    () =>
+      messages
+        .filter((m) => m.sender_type === "user")
+        .map((m) => ({ key: m.id, preview: turnPreview(m.content) })),
+    [messages],
+  )
+  const turnKeys = useMemo(() => turns.map((turn) => turn.key), [turns])
+  const activeTurnKey = useActiveTurnKey(viewport, turnKeys)
+
+  const liveTrace = (run: ConversationTimelineRun | null) => (
+    <RunTrace
+      key={run ? run.id : "live"}
+      run={run}
+      live={hasActiveStream ? { steps: stream.steps, startedAt: liveStartedAt ?? undefined } : null}
+      attention={
+        (!!run && runsAwaitingUser.has(run.id)) ||
+        (!!activeRunId && runsAwaitingUser.has(activeRunId)) ||
+        stream.pendingInteraction?.kind === "permission"
+      }
+    />
+  )
+  const traceFor = (run: ConversationTimelineRun) =>
+    run.id === activeRunId ? (
+      liveTrace(run)
+    ) : (
+      <RunTrace key={run.id} run={run} live={null} attention={runsAwaitingUser.has(run.id)} />
+    )
 
   // We trust SSE status while a stream is active; otherwise fall back to
   // the run table (covers external runs or page-refresh-during-run cases).
@@ -1045,7 +1136,9 @@ function ChatStream({
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <TurnNavRail turns={turns} activeKey={activeTurnKey} />
+        <div ref={setViewport} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col gap-5 px-4 py-6">
           {timelineQ.isLoading ? (
             <Skeleton className="h-16 w-3/4" />
@@ -1054,21 +1147,38 @@ function ChatStream({
               {t("conversations.detail.emptyTimeline")}
             </p>
           ) : (
-            messages.map((m) => (
-              <MessageRow
-                key={m.id}
-                senderType={m.sender_type}
-                messageType={m.kind}
-                content={m.content}
-                metadata={m.metadata}
-                outputRuns={runsByOutputMessage.get(m.id)}
-                stamp={fmtAgo(m.created_at)}
-                agentName={agent?.name ?? ""}
-                conversationId={conversationId}
-                onOpenRun={openRun}
-              />
-            ))
+            messages.map((m) => {
+              const row = (
+                <MessageRow
+                  senderType={m.sender_type}
+                  messageType={m.kind}
+                  content={m.content}
+                  metadata={m.metadata}
+                  outputRuns={runsByOutputMessage.get(m.id)}
+                  stamp={fmtAgo(m.created_at)}
+                  agentName={agent?.name ?? ""}
+                  conversationId={conversationId}
+                  onOpenRun={openRun}
+                />
+              )
+              if (m.sender_type === "user") {
+                // The turn and the work it triggered share one anchor.
+                return (
+                  <div key={m.id} data-turn-key={m.id} className="flex flex-col gap-3">
+                    {row}
+                    {(runsByTrigger.get(m.id) ?? []).map(traceFor)}
+                  </div>
+                )
+              }
+              return (
+                <Fragment key={m.id}>
+                  {(orphanRunsByOutput.get(m.id) ?? []).map(traceFor)}
+                  {row}
+                </Fragment>
+              )
+            })
           )}
+          {activeRunId && !liveRunAnchored && liveTrace(null)}
           {hasActiveStream && stream.deltaText && (
             <MessageRow
               senderType="agent"
@@ -1081,33 +1191,16 @@ function ChatStream({
           <ConversationInteractionCards
             workspaceID={convWorkspaceId}
             conversationID={conversationId}
-            preferredRequestID={stream.pendingInteraction?.requestId}
+            preferredRequestID={
+              stream.pendingInteraction?.kind === "user_choice" ? stream.pendingInteraction.requestId : undefined
+            }
+            omitPermission
           />
           {stream.status === "error" && (
             <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
               <span>{streamErrorMessage}</span>
             </p>
-          )}
-          {someRunActive && stream.steps.length === 0 && (
-            <p className="m-0 flex items-center gap-2 text-sm text-fg" role="status" aria-live="polite">
-              <StatusIcon status="running" />
-              <span>{t("conversations.stream.thinking")}</span>
-            </p>
-          )}
-          {someRunActive && stream.steps.length > 0 && (
-            <WorkingSteps
-              steps={stream.steps}
-              active={someRunActive}
-              cancelling={cancelRunMut.isPending}
-              onCancel={
-                activeRunId
-                  ? () => {
-                      cancelRunMut.mutate({ runID: activeRunId, reason: "user_clicked_cancel" })
-                    }
-                  : undefined
-              }
-            />
           )}
           {/*
             Queued runs render one "queued" line per run, distinct from the
@@ -1129,38 +1222,138 @@ function ChatStream({
               </p>
             ))}
         </div>
+        </div>
       </div>
 
       <ComposerFooter>
         <ListSlot slotId="conversation.input.dock" context={{ conversationId }} />
         {chatToast && <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />}
-        <ComposerForm
-          conversationId={conversationId}
-          placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
-          disabled={!agent || sandboxGuard?.blocked}
-          onRunStarted={setActiveRunId}
-          onStartError={setChatToast}
-          activeRunId={activeRunId}
-          // Drop activeRunId immediately on click for the same reason
-          // the "Cancel all" header button does: stop showing "thinking" /
-          // the in-progress affordance the moment the user asks for
-          // it, instead of waiting for the daemon to acknowledge the
-          // abort. Server-side useCancelRun handles the actual run
-          // cancellation + connector.Abort.
-          onCancelActiveRun={
-            activeRunId
-              ? () => {
-                  const runID = activeRunId
-                  setActiveRunId(null)
-                  cancelRunMut.mutate({ runID, reason: "user_clicked_stop" })
-                }
-              : undefined
-          }
-          cancelling={cancelRunMut.isPending}
-          blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
-        />
+        {pendingPermissions.length > 0 && convWorkspaceId ? (
+          // The approval takes the composer's slot: one control for the
+          // decision, none for typing until the agent may continue.
+          <ApprovalBar interactions={pendingPermissions} workspaceID={convWorkspaceId} />
+        ) : (
+          <ComposerForm
+            conversationId={conversationId}
+            placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
+            disabled={!agent || sandboxGuard?.blocked}
+            onRunStarted={startRun}
+            onStartError={setChatToast}
+            activeRunId={activeRunId}
+            // Drop activeRunId immediately on click for the same reason
+            // the "Cancel all" header button does: stop showing "thinking" /
+            // the in-progress affordance the moment the user asks for
+            // it, instead of waiting for the daemon to acknowledge the
+            // abort. Server-side useCancelRun handles the actual run
+            // cancellation + connector.Abort.
+            onCancelActiveRun={
+              activeRunId
+                ? () => {
+                    const runID = activeRunId
+                    setActiveRunId(null)
+                    cancelRunMut.mutate({ runID, reason: "user_clicked_stop" })
+                  }
+                : undefined
+            }
+            cancelling={cancelRunMut.isPending}
+            blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+          />
+        )}
       </ComposerFooter>
     </div>
+  )
+}
+
+/* ============================================================== */
+/*  Run trace — timeline / SSE steps normalised for WorkTrace        */
+/* ============================================================== */
+
+const RUN_STATUS_KINDS: readonly StatusKind[] = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted",
+]
+
+function runStatusKind(run: ConversationTimelineRun): StatusKind {
+  if ((RUN_STATUS_KINDS as readonly string[]).includes(run.status)) return run.status as StatusKind
+  return run.started_at ? "completed" : "queued"
+}
+
+function isoMs(iso?: string): number | undefined {
+  if (!iso) return undefined
+  const ms = Date.parse(iso)
+  return isNaN(ms) ? undefined : ms
+}
+
+function timelineTraceSteps(run: ConversationTimelineRun): TraceStep[] {
+  return (run.steps ?? []).map((s) => ({
+    id: s.tool_call_id,
+    name: s.name,
+    // Server never emits step.status="failed": a step still "running" in a
+    // failed run is the one that took the run down (see store.buildToolSteps).
+    status: run.status === "failed" && s.status === "running" ? "failed" : s.status,
+    args: s.args,
+    result: s.result,
+    startedAt: isoMs(s.occurred_at),
+  }))
+}
+
+/**
+ * SSE steps carry page-relative clocks and no results. Replayed events for a
+ * step the timeline already knows borrow its wall-clock start and result, so
+ * a resumed run does not restart every counter at the moment of subscribing.
+ */
+function streamTraceSteps(steps: StreamingStep[], known: ToolStep[]): TraceStep[] {
+  const origin = performance.timeOrigin
+  const byId = new Map(known.map((s) => [s.tool_call_id, s]))
+  return steps.map((s) => {
+    const persisted = byId.get(s.tool_call_id)
+    const persistedStart = isoMs(persisted?.occurred_at)
+    return {
+      id: s.tool_call_id,
+      name: s.name,
+      status: s.status,
+      args: s.args ?? persisted?.args,
+      result: persisted?.result,
+      startedAt: persistedStart ?? origin + s.started_at,
+      endedAt: persistedStart !== undefined ? undefined : s.ended_at === undefined ? undefined : origin + s.ended_at,
+    }
+  })
+}
+
+/**
+ * One run's WorkTrace. `live` carries the SSE steps while this run streams
+ * (they replay the persisted events and then follow, so they supersede the
+ * timeline snapshot); `run` is null only for a run the timeline has not
+ * caught up with yet. Finished runs without steps render nothing.
+ */
+function RunTrace({
+  run,
+  live,
+  attention,
+}: {
+  run: ConversationTimelineRun | null
+  live: { steps: StreamingStep[]; startedAt?: number } | null
+  attention: boolean
+}) {
+  const status: StatusKind = live ? "running" : run ? runStatusKind(run) : "running"
+  const steps = useMemo(() => {
+    if (live && live.steps.length > 0) return streamTraceSteps(live.steps, run?.steps ?? [])
+    return run ? timelineTraceSteps(run) : []
+  }, [live, run])
+  if (status !== "running" && status !== "queued" && steps.length === 0) return null
+  if (status === "queued" && !live) return null
+  return (
+    <WorkTrace
+      steps={steps}
+      status={status}
+      startedAt={isoMs(run?.started_at) ?? live?.startedAt}
+      finishedAt={isoMs(run?.finished_at)}
+      attentionRequired={attention}
+    />
   )
 }
 
@@ -1272,7 +1465,6 @@ const MessageRow = memo(function MessageRow({
         content={content}
         fallback={<p className="m-0 whitespace-pre-wrap break-words text-base text-fg">{content}</p>}
       />
-      {allSteps.length > 0 && <StepTrace steps={allSteps} />}
       {failedRun && onOpenRun && (
         <Button variant="link" size="sm" className="mt-1 px-0" onClick={() => onOpenRun(failedRun.id)}>
           {t("conversations.detail.viewRunLink")}
