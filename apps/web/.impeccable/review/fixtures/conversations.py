@@ -295,9 +295,24 @@ def timeline(m, q):
     return 200, {"conversation_id": cid, "messages": msgs, "agent_runs": []}
 
 
+RESOLVED = set()
+
+
 def interactions(m, q):
     status = q.get("status", ["pending"])[0]
-    return 200, {"interactions": [INTERACTION] if status == "pending" else []}
+    ids = {INTERACTION.get("request_id"), INTERACTION.get("id")}
+    pending = [] if RESOLVED & ids else [INTERACTION]
+    return 200, {"interactions": pending if status == "pending" else []}
+
+
+def resolve(m, q):
+    # POST .../interactions/{id}/resolve: the bar's decision removes the
+    # pending item so the composer (with its stop button) comes back.
+    RESOLVED.add(m.group(2))
+    return 200, {"ok": True}
+
+
+resolve.methods = ("POST",)
 
 
 ROUTES = [
@@ -306,4 +321,5 @@ ROUTES = [
     (r"^/api/v1/conversations/([^/]+)$", conversation),
     (r"^/api/v1/conversations/([^/]+)/timeline$", timeline),
     (r"^/api/v1/workspaces/([^/]+)/interactions$", interactions),
+    (r"^/api/v1/workspaces/([^/]+)/interactions/([^/]+)/resolve$", resolve),
 ]
