@@ -181,11 +181,21 @@ export function ConversationsPage() {
   }
 
   const qc = useQueryClient()
+  const firstSend = useRef<{
+    workspaceId: string
+    agentId: string
+    conversationId?: string
+  } | null>(null)
+
+  useEffect(() => {
+    firstSend.current = null
+  }, [wsId, selectedAgentId, entityId])
 
   // "New conversation" navigates to an empty composer without pre-creating a
   // conv — the conv is created on first send via handleSendFromEmpty,
   // so the sidebar only shows rows with a real first user turn.
   const openCreate = () => {
+    firstSend.current = null
     navigate("conversations", { id: "", focus: "compose" })
   }
 
@@ -196,28 +206,38 @@ export function ConversationsPage() {
     if (!wsId || !selectedAgentId) {
       throw new Error("workspace_id and agent_id required for empty-state send")
     }
-    const conv = await createConversation(wsId, {
-      title: content.slice(0, 30),
-      surface: "web",
-      form: "thread",
-      agent_id: selectedAgentId,
-    })
+    let attempt = firstSend.current
+    if (!attempt || attempt.workspaceId !== wsId || attempt.agentId !== selectedAgentId) {
+      attempt = { workspaceId: wsId, agentId: selectedAgentId }
+      firstSend.current = attempt
+    }
+    if (!attempt.conversationId) {
+      const conv = await createConversation(wsId, {
+        title: content.slice(0, 30),
+        surface: "web",
+        form: "thread",
+        agent_id: selectedAgentId,
+      })
+      attempt.conversationId = conv.id
+    }
+    const cid = attempt.conversationId
     try {
-      await sendUserMessage(conv.id, { content })
+      await sendUserMessage(cid, { content })
     } finally {
-      // Invalidate even on first-message failure — the empty conv is
-      // still real and the user can retry from the chat view.
+      // A failed first message still leaves a real conversation in the list.
       qc.invalidateQueries({
         predicate: (q) =>
           q.queryKey[0] === "admin" && q.queryKey[1] === "conversations" && q.queryKey[2] === wsId,
       })
-      qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conv.id] })
+      qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", cid] })
     }
+    if (firstSend.current !== attempt) return
+    firstSend.current = null
     writeConversationViewState(wsId, {
       agentId: selectedAgentId,
-      conversationId: conv.id,
+      conversationId: cid,
     })
-    navigate("conversations", { id: conv.id })
+    navigate("conversations", { id: cid })
   }
 
   const renameMutation = useUpdateConversationTitle(wsId)
@@ -227,6 +247,7 @@ export function ConversationsPage() {
   }
   const handleDeleteConversation = async (cid: string): Promise<void> => {
     await deleteMutation.mutateAsync(cid)
+    if (firstSend.current?.conversationId === cid) firstSend.current = null
     forgetConversationViewConversation(wsId, cid)
     // If we just deleted the active conv, navigate away — otherwise
     // useConversation 404s and the UI jumps to EmptyChat.
@@ -243,6 +264,7 @@ export function ConversationsPage() {
             agents={allAgents}
             selectedAgentId={selectedAgentId}
             onPickAgent={(id) => {
+              firstSend.current = null
               setPickedAgent({ workspaceId: wsId, agentId: id })
               writeConversationViewState(wsId, { agentId: id })
               navigate("conversations", { id: "", focus: "compose" })
@@ -251,6 +273,7 @@ export function ConversationsPage() {
             conversations={conversations}
             selectedConversationId={entityId ?? ""}
             onPickConversation={(id) => {
+              firstSend.current = null
               writeConversationViewState(wsId, {
                 agentId: selectedAgentId,
                 conversationId: id,
