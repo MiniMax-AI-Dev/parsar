@@ -100,13 +100,21 @@ export function ApprovalsPage() {
 
   // The newest pending request is the thing to act on; it is selected
   // until the user picks something else.
+  // Closing the rail must not re-select the default row; `dismissed`
+  // holds the rail shut until the user picks a row or the route changes.
+  const [dismissed, setDismissed] = useState(false)
   const selected =
     (entityId ? rows.find((r) => r.id === entityId) : undefined) ??
-    (entityId ? undefined : rows.find((r) => r.status === "pending"))
+    (entityId || dismissed ? undefined : rows.find((r) => r.status === "pending"))
 
   const select = (id: string | null) => {
-    if (id) navigate("approvals", { id })
-    else navigate("approvals")
+    if (id) {
+      setDismissed(false)
+      navigate("approvals", { id })
+    } else {
+      setDismissed(true)
+      navigate("approvals")
+    }
   }
 
   // The page is titled exactly as the nav item names it (common:nav.items.approvals).

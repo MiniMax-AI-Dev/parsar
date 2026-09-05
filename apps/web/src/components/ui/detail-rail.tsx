@@ -101,7 +101,11 @@ export function DetailRail({
             className,
           )}
           onAnimationEnd={(e) => {
-            if (closing && e.target === e.currentTarget) onClose?.()
+            if (!closing || e.target !== e.currentTarget) return
+            // Hand off to the parent, then reset so a rail the parent
+            // keeps mounted (or re-selects) can enter again.
+            setClosing(false)
+            onClose?.()
           }}
           {...props}
         >
