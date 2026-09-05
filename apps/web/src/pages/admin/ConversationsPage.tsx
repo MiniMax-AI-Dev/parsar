@@ -5,6 +5,7 @@ import type { TFunction } from "i18next"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
   AlertTriangle,
+  ArrowUp,
   ArrowUpRight,
   Check,
   ChevronsUpDown,
@@ -14,7 +15,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
-  Send,
   Square,
   Trash2,
   X,
@@ -36,16 +36,15 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { EmptyState } from "../../components/ui/empty-state"
-import { ErrorState } from "../../components/ui/error-state"
+import { ErrorState, InlineError } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { InitialTile, Ledger, LedgerId, LedgerRow } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
-import { Textarea } from "../../components/ui/textarea"
 import { TurnNavRail, turnPreview, useActiveTurnKey } from "../../components/ui/turn-nav-rail"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
-import { useAgents, useCancelRun, useCancelConversation } from "../../lib/api-agents"
+import { useAgents, useCancelRun } from "../../lib/api-agents"
 import { agentNeedsSandbox } from "../../lib/agent-runtime"
 import {
   createConversation,
@@ -808,7 +807,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
 /** Hairline-topped footer that holds the composer at the thread's measure. */
 function ComposerFooter({ children }: { children: React.ReactNode }) {
   return (
-    <div className="shrink-0 border-t border-line px-4 py-3">
+    <div className="shrink-0 px-4 pb-5 pt-2">
       <div className="mx-auto w-full max-w-[var(--thread-max-width)]">{children}</div>
     </div>
   )
@@ -872,6 +871,7 @@ function EmptyChat({
       <ComposerFooter>
         <ComposerForm
           conversationId={conversationId ?? ""}
+          agentName={agent?.name}
           disabled={!agent || sandboxGuard?.blocked}
           autoFocus={focusComposer}
           placeholder={
@@ -922,7 +922,6 @@ function ChatStream({
   const convInfoQ = useConversation(conversationId, null)
   const convWorkspaceId = convInfoQ.data?.workspace_id ?? null
   const cancelRunMut = useCancelRun(convWorkspaceId)
-  const cancelConvMut = useCancelConversation()
 
   // SSE state: ComposerForm hands us a run_id after send; we open the
   // EventSource and append delta tokens into the streaming message. While
@@ -1058,11 +1057,6 @@ function ChatStream({
       <RunTrace key={run.id} run={run} live={null} attention={runsAwaitingUser.has(run.id)} />
     )
 
-  // We trust SSE status while a stream is active; otherwise fall back to
-  // the run table (covers external runs or page-refresh-during-run cases).
-  const someRunActive =
-    hasActiveStream || runs.some((r) => r.status === "queued" || r.status === "running")
-
   // When the stream finishes, refetch the timeline so the persisted
   // assistant message replaces the in-memory deltaText, then drop the
   // activeRunId so polling resumes for any follow-up runs. We treat
@@ -1087,8 +1081,6 @@ function ChatStream({
     return () => window.clearTimeout(timer)
   }, [stream.status, streamErrorMessage, activeRunId, conversationId, qc])
 
-  const cancelAllLabel = t("conversations.detail.cancelAll")
-
   return (
     <div className="flex min-w-0 flex-1 flex-col" style={THREAD_STYLE}>
       <ThreadHeader
@@ -1096,41 +1088,6 @@ function ChatStream({
         onExpand={onExpand}
         actions={
           <>
-            {someRunActive && (
-              <>
-                <StatusIcon status="running" title={t("conversations.stream.thinking")} />
-                <Button
-                  variant="outline"
-                  disabled={cancelConvMut.isPending}
-                  onClick={() => {
-                    // Drop activeRunId immediately so useAgentRunStream
-                    // closes the EventSource without waiting for the
-                    // server to send a done frame — daemon may take
-                    // seconds to react to the abort, and the user
-                    // expects the "thinking" + button to disappear at
-                    // the moment of the click. The server still sees
-                    // the EventSource close (it cancels the ctx and
-                    // bails). The /stream re-subscription path that
-                    // hits writeStreamHangError with status='cancelled'
-                    // is handled by isUserCancelledError in
-                    // api-conversations.ts — no banner shown.
-                    setActiveRunId(null)
-                    cancelConvMut.mutate({
-                      conversationID: conversationId,
-                      reason: "user_clicked_cancel_all",
-                    })
-                  }}
-                  title={t("conversations.detail.cancelAllAria")}
-                >
-                  {cancelConvMut.isPending ? (
-                    <Loader2 className="animate-spin" aria-hidden="true" />
-                  ) : (
-                    <X strokeWidth={1.5} aria-hidden="true" />
-                  )}
-                  {cancelAllLabel}
-                </Button>
-              </>
-            )}
             <ListSlot slotId="conversation.header.actions" context={{ conversationId, agent }} />
           </>
         }
@@ -1235,6 +1192,7 @@ function ChatStream({
         ) : (
           <ComposerForm
             conversationId={conversationId}
+            agentName={agent?.name}
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
             disabled={!agent || sandboxGuard?.blocked}
             onRunStarted={startRun}
@@ -1576,9 +1534,12 @@ function ComposerForm({
   onCancelActiveRun,
   cancelling,
   blockReason,
+  agentName,
 }: {
   conversationId: string
   placeholder: string
+  /** Name of the agent that receives the message; shown in the toolbar. */
+  agentName?: string
   disabled?: boolean
   autoFocus?: boolean
   /**
@@ -1688,48 +1649,72 @@ function ComposerForm({
         void submit()
       }}
     >
-      {blockReason && (
-        <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
-          <span className="break-words">{blockReason}</span>
-        </p>
-      )}
-      <Textarea
-        ref={inputRef}
-        rows={2}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onKeyDown={(e) => {
-          // Enter sends; Shift+Enter inserts a newline; never fire mid-IME.
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            void submit()
-          }
-        }}
-        placeholder={placeholder}
-        aria-label={t("conversations.composer.label")}
-        disabled={disabled || (!conversationId && !onSendDirect)}
-      />
-      <div className="flex items-center justify-end gap-2">
-        {showStop ? (
-          <Button type="button" variant="outline" onClick={onCancelActiveRun} disabled={cancelling}>
-            {cancelling ? (
-              <Loader2 className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Square className="fill-current" strokeWidth={1.5} aria-hidden="true" />
-            )}
-            {t("conversations.composer.stopAria")}
-          </Button>
-        ) : (
-          <Button type="submit" disabled={!canSubmit}>
-            {isBusy ? (
-              <Loader2 className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Send strokeWidth={1.5} aria-hidden="true" />
-            )}
-            {isBusy ? t("conversations.composer.sending") : t("conversations.composer.send")}
-          </Button>
-        )}
+      {blockReason && <InlineError className="mb-2">{blockReason}</InlineError>}
+      {/* The composer: one tonal, borderless 16px panel (the ChatGPT idiom
+          in our greys), text on top, a toolbar row below with the bound
+          agent and the round ink send / stop button. */}
+      <div className="rounded-2xl bg-surface-muted px-4 pb-3 pt-4">
+        <textarea
+          ref={inputRef}
+          rows={1}
+          value={content}
+          onChange={(e) => {
+            setContent(e.target.value)
+            // Grow with the text up to eight lines, then scroll.
+            const el = e.currentTarget
+            el.style.height = "auto"
+            el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+          }}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter inserts a newline; never fire mid-IME.
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              void submit()
+            }
+          }}
+          placeholder={placeholder}
+          aria-label={t("conversations.composer.label")}
+          disabled={disabled || (!conversationId && !onSendDirect)}
+          className="block max-h-[200px] min-h-[40px] w-full resize-none bg-transparent text-base leading-relaxed text-fg placeholder:text-fg-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        <div className="mt-2 flex h-8 items-center justify-end gap-3">
+          {agentName && (
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
+              <InitialTile name={agentName} />
+              <span className="truncate">{agentName}</span>
+            </span>
+          )}
+          {showStop ? (
+            <button
+              type="button"
+              onClick={onCancelActiveRun}
+              disabled={cancelling}
+              aria-label={t("conversations.composer.stopAria")}
+              title={t("conversations.composer.stopAria")}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-emphasis text-fg-on-emphasis active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+            >
+              {cancelling ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Square className="h-3 w-3 fill-current" strokeWidth={1.5} aria-hidden="true" />
+              )}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              aria-label={isBusy ? t("conversations.composer.sending") : t("conversations.composer.send")}
+              title={t("conversations.composer.send")}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-emphasis text-fg-on-emphasis transition-opacity duration-150 ease-settle active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30"
+            >
+              {isBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </form>
   )
