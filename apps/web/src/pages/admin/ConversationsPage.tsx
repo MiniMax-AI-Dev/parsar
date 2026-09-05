@@ -272,6 +272,7 @@ export function ConversationsPage() {
       <div className="flex h-[calc(100vh-65px)] min-h-0">
         {!folded && (
           <ConversationSidebar
+            key={wsId}
             agents={allAgents}
             canWrite={canWrite}
             canDelete={workspaceRole === "owner" || workspaceRole === "admin"}

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
-  mockApp, json, WORKSPACE_ID, OTHER_WORKSPACE_ID, CONVERSATION_ID, OTHER_CONVERSATION_ID,
+  mockApp, json, WORKSPACE_ID, OTHER_WORKSPACE_ID, CONVERSATION_ID, OTHER_CONVERSATION_ID, OTHER_AGENT_ID,
 } from "./helpers/conversation-app";
 
 const READ_ONLY = "Read-only access. You cannot send messages.";
@@ -123,6 +123,44 @@ for (const action of ["Rename", "Delete"]) {
     expect(state.writes).toEqual([]);
   });
 }
+
+test("workspace navigation discards a pending delete target", async ({ page }) => {
+  const state = await mockApp(page, "new", null);
+  const conversation = {
+    id: OTHER_CONVERSATION_ID, workspace_id: OTHER_WORKSPACE_ID, title: "Other Conversation",
+    primary_agent_id: OTHER_AGENT_ID, surface: "web", form: "thread", status: "active",
+    metadata: {}, message_count: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  };
+  await page.route((url) => url.pathname.startsWith(`/api/v1/workspaces/${OTHER_WORKSPACE_ID}/`), (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/conversations")) return json(route, { conversations: [conversation] });
+    if (path.endsWith("/agents")) return json(route, { agents: [{
+      id: OTHER_AGENT_ID, workspace_id: OTHER_WORKSPACE_ID, name: "Other Agent", status: "active", connector_type: "http_agent", config: {},
+    }] });
+    return route.fallback();
+  });
+  await page.route(`**/api/v1/conversations/${OTHER_CONVERSATION_ID}`, (route) => {
+    if (route.request().method() === "DELETE") state.writes.push(`DELETE /api/v1/conversations/${OTHER_CONVERSATION_ID}`);
+    return json(route, conversation);
+  });
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  await expect(page.locator("form").getByRole("textbox")).toBeEnabled();
+  await page.evaluate((url) => {
+    window.history.pushState({}, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, `/?admin=conversations&ws=${OTHER_WORKSPACE_ID}&id=${OTHER_CONVERSATION_ID}`);
+  await page.getByRole("button", { name: "Delete conversation", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`ws=${WORKSPACE_ID}`));
+  state.otherRole = "viewer";
+  const roles = page.waitForResponse("**/api/v1/me/workspaces");
+  await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+  await roles;
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator("form").getByRole("textbox")).toBeEnabled();
+  expect(state.writes).toEqual([]);
+});
 
 for (const [role, conversationRole] of [["owner", "viewer"], ["viewer", "owner"], ["owner", undefined]]) {
   test(`conversation actions use its own workspace role ${conversationRole ?? "unknown"}, not URL role ${role}`, async ({ page }) => {
