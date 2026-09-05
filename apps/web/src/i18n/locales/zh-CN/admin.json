@@ -265,6 +265,7 @@
       "allow": "已允许",
       "deny": "已拒绝",
       "alreadyDecided": "这条审批已经处理过，不能再操作。",
+      "readOnly": "当前为只读模式。工作区所有者、管理员和成员可以处理。",
       "relatedLinks": "关联跳转",
       "openRun": "打开 Run Detail",
       "openConversation": "打开 Conversation",
