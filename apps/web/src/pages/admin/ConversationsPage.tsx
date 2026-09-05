@@ -52,6 +52,7 @@ import {
   useUpdateConversationTitle,
 } from "../../lib/api-conversations"
 import { useSandboxBinding, type SandboxBinding } from "../../lib/api-sandbox"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import type {
   ConversationListItem,
   ConversationTimelineRun,
@@ -87,6 +88,15 @@ export function ConversationsPage() {
   const wsId = useWorkspaceId()
   const restoreViewState = !entityId && focusTarget !== "compose"
   const savedViewState = useMemo(() => readConversationViewState(wsId), [wsId])
+  const workspacesQ = useMyWorkspaces()
+  const workspaces = workspacesQ.data?.workspaces ?? []
+  const writableWorkspaceIds = new Set(
+    workspaces
+      .filter((w) => w.role === "owner" || w.role === "admin" || w.role === "member")
+      .map((w) => w.id),
+  )
+  const workspaceRole = workspaces.find((w) => w.id === wsId)?.role
+  const canWrite = writableWorkspaceIds.has(wsId ?? "")
 
   const agentsQ = useAgents(wsId)
   const allAgents: Agent[] = useMemo(
@@ -263,6 +273,8 @@ export function ConversationsPage() {
         {!folded && (
           <ConversationSidebar
             agents={allAgents}
+            canWrite={canWrite}
+            canDelete={workspaceRole === "owner" || workspaceRole === "admin"}
             selectedAgentId={selectedAgentId}
             onPickAgent={(id) => {
               firstSend.current = null
@@ -290,6 +302,7 @@ export function ConversationsPage() {
         )}
         <ConversationMain
           conv={currentConv}
+          canWrite={entityId ? writableWorkspaceIds.has(currentConv?.workspace_id ?? "") : canWrite}
           convLoading={currentConvQ.isLoading}
           convError={currentConvQ.error}
           agent={selectedAgent}
@@ -342,6 +355,8 @@ function sandboxSendGuard(
 
 interface SidebarProps {
   agents: Agent[]
+  canWrite: boolean
+  canDelete: boolean
   selectedAgentId: string
   onPickAgent: (id: string) => void
   agentsLoading: boolean
@@ -369,6 +384,10 @@ function ConversationSidebar(p: SidebarProps) {
   const [deleteError, setDeleteError] = useState<string>("")
   const renameInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
+    if (!p.canWrite) setRenamingConvId(null)
+    if (!p.canDelete) setDeleteConvId(null)
+  }, [p.canWrite, p.canDelete])
+  useEffect(() => {
     if (renamingConvId && renameInputRef.current) {
       renameInputRef.current.focus()
       renameInputRef.current.select()
@@ -386,7 +405,7 @@ function ConversationSidebar(p: SidebarProps) {
     setRenameError("")
   }
   const commitRename = async () => {
-    if (!renamingConvId) return
+    if (!p.canWrite || !renamingConvId) return
     const trimmed = renameDraft.trim()
     if (trimmed === "") {
       setRenameError(t("conversations.sidebar.renameEmpty"))
@@ -409,7 +428,7 @@ function ConversationSidebar(p: SidebarProps) {
 
   const deleteConv = p.conversations.find((c) => c.id === deleteConvId)
   const confirmDelete = async () => {
-    if (!deleteConvId) return
+    if (!p.canDelete || !deleteConvId) return
     setDeleteBusy(true)
     setDeleteError("")
     try {
@@ -489,7 +508,7 @@ function ConversationSidebar(p: SidebarProps) {
       <button
         type="button"
         onClick={p.onNewConversation}
-        disabled={!p.selectedAgentId}
+        disabled={!p.canWrite || !p.selectedAgentId}
         className={cn(
           "mt-3 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-sm font-medium text-fg shadow-sm transition-[color,background-color,border-color,box-shadow]",
           "hover:border-line-strong hover:bg-surface-muted",
@@ -523,7 +542,7 @@ function ConversationSidebar(p: SidebarProps) {
         ) : (
           p.conversations.map((c) => {
             const isActive = c.id === p.selectedConversationId
-            const isRenaming = renamingConvId === c.id
+            const isRenaming = p.canWrite && renamingConvId === c.id
             // div+role="button" not <button>, so rename/delete can nest.
             return (
               <div
@@ -620,29 +639,33 @@ function ConversationSidebar(p: SidebarProps) {
                     {/* Hover-only action cluster. opacity-0 → */}
                     {/* group-hover:opacity-100 keeps the resting state clean. */}
                     <div className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          startRename(c)
-                        }}
-                        aria-label={t("conversations.sidebar.renameAria")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted"
-                      >
-                        <Pencil className="h-3 w-3" strokeWidth={2} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleteError("")
-                          setDeleteConvId(c.id)
-                        }}
-                        aria-label={t("conversations.sidebar.deleteAria")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-danger-subtle hover:text-danger"
-                      >
-                        <Trash2 className="h-3 w-3" strokeWidth={2} />
-                      </button>
+                      {p.canWrite && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            startRename(c)
+                          }}
+                          aria-label={t("conversations.sidebar.renameAria")}
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted"
+                        >
+                          <Pencil className="h-3 w-3" strokeWidth={2} />
+                        </button>
+                      )}
+                      {p.canDelete && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleteError("")
+                            setDeleteConvId(c.id)
+                          }}
+                          aria-label={t("conversations.sidebar.deleteAria")}
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-danger-subtle hover:text-danger"
+                        >
+                          <Trash2 className="h-3 w-3" strokeWidth={2} />
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
@@ -653,7 +676,7 @@ function ConversationSidebar(p: SidebarProps) {
       </div>
 
       <Dialog
-        open={deleteConvId !== null}
+        open={p.canDelete && deleteConvId !== null}
         onOpenChange={(next) => {
           if (!next && !deleteBusy) setDeleteConvId(null)
         }}
@@ -716,6 +739,7 @@ function ConversationSidebar(p: SidebarProps) {
 
 interface MainProps {
   conv: import("../../lib/api-types").Conversation | undefined
+  canWrite: boolean
   convLoading: boolean
   convError: unknown
   agent: Agent | undefined
@@ -800,6 +824,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
         ) : !p.conversationId || !p.conv ? (
           <EmptyChat
             agent={p.agent}
+            canWrite={p.canWrite}
             pageDescription={p.onPageDescription}
             onSendFromEmpty={p.onSendFromEmpty}
             focusComposer={p.focusComposer}
@@ -810,6 +835,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
           // like the initial no-conversation state until the first send.
           <EmptyChat
             agent={p.agent}
+            canWrite={p.canWrite}
             pageDescription={p.onPageDescription}
             conversationId={p.conversationId}
             workspaceID={p.conv.workspace_id}
@@ -820,6 +846,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
         ) : (
           <ChatStream
             conversationId={p.conversationId}
+            canWrite={p.canWrite}
             agent={p.agent}
             sidebarFolded={p.folded}
             sandboxGuard={p.sandboxGuard}
@@ -836,6 +863,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
 
 function EmptyChat({
   agent,
+  canWrite,
   pageDescription,
   conversationId,
   workspaceID,
@@ -845,6 +873,7 @@ function EmptyChat({
   sandboxGuard,
 }: {
   agent: Agent | undefined
+  canWrite: boolean
   pageDescription: string
   /** When set, composer sends into this conv (in-chat flow). */
   conversationId?: string
@@ -894,7 +923,7 @@ function EmptyChat({
             <ComposerForm
               conversationId={conversationId ?? ""}
               agentId={agent?.id}
-              disabled={!agent || sandboxGuard?.blocked}
+              disabled={!canWrite || !agent || sandboxGuard?.blocked}
               autoFocus={focusComposer}
               placeholder={
                 agent
@@ -907,7 +936,7 @@ function EmptyChat({
                   ? (title) => onRenameAfterFirstMessage(conversationId, title)
                   : undefined
               }
-              blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+              blockReason={!canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
             />
           </div>
         </div>
@@ -922,11 +951,13 @@ function EmptyChat({
 
 function ChatStream({
   conversationId,
+  canWrite,
   agent,
   sidebarFolded,
   sandboxGuard,
 }: {
   conversationId: string
+  canWrite: boolean
   agent: Agent | undefined
   sidebarFolded?: boolean
   sandboxGuard?: SandboxSendGuard
@@ -1051,7 +1082,7 @@ function ChatStream({
             >
               {someRunActive ? t("conversations.stream.thinking") : t("conversations.stream.ready")}
             </span>
-            {someRunActive && (
+            {canWrite && someRunActive && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1156,7 +1187,7 @@ function ChatStream({
               active={someRunActive}
               cancelling={cancelRunMut.isPending}
               onCancel={
-                activeRunId
+                canWrite && activeRunId
                   ? () => {
                       cancelRunMut.mutate({ runID: activeRunId, reason: "user_clicked_cancel" })
                     }
@@ -1195,7 +1226,7 @@ function ChatStream({
           <ComposerForm
             conversationId={conversationId}
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
-            disabled={!agent || sandboxGuard?.blocked}
+            disabled={!canWrite || !agent || sandboxGuard?.blocked}
             onRunStarted={setActiveRunId}
             onStartError={setChatToast}
             activeRunId={activeRunId}
@@ -1206,7 +1237,7 @@ function ChatStream({
             // abort. Server-side useCancelRun handles the actual run
             // cancellation + connector.Abort.
             onCancelActiveRun={
-              activeRunId
+              canWrite && activeRunId
                 ? () => {
                     const runID = activeRunId
                     setActiveRunId(null)
@@ -1215,7 +1246,7 @@ function ChatStream({
                 : undefined
             }
             cancelling={cancelRunMut.isPending}
-            blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+            blockReason={!canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
           />
         </div>
       </div>
