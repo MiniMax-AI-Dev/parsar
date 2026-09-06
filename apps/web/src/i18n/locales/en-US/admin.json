@@ -674,7 +674,11 @@
       "started": "Started",
       "finished": "Finished",
       "runId": "Run id",
-      "rawEvents": "Raw"
+      "rawEvents": "Raw",
+      "notFound": {
+        "title": "This run is no longer available",
+        "description": "It may have been removed, or its agent was deleted."
+      }
     },
     "emptyFiltered": {
       "title": "No matching runs",

@@ -420,13 +420,28 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
   if (runQ.error || !runData) {
     const err = runQ.error
     const isUnreachable = err instanceof ApiError && err.envelope.unreachable
+    // A 404 is not a load failure: the run is gone (or its agent was
+    // deleted), so say that instead of "check the server is running".
+    const isMissing = err instanceof ApiError && err.envelope.status === 404
     return (
       <DetailRail header={<LedgerId>{shortId(id, 12)}</LedgerId>} onClose={onClose} closeLabel={closeLabel}>
         <ErrorState
-          title={isUnreachable ? t("runs.loadError.unreachable.title") : t("runs.loadError.title")}
-          description={err instanceof Error ? err.message : t("runs.loadError.description")}
-          hint={t("runs.loadError.hint")}
-          onRetry={() => void runQ.refetch()}
+          title={
+            isMissing
+              ? t("runs.detail.notFound.title")
+              : isUnreachable
+                ? t("runs.loadError.unreachable.title")
+                : t("runs.loadError.title")
+          }
+          description={
+            isMissing
+              ? t("runs.detail.notFound.description")
+              : err instanceof Error
+                ? err.message
+                : t("runs.loadError.description")
+          }
+          hint={isMissing ? undefined : t("runs.loadError.hint")}
+          onRetry={isMissing ? undefined : () => void runQ.refetch()}
         />
       </DetailRail>
     )

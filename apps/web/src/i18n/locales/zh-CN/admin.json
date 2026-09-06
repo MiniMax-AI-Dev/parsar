@@ -674,7 +674,11 @@
       "started": "开始",
       "finished": "完成",
       "runId": "Run id",
-      "rawEvents": "原始事件"
+      "rawEvents": "原始事件",
+      "notFound": {
+        "title": "这条运行已不可用",
+        "description": "它可能已被移除，或其 Agent 已被删除。"
+      }
     },
     "emptyFiltered": {
       "title": "没有匹配的运行",

@@ -242,13 +242,15 @@ export function ConversationsPage() {
     await renameMutation.mutateAsync({ cid, title })
   }
   const handleDeleteConversation = async (cid: string): Promise<void> => {
-    await deleteMutation.mutateAsync(cid)
-    forgetConversationViewConversation(wsId, cid)
-    // If we just deleted the active conv, navigate away — otherwise
-    // useConversation 404s and the UI jumps to EmptyChat.
+    // Clear the selection BEFORE the mutation: deleting invalidates the
+    // conversation queries, and a still-mounted detail would refetch the
+    // row we are deleting and 404. If the delete then fails the dialog
+    // reports it and the conversation is still in the list.
     if (cid === entityId) {
       navigate("conversations", { id: "", focus: "compose" })
     }
+    await deleteMutation.mutateAsync(cid)
+    forgetConversationViewConversation(wsId, cid)
   }
 
   return (

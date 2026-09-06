@@ -108,8 +108,10 @@ export function ModelsTable({
     return <EmptyState icon={Database} title={t("models.empty.descriptionShort")} />
   }
 
+  // Rows carry their own checkbox, so this is a plain list, not a listbox:
+  // list/listitem instead of listbox/option.
   return (
-    <Ledger columns={LEDGER_COLUMNS} aria-label={t("models.page.title")}>
+    <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("models.page.title")}>
       <LedgerHeader>
         <span />
         <span />
@@ -134,7 +136,7 @@ export function ModelsTable({
             return (
               <LedgerRow
                 key={m.id}
-                role={undefined}
+                role="listitem"
                 aria-selected={undefined}
                 tabIndex={-1}
                 selected={selected}
