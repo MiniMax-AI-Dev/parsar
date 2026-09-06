@@ -28,7 +28,11 @@
     "search": "Search",
     "viewDetail": "View detail",
     "viewAuditLog": "View Audit Log",
-    "retry": "Retry"
+    "retry": "Retry",
+    "close": "Close",
+    "done": "Done",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "states": {
     "loading": "Loading…",
@@ -62,7 +66,8 @@
     "discoverNoMatch": "No workspaces match \"{{q}}\"",
     "discoverRange": "{{start}}–{{end}} of {{total}}",
     "paginationPrev": "Previous",
-    "paginationNext": "Next"
+    "paginationNext": "Next",
+    "membersColumn": "Members"
   },
   "workspaceCrud": {
     "actions": {
@@ -131,7 +136,18 @@
     "genericError": "Something went wrong. Please try again.",
     "ssoDivider": "SSO",
     "ssoButton": "Sign in with {{provider}}",
-    "noAccountHint": "First time here? Ask your admin for an invite."
+    "noAccountHint": "First time here? Ask your admin for an invite.",
+    "headline": "Your team's agent console.",
+    "headlineSub": "Log in to your Parsar account",
+    "orContinue": "or continue with",
+    "registerButton": "Sign up",
+    "registerTitle": "Join a workspace",
+    "registerHint": "Parsar is invite-only. Paste the invite link you received.",
+    "inviteLabel": "Invite link",
+    "invitePlaceholder": "https://…/invite/…",
+    "inviteContinue": "Continue",
+    "inviteInvalid": "That does not look like a Parsar invite link.",
+    "backToLogin": "Back to log in"
   },
   "passwordPolicy": {
     "placeholder": "8 characters or more",
@@ -236,5 +252,31 @@
       "title": "Choose a Workspace to view {{resource}}",
       "description": "This data is managed by Workspace. Choose a Workspace in the header first."
     }
+  },
+  "invite": {
+    "loading": "Loading invitation...",
+    "invalidTitle": "Invalid Invitation",
+    "invalidDescription": "This invitation link is invalid, expired, or has already been used.",
+    "title": "Join {{name}}",
+    "description": "You've been invited as {{role}}. Set a password to activate your account.",
+    "confirmLabel": "Confirm Password",
+    "confirmPlaceholder": "Confirm password",
+    "mismatch": "Passwords do not match",
+    "acceptFailed": "Failed to accept invitation",
+    "submitting": "Joining...",
+    "submit": "Set Password & Join"
+  },
+  "layout": {
+    "adjusted": "Width adjusted",
+    "temporary": "This session only",
+    "restore": "Restore"
+  },
+  "pagination": {
+    "range": "{{from}}–{{to}} of {{total}}",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "errors": {
+    "loadFailed": "Failed to load"
   }
 }

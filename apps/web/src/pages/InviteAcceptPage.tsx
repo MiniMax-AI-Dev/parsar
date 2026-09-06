@@ -1,6 +1,10 @@
-import { useState } from "react"
+import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "../components/ui/button"
+import { EntryFooter, EntryPage, EntryPanel } from "../components/ui/entry-panel"
+import { InlineError } from "../components/ui/error-state"
+import { Input } from "../components/ui/input"
+import { Field } from "../components/ui/label"
 import { useInviteInfo, useAcceptInvite } from "../lib/api-invitations"
 import { validateNewPassword } from "../lib/password-policy"
 import { setWorkspaceId } from "../lib/workspace"
@@ -20,32 +24,27 @@ export function InviteAcceptPage({ token }: { token: string }) {
 
   if (infoQ.isLoading) {
     return (
-      <main className="grid min-h-screen place-items-center bg-surface">
-        <p className="text-sm text-fg-subtle">Loading invitation...</p>
-      </main>
+      <EntryPage>
+        <p className="text-sm text-fg-muted">{t("invite.loading")}</p>
+      </EntryPage>
     )
   }
 
   if (infoQ.isError || !infoQ.data) {
     return (
-      <main className="grid min-h-screen place-items-center bg-surface">
-        <div className="w-full max-w-sm space-y-3 rounded-lg border border-line p-6">
-          <h1 className="text-base font-semibold text-fg">Invalid Invitation</h1>
-          <p className="text-sm text-fg-subtle">
-            This invitation link is invalid, expired, or has already been used.
-          </p>
-        </div>
-      </main>
+      <EntryPage>
+        <EntryPanel title={t("invite.invalidTitle")} description={t("invite.invalidDescription")} />
+      </EntryPage>
     )
   }
 
   const { workspace_name, email, role } = infoQ.data
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setErrMsg(null)
     if (password !== confirm) {
-      setErrMsg("Passwords do not match")
+      setErrMsg(t("invite.mismatch"))
       return
     }
     if (passwordPolicyError !== null) {
@@ -57,35 +56,34 @@ export function InviteAcceptPage({ token }: { token: string }) {
       setWorkspaceId(res.workspace_id)
       window.location.assign("/")
     } catch (err) {
-      setErrMsg(err instanceof Error ? err.message : "Failed to accept invitation")
+      setErrMsg(err instanceof Error ? err.message : t("invite.acceptFailed"))
     }
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-surface">
-      <div className="w-full max-w-sm space-y-4 rounded-lg border border-line p-6">
-        <div className="space-y-1">
-          <h1 className="text-base font-semibold text-fg">Join {workspace_name}</h1>
-          <p className="text-sm text-fg-subtle">
-            You've been invited as <span className="font-medium">{role}</span>. Set a password to
-            activate your account.
-          </p>
-        </div>
+    <EntryPage>
+      <EntryPanel
+        title={t("invite.title", { name: workspace_name })}
+        description={t("invite.description", { role })}
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <Field label={t("login.emailLabel")} htmlFor="invite-email">
+            <Input id="invite-email" type="email" value={email} readOnly disabled />
+          </Field>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-fg-subtle">Email</label>
-            <input
-              type="email"
-              value={email}
-              readOnly
-              className="w-full rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-subtle"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-fg-subtle">Password</label>
-            <input
+          <Field
+            label={t("login.passwordLabel")}
+            htmlFor="invite-password"
+            hint={
+              passwordPolicyErrorMsg ? (
+                <InlineError>{passwordPolicyErrorMsg}</InlineError>
+              ) : (
+                t("passwordPolicy.hint")
+              )
+            }
+          >
+            <Input
+              id="invite-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -93,43 +91,28 @@ export function InviteAcceptPage({ token }: { token: string }) {
               required
               autoFocus
               autoComplete="new-password"
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200"
             />
-            <p className="text-xs leading-4 text-fg-faint">{t("passwordPolicy.hint")}</p>
-            {passwordPolicyErrorMsg && (
-              <p className="text-xs leading-4 text-danger">{passwordPolicyErrorMsg}</p>
-            )}
-          </div>
+          </Field>
 
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-fg-subtle">Confirm Password</label>
-            <input
+          <Field label={t("invite.confirmLabel")} htmlFor="invite-confirm">
+            <Input
+              id="invite-confirm"
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Confirm password"
+              placeholder={t("invite.confirmPlaceholder")}
               required
               autoComplete="new-password"
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200"
             />
-          </div>
+          </Field>
 
-          {errMsg && (
-            <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger-emphasis">
-              {errMsg}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            disabled={acceptMut.isPending || passwordPolicyError !== null}
-            size="lg"
-            className="w-full"
-          >
-            {acceptMut.isPending ? "Joining..." : "Set Password & Join"}
-          </Button>
+          <EntryFooter message={errMsg && <InlineError>{errMsg}</InlineError>}>
+            <Button type="submit" disabled={acceptMut.isPending || passwordPolicyError !== null}>
+              {acceptMut.isPending ? t("invite.submitting") : t("invite.submit")}
+            </Button>
+          </EntryFooter>
         </form>
-      </div>
-    </main>
+      </EntryPanel>
+    </EntryPage>
   )
 }

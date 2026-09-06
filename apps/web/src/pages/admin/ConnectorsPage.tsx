@@ -1,14 +1,10 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  ArrowUpRight,
-  Bot,
-  Cable,
-  Search,
-} from "lucide-react"
+import { ArrowLeft, ArrowUpRight, Cable, Search } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { DetailHeading } from "../../components/ui/section"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { Badge } from "../../components/ui/badge"
@@ -16,15 +12,11 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
+import { InitialTile, Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../components/ui/ledger"
+import { PropertyList, Property } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
+import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useWorkspaceConnectors } from "../../lib/api-registry"
@@ -32,26 +24,47 @@ import type { ConnectorSummary } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 
 /* ------------------------------------------------------------------ */
-/*  Status badge                                                       */
+/*  Status                                                             */
 /* ------------------------------------------------------------------ */
 
-function ConnectorStatusBadge({ status }: { status: ConnectorSummary["status"] }) {
+type ConnectorStatus = "ready" | "needs_config" | "offline" | "unknown"
+
+const STATUS_ICON: Record<ConnectorStatus, StatusKind> = {
+  ready: "completed",
+  needs_config: "queued",
+  offline: "failed",
+  unknown: "interrupted",
+}
+
+const STATUS_KEY: Record<ConnectorStatus, "ready" | "needsConfig" | "offline" | "unknown"> = {
+  ready: "ready",
+  needs_config: "needsConfig",
+  offline: "offline",
+  unknown: "unknown",
+}
+
+function normalizeStatus(status: ConnectorSummary["status"]): ConnectorStatus {
+  return status === "ready" || status === "needs_config" || status === "offline" ? status : "unknown"
+}
+
+/** 14px status icon and the status word in ink. */
+function ConnectorStatus({ status }: { status: ConnectorSummary["status"] }) {
   const { t } = useTranslation("admin")
-  switch (status) {
-    case "ready":
-      return <Badge variant="success" dot>{t("connectors.status.ready")}</Badge>
-    case "needs_config":
-      return <Badge variant="warning" dot>{t("connectors.status.needsConfig")}</Badge>
-    case "offline":
-      return <Badge variant="destructive" dot>{t("connectors.status.offline")}</Badge>
-    default:
-      return <Badge variant="neutral">{t("connectors.status.unknown")}</Badge>
-  }
+  const s = normalizeStatus(status)
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <StatusIcon status={STATUS_ICON[s]} />
+      <span className="truncate">{t(`connectors.status.${STATUS_KEY[s]}`)}</span>
+    </span>
+  )
 }
 
 /* ------------------------------------------------------------------ */
 /*  List page                                                          */
 /* ------------------------------------------------------------------ */
+
+/** connector (label + type chip) · status · agents */
+const LEDGER_COLUMNS = [col.title(), col.meta(140), col.num(72)]
 
 export function ConnectorsPage() {
   const { t } = useTranslation("admin")
@@ -70,23 +83,43 @@ export function ConnectorsPage() {
     return c.connector_type.toLowerCase().includes(q) || c.label.toLowerCase().includes(q)
   })
 
-  return (
-    <AdminLayout activeMenu="settings">
-      <PageHeader
-        title={t("connectors.page.title")}
-        description={t("connectors.page.description")}
-      />
-      <SettingsTabs active="connectors" />
+  const pageTitle = t("connectors.page.title")
 
-      <p className="mb-4 rounded-lg border border-dashed border-line bg-surface-subtle/60 p-3 text-sm leading-relaxed text-fg-muted">
-        {t("connectors.aggregateHint")}
-      </p>
+  return (
+    <AdminLayout activeMenu="settings" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader
+        className="static mx-0 mb-0"
+        title={pageTitle}
+        subtitleFor="connectors.page.title"
+        action={
+          <>
+            <SettingsTabs active="connectors" />
+          {wsId ? (
+            <div className="relative w-72">
+              <Search
+                className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                strokeWidth={1.5}
+                aria-hidden="true"
+              />
+              <Input
+                type="search"
+                placeholder={t("connectors.search.placeholder")}
+                aria-label={t("connectors.search.placeholder")}
+                className="pl-7"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+            </div>
+          ) : undefined}
+          </>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
       {!wsId ? (
-        <ScopeRequiredState scope="workspace" resourceName={t("connectors.page.title")} />
+        <ScopeRequiredState scope="workspace" resourceName={pageTitle} />
       ) : query.isLoading ? (
-        <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-        </div>
+        <ConnectorsSkeleton />
       ) : err ? (
         <ErrorState
           title={isUnreachable ? t("connectors.loadError.unreachable.title") : t("connectors.loadError.title")}
@@ -100,70 +133,63 @@ export function ConnectorsPage() {
           hint={isUnreachable ? t("connectors.loadError.unreachable.hint") : t("connectors.loadError.hint")}
           onRetry={() => void query.refetch()}
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Cable}
+          title={t("connectors.empty.title")}
+          description={t("connectors.empty.description")}
+        />
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-fg-subtle">
-              {t("connectors.summary", { count: connectors.length })}
-            </span>
-            <div className="relative w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" strokeWidth={1.75} />
-              <Input
-                placeholder={t("connectors.search.placeholder")}
-                className="pl-8 text-xs"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={Cable}
-              title={t("connectors.empty.title")}
-              description={t("connectors.empty.description")}
-            />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("connectors.table.connector")}</TableHead>
-                    <TableHead>{t("connectors.table.status")}</TableHead>
-                    <TableHead className="text-right">{t("connectors.table.agentCount")}</TableHead>
-                    <TableHead className="text-right pr-4">{t("connectors.table.agents")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((c) => (
-                    <TableRow
-                      key={c.connector_type}
-                      className="cursor-pointer"
-                      onClick={() => navigate("connectors", { id: c.connector_type })}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Cable className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
-                          <span className="text-base font-medium text-fg">{c.label}</span>
-                          <code className="text-xs text-fg-faint">{c.connector_type}</code>
-                        </div>
-                      </TableCell>
-                      <TableCell><ConnectorStatusBadge status={c.status} /></TableCell>
-                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{c.agent_count}</TableCell>
-                      <TableCell className="text-right pr-4">
-                        <span className="text-xs text-fg-subtle">
-                          {c.agent_count === 0 ? "—" : t("connectors.table.agentSummary", { count: c.agent_count })}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
+        <Ledger columns={LEDGER_COLUMNS} className="-mx-6" role="listbox" aria-label={pageTitle}>
+          <LedgerHeader>
+            <span>{t("connectors.table.connector")}</span>
+            <span>{t("connectors.table.status")}</span>
+            <span className="text-right">{t("connectors.table.agentCount")}</span>
+          </LedgerHeader>
+          <ul className="m-0 list-none p-0">
+            {filtered.map((c) => (
+              <ConnectorRow key={c.connector_type} connector={c} onSelect={() => navigate("connectors", { id: c.connector_type })} />
+            ))}
+          </ul>
+        </Ledger>
       )}
+      </div>
+      </div>
     </AdminLayout>
+  )
+}
+
+function ConnectorRow({ connector, onSelect }: { connector: ConnectorSummary; onSelect: () => void }) {
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onSelect()
+    }
+  }
+  return (
+    <LedgerRow onClick={onSelect} onKeyDown={onKeyDown} className="cursor-pointer">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-medium">{connector.label}</span>
+        <Badge className="font-mono">{connector.connector_type}</Badge>
+      </span>
+      <ConnectorStatus status={connector.status} />
+      <LedgerNum muted={connector.agent_count === 0}>{connector.agent_count}</LedgerNum>
+    </LedgerRow>
+  )
+}
+
+function ConnectorsSkeleton() {
+  return (
+    <div className="-mx-6 -mt-1">
+      <div className="h-7 border-b border-line" />
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line px-4">
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-10" />
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -179,10 +205,26 @@ export function ConnectorDetailPage({ id }: { id: string }) {
   const query = useWorkspaceConnectors(wsId)
   const connector = (query.data?.connectors ?? []).find((c) => c.connector_type === id)
 
+  const back = (
+    <button
+      type="button"
+      onClick={() => navigate("connectors")}
+      className="inline-flex items-center gap-1 rounded text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+      {t("connectors.page.title")}
+    </button>
+  )
+
   if (query.isLoading) {
     return (
       <AdminLayout activeMenu="settings">
-        <Skeleton className="h-64 w-full" />
+        <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-3 w-64" />
+          ))}
+        </div>
       </AdminLayout>
     )
   }
@@ -190,15 +232,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
   if (!connector) {
     return (
       <AdminLayout activeMenu="settings">
-        <PageHeader
-          backLink={
-            <button onClick={() => navigate("connectors")} className="hover:underline">
-              ← {t("connectors.page.title")}
-            </button>
-          }
-          title={id}
-        />
-        <SettingsTabs active="connectors" />
+        <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
         <EmptyState
           icon={Cable}
           title={t("connectors.detail.notFound.title")}
@@ -210,52 +244,55 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 
   return (
     <AdminLayout activeMenu="settings">
-      <PageHeader
-        backLink={
-          <button onClick={() => navigate("connectors")} className="hover:text-fg hover:underline">
-            ← {t("connectors.page.title")}
-          </button>
-        }
+      <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
+
+      <DetailHeading
         title={connector.label}
-        description={<code className="font-mono text-sm">{connector.connector_type}</code>}
-        action={<ConnectorStatusBadge status={connector.status} />}
+        badges={<span className="font-mono text-xs text-fg-muted">{connector.connector_type}</span>}
       />
-      <SettingsTabs active="connectors" />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Stat label={t("connectors.detail.agentCount")} value={String(connector.agent_count)} />
-        <Stat label={t("connectors.detail.status")} value={connector.status} mono />
-        <Stat label={t("connectors.detail.type")} value={connector.connector_type} mono />
-      </div>
+      <Tabs defaultValue="overview" className="max-w-2xl">
+        <TabsList>
+          <TabsTrigger value="overview">{t("connectors.detail.tabs.overview")}</TabsTrigger>
+          <TabsTrigger value="agents">
+            {t("connectors.detail.agents")}
+            <span className="tabular-nums text-fg-muted">{connector.agent_count}</span>
+          </TabsTrigger>
+        </TabsList>
 
-      <section className="mt-6 rounded-lg border border-line bg-surface p-4">
-        <h3 className="mb-3 text-base font-semibold text-fg">
-          {t("connectors.detail.agents")}
-        </h3>
-        {connector.agent_count === 0 ? (
-          <p className="text-sm text-fg-subtle">{t("connectors.detail.noAgents")}</p>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("agents")}
-            className="justify-start px-0"
-          >
-            <Bot className="h-3.5 w-3.5 text-fg-faint" strokeWidth={1.75} />
-            {t("connectors.detail.agentSummary", { count: connector.agent_count })}
-            <ArrowUpRight className="ml-auto h-3 w-3 text-fg-faint" />
-          </Button>
-        )}
-      </section>
+        <TabsContent value="overview">
+          <PropertyList>
+            <Property label={t("connectors.detail.status")}>
+              <ConnectorStatus status={connector.status} />
+            </Property>
+            <Property label={t("connectors.detail.type")} mono>{connector.connector_type}</Property>
+            <Property label={t("connectors.detail.agentCount")} mono>{connector.agent_count}</Property>
+          </PropertyList>
+        </TabsContent>
+
+        <TabsContent value="agents">
+          {connector.agent_count === 0 ? (
+            <p className="text-sm text-fg-muted">{t("connectors.detail.noAgents")}</p>
+          ) : (
+            <>
+              <ul className="m-0 list-none p-0">
+                {connector.agent_slugs.map((slug) => (
+                  <li key={slug} className="flex h-8 items-center gap-1.5 border-b border-line text-sm text-fg">
+                    <InitialTile name={slug} />
+                    <span className="truncate font-medium">{slug}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex justify-end pt-3">
+                <Button variant="link" onClick={() => navigate("agents")}>
+                  {t("connectors.detail.agentSummary", { count: connector.agent_count })}
+                  <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+                </Button>
+              </div>
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
     </AdminLayout>
-  )
-}
-
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-lg border border-line bg-surface p-4">
-      <div className="text-xs font-medium text-fg-faint">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums text-fg ${mono ? "font-mono" : ""}`}>{value}</div>
-    </div>
   )
 }

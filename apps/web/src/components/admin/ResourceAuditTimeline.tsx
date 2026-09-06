@@ -1,22 +1,21 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Bot, Cog, Globe, User as UserIcon } from "lucide-react"
+import { Bot, Code, Cog, Globe, User as UserIcon, type LucideIcon } from "lucide-react"
 
-import { Badge } from "../ui/badge"
+import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
 import { ErrorState } from "../ui/error-state"
 import { Skeleton } from "../ui/skeleton"
 import { useAuditRecords } from "../../lib/api-governance"
-import type { AuditActorType, AuditRecord, AuditSource } from "../../lib/api-types"
+import type { AuditActorType, AuditRecord } from "../../lib/api-types"
 import { useRelativeTime } from "../../lib/relative-time"
+import { cn } from "../../lib/utils"
 
-type BadgeVariant = "primary" | "success" | "warning" | "destructive" | "neutral"
-
-const SOURCE_BADGE: Record<AuditSource, BadgeVariant> = {
-  identity: "neutral",
-  admin: "primary",
-  runtime: "success",
-  approval: "warning",
-  data: "neutral",
+const ACTOR_ICON: Record<AuditActorType, LucideIcon> = {
+  agent: Bot,
+  user: UserIcon,
+  external: Globe,
+  system: Cog,
 }
 
 function shortId(s: string | undefined | null, n = 10): string {
@@ -24,49 +23,45 @@ function shortId(s: string | undefined | null, n = 10): string {
   return s.length <= n ? s : s.slice(0, n) + "…"
 }
 
-function ActorIcon({ type }: { type: AuditActorType }) {
-  if (type === "agent") return <Bot className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-  if (type === "user") return <UserIcon className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-  if (type === "external") return <Globe className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-  return <Cog className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-}
-
-function PayloadPreview({ payload }: { payload?: Record<string, unknown> }) {
-  if (!payload) return null
-  const entries = Object.entries(payload).filter(([, v]) => v !== null && v !== undefined && v !== "")
-  if (entries.length === 0) return null
-  const preview = entries.slice(0, 3).map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · ")
-  return (
-    <p className="mt-1 truncate font-mono text-xs text-fg-subtle" title={preview}>
-      {preview}
-    </p>
-  )
-}
-
+/** One hairline-separated 32px row, the same idiom as the run steps list. */
 function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: string | null | undefined) => string }) {
+  const { t } = useTranslation("admin")
+  const [open, setOpen] = useState(false)
+  const Icon = ACTOR_ICON[record.actor_type] ?? Cog
+  const actor = record.actor_id ? `${record.actor_type} · ${shortId(record.actor_id, 12)}` : record.actor_type
+  const hasPayload = !!record.payload && Object.keys(record.payload).length > 0
+  const payloadLabel = t("audit.detail.payload")
+
   return (
-    <li className="flex gap-3 border-b border-line-muted px-1 py-2.5 last:border-b-0">
-      <div className="flex w-32 shrink-0 flex-col gap-0.5 pt-0.5">
-        <span className="text-sm text-fg-muted" title={record.occurred_at}>
+    <li className="border-b border-line last:border-b-0">
+      <div className="flex h-8 items-center gap-2 text-sm">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-fg" title={`${record.event_type} · ${actor}`}>
+          {record.event_type}
+          <span className="text-fg-muted"> · {actor}</span>
+        </span>
+        <span className="shrink-0 text-xs text-fg-muted" title={record.occurred_at}>
           {fmtAgo(record.occurred_at)}
         </span>
-        <Badge variant={SOURCE_BADGE[record.source]} className="w-fit">
-          {record.source}
-        </Badge>
+        {hasPayload && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            aria-expanded={open}
+            aria-label={payloadLabel}
+            title={payloadLabel}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <Code className={cn(open && "text-fg")} strokeWidth={1.5} />
+          </Button>
+        )}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-fg-emphasis" title={record.event_type}>
-          {record.event_type}
-        </p>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-subtle">
-          <ActorIcon type={record.actor_type} />
-          <span className="font-mono">
-            {record.actor_type}
-            {record.actor_id ? ` · ${shortId(record.actor_id, 12)}` : ""}
-          </span>
-        </div>
-        <PayloadPreview payload={record.payload} />
-      </div>
+      {open && hasPayload && (
+        <pre className="mb-2 mt-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+          {`#${record.id} ${record.source}\n${JSON.stringify(record.payload ?? {}, null, 2)}`}
+        </pre>
+      )}
     </li>
   )
 }
@@ -98,10 +93,10 @@ export function ResourceAuditTimeline({
 
   if (query.isLoading) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
+      <div className="space-y-2 pt-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-5/6" />
       </div>
     )
   }
@@ -122,11 +117,16 @@ export function ResourceAuditTimeline({
         description={t("audit.resourceTimeline.empty.description", {
           defaultValue: "This resource has not produced any audit records.",
         })}
+        className="py-8"
       />
     )
   }
   // Defensive re-sort: API returns newest-first, but a future cache
   // layer or mock could reorder.
   const sorted = [...records].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-  return <ul className="divide-y divide-slate-100">{sorted.map((r) => <TimelineRow key={r.id} record={r} fmtAgo={fmtAgo} />)}</ul>
+  return (
+    <ul className="m-0 list-none p-0">
+      {sorted.map((r) => <TimelineRow key={r.id} record={r} fmtAgo={fmtAgo} />)}
+    </ul>
+  )
 }

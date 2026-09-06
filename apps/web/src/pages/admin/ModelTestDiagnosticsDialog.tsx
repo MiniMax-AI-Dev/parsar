@@ -1,8 +1,8 @@
-import { AlertCircle, CheckCircle2, Copy } from "lucide-react"
+import { AlertTriangle, Copy } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
+import { RailSection } from "../../components/ui/detail-rail"
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog"
+import { StatusIcon } from "../../components/ui/status-icon"
 import type {
   ModelConnectivityEndpointResult,
   ModelConnectivityResult,
@@ -21,6 +22,11 @@ interface ModelTestDiagnosticsDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+/**
+ * Connectivity-test result: one headline (status icon + ink sentence), then
+ * a section per endpoint with its request and response as mono `pre`
+ * blocks on the muted paper tone. No coloured boxes; state lives in icons.
+ */
 export function ModelTestDiagnosticsDialog({
   open,
   result,
@@ -36,39 +42,39 @@ export function ModelTestDiagnosticsDialog({
   const healthyCount = data?.healthy_count ?? endpoints.filter((item) => item.success).length
   const totalCount = data?.total_count ?? endpoints.length
 
+  const headline = data
+    ? data.success
+      ? totalCount
+        ? t("models.test.successWithEndpoints", { healthy: healthyCount, total: totalCount, ms: data.latency_ms })
+        : t("models.test.success", { ms: data.latency_ms })
+      : totalCount
+        ? t("models.test.failureWithEndpoints", { healthy: healthyCount, total: totalCount })
+        : data.supported
+          ? t("models.test.failure")
+          : t("models.test.unsupported")
+    : null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-4xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-line px-5 py-4">
-          <div className="flex flex-wrap items-center gap-2 pr-8">
-            <DialogTitle className="text-sm">
-              {t("models.test.details.title")}
-            </DialogTitle>
-            {data && (
-              <Badge variant={data.success ? "success" : "destructive"} dot>
-                {t("models.test.details.summary", {
-                  healthy: healthyCount,
-                  total: totalCount,
-                })}
-              </Badge>
-            )}
-          </div>
-          <DialogDescription className="text-xs">
-            {data?.endpoint_type
-              ? t("models.test.details.primaryEndpoint", {
-                  endpoint: data.endpoint_type,
-                  ms: data.latency_ms,
-                })
-              : t("models.test.details.noEndpoint")}
-          </DialogDescription>
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t("models.test.details.title")}</DialogTitle>
+          {data && (
+            <DialogDescription className="flex items-center gap-2 text-fg">
+              <StatusIcon status={data.success ? "completed" : "failed"} />
+              <span>{headline}</span>
+              <span className="text-xs text-fg-muted">
+                {data.endpoint_type
+                  ? t("models.test.details.primaryEndpoint", { endpoint: data.endpoint_type, ms: data.latency_ms })
+                  : t("models.test.details.noEndpoint")}
+              </span>
+            </DialogDescription>
+          )}
         </DialogHeader>
 
-        <div className="max-h-[calc(100vh-9rem)] space-y-3 overflow-y-auto px-5 py-4">
+        <div>
           {endpoints.map((endpoint, index) => (
-            <EndpointDiagnostics
-              key={`${endpoint.endpoint_type}-${index}`}
-              endpoint={endpoint}
-            />
+            <EndpointDiagnostics key={`${endpoint.endpoint_type}-${index}`} endpoint={endpoint} />
           ))}
         </div>
       </DialogContent>
@@ -87,52 +93,40 @@ function EndpointDiagnostics({ endpoint }: { endpoint: ModelConnectivityEndpoint
     body: endpoint.response?.body ?? endpoint.response?.raw_body,
     truncated: endpoint.response?.truncated || undefined,
   })
+  const status = endpoint.success ? "completed" : endpoint.supported ? "failed" : "cancelled"
+  const word = endpoint.success
+    ? t("models.health.healthy")
+    : endpoint.supported
+      ? t("models.health.failed")
+      : t("models.health.unsupported")
+  const meta = [
+    t("models.test.details.latency", { ms: endpoint.latency_ms }),
+    endpoint.http_status ? t("models.test.details.httpStatus", { status: endpoint.http_status }) : null,
+    endpoint.failure_stage,
+  ]
+    .filter(Boolean)
+    .join(" · ")
 
   return (
-    <section className="rounded-md border border-line bg-surface">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs font-semibold text-fg">
-              {endpoint.endpoint_type || t("models.test.details.unknownEndpoint")}
-            </span>
-            <Badge variant={endpoint.success ? "success" : endpoint.supported ? "destructive" : "neutral"} dot>
-              {endpoint.success
-                ? t("models.health.healthy")
-                : endpoint.supported
-                  ? t("models.health.failed")
-                  : t("models.health.unsupported")}
-            </Badge>
-            {endpoint.failure_stage && (
-              <Badge variant="warning">{endpoint.failure_stage}</Badge>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
-            <span>{t("models.test.details.latency", { ms: endpoint.latency_ms })}</span>
-            {endpoint.http_status && (
-              <span>{t("models.test.details.httpStatus", { status: endpoint.http_status })}</span>
-            )}
-          </div>
-        </div>
-        {endpoint.success ? (
-          <CheckCircle2 className="h-4 w-4 text-success" />
-        ) : (
-          <AlertCircle className="h-4 w-4 text-danger-emphasis" />
-        )}
-      </div>
-
+    <RailSection
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          <StatusIcon status={status} />
+          <code className="font-mono">{endpoint.endpoint_type || t("models.test.details.unknownEndpoint")}</code>
+          <span className="font-normal text-fg-muted">{word}</span>
+        </span>
+      }
+      meta={meta}
+    >
       {endpoint.error && (
-        <div className="border-b border-line bg-danger-subtle/50 px-4 py-2 text-xs text-danger-emphasis">
-          {endpoint.error}
-        </div>
+        <p className="mt-1 flex items-start gap-1.5 break-words text-sm text-fg">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <span>{endpoint.error}</span>
+        </p>
       )}
-      {endpoint.sample && (
-        <div className="border-b border-line bg-success-subtle/50 px-4 py-2 text-xs text-success-emphasis">
-          {endpoint.sample}
-        </div>
-      )}
+      {endpoint.sample && <p className="mt-1 break-words text-sm text-fg">{endpoint.sample}</p>}
 
-      <div className="grid gap-3 p-4 lg:grid-cols-2">
+      <div className="mt-2 grid gap-3 md:grid-cols-2">
         <DiagnosticsBlock
           title={t("models.test.details.request")}
           meta={`${endpoint.request?.method ?? "POST"} ${endpoint.request?.url ?? ""}`}
@@ -144,7 +138,7 @@ function EndpointDiagnostics({ endpoint }: { endpoint: ModelConnectivityEndpoint
           value={responseJSON}
         />
       </div>
-    </section>
+    </RailSection>
   )
 }
 
@@ -163,24 +157,23 @@ function DiagnosticsBlock({
   }
 
   return (
-    <div className="min-w-0 rounded-md border border-line-muted bg-surface-subtle">
-      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-line-muted px-3 py-2">
-        <div className="min-w-0">
-          <div className="text-xs font-medium text-fg">{title}</div>
-          <div className="truncate font-mono text-xs text-fg-muted">{meta}</div>
-        </div>
+    <div className="min-w-0">
+      <div className="flex h-7 items-center gap-2 text-xs">
+        <span className="shrink-0 text-fg-muted">{title}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-fg-muted" title={meta}>{meta}</span>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0"
+          className="h-6 w-6"
+          aria-label={t("models.test.details.copy")}
           title={t("models.test.details.copy")}
           onClick={copyValue}
         >
-          <Copy className="h-3.5 w-3.5" />
+          <Copy strokeWidth={1.5} />
         </Button>
       </div>
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-relaxed text-fg-muted">
+      <pre className="m-0 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
         {value}
       </pre>
     </div>

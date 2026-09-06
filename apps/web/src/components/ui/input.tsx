@@ -1,15 +1,24 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
+/**
+ * The one text field. 28px, paper, strong hairline, control shadow;
+ * indigo border + ring on focus. Pair with <Kbd /> for shortcut hints.
+ */
 export const Input = React.forwardRef<
   HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(({ className, type, ...props }, ref) => {
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> & {
+    /** `lg` (36px) is for the entry surfaces; the console stays at 28px. */
+    size?: "default" | "lg"
+  }
+>(({ className, type, size = "default", ...props }, ref) => {
   return (
     <input
       type={type}
       className={cn(
-        "flex h-9 w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm shadow-sm transition-[border-color,box-shadow,background-color] placeholder:text-fg-faint hover:border-line-strong focus-visible:border-info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/20 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-60",
+        "app-shadow-control flex w-full rounded-md border border-line-strong bg-surface text-sm",
+        "text-fg transition-[border-color,box-shadow] duration-150 ease-settle placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-60",
+        size === "lg" ? "h-9 px-3 text-base" : "h-7 px-2",
         className,
       )}
       ref={ref}

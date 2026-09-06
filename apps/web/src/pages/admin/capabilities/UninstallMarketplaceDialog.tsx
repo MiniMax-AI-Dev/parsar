@@ -10,8 +10,10 @@ import {
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
+import { InitialTile } from "../../../components/ui/ledger"
 import { ApiError } from "../../../lib/api-client"
 import type { EnabledMarketplaceAgent, TargetMarketplaceInstall } from "../../../lib/api-marketplace"
+import { InlineNotice } from "./notices"
 
 interface UninstallMarketplaceDialogProps {
   capability: TargetMarketplaceInstall
@@ -27,6 +29,7 @@ export function UninstallMarketplaceDialog({ capability, agents, open, pending, 
   const { t } = useTranslation("admin")
   const errMsg = error instanceof ApiError ? error.envelope.message : error instanceof Error ? error.message : null
   const count = agents.length || capability.enabled_agent_count || 0
+  const rows = agents.length > 0 ? agents : [{ name: t("capabilities.uninstall.unknownAgent") }]
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -35,19 +38,26 @@ export function UninstallMarketplaceDialog({ capability, agents, open, pending, 
           <AlertDialogDescription>{t("capabilities.uninstall.description", { count })}</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
-          <ul className="max-h-44 space-y-1 overflow-auto rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
-            {(agents.length > 0 ? agents : [{ name: t("capabilities.uninstall.unknownAgent") }]).map((agent, index) => (
-              <li key={agent.agent_id ?? agent.id ?? index}>· {agent.name ?? agent.agent_name ?? t("capabilities.uninstall.unknownAgent")}</li>
-            ))}
+          <ul className="m-0 max-h-44 list-none overflow-auto border-t border-line p-0">
+            {rows.map((agent, index) => {
+              const name = agent.name ?? agent.agent_name ?? t("capabilities.uninstall.unknownAgent")
+              return (
+                <li key={agent.agent_id ?? agent.id ?? index} className="flex h-8 items-center gap-2 border-b border-line text-sm text-fg">
+                  <InitialTile name={name} />
+                  <span className="truncate">{name}</span>
+                </li>
+              )
+            })}
           </ul>
-          <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
-            {t("capabilities.uninstall.credentialNote")}
-          </div>
-          {errMsg && <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>}
+          <p className="text-xs text-fg-muted">{t("capabilities.uninstall.credentialNote")}</p>
+          {errMsg && <InlineNotice tone="error">{errMsg}</InlineNotice>}
         </div>
         <AlertDialogFooter>
-          <Button variant="outline" size="sm" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>
-          <Button variant="destructive" size="sm" disabled={pending} onClick={onConfirm}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("capabilities.uninstall.confirm", { count })}</Button>
+          <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>
+          <Button variant="destructive" disabled={pending} onClick={onConfirm}>
+            {pending && <Loader2 className="animate-spin" />}
+            {t("capabilities.uninstall.confirm", { count })}
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

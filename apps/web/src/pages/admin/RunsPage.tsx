@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
   AlertTriangle,
   ArrowUpRight,
   Bot,
+  Check,
   CheckCircle2,
   Clock,
   Code,
   Database,
   FileText,
   KeyRound,
+  ListFilter,
   Loader2,
   Play,
   Search,
@@ -29,22 +32,28 @@ import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
+import { Kbd } from "../../components/ui/kbd"
 import { OffsetPagination } from "../../components/ui/offset-pagination"
 import { Skeleton } from "../../components/ui/skeleton"
+import { StatusIcon } from "../../components/ui/status-icon"
+import { DetailRail, RailSection } from "../../components/ui/detail-rail"
+import { PropertyList, Property } from "../../components/ui/property-list"
+import {
+  col,
+  InitialTile,
+  Ledger,
+  LedgerGroup,
+  LedgerHeader,
+  LedgerId,
+  LedgerNum,
+  LedgerRow,
+} from "../../components/ui/ledger"
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import {
@@ -60,12 +69,713 @@ import {
   useAgentRun,
   useAgentRunEvents,
   useAgentRuns,
+  useRequeueRun,
 } from "../../lib/api-agents"
 import { formatRawRunEvents } from "../../lib/agent-run-event-format"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
+import { cn } from "../../lib/utils"
+
+/* ------------------------------------------------------------------ */
+/*  List page: the runs ledger + detail rail                            */
+/* ------------------------------------------------------------------ */
+
+const RUNS_PAGE_SIZE = 20
+
+type RunFilter = "all" | "running" | "failed"
+
+// "running" unions {running, queued} so a queued run waiting on the
+// dispatcher still shows under "In flight".
+const FILTER_STATUSES: Record<RunFilter, AgentRunStatus[]> = {
+  all: [],
+  running: ["running", "queued"],
+  failed: ["failed"],
+}
+
+const FILTERS: RunFilter[] = ["all", "running", "failed"]
+
+const GROUP_ORDER: AgentRunStatus[] = [
+  "running",
+  "queued",
+  "failed",
+  "interrupted",
+  "completed",
+  "cancelled",
+]
+
+/** status icon · run id · agent (+ failure reason) · conversation · connector · duration · age */
+const LEDGER_COLUMNS = [col.icon(), col.id(132), col.title(), col.id(104, 0.5), col.meta(104), col.num(64), col.age(80)]
+
+export function RunsPage({ selectedId }: { selectedId?: string | null }) {
+  const { t } = useTranslation("admin")
+  const { navigate } = useAdminView()
+  const wsId = useWorkspaceId()
+  const fmtAgo = useRelativeTime()
+  const [filter, setFilter] = useState<RunFilter>("all")
+  const [keyword, setKeyword] = useState("")
+  const [offset, setOffset] = useState(0)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // Status filter is server-side (?status=a,b for the union case), so the
+  // page always asks for exactly RUNS_PAGE_SIZE rows of the right kind.
+  const statuses = FILTER_STATUSES[filter]
+  const query = useAgentRuns(wsId, { statuses, offset, limit: RUNS_PAGE_SIZE })
+  const runs = useMemo(() => query.data?.agent_runs ?? [], [query.data])
+  const total = query.data?.total ?? 0
+
+  // Offset is keyed by (filter, workspace): switching either starts from
+  // page one so we never point past the end of the new result set.
+  const [offsetKey, setOffsetKey] = useState(`${filter}:${wsId ?? ""}`)
+  const currentKey = `${filter}:${wsId ?? ""}`
+  if (offsetKey !== currentKey) {
+    setOffsetKey(currentKey)
+    setOffset(0)
+  }
+
+  const err = query.error
+  const isUnreachable = err instanceof ApiError && err.envelope.unreachable
+
+  // Keyword search is client-side over the current page; backend has no
+  // free-text index on agent_name / conversation_id.
+  const filtered = useMemo(() => {
+    if (!keyword) return runs
+    const q = keyword.toLowerCase()
+    return runs.filter((r) =>
+      [r.agent_name ?? "", r.agent_slug ?? "", r.id, r.conversation_id ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [runs, keyword])
+
+  const groups = useMemo(
+    () =>
+      GROUP_ORDER.map((status) => ({
+        status,
+        runs: filtered.filter((r) => r.status === status),
+      })).filter((g) => g.runs.length > 0),
+    [filtered],
+  )
+
+  // The rail outlives the selection by one animation: `railId` holds the
+  // run being shown so the panel can play its exit before unmounting,
+  // whether the user clicked the X, the open row, or navigated.
+  const [railId, setRailId] = useState<string | null>(selectedId ?? null)
+  if (selectedId && selectedId !== railId) setRailId(selectedId)
+
+  // Clicking the row that is already open closes the rail: the row is a
+  // toggle, not a re-selection.
+  const select = (id: string | null) => {
+    if (id && id !== selectedId) navigate("runs", { id })
+    else navigate("runs")
+  }
+
+  // Keyboard: ⌘K focuses search; J/K (or arrows) move the selection.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        searchRef.current?.focus()
+        return
+      }
+      const target = e.target as HTMLElement | null
+      if (target?.closest("input, textarea, [contenteditable=true]")) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const forward = e.key === "j" || e.key === "ArrowDown"
+      const backward = e.key === "k" || e.key === "ArrowUp"
+      if (!forward && !backward) return
+      const ordered = groups.flatMap((g) => g.runs)
+      if (ordered.length === 0) return
+      e.preventDefault()
+      const i = ordered.findIndex((r) => r.id === selectedId)
+      const next = forward
+        ? ordered[Math.min(i + 1, ordered.length - 1)]
+        : ordered[Math.max(i - 1, 0)]
+      if (next && next.id !== selectedId) select(next.id)
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, selectedId])
+
+  const pageTitle = t("runs.page.title")
+  const filterLabel = t("runs.filter.label")
+
+  return (
+    <AdminLayout activeMenu="runs" fullBleed>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <PageHeader
+            className="static mx-0 mb-0"
+            title={pageTitle}
+            subtitleFor="runs.page.title"
+            action={
+              <>
+                <div className="relative w-72">
+                  <Search
+                    className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                    strokeWidth={1.5}
+                    aria-hidden="true"
+                  />
+                  <Input
+                    ref={searchRef}
+                    type="search"
+                    placeholder={t("runs.search.placeholder")}
+                    aria-label={t("runs.search.placeholder")}
+                    className="pl-7 pr-11"
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                  />
+                  <Kbd className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">⌘K</Kbd>
+                </div>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <Button variant="outline" aria-haspopup="menu">
+                      <ListFilter strokeWidth={1.5} aria-hidden="true" />
+                      {filterLabel}
+                      {filter !== "all" && (
+                        <span className="text-fg-muted">· {t(`runs.tabs.${filter}`)}</span>
+                      )}
+                    </Button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      align="end"
+                      sideOffset={6}
+                      className="app-shadow-floating z-50 min-w-[180px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
+                    >
+                      <DropdownMenu.RadioGroup value={filter} onValueChange={(v) => setFilter(v as RunFilter)}>
+                        {FILTERS.map((f) => (
+                          <DropdownMenu.RadioItem
+                            key={f}
+                            value={f}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
+                          >
+                            <span className="flex-1">{t(`runs.tabs.${f}`)}</span>
+                            <DropdownMenu.ItemIndicator>
+                              <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
+                            </DropdownMenu.ItemIndicator>
+                          </DropdownMenu.RadioItem>
+                        ))}
+                      </DropdownMenu.RadioGroup>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              </>
+            }
+          />
+
+          {!wsId ? (
+            <div className="px-6"><ScopeRequiredState scope="workspace" resourceName={pageTitle} /></div>
+          ) : query.isLoading ? (
+            <RunsLoadingSkeleton />
+          ) : err ? (
+            <div className="px-6 pt-6">
+              <ErrorState
+                title={isUnreachable ? t("runs.loadError.unreachable.title") : t("runs.loadError.title")}
+                description={
+                  isUnreachable
+                    ? t("runs.loadError.unreachable.description")
+                    : err instanceof Error
+                      ? err.message
+                      : t("runs.loadError.description")
+                }
+                hint={isUnreachable ? t("runs.loadError.unreachable.hint") : t("runs.loadError.hint")}
+                onRetry={() => void query.refetch()}
+              />
+            </div>
+          ) : total === 0 ? (
+            <EmptyState icon={Play} title={t("runs.empty.title")} description={t("runs.empty.description")} />
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={Play} title={t("runs.emptyFiltered.title")} description={t("runs.emptyFiltered.description")} />
+          ) : (
+            <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>
+              <LedgerHeader>
+                <span />
+                <span>{t("runs.table.run")}</span>
+                <span>{t("runs.table.agent")}</span>
+                <span>{t("runs.table.conversation")}</span>
+                <span>{t("runs.table.connector")}</span>
+                <span className="text-right">{t("runs.table.duration")}</span>
+                <span className="text-right">{t("runs.table.age")}</span>
+              </LedgerHeader>
+              {groups.map((g) => (
+                <LedgerGroup key={g.status} label={t(`runStatus.${g.status}`)} count={g.runs.length}>
+                  {g.runs.map((r) => (
+                    <RunRow
+                      key={r.id}
+                      run={r}
+                      selected={r.id === selectedId}
+                      statusLabel={t(`runStatus.${r.status}`)}
+                      age={fmtAgo(r.created_at)}
+                      onSelect={() => select(r.id)}
+                    />
+                  ))}
+                </LedgerGroup>
+              ))}
+            </Ledger>
+          )}
+
+          {wsId && !query.isLoading && !err && (
+            <OffsetPagination
+              offset={offset}
+              limit={RUNS_PAGE_SIZE}
+              total={total}
+              onPrevious={() => setOffset((cur) => Math.max(0, cur - RUNS_PAGE_SIZE))}
+              onNext={() => setOffset((cur) => cur + RUNS_PAGE_SIZE)}
+            />
+          )}
+        </div>
+
+        {railId && wsId && (
+          <RunDetailRail
+            id={railId}
+            wsId={wsId}
+            open={!!selectedId}
+            onClose={() => select(null)}
+            onClosed={() => setRailId(null)}
+          />
+        )}
+      </div>
+    </AdminLayout>
+  )
+}
+
+function RunRow({
+  run,
+  selected,
+  statusLabel,
+  age,
+  onSelect,
+}: {
+  run: AgentRunSummary
+  selected: boolean
+  statusLabel: string
+  age: string
+  onSelect: () => void
+}) {
+  const agent = run.agent_name ?? run.agent_slug ?? "—"
+  const errorSummary = run.error_summary ?? run.user_facing_reason
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onSelect()
+    }
+  }
+  return (
+    <LedgerRow selected={selected} onClick={onSelect} onKeyDown={onKeyDown}>
+      <StatusIcon status={run.status} title={statusLabel} />
+      <LedgerId>{shortId(run.id, 16)}</LedgerId>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <InitialTile name={agent} />
+        <span className="shrink-0 truncate font-medium">{agent}</span>
+        {errorSummary && (
+          <span className="min-w-0 truncate text-xs text-fg-muted max-[1360px]:hidden">· {errorSummary}</span>
+        )}
+      </span>
+      <LedgerId>{tailId(run.conversation_id)}</LedgerId>
+      <span className="truncate text-xs text-fg-muted">{connectorLabel(run.connector_type)}</span>
+      <LedgerNum muted={!run.started_at}>{fmtDuration(run.started_at, run.finished_at)}</LedgerNum>
+      <span className="truncate text-right text-xs text-fg-muted">{age}</span>
+    </LedgerRow>
+  )
+}
+
+function RunsLoadingSkeleton() {
+  return (
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Detail rail                                                        */
+/* ------------------------------------------------------------------ */
+
+function RunDetailRail({
+  id,
+  wsId,
+  open,
+  onClose,
+  onClosed,
+}: {
+  id: string
+  wsId: string
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+}) {
+  const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
+  const { navigate } = useAdminView()
+
+  // The rail is not remounted between runs (that would replay its
+  // entrance), so per-run state resets here when the id changes.
+  const [shownId, setShownId] = useState(id)
+  const runQ = useAgentRun(id, wsId)
+  const workspacesQ = useMyWorkspaces()
+  const cancelRun = useCancelRun(wsId)
+  const requeueRun = useRequeueRun(wsId)
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+
+  if (shownId !== id) {
+    setShownId(id)
+    setConfirmCancel(false)
+    setCancelError(null)
+  }
+
+  const runData = runQ.data
+  const eventsQ = useAgentRunEvents(runData?.id ?? null, wsId, { status: runData?.status, initialEvents: runData?.events })
+  const events = eventsQ.data?.events ?? runData?.events ?? []
+
+  const closeLabel = t("runs.detail.close")
+
+  if (runQ.isLoading) {
+    return (
+      <DetailRail open={open} onClosed={onClosed} header={<Skeleton className="h-3 w-40" />} onClose={onClose} closeLabel={closeLabel}>
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-48" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-3 w-full" />
+          ))}
+        </div>
+      </DetailRail>
+    )
+  }
+
+  if (runQ.error || !runData) {
+    const err = runQ.error
+    const isUnreachable = err instanceof ApiError && err.envelope.unreachable
+    // A 404 is not a load failure: the run is gone (or its agent was
+    // deleted), so say that instead of "check the server is running".
+    const isMissing = err instanceof ApiError && err.envelope.status === 404
+    return (
+      <DetailRail open={open} onClosed={onClosed} header={<LedgerId>{shortId(id, 12)}</LedgerId>} onClose={onClose} closeLabel={closeLabel}>
+        <ErrorState
+          title={
+            isMissing
+              ? t("runs.detail.notFound.title")
+              : isUnreachable
+                ? t("runs.loadError.unreachable.title")
+                : t("runs.loadError.title")
+          }
+          description={
+            isMissing
+              ? t("runs.detail.notFound.description")
+              : err instanceof Error
+                ? err.message
+                : t("runs.loadError.description")
+          }
+          hint={isMissing ? undefined : t("runs.loadError.hint")}
+          onRetry={isMissing ? undefined : () => void runQ.refetch()}
+        />
+      </DetailRail>
+    )
+  }
+
+  const run = runData
+  const agent = run.agent_name ?? run.agent_slug ?? "—"
+  const errorSummary = run.error_summary ?? run.user_facing_reason
+  const translateDetail = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
+  const diagnosis = buildRunDiagnosis(run, events, translateDetail)
+  const runtimeDiagnosis = buildRuntimeDiagnosis(run, translateDetail)
+  // Viewers may watch a run but not stop it (main #234ef56).
+  const role = workspacesQ.data?.workspaces.find((w) => w.id === run.workspace_id)?.role
+  const canCancel = role === "owner" || role === "admin" || role === "member"
+  const isCancellable = canCancel && (run.status === "running" || run.status === "queued")
+  const isRetryable = run.status === "failed" || run.status === "interrupted" || run.status === "cancelled"
+
+  function handleRetry() {
+    setCancelError(null)
+    requeueRun.mutate(
+      { runID: run.id, reason: "user_clicked_retry" },
+      { onError: (e) => setCancelError(e instanceof Error ? e.message : String(e)) },
+    )
+  }
+
+  function handleCancel() {
+    setCancelError(null)
+    cancelRun.mutate(
+      { runID: run.id, reason: "user_clicked_cancel" },
+      {
+        onSuccess: () => setConfirmCancel(false),
+        onError: (e) => setCancelError(e instanceof Error ? e.message : t("runs.actions.cancel.error")),
+      }
+    )
+  }
+
+  return (
+    <DetailRail
+      open={open}
+      onClosed={onClosed}
+      aria-label={`${agent} · ${run.id}`}
+      onClose={onClose}
+      closeLabel={closeLabel}
+      header={
+        <>
+          <StatusIcon status={run.status} />
+          <span className="shrink-0 text-sm font-medium text-fg">{t(`runStatus.${run.status}`)}</span>
+          <LedgerId className="min-w-0 flex-1">{run.id}</LedgerId>
+        </>
+      }
+      footer={
+        <>
+          {isRetryable && (
+            <Button variant="outline" onClick={handleRetry} disabled={requeueRun.isPending}>
+              {requeueRun.isPending && <Loader2 className="animate-spin" />}
+              {t("runs.actions.retry")}
+            </Button>
+          )}
+          {isCancellable && (
+            <Button variant="outline" onClick={() => setConfirmCancel(true)} disabled={cancelRun.isPending}>
+              {cancelRun.isPending && <Loader2 className="animate-spin" />}
+              {t("runs.actions.cancel.label")}
+            </Button>
+          )}
+          {run.conversation_id && (
+            <Button
+              variant="link"
+              className="ml-auto"
+              onClick={() => navigate("conversations", { id: run.conversation_id! })}
+            >
+              {t("runs.detail.openConversation")}
+              <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+            </Button>
+          )}
+        </>
+      }
+    >
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-fg">
+        <InitialTile name={agent} />
+        <span className="truncate">{agent}</span>
+      </h2>
+
+      {(errorSummary || cancelError) && (
+        <p className="mb-3 flex items-start gap-1.5 break-words text-sm text-fg">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <span>{cancelError ?? errorSummary}</span>
+        </p>
+      )}
+
+      <PropertyList>
+        <Property label={t("runs.detail.connector")}>{connectorLabel(run.connector_type)}</Property>
+        <Property label={t("runs.detail.conversation")} mono>
+          {run.conversation_id ?? "—"}
+        </Property>
+        <Property label={t("runs.detail.created")} mono>{fmtDateTime(run.created_at)}</Property>
+        <Property label={t("runs.detail.started")} mono>{fmtDateTime(run.started_at)}</Property>
+        <Property label={t("runs.detail.finished")} mono>{fmtDateTime(run.finished_at)}</Property>
+        <Property label={t("runs.detail.duration")} mono>{fmtDuration(run.started_at, run.finished_at)}</Property>
+        {run.runtime && (
+          <>
+            {/* An external HTTP agent has no node, engine or workdir: show a
+                property only when the run actually carries that fact. */}
+            {(run.runtime.name || run.runtime.id) && (
+              <Property label={t("runs.detail.runtime.name")}>{run.runtime.name || shortId(run.runtime.id, 12)}</Property>
+            )}
+            {run.runtime.agent_kind && (
+              <Property label={t("runs.detail.runtime.agentKind")}>{enumLabel(translateDetail, run.runtime.agent_kind)}</Property>
+            )}
+            {run.runtime.runtime_mode && (
+              <Property label={t("runs.detail.runtime.mode")}>{enumLabel(translateDetail, run.runtime.runtime_mode)}</Property>
+            )}
+            {run.runtime.managed_model_id && (
+              <Property label={t("runs.detail.runtime.model")} mono>{run.runtime.managed_model_id}</Property>
+            )}
+            {run.runtime.working_directory && (
+              <Property label={t("runs.detail.runtime.workdir")} mono>{run.runtime.working_directory}</Property>
+            )}
+            {run.runtime.last_heartbeat_at && (
+              <Property label={t("runs.detail.runtime.lastHeartbeat")}>{runtimeDiagnosis.heartbeatAge}</Property>
+            )}
+          </>
+        )}
+      </PropertyList>
+
+      <Tabs defaultValue="steps" className="mt-4">
+        <TabsList className="flex w-full">
+          <TabsTrigger value="overview" className="flex-1">{t("runs.detail.tabs.overview")}</TabsTrigger>
+          <TabsTrigger value="steps" className="flex-1">{t("runs.detail.tabs.steps")}</TabsTrigger>
+          <TabsTrigger value="artifacts" className="flex-1">{t("runs.detail.tabs.artifacts")}</TabsTrigger>
+          <TabsTrigger value="audit" className="flex-1">{t("runs.detail.tabs.audit")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <RailSection title={t("runs.detail.overview.diagnostics")}>
+            <PropertyList>
+              <Property label={t("runs.detail.diagnostics.fields.result")}>
+                <ToneBadge tone={diagnosis.tone} label={diagnosis.title} />
+              </Property>
+              <Property label={t("runs.detail.diagnostics.fields.reason")} className="h-auto min-h-7 whitespace-normal py-1 [overflow-wrap:anywhere]">
+                {diagnosis.reason}
+              </Property>
+              <Property label={t("runs.detail.diagnostics.fields.source")}>{enumLabel(translateDetail, diagnosis.source)}</Property>
+              <Property label={t("runs.detail.diagnostics.fields.nextAction")} className="h-auto min-h-7 whitespace-normal py-1">
+                {diagnosis.action}
+              </Property>
+              <Property label={t("runs.detail.diagnostics.fields.latestEvent")}>{diagnosis.latest}</Property>
+            </PropertyList>
+          </RailSection>
+          <RailSection title={t("runs.detail.overview.runtime")}>
+            <PropertyList>
+              <Property label={t("runs.detail.runtime.health")}>
+                <ToneBadge tone={runtimeDiagnosis.tone} label={runtimeDiagnosis.health} />
+              </Property>
+              <Property label={t("runs.detail.runtime.action")} className="h-auto min-h-7 whitespace-normal py-1">
+                {runtimeDiagnosis.action}
+              </Property>
+              {run.runtime ? (
+                <>
+                  <Property label={t("runs.detail.runtime.state")}>{enumLabel(translateDetail, run.runtime.liveness)}</Property>
+                  <Property label={t("runs.detail.runtime.provider")}>{enumLabel(translateDetail, run.runtime.provider)}</Property>
+                  <Property label={t("runs.detail.runtime.type")}>{enumLabel(translateDetail, run.runtime.type)}</Property>
+                  <Property label={t("runs.detail.runtime.executionPlace")}>{enumLabel(translateDetail, run.runtime.execution_place)}</Property>
+                  <Property label={t("runs.detail.runtime.governance")}>{enumLabel(translateDetail, run.runtime.governance_mode)}</Property>
+                  <Property label={t("runs.detail.runtime.device")} mono>{run.runtime.device_id || "—"}</Property>
+                  <Property label={t("runs.detail.runtime.sandbox")} mono>{run.runtime.sandbox_id || "—"}</Property>
+                  <Property label={t("runs.detail.runtime.host")} mono>{run.runtime.hostname || "—"}</Property>
+                  <Property label={t("runs.detail.runtime.version")} mono>{run.runtime.version || "—"}</Property>
+                  <Property label={t("runs.detail.runtime.capturedAt")} mono>
+                    {run.runtime.captured_at ? fmtDateTime(run.runtime.captured_at) : "—"}
+                  </Property>
+                  <Property label={t("runs.detail.runtime.capabilities")} className="h-auto min-h-7 flex-wrap py-1">
+                    <RuntimeCapabilities capabilities={run.runtime.capabilities} />
+                  </Property>
+                </>
+              ) : (
+                <Property label={t("runs.detail.runtime.name")} className="text-fg-muted">
+                  {t("runs.detail.runtime.empty")}
+                </Property>
+              )}
+            </PropertyList>
+          </RailSection>
+        </TabsContent>
+
+        <TabsContent value="steps">
+          <RunSteps events={events} loading={eventsQ.isFetching && events.length === 0} />
+        </TabsContent>
+
+        <TabsContent value="artifacts">
+          {run.artifacts && run.artifacts.length > 0 ? (
+            <ul className="m-0 list-none p-0">
+              {run.artifacts.map((a) => (
+                <ArtifactRow key={a.id} medium={a.medium} kind={a.kind} name={a.name} meta={a.uri || undefined} />
+              ))}
+            </ul>
+          ) : (
+            <p className="py-6 text-center text-sm text-fg-muted">{tc("states.emptyTitle")}</p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <ResourceAuditTimeline wsId={wsId} targetType="agent_run" targetID={run.id} />
+        </TabsContent>
+      </Tabs>
+
+      <RunCancelDialog
+        open={confirmCancel}
+        loading={cancelRun.isPending}
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={handleCancel}
+      />
+    </DetailRail>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Steps                                                              */
+/* ------------------------------------------------------------------ */
+
+function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boolean }) {
+  const { t } = useTranslation("admin")
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const steps = useMemo(() => {
+    const translateStep = (key: string, options?: Record<string, unknown>) =>
+      t(key as never, options as never) as unknown as string
+    return buildSteps(events, translateStep)
+  }, [events, t])
+  const toggle = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-2 pt-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    )
+  }
+  if (steps.length === 0) {
+    return <p className="pt-2 text-sm text-fg-muted">{t("runs.detail.steps.empty")}</p>
+  }
+
+  return (
+    <RailSection title={t("runs.detail.tabs.steps")} meta={steps.length}>
+      <ol className="m-0 list-none p-0">
+        {steps.map((step, index) => {
+          const open = expandedKeys.has(step.key)
+          const StepIcon = step.icon
+          return (
+            <li key={step.key} className="border-b border-line last:border-b-0">
+              <div className="flex h-8 items-center gap-2 text-sm">
+                <StepIcon className={cn("h-3.5 w-3.5 shrink-0", step.color)} strokeWidth={1.5} aria-hidden="true" />
+                <span className="w-4 shrink-0 text-right font-mono text-xs tabular-nums text-fg-muted">{index + 1}</span>
+                <span className="min-w-0 flex-1 truncate text-fg" title={step.detail ? `${step.title} · ${step.detail}` : step.title}>
+                  {step.title}
+                  {step.detail && <span className="text-fg-muted"> · {step.detail}</span>}
+                </span>
+                {step.rawEvents.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    aria-expanded={open}
+                    aria-label={open ? t("runs.detail.steps.hideRaw") : t("runs.detail.steps.viewRaw")}
+                    title={open ? t("runs.detail.steps.hideRaw") : t("runs.detail.steps.viewRaw")}
+                    onClick={() => toggle(step.key)}
+                  >
+                    <Code className={cn(open && "text-fg")} strokeWidth={1.5} />
+                  </Button>
+                )}
+              </div>
+              {open && step.rawEvents.length > 0 && (
+                <div className="space-y-2 pb-2">
+                  {formatRawRunEvents(step.rawEvents).map((block) => (
+                    <pre key={block.key} className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                      {block.text}
+                    </pre>
+                  ))}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </RailSection>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers (formatters, diagnosis, step builders)                     */
+/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /*  Formatters                                                         */
@@ -87,6 +797,21 @@ function connectorLabel(t: string): string {
   if (t === "agent_daemon") return "Agent Daemon"
   if (t === "http-agent" || t === "http") return "HTTP Agent"
   return t
+}
+
+/** Product enum values (claude_code, sandbox, online…) in the UI's own words;
+ *  unknown values fall back to the raw string with underscores as spaces. */
+function enumLabel(t: AdminText, value?: string): string {
+  if (!value) return "—"
+  const key = `runs.enum.${value}`
+  const translated = t(key)
+  return translated === key ? value.replace(/_/g, " ") : translated
+}
+
+/** Distinguishing tail of a long id: the prefix is shared, the tail is not. */
+function tailId(s?: string, n = 8): string {
+  if (!s) return "—"
+  return s.length <= n ? s : s.slice(-n)
 }
 
 function shortId(s?: string, n = 8): string {
@@ -330,571 +1055,23 @@ function buildRuntimeDiagnosis(run: AgentRunDetail, t: AdminText): RuntimeDiagno
   return { tone: "success", health: t("runs.detail.diagnostics.runtimeHealth.ready"), heartbeatAge: fmtAge(runtime.last_heartbeat_at, t), action: t("runs.detail.diagnostics.runtimeActions.ready") }
 }
 
-function toneBadgeVariant(tone: DiagnosisTone): "success" | "warning" | "destructive" | "neutral" {
-  if (tone === "success") return "success"
-  if (tone === "warning") return "warning"
-  if (tone === "error") return "destructive"
-  return "neutral"
-}
-
-/* ------------------------------------------------------------------ */
-/*  Status badge                                                       */
-/* ------------------------------------------------------------------ */
-
-function RunStatusBadge({ status }: { status: AgentRunStatus }) {
-  const { t } = useTranslation("admin")
-  const labelKey = status === "queued"
-    ? "queued"
-    : status === "running"
-      ? "running"
-      : status === "completed"
-        ? "completed"
-        : status === "failed"
-          ? "failed"
-          : status === "cancelled"
-            ? "cancelled"
-            : "interrupted"
-  switch (status) {
-    case "queued": return <Badge variant="neutral">{t(`runStatus.${labelKey}`)}</Badge>
-    case "running": return <Badge variant="primary" dot pulse>{t(`runStatus.${labelKey}`)}</Badge>
-    case "completed": return <Badge variant="success" dot>{t(`runStatus.${labelKey}`)}</Badge>
-    case "failed": return <Badge variant="destructive" dot>{t(`runStatus.${labelKey}`)}</Badge>
-    case "cancelled": return <Badge variant="neutral">{t(`runStatus.${labelKey}`)}</Badge>
-    case "interrupted": return <Badge variant="warning">{t(`runStatus.${labelKey}`)}</Badge>
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/*  List page                                                          */
-/* ------------------------------------------------------------------ */
-
-const RUNS_PAGE_SIZE = 20
-
-// "running" tab unions {running, queued} so a queued run waiting on the
-// dispatcher still shows under "Running".
-const TAB_STATUSES: Record<"all" | "running" | "failed", AgentRunStatus[]> = {
-  all: [],
-  running: ["running", "queued"],
-  failed: ["failed"],
-}
-
-export function RunsPage() {
-  const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
-  const wsId = useWorkspaceId()
-  const [tab, setTab] = useState<"all" | "running" | "failed">("all")
-  const [keyword, setKeyword] = useState("")
-  const [offset, setOffset] = useState(0)
-
-  // Status filter is now server-side (handler takes ?status=a,b for
-  // the union case), so the page always asks for exactly RUNS_PAGE_SIZE
-  // rows of the right kind — no over-fetch + client-side filter.
-  const statuses = TAB_STATUSES[tab]
-  const query = useAgentRuns(wsId, { statuses, offset, limit: RUNS_PAGE_SIZE })
-  const runs = useMemo(() => query.data?.agent_runs ?? [], [query.data])
-  const total = query.data?.total ?? 0
-
-  // Reset offset on filter change so we don't point past the end of the
-  // new result set.
-  useEffect(() => {
-    setOffset(0)
-  }, [tab, wsId])
-
-  const err = query.error
-  const isUnreachable = err instanceof ApiError && err.envelope.unreachable
-
-  // Keyword search is client-side over the current page; backend has no
-  // free-text index on agent_name / conversation_id.
-  const filtered = runs.filter((r) => {
-    if (!keyword) return true
-    const q = keyword.toLowerCase()
-    const haystack = [
-      r.agent_name ?? "",
-      r.agent_slug ?? "",
-      r.id,
-      r.conversation_id ?? "",
-    ].join(" ").toLowerCase()
-    return haystack.includes(q)
-  })
-
-  return (
-    <AdminLayout activeMenu="runs">
-      <PageHeader
-        title={t("runs.page.title")}
-        description={t("runs.page.description")}
-      />
-      {!wsId ? (
-        <ScopeRequiredState scope="workspace" resourceName={t("runs.page.title")} />
-      ) : query.isLoading ? (
-        <RunsLoadingSkeleton />
-      ) : err ? (
-        <ErrorState
-          title={
-            isUnreachable
-              ? t("runs.loadError.unreachable.title")
-              : t("runs.loadError.title")
-          }
-          description={
-            isUnreachable
-              ? t("runs.loadError.unreachable.description")
-              : err instanceof Error
-                ? err.message
-                : t("runs.loadError.description")
-          }
-          hint={
-            isUnreachable
-              ? t("runs.loadError.unreachable.hint")
-              : t("runs.loadError.hint")
-          }
-          onRetry={() => void query.refetch()}
-        />
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-              <TabsList>
-                <TabsTrigger value="all">{t("runs.tabs.all")}</TabsTrigger>
-                <TabsTrigger value="running">{t("runs.tabs.running")}</TabsTrigger>
-                <TabsTrigger value="failed">{t("runs.tabs.failed")}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="relative w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" strokeWidth={1.75} />
-              <Input
-                placeholder={t("runs.search.placeholder")}
-                className="pl-8 text-xs"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {total === 0 ? (
-            // Empty state must live INSIDE the tabs container so an empty
-            // "Running" / "Failed" tab doesn't take the tab bar with it — the user
-            // has to be able to click "All" to get back.
-            <EmptyState
-              icon={Play}
-              title={t("runs.empty.title")}
-              description={t("runs.empty.description")}
-            />
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              icon={Play}
-              title={t("runs.emptyFiltered.title")}
-              description={t("runs.emptyFiltered.description")}
-            />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("runs.table.run")}</TableHead>
-                    <TableHead>{t("runs.table.status")}</TableHead>
-                    <TableHead>{t("runs.table.conversation")}</TableHead>
-                    <TableHead className="text-right">{t("runs.table.duration")}</TableHead>
-                    <TableHead className="text-right pr-4">{t("runs.table.cost")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r) => (
-                    <RunRow
-                      key={r.id}
-                      run={r}
-                      onClick={() => navigate("runs", { id: r.id })}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <OffsetPagination
-            offset={offset}
-            limit={RUNS_PAGE_SIZE}
-            total={total}
-            rangeLabel={({ from, to, total: rangeTotal }) =>
-              t("runs.table.pagination.range", { from, to, total: rangeTotal })
-            }
-            previousLabel={t("runs.table.pagination.prev")}
-            nextLabel={t("runs.table.pagination.next")}
-            onPrevious={() => setOffset((cur) => Math.max(0, cur - RUNS_PAGE_SIZE))}
-            onNext={() => setOffset((cur) => cur + RUNS_PAGE_SIZE)}
-            className="text-sm text-fg-muted"
-          />
-        </div>
-      )}
-    </AdminLayout>
-  )
-}
-
-function RunRow({ run, onClick }: { run: AgentRunSummary; onClick: () => void }) {
-  const fmtAgo = useRelativeTime()
-  const errorSummary = run.error_summary ?? run.user_facing_reason
-  return (
-    <TableRow className="cursor-pointer" onClick={onClick}>
-      <TableCell>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <Bot className="h-3.5 w-3.5 shrink-0 text-fg-faint" strokeWidth={1.75} />
-            <span className="text-base font-medium text-fg">{run.agent_name ?? run.agent_slug ?? "(unknown)"}</span>
-          </div>
-          <span className="font-mono text-xs text-fg-subtle">
-            {shortId(run.id)} · {fmtAgo(run.created_at)}
-          </span>
-          {errorSummary && (
-            <span className="mt-0.5 line-clamp-1 text-xs text-danger">{errorSummary}</span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell><RunStatusBadge status={run.status} /></TableCell>
-      <TableCell>
-        <span className="font-mono text-xs text-fg-subtle">{shortId(run.conversation_id)}</span>
-      </TableCell>
-      <TableCell className="text-right text-sm tabular-nums text-fg-muted">
-        {fmtDuration(run.started_at, run.finished_at)}
-      </TableCell>
-      <TableCell className="text-right pr-4 text-sm tabular-nums text-fg-faint">—</TableCell>
-    </TableRow>
-  )
-}
-
-function RunsLoadingSkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-8 w-72" />
-      </div>
-      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Run Detail                                                         */
-/* ------------------------------------------------------------------ */
-
-export function RunDetailPage({ id }: { id: string }) {
-  const { t } = useTranslation("admin")
-  const { t: tc } = useTranslation("common")
-  const { navigate } = useAdminView()
-  const wsId = useWorkspaceId()
-  const workspacesQ = useMyWorkspaces()
-
-  const runQ = useAgentRun(id, wsId)
-  const cancelRun = useCancelRun(wsId)
-  const [confirmCancel, setConfirmCancel] = useState(false)
-  const [cancelError, setCancelError] = useState<string | null>(null)
-
-  const runData = runQ.data
-  const eventsQ = useAgentRunEvents(runData?.id ?? null, wsId, { status: runData?.status, initialEvents: runData?.events })
-  const events = eventsQ.data?.events ?? runData?.events ?? []
-
-  if (runQ.isLoading) {
-    return (
-      <AdminLayout activeMenu="runs">
-        <RunsLoadingSkeleton />
-      </AdminLayout>
-    )
-  }
-
-  if (runQ.error || !runData) {
-    const err = runQ.error
-    const isUnreachable = err instanceof ApiError && err.envelope.unreachable
-    return (
-      <AdminLayout activeMenu="runs">
-        <ErrorState
-          title={
-            isUnreachable
-              ? t("runs.loadError.unreachable.title")
-              : t("runs.loadError.title")
-          }
-          description={
-            err instanceof Error ? err.message : t("runs.loadError.description")
-          }
-          hint={t("runs.loadError.hint")}
-          onRetry={() => void runQ.refetch()}
-        />
-      </AdminLayout>
-    )
-  }
-
-  const run = runData
-  const errorSummary = run.error_summary ?? run.user_facing_reason
-  const translateDetail = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
-  const diagnosis = buildRunDiagnosis(run, events, translateDetail)
-  const runtimeDiagnosis = buildRuntimeDiagnosis(run, translateDetail)
-  const role = workspacesQ.data?.workspaces.find((workspace) => workspace.id === run.workspace_id)?.role
-  const isCancellable =
-    (role === "owner" || role === "admin" || role === "member") &&
-    (run.status === "running" || run.status === "queued")
-
-  function handleCancel() {
-    if (!isCancellable) return
-    setCancelError(null)
-    cancelRun.mutate(
-      { runID: run.id, reason: "user_clicked_cancel" },
-      {
-        onSuccess: () => setConfirmCancel(false),
-        onError: (e) => setCancelError(e instanceof Error ? e.message : t("runs.actions.cancel.error")),
-      }
-    )
-  }
-
-  return (
-    <AdminLayout activeMenu="runs">
-      <PageHeader
-        backLink={
-          <button
-            onClick={() => navigate("runs")}
-            className="hover:text-fg hover:underline"
-          >
-            ← {t("runs.page.title")}
-          </button>
-        }
-        title={run.agent_name ?? run.agent_slug ?? "(unknown agent)"}
-        description={
-          <span className="font-mono text-sm">
-            {shortId(run.id, 12)} · {connectorLabel(run.connector_type)}
-          </span>
-        }
-        action={
-          <>
-            <RunStatusBadge status={run.status} />
-            {isCancellable && (
-              <Button size="sm" variant="outline" onClick={() => setConfirmCancel(true)} disabled={cancelRun.isPending || !wsId}>
-                {cancelRun.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {t("runs.actions.cancel.label")}
-              </Button>
-            )}
-          </>
-        }
-      />
-
-      <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg border border-line bg-surface p-4 md:grid-cols-4">
-        <Field
-          label={t("runs.detail.duration")}
-          value={fmtDuration(run.started_at, run.finished_at)}
-        />
-        <Field label={t("runs.detail.cost")} value="—" mono />
-        <Field
-          label={t("runs.detail.conversation")}
-          value={
-            run.conversation_id ? (
-              <button
-                className="inline-flex items-center gap-1 hover:underline"
-                onClick={() => navigate("conversations", { id: run.conversation_id! })}
-              >
-                <span className="font-mono text-sm">{shortId(run.conversation_id, 10)}</span>
-                <ArrowUpRight className="h-3 w-3 text-fg-faint" />
-              </button>
-            ) : (
-              "—"
-            )
-          }
-        />
-        <Field label={tc("nav.items.agents")} value={run.agent_name ?? "—"} />
-      </div>
-
-      {cancelError && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-danger-border bg-danger-subtle/40 p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" strokeWidth={2} />
-          <p className="font-mono text-sm text-danger-emphasis">{cancelError}</p>
-        </div>
-      )}
-
-      {errorSummary && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-danger-border bg-danger-subtle/40 p-4">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" strokeWidth={2} />
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-danger-emphasis">{t("runs.detail.errorTitle")}</p>
-            <p className="text-sm text-danger-emphasis/85">{t("runs.detail.errorHint")}</p>
-          </div>
-        </div>
-      )}
-
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">{t("runs.detail.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="events">{t("runs.detail.tabs.steps")}</TabsTrigger>
-          <TabsTrigger value="artifacts">{t("runs.detail.tabs.artifacts")}</TabsTrigger>
-          <TabsTrigger value="audit">{t("runs.detail.tabs.audit")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <div className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Card title={t("runs.detail.overview.lifecycle")}>
-                <Field
-                  label={t("runs.detail.diagnostics.fields.status")}
-                  value={<RunStatusBadge status={run.status} />}
-                />
-                <Field label="run_id" value={run.id} mono />
-                <Field label="created_at" value={fmtDateTime(run.created_at)} mono />
-                <Field label="started_at" value={fmtDateTime(run.started_at)} mono />
-                <Field label="finished_at" value={fmtDateTime(run.finished_at)} mono />
-                <Field label={t("runs.detail.diagnostics.fields.latestEvent")} value={diagnosis.latest} mono />
-              </Card>
-              <Card title={t("runs.detail.overview.diagnostics")}>
-                <Field
-                  label={t("runs.detail.diagnostics.fields.result")}
-                  value={<ToneBadge tone={diagnosis.tone} label={diagnosis.title} />}
-                />
-                <Field
-                  label={t("runs.detail.diagnostics.fields.reason")}
-                  value={<span className="break-words">{diagnosis.reason}</span>}
-                  mono
-                />
-                <Field label={t("runs.detail.diagnostics.fields.source")} value={diagnosis.source || "—"} mono />
-                <Field label={t("runs.detail.diagnostics.fields.nextAction")} value={diagnosis.action} />
-              </Card>
-            </div>
-            <Card title={t("runs.detail.overview.runtime")}>
-              {run.runtime ? (
-                <>
-                  <Field
-                    label={t("runs.detail.runtime.health")}
-                    value={<ToneBadge tone={runtimeDiagnosis.tone} label={runtimeDiagnosis.health} />}
-                  />
-                  <Field label={t("runs.detail.runtime.heartbeatAge")} value={runtimeDiagnosis.heartbeatAge} mono />
-                  <Field label={t("runs.detail.runtime.action")} value={runtimeDiagnosis.action} />
-                  <Field
-                    label={t("runs.detail.runtime.name")}
-                    value={
-                      <div>
-                        <span>{run.runtime.name || shortId(run.runtime.id, 12)}</span>
-                        {run.runtime.id && run.runtime.name ? (
-                          <div className="font-mono text-xs text-fg-subtle">{shortId(run.runtime.id, 12)}</div>
-                        ) : null}
-                      </div>
-                    }
-                  />
-                  <Field
-                    label={t("runs.detail.runtime.state")}
-                    value={
-                      run.runtime.liveness || "—"
-                    }
-                    mono
-                  />
-                  <Field label={t("runs.detail.runtime.provider")} value={run.runtime.provider || "—"} mono />
-                  <Field label={t("runs.detail.runtime.type")} value={run.runtime.type || "—"} mono />
-                  <Field label={t("runs.detail.runtime.connector")} value={run.runtime.connector_type || "—"} mono />
-                  <Field label={t("runs.detail.runtime.agentKind")} value={run.runtime.agent_kind || "—"} mono />
-                  <Field label={t("runs.detail.runtime.mode")} value={run.runtime.runtime_mode || "—"} mono />
-                  <Field label={t("runs.detail.runtime.executionPlace")} value={run.runtime.execution_place || "—"} mono />
-                  <Field label={t("runs.detail.runtime.governance")} value={run.runtime.governance_mode || "—"} mono />
-                  <Field
-                    label={t("runs.detail.runtime.device")}
-                    value={<span className="break-all">{run.runtime.device_id || "—"}</span>}
-                    mono
-                  />
-                  <Field
-                    label={t("runs.detail.runtime.sandbox")}
-                    value={<span className="break-all">{run.runtime.sandbox_id || "—"}</span>}
-                    mono
-                  />
-                  <Field
-                    label={t("runs.detail.runtime.model")}
-                    value={<span className="break-all">{run.runtime.managed_model_id || "—"}</span>}
-                    mono
-                  />
-                  <Field
-                    label={t("runs.detail.runtime.workdir")}
-                    value={<span className="break-all">{run.runtime.working_directory || "—"}</span>}
-                    mono
-                  />
-                  <Field
-                    label={t("runs.detail.runtime.capabilities")}
-                    value={<RuntimeCapabilities capabilities={run.runtime.capabilities} />}
-                  />
-                  <Field label={t("runs.detail.runtime.host")} value={run.runtime.hostname || "—"} mono />
-                  <Field label={t("runs.detail.runtime.version")} value={run.runtime.version || "—"} mono />
-                  <Field
-                    label={t("runs.detail.runtime.lastHeartbeat")}
-                    value={run.runtime.last_heartbeat_at ? fmtDateTime(run.runtime.last_heartbeat_at) : "—"}
-                    mono
-                  />
-                  <Field
-                    label={t("runs.detail.runtime.capturedAt")}
-                    value={run.runtime.captured_at ? fmtDateTime(run.runtime.captured_at) : "—"}
-                    mono
-                  />
-                </>
-              ) : (
-                <>
-                  <Field
-                    label={t("runs.detail.runtime.health")}
-                    value={<ToneBadge tone={runtimeDiagnosis.tone} label={runtimeDiagnosis.health} />}
-                  />
-                  <Field label={t("runs.detail.runtime.action")} value={runtimeDiagnosis.action} />
-                  <p className="text-sm text-fg-subtle">{t("runs.detail.runtime.empty")}</p>
-                </>
-              )}
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="events">
-          <RunSteps events={events} loading={eventsQ.isFetching && events.length === 0} />
-        </TabsContent>
-
-        <TabsContent value="artifacts">
-          <div className="overflow-hidden rounded-lg border border-line bg-surface">
-            {run.artifacts && run.artifacts.length > 0 ? (
-              run.artifacts.map((a) => (
-                <ArtifactRow key={a.id} medium={a.medium} kind={a.kind} name={a.name} meta={a.uri || undefined} />
-              ))
-            ) : (
-              <div className="p-6 text-center text-sm text-fg-subtle">No artifacts.</div>
-            )}
-          </div>
-        </TabsContent>
-
-
-        <TabsContent value="audit">
-          <Card title={t("runs.detail.tabs.audit")}>
-            <ResourceAuditTimeline wsId={wsId} targetType="agent_run" targetID={run.id} />
-          </Card>
-        </TabsContent>
-      </Tabs>
-      {isCancellable && (
-        <RunCancelDialog
-          open={confirmCancel}
-          loading={cancelRun.isPending}
-          onCancel={() => setConfirmCancel(false)}
-          onConfirm={handleCancel}
-        />
-      )}
-    </AdminLayout>
-  )
-}
-
 function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean; loading: boolean; onCancel: () => void; onConfirm: () => void }) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
-      <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-        <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div className="space-y-1.5">
-            <DialogTitle className="text-sm">{t("runs.actions.cancel.confirmTitle")}</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {t("runs.actions.cancel.confirmBody")}
-            </DialogDescription>
-          </div>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>{t("runs.actions.cancel.confirmTitle")}</DialogTitle>
         </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>{tc("actions.cancel")}</Button>
-          <Button variant="destructive" size="sm" onClick={onConfirm} disabled={loading}>
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <DialogDescription className="flex items-start gap-2 text-fg">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <span>{t("runs.actions.cancel.confirmBody")}</span>
+        </DialogDescription>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>{tc("actions.cancel")}</Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={loading}>
+            {loading && <Loader2 className="animate-spin" />}
             {t("runs.actions.cancel.label")}
           </Button>
         </DialogFooter>
@@ -903,145 +1080,32 @@ function RunCancelDialog({ open, loading, onCancel, onConfirm }: { open: boolean
   )
 }
 
+
 function ToneBadge({ tone, label }: { tone: DiagnosisTone; label: string }) {
-  return <Badge variant={toneBadgeVariant(tone)}>{label}</Badge>
+  const status = tone === "success" ? "completed" : tone === "error" ? "failed" : tone === "warning" ? "interrupted" : "queued"
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm text-fg">
+      <StatusIcon status={status} />
+      {label}
+    </span>
+  )
 }
+
 
 function RuntimeCapabilities({ capabilities }: { capabilities?: Record<string, boolean> }) {
   const entries = runtimeCapabilityEntries(capabilities)
   if (entries.length === 0) return <span>—</span>
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <span className="flex flex-wrap gap-1">
       {entries.map(([key, enabled]) => (
-        <Badge key={key} variant={enabled ? "primary" : "neutral"}>
-          {key}: {enabled ? "true" : "false"}
+        <Badge key={key} variant={enabled ? "success" : "neutral"} dot>
+          {key}
         </Badge>
       ))}
-    </div>
+    </span>
   )
 }
 
-function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className={["min-w-0 text-sm text-fg-emphasis [overflow-wrap:anywhere]", mono ? "font-mono" : ""].filter(Boolean).join(" ")}>{value}</dd>
-    </div>
-  )
-}
-
-function Card({ title, actions, className, children }: { title: string; actions?: React.ReactNode; className?: string; children: React.ReactNode }) {
-  return (
-    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-fg">{title}</h3>
-        {actions}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boolean }) {
-  const { t } = useTranslation("admin")
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
-  const steps = useMemo(() => {
-    const translateStep = (key: string, options?: Record<string, unknown>) =>
-      t(key as never, options as never) as unknown as string
-    return buildSteps(events, translateStep)
-  }, [events, t])
-  const expandable = useMemo(() => steps.filter((s) => s.rawEvents.length > 0), [steps])
-  const allOpen = expandable.length > 0 && expandable.every((s) => expandedKeys.has(s.key))
-  const toggle = (key: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-  const toggleAll = () => {
-    setExpandedKeys(allOpen ? new Set() : new Set(expandable.map((s) => s.key)))
-  }
-  return (
-    <Card
-      title={t("runs.detail.steps.title")}
-      actions={
-        expandable.length > 0 && !loading ? (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
-          >
-            <Code className="h-3.5 w-3.5" strokeWidth={1.9} />
-            {allOpen ? t("runs.detail.steps.hideAllRaw") : t("runs.detail.steps.viewAllRaw")}
-          </button>
-        ) : null
-      }
-    >
-      {loading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-3/4" />
-        </div>
-      ) : steps.length === 0 ? (
-        <p className="text-sm text-fg-subtle">{t("runs.detail.steps.empty")}</p>
-      ) : (
-        <ol className="space-y-3">
-          {steps.map((step) => {
-            const open = expandedKeys.has(step.key)
-            return (
-              <li key={step.key} className="rounded-lg border border-line-muted bg-surface-subtle/50 p-3">
-                <div className="flex gap-3">
-                  <step.icon className={`mt-0.5 h-4 w-4 shrink-0 ${step.color}`} strokeWidth={1.9} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                      <p className="text-sm font-medium text-fg">{step.title}</p>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="whitespace-nowrap font-mono text-xs text-fg-faint">
-                          {"#" + step.sequence + (step.occurredAt ? " · " + fmtDateTime(step.occurredAt) : "")}
-                        </span>
-                        {step.rawEvents.length > 0 && (
-                          <button
-                            type="button"
-                            aria-expanded={open}
-                            aria-label={open ? t("runs.detail.steps.hideRaw") : t("runs.detail.steps.viewRaw")}
-                            title={open ? t("runs.detail.steps.hideRaw") : t("runs.detail.steps.viewRaw")}
-                            onClick={() => toggle(step.key)}
-                            className={`inline-flex items-center rounded-md border p-1 transition-colors ${
-                              open
-                                ? "border-line-strong bg-surface-muted text-fg-muted"
-                                : "border-line bg-surface text-fg-subtle hover:border-line-strong hover:bg-surface-muted hover:text-fg-emphasis"
-                            }`}
-                          >
-                            <Code className="h-3 w-3" strokeWidth={2} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {step.detail && <p className="mt-1 break-words text-sm text-fg-subtle">{step.detail}</p>}
-                  </div>
-                </div>
-                {open && step.rawEvents.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {formatRawRunEvents(step.rawEvents).map((block) => (
-                      <pre
-                        key={block.key}
-                        className="whitespace-pre-wrap break-all rounded-md bg-surface-inverse p-3 text-xs leading-relaxed text-fg-on-emphasis"
-                      >
-                        {block.text}
-                      </pre>
-                    ))}
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ol>
-      )}
-    </Card>
-  )
-}
 
 type RunStepT = (key: string, options?: Record<string, unknown>) => string
 
@@ -1071,7 +1135,7 @@ function buildSteps(events: AgentRunEvent[], t: RunStepT): BuiltStep[] {
       continue
     }
     if (deltaCount > 0) {
-      steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-info", rawEvents: deltaEvents })
+      steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-fg-muted", rawEvents: deltaEvents })
       deltaCount = 0
       deltaOccurredAt = ""
       deltaEvents = []
@@ -1080,7 +1144,7 @@ function buildSteps(events: AgentRunEvent[], t: RunStepT): BuiltStep[] {
     if (mapped) steps.push({ ...mapped, rawEvents: [ev] })
   }
   if (deltaCount > 0) {
-    steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-info", rawEvents: deltaEvents })
+    steps.push({ key: `delta-${deltaSequence}`, sequence: deltaSequence, title: t("runs.detail.steps.generated", { count: deltaCount }), occurredAt: deltaOccurredAt, icon: Bot, color: "text-fg-muted", rawEvents: deltaEvents })
   }
   return steps
 }
@@ -1089,25 +1153,25 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
   const withTime = { occurredAt: ev.occurred_at }
   switch (ev.event_kind) {
     case "message.complete":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.messageComplete"), detail: payloadValue(ev, "message_id"), icon: Bot, color: "text-info", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.messageComplete"), detail: payloadValue(ev, "message_id"), icon: Bot, color: "text-fg-muted", ...withTime }
     case "tool.call":
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolCall"), detail: payloadValue(ev, "name") || payloadValue(ev, "action") || "tool", icon: TerminalSquare, color: "text-fg-muted", ...withTime }
     case "tool.result":
       return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.toolResult"), detail: payloadValue(ev, "name") || "tool", icon: Wrench, color: "text-fg-muted", ...withTime }
     case "permission.asked":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permission"), detail: payloadValue(ev, "resource") || payloadValue(ev, "action") || "approval", icon: KeyRound, color: "text-warning", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permission"), detail: payloadValue(ev, "resource") || payloadValue(ev, "action") || "approval", icon: KeyRound, color: "text-status-running", ...withTime }
     case "permission.replied":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionReplied"), detail: payloadValue(ev, "decision") || payloadValue(ev, "status"), icon: KeyRound, color: "text-success", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionReplied"), detail: payloadValue(ev, "decision") || payloadValue(ev, "status"), icon: KeyRound, color: "text-status-completed", ...withTime }
     case "permission.auto_denied":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionAutoDenied"), detail: payloadValue(ev, "hook_reason") || payloadValue(ev, "resource") || "denied by plugin", icon: ShieldAlert, color: "text-danger", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionAutoDenied"), detail: payloadValue(ev, "hook_reason") || payloadValue(ev, "resource") || "denied by plugin", icon: ShieldAlert, color: "text-status-failed", ...withTime }
     case "permission.auto_allowed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionAutoAllowed"), detail: payloadValue(ev, "hook_reason") || payloadValue(ev, "resource") || "allowed by plugin", icon: ShieldCheck, color: "text-success", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.permissionAutoAllowed"), detail: payloadValue(ev, "hook_reason") || payloadValue(ev, "resource") || "allowed by plugin", icon: ShieldCheck, color: "text-status-completed", ...withTime }
     case "model.changed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.modelChanged"), detail: [payloadValue(ev, "from"), payloadValue(ev, "to")].filter(Boolean).join(" -> "), icon: Bot, color: "text-info", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.modelChanged"), detail: [payloadValue(ev, "from"), payloadValue(ev, "to")].filter(Boolean).join(" -> "), icon: Bot, color: "text-fg-muted", ...withTime }
     case "session.error":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.error"), detail: payloadValue(ev, "error"), icon: AlertTriangle, color: "text-danger", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.error"), detail: payloadValue(ev, "error"), icon: AlertTriangle, color: "text-status-failed", ...withTime }
     case "run.started":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.started"), detail: payloadValue(ev, "source"), icon: Play, color: "text-info", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.started"), detail: payloadValue(ev, "source"), icon: Play, color: "text-fg-muted", ...withTime }
     case "run.queued": {
       // run.queued payload may carry { position: N }; degrades to plain
       // "queued" when absent.
@@ -1116,36 +1180,37 @@ function stepForEvent(ev: AgentRunEvent, t: RunStepT) {
       const detail = position > 1
         ? t("runs.detail.steps.queuedWithPosition", { position })
         : t("runs.detail.steps.queued")
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.queued"), detail, icon: Clock, color: "text-fg-subtle", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.queued"), detail, icon: Clock, color: "text-fg-muted", ...withTime }
     }
     case "run.completed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.completed"), icon: CheckCircle2, color: "text-success", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.completed"), icon: CheckCircle2, color: "text-status-completed", ...withTime }
     case "run.failed":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.failed"), detail: payloadValue(ev, "error"), icon: XCircle, color: "text-danger", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.failed"), detail: payloadValue(ev, "error"), icon: XCircle, color: "text-status-failed", ...withTime }
     case "run.cancelled":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.cancelled"), detail: payloadValue(ev, "reason"), icon: XCircle, color: "text-fg-subtle", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.cancelled"), detail: payloadValue(ev, "reason"), icon: XCircle, color: "text-fg-muted", ...withTime }
     case "run.requeued":
-      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.requeued"), detail: payloadValue(ev, "reason"), icon: Play, color: "text-warning", ...withTime }
+      return { key: ev.id, sequence: ev.sequence, title: t("runs.detail.steps.requeued"), detail: payloadValue(ev, "reason"), icon: Play, color: "text-status-running", ...withTime }
     default:
       return null
   }
 }
 
+
 // agent_run_artifacts splits into medium (where bytes live) and kind
 // (what the artifact represents). Icon keys off kind.
 function ArtifactRow({ medium, kind, name, meta }: { medium: string; kind: string; name: string; meta?: string }) {
   return (
-    <button className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-subtle/60">
-      {kind === "diff" || kind === "patch" ? (
-        <FileText className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
-      ) : (
-        <Database className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
-      )}
-      <div className="flex-1">
-        <code className="text-sm font-medium text-fg">{name}</code>
-        {meta && <p className="text-xs text-fg-subtle">{kind} · {medium} · {meta}</p>}
-      </div>
-      <ArrowUpRight className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
-    </button>
+    <li className="border-b border-line last:border-b-0">
+      <button className="flex h-8 w-full items-center gap-2 text-left text-sm hover:app-hover">
+        {kind === "diff" || kind === "patch" ? (
+          <FileText className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        ) : (
+          <Database className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        )}
+        <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{name}</code>
+        {meta && <span className="truncate text-xs text-fg-muted">{kind} · {medium}</span>}
+        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+      </button>
+    </li>
   )
 }

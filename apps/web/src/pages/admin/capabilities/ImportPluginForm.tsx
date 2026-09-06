@@ -6,11 +6,14 @@
  * "preview a good plugin, ship a different one").
  */
 import { useEffect, useRef, useState } from "react"
-import { Loader2, Upload, FileArchive, X } from "lucide-react"
+import { AlertTriangle, Loader2, Upload, FileArchive, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "../../../components/ui/button"
+import { Label } from "../../../components/ui/label"
+import { PropertyList, Property } from "../../../components/ui/property-list"
 import { ApiError } from "../../../lib/api-client"
+import { InlineNotice } from "./notices"
 
 import {
   uploadPluginZipDirect,
@@ -162,22 +165,20 @@ export function ImportPluginForm({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <div className="grid gap-3">
-        <span className="text-sm font-medium text-fg-muted">
-          {t("capabilities.import.plugin.uploadLabel", "Upload Plugin zip")}
-        </span>
+      <div className="min-w-0">
+        <Label htmlFor="plugin-zip-input">{t("capabilities.import.plugin.uploadLabel", "Upload Plugin zip")}</Label>
         {!file ? (
           <label
             htmlFor="plugin-zip-input"
             onDrop={onDrop}
             onDragOver={onDragOver}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-line-strong bg-surface-subtle px-4 py-8 text-center hover:border-line-strong"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-line-strong bg-surface px-4 py-8 text-center transition-colors duration-150 ease-settle hover:app-hover"
           >
-            <Upload className="h-5 w-5 text-fg-subtle" />
-            <span className="text-sm text-fg-muted">
+            <Upload className="h-4 w-4 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+            <span className="text-sm text-fg">
               {t("capabilities.import.plugin.dropHint", "Drag or click to upload a .zip file")}
             </span>
-            <span className="text-xs text-fg-subtle">
+            <span className="text-xs text-fg-muted">
               {t("capabilities.import.plugin.sizeHint", "Up to 32 MiB")}
             </span>
             <input
@@ -193,58 +194,40 @@ export function ImportPluginForm({
             />
           </label>
         ) : (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <FileArchive className="h-4 w-4 shrink-0 text-fg-subtle" />
-              <div className="min-w-0">
-                <p className="truncate text-sm text-fg">{file.name}</p>
-                <p className="text-xs text-fg-subtle">
-                  {formatBytes(file.size)}
-                  {busy && (
-                    <>
-                      {" · "}
-                      <span className="inline-flex items-center gap-1 text-fg-muted">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        {presignMut.isPending
-                          ? t("capabilities.import.plugin.uploading", "Uploading…")
-                          : t("capabilities.import.plugin.validating", "Validating…")}
-                      </span>
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
+          <div className="flex h-9 items-center gap-2 border-b border-line text-sm">
+            <FileArchive className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-fg">{file.name}</span>
+            <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">{formatBytes(file.size)}</span>
+            {busy && (
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
+                <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+                {presignMut.isPending
+                  ? t("capabilities.import.plugin.uploading", "Uploading…")
+                  : t("capabilities.import.plugin.validating", "Validating…")}
+              </span>
+            )}
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={reset}
               disabled={busy}
               aria-label={t("capabilities.actions.cancel", "Cancel")}
             >
-              <X className="h-4 w-4" />
+              <X strokeWidth={1.5} />
             </Button>
           </div>
         )}
 
-        {errMsg && (
-          <div
-            role="alert"
-            className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
-          >
-            {errMsg}
-          </div>
-        )}
+        {errMsg && <InlineNotice tone="error" className="mt-2">{errMsg}</InlineNotice>}
       </div>
 
       {/* ---- validation preview pane ----------------------------------- */}
-      <div className="grid gap-3">
-        <span className="text-sm font-medium text-fg-muted">
-          {t("capabilities.import.plugin.previewLabel", "Validation result")}
-        </span>
+      <div className="min-w-0">
+        <Label>{t("capabilities.import.plugin.previewLabel", "Validation result")}</Label>
         {!validation && !busy && (
-          <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-3 py-6 text-center text-sm text-fg-subtle">
+          <p className="text-sm text-fg-muted">
             {t("capabilities.import.plugin.previewEmpty", "Upload a zip file to see the validation result here")}
-          </div>
+          </p>
         )}
         {validation && <ValidationPanel validation={validation} preview={previewMut.data ?? null} />}
       </div>
@@ -283,63 +266,53 @@ function ValidationPanel({
     : null
 
   return (
-    <div className="grid gap-3 rounded-md border border-line bg-surface p-3">
+    <div className="space-y-3">
       {validation.valid ? (
-        <div className="rounded-md border border-success-border bg-success-subtle px-3 py-1.5 text-sm text-success-emphasis">
-          {t("capabilities.import.plugin.passed", "Validation passed")}
-        </div>
+        <InlineNotice tone="success">{t("capabilities.import.plugin.passed", "Validation passed")}</InlineNotice>
       ) : (
-        <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-1.5 text-sm text-danger-emphasis">
-          {t("capabilities.import.plugin.failed", "Validation failed — fix the issues and upload again")}
-        </div>
+        <InlineNotice tone="error">{t("capabilities.import.plugin.failed", "Validation failed — fix the issues and upload again")}</InlineNotice>
       )}
 
       {m && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-          <dt className="text-fg-subtle">name</dt>
-          <dd className="font-mono text-fg">{m.name}</dd>
-          <dt className="text-fg-subtle">version</dt>
-          <dd className="font-mono text-fg">{m.version}</dd>
-          {m.description && (
-            <>
-              <dt className="text-fg-subtle">description</dt>
-              <dd className="text-fg-muted">{m.description}</dd>
-            </>
-          )}
-          {m.author && (
-            <>
-              <dt className="text-fg-subtle">author</dt>
-              <dd className="text-fg-muted">{m.author}</dd>
-            </>
-          )}
-        </dl>
+        <PropertyList className="grid-cols-[100px_minmax(0,1fr)]">
+          <Property label="name" mono>{m.name}</Property>
+          <Property label="version" mono>{m.version}</Property>
+          {m.description && <Property label="description" className="h-auto min-h-7 whitespace-normal py-1">{m.description}</Property>}
+          {m.author && <Property label="author">{m.author}</Property>}
+        </PropertyList>
       )}
 
       {errors.length > 0 && (
-        <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-danger-emphasis">
-            {t("capabilities.import.plugin.errorsHeader", "Errors")}
-          </p>
-          <ul className="ml-4 list-disc space-y-0.5 text-sm text-danger-emphasis">
-            {errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </div>
+        <IssueList
+          icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />}
+          title={t("capabilities.import.plugin.errorsHeader", "Errors")}
+          items={errors}
+        />
       )}
 
       {warnings.length > 0 && (
-        <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-warning">
-            {t("capabilities.import.plugin.warningsHeader", "Warnings")}
-          </p>
-          <ul className="ml-4 list-disc space-y-0.5 text-sm text-warning-emphasis">
-            {warnings.map((wn, i) => (
-              <li key={i}>{wn}</li>
-            ))}
-          </ul>
-        </div>
+        <IssueList
+          icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-running" strokeWidth={1.5} aria-hidden="true" />}
+          title={t("capabilities.import.plugin.warningsHeader", "Warnings")}
+          items={warnings}
+        />
       )}
+    </div>
+  )
+}
+
+function IssueList({ icon, title, items }: { icon: React.ReactNode; title: string; items: string[] }) {
+  return (
+    <div className="text-sm text-fg">
+      <p className="flex items-center gap-2 font-medium">
+        {icon}
+        {title}
+      </p>
+      <ul className="m-0 mt-1 list-disc space-y-0.5 pl-6 text-xs">
+        {items.map((item, i) => (
+          <li key={i} className="break-words">{item}</li>
+        ))}
+      </ul>
     </div>
   )
 }

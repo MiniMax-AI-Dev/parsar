@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowUpRight, Bot, Check, ChevronDown, Cloud, Cpu, Eye, EyeOff, Laptop, Network, Search, Server, Sparkles } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Eye, EyeOff, Search } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -15,8 +15,11 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { Input } from "../../components/ui/input"
+import { Label } from "../../components/ui/label"
+import { Select } from "../../components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
+import { cn } from "../../lib/utils"
 import { agentCodexModeOf, type CodexCollaborationMode } from "../../lib/agent-view-model"
 import {
   modelProtocols,
@@ -1034,7 +1037,7 @@ export function CreateAgentDialog({
         />
 
         <form
-          className="min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1"
+          className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden pr-1"
           onSubmit={(e) => {
             // Swallow accidental form submissions (e.g. Enter in a text input)
             // so the wizard never creates the agent from a wrong step.
@@ -1042,8 +1045,8 @@ export function CreateAgentDialog({
           }}
         >
           {step === 1 && (
-            <div className="space-y-5">
-              <section className="space-y-3">
+            <div className="flex flex-col gap-5">
+              <section className="flex flex-col gap-3">
                 <Field
                   label={t("agents.form.fields.name")}
                   required
@@ -1054,20 +1057,20 @@ export function CreateAgentDialog({
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("agents.form.placeholders.description")} />
                 </Field>
               </section>
-              <section className="flex flex-col space-y-3">
+              <section className="flex flex-col gap-3">
               {showExecutionChoices ? (
                 <>
                   <Field label={t("agents.form.fields.executionMode")} required>
-                    <div className={"grid gap-2 " + (mode === "create" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+                    <div className="flex flex-col" role="radiogroup">
                       <ChoiceCard
-                        icon={<Laptop className="h-4 w-4" />}
+                        name="execution-mode"
                         title={t("agents.execution.localDevice.title")}
                         description={t("agents.execution.localDevice.description")}
                         selected={executionMode === "local_device"}
                         onSelect={() => selectExecutionMode("local_device")}
                       />
                       <ChoiceCard
-                        icon={<Cloud className="h-4 w-4" />}
+                        name="execution-mode"
                         title={t("agents.execution.sandbox.title")}
                         description={t("agents.execution.sandbox.description")}
                         selected={executionMode === "sandbox"}
@@ -1075,7 +1078,7 @@ export function CreateAgentDialog({
                       />
                       {mode === "create" && (
                         <ChoiceCard
-                          icon={<Network className="h-4 w-4" />}
+                          name="execution-mode"
                           title={t("agents.execution.external.title")}
                           description={t("agents.execution.external.description")}
                           selected={executionMode === "external"}
@@ -1087,33 +1090,20 @@ export function CreateAgentDialog({
                   </Field>
                   {connector === "agent_daemon" && (
                     <Field label={t("agents.form.fields.agentEngine")} required>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <ChoiceCard
-                          icon={<Cpu className="h-4 w-4" />}
-                          title={t("agents.engine.claudeCode.title")}
-                          selected={agentEngine === "claude_code"}
-                          onSelect={() => setAgentEngine("claude_code")}
-                        />
-                        <ChoiceCard
-                          icon={<Bot className="h-4 w-4" />}
-                          title={t("agents.engine.codex.title")}
-                          selected={agentEngine === "codex"}
-                          onSelect={() => setAgentEngine("codex")}
-                        />
-                        <ChoiceCard
-                          icon={<Sparkles className="h-4 w-4" />}
-                          title={t("agents.engine.pi.title")}
-                          selected={agentEngine === "pi"}
-                          onSelect={() => setAgentEngine("pi")}
-                        />
-                        <ChoiceCard
-                          icon={<Server className="h-4 w-4" />}
-                          title={t("agents.engine.opencode.title")}
-                          selected={agentEngine === "opencode"}
-                          onSelect={() => setAgentEngine("opencode")}
-                          disabled
-                        />
-                      </div>
+                      <Select
+                        value={agentEngine}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          if (next === "claude_code" || next === "codex" || next === "pi") setAgentEngine(next)
+                        }}
+                        disabled={pending}
+                        aria-label={t("agents.form.fields.agentEngine")}
+                      >
+                        <option value="claude_code">{t("agents.engine.claudeCode.title")}</option>
+                        <option value="codex">{t("agents.engine.codex.title")}</option>
+                        <option value="pi">{t("agents.engine.pi.title")}</option>
+                        <option value="opencode" disabled>{t("agents.engine.opencode.title")}</option>
+                      </Select>
                     </Field>
                   )}
                   {connector === "agent_daemon" && agentEngine === "codex" && (
@@ -1121,54 +1111,53 @@ export function CreateAgentDialog({
                       label={t("agents.form.fields.codexMode")}
                       hint={t("agents.form.codexMode.hint")}
                     >
-                      <select
+                      <Select
                         value={codexMode}
                         onChange={(e) => setCodexMode(e.target.value === "plan" ? "plan" : "default")}
                         disabled={pending}
                         aria-label={t("agents.form.fields.codexMode")}
-                        className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
                       >
                         <option value="default">{t("agents.form.codexMode.default")}</option>
                         <option value="plan">{t("agents.form.codexMode.plan")}</option>
-                      </select>
+                      </Select>
                     </Field>
                   )}
                   {connector === "agent_daemon" && executionMode === "sandbox" && (
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-3">
                       <Field
                         label={t("agents.form.fields.sandboxSize")}
                         hint={t("agents.form.sandboxSize.hint")}
                       >
-                        <select
+                        <Select
                           value={sandboxSize}
                           onChange={(e) => setSandboxSize(e.target.value === "xl" ? "xl" : "standard")}
                           disabled={pending}
-                          className="h-9 rounded-md border border-line bg-surface px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
+                          aria-label={t("agents.form.fields.sandboxSize")}
                         >
                           <option value="standard">{t("agents.form.sandboxSize.standard")}</option>
                           <option value="xl">{t("agents.form.sandboxSize.xl")}</option>
-                        </select>
+                        </Select>
                       </Field>
                       <Field
                         label={t("agents.form.fields.sandboxAutoRenew")}
                         hint={t("agents.form.sandboxAutoRenew.hint")}
                       >
-                        <label className="flex cursor-pointer items-start gap-3">
+                        <label className="flex h-7 cursor-pointer items-center gap-2">
                           <input
                             type="checkbox"
-                            className="mt-0.5 h-4 w-4 shrink-0"
+                            className="h-3.5 w-3.5 shrink-0 accent-accent"
                             checked={sandboxAutoRenew}
                             disabled={pending}
                             onChange={(e) => setSandboxAutoRenew(e.target.checked)}
                           />
-                          <span className="min-w-0 flex-1 text-sm leading-4 text-fg">
+                          <span className="min-w-0 flex-1 text-sm text-fg">
                             {t("agents.form.sandboxAutoRenew.label")}
                           </span>
                         </label>
                       </Field>
                       {runtimeStatus.data?.sandbox_image ? (
                         <Field label={t("agents.form.fields.sandboxImage")} hint={t("agents.form.sandboxImage.hint")}>
-                          <code className="block break-all rounded-md border border-line bg-surface-subtle px-3 py-2 text-xs text-fg-muted">
+                          <code className="block break-all py-1 font-mono text-xs text-fg">
                             {runtimeStatus.data.sandbox_image}
                           </code>
                         </Field>
@@ -1178,7 +1167,7 @@ export function CreateAgentDialog({
                 </>
               ) : (
                 <Field label={t("agents.form.fields.executionMode")} required>
-                  <div className="flex h-9 items-center rounded-md border border-line bg-surface-subtle px-3 text-sm text-fg-muted">
+                  <div className="flex h-7 items-center text-sm text-fg">
                     {t(`agents.execution.${executionMode === "local_device" ? "localDevice" : executionMode}.title` as never)}
                   </div>
                 </Field>
@@ -1232,7 +1221,7 @@ export function CreateAgentDialog({
                   >
                 {hasModel ? (
                   <div ref={modelComboboxRef} className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" />
+                    <Search className="pointer-events-none absolute left-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
                     <Input
                       role="combobox"
                       aria-expanded={modelDropdownOpen}
@@ -1249,18 +1238,18 @@ export function CreateAgentDialog({
                         setModelDropdownOpen(true)
                       }}
                       onKeyDown={onModelKeyDown}
-                      className="pr-9 pl-8"
+                      className="pl-7 pr-8"
                       placeholder={t("agents.form.placeholders.modelSearch")}
                     />
-                    <ChevronDown className={"pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint transition-transform " + (modelDropdownOpen ? "rotate-180" : "")} />
+                    <ChevronDown className={cn("pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted transition-transform duration-200 ease-spring", modelDropdownOpen && "rotate-180")} strokeWidth={1.5} aria-hidden="true" />
                     {modelDropdownOpen && (
                       <div
                         id={modelListboxID}
                         role="listbox"
-                        className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-line bg-surface py-1 text-sm shadow-lg"
+                        className="app-shadow-floating absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-line bg-surface p-1 text-sm animate-pop-in data-[state=closed]:animate-pop-out"
                       >
                         {filteredModels.length === 0 ? (
-                          <div className="px-3 py-2 text-sm text-fg-subtle">{t("agents.form.emptyModelSearch")}</div>
+                          <div className="px-2 py-1.5 text-sm text-fg-muted">{t("agents.form.emptyModelSearch")}</div>
                         ) : filteredModels.map((m) => {
                           const selected = selectedModelID === m.id
                           const highlighted = highlightedModelID === m.id
@@ -1277,19 +1266,19 @@ export function CreateAgentDialog({
                               title={incompatible ? t("agents.form.modelProtocolMismatch", { engine: agentEngine }) : undefined}
                               onMouseEnter={() => { if (!incompatible) setHighlightedModelID(m.id) }}
                               onClick={() => selectModel(m)}
-                              className={"flex w-full items-center justify-between gap-3 px-3 py-2 text-left " + (incompatible ? "cursor-not-allowed opacity-40" : highlighted ? "bg-surface-muted text-fg" : selected ? "bg-surface-subtle text-fg" : "text-fg-muted hover:bg-surface-subtle")}
+                              className={cn("flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-sm text-fg", incompatible ? "cursor-not-allowed opacity-50" : highlighted ? "app-pressed" : selected ? "app-selected" : "hover:app-hover")}
                             >
                               <span className="min-w-0 flex-1 truncate">{modelLabel(m)}</span>
                               <span className="flex shrink-0 items-center gap-2">
                                 {/* Protocol badge on every row (compatible or
                                     not) so the user can see each model's wire
                                     protocol at a glance. */}
-                                <span className="text-xs text-fg-faint">
+                                <span className="font-mono text-xs text-fg-muted">
                                   {protocolListLabel(modelProtocols(m))}
                                 </span>
                                 {selected && !incompatible && (
-                                  <span className="inline-flex items-center gap-1 text-xs text-fg-subtle">
-                                    <Check className="h-3.5 w-3.5" />
+                                  <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
+                                    <Check className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
                                     {t("agents.form.selected")}
                                   </span>
                                 )}
@@ -1308,28 +1297,28 @@ export function CreateAgentDialog({
               )}
               {requiresModel && selectedModel && selectedModel.credential_mode === "credential_ref" && (
                 <Field label={t("credentialCheck.modelBindingTitle")}>
-                  <div className="space-y-2 rounded-md border border-line bg-surface p-3">
-                    <label className={`flex items-start gap-2 ${visibility === "public" ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+                  <div className="flex flex-col gap-1" role="radiogroup">
+                    <label className={cn("flex items-start gap-2 py-1", visibility === "public" ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
                       <input
                         type="radio"
                         name="model-binding"
-                        className="mt-0.5"
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
                         checked={modelBindingChoice.source === "personal"}
                         disabled={visibility === "public"}
                         onChange={() => setModelBindingChoice({ source: "personal" })}
                       />
-                      <span className="text-sm">
-                        <span className="block text-fg-emphasis">{t("credentialCheck.modelBindingPersonal")}</span>
+                      <span className="text-sm text-fg">
+                        <span className="block">{t("credentialCheck.modelBindingPersonal")}</span>
                         {visibility === "public" && (
-                          <span className="block text-xs text-fg-subtle">{t("credentialCheck.personalDisabledHint")}</span>
+                          <span className="block text-xs text-fg-muted">{t("credentialCheck.personalDisabledHint")}</span>
                         )}
                       </span>
                     </label>
-                    <label className="flex items-start gap-2 cursor-pointer">
+                    <label className="flex cursor-pointer items-start gap-2 py-1">
                       <input
                         type="radio"
                         name="model-binding"
-                        className="mt-0.5"
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
                         checked={modelBindingChoice.source === "shared"}
                         onChange={() => {
                           // Default selection on flip-in: existing secret if any, else
@@ -1344,12 +1333,12 @@ export function CreateAgentDialog({
                           }
                         }}
                       />
-                      <span className="flex-1 text-sm">
-                        <span className="block text-fg-emphasis">{t("credentialCheck.modelBindingShared")}</span>
+                      <span className="flex-1 text-sm text-fg">
+                        <span className="block">{t("credentialCheck.modelBindingShared")}</span>
                         {modelBindingChoice.source === "shared" && (
-                          <div className="mt-1 space-y-1.5">
+                          <div className="mt-1.5 flex flex-col gap-2">
                             {sharedSecrets.length > 0 && (
-                              <select
+                              <Select
                                 value={"existing_secret_id" in modelBindingChoice ? modelBindingChoice.existing_secret_id : "__new__"}
                                 onChange={(e) => {
                                   e.stopPropagation()
@@ -1365,18 +1354,19 @@ export function CreateAgentDialog({
                                   }
                                 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="h-7 w-full rounded border border-line bg-surface px-2 text-sm"
                               >
                                 {sharedSecrets.map((s) => (
                                   <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                                 <option value="__new__">{t("credentialCheck.createNewShared")}</option>
-                              </select>
+                              </Select>
                             )}
                             {sharedSecrets.length === 0 && !modelNewSecretExpanded && !("new_secret" in modelBindingChoice) && (
-                              <button
+                              <Button
                                 type="button"
-                                className="inline-flex h-7 items-center gap-1 rounded border border-dashed border-line-strong px-2 text-sm text-fg-muted hover:bg-surface-subtle"
+                                variant="outline"
+                                size="sm"
+                                className="self-start"
                                 onClick={(e) => {
                                   e.preventDefault()
                                   e.stopPropagation()
@@ -1385,19 +1375,18 @@ export function CreateAgentDialog({
                                   setModelNewSecretPlaintext("")
                                 }}
                               >
-                                <Check className="h-3 w-3" />
                                 {t("credentialCheck.createNewShared")}
-                              </button>
+                              </Button>
                             )}
                             {"new_secret" in modelBindingChoice && !modelNewSecretExpanded && (
-                              <div className="flex items-center gap-2 rounded border border-success-border bg-success-subtle px-2 py-1 text-xs text-success-emphasis">
-                                <Check className="h-3 w-3 shrink-0" />
+                              <div className="flex items-center gap-1.5 text-xs text-fg">
+                                <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
                                 <span className="flex-1 truncate">
                                   {t("credentialCheck.sharedNewQueued", { name: modelBindingChoice.new_secret.display_name || t("credentialCheck.modelBindingTitle") })}
                                 </span>
                                 <button
                                   type="button"
-                                  className="text-fg-muted underline"
+                                  className="text-fg underline underline-offset-4"
                                   onClick={(e) => {
                                     e.preventDefault()
                                     e.stopPropagation()
@@ -1413,44 +1402,42 @@ export function CreateAgentDialog({
                               </div>
                             )}
                             {modelNewSecretExpanded && (
-                              <div className="space-y-2 rounded border border-line bg-surface-subtle p-2" onClick={(e) => e.stopPropagation()}>
-                                <div className="grid gap-1">
-                                  <label className="text-xs font-medium text-fg-muted">{t("credentialCheck.form.displayName")}</label>
+                              <div className="flex flex-col gap-3 border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex flex-col">
+                                  <Label>{t("credentialCheck.form.displayName")}</Label>
                                   <Input
                                     value={modelNewSecretDisplayName}
                                     onChange={(e) => setModelNewSecretDisplayName(e.target.value)}
                                     placeholder={selectedModel?.name ?? t("credentialCheck.modelBindingTitle")}
-                                    className="h-7 text-sm"
                                   />
                                 </div>
-                                <div className="grid gap-1">
-                                  <label className="text-xs font-medium text-fg-muted">
-                                    {t("credentialCheck.form.value")}
-                                    <span className="ml-0.5 text-danger">*</span>
-                                  </label>
+                                <div className="flex flex-col">
+                                  <Label>
+                                    {t("credentialCheck.form.value")}<span aria-hidden="true"> *</span>
+                                  </Label>
                                   <div className="relative">
                                     <Input
                                       type={modelNewSecretShowPlaintext ? "text" : "password"}
                                       value={modelNewSecretPlaintext}
                                       onChange={(e) => setModelNewSecretPlaintext(e.target.value)}
                                       placeholder="sk-..."
-                                      className="h-7 pr-8 text-sm"
+                                      className="pr-8"
                                     />
                                     <button
                                       type="button"
+                                      aria-label={modelNewSecretShowPlaintext ? "Hide" : "Show"}
                                       onClick={() => setModelNewSecretShowPlaintext(!modelNewSecretShowPlaintext)}
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-faint hover:text-fg-muted"
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg"
                                     >
-                                      {modelNewSecretShowPlaintext ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                      {modelNewSecretShowPlaintext ? <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />}
                                     </button>
                                   </div>
                                 </div>
                                 <div className="flex justify-end gap-2">
                                   <Button
                                     type="button"
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
-                                    className="h-6 text-xs"
                                     onClick={() => {
                                       setModelNewSecretExpanded(false)
                                       // If the user cancels and no existing secret has been chosen yet,
@@ -1470,7 +1457,6 @@ export function CreateAgentDialog({
                                   <Button
                                     type="button"
                                     size="sm"
-                                    className="h-6 text-xs"
                                     disabled={!modelNewSecretPlaintext.trim()}
                                     onClick={() => {
                                       if (!modelNewSecretPlaintext.trim()) return
@@ -1502,10 +1488,10 @@ export function CreateAgentDialog({
 
           {step === 2 && (
             <>
-              <section className="space-y-3">
+              <section className="flex flex-col gap-3">
                 <Input value={capabilitySearch} onChange={(e) => setCapabilitySearch(e.target.value)} placeholder={t("agents.form.placeholders.capabilitySearch")} />
                 {capabilityOptions.length === 0 ? (
-                  <p className="rounded-md bg-surface-subtle px-3 py-2 text-sm text-fg-subtle">
+                  <p className="py-2 text-sm text-fg-muted">
                     {admin ? t("agents.form.noTagsAdmin") : t("agents.form.noTagsMember")}
                   </p>
                 ) : (
@@ -1517,9 +1503,9 @@ export function CreateAgentDialog({
                         <TabsTrigger value="skill">{t("agents.form.capabilityTypeTabs.skill")} ({capabilityTypeCounts.skill})</TabsTrigger>
                       </TabsList>
                     </Tabs>
-                    <div className="max-h-56 overflow-y-auto rounded-md border border-line bg-surface">
+                    <div className="max-h-56 overflow-y-auto border-t border-line">
                       {visibleCapabilityOptions.length === 0 ? (
-                        <p className="px-3 py-2 text-sm text-fg-subtle">{tc("states.noResults")}</p>
+                        <p className="py-3 text-sm text-fg-muted">{tc("states.noResults")}</p>
                       ) : (() => {
                         const sections = (["workspace", "marketplace"] as const)
                           .map((sec) => ({ sec, rows: visibleCapabilityOptions.filter((o) => o.section === sec) }))
@@ -1527,7 +1513,7 @@ export function CreateAgentDialog({
                         let rowCounter = 0
                         return sections.map(({ sec, rows }, sectionIdx) => (
                           <Fragment key={sec}>
-                            <div className={"px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-subtle bg-surface-subtle" + (sectionIdx > 0 ? " border-t border-line" : "")}>
+                            <div className={cn("flex h-7 items-center border-b border-line text-xs text-fg-muted", sectionIdx > 0 && "mt-2")}>
                               {t(`agents.form.capabilitySections.${sec}`)}
                             </div>
                             {rows.map((cap) => {
@@ -1538,22 +1524,22 @@ export function CreateAgentDialog({
                               const disabled = lockedNoVersion || lockedDeprecatedAndUnchecked
                               const ghostTitle = cap.deprecated ? t("agents.form.deprecatedCapabilityTooltip") : undefined
                               return (
-                                <label key={`${sec}:${cap.id || cap.name}`} title={ghostTitle} className={"flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left " + (disabled ? "cursor-not-allowed bg-surface-subtle text-fg-faint" : "cursor-pointer hover:bg-surface-subtle") + (index > 0 ? " border-t border-line-muted" : "")}>
+                                <label key={`${sec}:${cap.id || cap.name}`} title={ghostTitle} data-row-index={index} className={cn("flex w-full min-w-0 items-start gap-2 border-b border-line py-2 text-left", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:app-hover")}>
                                   <input
                                     type="checkbox"
-                                    className="mt-0.5 h-4 w-4 shrink-0"
+                                    className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
                                     checked={checked}
                                     disabled={disabled}
                                     onChange={() => mode === "create" ? toggleInitialCapability(cap.id, cap.latestVersionID) : toggleCapability(cap.name, cap.id, cap.latestVersionID)}
                                   />
                                   <span className="min-w-0 flex-1">
                                     <span className="flex min-w-0 items-center gap-2">
-                                      <span className={"min-w-0 flex-1 truncate text-sm font-medium leading-4 " + (cap.deprecated ? "text-fg-subtle" : "text-fg")}>{cap.name}</span>
+                                      <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", cap.deprecated ? "text-fg-muted" : "text-fg")}>{cap.name}</span>
                                       {cap.type && !cap.deprecated && <span className="shrink-0"><Badge variant="neutral">{cap.type}</Badge></span>}
                                       {sec === "marketplace" && !cap.deprecated && <span className="shrink-0"><Badge variant="neutral">{t("agents.form.capabilityBadges.marketplace")}</Badge></span>}
-                                      {cap.deprecated && <span className="shrink-0"><Badge variant="warning">{t("agents.form.deprecatedCapabilityBadge")}</Badge></span>}
-                                      {!cap.deprecated && !checked && cap.latestVersion && <span className="shrink-0"><Badge variant="primary">v{cap.latestVersion}</Badge></span>}
-                                      {!cap.deprecated && !checked && !cap.latestVersion && <span className="shrink-0"><Badge variant="warning">{t("agents.form.noCapabilityVersion")}</Badge></span>}
+                                      {cap.deprecated && <span className="shrink-0"><Badge variant="warning" dot>{t("agents.form.deprecatedCapabilityBadge")}</Badge></span>}
+                                      {!cap.deprecated && !checked && cap.latestVersion && <span className="shrink-0 font-mono text-xs text-fg-muted">v{cap.latestVersion}</span>}
+                                      {!cap.deprecated && !checked && !cap.latestVersion && <span className="shrink-0"><Badge variant="warning" dot>{t("agents.form.noCapabilityVersion")}</Badge></span>}
                                       {!cap.deprecated && checked && cap.id && (
                                         <CapabilityVersionPicker
                                           capabilityID={cap.id}
@@ -1566,7 +1552,7 @@ export function CreateAgentDialog({
                                         />
                                       )}
                                     </span>
-                                    {cap.description && !cap.deprecated && <span className="mt-0.5 block truncate text-sm leading-4 text-fg-subtle">{cap.description}</span>}
+                                    {cap.description && !cap.deprecated && <span className="block truncate text-xs text-fg-muted">{cap.description}</span>}
                                   </span>
                                 </label>
                               )
@@ -1580,8 +1566,8 @@ export function CreateAgentDialog({
               </section>
 
               {aggregatedRequiredKinds.length > 0 && (
-                <section className="space-y-3">
-                  <h3 className="text-base font-semibold text-fg">{t("agents.form.sections.credentials")}</h3>
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-sm font-medium text-fg">{t("agents.form.sections.credentials")}</h3>
                   <CredentialCheckPanel
                     requiredKinds={aggregatedRequiredKinds}
                     workspaceID={workspaceID}
@@ -1599,24 +1585,27 @@ export function CreateAgentDialog({
             </>
           )}
 
-          {errMsg && <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>}
+          {errMsg && (
+            <p className="flex items-start gap-1.5 text-sm text-fg" role="alert">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+              <span className="min-w-0 break-words">{errMsg}</span>
+            </p>
+          )}
         </form>
 
-        <DialogFooter className="shrink-0 border-t border-line-muted pt-4">
+        <DialogFooter className="shrink-0">
           {step > 1 ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => setStep((step - 1) as WizardStep)} disabled={pending}>
+            <Button type="button" variant="outline" onClick={() => setStep((step - 1) as WizardStep)} disabled={pending}>
               {t("agents.form.wizard.actions.back")}
             </Button>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
               {tc("actions.cancel")}
             </Button>
           )}
           {step < totalSteps ? (
             <Button
               type="button"
-              size="sm"
-              className="bg-success text-white hover:bg-success"
               onClick={() => tryAdvance((step + 1) as WizardStep)}
               disabled={pending || (step === 1 && !step1Valid)}
             >
@@ -1625,8 +1614,6 @@ export function CreateAgentDialog({
           ) : (
             <Button
               type="button"
-              size="sm"
-              className="bg-success text-white hover:bg-success"
               onClick={() => submit()}
               disabled={!canSubmit}
             >
@@ -1656,7 +1643,7 @@ export function CreateAgentDialog({
 interface WizardProgressProps {
   step: WizardStep
   totalSteps: number
-  progressPercent: number
+  progressPercent?: number
   title: string
   summary: string
   stepOfLabel: string
@@ -1665,30 +1652,16 @@ interface WizardProgressProps {
 function WizardProgress({
   step,
   totalSteps,
-  progressPercent,
   title,
   summary,
   stepOfLabel,
   completeLabel,
 }: WizardProgressProps) {
   return (
-    <div className="shrink-0 space-y-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">{stepOfLabel}</p>
-        <p className="text-xs text-fg-faint">{completeLabel}</p>
-      </div>
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="shrink-0 text-lg font-semibold leading-none text-fg">{title}</h2>
-        <p className="min-w-0 truncate text-sm text-fg-subtle">{summary}</p>
-      </div>
-      <div className="relative h-1 w-full overflow-hidden rounded-full bg-surface-muted">
-        <div
-          className="absolute inset-y-0 left-0 bg-success transition-all"
-          style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }}
-          aria-hidden
-        />
-      </div>
-      <div className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={totalSteps} aria-valuenow={step} />
+    <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-line pb-3">
+      <h2 className="text-sm font-medium text-fg">{title}</h2>
+      <p className="text-xs tabular-nums text-fg-muted">{stepOfLabel}</p>
+      <div className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={totalSteps} aria-valuenow={step} aria-valuetext={`${completeLabel} · ${summary}`} />
     </div>
   )
 }
@@ -1705,49 +1678,51 @@ const Field = forwardRef<HTMLDivElement, FieldProps>(function Field(
   ref
 ) {
   return (
-    <div ref={ref} className="grid gap-1.5">
-      <label className="text-sm font-medium text-fg-muted">
-        {label}{required && <span className="ml-0.5 text-danger">*</span>}
-      </label>
+    <div ref={ref} className="flex flex-col">
+      <Label>
+        {label}{required && <span aria-hidden="true"> *</span>}
+      </Label>
       {children}
-      {hint && <span className="text-xs text-fg-faint">{hint}</span>}
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {hint && <span className="mt-1 text-xs text-fg-muted">{hint}</span>}
+      {error && (
+        <span className="mt-1 flex items-start gap-1.5 text-xs text-fg" role="alert">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          {error}
+        </span>
+      )}
     </div>
   )
 })
-function ChoiceCard({ icon, title, description, selected, onSelect, disabled = false }: { icon: ReactNode; title: string; description?: string; selected: boolean; onSelect: () => void; disabled?: boolean }) {
-  // min-h on cards with descriptions keeps neighbors aligned when one wraps;
-  // cards without one collapse to natural height to avoid an empty body block.
-  const heightClass = description ? "min-h-[92px] items-start" : "items-center"
-  const className = disabled
-    ? `flex w-full ${heightClass} gap-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-left text-sm text-fg-faint`
-    : `flex w-full ${heightClass} gap-2 rounded-md border px-3 py-2 text-left text-sm transition ` + (selected ? "border-line-strong bg-surface-subtle text-fg" : "border-line bg-surface text-fg-muted hover:bg-surface-subtle")
+/** One option of a radio group: the choice word in ink, its description muted. */
+function ChoiceCard({ name, title, description, selected, onSelect, disabled = false }: { name: string; title: string; description?: string; selected: boolean; onSelect: () => void; disabled?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onSelect}
-      disabled={disabled}
-      className={className}
-    >
-      <span className={(description ? "mt-0.5 " : "") + "text-fg-subtle"}>{icon}</span>
+    <label className={cn("flex items-start gap-2 py-1 text-sm text-fg", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
+      <input
+        type="radio"
+        name={name}
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-accent"
+        checked={selected}
+        disabled={disabled}
+        onChange={() => { if (!disabled) onSelect() }}
+      />
       <span className="min-w-0">
-        <span className="block font-medium">{title}</span>
-        {description && (
-          <span className="mt-0.5 block text-xs leading-4 text-fg-subtle">{description}</span>
-        )}
+        <span className={cn("block", selected && "font-medium")}>{title}</span>
+        {description && <span className="block text-xs text-fg-muted">{description}</span>}
       </span>
-    </button>
+    </label>
   )
 }
 
 function DependencyCard({ title, description, href, cta }: { title: string; description: string; href: string; cta: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-line-strong bg-surface-subtle p-3">
+    <div className="flex flex-col items-start gap-1 py-1">
       <p className="text-sm font-medium text-fg">{title}</p>
-      <p className="mt-1 text-sm text-fg-subtle">{description}</p>
-      <a href={href} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-fg underline">
-        {cta} <ArrowUpRight className="h-3 w-3" />
-      </a>
+      <p className="text-xs text-fg-muted">{description}</p>
+      <Button variant="link" size="sm" className="mt-1 px-0" asChild>
+        <a href={href}>
+          {cta} <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+        </a>
+      </Button>
     </div>
   )
 }
@@ -1814,7 +1789,7 @@ function CapabilityVersionPicker({
   }
 
   return (
-    <select
+    <Select
       value={selectValue}
       onChange={handleChange}
       onClick={(event) => event.stopPropagation()}
@@ -1822,7 +1797,8 @@ function CapabilityVersionPicker({
       // suffix) reminds the user that breaking changes can land
       // without warning. We don't disable "latest" outright — opting
       // into it is a deliberate user choice we surface explicitly.
-      className="ml-1 h-7 shrink-0 rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
+      wrapperClassName="ml-1 w-auto shrink-0"
+      className="w-auto font-mono text-xs"
       title={fromMarketplace ? t("agents.form.versionPicker.marketplaceHint") : t("agents.form.versionPicker.localHint")}
     >
       <option value="__latest__">
@@ -1844,6 +1820,6 @@ function CapabilityVersionPicker({
           v{version.version}
         </option>
       ))}
-    </select>
+    </Select>
   )
 }

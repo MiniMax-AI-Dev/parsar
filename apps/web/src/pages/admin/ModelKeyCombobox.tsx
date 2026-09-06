@@ -9,7 +9,7 @@
  */
 import { useMemo, useRef, useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import { Check, ChevronsUpDown, CornerDownLeft } from "lucide-react"
+import { Check, ChevronDown, CornerDownLeft } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Input } from "../../components/ui/input"
@@ -25,6 +25,18 @@ interface Props {
   placeholder?: string
   id?: string
 }
+
+/** Trigger styled like Select: 28px, paper, strong hairline, control shadow, muted chevron. */
+export const COMBOBOX_TRIGGER_CLASS =
+  "app-shadow-control relative flex h-7 w-full items-center rounded-md border border-line-strong bg-surface pl-2 pr-7 text-left text-sm text-fg transition-[border-color,box-shadow] duration-150 ease-settle focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent data-[state=open]:app-pressed disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-60"
+
+/** Floating menu: 8px radius, hairline, floating shadow, 4px padding, pop-in. */
+export const COMBOBOX_MENU_CLASS =
+  "app-shadow-floating z-50 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
+
+/** 13px item, 4px radius, pressed tint when highlighted. */
+export const COMBOBOX_ITEM_CLASS =
+  "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
 
 export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: Props) {
   const { t } = useTranslation("admin")
@@ -53,63 +65,52 @@ export function ModelKeyCombobox({ value, onChange, models, placeholder, id }: P
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
-        <button
-          id={id}
-          type="button"
-          className={cn(
-            "flex h-9 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong",
-            !value && "text-fg-faint",
-          )}
-        >
-          <span className="truncate font-mono text-sm">
+        <button id={id} type="button" className={COMBOBOX_TRIGGER_CLASS}>
+          <span className={cn("truncate font-mono text-xs", !value && "font-sans text-sm text-fg-muted")}>
             {value || placeholder || t("models.createModel.fields.modelKeyPlaceholder")}
           </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+          <ChevronDown
+            className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
         </button>
       </DropdownMenu.Trigger>
 
       {/* No Portal: when rendered inside a Radix Dialog (modal), portaling
           to <body> lands outside the Dialog's pointer-events scope and the
           menu never opens. Keep the content inside the DialogContent subtree. */}
-      <DropdownMenu.Content
-        align="start"
-        sideOffset={4}
-        className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
-      >
-        <div className="border-b border-line-muted p-1">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("models.createModel.fields.modelKeySearch", "Search or type a model id…")}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (e.key === "Enter" && typed !== "") {
-                e.preventDefault()
-                commit(typed)
-              }
-            }}
-            className="h-8 font-mono text-sm"
-            autoFocus
-          />
-        </div>
+      <DropdownMenu.Content align="start" sideOffset={4} className={COMBOBOX_MENU_CLASS}>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("models.createModel.fields.modelKeySearch", "Search or type a model id…")}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === "Enter" && typed !== "") {
+              e.preventDefault()
+              commit(typed)
+            }
+          }}
+          className="font-mono text-xs"
+          autoFocus
+        />
+        <div className="my-1 border-t border-line" />
 
         {/* Wheel scroll driven by a non-passive listener (see useWheelScroll) —
             an inline React onWheel is passive in a Dialog and gets eaten by
             react-remove-scroll, so the wheel wouldn't reach the list at all. */}
-        <div ref={listRef} className="max-h-[220px] overflow-auto py-1">
+        <div ref={listRef} className="max-h-[220px] overflow-auto">
           {showFreeText && (
-            <DropdownMenu.Item
-              onSelect={() => commit(typed)}
-              className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
-            >
-              <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
-              <span className="text-fg-subtle">{t("models.createModel.fields.modelKeyUse", "Use")}</span>
+            <DropdownMenu.Item onSelect={() => commit(typed)} className={COMBOBOX_ITEM_CLASS}>
+              <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+              <span className="text-fg-muted">{t("models.createModel.fields.modelKeyUse", "Use")}</span>
               <code className="truncate font-mono text-xs text-fg">{typed}</code>
             </DropdownMenu.Item>
           )}
 
           {filtered.length === 0 && !showFreeText ? (
-            <p className="px-3 py-2 text-sm text-fg-subtle">
+            <p className="px-2 py-1.5 text-sm text-fg-muted">
               {t("models.createModel.fields.modelKeyEmpty", "No matching models — type any id")}
             </p>
           ) : (
@@ -138,36 +139,20 @@ function ModelRow({
   onSelect: () => void
 }) {
   const caption = modelCaption(model)
+  const flags = [model.reasoning && "reasoning", model.vision && "vision"].filter(Boolean).join(" · ")
   return (
-    <DropdownMenu.Item
-      onSelect={() => onSelect()}
-      className={cn(
-        "flex cursor-pointer items-start justify-between gap-2 rounded px-3 py-2 outline-none",
-        selected ? "bg-surface-muted" : "hover:bg-surface-subtle focus:bg-surface-subtle",
-      )}
-    >
+    <DropdownMenu.Item onSelect={() => onSelect()} className={cn(COMBOBOX_ITEM_CLASS, "items-start")}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-fg">{model.name}</span>
-          {model.reasoning && (
-            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
-              reasoning
-            </span>
-          )}
-          {model.vision && (
-            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
-              vision
-            </span>
-          )}
+          <span className="truncate font-medium">{model.name}</span>
+          {flags && <span className="shrink-0 text-xs text-fg-muted">{flags}</span>}
         </div>
-        <div className="mt-0.5 flex items-center gap-2">
-          <code className="truncate rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-fg-subtle">
-            {model.id}
-          </code>
-          {caption && <span className="shrink-0 text-xs text-fg-subtle">{caption}</span>}
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
+          <code className="truncate font-mono">{model.id}</code>
+          {caption && <span className="shrink-0">{caption}</span>}
         </div>
       </div>
-      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
+      {selected && <Check className="mt-1 h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />}
     </DropdownMenu.Item>
   )
 }

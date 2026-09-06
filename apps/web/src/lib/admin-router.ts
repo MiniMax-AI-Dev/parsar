@@ -45,6 +45,8 @@ interface AppRoute {
   view: AdminView | ProfileView | null
   entityId: string | null
   tab: string | null
+  /** "full" when the detail rail is lifted into its expanded panel. */
+  railView: string | null
   credentialKind: string | null
   /** Comma-separated kinds to prefill on MyCredentialsPage; opens N create
    * dialogs in sequence (channel-layer fallback for disabled MCP). */
@@ -73,6 +75,7 @@ function parseRoute(search: string): AppRoute {
       view: profile as ProfileView,
       entityId: params.get("id"),
       tab: params.get("tab"),
+      railView: params.get("view"),
       credentialKind: params.get("kind"),
       credentialPrefill: parsePrefill(params.get("prefill")),
       returnTo: params.get("returnTo"),
@@ -83,12 +86,15 @@ function parseRoute(search: string): AppRoute {
   const view = v && ALL_ADMIN_VIEWS.includes(v as AdminView) ? (v as AdminView) : null
   const entityId = params.get("id")
   const tab = params.get("tab")
-  return { mode: "admin", view, entityId, tab, credentialKind: null, credentialPrefill: null, returnTo: null }
+  const railView = params.get("view")
+  return { mode: "admin", view, entityId, tab, railView, credentialKind: null, credentialPrefill: null, returnTo: null }
 }
 
 export interface NavigateOptions {
   id?: string | null
   tab?: string | null
+  /** "full" lifts the detail rail into its expanded panel. */
+  view?: string | null
   marketplace?: string | null
   item?: string | null
   from?: string | null
@@ -149,6 +155,8 @@ export function useNavigateAdmin() {
     } else {
       url.searchParams.delete("tab")
     }
+    if (opts?.id && opts?.view) url.searchParams.set("view", opts.view)
+    else url.searchParams.delete("view")
     setOptionalParam(url, "marketplace", opts?.marketplace)
     setOptionalParam(url, "item", opts?.item)
     setOptionalParam(url, "from", opts?.from)
@@ -165,6 +173,7 @@ export function navigateProfileCredentials(opts?: { kind?: string | null; return
   url.searchParams.delete("admin")
   url.searchParams.delete("id")
   url.searchParams.delete("tab")
+  url.searchParams.delete("view")
   if (opts?.kind) url.searchParams.set("kind", opts.kind)
   else url.searchParams.delete("kind")
   if (opts?.returnTo) url.searchParams.set("returnTo", opts.returnTo)
@@ -191,6 +200,8 @@ export function navigateAdmin(next: AdminView, opts?: NavigateOptions) {
   else url.searchParams.delete("id")
   if (opts?.tab) url.searchParams.set("tab", opts.tab)
   else url.searchParams.delete("tab")
+  if (opts?.id && opts?.view) url.searchParams.set("view", opts.view)
+  else url.searchParams.delete("view")
   setOptionalParam(url, "marketplace", opts?.marketplace)
   setOptionalParam(url, "item", opts?.item)
   setOptionalParam(url, "from", opts?.from)
@@ -208,4 +219,25 @@ function setOptionalParam(url: URL, key: string, value?: string | null) {
 function setOneShotParam(url: URL, key: string, value?: string | null) {
   if (value) url.searchParams.set(key, value)
   else url.searchParams.delete(key)
+}
+
+/**
+ * The detail rail's expanded panel, held in the URL rather than in component
+ * state, so the big view can be linked, bookmarked, and dismissed with the
+ * browser's back button instead of being a dead end over the list.
+ */
+export function useDetailExpanded(): {
+  expanded: boolean
+  setExpanded: (next: boolean, replace?: boolean) => void
+} {
+  const { railView } = useAppRoute()
+  const setExpanded = useCallback((next: boolean, replace = false) => {
+    const url = new URL(window.location.href)
+    if (next) url.searchParams.set("view", "full")
+    else url.searchParams.delete("view")
+    if (url.toString() === window.location.href) return
+    window.history[replace ? "replaceState" : "pushState"]({}, "", url.toString())
+    window.dispatchEvent(new Event("app:navigate"))
+  }, [])
+  return { expanded: railView === "full", setExpanded }
 }

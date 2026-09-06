@@ -51,7 +51,8 @@
       "credentialMode": "凭据模式",
       "status": "状态",
       "health": "健康状态",
-      "actions": "操作"
+      "actions": "操作",
+      "lastTested": "上次测试"
     },
     "loadError": {
       "title": "无法加载模型列表",
@@ -205,6 +206,11 @@
         "kindCode": "凭据类型",
         "kindCodeHint": "用户会在「我的凭据」页面按这个 kind code 填写自己的 Key。"
       }
+    },
+    "ownership": {
+      "all": "全部",
+      "mine": "我的",
+      "others": "他人的"
     }
   },
   "runStatus": {
@@ -289,6 +295,9 @@
     "mockBanner": {
       "title": "选择数据范围",
       "hint": "请在顶部选择对应的 Workspace。"
+    },
+    "table": {
+      "request": "请求"
     }
   },
   "conversations": {
@@ -345,7 +354,9 @@
       "emptyTimeline": "暂无消息",
       "agentTyping": "正在生成回复…",
       "stamp": "{{time}} · {{agent}}",
-      "viewRunLink": "查看运行详情"
+      "viewRunLink": "查看运行详情",
+      "cancelAll": "全部取消",
+      "cancelAllAria": "取消此对话中所有进行中的任务"
     },
     "runtime_error": {
       "badge": "运行失败",
@@ -367,7 +378,8 @@
       "addContext": "添加附件 / 上下文",
       "send": "发送",
       "sending": "发送中…",
-      "stopAria": "停止生成"
+      "stopAria": "停止生成",
+      "placeholderGeneric": "发送消息…"
     },
     "sandboxGuard": {
       "checking": "发送前正在检查此 Agent 的 sandbox…",
@@ -430,11 +442,44 @@
       "expandAria": "展开执行轨迹",
       "collapseAria": "折叠执行轨迹",
       "cancelAria": "取消当前任务"
+    },
+    "trace": {
+      "label": "执行轨迹",
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "interrupted": "已中断",
+      "args": "参数",
+      "result": "结果",
+      "verb": {
+        "bash": "运行",
+        "read": "读取",
+        "write": "写入",
+        "edit": "编辑",
+        "search": "搜索",
+        "tool": "调用"
+      }
+    },
+    "approval": {
+      "title": "审批请求",
+      "body": "{{agent}} 请求运行 {{tool}}"
+    },
+    "turnNav": {
+      "label": "楼层导航"
+    },
+    "thinking": {
+      "active": "思考中",
+      "done": "已思考"
+    },
+    "toolCall": {
+      "argsLabel": "参数",
+      "resultLabel": "结果"
     }
   },
   "runs": {
     "page": {
-      "title": "运行 (Runs)",
+      "title": "运行",
       "description": "Agent 每一次执行都对应一条 Run。这里能看到正在跑、卡住、失败、待审批的 run。"
     },
     "tabs": {
@@ -455,9 +500,12 @@
       "pagination": {
         "prev": "上一页",
         "next": "下一页",
-        "range": "第 {{from}}-{{to}} 条,共 {{total}} 条",
+        "range": "第 {{from}}-{{to}} 条，共 {{total}} 条",
         "empty": "暂无数据"
-      }
+      },
+      "agent": "Agent",
+      "connector": "连接器",
+      "age": "时间"
     },
     "actions": {
       "retry": "重试",
@@ -619,11 +667,48 @@
         "requeued": "重新入队",
         "queued": "排队中",
         "queuedWithPosition": "排队中（第 {{position}} 位）"
+      },
+      "close": "关闭",
+      "openConversation": "打开对话",
+      "agent": "Agent",
+      "connector": "连接器",
+      "created": "创建",
+      "started": "开始",
+      "finished": "完成",
+      "runId": "Run id",
+      "rawEvents": "原始事件",
+      "notFound": {
+        "title": "这条运行已不可用",
+        "description": "它可能已被移除，或其 Agent 已被删除。"
       }
     },
     "emptyFiltered": {
       "title": "没有匹配的运行",
       "description": "调整筛选条件，或切到「全部」tab 查看所有运行。"
+    },
+    "filter": {
+      "label": "筛选"
+    },
+    "enum": {
+      "claude_code": "Claude Code",
+      "opencode": "OpenCode",
+      "codex": "Codex",
+      "piagent": "Piagent",
+      "sandbox": "沙盒",
+      "local": "本地",
+      "online": "在线",
+      "offline": "离线",
+      "degraded": "降级",
+      "docker": "Docker",
+      "host": "宿主机",
+      "e2b": "E2B",
+      "workspace": "工作区",
+      "agent_daemon": "Agent Daemon",
+      "http-agent": "HTTP Agent",
+      "http": "HTTP Agent",
+      "daemon": "守护进程",
+      "web": "Web",
+      "user": "用户"
     }
   },
   "capabilities": {
@@ -632,7 +717,8 @@
     },
     "tabs": {
       "workspace": "本工作区",
-      "marketplace": "能力市场"
+      "marketplace": "能力市场",
+      "skills": "Skills"
     },
     "actions": {
       "create": "新建能力",
@@ -660,7 +746,9 @@
       "latestVersion": "最新版本",
       "enabledAgents": "已启用 Agent 数",
       "credentials": "凭据需求",
-      "actions": "操作"
+      "actions": "操作",
+      "updated": "更新于",
+      "installs": "安装数"
     },
     "pagination": {
       "perPage": "每页",
@@ -674,7 +762,8 @@
     },
     "filters": {
       "all": "全部",
-      "search": "搜索能力名 / 描述"
+      "search": "搜索能力名 / 描述",
+      "label": "筛选"
     },
     "emptyFiltered": {
       "title": "没有匹配的能力",
@@ -934,12 +1023,12 @@
         "back": "返回连接器列表",
         "viewCapability": "查看 Capability"
       },
-	  "oauth": {
-		"connect": "连接",
-		"connected": "已连接",
-		"required": "需要 OAuth 授权",
-		"failed": "授权未完成，请重试。"
-	  },
+      "oauth": {
+        "connect": "连接",
+        "connected": "已连接",
+        "required": "需要 OAuth 授权",
+        "failed": "授权未完成，请重试。"
+      },
       "loadError": {
         "title": "无法加载连接器目录",
         "description": "无法加载连接器目录，部分连接器信息可能缺失。你可以直接重试，不会影响 Skill 市场和工作区 Capability。"
@@ -963,7 +1052,7 @@
       },
       "import": {
         "title": "导入 {{name}}？",
-		"description": "请检查连接器配置。OAuth 连接器需要先完成授权；导入不会运行 MCP 或绑定 Agent。",
+        "description": "请检查连接器配置。OAuth 连接器需要先完成授权；导入不会运行 MCP 或绑定 Agent。",
         "success": "已将 {{name}} 导入为工作区 MCP Capability。",
         "failed": "无法导入该连接器。",
         "importing": "正在导入...",
@@ -1734,7 +1823,11 @@
       "modelProtocolMismatch": "{{engine}} 无法使用该模型的协议",
       "selected": "已选择",
       "devicePicker": {
-        "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。"
+        "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。",
+        "addDevice": "接入新设备",
+        "placeholder": "选择设备…",
+        "emptyTitle": "尚未接入任何 agent daemon",
+        "noCompatibleTitle": "没有与当前 Agent 引擎匹配的在线设备"
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
@@ -1804,7 +1897,7 @@
   },
   "connectors": {
     "page": {
-      "title": "连接器 (Connectors)",
+      "title": "连接器",
       "description": "Agent 的执行接入方式。Connector 是接入层抽象，一个 Connector 可以承载多个 Agent 的运行。"
     },
     "aggregateHint": "当前展示的是当前工作区内 Agent 使用的 connector 类型聚合视图。Connector 没有独立的注册表/实例表（反过度设计：connector 身份直接长在每个 Agent 的 connector_type 字段上）。",
@@ -1858,7 +1951,10 @@
         "title": "连接器类型未找到",
         "description": "可能已被移除或当前工作区没有 Agent 在用。"
       },
-      "agentSummary": "查看 {{count}} 个 Agent"
+      "agentSummary": "查看 {{count}} 个 Agent",
+      "tabs": {
+        "overview": "概览"
+      }
     }
   },
   "secrets": {
@@ -1939,7 +2035,7 @@
   },
   "members": {
     "page": {
-      "title": "成员 (Members)"
+      "title": "成员"
     },
     "tabs": {
       "workspace": "Workspace 成员",
@@ -1966,10 +2062,10 @@
       "actions": "操作"
     },
     "role": {
-      "owner": "Owner",
-      "admin": "Admin",
-      "member": "Member",
-      "viewer": "Viewer"
+      "owner": "所有者",
+      "admin": "管理员",
+      "member": "成员",
+      "viewer": "访客"
     },
     "userStatus": {
       "active": "活跃",
@@ -2042,7 +2138,12 @@
         "url": "登录链接",
         "email": "邮箱",
         "password": "密码"
-      }
+      },
+      "tabs": {
+        "link": "邀请链接",
+        "existing": "已有用户"
+      },
+      "pendingLabel": "待处理邀请"
     },
     "remove": {
       "cta": "移除",
@@ -2079,7 +2180,7 @@
   },
   "settings": {
     "page": {
-      "title": "设置 (Settings)"
+      "title": "设置"
     },
     "actions": {
       "saved": "已保存"
@@ -2298,6 +2399,9 @@
         "title": "该资源暂无审计事件",
         "description": "这个资源还没有产生任何审计记录。"
       }
+    },
+    "filter": {
+      "label": "筛选"
     }
   },
   "usage": {
@@ -2842,7 +2946,8 @@
       "actions": {
         "pair": "接入新设备",
         "enable": "启用",
-        "disable": "禁用"
+        "disable": "禁用",
+        "delete": "删除设备"
       },
       "table": {
         "name": "名称",
@@ -2900,14 +3005,24 @@
         "connectLabel": "连接 daemon",
         "copy": "复制",
         "copyCommand": "复制命令",
-        "tokenOnlyToggle": "只看 token"
+        "tokenOnlyToggle": "只看 token",
+        "connected": "设备已接入",
+        "copied": "已复制",
+        "copyFailed": "请手动选择下方命令",
+        "oneLineLabel": "复制后在目标机器上运行",
+        "safetyClaude": "Agent CLI、文件与密钥都留在这台机器上。",
+        "waitingConnection": "等待设备接入…"
+      },
+      "delete": {
+        "confirm": "删除"
       }
     }
   },
   "scopeRequired": {
     "workspace": {
       "title": "选择 Workspace 查看{{resource}}",
-      "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。"
+      "description": "这些数据按 Workspace 管理。请在顶部选择一个 Workspace。",
+      "pick": "选择 Workspace"
     }
   },
   "connections": {
@@ -3129,6 +3244,9 @@
           "generic": "保存 Teams 连接器失败,请重试。"
         }
       }
+    },
+    "detail": {
+      "close": "关闭"
     }
   },
   "scheduledTasks": {
@@ -3147,9 +3265,14 @@
       "frequency": "频率",
       "status": "状态",
       "nextRun": "下次运行",
-      "actions": "操作"
+      "actions": "操作",
+      "lastRun": "上次运行"
     },
-    "action": { "edit": "编辑", "runNow": "立即运行", "delete": "删除" },
+    "action": {
+      "edit": "编辑",
+      "runNow": "立即运行",
+      "delete": "删除"
+    },
     "runNowOk": "已触发一次运行",
     "runNowErr": "触发失败",
     "deleteConfirm": "确认删除该定时任务？历史运行记录会保留。",
@@ -3186,7 +3309,15 @@
       "custom": "cron：{{cron}}",
       "withTz": "{{desc}}（{{tz}}）"
     },
-    "weekdays": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+    "weekdays": [
+      "周日",
+      "周一",
+      "周二",
+      "周三",
+      "周四",
+      "周五",
+      "周六"
+    ],
     "dialog": {
       "createTitle": "新建定时任务",
       "editTitle": "编辑定时任务",

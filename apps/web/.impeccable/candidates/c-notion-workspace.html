@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<!--
+  Parsar · 运行 (Runs) — candidate C "工作区页面 · The Workspace Page"
+  Notion's page model applied to an operations console: page tree sidebar, a page with
+  properties, a database view, and a side peek for the selected run.
+
+  ALL DATA IN THIS FILE IS SYNTHETIC. Run ids, agents, conversations, models, timings,
+  costs, hostnames and timestamps are mock values for a design decision only.
+-->
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>运行 · MiniMax · Infra — Parsar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root, html[data-theme="light"] {
+    --bg: #FFFFFF;
+    --surface-side: #F7F7F5;
+    --fg: #37352F;
+    --fg-muted: #65645E;
+    --line: rgba(55, 53, 47, 0.09);
+    --line-strong: rgba(55, 53, 47, 0.16);
+    --hover: rgba(55, 53, 47, 0.06);
+    --active: rgba(55, 53, 47, 0.10);
+    --row-hover: rgba(55, 53, 47, 0.03);
+    --row-selected: rgba(35, 131, 226, 0.06);
+    --accent: #1F6FC4;
+    --accent-fg: #FFFFFF;
+    --selection: rgba(35, 131, 226, 0.22);
+    --shadow: rgba(15, 15, 15, 0.10);
+    --shadow-panel: 0 1px 2px rgba(26, 26, 24, 0.04), 0 8px 24px -12px rgba(26, 26, 24, 0.18);
+    --hover-soft: rgba(26, 26, 24, 0.03);
+    --scroll: rgba(55, 53, 47, 0.22);
+    --tile-bg: #37352F;
+    --tile-fg: #FFFFFF;
+    --avatar-bg: #E3E2E0;
+    --avatar-fg: #37352F;
+    --code-bg: rgba(55, 53, 47, 0.06);
+    --tag-grey-bg: #E3E2E0;   --tag-grey-fg: #32302C;
+    --tag-yellow-bg: #FDECC8; --tag-yellow-fg: #402C1B;
+    --tag-green-bg: #DBEDDB;  --tag-green-fg: #1C3829;
+    --tag-red-bg: #FFE2DD;    --tag-red-fg: #5D1715;
+    --tag-orange-bg: #FADEC9; --tag-orange-fg: #49290E;
+    --diff-add: #2B6B3A;
+    --diff-del: #A83A32;
+  }
+  html[data-theme="dark"] {
+    --bg: #191919;
+    --surface-side: #202020;
+    --fg: #D4D4D4;
+    --fg-muted: #9B9B9B;
+    --line: rgba(255, 255, 255, 0.09);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --hover: rgba(255, 255, 255, 0.055);
+    --active: rgba(255, 255, 255, 0.10);
+    --row-hover: rgba(255, 255, 255, 0.03);
+    --row-selected: rgba(82, 156, 202, 0.10);
+    --accent: #529CCA;
+    --accent-fg: #0F1A24;
+    --selection: rgba(82, 156, 202, 0.30);
+    --shadow: rgba(0, 0, 0, 0.35);
+    --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.30), 0 8px 24px -12px rgba(0, 0, 0, 0.55);
+    --hover-soft: rgba(236, 236, 232, 0.03);
+    --scroll: rgba(255, 255, 255, 0.22);
+    --tile-bg: #D4D4D4;
+    --tile-fg: #191919;
+    --avatar-bg: #373737;
+    --avatar-fg: #D4D4D4;
+    --code-bg: rgba(255, 255, 255, 0.08);
+    --tag-grey-bg: #3A3A3A;   --tag-grey-fg: #D0D0D0;
+    --tag-yellow-bg: #453B22; --tag-yellow-fg: #E8D19A;
+    --tag-green-bg: #26402F;  --tag-green-fg: #A3D4AE;
+    --tag-red-bg: #4A2A28;    --tag-red-fg: #EDA6A0;
+    --tag-orange-bg: #4A3320; --tag-orange-fg: #EBBB8C;
+    --diff-add: #8FC99B;
+    --diff-del: #E39A93;
+  }
+
+  /* ---------- base ---------- */
+  * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+  html, body { height: 100%; margin: 0; }
+  /* ============================================================
+     TYPE SYSTEM (strict; every rule below obeys it)
+     Face   : system UI face. Latin = SF Pro / Segoe UI, CJK = 苹方 / 雅黑.
+              Noto Sans SC is only the last-resort CJK fallback.
+     Sizes  : 40 page title · 24 panel title · 14 UI & body · 13 table cells,
+              buttons, compact rows · 12 labels & metadata. Nothing else.
+     Weights: 600 = page/panel titles only.
+              500 = names of things (workspace, user, row title, run id in
+                    panel), the ACTIVE nav item / tab, button labels,
+                    section heads inside the panel.
+              400 = everything else, including all labels and all values.
+     Colors : --fg (ink)   = content, values, names, active items, actions.
+              --fg-muted   = labels, metadata (ids, ages, counts, headers,
+                             group labels, placeholders), inactive tabs/nav
+                             icons, disabled text. Never for a value.
+     ============================================================ */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei", "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.5; color: var(--fg); background: var(--bg);
+    caret-color: var(--accent); min-width: 1100px;
+  }
+  ::selection { background: var(--selection); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 5px; border: 3px solid transparent; background-clip: content-box; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 4px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .mono, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono", monospace; font-variant-numeric: tabular-nums; }
+  .num { font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: right; }
+  .icon { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  code { font-size: 12px; background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; height: 100vh; }
+  .sidebar { width: 240px; flex: none; background: var(--surface-side); display: flex; flex-direction: column; padding: 12px 12px 12px; overflow-y: auto; }
+  .main { flex: 1; min-width: 0; overflow-y: auto; }
+
+  .brand { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; margin: 4px 0 14px; color: var(--fg); }
+  .brand .mark { width: 20px; height: 20px; flex: none; }
+  .brand .wordmark { font-size: 12px; font-weight: 500; letter-spacing: 0.22em; line-height: 1; transform: translateY(0.5px); }
+  .ws {
+    display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 10px 0 8px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--bg); box-shadow: var(--shadow-panel); text-align: left;
+  }
+  .ws:hover { background: var(--hover-soft); }
+  .ws .tile { width: 24px; height: 24px; border-radius: 6px; background: var(--tile-bg); color: var(--tile-fg); font-size: 12px; font-weight: 500; display: grid; place-items: center; flex: none; }
+  .ws .ws-name { flex: 1; min-width: 0; font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws .icon { color: var(--fg-muted); width: 14px; height: 14px; flex: none; }
+
+  .side-row { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; width: 100%; text-align: left; color: var(--fg); font-size: 14px; border-radius: 8px; border: 1px solid transparent; }
+  .side-row .icon { color: var(--fg-muted); }
+  .side-row:hover { background: var(--hover); }
+  .side-row[aria-current="page"] { background: var(--bg); border-color: var(--line); box-shadow: var(--shadow-panel); font-weight: 500; }
+  .side-row[aria-current="page"] .icon { color: var(--fg); }
+  .side-row .badge { margin-left: auto; font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .utility { margin-top: 6px; }
+  .group { margin-top: 18px; display: flex; flex-direction: column; gap: 1px; }
+  .group:first-of-type { margin-top: 20px; }
+  .group-label { font-size: 12px; font-weight: 400; color: var(--fg-muted); padding: 0 10px; margin-bottom: 4px; }
+  .side-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px 4px 4px 8px; border-top: 1px solid var(--line); }
+  .side-foot .avatar { width: 28px; height: 28px; border-radius: 6px; font-size: 12px; }
+  .side-foot .who { flex: 1; min-width: 0; line-height: 1.25; }
+  .side-foot .who .n { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side-foot .who .r { font-size: 12px; color: var(--fg-muted); }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 6px; }
+  .seg button { display: inline-flex; align-items: center; justify-content: center; height: 22px; min-width: 26px; border-radius: 4px; color: var(--fg-muted); }
+  .seg button:hover { color: var(--fg); }
+  .seg button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }
+  .seg .icon { width: 14px; height: 14px; }
+
+  /* ---------- top line ---------- */
+  .topline { display: flex; align-items: center; height: 44px; padding: 0 32px; font-size: 13px; color: var(--fg-muted); }
+  .crumb { display: flex; align-items: center; gap: 6px; }
+  .crumb .here { color: var(--fg); }
+  .topline .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .icon-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-muted); }
+  .icon-btn:hover { background: var(--hover); color: var(--fg); }
+  .icon-btn .sun, html[data-theme="dark"] .icon-btn .moon { display: none; }
+  html[data-theme="dark"] .icon-btn .sun { display: block; }
+  .avatar { width: 24px; height: 24px; border-radius: 4px; background: var(--avatar-bg); color: var(--avatar-fg); font-size: 11px; font-weight: 500; display: grid; place-items: center; letter-spacing: 0.02em; }
+
+  /* ---------- page ---------- */
+  .page { max-width: 960px; width: 100%; margin: 0 auto; padding: 56px 32px 96px; }
+  h1 { font-size: 40px; font-weight: 600; line-height: 1.2; margin: 0; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 12px; }
+  h1 span { font-size: 20px; font-weight: 400; color: var(--fg-muted); letter-spacing: 0; }
+  .desc { margin: 10px 0 0; max-width: 640px; }
+
+  .views { display: flex; align-items: center; gap: 2px; margin-top: 20px; margin-bottom: 6px; }
+  .tab { height: 28px; padding: 0 10px; font-size: 14px; color: var(--fg-muted); border-radius: 6px; }
+  .tab:hover { color: var(--fg); background: var(--hover); }
+  .tab[aria-selected="true"] { color: var(--fg); background: var(--active); font-weight: 500; }
+  .tools { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+  .search { display: flex; align-items: center; height: 28px; border-radius: 4px; }
+  .search input { width: 0; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--fg); outline: none; }
+  .search input::placeholder { color: var(--fg-muted); }
+  .search:focus-within { background: var(--hover); }
+  .search:focus-within .icon-btn { color: var(--fg); }
+  .search:focus-within input { width: 200px; padding-right: 8px; }
+  .btn-primary { height: 28px; padding: 0 10px 0 8px; margin-left: 8px; background: var(--accent); color: var(--accent-fg); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+  .btn-primary:hover { filter: brightness(0.94); }
+  .btn-primary .icon { width: 14px; height: 14px; }
+
+  /* ---------- database view ---------- */
+  .db { margin-top: 4px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { text-align: left; font-weight: 400; font-size: 12px; color: var(--fg-muted); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th .hd { display: inline-flex; align-items: center; gap: 6px; }
+  th .icon { width: 14px; height: 14px; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr[aria-selected="true"] { background: var(--row-selected); }
+  td.run { padding: 4px 10px; }
+  td.run .id { display: block; font-size: 12px; line-height: 16px; color: var(--fg-muted); }
+  td.run .agent { display: block; font-size: 13px; line-height: 16px; }
+  td .dash { color: var(--fg-muted); }
+  td.title { font-weight: 500; }
+
+  .tag { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; border-radius: 3px; font-size: 12px; line-height: 20px; white-space: nowrap; vertical-align: middle; }
+  .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .tag.grey   { background: var(--tag-grey-bg);   color: var(--tag-grey-fg); }
+  .tag.yellow { background: var(--tag-yellow-bg); color: var(--tag-yellow-fg); }
+  .tag.green  { background: var(--tag-green-bg);  color: var(--tag-green-fg); }
+  .tag.red    { background: var(--tag-red-bg);    color: var(--tag-red-fg); }
+  .tag.orange { background: var(--tag-orange-bg); color: var(--tag-orange-fg); }
+
+  .db-foot { display: flex; align-items: center; font-size: 12px; color: var(--fg-muted); padding: 8px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .db-foot .pager { margin-left: auto; display: flex; gap: 14px; }
+  .db-foot .pager a { color: var(--fg); }
+  .db-add { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; width: 100%; text-align: left; color: var(--fg-muted); font-size: 13px; border-radius: 0; }
+  .db-add:hover { background: var(--row-hover); }
+  .db-add .icon { width: 14px; height: 14px; }
+
+  /* ---------- detail rail (dense, after candidate B) ---------- */
+  .peek { width: 400px; flex: none; display: flex; flex-direction: column; min-width: 0; background: var(--surface-side); border-left: 1px solid var(--line); animation: peek-in 200ms ease-out; }
+  .peek[hidden] { display: none; }
+  .rail-h { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--line); }
+  .rail-h .rid { flex: 1; min-width: 0; font-size: 13px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 16px 8px; }
+  .rail-title { font-size: 14px; font-weight: 500; line-height: 1.4; margin: 0 0 12px; }
+  .props { display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 12px; margin: 0; }
+  .props dt { height: 28px; display: flex; align-items: center; font-size: 12px; color: var(--fg-muted); }
+  .props dd { height: 28px; display: flex; align-items: center; gap: 6px; margin: 0; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .props dd.mono, .props dd.num { font-size: 12px; }
+  .agent-tile { width: 18px; height: 18px; border-radius: 4px; background: var(--avatar-bg); color: var(--avatar-fg); font-size: 11px; font-weight: 500; display: grid; place-items: center; flex: none; }
+  .peek-tabs { display: flex; gap: 2px; padding: 2px; margin: 18px 0 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .peek-tabs button { flex: 1; height: 24px; padding: 0 4px; border-radius: 4px; font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+  .peek-tabs button:hover { color: var(--fg); background: var(--hover); }
+  .peek-tabs button[aria-selected="true"] { color: var(--fg); background: var(--active); font-weight: 500; }
+  .peek h3 { display: flex; justify-content: space-between; font-size: 12px; font-weight: 500; margin: 0 0 2px; }
+  .peek h3 span { font-weight: 400; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .steps { margin: 0; padding: 0; list-style: none; }
+  .steps li { display: flex; align-items: center; gap: 8px; height: 32px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .steps li:last-child { border-bottom: 0; }
+  .steps .n { width: 14px; text-align: right; font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; flex: none; }
+  .steps .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .steps .st { width: 14px; height: 14px; flex: none; color: var(--tag-green-fg); }
+  .diff { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono", monospace; font-size: 12px; margin-left: auto; padding-left: 8px; font-variant-numeric: tabular-nums; }
+  .diff .add { color: var(--diff-add); }
+  .diff .del { color: var(--diff-del); margin-left: 4px; }
+  .actions { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .btn { height: 28px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--bg); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { background: var(--hover); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn:disabled:hover { background: var(--bg); }
+  .actions a { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 500; }
+  .actions a .icon { width: 14px; height: 14px; }
+
+  @keyframes peek-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .peek { animation: none; } }
+  @media (max-width: 1360px) {
+    .peek { width: 360px; }
+    .page, .topline { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-type" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></symbol>
+  <symbol id="i-select" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m8 11 4 4 4-4"/></symbol>
+  <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-chevrons" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+</svg>
+
+<div class="app">
+
+  <!-- ===== sidebar: the page tree ===== -->
+  <aside class="sidebar">
+    <div class="brand" translate="no">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="butt" stroke-dasharray="10.61 6.14" stroke-dashoffset="9.49"/><circle cx="12.00" cy="4.00" r="2.6" fill="currentColor"/><circle cx="5.07" cy="16.00" r="2.6" fill="currentColor"/><circle cx="18.93" cy="16.00" r="2.6" fill="currentColor"/></svg>
+      <span class="wordmark">PARSAR</span>
+    </div>
+    <button class="ws" type="button" aria-label="切换工作区">
+      <span class="tile">M</span>
+      <span class="ws-name">MiniMax · Infra</span>
+      <svg class="icon"><use href="#i-chevrons"/></svg>
+    </button>
+
+
+    <nav class="group" aria-label="协作">
+      <div class="group-label">协作</div>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-message"/></svg>对话</a>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-inbox"/></svg>收件箱<span class="badge">3</span></a>
+      <a class="side-row" href="#" aria-current="page"><svg class="icon"><use href="#i-play"/></svg>运行</a>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-clock"/></svg>定时任务</a>
+    </nav>
+
+    <nav class="group" aria-label="Agent">
+      <div class="group-label">Agent</div>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-bot"/></svg>Agent</a>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-zap"/></svg>能力</a>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-cpu"/></svg>模型</a>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-link"/></svg>连接</a>
+    </nav>
+
+    <nav class="group" aria-label="团队">
+      <div class="group-label">团队</div>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-users"/></svg>成员</a>
+      <a class="side-row" href="#"><svg class="icon"><use href="#i-settings"/></svg>设置</a>
+    </nav>
+
+    <div class="side-foot">
+      <span class="avatar" aria-hidden="true">FJ</span>
+      <div class="who">
+        <div class="n">fanjingluo</div>
+        <div class="r">管理员</div>
+      </div>
+      <div class="seg theme" role="group" aria-label="主题">
+        <button type="button" id="th-light" aria-pressed="true" aria-label="浅色"><svg class="icon"><use href="#i-sun"/></svg></button>
+        <button type="button" id="th-dark" aria-pressed="false" aria-label="深色"><svg class="icon"><use href="#i-moon"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== main: the page ===== -->
+  <main class="main">
+    <div class="topline">
+      <div class="crumb"><span>MiniMax · Infra</span><span>/</span><span class="here">运行</span></div>
+    </div>
+
+    <div class="page">
+      <h1>运行<span>Runs</span></h1>
+
+      <div class="views" role="tablist" aria-label="视图">
+        <button class="tab" role="tab" aria-selected="true" type="button">全部</button>
+        <button class="tab" role="tab" aria-selected="false" type="button">进行中</button>
+        <button class="tab" role="tab" aria-selected="false" type="button">失败</button>
+        <div class="tools">
+          <button class="icon-btn" type="button" aria-label="筛选"><svg class="icon"><use href="#i-filter"/></svg></button>
+          <button class="icon-btn" type="button" aria-label="排序"><svg class="icon"><use href="#i-sort"/></svg></button>
+          <label class="search">
+            <span class="icon-btn"><svg class="icon"><use href="#i-search"/></svg></span>
+            <input type="search" placeholder="搜索 run id / agent / 对话…" aria-label="搜索">
+          </label>
+          <button class="btn-primary" type="button"><svg class="icon"><use href="#i-plus"/></svg>新建</button>
+        </div>
+      </div>
+
+      <div class="db">
+        <table>
+          <colgroup>
+            <col style="width:150px"><col style="width:96px"><col><col style="width:150px"><col style="width:80px"><col style="width:72px">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>状态</th>
+              <th>对话</th>
+              <th>模型</th>
+              <th class="num">耗时</th>
+              <th class="num">成本</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZM3Q7K</span><span class="agent">reviewer-bot</span></td>
+              <td><span class="tag yellow"><span class="dot"></span>运行中</span></td>
+              <td class="title">#infra-alerts · 修复 nightly 构建失败</td>
+              <td>claude-opus-5</td>
+              <td class="num">4m 12s</td>
+              <td class="num">¥0.38</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZKX2P9</span><span class="agent">release-notes</span></td>
+              <td><span class="tag green">已完成</span></td>
+              <td class="title">#release · v0.9.2 发布说明</td>
+              <td>MiniMax-M2</td>
+              <td class="num">2m 51s</td>
+              <td class="num">¥0.12</td>
+            </tr>
+            <tr aria-selected="true">
+              <td class="run"><span class="id mono">run_01J8ZKR8T4</span><span class="agent">reviewer-bot</span></td>
+              <td><span class="tag green">已完成</span></td>
+              <td class="title">PR #271 · store: split routes.go</td>
+              <td>claude-opus-5</td>
+              <td class="num">6m 03s</td>
+              <td class="num">¥0.71</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZK9A1M</span><span class="agent">migrate-helper</span></td>
+              <td><span class="tag red">失败</span></td>
+              <td class="title">#backend · 迁移 0042 回滚</td>
+              <td>gpt-5-codex</td>
+              <td class="num">0m 48s</td>
+              <td class="num">¥0.05</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZJH6W2</span><span class="agent">reviewer-bot</span></td>
+              <td><span class="tag grey">等待调度</span></td>
+              <td class="title">#frontend · 对话页 assistant-ui 接入</td>
+              <td>claude-opus-5</td>
+              <td class="num"><span class="dash">—</span></td>
+              <td class="num"><span class="dash">—</span></td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZJ3C5N</span><span class="agent">docs-writer</span></td>
+              <td><span class="tag green">已完成</span></td>
+              <td class="title">#docs · CONTRIBUTING 补充 e2b 章节</td>
+              <td>MiniMax-M2</td>
+              <td class="num">1m 37s</td>
+              <td class="num">¥0.06</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZHT0X8</span><span class="agent">migrate-helper</span></td>
+              <td><span class="tag grey">已取消</span></td>
+              <td class="title">#backend · sqlc 重新生成</td>
+              <td>gpt-5-codex</td>
+              <td class="num">0m 12s</td>
+              <td class="num">¥0.01</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZH2R9Q</span><span class="agent">reviewer-bot</span></td>
+              <td><span class="tag green">已完成</span></td>
+              <td class="title">PR #268 · web: marketplace tab filter</td>
+              <td>claude-opus-5</td>
+              <td class="num">3m 44s</td>
+              <td class="num">¥0.42</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZGF4K7</span><span class="agent">release-notes</span></td>
+              <td><span class="tag orange">已中断</span></td>
+              <td class="title">#release · v0.9.1 发布说明</td>
+              <td>MiniMax-M2</td>
+              <td class="num">5m 20s</td>
+              <td class="num">¥0.19</td>
+            </tr>
+            <tr aria-selected="false">
+              <td class="run"><span class="id mono">run_01J8ZFQ1B3</span><span class="agent">docs-writer</span></td>
+              <td><span class="tag green">已完成</span></td>
+              <td class="title">#docs · README 快速开始</td>
+              <td>MiniMax-M2</td>
+              <td class="num">0m 58s</td>
+              <td class="num">¥0.03</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="db-foot">
+          <span>第 1-10 条,共 128 条</span>
+          <span class="pager"><a href="#">上一页</a><a href="#">下一页</a></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== side peek: the run as a sub-page ===== -->
+  <aside class="peek" id="peek" aria-label="Run 详情">
+    <header class="rail-h">
+      <span id="p-status"><span class="tag green">已完成</span></span>
+      <span class="rid mono" id="peek-title">run_01J8ZKR8T4</span>
+      <button class="icon-btn" id="peek-close" type="button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+    </header>
+
+    <div class="rail-body">
+      <h2 class="rail-title" id="p-title">PR #271 · store: split routes.go</h2>
+      <dl class="props">
+        <dt>Agent</dt><dd><span class="agent-tile">R</span><span id="p-agent">reviewer-bot</span></dd>
+        <dt>触发</dt><dd>来自飞书线程 · PR #271</dd>
+        <dt>模型</dt><dd id="p-model">claude-opus-5</dd>
+        <dt>运行节点</dt><dd class="mono">mbp-fanjingluo</dd>
+        <dt>引擎</dt><dd>Claude Code</dd>
+        <dt>运行模式</dt><dd>沙盒 (docker)</dd>
+        <dt>工作目录</dt><dd class="mono">~/dev/parsar</dd>
+        <dt>最近心跳</dt><dd class="num">12 秒前</dd>
+        <dt>创建</dt><dd class="num">09:41:02</dd>
+        <dt>开始</dt><dd class="num">09:41:05</dd>
+        <dt>完成</dt><dd class="num">09:47:08</dd>
+        <dt>耗时</dt><dd class="num" id="p-duration">6m 03s</dd>
+        <dt>成本</dt><dd class="num" id="p-cost">¥0.71</dd>
+      </dl>
+
+      <div class="peek-tabs" role="tablist" aria-label="Run 详情视图">
+        <button role="tab" aria-selected="true" type="button">Overview</button>
+        <button role="tab" aria-selected="false" type="button">Events</button>
+        <button role="tab" aria-selected="false" type="button">Steps</button>
+        <button role="tab" aria-selected="false" type="button">Artifacts</button>
+        <button role="tab" aria-selected="false" type="button">Permissions</button>
+        <button role="tab" aria-selected="false" type="button">Audit</button>
+      </div>
+
+      <h3>步骤<span>6 / 6</span></h3>
+      <ol class="steps">
+        <li><svg class="st"><use href="#i-check"/></svg><span class="n">1</span><span class="t">读取 PR #271 的 diff 与评论</span></li>
+        <li><svg class="st"><use href="#i-check"/></svg><span class="n">2</span><span class="t">搜索 store.go 中的相关调用</span></li>
+        <li><svg class="st"><use href="#i-check"/></svg><span class="n">3</span><span class="t">修改 3 个文件</span><span class="diff"><span class="add">+142</span><span class="del">−37</span></span></li>
+        <li><svg class="st"><use href="#i-check"/></svg><span class="n">4</span><span class="t">运行 <code>make check-web</code></span></li>
+        <li><svg class="st"><use href="#i-check"/></svg><span class="n">5</span><span class="t">推送修订并更新 PR 描述</span></li>
+        <li><svg class="st"><use href="#i-check"/></svg><span class="n">6</span><span class="t">回帖到飞书线程</span></li>
+      </ol>
+    </div>
+
+    <footer class="actions">
+      <button class="btn" type="button"><svg class="icon"><use href="#i-rotate"/></svg>重试</button>
+      <button class="btn" id="p-cancel" type="button" disabled>取消运行</button>
+      <a href="#">打开对话<svg class="icon"><use href="#i-arrow"/></svg></a>
+    </footer>
+  </aside>
+
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    function setTheme(t) {
+      root.dataset.theme = t;
+      document.getElementById('th-light').setAttribute('aria-pressed', String(t === 'light'));
+      document.getElementById('th-dark').setAttribute('aria-pressed', String(t === 'dark'));
+    }
+    document.getElementById('th-light').addEventListener('click', function () { setTheme('light'); });
+    document.getElementById('th-dark').addEventListener('click', function () { setTheme('dark');
+    });
+
+    // tab groups: purely visual toggle
+    document.querySelectorAll('[role="tablist"]').forEach(function (list) {
+      var tabs = list.querySelectorAll('[role="tab"]');
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () {
+          tabs.forEach(function (x) { x.setAttribute('aria-selected', String(x === t)); });
+        });
+      });
+    });
+
+    // rows <-> side peek
+    var peek = document.getElementById('peek');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#rows tr'));
+    var pick = function (row, i) { return row.children[i].textContent.trim(); };
+    var openPeek = function (row) {
+      var status = row.children[1].querySelector('.tag');
+      document.getElementById('peek-title').textContent = row.querySelector('.id').textContent;
+      document.getElementById('p-agent').textContent = row.querySelector('.agent').textContent;
+      document.getElementById('p-title').textContent = pick(row, 2);
+      document.getElementById('p-status').innerHTML = status.outerHTML;
+      document.getElementById('p-model').textContent = pick(row, 3);
+      document.getElementById('p-duration').textContent = pick(row, 4);
+      document.getElementById('p-cost').textContent = pick(row, 5);
+      var live = /运行中|等待调度/.test(status.textContent);
+      document.getElementById('p-cancel').disabled = !live;
+      if (peek.hidden) {
+        peek.hidden = false;
+        peek.style.animation = 'none';
+        void peek.offsetWidth;
+        peek.style.animation = '';
+      }
+    };
+    rows.forEach(function (row) {
+      row.addEventListener('click', function () {
+        rows.forEach(function (r) { r.setAttribute('aria-selected', String(r === row)); });
+        openPeek(row);
+      });
+    });
+    document.getElementById('peek-close').addEventListener('click', function () {
+      peek.hidden = true;
+      rows.forEach(function (r) { r.setAttribute('aria-selected', 'false'); });
+    });
+    document.querySelectorAll('a[href="#"]').forEach(function (a) {
+      a.addEventListener('click', function (e) { e.preventDefault(); });
+    });
+  })();
+</script>
+</body>
+</html>

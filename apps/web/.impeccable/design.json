@@ -1,0 +1,641 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-06T06:01:43Z",
+  "title": "Design System: Parsar",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm Ink",
+        "canonical": "#37352f",
+        "tonalRamp": [
+          "#1b1a17",
+          "#2a2823",
+          "#37352f",
+          "#54514a",
+          "#787774",
+          "#9c9a95",
+          "#c8c6c1",
+          "#eceae6"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Grey",
+        "canonical": "#787774",
+        "tonalRamp": [
+          "#232320",
+          "#3a3936",
+          "#52514d",
+          "#6a6965",
+          "#787774",
+          "#9c9b97",
+          "#c4c3bf",
+          "#e9e8e5"
+        ]
+      },
+      "ink-sidebar": {
+        "role": "neutral",
+        "displayName": "Sidebar Grey",
+        "canonical": "#5f5e5a",
+        "tonalRamp": [
+          "#1e1d1b",
+          "#333230",
+          "#464542",
+          "#5f5e5a",
+          "#7b7a76",
+          "#9d9c98",
+          "#c6c5c1",
+          "#eae9e6"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#191919",
+          "#2a2a2a",
+          "#4a4a4a",
+          "#787774",
+          "#c8c8c8",
+          "#f1f1f0",
+          "#fafafa",
+          "#ffffff"
+        ]
+      },
+      "paper-panel": {
+        "role": "neutral",
+        "displayName": "Panel Paper",
+        "canonical": "#fafafa",
+        "tonalRamp": [
+          "#1c1c1c",
+          "#202020",
+          "#3a3a3a",
+          "#6b6b6b",
+          "#b5b5b5",
+          "#efefef",
+          "#fafafa",
+          "#ffffff"
+        ]
+      },
+      "paper-muted": {
+        "role": "neutral",
+        "displayName": "Muted Tint",
+        "canonical": "#f1f1f0",
+        "tonalRamp": [
+          "#1a1a19",
+          "#2a2a2a",
+          "#454543",
+          "#6b6b68",
+          "#a5a5a2",
+          "#d8d8d6",
+          "#f1f1f0",
+          "#fbfbfa"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e9e9ec",
+        "tonalRamp": [
+          "#191920",
+          "#2b2b33",
+          "#45454f",
+          "#6a6a75",
+          "#a3a3ac",
+          "#d6d7dc",
+          "#e9e9ec",
+          "#f6f6f8"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Control Hairline",
+        "canonical": "#d6d7dc",
+        "tonalRamp": [
+          "#1a1a1f",
+          "#2d2d34",
+          "#48484f",
+          "#6d6d76",
+          "#a2a2ac",
+          "#c2c3ca",
+          "#d6d7dc",
+          "#eeeef1"
+        ]
+      },
+      "indigo": {
+        "role": "primary",
+        "displayName": "Selection Indigo",
+        "canonical": "#4f46e5",
+        "tonalRamp": [
+          "#1b1745",
+          "#241f66",
+          "#312a92",
+          "#4338ca",
+          "#4f46e5",
+          "#8b90f6",
+          "#c7d2fe",
+          "#eef2ff"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Destructive Red",
+        "canonical": "#dc2626",
+        "tonalRamp": [
+          "#3f0d0d",
+          "#5c1414",
+          "#8a1c1c",
+          "#b91c1c",
+          "#dc2626",
+          "#f05252",
+          "#fecaca",
+          "#fef2f2"
+        ]
+      },
+      "status-running": {
+        "role": "tertiary",
+        "displayName": "Running Amber",
+        "canonical": "#d97706",
+        "tonalRamp": [
+          "#3d2103",
+          "#5c3205",
+          "#8a4a06",
+          "#b45309",
+          "#d97706",
+          "#f5a524",
+          "#fde68a",
+          "#fffbeb"
+        ]
+      },
+      "status-completed": {
+        "role": "tertiary",
+        "displayName": "Completed Green",
+        "canonical": "#16a34a",
+        "tonalRamp": [
+          "#052e16",
+          "#08421f",
+          "#0d6b30",
+          "#15803d",
+          "#16a34a",
+          "#3fb950",
+          "#bbf7d0",
+          "#f0fdf4"
+        ]
+      },
+      "status-failed": {
+        "role": "tertiary",
+        "displayName": "Failed Red",
+        "canonical": "#dc2626",
+        "tonalRamp": [
+          "#3f0d0d",
+          "#5c1414",
+          "#8a1c1c",
+          "#b91c1c",
+          "#dc2626",
+          "#f05252",
+          "#fecaca",
+          "#fef2f2"
+        ]
+      },
+      "status-queued": {
+        "role": "neutral",
+        "displayName": "Queued Grey",
+        "canonical": "#9a9ca4",
+        "tonalRamp": [
+          "#1c1d20",
+          "#2f3034",
+          "#4a4b51",
+          "#71737b",
+          "#9a9ca4",
+          "#bcbec4",
+          "#d4d4d8",
+          "#eeeef0"
+        ]
+      },
+      "status-interrupted": {
+        "role": "tertiary",
+        "displayName": "Interrupted Orange",
+        "canonical": "#ea580c",
+        "tonalRamp": [
+          "#401704",
+          "#5c2106",
+          "#8a3209",
+          "#c2410c",
+          "#ea580c",
+          "#fb8a3c",
+          "#fed7aa",
+          "#fff7ed"
+        ]
+      },
+      "dark-ground": {
+        "role": "neutral",
+        "displayName": "Grey Night Ground",
+        "canonical": "#191919",
+        "tonalRamp": [
+          "#0f0f0f",
+          "#191919",
+          "#202020",
+          "#2a2a2a",
+          "#3f3f3f",
+          "#6b6b6b",
+          "#9b9b9b",
+          "#d4d4d4"
+        ]
+      },
+      "dark-indigo": {
+        "role": "primary",
+        "displayName": "Night Indigo",
+        "canonical": "#8b90f6",
+        "tonalRamp": [
+          "#14142b",
+          "#1f2035",
+          "#33355e",
+          "#4f46e5",
+          "#6f74ee",
+          "#8b90f6",
+          "#a5a9f8",
+          "#d6d8fc"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "The page title in the 64px topbar; the only 600 weight on a screen."
+      },
+      "entry-title": {
+        "displayName": "Entry Title",
+        "purpose": "The single heading inside EntryPanel on login / setup / invite / join."
+      },
+      "panel-title": {
+        "displayName": "Panel Title",
+        "purpose": "Section heads, rail status word, dialog titles, button labels, active nav and tabs."
+      },
+      "body": {
+        "displayName": "Body / UI",
+        "purpose": "Sidebar nav, form copy, dialog body, the composer textarea."
+      },
+      "row": {
+        "displayName": "Row",
+        "purpose": "Ledger rows, inputs, property values, step titles, inline messages."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Column headers, group labels, field labels, counts, ages, categories, tooltips."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Identifiers, durations, timestamps, paths, commands, countdowns; tabular slashed zero."
+      }
+    },
+    "shadows": [
+      {
+        "name": "control",
+        "value": "0 1px 2px rgb(0 0 0 / 6%)",
+        "purpose": "Raised controls: outline / primary / destructive buttons, inputs, selects, textareas, the active theme segment. Dark: 0 1px 2px rgb(0 0 0 / 40%)."
+      },
+      {
+        "name": "floating",
+        "value": "0 1px 2px rgb(24 24 27 / 4%), 0 8px 24px -12px rgb(24 24 27 / 18%)",
+        "purpose": "Floating layers: menus, tooltips, dialogs, the rail modal, the layout prompt, the turn preview, the entry panel. Dark: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -12px rgb(0 0 0 / 55%)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-spring",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "purpose": "Every entrance and toggle."
+      },
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Every exit, hover tint, colour change, selection, field focus."
+      },
+      {
+        "name": "page-in",
+        "value": "page-in 320ms var(--ease-spring) both",
+        "purpose": "Level-one arrival: a sidebar view rises 10px and fades in."
+      },
+      {
+        "name": "detail-in",
+        "value": "detail-in 360ms var(--ease-spring) both",
+        "purpose": "Level-two arrival: a detail page pushed in 28px from the right."
+      },
+      {
+        "name": "rail-in",
+        "value": "rail-in 260ms var(--ease-spring) both",
+        "purpose": "The detail rail entering once per selection, from 16px right."
+      },
+      {
+        "name": "rail-out",
+        "value": "rail-out 200ms var(--ease-settle) both",
+        "purpose": "The rail leaving before it unmounts; the parent waits for animationend."
+      },
+      {
+        "name": "modal-in",
+        "value": "modal-in 420ms var(--ease-spring) both",
+        "purpose": "The expanded rail flying in from the rail's side at 0.35 scale."
+      },
+      {
+        "name": "modal-out",
+        "value": "modal-out 260ms var(--ease-settle) both",
+        "purpose": "The expanded rail flying back to the rail's side at 0.45 scale."
+      },
+      {
+        "name": "overlay-in",
+        "value": "overlay-in 240ms var(--ease-settle) both",
+        "purpose": "The 30% inverse overlay under dialogs and the rail modal."
+      },
+      {
+        "name": "overlay-out",
+        "value": "overlay-out 200ms var(--ease-settle) both",
+        "purpose": "The same overlay fading away; overlays never snap."
+      },
+      {
+        "name": "pop-in",
+        "value": "pop-in 200ms var(--ease-spring) both",
+        "purpose": "Menus, tooltips, dialogs, layout prompt, turn preview, from scale 0.96."
+      },
+      {
+        "name": "pop-out",
+        "value": "pop-out 150ms var(--ease-settle) both",
+        "purpose": "The reverse of pop-in on every floating layer, to scale 0.97."
+      },
+      {
+        "name": "spin-slow",
+        "value": "spin 1.8s linear infinite",
+        "purpose": "The running status arc only; the one linear motion in the system."
+      },
+      {
+        "name": "fade-out",
+        "value": "fade-out 2s ease-out forwards",
+        "purpose": "Transient confirmations: hold to 70%, then fade."
+      },
+      {
+        "name": "press",
+        "value": "transform 120ms var(--ease-spring)",
+        "purpose": "scale(0.97) on active for every button-like control."
+      },
+      {
+        "name": "state",
+        "value": "background-color / color / border-color / box-shadow 150ms var(--ease-settle)",
+        "purpose": "The shared state transition on button, [role=button], [role=tab]."
+      },
+      {
+        "name": "collapse",
+        "value": "grid-template-rows 220ms var(--ease-settle)",
+        "purpose": "The WorkTrace block and its step details opening and closing."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "floor",
+        "value": "960px",
+        "purpose": "body min-width; below it the console does not respond and the turn-nav rail hides."
+      },
+      {
+        "name": "compact",
+        "value": "1360px",
+        "purpose": "At or below, the ledger row's inline error summary hides."
+      },
+      {
+        "name": "design",
+        "value": "1440px",
+        "purpose": "The reference desktop: 232px sidebar, fluid main, 384px rail."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action of a screen, if any.",
+      "html": "<button class=\"ds-btn-primary\">保存</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:none;border-radius:6px;background:#4f46e5;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;font-size:13px;font-weight:500;line-height:18px;box-shadow:0 1px 2px rgb(0 0 0 / 6%);cursor:pointer;transition:background-color 150ms cubic-bezier(.22,1,.36,1),box-shadow 150ms cubic-bezier(.22,1,.36,1),transform 120ms cubic-bezier(.34,1.56,.64,1)}.ds-btn-primary:hover{background:#4338ca}.ds-btn-primary:active{transform:scale(.97)}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px rgb(79 70 229 / 40%)}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The ledger's default control: every topbar and footer action.",
+      "html": "<button class=\"ds-btn-outline\">筛选</button>",
+      "css": ".ds-btn-outline{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid #d6d7dc;border-radius:6px;background:#fff;color:#37352f;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;font-size:13px;font-weight:500;line-height:18px;box-shadow:0 1px 2px rgb(0 0 0 / 6%);cursor:pointer;transition:background-color 150ms cubic-bezier(.22,1,.36,1),transform 120ms cubic-bezier(.34,1.56,.64,1)}.ds-btn-outline:hover{background:rgb(55 53 47 / 3%)}.ds-btn-outline:active{transform:scale(.97)}.ds-btn-outline:focus-visible{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px rgb(79 70 229 / 40%)}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "The 240px search field in a list page's topbar, with the one advertised shortcut.",
+      "html": "<span class=\"ds-input-search\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"M20 20l-3.5-3.5\"/></svg><input placeholder=\"搜索运行\"/><kbd>⌘K</kbd></span>",
+      "css": ".ds-input-search{display:inline-flex;align-items:center;gap:6px;width:240px;height:28px;padding:0 6px 0 8px;border:1px solid #d6d7dc;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgb(0 0 0 / 6%);transition:border-color 150ms cubic-bezier(.22,1,.36,1),box-shadow 150ms cubic-bezier(.22,1,.36,1)}.ds-input-search svg{width:14px;height:14px;color:#787774;flex:none}.ds-input-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;color:#37352f;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;font-size:13px;line-height:18px}.ds-input-search input::placeholder{color:#787774}.ds-input-search:focus-within{border-color:#4f46e5;box-shadow:0 0 0 1px #4f46e5}.ds-input-search kbd{min-width:20px;padding:2px 4px;border:1px solid #d6d7dc;border-bottom-width:1.5px;border-radius:4px;color:#787774;font-family:inherit;font-size:12px;line-height:1}"
+    },
+    {
+      "name": "Ledger (column model)",
+      "kind": "custom",
+      "refersTo": "ledger-row",
+      "description": "The signature list: 24px outer edges, minmax(floor, weight fr) content columns, 28px truncating header, 36px rows, actions floating on hover.",
+      "html": "<div class=\"ds-ledger\"><div class=\"ds-ledger-head\"><span></span><span>运行</span><span>代理</span><span>连接</span><span class=\"ds-num\">用时</span><span class=\"ds-num\">时间</span></div><ul class=\"ds-ledger-body\"><li class=\"ds-ledger-row ds-selected\"><svg class=\"ds-status\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" style=\"color:#16a34a\"><circle cx=\"7\" cy=\"7\" r=\"6\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M4.4 7.2l1.8 1.8 3.4-3.6\" stroke=\"#fff\" stroke-linecap=\"round\"/></svg><span class=\"ds-id\">run_8f21c0</span><span class=\"ds-title\"><i class=\"ds-tile\">A</i>Atlas Reviewer</span><span class=\"ds-meta\">github · main</span><span class=\"ds-num\">1m 12s</span><span class=\"ds-num\">2 分钟前</span><span class=\"ds-actions\"><button aria-label=\"重试\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M20 12a8 8 0 1 1-2.3-5.6\"/><path d=\"M20 4v5h-5\"/></svg></button></span></li><li class=\"ds-ledger-row\"><svg class=\"ds-status\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" style=\"color:#d97706\"><circle cx=\"7\" cy=\"7\" r=\"6\" stroke=\"#d4d4d8\"/><path d=\"M13 7a6 6 0 0 0-6-6\" stroke-linecap=\"round\"/></svg><span class=\"ds-id\">run_31be9a</span><span class=\"ds-title\"><i class=\"ds-tile\">N</i>Nightly Sweep</span><span class=\"ds-meta\">gitlab · release</span><span class=\"ds-num\">18s</span><span class=\"ds-num\">刚刚</span><span class=\"ds-actions\"><button aria-label=\"取消\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button></span></li></ul></div>",
+      "css": ".ds-ledger{background:#fff;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;--tpl:14px minmax(132px,.7fr) minmax(200px,2fr) minmax(104px,.8fr) minmax(64px,.5fr) minmax(80px,.6fr) 0px}.ds-ledger-head{display:grid;grid-template-columns:var(--tpl);align-items:center;gap:0 10px;height:28px;padding:0 14px 0 24px;border-bottom:1px solid #e9e9ec;color:#787774;font-size:12px;line-height:16px}.ds-ledger-head>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-ledger-body{margin:0;padding:0;list-style:none}.ds-ledger-row{position:relative;display:grid;grid-template-columns:var(--tpl);align-items:center;gap:0 10px;height:36px;padding:0 14px 0 24px;border-bottom:1px solid #e9e9ec;color:#37352f;font-size:13px;line-height:18px;transition:background-color 150ms cubic-bezier(.22,1,.36,1)}.ds-ledger-row>*{min-width:0;align-self:center}.ds-ledger-row:hover{background:rgb(55 53 47 / 3%)}.ds-ledger-row.ds-selected{background:rgb(79 70 229 / 3%)}.ds-ledger-row.ds-selected::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:#4f46e5}.ds-status{width:14px;height:14px}.ds-id{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;color:#787774;font-variant-numeric:tabular-nums slashed-zero;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-title{display:flex;align-items:center;gap:8px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-tile{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:none;border-radius:4px;background:rgb(55 53 47 / 7%);font-size:11px;font-weight:500;font-style:normal}.ds-meta{color:#787774;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-num{text-align:right;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-variant-numeric:tabular-nums slashed-zero;color:#787774}.ds-actions{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;gap:2px;padding:0 2px;border-radius:6px;background:color-mix(in srgb,#fff,#37352f 4%);opacity:0;transition:opacity 150ms cubic-bezier(.22,1,.36,1)}.ds-ledger-row:hover .ds-actions,.ds-ledger-row:focus-within .ds-actions{opacity:1}.ds-actions button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:6px;background:transparent;color:#787774;cursor:pointer}.ds-actions button svg{width:14px;height:14px}.ds-actions button:hover{background:rgb(55 53 47 / 3%);color:#37352f}"
+    },
+    {
+      "name": "Dialog",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "The confirm / form dialog: hairline-bounded 48px header bar, 16px body, hairline footer with right-aligned actions.",
+      "html": "<div class=\"ds-dialog\"><header><h2>取消运行</h2><button class=\"ds-dialog-x\" aria-label=\"关闭\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button></header><div class=\"ds-dialog-body\">运行 run_8f21c0 将立即停止，已产生的步骤会保留。</div><footer><button class=\"ds-dialog-cancel\">取消</button><button class=\"ds-dialog-confirm\">停止运行</button></footer></div>",
+      "css": ".ds-dialog{position:relative;width:448px;border:1px solid #e9e9ec;border-radius:8px;background:#fff;color:#37352f;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;font-size:13px;box-shadow:0 1px 2px rgb(24 24 27 / 4%),0 8px 24px -12px rgb(24 24 27 / 18%)}.ds-dialog header{display:flex;align-items:center;min-height:48px;padding:10px 48px 10px 16px;border-bottom:1px solid #e9e9ec}.ds-dialog h2{margin:0;font-size:13px;font-weight:500;line-height:18px}.ds-dialog-x{position:absolute;right:8px;top:10px;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:6px;background:transparent;color:#787774;cursor:pointer}.ds-dialog-x svg{width:14px;height:14px}.ds-dialog-x:hover{background:rgb(55 53 47 / 3%);color:#37352f}.ds-dialog-body{padding:16px;line-height:18px}.ds-dialog footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e9e9ec}.ds-dialog footer button{height:28px;padding:0 10px;border-radius:6px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgb(0 0 0 / 6%)}.ds-dialog-cancel{border:1px solid #d6d7dc;background:#fff;color:#37352f}.ds-dialog-cancel:hover{background:rgb(55 53 47 / 3%)}.ds-dialog-confirm{border:none;background:#dc2626;color:#fff}.ds-dialog-confirm:hover{background:#b91c1c}"
+    },
+    {
+      "name": "Composer",
+      "kind": "custom",
+      "refersTo": "composer",
+      "description": "The conversation composer: one tonal borderless 16px panel, auto-growing textarea, toolbar with the bound agent and one round ink send button.",
+      "html": "<form class=\"ds-composer\"><textarea rows=\"1\" placeholder=\"向 Atlas Reviewer 提问\"></textarea><div class=\"ds-composer-bar\"><span class=\"ds-composer-agent\"><i class=\"ds-tile\">A</i>Atlas Reviewer</span><button type=\"submit\" class=\"ds-composer-send\" aria-label=\"发送\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19V5\"/><path d=\"M5 12l7-7 7 7\"/></svg></button></div></form>",
+      "css": ".ds-composer{width:100%;max-width:48rem;padding:16px 16px 12px;border-radius:16px;background:#f1f1f0;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}.ds-composer textarea{display:block;width:100%;min-height:40px;max-height:200px;resize:none;border:none;outline:none;background:transparent;color:#37352f;font:inherit;font-size:14px;line-height:1.625}.ds-composer textarea::placeholder{color:#787774}.ds-composer-bar{display:flex;align-items:center;justify-content:flex-end;gap:12px;height:32px;margin-top:8px}.ds-composer-agent{display:flex;align-items:center;gap:6px;min-width:0;color:#787774;font-size:12px}.ds-composer-agent .ds-tile{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:rgb(55 53 47 / 7%);color:#37352f;font-size:11px;font-weight:500;font-style:normal}.ds-composer-send{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;border:none;border-radius:999px;background:#37352f;color:#fff;cursor:pointer;transition:opacity 150ms cubic-bezier(.22,1,.36,1),transform 120ms cubic-bezier(.34,1.56,.64,1)}.ds-composer-send svg{width:16px;height:16px}.ds-composer-send:active{transform:scale(.97)}.ds-composer-send:disabled{opacity:.3}.ds-composer-send:focus-visible{outline:none;box-shadow:0 0 0 2px rgb(79 70 229 / 40%)}"
+    },
+    {
+      "name": "Approval Bar",
+      "kind": "custom",
+      "refersTo": "approval-head",
+      "description": "Replaces the composer while a permission is pending: tool + mono countdown, the request sentence, the command in mono, deny / allow-once and the stop control.",
+      "html": "<section class=\"ds-approval\"><div class=\"ds-approval-head\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 17l6-5-6-5\"/><path d=\"M12 19h8\"/></svg><span class=\"ds-approval-tool\">bash</span><span class=\"ds-approval-timer\">4:52</span></div><p class=\"ds-approval-body\">Atlas Reviewer 请求执行 bash。</p><p class=\"ds-approval-cmd\">pnpm -C apps/web build --force</p><div class=\"ds-approval-actions\"><button class=\"ds-btn-deny\">拒绝</button><button class=\"ds-btn-allow\">允许一次</button><button class=\"ds-approval-stop\" aria-label=\"停止\"><span></span></button></div></section>",
+      "css": ".ds-approval{display:flex;flex-direction:column;width:100%;max-width:48rem;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}.ds-approval-head{display:flex;align-items:center;gap:8px;height:28px;color:#787774;font-size:12px}.ds-approval-head svg{width:14px;height:14px;flex:none}.ds-approval-tool{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-approval-timer{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums slashed-zero}.ds-approval-body{margin:4px 0 0;color:#37352f;font-size:13px;font-weight:400;line-height:18px}.ds-approval-cmd{margin:4px 0 0;color:#787774;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-approval-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px}.ds-approval-actions button{height:28px;padding:0 10px;border-radius:6px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgb(0 0 0 / 6%);transition:background-color 150ms cubic-bezier(.22,1,.36,1),transform 120ms cubic-bezier(.34,1.56,.64,1)}.ds-approval-actions button:active{transform:scale(.97)}.ds-btn-deny{border:1px solid #d6d7dc;background:#fff;color:#37352f}.ds-btn-deny:hover{background:rgb(55 53 47 / 3%)}.ds-btn-allow{border:none;background:#4f46e5;color:#fff}.ds-btn-allow:hover{background:#4338ca}.ds-approval-stop{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin-left:4px;padding:0;border:none;border-radius:999px;background:#37352f;box-shadow:none}.ds-approval-stop span{display:block;width:12px;height:12px;background:#fff}"
+    },
+    {
+      "name": "Work Trace",
+      "kind": "custom",
+      "refersTo": "trace-step",
+      "description": "The collapsible run block between a user turn and the answer: status word plus mono elapsed, no trailing rule, 32px tool rows.",
+      "html": "<section class=\"ds-trace\"><button class=\"ds-trace-head\" aria-expanded=\"true\"><svg class=\"ds-status\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" style=\"color:#d97706\"><circle cx=\"7\" cy=\"7\" r=\"6\" stroke=\"#d4d4d8\"/><path d=\"M13 7a6 6 0 0 0-6-6\" stroke-linecap=\"round\"/></svg><span class=\"ds-trace-word\">运行中</span><span class=\"ds-trace-elapsed\">· <b>12s</b></span><svg class=\"ds-trace-chev\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M6 9l6 6 6-6\"/></svg></button><ul class=\"ds-trace-steps\"><li><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M7 9l3 3-3 3M13 15h4\"/></svg><span class=\"ds-trace-verb\">执行</span><span class=\"ds-trace-target\">pnpm -C apps/web build</span><span class=\"ds-trace-time\">8s</span><svg class=\"ds-trace-chev2\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M9 6l6 6-6 6\"/></svg></li><li><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 3v5h5\"/><path d=\"M19 8v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h8z\"/></svg><span class=\"ds-trace-verb\">读取</span><span class=\"ds-trace-target\">apps/web/src/style.css</span><span class=\"ds-trace-time\">1s</span><svg class=\"ds-trace-chev2\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M9 6l6 6-6 6\"/></svg></li></ul></section>",
+      "css": ".ds-trace{width:100%;max-width:48rem;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}.ds-trace-head{display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0;border:none;border-radius:6px;background:transparent;color:#787774;font:inherit;font-size:13px;text-align:left;cursor:pointer}.ds-trace-head .ds-status{width:14px;height:14px;flex:none}.ds-trace-elapsed b{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:400;font-variant-numeric:tabular-nums slashed-zero}.ds-trace-chev{width:14px;height:14px;opacity:0;transition:opacity 150ms cubic-bezier(.22,1,.36,1)}.ds-trace-head:hover .ds-trace-chev,.ds-trace-head:focus-visible .ds-trace-chev{opacity:1}.ds-trace-steps{margin:0;padding:0;list-style:none;border-top:1px solid #e9e9ec}.ds-trace-steps li{display:flex;align-items:center;gap:8px;height:32px;border-bottom:1px solid #e9e9ec;transition:background-color 150ms cubic-bezier(.22,1,.36,1)}.ds-trace-steps li:last-child{border-bottom:none}.ds-trace-steps li:hover{background:rgb(55 53 47 / 3%)}.ds-trace-steps svg{width:14px;height:14px;flex:none;color:#787774}.ds-trace-verb{flex:none;color:#37352f;font-size:13px}.ds-trace-target{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#787774;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px}.ds-trace-time{flex:none;color:#787774;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-variant-numeric:tabular-nums slashed-zero}"
+    },
+    {
+      "name": "Turn Nav Rail",
+      "kind": "nav",
+      "refersTo": "turn-marker",
+      "description": "One 2px marker per user turn on the thread's left edge: 6px at rest, 26px ink when active, a wave under the pointer and a floating preview.",
+      "html": "<nav class=\"ds-turnrail\" aria-label=\"对话轮次\"><button style=\"width:6px\"></button><button style=\"width:10px\"></button><button style=\"width:14px\"></button><button class=\"ds-turn-hover\" style=\"width:20px\"></button><button class=\"ds-turn-active\" style=\"width:26px\"></button><button style=\"width:20px\"></button><button style=\"width:14px\"></button><button style=\"width:6px\"></button><div class=\"ds-turn-preview\">帮我把 ledger 的列模型迁移到 col.* 并保持 24px 外边。</div></nav>",
+      "css": ".ds-turnrail{position:relative;display:flex;flex-direction:column;align-items:flex-end;gap:7.5px;width:20px;padding:8px 2px 8px 4px}.ds-turnrail button{position:relative;height:2px;border:none;border-radius:999px;background:#d6d7dc;padding:0;cursor:pointer;transition:width 150ms cubic-bezier(.22,1,.36,1),background-color 150ms cubic-bezier(.22,1,.36,1)}.ds-turnrail button::after{content:'';position:absolute;inset:-4px -8px}.ds-turnrail button:hover,.ds-turn-hover,.ds-turn-active{background:#37352f}.ds-turnrail button:focus-visible{outline:none;box-shadow:0 0 0 2px rgb(79 70 229 / 40%)}.ds-turn-preview{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:6px;width:256px;padding:8px;border:1px solid #e9e9ec;border-radius:8px;background:#fff;color:#787774;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;font-size:12px;line-height:16px;box-shadow:0 1px 2px rgb(24 24 27 / 4%),0 8px 24px -12px rgb(24 24 27 / 18%)}"
+    },
+    {
+      "name": "Detail Rail",
+      "kind": "custom",
+      "refersTo": "detail-rail",
+      "description": "The right-hand detail pane: 64px header with the status word, mono id, expand-to-modal and close; property grid; hairline footer.",
+      "html": "<aside class=\"ds-rail\"><header><svg class=\"ds-status\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" style=\"color:#16a34a\"><circle cx=\"7\" cy=\"7\" r=\"6\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M4.4 7.2l1.8 1.8 3.4-3.6\" stroke=\"#fff\" stroke-linecap=\"round\"/></svg><span class=\"ds-rail-word\">已完成</span><span class=\"ds-rail-id\">run_8f21c0</span><button aria-label=\"展开\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7\"/></svg></button><button aria-label=\"关闭\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button></header><div class=\"ds-rail-body\"><dl><dt>代理</dt><dd>Atlas Reviewer</dd><dt>连接</dt><dd>github · main</dd><dt>模型</dt><dd class=\"ds-mono\">claude-opus-5</dd><dt>用时</dt><dd class=\"ds-mono\">1m 12s</dd></dl></div><footer><button class=\"ds-btn-outline\">重试</button></footer></aside>",
+      "css": ".ds-rail{display:flex;flex-direction:column;width:384px;height:420px;border-left:1px solid #e9e9ec;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;overflow:hidden}.ds-rail header{display:flex;align-items:center;gap:8px;height:64px;flex:none;padding:0 8px 0 16px;border-bottom:1px solid #e9e9ec}.ds-rail .ds-status{width:14px;height:14px;flex:none}.ds-rail-word{font-size:13px;font-weight:500;color:#37352f}.ds-rail-id{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#787774;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px}.ds-rail header button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;border:none;border-radius:6px;background:transparent;color:#787774;cursor:pointer;transition:background-color 150ms cubic-bezier(.22,1,.36,1)}.ds-rail header button svg{width:14px;height:14px}.ds-rail header button:hover{background:rgb(55 53 47 / 3%);color:#37352f}.ds-rail-body{flex:1;min-height:0;overflow-y:auto;padding:16px 16px 8px}.ds-rail-body dl{display:grid;grid-template-columns:84px 1fr;column-gap:12px;margin:0;font-size:13px}.ds-rail-body dt{display:flex;align-items:center;height:28px;color:#787774;font-size:12px}.ds-rail-body dd{display:flex;align-items:center;height:28px;margin:0;color:#37352f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-rail-body .ds-mono{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-variant-numeric:tabular-nums slashed-zero}.ds-rail footer{display:flex;align-items:center;gap:8px;flex:none;padding:12px 16px;border-top:1px solid #e9e9ec}.ds-rail footer .ds-btn-outline{height:28px;padding:0 10px;border:1px solid #d6d7dc;border-radius:6px;background:#fff;color:#37352f;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgb(0 0 0 / 6%)}"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "The 232px panel: 30px rows, sidebar grey at rest, ink 6% tint and full ink when active.",
+      "html": "<nav class=\"ds-nav\"><p class=\"ds-nav-group\">工作台</p><a class=\"ds-nav-item ds-nav-active\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 5v14l11-7z\"/></svg>运行<span class=\"ds-nav-count\">12</span></a><a class=\"ds-nav-item\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/></svg>对话</a><a class=\"ds-nav-item\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3l8 4v6c0 4.5-3.4 7.6-8 8-4.6-.4-8-3.5-8-8V7z\"/></svg>审批</a></nav>",
+      "css": ".ds-nav{width:232px;padding:10px;background:#fafafa;border-right:1px solid #e9e9ec;color:#5f5e5a;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif}.ds-nav-group{margin:14px 0 4px;padding:0 8px;color:#787774;font-size:12px;line-height:16px}.ds-nav-item{display:flex;align-items:center;gap:8px;height:30px;margin-bottom:1px;padding:0 8px;border-radius:6px;color:inherit;font-size:14px;text-decoration:none;cursor:pointer;transition:background-color 150ms cubic-bezier(.22,1,.36,1),color 150ms cubic-bezier(.22,1,.36,1)}.ds-nav-item svg{width:16px;height:16px;flex:none;color:#787774}.ds-nav-item:hover{background:rgb(55 53 47 / 3%)}.ds-nav-active{background:rgb(55 53 47 / 6%);color:#37352f;font-weight:500}.ds-nav-active svg{color:#37352f}.ds-nav-item:focus-visible{outline:none;box-shadow:0 0 0 2px rgb(79 70 229 / 40%)}.ds-nav-count{margin-left:auto;padding:0 6px;border-radius:999px;background:rgb(55 53 47 / 7%);color:#787774;font-size:12px;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "At most one per row: a secondary state, colour only in the 6px dot.",
+      "html": "<span class=\"ds-badge\"><i style=\"background:#9a9ca4\"></i>已禁用</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 6px;border:1px solid #d6d7dc;border-radius:6px;background:#fff;color:#37352f;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;font-size:12px;line-height:16px}.ds-badge i{width:6px;height:6px;border-radius:999px;display:block}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Issue Ledger",
+    "overview": "**Creative North Star: \"The Issue Ledger\"**\n\nParsar's console reads like the issue tracker an engineering team already lives in: one dense row per object, status drawn as a small icon, identifiers in mono, and a keyboard that can do everything. The register is the restrained, premium calm of Notion and OpenAI: hierarchy comes from spacing, weight and two tones of ink, never from colour or decoration. Chrome is thin and structural; content is the surface.\n\nDensity is a feature, not a compromise. Rows are 36px, sidebar rows 30px, the topbar 64px. Panels are separated by hairlines and one step of tone, not by cards. Anything that describes or qualifies content is small and grey; anything that is content is ink. The two side panels (sidebar, detail rail) are the user's: their edges drag, and the console asks once whether to keep the new width.\n\nThe system rejects, by the user's decision: the card dashboard (sidebar + stat tiles + card grid), the document-page arrangement (large centred title, database view), pure-black dark mode, webfont CJK, tinted message boxes, category chips, padding above ledger headers, a rail \"drain\" effect on expand, and any control that appears twice on one screen.\n\nThis file was written with the user as the spec, refreshed against the Runs build, and refreshed again against the whole shipped console (fifteen views in light and dark, `src/style.css`, `src/components/ui/*`, `src/components/layout/*`, `src/lib/layout-width.ts`). This pass adds what the refinement batch landed: the ledger **column model** with fixed 24px outer edges, the **level-aware entrance** (page-in for sidebar views, detail-in for drill-downs), an **exit for every entrance**, dialogs rebuilt on the rail's header/body/footer frame, and the conversation surface (composer, `WorkTrace`, `ApprovalBar`, `TurnNavRail`). Where the build settled a value the earlier record had approximate, the build's value is recorded here; the user rules themselves are unchanged.",
+    "keyCharacteristics": [
+      "Dense rows, hairline structure, two greys, one accent.",
+      "System typefaces only: SF Pro / PingFang on macOS, Segoe UI / YaHei on Windows.",
+      "Status colour lives only inside 14px status icons (and the 14px glyph of an inline message).",
+      "One control per semantic per screen; no page description subtitles; the English page name is the only companion to a title.",
+      "Springy, non-linear motion, short and rare: two page entrances (section switch, drill-down), one rail entrance, one modal flight — and every one of them has a reverse.",
+      "Every ledger and the topbar share the same two vertical edges (24px), so page after page reads as one document."
+    ],
+    "rules": [
+      {
+        "name": "The Icon-Only Status Rule",
+        "body": "Status colour appears only inside a 14px glyph: the status icon, the inline-message triangle or check, the badge dot. Status words, rows, chips and message text stay in ink and grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Greys Rule",
+        "body": "Content text is ink or ink-muted, nothing in between. Muted is for labels, metadata and categories; a value is never muted. The sidebar rests one shade lighter than ink as a whole surface, which is not a third content grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Grey Night Rule",
+        "body": "Dark mode is warm grey (#191919 ground / #202020 panel / #2a2a2a muted), never pure black. Hairlines in dark are white at 9% and 16%, so structure stays visible without a third grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Tinted Box Rule",
+        "body": "A message is a 14px glyph plus ink text, inline, at the size of its surroundings. There is no coloured background, no coloured border, no coloured text behind a message; the `*-subtle` fills stay unused.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Weights Rule",
+        "body": "600 is the page title only. 500 is the name of a thing (workspace, user, row title, run id in the rail), the active nav item or tab, button labels, section heads and the entry title. Everything else, including every label and every value, is 400. 700 does not exist.",
+        "section": "typography"
+      },
+      {
+        "name": "The Five Sizes Rule",
+        "body": "20 / 14 / 13 / 12 and 12-mono. There is no 11px functional text and no sixth size in the console; 22 belongs to the entry panel alone.",
+        "section": "typography"
+      },
+      {
+        "name": "The Layered Base Rule",
+        "body": "Element-level type and reset rules live in `@layer base`, never unlayered. An unlayered `button, select, textarea { font: inherit }` outranks Tailwind's utility layer and silently drags every button, tab and nav row to the 16px root size; inside `@layer base` the `text-*` utilities win. Any new element rule added to `src/style.css` goes in that layer.",
+        "section": "typography"
+      },
+      {
+        "name": "The Plain Category Rule",
+        "body": "A category (member role, capability type, source, connector) is 12px muted text in its own column, never a chip. A `Badge` marks at most one secondary state per row (disabled, unmanaged, pending) with a neutral dot.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed Outer Edges Rule",
+        "body": "The topbar and every ledger — header row, group header, data row, and the ledger on every page — share the same two vertical edges at 24px. Internal space is divided only after those edges are set: content columns are `minmax(floor, weight fr)`, never fixed pixels that leave a ragged right edge. A page that starts its rows at a different inset is wrong, not merely different.",
+        "section": "layout"
+      },
+      {
+        "name": "The Two Levels of Arrival Rule",
+        "body": "Opening a level-one view (anything reached from the sidebar) rises in with `page-in`. Opening a level-two view (a detail page carrying an entity id on a non-rail view) is pushed in from the right with `detail-in`. Views whose `?id=` selects a rail instead of a page (runs, approvals, conversations, connections, capabilities) stay level one — a view listed in `RAIL_VIEWS` must never key its page transition on the entity id, or selecting a second row replays the entrance instead of swapping the rail's content. Two arrivals, no third.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Way In Rule",
+        "body": "Clicking a row in any ledger opens the detail rail — never a second page. Clicking the row that is already open closes it, and clicking a different row swaps the rail's content in place rather than replaying its entrance. There is exactly one escalation from there, the rail's expand button, and exactly one control that means “bigger” anywhere in the console. Two forms of detail would make the user predict which list navigates and which peeks; there is nothing to predict.",
+        "section": "layout"
+      },
+      {
+        "name": "The Addressable Detail Rule",
+        "body": "Every step of the ladder lives in the URL: `?id=` (or `&item=`) selects the rail, `&view=full` lifts it into the expanded panel. The expanded panel is therefore linkable, bookmarkable, and dismissed by the browser's back button — never a dead end floating over the list. Clearing the id clears `view` with it: an expanded panel with nothing selected is not a reachable state.",
+        "section": "layout"
+      },
+      {
+        "name": "The Every Entrance Has An Exit Rule",
+        "body": "Nothing disappears without playing its reverse: `rail-out` before the rail unmounts, `pop-out` on every floating layer (menus, tooltips, dialogs, the layout prompt, the turn preview), `overlay-out` under them, `modal-out` when the expanded rail collapses. A component that owns an exit stays mounted until the animation ends (the rail unmounts on `animationend`; `LayoutPrompt` holds for 160ms after `open` turns false).",
+        "section": "layout"
+      },
+      {
+        "name": "The Row Reading Rule",
+        "body": "A column header never wraps: one line, truncating, in a 28px header. Every cell in a row is vertically centred, and every numeric or age column is right-aligned and tabular, so the eye reads down a column of figures without drifting.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Rows, panels, group headers, sections and the rail never carry a shadow or a tint of their own. If something floats, it is a menu, a tooltip, a dialog, the rail's modal or the layout prompt.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Keyframe Home Rule",
+        "body": "Every keyframe and every `--animate-*` utility is declared in `src/style.css`; components reference them and never write their own. Modal centring lives in the keyframes and `.app-modal-center`, never in a translate utility, so the two never stack.",
+        "section": "motion"
+      }
+    ],
+    "dos": [
+      "**Do** put every action in exactly one place on a screen. If a filter, a search, a count or a theme toggle already exists, reuse it.",
+      "**Do** start every console page with the 64px `PageHeader`, passing `subtitleFor` so the English name appears in 12px muted beside the title.",
+      "**Do** keep status colour inside the 14px status icon and set the status word in ink; lead a row with the status icon when the object has a status.",
+      "**Do** set identifiers, durations, costs, e-mail addresses and timestamps in mono with tabular numerals, right-aligned in numeric columns.",
+      "**Do** use the system font stack unchanged; let macOS render PingFang and Windows render YaHei.",
+      "**Do** separate regions with hairlines and one tone step; use 36px rows and 30px nav rows; let the sticky column header hug the topbar on full-bleed list pages.",
+      "**Do** use spring easing for entrances and toggles, settle for exits and hovers, and gate every animation behind reduced-motion.",
+      "**Do** keep light and dark as one token set; dark is warm grey, never black.",
+      "**Do** build every list on `Ledger` and pass the column template once so header and rows share one grid; build every detail pane on `DetailRail` + `PropertyList`; build every settings body on `PageSection`; build every entry surface on `EntryPanel`.",
+      "**Do** write categories as 12px muted text and reserve `Badge` for one neutral-dot secondary state per row.",
+      "**Do** put navigation tabs in the topbar action slot and content tabs in the 40px hairline row under it.",
+      "**Do** hide `RowActions` until hover or focus, and pull pagination strings only from `common:pagination.*`.",
+      "**Do** declare ledger columns with `col.*` and let the primitive build the grid; keep the 24px outer edges so every list shares the topbar's two edges.",
+      "**Do** keep column headers on one truncating line, centre every cell vertically, and right-align numeric and age columns.",
+      "**Do** give every entrance its exit — `rail-out`, `pop-out`, `overlay-out`, `modal-out` — and keep the component mounted until the animation ends.",
+      "**Do** choose the entrance by level: `page-in` for a sidebar view, `detail-in` for a drill-down.",
+      "**Do** put element-level CSS in `@layer base` so Tailwind's utilities keep winning.",
+      "**Do** build the conversation surface from its named parts: the tonal composer with one round ink send/stop control, `WorkTrace`, `ApprovalBar`, `TurnNavRail`."
+    ],
+    "donts": [
+      "**Don't** add a description or subtitle under a page title, a keyboard-hint line, a version string, or any helper copy that is not content or a control. The one exception, approved by the user, is the `⌘K` kbd inside the search field. The English page name beside the title is a name, not a description.",
+      "**Don't** render the same action twice (a header button and a table-footer button, a sidebar utility row and a nav item, a topbar count and a footer count, a settings tab strip in two places).",
+      "**Don't** use cards, stat tiles, nested bordered boxes, tinted message boxes, or coloured left borders thicker than the 2px selection marker.",
+      "**Don't** wrap a category (role, type, source) in a chip, or put more than one `Badge` on a row.",
+      "**Don't** add padding between the topbar and a ledger's column header, or a margin above the first section of a page.",
+      "**Don't** animate the rail when it expands; only the modal moves, and the modal's only control is collapse.",
+      "**Don't** let anything vanish without its reverse animation, and don't unmount a panel before its exit has played.",
+      "**Don't** reserve a grid track for row actions, give a ledger a different inset than 24px, wrap a column header onto a second line, or hand `Ledger` a raw string template.",
+      "**Don't** add an element rule to `src/style.css` outside `@layer base`; an unlayered `button { font: inherit }` beats every `text-*` utility and resets the console to 16px.",
+      "**Don't** show a send button and a stop button at once, or put a second cancel control on the conversation while the approval bar owns the composer slot.",
+      "**Don't** add a session-scoped approval button; the API has no such decision.",
+      "**Don't** use 700 weight, a third grey, an 11px functional size, or arbitrary pixel sizes outside the scale.",
+      "**Don't** load Google Fonts for Latin or CJK; Noto Sans SC stays a last-resort fallback only.",
+      "**Don't** put colour in text to signal state; tint a background or draw an icon instead.",
+      "**Don't** use linear easing for anything but the running spinner, or declare a keyframe outside `src/style.css`.",
+      "**Don't** render the compatibility strings (`description`, `audit.footer.shownCount`, login `noAccountHint`).",
+      "**Don't** reach past the semantic tokens (`fg-*`, `surface-*`, `line-*`, `accent`, `status-*`, `app-*`) to the raw palette; lint will fail the build."
+    ]
+  }
+}

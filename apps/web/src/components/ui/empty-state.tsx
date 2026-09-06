@@ -10,23 +10,23 @@ interface EmptyStateProps {
   className?: string
 }
 
+/**
+ * Flat empty state: a muted icon, an ink title, optional one-line
+ * description and one action. No dashed box, no card.
+ */
 export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-line bg-surface px-6 py-16 text-center",
+        "flex flex-col items-center justify-center gap-3 px-6 py-16 text-center",
         className
       )}
     >
-      {Icon && (
-        <div className="rounded-full bg-surface-muted p-3 text-fg-subtle">
-          <Icon className="h-5 w-5" />
-        </div>
-      )}
-      <div className="space-y-1.5">
-        <p className="text-base font-medium text-fg">{title}</p>
+      {Icon && <Icon className="h-5 w-5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />}
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-fg">{title}</p>
         {description && (
-          <p className="text-sm text-fg-subtle max-w-sm">{description}</p>
+          <p className="max-w-sm text-sm text-fg-muted">{description}</p>
         )}
       </div>
       {action && <div className="mt-1">{action}</div>}

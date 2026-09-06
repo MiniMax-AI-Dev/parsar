@@ -1,0 +1,36 @@
+import { chromium } from "@playwright/test"
+import path from "node:path"
+const OUT = path.resolve(".impeccable/review")
+const EXE = `${process.env.HOME}/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`
+const browser = await chromium.launch({ executablePath: EXE, args: ["--no-sandbox", "--disable-gpu"] })
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "zh-CN", reducedMotion: "no-preference" })
+await ctx.addInitScript(() => { localStorage.setItem("parsar.theme", "light"); localStorage.setItem("parsar.lang", "zh-CN"); localStorage.setItem("parsar.ws", "0f4d2c6e-9b1a-4e7c-8f3d-2a1b5c6d7e8f") })
+const page = await ctx.newPage()
+const url = "http://127.0.0.1:5173/?admin=runs&id=run_01J8Z03KX2P9Q03"
+await page.goto(url, { waitUntil: "networkidle" }); await page.waitForTimeout(600)
+const handles = page.getByRole("separator", { name: "已调整宽度" })
+console.log("handles:", await handles.count())
+// drag the rail's left edge 120px to the left
+const rail = handles.nth(1)
+const box = await rail.boundingBox()
+await page.mouse.move(box.x + box.width / 2, box.y + 400)
+await page.mouse.down(); await page.mouse.move(box.x - 60, box.y + 400, { steps: 6 }); await page.mouse.move(box.x - 120, box.y + 400, { steps: 6 }); await page.mouse.up()
+await page.waitForTimeout(400)
+await page.screenshot({ path: path.join(OUT, "drag-rail-prompt.png") })
+const railW = await page.evaluate(() => document.querySelector('aside[aria-label]')?.parentElement?.getBoundingClientRect().width)
+console.log("rail width after drag:", railW)
+await page.getByRole("button", { name: "保存" }).click(); await page.waitForTimeout(200)
+console.log("stored:", await page.evaluate(() => localStorage.getItem("parsar.layout.rail")))
+await page.reload({ waitUntil: "networkidle" }); await page.waitForTimeout(600)
+console.log("rail width after reload:", await page.evaluate(() => document.querySelector('aside[aria-label]')?.parentElement?.getBoundingClientRect().width))
+// sidebar: drag right edge +60 then restore
+const side = handles.nth(0); const sb = await side.boundingBox()
+await page.mouse.move(sb.x + sb.width / 2, sb.y + 400); await page.mouse.down(); await page.mouse.move(sb.x + 60, sb.y + 400, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(300)
+console.log("sidebar after drag:", await page.evaluate(() => document.querySelector('aside.app-sidebar')?.parentElement?.getBoundingClientRect().width))
+await page.screenshot({ path: path.join(OUT, "drag-sidebar-prompt.png") })
+await page.getByRole("button", { name: "恢复" }).click(); await page.waitForTimeout(120)
+console.log("sidebar mid-restore:", await page.evaluate(() => document.querySelector('aside.app-sidebar')?.parentElement?.getBoundingClientRect().width))
+await page.waitForTimeout(600)
+console.log("sidebar after restore:", await page.evaluate(() => document.querySelector('aside.app-sidebar')?.parentElement?.getBoundingClientRect().width), "stored:", await page.evaluate(() => localStorage.getItem("parsar.layout.sidebar")))
+await page.screenshot({ path: path.join(OUT, "drag-after-restore.png") })
+await browser.close()

@@ -1,19 +1,33 @@
-import { ArrowUpRight } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import {
+  Ledger,
+  LedgerHeader,
+  LedgerId,
+  LedgerNum,
+  LedgerRow,
+  col,
+} from "../../../components/ui/ledger"
+import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
+import { StatusIcon } from "../../../components/ui/status-icon"
 import { useAdminView } from "../../../lib/admin-router"
 import {
   useAgentMetrics,
   useAgentRuns,
   type AgentMetrics,
 } from "../../../lib/api-agents"
-import type { Agent, AgentRunStatus, AgentRunSummary } from "../../../lib/api-types"
+import type { Agent, AgentRunSummary } from "../../../lib/api-types"
 import { useRelativeTime } from "../../../lib/relative-time"
+import { DetailSection } from "./DetailSection"
 
 const RECENT_RUNS_LIMIT = 10
 
+/** status icon · run id · conversation · duration · age */
+const RUNS_COLUMNS = [col.icon(), col.id(132), col.id(200, 2), col.num(64), col.age(80)]
+
 export function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string | null; agent: Agent }) {
+  const { t } = useTranslation("admin")
   const inflightQ = useAgentRuns(workspaceID, { statuses: ["running", "queued"], limit: 50 })
   const recentQ = useAgentRuns(workspaceID, { limit: 50 })
   const metricsQ = useAgentMetrics(workspaceID, agent.id, 30)
@@ -26,182 +40,117 @@ export function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string |
     .slice(0, RECENT_RUNS_LIMIT)
 
   return (
-    <div className="space-y-4">
-      <CurrentWorkCard
-        runs={inflight}
-        loading={inflightQ.isLoading}
-      />
-      <MetricsCard
-        metrics={metricsQ.data}
-        loading={metricsQ.isLoading}
-      />
-      <RecentRunsCard
-        runs={recent}
-        loading={recentQ.isLoading}
-        showCount={recent.length}
-      />
-    </div>
+    <>
+      <DetailSection title={t("agents.detail.dynamics.current.title")} meta={inflight.length || undefined}>
+        <RunsLedger
+          runs={inflight}
+          loading={inflightQ.isLoading}
+          emptyLabel={t("agents.detail.dynamics.current.empty")}
+        />
+      </DetailSection>
+
+      <DetailSection title={t("agents.detail.dynamics.metrics.title")}>
+        <MetricsList metrics={metricsQ.data} loading={metricsQ.isLoading} />
+      </DetailSection>
+
+      <DetailSection title={t("agents.detail.dynamics.recent.title")} meta={recent.length || undefined}>
+        <RunsLedger
+          runs={recent}
+          loading={recentQ.isLoading}
+          emptyLabel={t("agents.detail.dynamics.recent.empty")}
+        />
+      </DetailSection>
+    </>
   )
 }
 
-function CurrentWorkCard({ runs, loading }: { runs: AgentRunSummary[]; loading: boolean }) {
-  const { t } = useTranslation("admin")
-  return (
-    <DynamicsCard
-      title={t("agents.detail.dynamics.current.title")}
-      subtitle={t("agents.detail.dynamics.current.subtitle")}
-    >
-      {loading ? (
-        <Skeleton className="h-5 w-2/3" />
-      ) : runs.length === 0 ? (
-        <p className="text-sm text-fg-faint">{t("agents.detail.dynamics.current.empty")}</p>
-      ) : (
-        <ul className="space-y-2">
-          {runs.map((run) => (
-            <li key={run.id} className="flex items-center justify-between rounded-md border border-line px-3 py-2">
-              <div className="flex items-center gap-2 text-sm">
-                <RunStatusDot status={run.status} />
-                <code className="font-mono text-sm text-fg-muted">{shortRunId(run.id)}</code>
-                <span className="text-fg-subtle">·</span>
-                <span className="text-fg-muted">{run.agent_name ?? "—"}</span>
-              </div>
-              <span className="text-sm text-fg-subtle">{run.status}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DynamicsCard>
-  )
-}
-
-function MetricsCard({ metrics, loading }: { metrics?: AgentMetrics; loading: boolean }) {
-  const { t } = useTranslation("admin")
-  return (
-    <DynamicsCard
-      title={t("agents.detail.dynamics.metrics.title")}
-      subtitle={t("agents.detail.dynamics.metrics.subtitle")}
-    >
-      {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)}
-        </div>
-      ) : !metrics || metrics.completed_count + metrics.failed_count === 0 ? (
-        <p className="text-sm text-fg-faint">{t("agents.detail.dynamics.metrics.empty")}</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <MetricStat
-            label={t("agents.detail.dynamics.metrics.completed")}
-            value={metrics.completed_count.toString()}
-          />
-          <MetricStat
-            label={t("agents.detail.dynamics.metrics.successRate")}
-            value={formatPercent(metrics.success_rate)}
-          />
-          <MetricStat
-            label={t("agents.detail.dynamics.metrics.avgDuration")}
-            value={formatDurationMs(metrics.avg_duration_ms)}
-          />
-        </div>
-      )}
-    </DynamicsCard>
-  )
-}
-
-function MetricStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-surface-subtle/40 px-3 py-2">
-      <div className="text-xs font-medium text-fg-faint">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold tabular-nums text-fg">{value}</div>
-    </div>
-  )
-}
-
-function RecentRunsCard({
-  runs,
-  loading,
-  showCount,
-}: {
-  runs: AgentRunSummary[]
-  loading: boolean
-  showCount: number
-}) {
+function RunsLedger({ runs, loading, emptyLabel }: { runs: AgentRunSummary[]; loading: boolean; emptyLabel: string }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
   const fmtAgo = useRelativeTime()
-  return (
-    <DynamicsCard
-      title={t("agents.detail.dynamics.recent.title")}
-      subtitle={t("agents.detail.dynamics.recent.subtitle", { count: showCount })}
-    >
-      {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-10 w-full" />)}
-        </div>
-      ) : runs.length === 0 ? (
-        <p className="text-sm text-fg-faint">{t("agents.detail.dynamics.recent.empty")}</p>
-      ) : (
-        <ul className="space-y-2">
-          {runs.map((run) => (
-            <li key={run.id}>
-              <button
-                type="button"
-                onClick={() => navigate("runs", { id: run.id })}
-                className="flex w-full items-center gap-3 rounded-md border border-line px-3 py-2 text-left hover:bg-surface-subtle"
-              >
-                <RunStatusDot status={run.status} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-sm">
-                    <code className="font-mono text-sm text-fg-muted">{shortRunId(run.id)}</code>
-                    <span className="truncate text-fg-muted">{run.agent_name ?? t("agents.detail.dynamics.recent.untitled")}</span>
-                  </div>
-                  <div className="mt-0.5 text-xs text-fg-subtle">
-                    {fmtAgo(run.created_at)}
-                    {run.started_at && run.finished_at && (
-                      <> · {formatDurationMs(durationMs(run.started_at, run.finished_at))}</>
-                    )}
-                  </div>
-                </div>
-                <ArrowUpRight className="h-3 w-3 text-fg-faint" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DynamicsCard>
-  )
-}
 
-function DynamicsCard({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <div className="mb-3 flex items-baseline gap-2">
-        <h3 className="text-base font-semibold text-fg">{title}</h3>
-        {subtitle && <span className="text-sm text-fg-subtle">{subtitle}</span>}
+  if (loading) {
+    return (
+      <div className="-mx-4">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div key={index} className="flex h-9 items-center gap-3 border-b border-line px-4">
+            <Skeleton className="h-3.5 w-3.5 rounded-full" />
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-3 flex-1" />
+            <Skeleton className="h-3 w-12" />
+          </div>
+        ))}
       </div>
-      {children}
-    </section>
+    )
+  }
+  if (runs.length === 0) {
+    return <p className="text-sm text-fg-muted">{emptyLabel}</p>
+  }
+
+  return (
+    <Ledger columns={RUNS_COLUMNS} className="-mx-4 border-t border-line" role="listbox" aria-label={t("runs.table.run")}>
+      <LedgerHeader>
+        <span />
+        <span>{t("runs.table.run")}</span>
+        <span>{t("runs.table.conversation")}</span>
+        <span className="text-right">{t("runs.table.duration")}</span>
+        <span className="text-right">{t("runs.table.age")}</span>
+      </LedgerHeader>
+      <ul className="m-0 list-none p-0">
+        {runs.map((run) => (
+          <LedgerRow
+            key={run.id}
+            onClick={() => navigate("runs", { id: run.id })}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault()
+                navigate("runs", { id: run.id })
+              }
+            }}
+          >
+            <StatusIcon status={run.status} title={t(`runStatus.${run.status}`)} />
+            <LedgerId>{shortRunId(run.id)}</LedgerId>
+            <LedgerId>{run.conversation_id || "—"}</LedgerId>
+            <LedgerNum muted={!run.started_at || !run.finished_at}>
+              {run.started_at && run.finished_at ? formatDurationMs(durationMs(run.started_at, run.finished_at)) : "—"}
+            </LedgerNum>
+            <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(run.created_at)}</span>
+          </LedgerRow>
+        ))}
+      </ul>
+    </Ledger>
   )
 }
 
-function RunStatusDot({ status }: { status: AgentRunStatus }) {
-  const tone =
-    status === "completed" ? "bg-success"
-      : status === "running" || status === "queued" ? "bg-info"
-      : status === "failed" ? "bg-danger"
-      : "bg-surface-muted"
-  return <span className={`h-2 w-2 shrink-0 rounded-full ${tone}`} />
+function MetricsList({ metrics, loading }: { metrics?: AgentMetrics; loading: boolean }) {
+  const { t } = useTranslation("admin")
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-2 pt-1">
+        {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-3 w-56" />)}
+      </div>
+    )
+  }
+  if (!metrics || metrics.completed_count + metrics.failed_count === 0) {
+    return <p className="text-sm text-fg-muted">{t("agents.detail.dynamics.metrics.empty")}</p>
+  }
+  return (
+    <PropertyList className="max-w-2xl grid-cols-[140px_minmax(0,1fr)]">
+      <Property label={t("agents.detail.dynamics.metrics.completed")} mono>
+        {metrics.completed_count}
+      </Property>
+      <Property label={t("agents.detail.dynamics.metrics.successRate")} mono>
+        {formatPercent(metrics.success_rate)}
+      </Property>
+      <Property label={t("agents.detail.dynamics.metrics.avgDuration")} mono>
+        {formatDurationMs(metrics.avg_duration_ms)}
+      </Property>
+    </PropertyList>
+  )
 }
 
 function shortRunId(id: string): string {
-  return id.length <= 8 ? id : id.slice(0, 8)
+  return id.length <= 16 ? id : `${id.slice(0, 16)}…`
 }
 
 function durationMs(startISO: string, endISO: string): number {

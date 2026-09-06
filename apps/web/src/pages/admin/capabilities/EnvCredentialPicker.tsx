@@ -9,9 +9,10 @@
 import { KeyRound, Lock } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { Badge } from "../../../components/ui/badge"
 import { Input } from "../../../components/ui/input"
-import { Button } from "../../../components/ui/button"
-import { cn } from "../../../lib/utils"
+import { Label } from "../../../components/ui/label"
+import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 
 import { CredentialKindCombobox } from "./CredentialKindCombobox"
 import type { CanonicalEnvValue, EnvMode } from "./types"
@@ -45,7 +46,7 @@ function startsWithEnvPlaceholder(value: string | undefined): boolean {
 
 export function EnvCredentialPicker({
   workspaceID,
-  serverName: _serverName,
+  serverName,
   envKey,
   value,
   inlineSecretPlaintext,
@@ -55,6 +56,7 @@ export function EnvCredentialPicker({
   const { t } = useTranslation("admin")
   const activeMode: CredentialMode =
     value.mode === "inline_secret" ? "inline_secret" : "credential_ref"
+  const fieldID = `env-${serverName}-${envKey}`
 
   const setMode = (mode: CredentialMode) => {
     switch (mode) {
@@ -75,43 +77,41 @@ export function EnvCredentialPicker({
   }
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-md border border-line bg-surface p-3">
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <code
-            title={envKey}
-            className="block max-w-full flex-1 break-all rounded bg-surface-subtle px-1.5 py-1 font-mono text-sm font-medium text-fg"
-          >
-            {envKey}
-          </code>
-          <span className="shrink-0 rounded bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">
-            {t("capabilities.import.envBadge.credential", "Credential")}
-          </span>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="text-xs font-medium text-fg-subtle">
-            {t("capabilities.import.envMode.label", "Credential source")}
-          </div>
-          <ModeToggle value={activeMode} onChange={setMode} />
-        </div>
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-2">
+        <code title={envKey} className="min-w-0 truncate font-mono text-xs font-medium text-fg">
+          {envKey}
+        </code>
+        <Badge variant="warning" dot>{t("capabilities.import.envBadge.credential", "Credential")}</Badge>
       </div>
 
-      <div className="mt-2.5">
+      <div className="mt-2">
+        <Label>{t("capabilities.import.envMode.label", "Credential source")}</Label>
+        <Tabs value={activeMode} onValueChange={(next) => setMode(next as CredentialMode)}>
+          <TabsList>
+            {MODE_OPTIONS.map((opt) => (
+              <TabsTrigger key={opt.value} value={opt.value}>{t(opt.labelKey, opt.fallback)}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="mt-2">
         {activeMode === "inline_secret" && (
-          <div className="space-y-1.5">
+          <div>
             <Input
+              id={fieldID}
               type="password"
               value={inlineSecretPlaintext ?? ""}
               onChange={(e) => onInlineSecretPlaintextChange(e.target.value)}
-              className="font-mono text-sm"
+              className="font-mono"
               placeholder={t(
                 "capabilities.import.envValue.inlineSecretPlaceholder",
                 "Paste a team-shared token; we encrypt it on import.",
               )}
             />
-            <p className="flex items-center gap-1.5 text-xs text-success">
-              <Lock className="h-3 w-3" />
+            <p className="mt-1 flex items-start gap-1.5 text-xs text-fg-muted">
+              <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.5} aria-hidden="true" />
               {t(
                 "capabilities.import.envValue.inlineSecretNote",
                 "Best for shared service-account tokens. The config only stores a reference; plaintext is never persisted.",
@@ -121,15 +121,14 @@ export function EnvCredentialPicker({
         )}
 
         {activeMode === "credential_ref" && (
-          <div className="space-y-1.5">
+          <div>
             <CredentialKindCombobox
               workspaceID={workspaceID}
               value={value.mode === "credential_ref" ? value.credential_kind_code ?? "" : ""}
               onChange={(code) => onChange({ mode: "credential_ref", credential_kind_code: code })}
-              className="w-full"
             />
-            <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
-              <KeyRound className="h-3 w-3" />
+            <p className="mt-1 flex items-start gap-1.5 text-xs text-fg-muted">
+              <KeyRound className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.5} aria-hidden="true" />
               {t(
                 "capabilities.import.envValue.credentialRefNote",
                 "Best for personal tokens like a GitLab PAT — at runtime we use the caller's value from My Credentials.",
@@ -138,41 +137,6 @@ export function EnvCredentialPicker({
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function ModeToggle({
-  value,
-  onChange,
-}: {
-  value: CredentialMode
-  onChange: (mode: CredentialMode) => void
-}) {
-  const { t } = useTranslation("admin")
-  return (
-    <div className="flex w-full flex-wrap gap-1 rounded-md border border-line bg-surface-subtle p-1">
-      {MODE_OPTIONS.map((opt) => {
-        const active = opt.value === value
-        return (
-          <Button
-            key={opt.value}
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange(opt.value)}
-            className={cn(
-              "h-7 flex-1 rounded px-2 text-xs sm:flex-none",
-              active
-                ? "bg-surface text-fg shadow-inner"
-                : "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted",
-            )}
-            aria-pressed={active}
-          >
-            {t(opt.labelKey, opt.fallback)}
-          </Button>
-        )
-      })}
     </div>
   )
 }

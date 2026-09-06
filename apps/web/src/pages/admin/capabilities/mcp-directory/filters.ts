@@ -2,11 +2,14 @@ import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
 
 export type DirectorySort = "featured" | "name"
 
-interface DirectoryFilters {
-  query: string
+export interface DirectoryFilterState {
   category: string
   verifiedOnly: boolean
   sort: DirectorySort
+}
+
+interface DirectoryFilters extends DirectoryFilterState {
+  query: string
 }
 
 export function filterMCPDirectoryItems(items: MCPDirectoryItem[], filters: DirectoryFilters): MCPDirectoryItem[] {

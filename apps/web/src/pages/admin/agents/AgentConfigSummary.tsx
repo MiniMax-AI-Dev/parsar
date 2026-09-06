@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 
-import { Badge } from "../../../components/ui/badge"
+import { PropertyList, Property } from "../../../components/ui/property-list"
 import {
   agentConnectorLabel,
   agentCodexModeOf,
@@ -11,6 +11,10 @@ import {
   agentWorkdirOf,
 } from "../../../lib/agent-view-model"
 import type { AgentDetail } from "../../../lib/api-types"
+import { DetailSection } from "./DetailSection"
+
+/* The page is wide, so the label column grows past the rail's 84px. */
+export const CONFIG_PROPERTY_LIST = "max-w-3xl grid-cols-[140px_minmax(0,1fr)]"
 
 export function AgentConfigSummary({
   agent,
@@ -25,114 +29,70 @@ export function AgentConfigSummary({
   const systemPrompt = String(config.system_prompt ?? profile.system_prompt ?? "").trim()
   const executionMode = agentExecutionModeOf(agent)
   const agentEngine = agentEngineOf(agent)
+  const workdir = agentWorkdirOf(agent)
+  const binding = agent.runtime_name || agent.runtime_id
 
   return (
     <>
-      <SummaryCard title={t("agents.detail.config.identity.title")}>
-        <SummaryField label={t("agents.detail.config.identity.slug")} value={agent.slug} mono />
-        <SummaryField
-          label={t("agents.detail.config.identity.visibility")}
-          value={t(`agents.visibility.${agent.visibility ?? "workspace"}`)}
-        />
-        <SummaryField label={t("agents.detail.config.identity.agentId")} value={agent.id} mono />
-        <SummaryField
-          label={t("agents.detail.config.identity.created")}
-          value={formatDate(agent.created_at, i18n.language)}
-        />
-        <SummaryField
-          label={t("agents.detail.config.identity.updated")}
-          value={formatDate(agent.updated_at, i18n.language)}
-        />
-      </SummaryCard>
+      <DetailSection title={t("agents.detail.config.identity.title")}>
+        <PropertyList className={CONFIG_PROPERTY_LIST}>
+          <Property label={t("agents.detail.config.identity.slug")} mono>{agent.slug}</Property>
+          <Property label={t("agents.detail.config.identity.visibility")}>
+            {t(`agents.visibility.${agent.visibility ?? "workspace"}`)}
+          </Property>
+          <Property label={t("agents.detail.config.identity.agentId")} mono>{agent.id}</Property>
+          <Property label={t("agents.detail.config.identity.created")} mono>
+            {formatDate(agent.created_at, i18n.language)}
+          </Property>
+          <Property label={t("agents.detail.config.identity.updated")} mono>
+            {formatDate(agent.updated_at, i18n.language)}
+          </Property>
+        </PropertyList>
+      </DetailSection>
 
-      <SummaryCard title={t("agents.detail.config.intelligence.title")}>
-        <SummaryField
-          label={t("agents.detail.config.intelligence.engine")}
-          value={t(agentEngineLabel(agentEngine))}
-        />
-        {agentEngine === "codex" && (
-          <SummaryField
-            label={t("agents.detail.config.intelligence.codexMode")}
-            value={t(`agents.form.codexMode.${agentCodexModeOf(agent)}`)}
-          />
-        )}
-        <SummaryField label={t("agents.detail.config.runtime.model")} value={modelLabel} mono />
-        <SummaryField
-          label={t("agents.detail.config.intelligence.systemPrompt")}
-          value={
-            systemPrompt ? (
-              <p className="whitespace-pre-wrap break-words text-fg-muted">{systemPrompt}</p>
-            ) : (
-              <span className="text-fg-faint">—</span>
-            )
-          }
-        />
-      </SummaryCard>
+      <DetailSection title={t("agents.detail.config.intelligence.title")}>
+        <PropertyList className={CONFIG_PROPERTY_LIST}>
+          <Property label={t("agents.detail.config.intelligence.engine")}>
+            {t(agentEngineLabel(agentEngine))}
+          </Property>
+          {agentEngine === "codex" && (
+            <Property label={t("agents.detail.config.intelligence.codexMode")}>
+              {t(`agents.form.codexMode.${agentCodexModeOf(agent)}`)}
+            </Property>
+          )}
+          <Property label={t("agents.detail.config.runtime.model")} mono>{modelLabel}</Property>
+          <Property
+            label={t("agents.detail.config.intelligence.systemPrompt")}
+            className={systemPrompt ? "h-auto min-h-7 whitespace-pre-wrap py-1 [overflow-wrap:anywhere]" : "text-fg-muted"}
+          >
+            {systemPrompt || "—"}
+          </Property>
+        </PropertyList>
+      </DetailSection>
 
-      <SummaryCard title={t("agents.detail.config.runtime.title")}>
-        <SummaryField
-          label={t("agents.detail.config.runtime.execution")}
-          value={
-            <Badge variant={executionMode === "sandbox" ? "success" : "neutral"} dot>
-              {t(
-                `agents.execution.${executionMode === "local_device" ? "localDevice" : executionMode}.title`,
-              )}
-            </Badge>
-          }
-        />
-        <SummaryField
-          label={t("agents.detail.config.runtime.connector")}
-          value={
-            <span>
-              {agentConnectorLabel(agent.connector_type)}
-              <span className="ml-1 text-sm text-fg-subtle">· {agent.connector_type}</span>
-            </span>
-          }
-        />
-        <SummaryField
-          label={t("agents.detail.config.runtime.workdir")}
-          value={agentWorkdirOf(agent) || "—"}
-          mono
-        />
-        {executionMode === "sandbox" && (
-          <SummaryField
-            label={t("agents.detail.config.runtime.sandboxSize")}
-            value={t(`agents.form.sandboxSize.${agentSandboxSizeOf(agent)}`)}
-          />
-        )}
-        <SummaryField
-          label={t("agents.detail.config.runtime.binding")}
-          value={agent.runtime_name || agent.runtime_id || "—"}
-          mono
-        />
-      </SummaryCard>
+      <DetailSection title={t("agents.detail.config.runtime.title")}>
+        <PropertyList className={CONFIG_PROPERTY_LIST}>
+          <Property label={t("agents.detail.config.runtime.execution")}>
+            {t(`agents.execution.${executionMode === "local_device" ? "localDevice" : executionMode}.title`)}
+          </Property>
+          <Property label={t("agents.detail.config.runtime.connector")}>
+            <span className="truncate">{agentConnectorLabel(agent.connector_type)}</span>
+            <span className="truncate font-mono text-xs text-fg-muted">{agent.connector_type}</span>
+          </Property>
+          <Property label={t("agents.detail.config.runtime.workdir")} mono className={workdir ? undefined : "text-fg-muted"}>
+            {workdir || "—"}
+          </Property>
+          {executionMode === "sandbox" && (
+            <Property label={t("agents.detail.config.runtime.sandboxSize")}>
+              {t(`agents.form.sandboxSize.${agentSandboxSizeOf(agent)}`)}
+            </Property>
+          )}
+          <Property label={t("agents.detail.config.runtime.binding")} mono className={binding ? undefined : "text-fg-muted"}>
+            {binding || "—"}
+          </Property>
+        </PropertyList>
+      </DetailSection>
     </>
-  )
-}
-
-function SummaryCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
-      <dl>{children}</dl>
-    </section>
-  )
-}
-
-function SummaryField({
-  label,
-  value,
-  mono,
-}: {
-  label: string
-  value: React.ReactNode
-  mono?: boolean
-}) {
-  return (
-    <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className={`text-sm text-fg-emphasis ${mono ? "font-mono" : ""}`}>{value}</dd>
-    </div>
   )
 }
 

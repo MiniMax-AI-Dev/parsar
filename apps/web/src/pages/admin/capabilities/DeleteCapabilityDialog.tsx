@@ -12,6 +12,7 @@ import {
 import { Button } from "../../../components/ui/button"
 import { ApiError } from "../../../lib/api-client"
 import type { Capability } from "../../../lib/api-types"
+import { InlineNotice } from "./notices"
 
 interface DeleteCapabilityDialogProps {
   capability: Capability | null
@@ -38,10 +39,13 @@ export function DeleteCapabilityDialog({ capability, pending, error, onOpenChang
           <AlertDialogTitle>{t("capabilities.delete.dialog.title", { name: capability.name })}</AlertDialogTitle>
           <AlertDialogDescription>{t("capabilities.delete.dialog.description")}</AlertDialogDescription>
         </AlertDialogHeader>
-        {errMsg && <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>}
+        {errMsg && <InlineNotice tone="error">{errMsg}</InlineNotice>}
         <AlertDialogFooter>
-          <Button variant="outline" size="sm" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>
-          <Button variant="destructive" size="sm" disabled={pending} onClick={onConfirm}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("capabilities.delete.dialog.confirm")}</Button>
+          <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>{t("capabilities.actions.cancel")}</Button>
+          <Button variant="destructive" disabled={pending} onClick={onConfirm}>
+            {pending && <Loader2 className="animate-spin" />}
+            {t("capabilities.delete.dialog.confirm")}
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

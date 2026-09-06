@@ -1,166 +1,144 @@
-import { ArrowLeft, Server, ShieldCheck } from "lucide-react"
+import type { ReactNode } from "react"
+import { ArrowUpRight, Download, Link2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
-import { EmptyState } from "../../../../components/ui/empty-state"
+import { DetailRail, RailSection } from "../../../../components/ui/detail-rail"
 import { ErrorState } from "../../../../components/ui/error-state"
+import { PropertyList, Property } from "../../../../components/ui/property-list"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
-import { ConnectorIcon, ExternalLinkRow, Metadata, VerifiedBadge } from "./shared"
+import { ExternalLinkValue, safeExternalURL } from "../notices"
+import { ConnectorIcon, VerifiedBadge } from "./shared"
 
+/**
+ * A directory entry read in the rail beside the list: identity in the header,
+ * the one thing you can do with it in the footer. Nothing here is a workplace,
+ * so it never takes over the page.
+ */
 export function DirectoryDetail({
   item,
   loading,
   error,
   canImport,
-  onBack,
+  open,
+  onClosed,
+  onClose,
   onRetry,
   onImport,
-	onConnect,
+  onConnect,
   onViewCapability,
 }: {
   item: MCPDirectoryItem | null
   loading: boolean
   error: unknown
   canImport: boolean
-  onBack: () => void
+  open: boolean
+  onClosed: () => void
+  onClose: () => void
   onRetry: () => void
   onImport: () => void
-	onConnect: () => void
+  onConnect: () => void
   onViewCapability: (capabilityID: string) => void
 }) {
   const { t } = useTranslation("admin")
-  if (loading && !item)
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-[440px] w-full" />
-      </div>
-    )
-  if (error)
-    return (
-      <ErrorState
-        title={t("capabilities.mcpDirectory.detail.loadError")}
-        description={error instanceof Error ? error.message : ""}
-        onRetry={onRetry}
-      />
-    )
-  if (!item)
-    return (
-      <EmptyState
-        icon={Server}
-        title={t("capabilities.mcpDirectory.detail.notFound")}
-        action={
-          <Button variant="outline" size="sm" onClick={onBack}>
-            {t("capabilities.mcpDirectory.actions.back")}
-          </Button>
-        }
-      />
-    )
-  return (
-    <div className="space-y-3" data-testid="mcp-directory-detail">
-      <Button variant="ghost" size="sm" onClick={onBack}>
-        <ArrowLeft className="h-3.5 w-3.5" /> {t("capabilities.mcpDirectory.actions.back")}
+
+  const header: ReactNode = item ? (
+    <>
+      <ConnectorIcon item={item} />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{item.name}</span>
+      {item.verified ? <VerifiedBadge /> : null}
+      {item.installed ? (
+        <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
+      ) : item.connected ? (
+        <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
+      ) : null}
+    </>
+  ) : (
+    <Skeleton className="h-3 w-40" />
+  )
+
+  const footer = item ? (
+    item.authentication === "oauth2" && !item.connected ? (
+      <Button onClick={onConnect}>
+        <Link2 strokeWidth={1.5} aria-hidden="true" />
+        {t("capabilities.mcpDirectory.oauth.connect")}
       </Button>
-      <article className="rounded-xl border border-line bg-surface p-5">
-        <div className="flex flex-wrap items-start gap-4">
-          <ConnectorIcon item={item} large />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold text-fg">{item.name}</h2>
-              {item.verified ? <VerifiedBadge /> : null}
-              {item.installed ? (
-                <Badge variant="success">{t("capabilities.mcpDirectory.actions.installed")}</Badge>
-              ) : null}
-			  {item.connected ? <Badge variant="success">{t("capabilities.mcpDirectory.oauth.connected")}</Badge> : null}
-            </div>
-            <p className="mt-1 text-sm text-fg-subtle">{item.publisher.name}</p>
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-fg-muted">{item.description}</p>
-          </div>
+    ) : item.installed && item.installed_capability_id ? (
+      <Button variant="outline" onClick={() => onViewCapability(item.installed_capability_id!)}>
+        {t("capabilities.mcpDirectory.actions.viewCapability")}
+        <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+      </Button>
+    ) : (
+      <Button disabled={!canImport} title={!canImport ? t("capabilities.permission.adminOnly") : undefined} onClick={onImport}>
+        <Download strokeWidth={1.5} aria-hidden="true" />
+        {t("capabilities.mcpDirectory.actions.import")}
+      </Button>
+    )
+  ) : undefined
+
+  return (
+    <DetailRail
+      open={open}
+      onClosed={onClosed}
+      onClose={onClose}
+      closeLabel={t("capabilities.mcpDirectory.actions.back")}
+      aria-label={item?.name ?? t("capabilities.mcpDirectory.title")}
+      data-testid="mcp-directory-detail"
+      header={header}
+      footer={footer}
+    >
+      {error ? (
+        <ErrorState
+          title={t("capabilities.mcpDirectory.detail.loadError")}
+          description={error instanceof Error ? error.message : ""}
+          onRetry={onRetry}
+        />
+      ) : !item ? (
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <Metadata
-            label={t("capabilities.mcpDirectory.detail.version")}
-            value={item.version}
-            mono
-          />
-          <Metadata
-            label={t("capabilities.mcpDirectory.detail.transport")}
-            value={item.transport}
-            mono
-          />
-          <Metadata
-            label={t("capabilities.mcpDirectory.detail.authentication")}
-			value={item.authentication === "oauth2"
-			  ? item.connected
-				? t("capabilities.mcpDirectory.oauth.connected")
-				: t("capabilities.mcpDirectory.oauth.required")
-			  : t("capabilities.mcpDirectory.detail.noAuthentication")}
-          />
-        </div>
-        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="space-y-4">
-            <section>
-              <h3 className="text-sm font-medium text-fg">
-                {t("capabilities.mcpDirectory.detail.endpoint")}
-              </h3>
-              <pre className="mt-2 overflow-x-auto rounded-lg border border-line bg-surface-muted/35 p-3 font-mono text-xs leading-5 text-fg">
-                {item.url}
-              </pre>
-            </section>
-            <div className="rounded-lg border border-line bg-surface-muted/25 p-4 text-sm leading-5 text-fg-muted">
-              <div className="flex items-start gap-2">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" />
-                <span>{t("capabilities.mcpDirectory.securityNotice")}</span>
-              </div>
-            </div>
-          </div>
-          <aside className="space-y-3 rounded-lg border border-line bg-surface-muted/20 p-4">
-            <ExternalLinkRow
-              label={t("capabilities.mcpDirectory.detail.publisher")}
-              value={item.publisher.name}
-              href={item.publisher.url}
-            />
-            <ExternalLinkRow
-              label={t("capabilities.mcpDirectory.detail.homepage")}
-              value={t("capabilities.mcpDirectory.detail.openLink")}
-              href={item.homepage_url}
-            />
-            <ExternalLinkRow
-              label={t("capabilities.mcpDirectory.detail.repository")}
-              value={t("capabilities.mcpDirectory.detail.openLink")}
-              href={item.repository_url}
-            />
-          </aside>
-        </div>
-        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
-		  {item.authentication === "oauth2" && !item.connected ? (
-			<Button size="sm" onClick={onConnect}>
-			  {t("capabilities.mcpDirectory.oauth.connect")}
-			</Button>
-		  ) : item.installed && item.installed_capability_id ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onViewCapability(item.installed_capability_id!)}
-            >
-              {t("capabilities.mcpDirectory.actions.viewCapability")}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              disabled={!canImport}
-              title={!canImport ? t("capabilities.permission.adminOnly") : undefined}
-              onClick={onImport}
-            >
-              {canImport
-                ? t("capabilities.mcpDirectory.actions.import")
-                : t("capabilities.permission.adminOnly")}
-            </Button>
-          )}
-        </div>
-      </article>
-    </div>
+      ) : (
+        <DirectoryDetailBody item={item} loading={loading} />
+      )}
+    </DetailRail>
+  )
+}
+
+function DirectoryDetailBody({ item, loading }: { item: MCPDirectoryItem; loading: boolean }) {
+  const { t } = useTranslation("admin")
+  const auth = item.authentication === "oauth2"
+    ? item.connected
+      ? t("capabilities.mcpDirectory.oauth.connected")
+      : t("capabilities.mcpDirectory.oauth.required")
+    : t("capabilities.mcpDirectory.detail.noAuthentication")
+  const publisherURL = safeExternalURL(item.publisher.url)
+  const homepageURL = safeExternalURL(item.homepage_url)
+  const repositoryURL = safeExternalURL(item.repository_url)
+
+  return (
+    <>
+      {item.description && <p className="mb-4 text-sm text-fg">{item.description}</p>}
+      <RailSection title={t("capabilities.detail.basic.title")}>
+        <PropertyList>
+          <Property label={t("capabilities.mcpDirectory.detail.publisher")}>
+            {publisherURL ? <ExternalLinkValue href={publisherURL}>{item.publisher.name}</ExternalLinkValue> : item.publisher.name}
+          </Property>
+          <Property label={t("capabilities.mcpDirectory.detail.version")} mono>{item.version || "—"}</Property>
+          <Property label={t("capabilities.mcpDirectory.detail.transport")} mono>{item.transport}</Property>
+          <Property label={t("capabilities.mcpDirectory.detail.authentication")}>{auth}</Property>
+          <Property label={t("capabilities.mcpDirectory.detail.endpoint")} mono className="h-auto min-h-7 whitespace-normal break-all py-1">{item.url || "—"}</Property>
+          <Property label={t("capabilities.mcpDirectory.filters.category")}>{item.categories.join(" · ") || "—"}</Property>
+          <Property label={t("capabilities.mcpDirectory.detail.homepage")}>
+            {homepageURL ? <ExternalLinkValue href={homepageURL}>{t("capabilities.mcpDirectory.detail.openLink")}</ExternalLinkValue> : "—"}
+          </Property>
+          <Property label={t("capabilities.mcpDirectory.detail.repository")}>
+            {repositoryURL ? <ExternalLinkValue href={repositoryURL}>{t("capabilities.mcpDirectory.detail.openLink")}</ExternalLinkValue> : "—"}
+          </Property>
+        </PropertyList>
+      </RailSection>
+      {loading && <Skeleton className="mt-4 h-3 w-24" />}
+    </>
   )
 }

@@ -18,16 +18,29 @@ import {
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher"
 import { ThemeMenu } from "./ThemeMenu"
 import { UserMenu } from "./UserMenu"
-import { useTheme } from "../../lib/theme"
 import { ListSlot } from "../plugin/SlotRenderer"
+import { ResizeHandle } from "../ui/resize-handle"
+import { PageTransition, type PageLevel } from "../ui/page-transition"
+import { LayoutPrompt } from "./LayoutPrompt"
+import { useResizableWidth } from "../../lib/layout-width"
 
 interface AdminLayoutProps {
   children: ReactNode
   activeMenu?: string
+  /** Page owns the whole main column (ledger pages, conversations). */
   fullBleed?: boolean
   hideSidebar?: boolean
   contentClassName?: string
+  /**
+   * Entrance animation level. Defaults to "detail" when the route carries
+   * an entity id on a view that opens a separate detail page, "page"
+   * otherwise (views whose id only selects a rail stay level one).
+   */
+  level?: PageLevel
 }
+
+/** Views where `?id=` selects a rail on the same page instead of a detail page. */
+const RAIL_VIEWS = new Set<string>(["runs", "approvals", "conversations", "connections", "capabilities"])
 
 interface MenuItem {
   id: AdminView
@@ -35,7 +48,6 @@ interface MenuItem {
   itemKey: string
   icon: LucideIcon
   badge?: number | string
-  hint?: "p1Hint"
 }
 
 interface MenuGroup {
@@ -72,112 +84,111 @@ const menuGroups: MenuGroup[] = [
   },
 ]
 
+/**
+ * Console shell: a 232px panel-toned sidebar (workspace row, three nav
+ * groups, account row pinned to the bottom) and a main column. There is
+ * no top bar; each page renders its own 48px <PageHeader />.
+ */
 export function AdminLayout({
   children,
   activeMenu = "agents",
   fullBleed = false,
   hideSidebar = false,
   contentClassName,
+  level: levelProp,
 }: AdminLayoutProps) {
   const { t } = useTranslation("common")
-  const { navigate } = useAdminView()
-  const { resolvedTheme } = useTheme()
+  const { navigate, view, entityId } = useAdminView()
+  const level: PageLevel = levelProp ?? (entityId && view && !RAIL_VIEWS.has(view) ? "detail" : "page")
+  const sidebar = useResizableWidth({ storageKey: "sidebar", defaultWidth: 232, min: 200, max: 360, edge: "right" })
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-surface-subtle text-fg antialiased">
+    <div className="flex h-screen overflow-hidden bg-surface text-fg">
       <a
         href="#main-content"
-        className="fixed left-4 top-3 z-50 -translate-y-20 rounded-lg bg-surface-emphasis px-3 py-2 text-sm font-medium text-fg-on-emphasis shadow-lg transition-transform focus:translate-y-0"
+        className="fixed left-4 top-3 z-50 -translate-y-20 rounded-md bg-surface-emphasis px-3 py-2 text-sm font-medium text-fg-on-emphasis app-shadow-floating transition-transform focus:translate-y-0"
       >
         Skip to main content
       </a>
-      <header className="flex h-16 shrink-0 items-center gap-4 border-b border-line/70 bg-surface/95 px-5 shadow-sm backdrop-blur">
-        <div className="flex items-center gap-2.5" translate="no">
-          <img
-            src={resolvedTheme === "dark" ? "/parsar-logo-dark.png" : "/parsar-logo-light.png"}
-            alt="Parsar"
-            className="h-10 w-auto"
-          />
-        </div>
 
-        <WorkspaceSwitcher />
+      {!hideSidebar && (
+        <div
+          className={cn("relative flex shrink-0", sidebar.restoring && "transition-[width] duration-[420ms] ease-spring")}
+          style={{ width: sidebar.width }}
+        >
+        <aside className="app-sidebar flex w-full flex-col overflow-y-auto border-r border-line bg-surface-subtle p-2.5">
+          <WorkspaceSwitcher />
 
-        <div className="ml-auto flex items-center gap-2">
-          <ListSlot slotId="layout.header.actions" />
-          <ThemeMenu />
-          <UserMenu />
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden">
-        {!hideSidebar && (
-          <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-line/70 bg-surface/80 px-3 py-4 backdrop-blur">
-            {menuGroups.map((group, idx) => (
-              <nav key={group.groupKey} className={cn("flex flex-col", idx > 0 && "mt-4")}>
-                <span className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                  {t(`nav.${group.groupKey}` as never)}
-                </span>
-                <ul className="flex flex-col gap-0.5">
-                  {group.items.map((item) => {
-                    const Icon = item.icon
-                    const isActive = activeMenu === item.id
-                    return (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => navigate(item.id)}
-                          className={cn(
-                            "group relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-sm transition-[color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/30",
-                            isActive
-                              ? "bg-surface font-semibold text-fg shadow-sm ring-1 ring-line-muted"
-                              : "font-normal text-fg-muted hover:bg-surface-muted hover:text-fg",
-                          )}
-                          aria-current={isActive ? "page" : undefined}
-                        >
-                          <Icon
-                            className={cn(
-                              "h-4 w-4 shrink-0",
-                              isActive
-                                ? "text-fg-muted"
-                                : "text-fg-faint group-hover:text-fg-muted",
-                            )}
-                            strokeWidth={1.75}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate">
-                            {t(`nav.items.${item.itemKey}` as never)}
+          {menuGroups.map((group) => (
+            <nav key={group.groupKey} aria-label={t(`nav.${group.groupKey}` as never)}>
+              <div className="px-2 pb-1 pt-3.5 text-xs text-fg-muted">
+                {t(`nav.${group.groupKey}` as never)}
+              </div>
+              <ul className="flex flex-col gap-px">
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeMenu === item.id
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => navigate(item.id)}
+                        aria-current={isActive ? "page" : undefined}
+                        className={cn(
+                          "flex h-[30px] w-full items-center gap-2 rounded-md px-2 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+                          isActive
+                            ? "app-pressed font-medium text-fg"
+                            : "text-inherit hover:app-hover",
+                        )}
+                      >
+                        <Icon
+                          className={cn("h-4 w-4 shrink-0", isActive ? "text-fg" : "text-fg-muted")}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {t(`nav.items.${item.itemKey}` as never)}
+                        </span>
+                        {item.badge !== undefined && (
+                          <span className="app-tile rounded-full px-1.5 text-xs tabular-nums text-fg-muted">
+                            {item.badge}
                           </span>
-                          {item.badge !== undefined && (
-                            <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-warning-subtle px-1.5 text-xs font-medium text-warning">
-                              {item.badge}
-                            </span>
-                          )}
-                          {item.hint && (
-                            <span className="ml-auto text-xs uppercase tracking-wider text-fg-faint">
-                              {t(`nav.${item.hint}` as never)}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </nav>
-            ))}
-            <ListSlot slotId="layout.nav.bottom" />
-          </aside>
-        )}
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
+          ))}
+          <ListSlot slotId="layout.nav.bottom" />
 
-        <main id="main-content" className="relative flex-1 overflow-y-auto" tabIndex={-1}>
+          <div className="mt-auto flex items-center gap-2 border-t border-line pl-1.5 pr-0.5 pt-2.5">
+            <UserMenu />
+            <ListSlot slotId="layout.header.actions" />
+            <ThemeMenu />
+          </div>
+        </aside>
+        <ResizeHandle edge="right" dragging={sidebar.dragging} label={t("layout.adjusted")} {...sidebar.handleProps} />
+        <LayoutPrompt open={sidebar.dirty} onSave={sidebar.save} onTemporary={sidebar.keepTemporary} onRestore={sidebar.restore} />
+        </div>
+      )}
+
+      <main
+        id="main-content"
+        className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
+        tabIndex={-1}
+      >
+        <PageTransition viewKey={level === "detail" ? `${activeMenu}:${entityId ?? ""}` : activeMenu} level={level}>
           {fullBleed ? (
             children
           ) : (
-            <div className={cn("relative mx-auto max-w-6xl px-10 py-9", contentClassName)}>
+            <div className={cn("flex-1 overflow-y-auto px-6 pb-10", contentClassName)}>
               {children}
             </div>
           )}
-        </main>
-      </div>
+        </PageTransition>
+      </main>
     </div>
   )
 }

@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<!--
+  Parsar — 运行 (Runs) — candidate D: 工作舱 · The Cabin
+  All run ids, agents, conversations, costs and timestamps in this file are SYNTHETIC mock data
+  for a design decision. Nothing here reflects real workloads.
+-->
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运行 · Parsar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------- tokens ---------- */
+  html[data-theme="light"] {
+    --ground: #F5F5F3;
+    --surface: #FFFFFF;
+    --fg: #1A1A18;
+    --fg-muted: #6B6B66;
+    --ink: #1A1A18;
+    --ink-inverse: #FFFFFF;
+    --line: rgba(26, 26, 24, 0.08);
+    --hairline: rgba(26, 26, 24, 0.06);
+    --tint-hover: rgba(26, 26, 24, 0.03);
+    --tint-nav: rgba(26, 26, 24, 0.04);
+    --tint-selected: rgba(26, 26, 24, 0.04);
+    --shadow: 0 1px 2px rgba(26, 26, 24, 0.04), 0 8px 24px -12px rgba(26, 26, 24, 0.18);
+    --shadow-sm: 0 1px 2px rgba(26, 26, 24, 0.03);
+    --ring: rgba(26, 26, 24, 0.55);
+    --selection: rgba(26, 26, 24, 0.12);
+    --scroll: rgba(26, 26, 24, 0.18);
+    --live: #2A9D8F;
+    --dot-grey: #9A9A94;
+    --dot-green: #3E9E5A;
+    --dot-red: #D5443C;
+    --dot-amber: #D9962B;
+    --av-rb-bg: #E8E4DC; --av-rb-fg: #4A4640;
+    --av-rn-bg: #E0E4E8; --av-rn-fg: #3F4750;
+    --av-mh-bg: #ECE6D8; --av-mh-fg: #5A4F38;
+    --av-dw-bg: #E2E6E0; --av-dw-fg: #414A40;
+    --av-ws-bg: #1A1A18; --av-ws-fg: #FFFFFF;
+    --av-me-bg: #DDD9D0; --av-me-fg: #3A3733;
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    --ground: #161615;
+    --surface: #1F1F1D;
+    --fg: #ECECE8;
+    --fg-muted: #A3A39C;
+    --ink: #ECECE8;
+    --ink-inverse: #161615;
+    --line: rgba(236, 236, 232, 0.08);
+    --hairline: rgba(236, 236, 232, 0.06);
+    --tint-hover: rgba(236, 236, 232, 0.03);
+    --tint-nav: rgba(236, 236, 232, 0.04);
+    --tint-selected: rgba(236, 236, 232, 0.04);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.30), 0 8px 24px -12px rgba(0, 0, 0, 0.55);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --ring: rgba(236, 236, 232, 0.6);
+    --selection: rgba(236, 236, 232, 0.16);
+    --scroll: rgba(236, 236, 232, 0.18);
+    --live: #4DB6A6;
+    --dot-grey: #7E7E78;
+    --dot-green: #5BB878;
+    --dot-red: #E5645C;
+    --dot-amber: #E0A845;
+    --av-rb-bg: #3A3833; --av-rb-fg: #D8D3C8;
+    --av-rn-bg: #33383D; --av-rn-fg: #C9D0D6;
+    --av-mh-bg: #3D372B; --av-mh-fg: #D6CBB2;
+    --av-dw-bg: #323830; --av-dw-fg: #C8D0C4;
+    --av-ws-bg: #ECECE8; --av-ws-fg: #161615;
+    --av-me-bg: #3A3833; --av-me-fg: #D8D3C8;
+    color-scheme: dark;
+  }
+
+  /* ---------- base ---------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Onest", "Inter", "Noto Sans SC", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; color: var(--fg); background: var(--ground);
+    -webkit-font-smoothing: antialiased; caret-color: var(--fg); min-width: 960px;
+  }
+  ::selection { background: var(--selection); }
+  * { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  a { color: inherit; text-decoration: none; }
+  svg.i { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .num { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--fg-muted); }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px;
+    font-weight: 500; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn:hover { background: var(--tint-hover); }
+  .btn.primary { background: var(--ink); color: var(--ink-inverse); border-color: var(--ink); box-shadow: none; }
+  .btn.primary:hover { opacity: .92; }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 7px; }
+  .btn:disabled { opacity: .45; }
+  .btn:disabled:hover { background: var(--surface); }
+
+  .avatar {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    font-weight: 600; letter-spacing: 0.01em; font-family: "Onest", "Inter", sans-serif;
+  }
+  .avatar.rb { background: var(--av-rb-bg); color: var(--av-rb-fg); }
+  .avatar.rn { background: var(--av-rn-bg); color: var(--av-rn-fg); }
+  .avatar.mh { background: var(--av-mh-bg); color: var(--av-mh-fg); }
+  .avatar.dw { background: var(--av-dw-bg); color: var(--av-dw-fg); }
+  .avatar.wsp { background: var(--av-ws-bg); color: var(--av-ws-fg); }
+  .avatar.me { background: var(--av-me-bg); color: var(--av-me-fg); }
+
+  /* status chip: neutral chip, colored dot, ink text */
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; height: 24px; padding: 0 9px 0 8px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 500;
+    white-space: nowrap; color: var(--fg);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--dot-grey); }
+  .dot.running { background: var(--live); animation: breathe 1.8s ease-in-out infinite; }
+  .dot.completed { background: var(--dot-green); }
+  .dot.failed { background: var(--dot-red); }
+  .dot.interrupted { background: var(--dot-amber); }
+  @keyframes breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
+
+  /* ---------- shell ---------- */
+  .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100vh; }
+  .side { display: flex; flex-direction: column; padding: 20px 12px 16px; min-height: 0; }
+  .wordmark { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; padding: 0 8px; margin-bottom: 14px; }
+  .ws {
+    display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 10px 0 8px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); text-align: left;
+  }
+  .ws:hover { background: var(--tint-hover); }
+  .ws .avatar { width: 24px; height: 24px; border-radius: 6px; font-size: 12px; }
+  .ws .name { flex: 1; font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws svg { color: var(--fg-muted); }
+  .nav { margin-top: 22px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+  .nav h3 { margin: 0 0 4px; padding: 0 10px; font-size: 12px; font-weight: 500; color: var(--fg-muted); }
+  .nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  .nav a {
+    display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px;
+    border: 1px solid transparent; font-size: 14px;
+  }
+  .nav a svg { color: var(--fg-muted); }
+  .nav a:hover { background: var(--tint-nav); }
+  .nav a.active { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow); font-weight: 500; }
+  .nav a.active svg { color: var(--fg); }
+  .nav .badge {
+    margin-left: auto; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px;
+    background: var(--ink); color: var(--ink-inverse); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center;
+  }
+  .side-foot { display: flex; align-items: center; gap: 10px; padding: 10px 0 0 8px; border-top: 1px solid var(--hairline); margin-top: 12px; }
+  .side-foot .avatar { width: 28px; height: 28px; border-radius: 8px; font-size: 12px; }
+  .side-foot .who { flex: 1; min-width: 0; line-height: 1.25; }
+  .side-foot .who .n { font-size: 13px; font-weight: 500; }
+  .side-foot .who .r { font-size: 12px; color: var(--fg-muted); }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); }
+  .seg button { display: inline-flex; align-items: center; justify-content: center; height: 24px; min-width: 28px; padding: 0 6px; border-radius: 6px; color: var(--fg-muted); font-size: 13px; font-weight: 500; }
+  .seg button:hover { color: var(--fg); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); border: 1px solid var(--line); }
+  .seg.theme button { min-width: 30px; padding: 0; }
+
+  /* ---------- main ---------- */
+  .main { padding: 32px; overflow-y: auto; min-width: 0; }
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+  .page-head h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.2; display: flex; align-items: baseline; gap: 10px; }
+  .page-head h1 span { font-size: 14px; font-weight: 400; color: var(--fg-muted); letter-spacing: 0; }
+  .page-head p { margin: 8px 0 0; color: var(--fg-muted); max-width: 640px; }
+  .page-head .actions { display: flex; gap: 8px; flex: none; padding-top: 4px; }
+
+  .work { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
+  .listcol { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; padding: 8px; }
+  .toolbar .seg { background: var(--ground); }
+  .toolbar .seg button { padding: 0 10px; height: 26px; }
+  .search { flex: 1; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg-muted); }
+  .search:focus-within { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .search input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }
+  .search input::placeholder { color: var(--fg-muted); }
+  .search kbd { font: 500 12px "IBM Plex Mono", monospace; color: var(--fg-muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; line-height: 16px; }
+
+  /* list */
+  .runs { overflow: hidden; }
+  .row, .rows-head {
+    display: grid; grid-template-columns: 166px 92px minmax(0, 1fr) 100px 52px 48px; column-gap: 12px; align-items: center; padding: 0 12px 0 16px;
+  }
+  .rows-head { height: 36px; font-size: 12px; font-weight: 500; color: var(--fg-muted); border-bottom: 1px solid var(--hairline); }
+  .rows-head .r, .row .r { text-align: right; }
+  .row { position: relative; height: 44px; border-bottom: 1px solid var(--hairline); cursor: default; }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: var(--tint-hover); }
+  .row.selected { background: var(--tint-selected); }
+  .row.selected::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+  .row .agent { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .row .agent .avatar { width: 24px; height: 24px; border-radius: 6px; font-size: 11px; }
+  .row .agent .txt { min-width: 0; line-height: 1.25; }
+  .row .agent .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .agent .id { font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+  .row .conv { font-size: 13px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .conv b { font-weight: 500; color: var(--fg); }
+  .row .model { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .r { font-size: 12.5px; color: var(--fg); }
+  .row .r.na { color: var(--fg-muted); }
+  .runs-foot { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 12px 0 16px; border-top: 1px solid var(--hairline); font-size: 12.5px; color: var(--fg-muted); }
+  .runs-foot .pg { display: flex; gap: 6px; }
+
+  /* ---------- detail column ---------- */
+  .detail { display: flex; flex-direction: column; gap: 16px; min-width: 0; animation: rise 180ms ease-out both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .d-head { padding: 16px; }
+  .d-head .top { display: flex; align-items: center; gap: 10px; }
+  .d-head .top .avatar { width: 32px; height: 32px; border-radius: 8px; font-size: 12px; }
+  .d-head .top .who { flex: 1; min-width: 0; line-height: 1.25; }
+  .d-head .top .who .n { font-weight: 600; font-size: 15px; }
+  .d-head .top .who .id { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+  .d-head .meta { margin-top: 12px; font-size: 13px; color: var(--fg-muted); line-height: 1.55; }
+  .d-head .meta .sep { margin: 0 6px; opacity: .6; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+  .facts div { line-height: 1.3; }
+  .facts .l { font-size: 12px; color: var(--fg-muted); }
+  .facts .v { font-size: 13px; font-weight: 500; margin-top: 3px; }
+
+  .tabs { display: flex; gap: 18px; padding: 0 4px; border-bottom: 1px solid var(--line); margin: -4px 0 0; }
+  .tabs button { position: relative; height: 34px; font-size: 13px; color: var(--fg-muted); font-weight: 500; }
+  .tabs button:hover { color: var(--fg); }
+  .tabs button[aria-selected="true"] { color: var(--fg); }
+  .tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px; background: var(--ink); }
+
+  .d-sec { padding: 4px 16px 8px; }
+  .d-sec h2 { margin: 0; padding: 10px 0 8px; font-size: 13px; font-weight: 600; letter-spacing: -0.005em; border-bottom: 1px solid var(--hairline); }
+  .defs { margin: 0; }
+  .defs > div { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 32px; border-bottom: 1px solid var(--hairline); }
+  .defs > div:last-child { border-bottom: 0; }
+  .defs dt { font-size: 13px; color: var(--fg-muted); margin: 0; flex: none; }
+  .defs dd { margin: 0; font-size: 13px; text-align: right; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .defs dd.mono { font-size: 12.5px; }
+  .defs dd .dot { display: inline-block; margin-right: 7px; vertical-align: 1px; }
+
+  .steps { list-style: none; margin: 0; padding: 4px 0 0; }
+  .steps li { display: flex; align-items: center; gap: 10px; min-height: 32px; font-size: 13px; border-bottom: 1px solid var(--hairline); }
+  .steps li:last-child { border-bottom: 0; }
+  .steps .n { width: 18px; font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; flex: none; }
+  .steps .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .steps .t code { font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--tint-nav); }
+  .steps .diff { font-size: 12px; color: var(--fg-muted); flex: none; }
+  .steps .ok { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; color: var(--fg-muted); flex: none; }
+  .steps .ok svg { width: 11px; height: 11px; stroke-width: 2; }
+
+  .d-actions { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+  .d-actions .link { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--fg); padding: 6px 4px; border-radius: 6px; }
+  .d-actions .link:hover { background: var(--tint-nav); }
+
+  @media (max-width: 1360px) {
+    .work { grid-template-columns: minmax(0, 1fr) 372px; }
+    .row, .rows-head { grid-template-columns: 166px 92px minmax(0, 1fr) 52px 48px; }
+    .row .model, .rows-head .model { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dot.running { animation: none; }
+    .detail { animation: none; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-calclock" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-updown" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</svg>
+
+<div class="shell">
+  <!-- ---------- sidebar ---------- -->
+  <aside class="side">
+    <div class="wordmark">Parsar</div>
+    <button class="ws" type="button" aria-label="切换工作区">
+      <span class="avatar wsp">M</span>
+      <span class="name">MiniMax · Infra</span>
+      <svg class="i" style="width:14px;height:14px"><use href="#i-updown"/></svg>
+    </button>
+
+    <nav class="nav" aria-label="主导航">
+      <div>
+        <h3>协作</h3>
+        <ul>
+          <li><a href="#"><svg class="i"><use href="#i-message"/></svg>对话</a></li>
+          <li><a href="#"><svg class="i"><use href="#i-inbox"/></svg>收件箱<span class="badge">3</span></a></li>
+          <li><a href="#" class="active" aria-current="page"><svg class="i"><use href="#i-play"/></svg>运行</a></li>
+          <li><a href="#"><svg class="i"><use href="#i-calclock"/></svg>定时任务</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Agent</h3>
+        <ul>
+          <li><a href="#"><svg class="i"><use href="#i-bot"/></svg>Agent</a></li>
+          <li><a href="#"><svg class="i"><use href="#i-wrench"/></svg>能力</a></li>
+          <li><a href="#"><svg class="i"><use href="#i-db"/></svg>模型</a></li>
+          <li><a href="#"><svg class="i"><use href="#i-plug"/></svg>连接</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>团队</h3>
+        <ul>
+          <li><a href="#"><svg class="i"><use href="#i-users"/></svg>成员</a></li>
+          <li><a href="#"><svg class="i"><use href="#i-settings"/></svg>设置</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <span class="avatar me">FJ</span>
+      <div class="who">
+        <div class="n">fanjingluo</div>
+        <div class="r">管理员</div>
+      </div>
+      <div class="seg theme" role="group" aria-label="主题">
+        <button type="button" id="th-light" aria-pressed="true" aria-label="浅色"><svg class="i" style="width:14px;height:14px"><use href="#i-sun"/></svg></button>
+        <button type="button" id="th-dark" aria-pressed="false" aria-label="深色"><svg class="i" style="width:14px;height:14px"><use href="#i-moon"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ---------- main ---------- -->
+  <main class="main">
+    <header class="page-head">
+      <div>
+        <h1>运行 <span>Runs</span></h1>
+        <p>Agent 每一次执行都对应一条 Run。这里能看到正在跑、卡住、失败、待审批的 run。</p>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button"><svg class="i" style="width:14px;height:14px"><use href="#i-export"/></svg>导出</button>
+        <button class="btn primary" type="button"><svg class="i" style="width:14px;height:14px"><use href="#i-plus"/></svg>新建运行</button>
+      </div>
+    </header>
+
+    <div class="work">
+      <div class="listcol">
+        <!-- toolbar -->
+        <div class="panel toolbar">
+          <div class="seg" role="group" aria-label="筛选状态">
+            <button type="button" aria-pressed="true">全部</button>
+            <button type="button" aria-pressed="false">进行中</button>
+            <button type="button" aria-pressed="false">失败</button>
+          </div>
+          <label class="search">
+            <svg class="i" style="width:14px;height:14px"><use href="#i-search"/></svg>
+            <input type="search" placeholder="搜索 run id / agent / 对话…" aria-label="搜索运行">
+            <kbd>/</kbd>
+          </label>
+          <button class="btn" type="button"><svg class="i" style="width:14px;height:14px"><use href="#i-sliders"/></svg>筛选</button>
+        </div>
+
+        <!-- run list -->
+        <section class="panel runs" aria-label="运行列表">
+          <div class="rows-head">
+            <div>Run</div>
+            <div>状态</div>
+            <div>对话</div>
+            <div class="model">模型</div>
+            <div class="r">耗时</div>
+            <div class="r">成本</div>
+          </div>
+
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar rb">RB</span><div class="txt"><div class="nm">reviewer-bot</div><div class="id mono">run_01J8ZM3Q7K · 4 分钟前</div></div></div>
+            <div><span class="chip"><span class="dot running"></span>运行中</span></div>
+            <div class="conv"><b>#infra-alerts</b> · 修复 nightly 构建失败</div>
+            <div class="model mono">claude-opus-5</div>
+            <div class="r mono">4m 12s</div>
+            <div class="r mono">¥0.38</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar rn">RN</span><div class="txt"><div class="nm">release-notes</div><div class="id mono">run_01J8ZKX2P9 · 26 分钟前</div></div></div>
+            <div><span class="chip"><span class="dot completed"></span>已完成</span></div>
+            <div class="conv"><b>#release</b> · v0.9.2 发布说明</div>
+            <div class="model mono">MiniMax-M2</div>
+            <div class="r mono">2m 51s</div>
+            <div class="r mono">¥0.12</div>
+          </div>
+          <div class="row selected" tabindex="0" aria-selected="true">
+            <div class="agent"><span class="avatar rb">RB</span><div class="txt"><div class="nm">reviewer-bot</div><div class="id mono">run_01J8ZKR8T4 · 1 小时前</div></div></div>
+            <div><span class="chip"><span class="dot completed"></span>已完成</span></div>
+            <div class="conv"><b>PR #271</b> · store: split routes.go</div>
+            <div class="model mono">claude-opus-5</div>
+            <div class="r mono">6m 03s</div>
+            <div class="r mono">¥0.71</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar mh">MH</span><div class="txt"><div class="nm">migrate-helper</div><div class="id mono">run_01J8ZK9A1M · 2 小时前</div></div></div>
+            <div><span class="chip"><span class="dot failed"></span>失败</span></div>
+            <div class="conv"><b>#backend</b> · 迁移 0042 回滚</div>
+            <div class="model mono">gpt-5-codex</div>
+            <div class="r mono">0m 48s</div>
+            <div class="r mono">¥0.05</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar rb">RB</span><div class="txt"><div class="nm">reviewer-bot</div><div class="id mono">run_01J8ZJH6W2 · 2 小时前</div></div></div>
+            <div><span class="chip"><span class="dot queued"></span>等待调度</span></div>
+            <div class="conv"><b>#frontend</b> · 对话页 assistant-ui 接入</div>
+            <div class="model mono">claude-opus-5</div>
+            <div class="r mono na">—</div>
+            <div class="r mono na">—</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar dw">DW</span><div class="txt"><div class="nm">docs-writer</div><div class="id mono">run_01J8ZJ3C5N · 3 小时前</div></div></div>
+            <div><span class="chip"><span class="dot completed"></span>已完成</span></div>
+            <div class="conv"><b>#docs</b> · CONTRIBUTING 补充 e2b 章节</div>
+            <div class="model mono">MiniMax-M2</div>
+            <div class="r mono">1m 37s</div>
+            <div class="r mono">¥0.06</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar mh">MH</span><div class="txt"><div class="nm">migrate-helper</div><div class="id mono">run_01J8ZHT0X8 · 5 小时前</div></div></div>
+            <div><span class="chip"><span class="dot cancelled"></span>已取消</span></div>
+            <div class="conv"><b>#backend</b> · sqlc 重新生成</div>
+            <div class="model mono">gpt-5-codex</div>
+            <div class="r mono">0m 12s</div>
+            <div class="r mono">¥0.01</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar rb">RB</span><div class="txt"><div class="nm">reviewer-bot</div><div class="id mono">run_01J8ZH2R9Q · 昨天</div></div></div>
+            <div><span class="chip"><span class="dot completed"></span>已完成</span></div>
+            <div class="conv"><b>PR #268</b> · web: marketplace tab filter</div>
+            <div class="model mono">claude-opus-5</div>
+            <div class="r mono">3m 44s</div>
+            <div class="r mono">¥0.42</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar rn">RN</span><div class="txt"><div class="nm">release-notes</div><div class="id mono">run_01J8ZGF4K7 · 昨天</div></div></div>
+            <div><span class="chip"><span class="dot interrupted"></span>已中断</span></div>
+            <div class="conv"><b>#release</b> · v0.9.1 发布说明</div>
+            <div class="model mono">MiniMax-M2</div>
+            <div class="r mono">5m 20s</div>
+            <div class="r mono">¥0.19</div>
+          </div>
+          <div class="row" tabindex="0">
+            <div class="agent"><span class="avatar dw">DW</span><div class="txt"><div class="nm">docs-writer</div><div class="id mono">run_01J8ZFQ1B3 · 昨天</div></div></div>
+            <div><span class="chip"><span class="dot completed"></span>已完成</span></div>
+            <div class="conv"><b>#docs</b> · README 快速开始</div>
+            <div class="model mono">MiniMax-M2</div>
+            <div class="r mono">0m 58s</div>
+            <div class="r mono">¥0.03</div>
+          </div>
+
+          <div class="runs-foot">
+            <span class="num">第 1-10 条,共 128 条</span>
+            <div class="pg">
+              <button class="btn sm" type="button" disabled><svg class="i" style="width:13px;height:13px"><use href="#i-left"/></svg>上一页</button>
+              <button class="btn sm" type="button">下一页<svg class="i" style="width:13px;height:13px"><use href="#i-right"/></svg></button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ---------- detail column ---------- -->
+      <aside class="detail" aria-label="运行详情">
+        <section class="panel d-head">
+          <div class="top">
+            <span class="avatar rb">RB</span>
+            <div class="who">
+              <div class="n">reviewer-bot</div>
+              <div class="id mono">run_01J8ZKR8T4</div>
+            </div>
+            <span class="chip"><span class="dot completed"></span>已完成</span>
+          </div>
+          <div class="meta">
+            <div>来自飞书线程<span class="sep">·</span>PR #271</div>
+            <div class="num">创建 09:41:02<span class="sep">·</span>开始 09:41:05</div>
+          </div>
+          <div class="facts">
+            <div><div class="l">耗时</div><div class="v mono">6m 03s</div></div>
+            <div><div class="l">成本</div><div class="v mono">¥0.71</div></div>
+            <div><div class="l">完成</div><div class="v mono">09:47:08</div></div>
+          </div>
+        </section>
+
+        <div class="tabs" role="tablist" aria-label="详情标签">
+          <button type="button" role="tab" aria-selected="true">Overview</button>
+          <button type="button" role="tab" aria-selected="false">Events</button>
+          <button type="button" role="tab" aria-selected="false">Steps</button>
+          <button type="button" role="tab" aria-selected="false">Artifacts</button>
+          <button type="button" role="tab" aria-selected="false">Permissions</button>
+          <button type="button" role="tab" aria-selected="false">Audit</button>
+        </div>
+
+        <section class="panel d-sec">
+          <h2>运行环境</h2>
+          <dl class="defs">
+            <div><dt>运行节点</dt><dd class="mono">mbp-fanjingluo</dd></div>
+            <div><dt>Agent 引擎</dt><dd>Claude Code</dd></div>
+            <div><dt>运行模式</dt><dd>沙盒 (docker)</dd></div>
+            <div><dt>托管模型</dt><dd class="mono">claude-opus-5</dd></div>
+            <div><dt>工作目录</dt><dd class="mono">~/dev/parsar</dd></div>
+            <div><dt>最近心跳</dt><dd class="num"><span class="dot running"></span>12 秒前</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel d-sec">
+          <h2>Steps</h2>
+          <ol class="steps">
+            <li><span class="n">1</span><span class="t">读取 PR #271 的 diff 与评论</span><span class="ok"><svg class="i"><use href="#i-check"/></svg></span></li>
+            <li><span class="n">2</span><span class="t">搜索 store.go 中的相关调用</span><span class="ok"><svg class="i"><use href="#i-check"/></svg></span></li>
+            <li><span class="n">3</span><span class="t">修改 3 个文件</span><span class="diff mono">+142 −37</span><span class="ok"><svg class="i"><use href="#i-check"/></svg></span></li>
+            <li><span class="n">4</span><span class="t">运行 <code>make check-web</code></span><span class="ok"><svg class="i"><use href="#i-check"/></svg></span></li>
+            <li><span class="n">5</span><span class="t">推送修订并更新 PR 描述</span><span class="ok"><svg class="i"><use href="#i-check"/></svg></span></li>
+            <li><span class="n">6</span><span class="t">回帖到飞书线程</span><span class="ok"><svg class="i"><use href="#i-check"/></svg></span></li>
+          </ol>
+        </section>
+
+        <div class="d-actions">
+          <button class="btn" type="button"><svg class="i" style="width:14px;height:14px"><use href="#i-retry"/></svg>重试</button>
+          <button class="btn" type="button" disabled title="运行已完成"><svg class="i" style="width:14px;height:14px"><use href="#i-x"/></svg>取消运行</button>
+          <a class="link" href="#">打开对话<svg class="i" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var light = document.getElementById('th-light');
+    var dark = document.getElementById('th-dark');
+    function setTheme(t) {
+      root.setAttribute('data-theme', t);
+      light.setAttribute('aria-pressed', String(t === 'light'));
+      dark.setAttribute('aria-pressed', String(t === 'dark'));
+    }
+    light.addEventListener('click', function () { setTheme('light'); });
+    dark.addEventListener('click', function () { setTheme('dark'); });
+
+    // segmented filter + tabs: purely visual toggles for the mock
+    document.querySelectorAll('.toolbar .seg').forEach(function (g) {
+      g.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      });
+    });
+    document.querySelectorAll('.tabs').forEach(function (g) {
+      g.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
+      });
+    });
+    document.querySelectorAll('.row').forEach(function (r) {
+      r.addEventListener('click', function () {
+        document.querySelectorAll('.row').forEach(function (x) { x.classList.remove('selected'); x.removeAttribute('aria-selected'); });
+        r.classList.add('selected'); r.setAttribute('aria-selected', 'true');
+      });
+    });
+  })();
+</script>
+</body>
+</html>

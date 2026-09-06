@@ -1,46 +1,50 @@
 /**
- * Shared UI primitives + tiny helpers for all channel-connector panels
- * (Feishu / Slack / Discord). Each platform-specific fields module owns its
- * own SecretFieldSpec + config-equal logic, but the visual shell — Card,
- * Field and SecretInput live here so all three panels look the
- * same and any tweak to spacing/colors applies uniformly.
+ * Shared pieces for the channel-connector forms (Feishu / Slack / Discord /
+ * Teams). Each platform module owns its secret-ref logic; the visual shell
+ * (section head, fields, secret input, footer) lives here so every form
+ * reads the same.
  */
 import type { ReactNode } from "react"
-import { CheckCircle2, ExternalLink, Loader2, QrCode, XCircle } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 
-export function Card({
+import { Badge } from "../../ui/badge"
+import { Button } from "../../ui/button"
+import { Input } from "../../ui/input"
+import { Field as UiField } from "../../ui/label"
+import { StatusIcon } from "../../ui/status-icon"
+import { cn } from "../../../lib/utils"
+
+/** A form section: 13px/500 head with the state chip and the doc link, then the fields 12px apart. */
+export function FormSection({
   title,
-  description,
+  status,
   docHref,
   docLabel,
   className,
   children,
 }: {
   title: string
-  description?: string
+  status?: ReactNode
   docHref?: string
   docLabel?: string
   className?: string
   children: ReactNode
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-surface px-5 py-4 ${className ?? ""}`}>
-      <header className="mb-4">
-        <h3 className="text-lg font-semibold text-fg">{title}</h3>
-        {description && <p className="mt-1 text-sm text-fg-subtle">{description}</p>}
+    <section className={cn("max-w-2xl", className)}>
+      <div className="mb-3 flex h-7 items-center gap-2">
+        <h2 className="text-sm font-medium text-fg">{title}</h2>
+        {status}
         {docHref && docLabel && (
-          <a
-            href={docHref}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-info-emphasis hover:underline"
-          >
-            <ExternalLink className="h-3 w-3" />
-            {docLabel}
-          </a>
+          <Button asChild variant="link" size="sm" className="ml-auto px-0 text-fg-muted hover:text-fg">
+            <a href={docHref} target="_blank" rel="noreferrer noopener">
+              {docLabel}
+              <ExternalLink strokeWidth={1.5} aria-hidden="true" />
+            </a>
+          </Button>
         )}
-      </header>
-      {children}
+      </div>
+      <div className="flex flex-col gap-3">{children}</div>
     </section>
   )
 }
@@ -50,34 +54,43 @@ export function Field({
   hint,
   required,
   badge,
+  htmlFor,
   children,
 }: {
   label: string
   hint?: string
   required?: boolean
   badge?: ReactNode
+  htmlFor?: string
   children: ReactNode
 }) {
   return (
-    <div className="mb-3 last:mb-0">
-      <label className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-faint">
-        <span>
-          {label}
-          {required && <span className="ml-1 text-danger">*</span>}
+    <UiField
+      htmlFor={htmlFor}
+      hint={hint}
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          <span>
+            {label}
+            {required && <span aria-hidden="true"> *</span>}
+          </span>
+          {badge}
         </span>
-        {badge}
-      </label>
+      }
+    >
       {children}
-      {hint && <p className="mt-0.5 text-xs leading-tight text-fg-subtle">{hint}</p>}
-    </div>
+    </UiField>
   )
 }
 
+/**
+ * Password field for a secret; the "Saved" chip carries the stored-ref
+ * state and the placeholder carries the expected format (e.g. "xoxb-…").
+ */
 export function SecretInput({
   label,
-  hint,
-  savedHint,
   savedBadge,
+  placeholder,
   value,
   onChange,
   required,
@@ -86,9 +99,8 @@ export function SecretInput({
   testId,
 }: {
   label: string
-  hint: string
-  savedHint: string
   savedBadge?: string
+  placeholder?: string
   value: string
   onChange: (v: string) => void
   required: boolean
@@ -99,32 +111,63 @@ export function SecretInput({
   return (
     <Field
       label={label}
-      hint={hasSavedValue ? savedHint : hint}
       required={required}
+      htmlFor={testId}
       badge={
         hasSavedValue ? (
-          <span
-            className="inline-flex items-center gap-1 rounded-full bg-success-subtle px-1.5 py-0.5 text-xs font-medium normal-case tracking-normal text-success-emphasis"
-            data-testid={`${testId}-saved-badge`}
-          >
-            <CheckCircle2 className="h-3 w-3" />
+          <Badge variant="success" dot data-testid={`${testId}-saved-badge`}>
             {savedBadge ?? "Saved"}
-          </span>
+          </Badge>
         ) : undefined
       }
     >
-      <input
+      <Input
+        id={testId}
         type="password"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         autoComplete="new-password"
-        placeholder={hasSavedValue ? "••••••••" : undefined}
-        className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
+        placeholder={hasSavedValue ? "••••••••" : placeholder}
+        className="font-mono"
         data-testid={testId}
       />
     </Field>
   )
+}
+
+/** The enabled switch: one 28px row with a checkbox and its label. */
+export function EnabledField({
+  label,
+  checked,
+  onChange,
+  disabled,
+  testId,
+}: {
+  label: string
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled: boolean
+  testId: string
+}) {
+  return (
+    <label className="flex h-7 items-center gap-2 text-sm text-fg">
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 accent-accent"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        data-testid={testId}
+      />
+      {label}
+    </label>
+  )
+}
+
+/** Right-aligned footer with a top hairline; holds the form's one save button. */
+export function FormFooter({ children }: { children: ReactNode }) {
+  return <div className="mt-1 flex items-center justify-end gap-2 border-t border-line pt-3">{children}</div>
 }
 
 export function ProvisionStatusIcon({
@@ -136,26 +179,12 @@ export function ProvisionStatusIcon({
   loading: boolean
   labels: { waiting: string; connected: string; stopped: string }
 }) {
-  if (status === "success") {
-    return (
-      <p className="inline-flex items-center gap-1 text-success">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        <span>{labels.connected}</span>
-      </p>
-    )
-  }
-  if (status === "error" || status === "expired") {
-    return (
-      <p className="inline-flex items-center gap-1 text-danger">
-        <XCircle className="h-3.5 w-3.5" />
-        <span>{labels.stopped}</span>
-      </p>
-    )
-  }
+  const kind = status === "success" ? "completed" : status === "pending" ? (loading ? "running" : "queued") : "failed"
+  const text = status === "success" ? labels.connected : status === "pending" ? labels.waiting : labels.stopped
   return (
-    <p className="inline-flex items-center gap-1 text-fg-subtle">
-      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <QrCode className="h-3.5 w-3.5" />}
-      <span>{labels.waiting}</span>
+    <p className="flex items-center gap-1.5 text-sm text-fg" role="status">
+      <StatusIcon status={kind} />
+      <span>{text}</span>
     </p>
   )
 }

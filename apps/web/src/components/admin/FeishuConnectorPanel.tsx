@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import QRCode from "qrcode"
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, MessageCircle, QrCode, RefreshCw, XCircle } from "lucide-react"
+import { ExternalLink, Loader2, QrCode } from "lucide-react"
 
 import { ApiError } from "../../lib/api-client"
 import {
@@ -14,51 +14,14 @@ import {
 import { useCreateSecret } from "../../lib/api-secrets"
 import type { CreateSecretRequest } from "../../lib/api-types"
 import { randomHex } from "../../lib/random"
-
-function Card({
-  title,
-  description,
-  className,
-  children,
-}: {
-  title: string
-  description?: string
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className={`rounded-lg border border-line bg-surface px-5 py-4 ${className ?? ""}`}>
-      <header className="mb-4">
-        <h3 className="text-lg font-semibold text-fg">{title}</h3>
-        {description && <p className="mt-1 text-sm text-fg-subtle">{description}</p>}
-      </header>
-      {children}
-    </section>
-  )
-}
-
-function Field({
-  label,
-  hint,
-  required,
-  children,
-}: {
-  label: string
-  hint?: string
-  required?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <div className="mb-3 last:mb-0">
-      <label className="mb-1 block text-xs font-medium text-fg-faint">
-        {label}
-        {required && <span className="ml-1 text-danger">*</span>}
-      </label>
-      {children}
-      {hint && <p className="mt-0.5 text-xs leading-tight text-fg-subtle">{hint}</p>}
-    </div>
-  )
-}
+import { Badge } from "../ui/badge"
+import { Button } from "../ui/button"
+import { Field } from "../ui/label"
+import { Input } from "../ui/input"
+import { PropertyList, Property } from "../ui/property-list"
+import { StatusIcon, type StatusKind } from "../ui/status-icon"
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
+import { InlineError } from "../../pages/admin/agents/DetailSection"
 
 /* ------------------------------------------------------------------ */
 /*  FeishuConnectorPanel — see docs/feishu-routing.md §6.2             */
@@ -146,6 +109,10 @@ interface FeishuConnectorPanelProps {
   current: FeishuConnectorConfig | undefined
   canEdit: boolean
   onToast: (msg: string) => void
+}
+
+function RequiredMark() {
+  return <span aria-hidden="true"> *</span>
 }
 
 export function FeishuConnectorPanel({
@@ -307,7 +274,7 @@ export function FeishuConnectorPanel({
           const qrDataUrl = await QRCode.toDataURL(begin.verification_uri_complete, {
             width: 224,
             margin: 2,
-            color: { dark: "#020617", light: "#ffffff" },
+            color: { dark: "#37352f", light: "#ffffff" },
           })
           setProvision({
             deviceCode: begin.device_code,
@@ -328,218 +295,190 @@ export function FeishuConnectorPanel({
     })
   }
 
+  const disabled = !canEdit || saving
+
   return (
-    <Card
-      title={t("agents.feishuConnector.title")}
-      description={t("agents.feishuConnector.description")}
-      className="mt-4"
-    >
-      {draft.enabled && (
-        <div className="mb-4 rounded-md border border-line bg-surface p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <QrCode className="h-4 w-4 text-fg-muted" strokeWidth={1.75} />
-              <div>
-                <p className="text-sm font-medium text-fg">
-                  {t("agents.feishuConnector.provision.title")}
-                </p>
-                <p className="text-sm text-fg-subtle">
-                  {t("agents.feishuConnector.provision.subtitle")}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onBeginProvision}
-              disabled={!canEdit || saving || beginProvisionMut.isPending || provision?.status === "pending"}
-              className="inline-flex items-center gap-2 rounded-md bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:opacity-60"
-              data-testid="feishu-provision-begin-button"
-            >
-              {beginProvisionMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <QrCode className="h-3.5 w-3.5" />}
-              {t("agents.feishuConnector.provision.start")}
-            </button>
-          </div>
+    <section className="mt-6 max-w-2xl">
+      <div className="mb-2 flex h-7 items-center justify-between gap-2">
+        <h2 className="text-sm font-medium text-fg">{t("agents.feishuConnector.title")}</h2>
+      </div>
 
-          {provision && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr]">
-              {provision.qrDataUrl && provision.status === "pending" && (
-                <img
-                  src={provision.qrDataUrl}
-                  alt={t("agents.feishuConnector.provision.qrAlt")}
-                  className="h-40 w-40 rounded-md border border-line bg-surface p-2"
-                  data-testid="feishu-provision-qr"
-                />
-              )}
-              <div className="min-w-0 space-y-2 text-sm text-fg-muted">
-                <ProvisionStatusIcon status={provision.status} loading={pollProvisionPending} />
-                <p className="font-mono text-sm text-fg-emphasis">{provision.userCode}</p>
-                <a
-                  href={provision.verificationUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex max-w-full items-center gap-1 text-sm text-fg-muted underline underline-offset-2"
+      <div className="flex flex-col gap-3">
+        <Field
+          label={t("agents.feishuConnector.fields.entryMode.label")}
+          hint={t("agents.feishuConnector.fields.entryMode.hint")}
+        >
+          <Tabs
+            value={entryMode}
+            onValueChange={(mode) => onEntryModeChange(mode === "dedicated" ? "dedicated" : "default")}
+          >
+            <TabsList className="flex w-full" data-testid="feishu-entry-mode-control">
+              {(["default", "dedicated"] as const).map((mode) => (
+                <TabsTrigger key={mode} value={mode} className="flex-1" disabled={disabled}>
+                  {t(`agents.feishuConnector.fields.entryMode.options.${mode}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </Field>
+
+        {draft.enabled && (
+          <>
+            <div className="mt-3 border-t border-line pt-3">
+              <div className="flex h-7 items-center justify-between gap-2">
+                <h3 className="text-sm font-medium text-fg">{t("agents.feishuConnector.provision.title")}</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onBeginProvision}
+                  disabled={disabled || beginProvisionMut.isPending || provision?.status === "pending"}
+                  data-testid="feishu-provision-begin-button"
                 >
-                  <span className="truncate">{t("agents.feishuConnector.provision.openLink")}</span>
-                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                </a>
-                {provision.status === "pending" && (
-                  <p className="inline-flex items-center gap-1 text-fg-subtle">
-                    {pollProvisionPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {t("agents.feishuConnector.provision.pending")}
-                  </p>
-                )}
-                {provision.message && (
-                  <p className={provision.status === "success" ? "text-success" : "text-danger"}>
-                    {provision.message}
-                  </p>
-                )}
+                  {beginProvisionMut.isPending ? (
+                    <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />
+                  ) : (
+                    <QrCode strokeWidth={1.5} aria-hidden="true" />
+                  )}
+                  {t("agents.feishuConnector.provision.start")}
+                </Button>
               </div>
+
+              {provision && (
+                <div className="mt-2 flex items-start gap-4">
+                  {provision.qrDataUrl && provision.status === "pending" && (
+                    <img
+                      src={provision.qrDataUrl}
+                      alt={t("agents.feishuConnector.provision.qrAlt")}
+                      className="h-36 w-36 shrink-0 rounded-md border border-line"
+                      data-testid="feishu-provision-qr"
+                    />
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                    <ProvisionStatus status={provision.status} loading={pollProvisionPending} />
+                    <code className="font-mono text-xs text-fg">{provision.userCode}</code>
+                    <Button variant="link" size="sm" className="px-0" asChild>
+                      <a href={provision.verificationUrl} target="_blank" rel="noreferrer">
+                        <span className="truncate">{t("agents.feishuConnector.provision.openLink")}</span>
+                        <ExternalLink strokeWidth={1.5} aria-hidden="true" />
+                      </a>
+                    </Button>
+                    {provision.message && <p className="text-sm text-fg">{provision.message}</p>}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
 
-      {SHOW_FEISHU_DIAGNOSTICS && (
-        <FeishuDiagnosticsStrip
-          diagnostics={undefined}
-          loading={false}
-          hasError={false}
-          formatTime={() => ""}
-        />
-      )}
+            {SHOW_FEISHU_DIAGNOSTICS && (
+              <FeishuDiagnosticsStrip
+                diagnostics={undefined}
+                loading={false}
+                hasError={false}
+                formatTime={() => ""}
+              />
+            )}
 
-      <Field
-        label={t("agents.feishuConnector.fields.entryMode.label")}
-        hint={t("agents.feishuConnector.fields.entryMode.hint")}
-      >
-        <div className="grid grid-cols-2 gap-2" data-testid="feishu-entry-mode-control">
-          {(["default", "dedicated"] as const).map((mode) => {
-            const active = entryMode === mode
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onEntryModeChange(mode)}
-                disabled={!canEdit || saving}
-                className={`min-h-9 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                  active
-                    ? "border-line-strong bg-surface-emphasis text-white"
-                    : "border-line bg-surface text-fg-muted hover:bg-surface-subtle"
-                } disabled:opacity-60`}
-                aria-pressed={active}
+            <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
+              <Field
+                label={<>{t("agents.feishuConnector.fields.appId.label")}<RequiredMark /></>}
+                hint={t("agents.feishuConnector.fields.appId.hint")}
+                htmlFor="feishu-app-id"
               >
-                {t(`agents.feishuConnector.fields.entryMode.options.${mode}`)}
-              </button>
-            )
-          })}
-        </div>
-      </Field>
+                <Input
+                  id="feishu-app-id"
+                  type="text"
+                  value={draft.app_id}
+                  placeholder="cli_xxxxxxxxxxxxxxxx"
+                  onChange={(e) => setDraft({ ...draft, app_id: e.target.value })}
+                  disabled={disabled}
+                  className="font-mono"
+                  data-testid="feishu-app-id-input"
+                />
+              </Field>
 
-      {draft.enabled && (
-        <>
-          <Field
-            label={t("agents.feishuConnector.fields.appId.label")}
-            hint={t("agents.feishuConnector.fields.appId.hint")}
-            required
-          >
-            <input
-              type="text"
-              value={draft.app_id}
-              placeholder="cli_xxxxxxxxxxxxxxxx"
-              onChange={(e) => setDraft({ ...draft, app_id: e.target.value })}
-              disabled={!canEdit || saving}
-              className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
-              data-testid="feishu-app-id-input"
-            />
-          </Field>
+              <SecretInput
+                id="feishu-app-secret"
+                label={t("agents.feishuConnector.fields.appSecret.label")}
+                hint={t("agents.feishuConnector.fields.appSecret.hint")}
+                savedHint={t("agents.feishuConnector.fields.appSecret.savedHint")}
+                value={secretInputs.appSecret}
+                onChange={(v) => setSecretInputs((prev) => ({ ...prev, appSecret: v }))}
+                required={!draft.app_secret_ref.trim()}
+                hasSavedValue={Boolean(draft.app_secret_ref.trim())}
+                disabled={disabled}
+                testId="feishu-app-secret-input"
+              />
 
-          <SecretInput
-            label={t("agents.feishuConnector.fields.appSecret.label")}
-            hint={t("agents.feishuConnector.fields.appSecret.hint")}
-            savedHint={t("agents.feishuConnector.fields.appSecret.savedHint")}
-            value={secretInputs.appSecret}
-            onChange={(v) => setSecretInputs((prev) => ({ ...prev, appSecret: v }))}
-            required={!draft.app_secret_ref.trim()}
-            hasSavedValue={Boolean(draft.app_secret_ref.trim())}
-            disabled={!canEdit || saving}
-            testId="feishu-app-secret-input"
-          />
+              <SecretInput
+                id="feishu-verification-token"
+                label={t("agents.feishuConnector.fields.verificationToken.label")}
+                hint={t("agents.feishuConnector.fields.verificationToken.hint")}
+                savedHint={t("agents.feishuConnector.fields.verificationToken.savedHint")}
+                value={secretInputs.verificationToken}
+                onChange={(v) => setSecretInputs((prev) => ({ ...prev, verificationToken: v }))}
+                required={draft.event_mode !== "websocket" && !draft.verification_token_ref.trim()}
+                hasSavedValue={Boolean(draft.verification_token_ref.trim())}
+                disabled={disabled}
+                testId="feishu-verification-token-input"
+              />
 
-          <SecretInput
-            label={t("agents.feishuConnector.fields.verificationToken.label")}
-            hint={t("agents.feishuConnector.fields.verificationToken.hint")}
-            savedHint={t("agents.feishuConnector.fields.verificationToken.savedHint")}
-            value={secretInputs.verificationToken}
-            onChange={(v) => setSecretInputs((prev) => ({ ...prev, verificationToken: v }))}
-            required={draft.event_mode !== "websocket" && !draft.verification_token_ref.trim()}
-            hasSavedValue={Boolean(draft.verification_token_ref.trim())}
-            disabled={!canEdit || saving}
-            testId="feishu-verification-token-input"
-          />
+              <SecretInput
+                id="feishu-encrypt-key"
+                label={t("agents.feishuConnector.fields.encryptKey.label")}
+                hint={t("agents.feishuConnector.fields.encryptKey.hint")}
+                savedHint={t("agents.feishuConnector.fields.encryptKey.savedHint")}
+                value={secretInputs.encryptKey}
+                onChange={(v) => setSecretInputs((prev) => ({ ...prev, encryptKey: v }))}
+                required={false}
+                hasSavedValue={Boolean(draft.encrypt_key_ref.trim())}
+                disabled={disabled}
+                testId="feishu-encrypt-key-input"
+              />
 
-          <SecretInput
-            label={t("agents.feishuConnector.fields.encryptKey.label")}
-            hint={t("agents.feishuConnector.fields.encryptKey.hint")}
-            savedHint={t("agents.feishuConnector.fields.encryptKey.savedHint")}
-            value={secretInputs.encryptKey}
-            onChange={(v) => setSecretInputs((prev) => ({ ...prev, encryptKey: v }))}
-            required={false}
-            hasSavedValue={Boolean(draft.encrypt_key_ref.trim())}
-            disabled={!canEdit || saving}
-            testId="feishu-encrypt-key-input"
-          />
-
-          <Field
-            label={t("agents.feishuConnector.fields.botOpenId.label")}
-            hint={t("agents.feishuConnector.fields.botOpenId.hint")}
-          >
-            <input
-              type="text"
-              value={draft.bot_open_id}
-              placeholder="ou_xxxxxxxxxxxxxxxx"
-              onChange={(e) => setDraft({ ...draft, bot_open_id: e.target.value })}
-              disabled={!canEdit || saving}
-              className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
-              data-testid="feishu-bot-open-id-input"
-            />
-          </Field>
-        </>
-      )}
-
-      {!canEdit && (
-        <p className="mt-3 text-sm text-fg-faint">{t("agents.feishuConnector.ownerOnly")}</p>
-      )}
-
-      {errorMsg && (
-        <p className="mt-3 text-sm text-danger" role="alert" data-testid="feishu-error">
-          {errorMsg}
-        </p>
-      )}
-
-      <div className="mt-5 flex items-center justify-end gap-2 border-t border-line/40 pt-4">
-        {dirty && (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-subtle disabled:opacity-60"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            {t("agents.feishuConnector.actions.reset")}
-          </button>
+              <Field
+                label={t("agents.feishuConnector.fields.botOpenId.label")}
+                hint={t("agents.feishuConnector.fields.botOpenId.hint")}
+                htmlFor="feishu-bot-open-id"
+              >
+                <Input
+                  id="feishu-bot-open-id"
+                  type="text"
+                  value={draft.bot_open_id}
+                  placeholder="ou_xxxxxxxxxxxxxxxx"
+                  onChange={(e) => setDraft({ ...draft, bot_open_id: e.target.value })}
+                  disabled={disabled}
+                  className="font-mono"
+                  data-testid="feishu-bot-open-id-input"
+                />
+              </Field>
+            </div>
+          </>
         )}
-        <button
+
+        {!canEdit && (
+          <p className="text-xs text-fg-muted">{t("agents.feishuConnector.ownerOnly")}</p>
+        )}
+
+        {errorMsg && (
+          <InlineError role="alert" data-testid="feishu-error">{errorMsg}</InlineError>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-end gap-2 border-t border-line pt-3">
+        <Button type="button" variant="outline" onClick={onReset} disabled={saving || !dirty}>
+          {t("agents.feishuConnector.actions.reset")}
+        </Button>
+        <Button
           type="button"
           onClick={onSave}
-          disabled={!canEdit || saving || !dirty || Boolean(missingRequired)}
-          className="inline-flex items-center gap-2 rounded-md bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:opacity-60"
+          disabled={disabled || !dirty || Boolean(missingRequired)}
           data-testid="feishu-save-button"
         >
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />}
           {t("agents.feishuConnector.actions.save")}
-        </button>
+        </Button>
       </div>
-    </Card>
+    </section>
   )
 }
 
@@ -567,7 +506,7 @@ function FeishuDiagnosticsStrip({
 }) {
   const { t } = useTranslation("admin")
   const status = resolveFeishuDiagnosticsStatus(diagnostics, loading, hasError)
-  const emptyValue = loading && !diagnostics ? "..." : t("agents.feishuConnector.diagnostics.empty")
+  const emptyValue = loading && !diagnostics ? "…" : t("agents.feishuConnector.diagnostics.empty")
   const mode = diagnostics?.configured
     ? t(`agents.feishuConnector.diagnostics.mode.${diagnostics.event_mode}`)
     : emptyValue
@@ -586,47 +525,29 @@ function FeishuDiagnosticsStrip({
   ] as const
 
   return (
-    <div
-      className="mb-3 rounded-md border border-line bg-surface-subtle p-3"
-      data-testid="feishu-diagnostics-strip"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="mt-3 border-t border-line pt-3" data-testid="feishu-diagnostics-strip">
+      <div className="flex h-7 items-center gap-2">
         <FeishuDiagnosticsBadge status={status} />
-        <span className="rounded-md bg-surface px-2 py-1 font-mono text-xs text-fg-subtle ring-1 ring-slate-200">
-          {mode}
-        </span>
+        <span className="font-mono text-xs text-fg-muted">{mode}</span>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-2 min-[520px]:grid-cols-3 sm:grid-cols-6">
+      <PropertyList className="mt-1">
         {counts.map(([key, value]) => (
-          <div key={key} className="min-w-0 rounded-md bg-surface px-2 py-2 ring-1 ring-slate-200">
-            <p className="truncate text-xs font-medium text-fg-faint">
-              {t(`agents.feishuConnector.diagnostics.stats.${key}`)}
-            </p>
-            <p className="mt-0.5 truncate font-mono text-sm font-semibold tabular-nums text-fg-emphasis">
-              {typeof value === "number" ? value : emptyValue}
-            </p>
-          </div>
+          <Property key={key} label={t(`agents.feishuConnector.diagnostics.stats.${key}`)} mono className={typeof value === "number" ? undefined : "text-fg-muted"}>
+            {typeof value === "number" ? value : emptyValue}
+          </Property>
         ))}
-      </div>
-
-      <div className="mt-2 grid grid-cols-1 gap-2 border-t border-line pt-2 min-[520px]:grid-cols-3">
         {times.map(([key, value]) => (
-          <FeishuDiagnosticTime
-            key={key}
-            label={t(`agents.feishuConnector.diagnostics.times.${key}`)}
-            value={diagnostics ? formatTime(value) : emptyValue}
-          />
+          <Property key={key} label={t(`agents.feishuConnector.diagnostics.times.${key}`)} mono>
+            {diagnostics ? formatTime(value) : emptyValue}
+          </Property>
         ))}
-      </div>
+      </PropertyList>
 
       {diagnostics?.last_error && (
-        <p className="mt-2 flex items-start gap-1.5 break-words text-sm text-danger-emphasis">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            {t("agents.feishuConnector.diagnostics.lastError")}: {diagnostics.last_error}
-          </span>
-        </p>
+        <InlineError className="mt-2">
+          {t("agents.feishuConnector.diagnostics.lastError")}: {diagnostics.last_error}
+        </InlineError>
       )}
     </div>
   )
@@ -636,41 +557,19 @@ function FeishuDiagnosticsBadge({ status }: { status: FeishuDiagnosticsStatus })
   const { t } = useTranslation("admin")
   const label = t(`agents.feishuConnector.diagnostics.status.${status}`)
   const warningStatus = status === "pending" || status === "retrying" || status === "inboundOnly"
-  const tone =
+  const variant =
     status === "ready"
-      ? "bg-success-subtle text-success ring-emerald-200"
+      ? "success"
       : status === "error" || status === "unreachable"
-        ? "bg-danger-subtle text-danger-emphasis ring-rose-200"
+        ? "destructive"
         : warningStatus
-          ? "bg-warning-subtle text-warning ring-amber-200"
-          : "bg-surface text-fg-muted ring-slate-200"
-  const Icon =
-    status === "loading"
-      ? Loader2
-      : status === "ready"
-        ? CheckCircle2
-        : status === "error" || status === "unreachable"
-          ? XCircle
-          : warningStatus
-            ? AlertTriangle
-            : MessageCircle
+          ? "warning"
+          : "neutral"
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium ring-1 ${tone}`}>
-      <Icon className={`h-3.5 w-3.5 ${status === "loading" ? "animate-spin" : ""}`} />
+    <Badge variant={variant} dot pulse={status === "loading"}>
       {label}
-    </span>
-  )
-}
-
-function FeishuDiagnosticTime({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs font-medium text-fg-faint">{label}</p>
-      <p className="mt-0.5 truncate text-sm text-fg-muted" title={value}>
-        {value}
-      </p>
-    </div>
+    </Badge>
   )
 }
 
@@ -691,6 +590,7 @@ function resolveFeishuDiagnosticsStatus(
 }
 
 function SecretInput({
+  id,
   label,
   hint,
   savedHint,
@@ -701,6 +601,7 @@ function SecretInput({
   disabled,
   testId,
 }: {
+  id: string
   label: string
   hint: string
   savedHint: string
@@ -712,21 +613,23 @@ function SecretInput({
   testId: string
 }) {
   return (
-    <Field label={label} hint={hasSavedValue ? savedHint : hint} required={required}>
-      <input
+    <Field label={<>{label}{required && <RequiredMark />}</>} hint={hasSavedValue ? savedHint : hint} htmlFor={id}>
+      <Input
+        id={id}
         type="password"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         autoComplete="new-password"
-        className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
+        className="font-mono"
         data-testid={testId}
       />
     </Field>
   )
 }
 
-function ProvisionStatusIcon({
+/* The provisioning state as a status icon and an ink word; colour lives in the icon. */
+function ProvisionStatus({
   status,
   loading,
 }: {
@@ -734,27 +637,18 @@ function ProvisionStatusIcon({
   loading: boolean
 }) {
   const { t } = useTranslation("admin")
-  if (status === "success") {
-    return (
-      <p className="inline-flex items-center gap-1 text-success">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        <span>{t("agents.feishuConnector.provision.status.connected")}</span>
-      </p>
-    )
-  }
-  if (status === "error" || status === "expired") {
-    return (
-      <p className="inline-flex items-center gap-1 text-danger">
-        <XCircle className="h-3.5 w-3.5" />
-        <span>{t("agents.feishuConnector.provision.status.stopped")}</span>
-      </p>
-    )
-  }
+  const kind: StatusKind = status === "success" ? "completed" : status === "error" || status === "expired" ? "failed" : loading ? "running" : "queued"
+  const word = status === "success"
+    ? t("agents.feishuConnector.provision.status.connected")
+    : status === "error" || status === "expired"
+      ? t("agents.feishuConnector.provision.status.stopped")
+      : t("agents.feishuConnector.provision.status.waiting")
   return (
-    <p className="inline-flex items-center gap-1 text-fg-subtle">
-      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <QrCode className="h-3.5 w-3.5" />}
-      <span>{t("agents.feishuConnector.provision.status.waiting")}</span>
-    </p>
+    <span className="inline-flex items-center gap-1.5 text-sm text-fg">
+      <StatusIcon status={kind} />
+      <span>{word}</span>
+      {status === "pending" && <span className="text-xs text-fg-muted">· {t("agents.feishuConnector.provision.pending")}</span>}
+    </span>
   )
 }
 

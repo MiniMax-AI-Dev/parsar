@@ -14,16 +14,21 @@ import {
 } from "shiki/core"
 import { createOnigurumaEngine } from "shiki/engine/oniguruma"
 
+import { Badge } from "../../../components/ui/badge"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../../../components/ui/collapsible"
+import { cn } from "../../../lib/utils"
 import type { CanonicalSkillSpec, SkillFile } from "./types"
 
 interface Props {
   skill: CanonicalSkillSpec
 }
+
+/* 28px hairline rows; mono file names; chevron rotates when open. */
+const TREE_ROW_CLASS = "flex h-7 w-full items-center gap-2 border-b border-line text-left text-sm transition-colors duration-150 ease-settle hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
 
 export function SkillFileTree({ skill }: Props) {
   const { t } = useTranslation("admin")
@@ -32,26 +37,23 @@ export function SkillFileTree({ skill }: Props) {
   const grouped = useMemo(() => groupFiles(files), [files])
 
   return (
-    <section className="grid gap-3">
-      <SkillMdCard skill={skill} />
+    <section className="border-t border-line">
+      <SkillMdRow skill={skill} />
 
       {grouped.references.length > 0 && (
-        <GroupCard
-          icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
+        <GroupRows
           title={t("capabilities.import.skill.fileTree.references", "references/")}
           files={grouped.references}
         />
       )}
       {grouped.scripts.length > 0 && (
-        <GroupCard
-          icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
+        <GroupRows
           title={t("capabilities.import.skill.fileTree.scripts", "scripts/")}
           files={grouped.scripts}
         />
       )}
       {grouped.other.length > 0 && (
-        <GroupCard
-          icon={<FolderOpen className="h-4 w-4 text-fg-subtle" />}
+        <GroupRows
           title={t("capabilities.import.skill.fileTree.other", "Other files")}
           files={grouped.other}
         />
@@ -60,7 +62,17 @@ export function SkillFileTree({ skill }: Props) {
   )
 }
 
-function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <ChevronRight
+      className={cn("h-3.5 w-3.5 shrink-0 text-fg-muted transition-transform duration-200 ease-spring", open && "rotate-90")}
+      strokeWidth={1.5}
+      aria-hidden="true"
+    />
+  )
+}
+
+function SkillMdRow({ skill }: { skill: CanonicalSkillSpec }) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(true)
 
@@ -70,21 +82,17 @@ function SkillMdCard({ skill }: { skill: CanonicalSkillSpec }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="overflow-hidden rounded-lg border border-success-border bg-surface">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-line-muted bg-success-subtle/50 px-3 py-2 text-left">
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 text-fg-subtle transition-transform ${open ? "rotate-90" : ""}`}
-          />
-          <FileText className="h-4 w-4 shrink-0 text-success" />
-          <code className="font-mono text-sm text-fg">SKILL.md</code>
-          <span className="ml-auto rounded-full bg-success-subtle px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-success-emphasis">
-            {t("capabilities.import.skill.fileTree.entry", "Entry")}
-          </span>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <ShikiCode content={source} lang="markdown" />
-        </CollapsibleContent>
-      </div>
+      <CollapsibleTrigger className={TREE_ROW_CLASS}>
+        <Chevron open={open} />
+        <FileText className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <code className="font-mono text-xs text-fg">SKILL.md</code>
+        <Badge variant="success" dot className="ml-auto">
+          {t("capabilities.import.skill.fileTree.entry", "Entry")}
+        </Badge>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ShikiCode content={source} lang="markdown" />
+      </CollapsibleContent>
     </Collapsible>
   )
 }
@@ -115,37 +123,29 @@ function buildSkillMdSource(skill: CanonicalSkillSpec): string {
   return lines.join("\n")
 }
 
-function GroupCard({
-  icon,
+function GroupRows({
   title,
   files,
 }: {
-  icon: React.ReactNode
   title: string
   files: SkillFile[]
 }) {
   const [open, setOpen] = useState(false)
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="overflow-hidden rounded-lg border border-line bg-surface">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-line-muted bg-surface-subtle px-3 py-2 text-left">
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 text-fg-subtle transition-transform ${open ? "rotate-90" : ""}`}
-          />
-          {icon}
-          <span className="font-mono text-sm text-fg-muted">{title}</span>
-          <span className="ml-auto text-xs text-fg-subtle">
-            {files.length}
-          </span>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <ul className="grid gap-2 p-3">
-            {files.map((f) => (
-              <FileRow key={f.path} file={f} />
-            ))}
-          </ul>
-        </CollapsibleContent>
-      </div>
+      <CollapsibleTrigger className={TREE_ROW_CLASS}>
+        <Chevron open={open} />
+        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <span className="font-mono text-xs text-fg">{title}</span>
+        <span className="ml-auto font-mono text-xs tabular-nums text-fg-muted">{files.length}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="m-0 list-none p-0">
+          {files.map((f) => (
+            <FileRow key={f.path} file={f} />
+          ))}
+        </ul>
+      </CollapsibleContent>
     </Collapsible>
   )
 }
@@ -155,15 +155,11 @@ function FileRow({ file }: { file: SkillFile }) {
   return (
     <li>
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5 text-left hover:bg-surface-subtle">
-          <ChevronRight
-            className={`h-3.5 w-3.5 shrink-0 text-fg-faint transition-transform ${open ? "rotate-90" : ""}`}
-          />
-          <FileText className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
-          <code className="truncate font-mono text-xs text-fg-emphasis">{file.path}</code>
-          <span className="ml-auto text-xs uppercase tracking-wide text-fg-faint">
-            {file.kind}
-          </span>
+        <CollapsibleTrigger className={cn(TREE_ROW_CLASS, "pl-5")}>
+          <Chevron open={open} />
+          <FileText className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+          <code className="truncate font-mono text-xs text-fg">{file.path}</code>
+          <span className="ml-auto text-xs text-fg-muted">{file.kind}</span>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <FileBody file={file} />
@@ -204,7 +200,7 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
 
   if (err || html === null) {
     return (
-      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all bg-surface-subtle px-3 py-2 font-mono text-xs leading-relaxed text-fg-muted">
+      <pre className="m-0 my-2 max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
         {content}
       </pre>
     )
@@ -212,8 +208,9 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
   return (
     <div
       // Force shiki's <pre> to wrap — default overflow-x: auto pushes
-      // long URLs / minified JSON into horizontal dialog scroll.
-      className="max-h-[420px] overflow-y-auto text-xs leading-relaxed [&_pre]:!m-0 [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:!bg-surface-subtle [&_pre]:!px-3 [&_pre]:!py-2"
+      // long URLs / minified JSON into horizontal dialog scroll. Token
+      // colours come from the light / dark CSS variables shiki emits.
+      className="my-2 max-h-[420px] overflow-y-auto text-xs leading-relaxed [&_pre]:!m-0 [&_pre]:!whitespace-pre-wrap [&_pre]:!break-all [&_pre]:rounded-md [&_pre]:!bg-surface-muted [&_pre]:!p-2 [&_span]:[color:var(--shiki-light)] [html[data-theme=dark]_&_span]:[color:var(--shiki-dark)]"
       // shiki output is sanitized server-controlled markup.
       dangerouslySetInnerHTML={{ __html: html }}
     />
@@ -257,12 +254,13 @@ function inferLang(path: string): string {
 }
 
 // Singleton: first expand pays the cost, subsequent reuse it. Languages
-// are hand-picked so the chunk only loads what's rendered.
+// are hand-picked so the chunk only loads what's rendered. Both themes
+// load so the block follows the app theme without a re-render.
 let highlighterPromise: Promise<HighlighterCore> | null = null
 function getHighlighter(): Promise<HighlighterCore> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighterCore({
-      themes: [import("shiki/themes/github-light.mjs")],
+      themes: [import("shiki/themes/github-light.mjs"), import("shiki/themes/github-dark.mjs")],
       langs: [
         import("shiki/langs/python.mjs"),
         import("shiki/langs/bash.mjs"),
@@ -283,7 +281,11 @@ async function highlight(code: string, lang: string): Promise<string> {
   const h = await getHighlighter()
   const known = new Set(h.getLoadedLanguages())
   const useLang = known.has(lang as never) ? lang : "text"
-  return h.codeToHtml(code, { lang: useLang, theme: "github-light" })
+  return h.codeToHtml(code, {
+    lang: useLang,
+    themes: { light: "github-light", dark: "github-dark" },
+    defaultColor: false,
+  })
 }
 
 export { SkillFileTree as default }

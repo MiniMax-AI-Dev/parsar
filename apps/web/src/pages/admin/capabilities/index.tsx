@@ -1,10 +1,22 @@
 // Admin capability page — list + detail.
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, ArrowUpRight, Eye, Loader2, MoreHorizontal, PackageCheck, Pencil, Plus, Search, Share2, Trash2, Wrench } from "lucide-react"
-import * as Tooltip from "@radix-ui/react-tooltip"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import {
+  ArrowUpRight,
+  Check,
+  ListFilter,
+  Loader2,
+  MoreHorizontal,
+  PackageCheck,
+  Pencil,
+  Plus,
+  Search,
+  Share2,
+  Trash2,
+  Wrench,
+} from "lucide-react"
 
 import { AdminLayout } from "../../../components/layout/AdminLayout"
 import { PageHeader } from "../../../components/layout/PageHeader"
@@ -19,18 +31,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog"
+import { DetailRail, RailLayout, RailSection } from "../../../components/ui/detail-rail"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
+import { Field } from "../../../components/ui/label"
 import { Input } from "../../../components/ui/input"
+import { InitialTile, Ledger, LedgerGroup, LedgerHeader, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
+import { OffsetPagination } from "../../../components/ui/offset-pagination"
+import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { ApiError } from "../../../lib/api-client"
 import { noUnreachableRetry } from "../../../lib/api-client"
@@ -52,6 +61,7 @@ import {
   useDeprecate,
   useInstallCount,
   useMarketplaceEnabledAgents,
+  useMCPDirectory,
   usePublish,
   useTargetMarketplaceInstalls,
   useUndeprecate,
@@ -65,14 +75,20 @@ import { navigateAdmin, useAdminView } from "../../../lib/admin-router"
 import type { AgentCapability, Capability, CapabilityVersion } from "../../../lib/api-types"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
 import { useWorkspaceId } from "../../../lib/workspace"
+import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
-import { MarketplaceCapabilityDetail } from "./MarketplaceCapabilityDetail"
+import { CapabilityTypeBadge } from "./CapabilityTypeBadge"
+import { InlineNotice } from "./notices"
+import { MarketplaceCapabilityRail } from "./MarketplaceCapabilityRail"
 import { MarketplaceTab } from "./MarketplaceTab"
 import { DeprecateCapabilityDialog } from "./DeprecateCapabilityDialog"
 import { DeleteCapabilityDialog } from "./DeleteCapabilityDialog"
 import { ImportCapabilityDialog } from "./ImportCapabilityDialog"
 import { AddCapabilityVersionDialog } from "./AddCapabilityVersionDialog"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
+import type { DirectoryFilterState, DirectorySort } from "./mcp-directory/filters"
+
+export { CapabilityTypeBadge } from "./CapabilityTypeBadge"
 
 type MarketAction = "publish" | "unpublish" | "deprecate" | "undeprecate" | null
 type MarketCapabilityAction = Exclude<MarketAction, null>
@@ -84,24 +100,37 @@ interface AgentInstallation {
   latest: boolean
 }
 
-type CapabilityTypeFilter = "mcp" | "skill" | "bundle"
-type PageTab = "workspace" | "marketplace"
+/** "" = every type; "bundle" is the server's name for plugin bundles. */
+type CapabilityTypeFilter = "" | "mcp" | "skill" | "bundle"
+type PageTab = "workspace" | "marketplace" | "connectors" | "skills"
+
+const PAGE_SIZE = 20
+const PAGE_TABS: PageTab[] = ["workspace", "marketplace", "connectors", "skills"]
+const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
+  { value: "mcp", label: "MCP" },
+  { value: "skill", label: "Skill" },
+  { value: "bundle", label: "Plugin" },
+]
+
+/** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
+const LEDGER_COLUMNS = [col.title(), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
 
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
   const wid = useWorkspaceId()
   const { navigate } = useAdminView()
+  const fmtAgo = useRelativeTime()
   const [query, setQuery] = useState("")
-  const [typeFilter, setTypeFilter] = useState<CapabilityTypeFilter>("mcp")
+  const [typeFilter, setTypeFilter] = useState<CapabilityTypeFilter>("")
+  const [hideInstalled, setHideInstalled] = useState(false)
+  const [directoryFilters, setDirectoryFilters] = useState<DirectoryFilterState>({ category: "", verifiedOnly: false, sort: "featured" })
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
   const debouncedQuery = useDebouncedValue(query, 250)
-  const typeParam = typeFilter
-  // Reset to page 1 whenever the user changes filters / page size.
+  // Reset to page 1 whenever the user changes filters.
   useEffect(() => {
     setPage(1)
-  }, [debouncedQuery, typeParam, pageSize])
-  const capsQ = useCapabilitiesQuery(wid, debouncedQuery, typeParam, page, pageSize)
+  }, [debouncedQuery, typeFilter])
+  const capsQ = useCapabilitiesQuery(wid, debouncedQuery, typeFilter, page, PAGE_SIZE)
   const agentsQ = useAgents(wid)
   const workspacesQ = useMyWorkspaces()
   const marketplaceInstallsQ = useTargetMarketplaceInstalls(wid)
@@ -135,19 +164,31 @@ export function CapabilitiesPage() {
     })),
   })
 
-  const routeTab = useAdminView().tab
+  const { tab: routeTab, entityId } = useAdminView()
+  const fromMarketplace = useUrlParam("from") === "marketplace"
   const itemParam = useUrlParam("item")
-  // Tab is URL-driven; default lands on workspace. Marketplace tab also
-  // owns the selected-detail state via the `item` URL param.
-  const pageTab: PageTab = routeTab === "marketplace" || itemParam ? "marketplace" : "workspace"
-  const marketplaceTypeFilter: "mcp" | "skill" = typeFilter === "skill" ? "skill" : "mcp"
+  // Tab is URL-driven; default lands on the workspace list. A selected
+  // marketplace / directory item also lives in the URL (`item`).
+  const pageTab: PageTab = itemParam?.startsWith("mcp:")
+    ? "connectors"
+    : routeTab === "marketplace" || routeTab === "connectors" || routeTab === "skills"
+      ? routeTab
+      : itemParam
+        ? "marketplace"
+        : "workspace"
+  const marketplaceTypeFilter: "" | "mcp" | "skill" = typeFilter === "bundle" ? "" : typeFilter
   const setPageTab = (next: PageTab) => {
-    if (next === "marketplace" && typeFilter === "bundle") {
-      setTypeFilter("mcp")
-    }
-    navigate("capabilities", { tab: next === "marketplace" ? "marketplace" : null, item: null })
+    if (next !== "workspace" && typeFilter === "bundle") setTypeFilter("")
+    navigate("capabilities", { tab: next === "workspace" ? null : next, item: null })
   }
-  const marketplaceItem = pageTab === "marketplace" ? itemParam : null
+  const selectedItem = pageTab === "marketplace" || pageTab === "connectors" ? itemParam : null
+  // Directory categories feed the filter menu; React Query dedupes this
+  // against the directory list itself.
+  const directoryQ = useMCPDirectory(pageTab === "connectors" ? wid : null)
+  const directoryCategories = useMemo(
+    () => Array.from(new Set((directoryQ.data?.items ?? []).flatMap((item) => item.categories))).sort((a, b) => a.localeCompare(b)),
+    [directoryQ.data?.items],
+  )
   const goToAgentsForCapability = (capability: MarketplaceCapability) => {
     const url = new URL(window.location.href)
     url.searchParams.set("admin", "agents")
@@ -169,17 +210,10 @@ export function CapabilitiesPage() {
   )
   const allInstalls = marketplaceInstallsQ.data ?? []
   const usingServerPage = capsQ.data?.total !== undefined
-  const allCapabilities = useMemo(
-    () => [...ownCapabilities, ...pageInstalls],
-    [ownCapabilities, pageInstalls],
-  )
-  // visibleTotal: total across own + marketplace, used to decide whether to
-  // show the "workspace empty" state. Server pagination gives us the merged
-  // total directly; legacy mode adds the two list lengths.
   const visibleTotal = usingServerPage
     ? capsQ.data?.total ?? 0
     : ownCapabilities.length + allInstalls.length
-  const filtersActive = !!debouncedQuery.trim()
+  const filtersActive = !!debouncedQuery.trim() || typeFilter !== ""
   const versionSummary = useCapabilityVersionSummary(wid, ownCapabilities)
   const latestVersions = versionSummary.latest
   const selectedLatestVersion = addVersionCapability ? latestVersions.get(addVersionCapability.id) : undefined
@@ -197,7 +231,6 @@ export function CapabilitiesPage() {
     : null
   const uninstallPendingID = uninstallTarget && uninstallMut.isPending ? uninstallTarget.id : null
   const deletePendingID = deleteTarget && deleteMut.isPending ? deleteTarget.id : null
-
 
   const requestMarketAction = (action: MarketCapabilityAction, capability: Capability) => {
     setMarketClientError(null)
@@ -229,206 +262,225 @@ export function CapabilitiesPage() {
     })
   }
 
-  return (
-    <AdminLayout activeMenu="capabilities">
-      <PageHeader
-        title={t("capabilities.page.title")}
-        action={
-          isAdmin ? (
-            <Button size="sm" onClick={() => setImportOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> {t("capabilities.actions.create")}
-            </Button>
-          ) : (
-            <Tooltip.Provider delayDuration={150}>
-              <Tooltip.Root>
-                <Tooltip.Trigger asChild>
-                  <span>
-                    <Button size="sm" disabled>
-                      <Plus className="h-3.5 w-3.5" /> {t("capabilities.actions.create")}
-                    </Button>
-                  </span>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content className="z-50 rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
-                    {t("capabilities.permission.adminOnly")}
-                    <Tooltip.Arrow className="fill-white" />
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
-          )
+  const pageTitle = t("capabilities.page.title")
+  const openCapability = (cap: Capability, fromMarketplace: boolean) =>
+    navigate("capabilities", {
+      id: cap.id === entityId ? null : cap.id,
+      from: cap.id === entityId ? null : fromMarketplace ? "marketplace" : null,
+    })
+  // Hold the id through the rail's exit so closing animates instead of
+  // vanishing — the same pattern every ledger uses.
+  const [railID, setRailID] = useState<string | null>(entityId)
+  const [railFromMarket, setRailFromMarket] = useState(fromMarketplace)
+  if (entityId && entityId !== railID) {
+    setRailID(entityId)
+    setRailFromMarket(fromMarketplace)
+  }
+  const RailForCapability = railFromMarket ? MarketplaceCapabilityRail : CapabilityRail
+  const workspaceRail = railID ? (
+    <RailForCapability
+      id={railID}
+      open={!!entityId}
+      onClose={() => navigate("capabilities")}
+      onClosed={() => setRailID(null)}
+    />
+  ) : null
+
+  const own = ownCapabilities
+  const installs = pageInstalls
+  const renderRow = (cap: Capability, fromMarketplace: boolean) => {
+    const marketCap = cap as TargetMarketplaceInstall
+    const enabledCount = fromMarketplace
+      ? marketCap.enabled_agent_count ?? enabledCounts.get(cap.id) ?? 0
+      : enabledCounts.get(cap.id) ?? 0
+    const version = fromMarketplace
+      ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version
+      : latestVersions.get(cap.id)?.version
+    return (
+      <CapabilityRow
+        key={`${fromMarketplace ? "market" : "own"}-${cap.id}`}
+        capability={cap}
+        version={version}
+        source={fromMarketplace ? marketplaceSourceName(marketCap) : t("capabilities.tabs.workspace")}
+        deprecatedLabel={fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}
+        enabledCount={enabledCount}
+        credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
+        age={fmtAgo(cap.updated_at ?? cap.created_at)}
+        selected={cap.id === entityId}
+        onOpen={() => openCapability(cap, fromMarketplace)}
+        actions={
+          <CapabilityRowActions
+            capability={cap}
+            fromMarketplace={fromMarketplace}
+            isAdmin={isAdmin}
+            marketPending={marketPendingID === cap.id}
+            uninstallPending={uninstallPendingID === cap.id}
+            deletePending={deletePendingID === cap.id}
+            onAddVersion={() => setAddVersionCapability(cap)}
+            onMarketAction={(action) => requestMarketAction(action, cap)}
+            onUninstall={() => setUninstallTarget(marketCap)}
+            onDelete={() => setDeleteTarget(cap)}
+          />
         }
       />
+    )
+  }
 
-      {toast && <ToastBanner message={toast} />}
-      {marketClientError && <ErrorBanner message={marketClientError} />}
-
-      {!marketplaceItem && (
-        <CapabilitiesFilterBar
-          query={query}
-          onQueryChange={setQuery}
-          typeFilter={pageTab === "marketplace" ? marketplaceTypeFilter : typeFilter}
-          onTypeFilterChange={setTypeFilter}
-          showBundle={pageTab === "workspace"}
-        />
-      )}
-
-      <Tabs value={pageTab} onValueChange={(value) => setPageTab(value as PageTab)} className="mb-4 mt-3">
-        <TabsList>
-          <TabsTrigger value="workspace">{t("capabilities.tabs.workspace")}</TabsTrigger>
-          <TabsTrigger value="marketplace">{t("capabilities.tabs.marketplace")}</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {pageTab === "marketplace" ? (
-        <MarketplaceTab
-          itemID={marketplaceItem}
-          query={query}
-          typeFilter={marketplaceTypeFilter}
-          canImport={canImportDirectory}
-          canManage={isAdmin}
-          onSelectItem={(item) => navigate("capabilities", { tab: "marketplace", item })}
-          onInstall={goToAgentsForCapability}
-          onDelete={setDeleteTarget}
-          onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
-        />
-      ) : err ? (
-        <ErrorState
-          title={isUnreachable ? t("capabilities.loadError.unreachable.title") : t("capabilities.loadError.title")}
-          description={isUnreachable ? t("capabilities.loadError.unreachable.description") : err instanceof Error ? err.message : t("capabilities.loadError.description")}
-          hint={isUnreachable ? t("capabilities.loadError.unreachable.hint") : t("capabilities.loadError.hint")}
-          onRetry={() => void capsQ.refetch()}
-        />
-      ) : !capsQ.isLoading && !filtersActive && visibleTotal === 0 ? (
-        <EmptyState
-          icon={PackageCheck}
-          title={t("capabilities.empty.title")}
-          description={isAdmin ? t("capabilities.empty.descriptionAdmin") : t("capabilities.empty.descriptionMember")}
-          action={isAdmin ? <Button size="sm" onClick={() => setImportOpen(true)}><Plus className="h-3.5 w-3.5" /> {t("capabilities.actions.create")}</Button> : undefined}
-        />
-      ) : (
-        <Tooltip.Provider delayDuration={150}>
-          <div className="space-y-3">
-            {capsQ.isLoading ? (
-              <CapabilitiesLoading />
-            ) : allCapabilities.length === 0 ? (
-              <EmptyState
-                icon={Search}
-                title={t("capabilities.emptyFiltered.title")}
-                description={t("capabilities.emptyFiltered.description")}
-                action={
-                  filtersActive ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setQuery("")
-                      }}
-                    >
-                      {t("capabilities.emptyFiltered.reset")}
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <>
-                <div className="overflow-hidden rounded-lg border border-line bg-surface">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("capabilities.table.name")}</TableHead>
-                        <TableHead>{t("capabilities.table.type")}</TableHead>
-                        <TableHead>{t("capabilities.table.latestVersion")}</TableHead>
-                        <TableHead>{t("capabilities.table.enabledAgents")}</TableHead>
-                        <TableHead>{t("capabilities.table.credentials")}</TableHead>
-                        <TableHead className="w-[220px] text-right pr-4">{t("capabilities.table.actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {allCapabilities.map((cap) => {
-                        const fromMarketplace = !!cap.from_marketplace || cap.workspace_id !== wid
-                        const marketCap = cap as TargetMarketplaceInstall
-                        const enabledCount = fromMarketplace ? marketCap.enabled_agent_count ?? enabledCounts.get(cap.id) ?? 0 : enabledCounts.get(cap.id) ?? 0
-                        const sourceLine = fromMarketplace
-                          ? t("capabilities.marketplace.sourceLine", {
-                              source: marketplaceSourceName(marketCap),
-                              version: marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version ?? "—",
-                            })
-                          : ""
-                        return (
-                          <TableRow key={`${fromMarketplace ? "market" : "own"}-${cap.id}`}>
-                            <TableCell className="max-w-[420px]">
-                              <button
-                                type="button"
-                                onClick={() => navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })}
-                                className="flex w-full flex-col items-start text-left transition-colors hover:text-fg"
-                              >
-                                <span className="flex flex-wrap items-center gap-2 text-base font-medium text-fg hover:underline">
-                                  {cap.name}
-                                  {cap.deprecated_at && <Badge variant="destructive">{fromMarketplace ? t("capabilities.deprecated.badgeTarget") : t("capabilities.deprecated.badgeSource")}</Badge>}
-                                </span>
-                                {fromMarketplace && (
-                                  <span className="truncate text-xs text-fg-faint">{sourceLine}</span>
-                                )}
-                                {cap.description && (
-                                  <Tooltip.Root>
-                                    <Tooltip.Trigger asChild>
-                                      <span className="block w-full truncate text-sm text-fg-subtle">{cap.description}</span>
-                                    </Tooltip.Trigger>
-                                    <Tooltip.Portal>
-                                      <Tooltip.Content
-                                        className="z-50 max-w-[420px] rounded-md border border-line bg-surface px-2 py-1 text-sm leading-snug text-fg-muted shadow-md"
-                                        sideOffset={4}
-                                      >
-                                        {cap.description}
-                                        <Tooltip.Arrow className="fill-white" />
-                                      </Tooltip.Content>
-                                    </Tooltip.Portal>
-                                  </Tooltip.Root>
-                                )}
-                              </button>
-                            </TableCell>
-                            <TableCell><CapabilityTypeBadge type={cap.type} /></TableCell>
-                            <TableCell className="font-mono text-sm text-fg-muted">{fromMarketplace ? marketCap.pinned_version ?? marketCap.latest_version ?? marketCap.latest_published_version ?? t("capabilities.none") : latestVersions.get(cap.id)?.version ?? t("capabilities.none")}</TableCell>
-                            <TableCell className="text-sm text-fg-muted">{enabledCount}</TableCell>
-                            <TableCell className="text-sm text-fg-muted">
-                              {requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
-                            </TableCell>
-                            <TableCell className="pr-4">
-                              <CapabilityRowActions
-                                capability={cap}
-                                fromMarketplace={fromMarketplace}
-                                isAdmin={isAdmin}
-                                marketPending={marketPendingID === cap.id}
-                                uninstallPending={uninstallPendingID === cap.id}
-                                deletePending={deletePendingID === cap.id}
-                                onView={() => navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })}
-                                onAddVersion={() => setAddVersionCapability(cap)}
-                                onMarketAction={(action) => requestMarketAction(action, cap)}
-                                onUninstall={() => setUninstallTarget(marketCap)}
-                                onDelete={() => setDeleteTarget(cap)}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-                {usingServerPage && (
-                  <CapabilitiesPagination
-                    page={page}
-                    pageSize={pageSize}
-                    total={capsQ.data?.total ?? 0}
-                    onPageChange={setPage}
-                    onPageSizeChange={setPageSize}
-                  />
-                )}
-              </>
+  const workspaceBody = err ? (
+    <div className="px-4 pt-4">
+      <ErrorState
+        title={isUnreachable ? t("capabilities.loadError.unreachable.title") : t("capabilities.loadError.title")}
+        description={isUnreachable ? t("capabilities.loadError.unreachable.description") : err instanceof Error ? err.message : t("capabilities.loadError.description")}
+        hint={isUnreachable ? t("capabilities.loadError.unreachable.hint") : t("capabilities.loadError.hint")}
+        onRetry={() => void capsQ.refetch()}
+      />
+    </div>
+  ) : capsQ.isLoading ? (
+    <LedgerSkeleton />
+  ) : !filtersActive && visibleTotal === 0 ? (
+    <EmptyState
+      icon={PackageCheck}
+      title={t("capabilities.empty.title")}
+      description={isAdmin ? undefined : t("capabilities.empty.descriptionMember")}
+    />
+  ) : own.length + installs.length === 0 ? (
+    <EmptyState
+      icon={Search}
+      title={t("capabilities.emptyFiltered.title")}
+      description={t("capabilities.emptyFiltered.description")}
+      action={
+        <Button size="sm" variant="outline" onClick={() => { setQuery(""); setTypeFilter("") }}>
+          {t("capabilities.emptyFiltered.reset")}
+        </Button>
+      }
+    />
+  ) : (
+    <>
+      <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>
+        <LedgerHeader>
+          <span>{t("capabilities.table.name")}</span>
+          <span>{t("capabilities.table.latestVersion")}</span>
+          <span>{t("capabilities.marketplaceDetail.source.title")}</span>
+          <span className="text-right">{t("capabilities.table.enabledAgents")}</span>
+          <span>{t("capabilities.table.credentials")}</span>
+          <span className="text-right">{t("capabilities.table.updated")}</span>
+          <span />
+        </LedgerHeader>
+        {installs.length > 0 ? (
+          <>
+            {own.length > 0 && (
+              <LedgerGroup label={t("capabilities.tabs.workspace")} count={own.length}>
+                {own.map((cap) => renderRow(cap, false))}
+              </LedgerGroup>
             )}
-          </div>
-        </Tooltip.Provider>
+            <LedgerGroup label={t("capabilities.tabs.marketplace")} count={installs.length}>
+              {installs.map((cap) => renderRow(cap, true))}
+            </LedgerGroup>
+          </>
+        ) : (
+          <ul className="m-0 list-none p-0">{own.map((cap) => renderRow(cap, false))}</ul>
+        )}
+      </Ledger>
+      {usingServerPage && (
+        <OffsetPagination
+          offset={(page - 1) * PAGE_SIZE}
+          limit={PAGE_SIZE}
+          total={capsQ.data?.total ?? 0}
+          onPrevious={() => setPage((cur) => Math.max(1, cur - 1))}
+          onNext={() => setPage((cur) => cur + 1)}
+        />
       )}
+    </>
+  )
+
+  const marketplaceTab = (
+    <MarketplaceTab
+      view={pageTab === "workspace" ? "marketplace" : pageTab}
+      itemID={selectedItem}
+      query={query}
+      typeFilter={marketplaceTypeFilter}
+      hideInstalled={hideInstalled}
+      directoryFilters={directoryFilters}
+      canImport={canImportDirectory}
+      canManage={isAdmin}
+      onSelectItem={(item) => navigate("capabilities", { tab: item?.startsWith("mcp:") ? "connectors" : pageTab === "workspace" ? "marketplace" : pageTab, item })}
+      onInstall={goToAgentsForCapability}
+      onDelete={setDeleteTarget}
+      onViewCapability={(capabilityID) => navigate("capabilities", { id: capabilityID, tab: null, item: null })}
+    />
+  )
+
+  return (
+    <AdminLayout activeMenu="capabilities" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="capabilities.page.title"
+          action={
+            <>
+              <div className="relative w-72">
+                <Search
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  className="pl-7"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t("capabilities.filters.search")}
+                  aria-label={t("capabilities.filters.search")}
+                />
+              </div>
+              {pageTab !== "skills" && (
+                <CapabilitiesFilterMenu
+                  tab={pageTab}
+                  typeFilter={pageTab === "workspace" ? typeFilter : marketplaceTypeFilter}
+                  onTypeFilterChange={setTypeFilter}
+                  hideInstalled={hideInstalled}
+                  onHideInstalledChange={setHideInstalled}
+                  directory={directoryFilters}
+                  onDirectoryChange={setDirectoryFilters}
+                  categories={directoryCategories}
+                />
+              )}
+              {pageTab === "workspace" && (
+                <Button
+                  onClick={() => setImportOpen(true)}
+                  disabled={!isAdmin}
+                  title={isAdmin ? undefined : t("capabilities.permission.adminOnly")}
+                >
+                  <Plus strokeWidth={1.5} aria-hidden="true" />
+                  {t("capabilities.actions.create")}
+                </Button>
+              )}
+            </>
+          }
+        />
+
+        <div className="flex h-10 shrink-0 items-center border-b border-line px-4">
+          <Tabs value={pageTab} onValueChange={(value) => setPageTab(value as PageTab)}>
+            <TabsList>
+              {PAGE_TABS.map((tab) => (
+                <TabsTrigger key={tab} value={tab}>
+                  {tab === "connectors" ? t("capabilities.mcpDirectory.title") : t(`capabilities.tabs.${tab}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {toast && <InlineNotice tone="success" className="border-b border-line px-4 py-2">{toast}</InlineNotice>}
+        {marketClientError && <InlineNotice tone="error" className="border-b border-line px-4 py-2">{marketClientError}</InlineNotice>}
+
+        {pageTab === "workspace" ? (
+          <RailLayout rail={workspaceRail}>{workspaceBody}</RailLayout>
+        ) : (
+          marketplaceTab
+        )}
+      </div>
 
       <ImportCapabilityDialog
         workspaceID={wid}
@@ -519,40 +571,191 @@ export function CapabilitiesPage() {
   )
 }
 
+/* ------------------------------------------------------------------ */
+/*  List row                                                            */
+/* ------------------------------------------------------------------ */
 
-function CapabilitiesFilterBar({
-  query,
-  onQueryChange,
+function CapabilityRow({
+  capability,
+  version,
+  source,
+  deprecatedLabel,
+  enabledCount,
+  credentials,
+  age,
+  selected,
+  onOpen,
+  actions,
+}: {
+  capability: Capability
+  version?: string
+  source: string
+  deprecatedLabel: string
+  enabledCount: number
+  credentials: string
+  age: string
+  selected: boolean
+  onOpen: () => void
+  actions: ReactNode
+}) {
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onOpen()
+    }
+  }
+  return (
+    <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown}>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 truncate font-medium">{capability.name}</span>
+        <CapabilityTypeBadge type={capability.type} />
+        {capability.deprecated_at && <Badge variant="neutral" dot>{deprecatedLabel}</Badge>}
+        {capability.description && (
+          <span className="min-w-0 truncate text-xs text-fg-muted">· {capability.description}</span>
+        )}
+      </span>
+      <span className={cnMono(!!version)}>{version ?? "—"}</span>
+      <span className="truncate text-xs text-fg-muted">{source}</span>
+      <LedgerNum>{enabledCount}</LedgerNum>
+      <span className="truncate text-xs text-fg-muted">{credentials}</span>
+      <span className="truncate text-right text-xs text-fg-muted">{age}</span>
+      <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        {actions}
+      </span>
+    </LedgerRow>
+  )
+}
+
+function cnMono(present: boolean) {
+  return present ? "truncate font-mono text-xs text-fg" : "truncate font-mono text-xs text-fg-muted"
+}
+
+function LedgerSkeleton() {
+  return (
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Header filter menu                                                  */
+/* ------------------------------------------------------------------ */
+
+const MENU_CONTENT_CLASS = "app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
+const MENU_ITEM_CLASS = "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
+
+function MenuRadio({ value, label }: { value: string; label: string }) {
+  return (
+    <DropdownMenu.RadioItem value={value} className={MENU_ITEM_CLASS}>
+      <span className="flex-1">{label}</span>
+      <DropdownMenu.ItemIndicator>
+        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
+      </DropdownMenu.ItemIndicator>
+    </DropdownMenu.RadioItem>
+  )
+}
+
+function MenuCheck({ checked, onCheckedChange, label }: { checked: boolean; onCheckedChange: (next: boolean) => void; label: string }) {
+  return (
+    <DropdownMenu.CheckboxItem checked={checked} onCheckedChange={onCheckedChange} className={MENU_ITEM_CLASS}>
+      <span className="flex-1">{label}</span>
+      <DropdownMenu.ItemIndicator>
+        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
+      </DropdownMenu.ItemIndicator>
+    </DropdownMenu.CheckboxItem>
+  )
+}
+
+function MenuSeparator() {
+  return <DropdownMenu.Separator className="my-1 h-px bg-line" />
+}
+
+function CapabilitiesFilterMenu({
+  tab,
   typeFilter,
   onTypeFilterChange,
-  showBundle,
+  hideInstalled,
+  onHideInstalledChange,
+  directory,
+  onDirectoryChange,
+  categories,
 }: {
-  query: string
-  onQueryChange: (value: string) => void
+  tab: PageTab
   typeFilter: CapabilityTypeFilter
   onTypeFilterChange: (value: CapabilityTypeFilter) => void
-  showBundle: boolean
+  hideInstalled: boolean
+  onHideInstalledChange: (value: boolean) => void
+  directory: DirectoryFilterState
+  onDirectoryChange: (value: DirectoryFilterState) => void
+  categories: string[]
 }) {
   const { t } = useTranslation("admin")
+  const typeOptions = tab === "workspace" ? TYPE_FILTERS : TYPE_FILTERS.filter((opt) => opt.value !== "bundle")
+  const activeType = TYPE_FILTERS.find((opt) => opt.value === typeFilter && typeFilter !== "")
+  const summary = tab === "connectors" ? directory.category || null : activeType?.label ?? null
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Tabs value={typeFilter} onValueChange={(value) => onTypeFilterChange(value as CapabilityTypeFilter)}>
-        <TabsList>
-          <TabsTrigger value="mcp">MCP</TabsTrigger>
-          <TabsTrigger value="skill">Skill</TabsTrigger>
-          {showBundle && <TabsTrigger value="bundle">Plugin</TabsTrigger>}
-        </TabsList>
-      </Tabs>
-      <div className="relative ml-auto w-full max-w-[280px]">
-        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-fg-faint" />
-        <Input
-          className="pl-8"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={t("capabilities.filters.search")}
-        />
-      </div>
-    </div>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button variant="outline" aria-haspopup="menu">
+          <ListFilter strokeWidth={1.5} aria-hidden="true" />
+          {t("capabilities.filters.label")}
+          {summary && <span className="text-fg-muted">· {summary}</span>}
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={6} className={MENU_CONTENT_CLASS}>
+          {tab === "connectors" ? (
+            <>
+              <DropdownMenu.RadioGroup value={directory.sort} onValueChange={(v) => onDirectoryChange({ ...directory, sort: v as DirectorySort })}>
+                <MenuRadio value="featured" label={t("capabilities.mcpDirectory.sort.featured")} />
+                <MenuRadio value="name" label={t("capabilities.mcpDirectory.sort.name")} />
+              </DropdownMenu.RadioGroup>
+              <MenuSeparator />
+              <MenuCheck
+                checked={directory.verifiedOnly}
+                onCheckedChange={(next) => onDirectoryChange({ ...directory, verifiedOnly: next })}
+                label={t("capabilities.mcpDirectory.filters.verified")}
+              />
+              {categories.length > 0 && (
+                <>
+                  <MenuSeparator />
+                  <DropdownMenu.RadioGroup value={directory.category} onValueChange={(v) => onDirectoryChange({ ...directory, category: v })}>
+                    <MenuRadio value="" label={t("capabilities.mcpDirectory.filters.allCategories")} />
+                    {categories.map((category) => (
+                      <MenuRadio key={category} value={category} label={category} />
+                    ))}
+                  </DropdownMenu.RadioGroup>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <DropdownMenu.RadioGroup value={typeFilter} onValueChange={(v) => onTypeFilterChange(v as CapabilityTypeFilter)}>
+                <MenuRadio value="" label={t("capabilities.filters.all")} />
+                {typeOptions.map((opt) => (
+                  <MenuRadio key={opt.value} value={opt.value} label={opt.label} />
+                ))}
+              </DropdownMenu.RadioGroup>
+              {tab === "marketplace" && (
+                <>
+                  <MenuSeparator />
+                  <MenuCheck checked={hideInstalled} onCheckedChange={onHideInstalledChange} label={t("capabilities.marketplace.filters.hideInstalled")} />
+                </>
+              )}
+            </>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }
 
@@ -589,54 +792,9 @@ function useUrlParam(name: string): string | null {
   return value
 }
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
-
-function CapabilitiesPagination({
-  page,
-  pageSize,
-  total,
-  onPageChange,
-  onPageSizeChange,
-}: {
-  page: number
-  pageSize: number
-  total: number
-  onPageChange: (page: number) => void
-  onPageSizeChange: (size: number) => void
-}) {
-  const { t } = useTranslation("admin")
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const safePage = Math.min(page, totalPages)
-  const startIdx = total === 0 ? 0 : (safePage - 1) * pageSize + 1
-  const endIdx = Math.min(safePage * pageSize, total)
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm text-fg-muted">
-      <div>{t("capabilities.pagination.range", { start: startIdx, end: endIdx, total })}</div>
-      <div className="flex items-center gap-2">
-        <label className="flex items-center gap-1">
-          <span>{t("capabilities.pagination.perPage")}</span>
-          <select
-            className="rounded border border-line bg-surface px-1.5 py-1 text-sm"
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          >
-            {PAGE_SIZE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        </label>
-        <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => onPageChange(safePage - 1)}>
-          {t("capabilities.pagination.prev")}
-        </Button>
-        <span>{t("capabilities.pagination.page", { page: safePage, totalPages })}</span>
-        <Button size="sm" variant="outline" disabled={safePage >= totalPages} onClick={() => onPageChange(safePage + 1)}>
-          {t("capabilities.pagination.next")}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
+/* ------------------------------------------------------------------ */
+/*  Row actions                                                         */
+/* ------------------------------------------------------------------ */
 
 function CapabilityRowActions({
   capability,
@@ -645,7 +803,6 @@ function CapabilityRowActions({
   marketPending,
   uninstallPending,
   deletePending,
-  onView,
   onAddVersion,
   onMarketAction,
   onUninstall,
@@ -657,7 +814,6 @@ function CapabilityRowActions({
   marketPending: boolean
   uninstallPending: boolean
   deletePending: boolean
-  onView: () => void
   onAddVersion: () => void
   onMarketAction: (action: MarketCapabilityAction) => void
   onUninstall: () => void
@@ -667,11 +823,10 @@ function CapabilityRowActions({
   const published = capability.visibility === "public" || capability.scope === "public"
   const disabledByRole = !isAdmin
 
-  // Marketplace rows only support uninstall.
+  // Marketplace rows only support uninstall; the row itself opens the detail.
   if (fromMarketplace) {
     return (
       <RowActions>
-        <ActionIconButton icon={Eye} label={t("capabilities.rowActions.view")} onClick={onView} />
         <ActionIconButton
           icon={Trash2}
           label={t("capabilities.rowActions.uninstall")}
@@ -684,48 +839,37 @@ function CapabilityRowActions({
     )
   }
 
-  // Edit-as-new-version: clicking the primary action opens AddCapabilityVersionDialog,
-  // which now carries name/description fields too. The old standalone Pencil
-  // (PATCH-only metadata edit) was removed in favor of this single surface.
-  const someMenuPending = marketPending || deletePending
-
+  // Edit-as-new-version: the primary action opens AddCapabilityVersionDialog,
+  // which carries name/description fields too.
   return (
     <RowActions>
       <ActionIconButton
         icon={Pencil}
         label={t("capabilities.rowActions.edit")}
-        tone="primary"
         disabled={disabledByRole}
         onClick={onAddVersion}
       />
-      <CapabilityRowMoreMenu
-        published={published}
-        disabledByRole={disabledByRole}
-        menuPending={someMenuPending}
-        onView={onView}
-        onMarketAction={onMarketAction}
-        onDelete={onDelete}
-      />
+      {!disabledByRole && (
+        <CapabilityRowMoreMenu
+          published={published}
+          menuPending={marketPending || deletePending}
+          onMarketAction={onMarketAction}
+          onDelete={onDelete}
+        />
+      )}
     </RowActions>
   )
 }
 
-/**
- * "More actions" menu for cross-workspace marketplace actions (publish,
- * deprecate). View-detail also lives here as a fallback entry point.
- */
+/** "More actions" menu for marketplace publishing and delete. */
 function CapabilityRowMoreMenu({
   published,
-  disabledByRole,
   menuPending,
-  onView,
   onMarketAction,
   onDelete,
 }: {
   published: boolean
-  disabledByRole: boolean
   menuPending: boolean
-  onView: () => void
   onMarketAction: (action: MarketCapabilityAction) => void
   onDelete: () => void
 }) {
@@ -733,89 +877,52 @@ function CapabilityRowMoreMenu({
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          aria-label={t("capabilities.rowActions.more")}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-subtle hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-surface-muted"
-        >
-          {menuPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
-        </button>
+        <Button variant="ghost" size="icon" aria-label={t("capabilities.rowActions.more")} aria-haspopup="menu">
+          {menuPending ? <Loader2 className="animate-spin" strokeWidth={1.5} /> : <MoreHorizontal strokeWidth={1.5} />}
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align="end"
-          sideOffset={6}
-          className="z-50 min-w-[180px] overflow-hidden rounded-md border border-line bg-surface p-1 text-sm text-fg-muted shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-        >
-          <CapabilityMenuItem icon={Eye} label={t("capabilities.rowActions.view")} onSelect={onView} />
-
-          {!disabledByRole && (
-            <>
-              <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
-
-              <CapabilityMenuItem
-                icon={Share2}
-                label={t(published ? "capabilities.rowActions.unpublish" : "capabilities.rowActions.publish")}
-                tone={published ? "danger" : "success"}
-                onSelect={() => onMarketAction(published ? "unpublish" : "publish")}
-              />
-              {/*
-                "Delete" releases the capability.name workspace-unique index,
-                allowing a same-name capability to be re-imported. The server
-                rejects deletes that still have bound agents (409).
-                "Deprecate" is a separate concept — the author signals that
-                maintenance has stopped and existing installs freeze on the
-                current version. That entry point lives on the detail page's
-                marketplace panel.
-              */}
-              <CapabilityMenuItem
-                icon={Trash2}
-                label={t("capabilities.rowActions.delete")}
-                tone="danger"
-                onSelect={onDelete}
-              />
-            </>
-          )}
+        <DropdownMenu.Content align="end" sideOffset={6} className={MENU_CONTENT_CLASS}>
+          {/*
+            "Delete" releases the capability.name workspace-unique index,
+            allowing a same-name capability to be re-imported. The server
+            rejects deletes that still have bound agents (409).
+            "Deprecate" lives on the detail page's market section.
+          */}
+          <DropdownMenu.Item className={MENU_ITEM_CLASS} onSelect={() => onMarketAction(published ? "unpublish" : "publish")}>
+            <Share2 className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+            <span>{t(published ? "capabilities.rowActions.unpublish" : "capabilities.rowActions.publish")}</span>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={MENU_ITEM_CLASS} onSelect={onDelete}>
+            <Trash2 className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+            <span>{t("capabilities.rowActions.delete")}</span>
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
   )
 }
 
-/**
- * Single menu row inside CapabilityRowMoreMenu. Tone is purely visual —
- * the actual confirm/deny gates live in their respective dialogs (this is
- * just an entry point).
- */
-function CapabilityMenuItem({
-  icon: Icon,
-  label,
-  onSelect,
-  tone = "default",
-}: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
-  label: string
-  onSelect: () => void
-  tone?: "default" | "danger" | "success"
-}) {
-  const toneClass =
-    tone === "danger"
-      ? "text-danger data-[highlighted]:bg-danger-subtle data-[highlighted]:text-danger-emphasis"
-      : tone === "success"
-        ? "text-success data-[highlighted]:bg-success-subtle data-[highlighted]:text-success-emphasis"
-        : "text-fg-muted data-[highlighted]:bg-surface-muted data-[highlighted]:text-fg"
-  return (
-    <DropdownMenu.Item
-      onSelect={onSelect}
-      className={`flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 outline-none ${toneClass}`}
-    >
-      <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-      <span>{label}</span>
-    </DropdownMenu.Item>
-  )
-}
+/* ------------------------------------------------------------------ */
+/*  Detail page                                                         */
+/* ------------------------------------------------------------------ */
 
-export function CapabilityDetailPage({ id }: { id: string }) {
+/** version · created · agents using it */
+const VERSION_COLUMNS = [col.id(160, 0.7), col.id(160, 2), col.num(96)]
+/** agent · version · open */
+const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
+
+/**
+ * A workspace capability, read in the rail beside the list. Identity in the
+ * header, the admin verbs in the footer; versions and the agents using it are
+ * nested ledgers, which is why this one earns the expand button.
+ */
+export function CapabilityRail({ id, open, onClose, onClosed }: {
+  id: string
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+}) {
   const { t, i18n } = useTranslation("admin")
   const wid = useWorkspaceId()
   const capQ = useCapabilityQuery(wid, id)
@@ -834,33 +941,51 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [viewVersion, setViewVersion] = useState<CapabilityVersion | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  // Switching to another capability swaps the rail's content rather than
+  // replaying its entrance, so the per-capability state is reset here instead
+  // of by a remount.
+  const [shownID, setShownID] = useState(id)
+  if (id !== shownID) {
+    setShownID(id)
+    setEditOpen(false)
+    setAddVersionOpen(false)
+    setMarketAction(null)
+    setMarketClientError(null)
+    setViewVersion(null)
+    setToast(null)
+  }
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const capability = capQ.data ?? null
-  const latestVersion = versionsQ.data?.versions?.[0]
-  const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versionsQ.data?.versions ?? [])
+  const versions = versionsQ.data?.versions ?? []
+  const latestVersion = versions[0]
+  const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versions)
   const enabledCount = installationSummary.installations.length
 
-  const fromMarketplace = new URLSearchParams(window.location.search).get("from") === "marketplace"
+  const closeLabel = t("capabilities.detail.backToList")
 
-  if (fromMarketplace) {
-    return <AdminLayout activeMenu="capabilities"><MarketplaceCapabilityDetail id={id} /></AdminLayout>
-  }
-
-  if (capQ.isLoading) {
-    return <AdminLayout activeMenu="capabilities"><CapabilityDetailLoading /></AdminLayout>
-  }
-
-  if (capQ.error || !capability) {
+  if (capQ.isLoading || capQ.error || !capability) {
     return (
-      <AdminLayout activeMenu="capabilities">
-        <EmptyState
-          icon={Wrench}
-          title={t("capabilities.detail.notFound.title")}
-          description={capQ.error instanceof Error ? capQ.error.message : t("capabilities.detail.notFound.description")}
-          action={<Button size="sm" variant="outline" onClick={() => navigateAdmin("capabilities")}>{t("capabilities.detail.backToList")}</Button>}
-        />
-      </AdminLayout>
+      <DetailRail
+        open={open}
+        onClose={onClose}
+        onClosed={onClosed}
+        closeLabel={closeLabel}
+        aria-label={t("capabilities.page.title")}
+        header={<Skeleton className="h-3 w-40" />}
+      >
+        {capQ.isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Wrench}
+            title={t("capabilities.detail.notFound.title")}
+            description={capQ.error instanceof Error ? capQ.error.message : t("capabilities.detail.notFound.description")}
+          />
+        )}
+      </DetailRail>
     )
   }
 
@@ -888,7 +1013,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const requestMarketAction = (action: MarketAction) => {
     setMarketClientError(null)
     if (action === "publish" && capability.type === "mcp") {
-      const leakingVersion = (versionsQ.data?.versions ?? []).find((version) => containsPlaintextSecretPattern(JSON.stringify(version.content ?? {})))
+      const leakingVersion = versions.find((version) => containsPlaintextSecretPattern(JSON.stringify(version.content ?? {})))
       if (leakingVersion) {
         setMarketClientError(t("capabilities.errors.plaintextSecretPattern", { version: leakingVersion.version }))
         return
@@ -897,146 +1022,132 @@ export function CapabilityDetailPage({ id }: { id: string }) {
     setMarketAction(action)
   }
 
+  const published = capability.visibility === "public" || capability.scope === "public"
+  const deprecated = !!capability.deprecated_at
+
   return (
-    <AdminLayout activeMenu="capabilities">
-      <PageHeader
-        backLink={<button onClick={() => navigateAdmin("capabilities")} className="inline-flex items-center gap-1 hover:text-fg hover:underline"><ArrowLeft className="h-3 w-3" />{t("capabilities.detail.backToList")}</button>}
-        title={<span className="inline-flex items-center gap-2">{capability.name}<CapabilityTypeBadge type={capability.type} /></span>}
-        description={capability.description || t("capabilities.detail.noDescription")}
-        action={
+    <DetailRail
+      open={open}
+      onClose={onClose}
+      onClosed={onClosed}
+      closeLabel={closeLabel}
+      aria-label={capability.name}
+      header={
+        <>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <CapabilityTypeBadge type={capability.type} />
+          <Badge variant="neutral" dot>
+            {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
+          </Badge>
+        </>
+      }
+      footer={
+        isAdmin ? (
           <>
-            <Badge variant={capability.deprecated_at ? "neutral" : "success"} dot>{t(capability.deprecated_at ? "capabilities.status.deprecated" : "capabilities.status.active")}</Badge>
-            {isAdmin && <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>{t("capabilities.actions.edit")}</Button>}
-            {isAdmin && <Button size="sm" onClick={() => setAddVersionOpen(true)}><Plus className="h-3.5 w-3.5" />{t("capabilities.actions.addVersion")}</Button>}
+            <Button variant="outline" onClick={() => setEditOpen(true)}>{t("capabilities.actions.edit")}</Button>
+            <Button onClick={() => setAddVersionOpen(true)}>
+              <Plus strokeWidth={1.5} aria-hidden="true" />
+              {t("capabilities.actions.addVersion")}
+            </Button>
           </>
-        }
-      />
+        ) : undefined
+      }
+    >
+      {toast && <InlineNotice tone="success" className="mb-4">{toast}</InlineNotice>}
+      {marketClientError && <InlineNotice tone="error" className="mb-4">{marketClientError}</InlineNotice>}
 
-      {toast && <ToastBanner message={toast} />}
-      {marketClientError && <ErrorBanner message={marketClientError} />}
+      {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
 
-      <div className="space-y-4">
-        <Card title={t("capabilities.detail.basic.title")}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <DetailField label={t("capabilities.table.type")} value={<CapabilityTypeBadge type={capability.type} />} />
-            <DetailField label={t("capabilities.table.credentials")} value={requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))} />
-            <DetailField label={t("capabilities.detail.basic.createdAt")} value={formatDate(capability.created_at)} />
-            <DetailField label={t("capabilities.table.latestVersion")} value={latestVersion?.version ?? t("capabilities.none")} mono />
-          </div>
-        </Card>
+      <RailSection title={t("capabilities.detail.basic.title")}>
+        <PropertyList>
+          <Property label={t("capabilities.table.type")}><CapabilityTypeBadge type={capability.type} /></Property>
+          <Property label={t("capabilities.table.credentials")}>
+            {requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}
+          </Property>
+          <Property label={t("capabilities.detail.basic.createdAt")} mono>{formatDate(capability.created_at)}</Property>
+          <Property label={t("capabilities.table.latestVersion")} mono>{latestVersion?.version ?? t("capabilities.none")}</Property>
+        </PropertyList>
+      </RailSection>
 
-        <Card title={t("capabilities.versions.title")}>
-          {versionsQ.isLoading ? (
-            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
-          ) : (versionsQ.data?.versions ?? []).length === 0 ? (
-            <EmptyState icon={PackageCheck} title={t("capabilities.versions.empty.title")} description={t("capabilities.versions.empty.description")} />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("capabilities.versions.table.version")}</TableHead>
-                  <TableHead>{t("capabilities.versions.table.createdAt")}</TableHead>
-                  <TableHead>{t("capabilities.versions.table.enabledAgents")}</TableHead>
-                  <TableHead>{t("capabilities.versions.table.actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(versionsQ.data?.versions ?? []).map((version, index) => {
-                  const count = installationSummary.versionCounts.get(version.id) ?? 0
-                  return (
-                    <TableRow key={version.id}>
-                      <TableCell className="font-mono text-sm text-fg-muted">
-                        {version.version} {index === 0 && <Badge className="ml-2" variant="neutral">{t("capabilities.versions.latest")}</Badge>}
-                      </TableCell>
-                      <TableCell className="text-sm text-fg-muted">{formatDate(version.created_at)}</TableCell>
-                      <TableCell className="text-sm text-fg-muted">{count}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" variant="ghost" onClick={() => setViewVersion(version)}>
-                            {t("capabilities.versions.viewContent.action")}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
-
-        <Card title={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
-          {installationSummary.isLoading ? (
-            <Skeleton className="h-12 w-full" />
-          ) : enabledCount === 0 ? (
-            <p className="text-sm text-fg-subtle">{t("capabilities.detail.enabledAgents.empty")}</p>
-          ) : (
-            <div className="space-y-2">
-              {installationSummary.installations.map((item) => (
-                <button key={item.agentID} type="button" onClick={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })} className="flex w-full items-center justify-between rounded-md border border-line p-3 text-left hover:bg-surface-subtle">
-                  <span className="text-sm font-medium text-fg">{item.agentName}</span>
-                  <span className="flex items-center gap-2 text-sm text-fg-subtle">
-                    <span className="font-mono">{item.version}</span>
-                    {!item.latest && <Badge variant="neutral">{t("capabilities.detail.enabledAgents.old")}</Badge>}
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </span>
-                </button>
+      <RailSection title={t("capabilities.versions.title")} meta={versions.length || undefined} className="mt-6">
+        {versionsQ.isLoading ? (
+          <div className="space-y-2 pt-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-3 w-full max-w-lg" />)}</div>
+        ) : versions.length === 0 ? (
+          <EmptyState icon={PackageCheck} title={t("capabilities.versions.empty.title")} description={t("capabilities.versions.empty.description")} className="py-8" />
+        ) : (
+          <Ledger columns={VERSION_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.versions.title")}>
+            <LedgerHeader className="static">
+              <span>{t("capabilities.versions.table.version")}</span>
+              <span>{t("capabilities.versions.table.createdAt")}</span>
+              <span className="text-right">{t("capabilities.versions.table.enabledAgents")}</span>
+            </LedgerHeader>
+            <ul className="m-0 list-none p-0">
+              {versions.map((version, index) => (
+                <VersionRow
+                  key={version.id}
+                  version={version}
+                  latestLabel={index === 0 ? t("capabilities.versions.latest") : undefined}
+                  count={installationSummary.versionCounts.get(version.id) ?? 0}
+                  onOpen={() => setViewVersion(version)}
+                />
               ))}
-            </div>
-          )}
-        </Card>
-
-        {isAdmin && (
-          <Card title={t("capabilities.marketStatus.title")}>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={capability.visibility === "public" || capability.scope === "public" ? "success" : "neutral"} dot>
-                    {capability.visibility === "public" || capability.scope === "public" ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
-                  </Badge>
-                  {capability.deprecated_at && <Badge variant="destructive">{t("capabilities.deprecated.badgeSource")}</Badge>}
-                </div>
-                <p className="text-sm text-fg-subtle">{t("capabilities.marketStatus.installCount", { count: installCountQ.data ?? 0 })}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {/*
-                  The deprecate / undeprecate toggle now applies to ALL
-                  capabilities, not just published-marketplace ones —
-                  it's the single "stop offering this" admin signal
-                  since the standalone disable button was removed.
-                  Existing agent bindings keep working either way;
-                  the tooltip below makes that contract explicit so
-                  admins don't fear they're about to break running
-                  agents. Marketplace publish / unpublish remain a
-                  separate concern.
-                */}
-                <Tooltip.Provider delayDuration={150}>
-                  <Tooltip.Root>
-                    <Tooltip.Trigger asChild>
-                      <span>
-                        <Button size="sm" variant="outline" onClick={() => requestMarketAction(capability.deprecated_at ? "undeprecate" : "deprecate")}>
-                          {capability.deprecated_at ? t("capabilities.marketStatus.actions.undeprecate") : t("capabilities.marketStatus.actions.deprecate")}
-                        </Button>
-                      </span>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content className="z-50 max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
-                        {capability.deprecated_at ? t("capabilities.marketStatus.undeprecateTooltip") : t("capabilities.marketStatus.deprecateTooltip")}
-                        <Tooltip.Arrow className="fill-white" />
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
-                {(capability.visibility === "public" || capability.scope === "public") ? (
-                  <Button size="sm" variant="ghost" onClick={() => requestMarketAction("unpublish")}>{t("capabilities.marketStatus.actions.unpublish")}</Button>
-                ) : (
-                  <Button size="sm" onClick={() => requestMarketAction("publish")}>{t("capabilities.marketStatus.actions.publish")}</Button>
-                )}
-              </div>
-            </div>
-          </Card>
+            </ul>
+          </Ledger>
         )}
-      </div>
+      </RailSection>
+
+      <RailSection title={t("capabilities.detail.enabledAgents.title", { count: enabledCount })} className="mt-6">
+        {installationSummary.isLoading ? (
+          <Skeleton className="mt-2 h-3 w-full max-w-lg" />
+        ) : enabledCount === 0 ? (
+          <p className="pt-1 text-sm text-fg-muted">{t("capabilities.detail.enabledAgents.empty")}</p>
+        ) : (
+          <Ledger columns={AGENT_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
+            <ul className="m-0 list-none p-0">
+              {installationSummary.installations.map((item) => (
+                <AgentInstallRow
+                  key={item.agentID}
+                  name={item.agentName}
+                  version={item.version}
+                  oldLabel={item.latest ? undefined : t("capabilities.detail.enabledAgents.old")}
+                  onOpen={() => navigateAdmin("agents", { id: item.agentID, tab: "capabilities" })}
+                />
+              ))}
+            </ul>
+          </Ledger>
+        )}
+      </RailSection>
+
+      {isAdmin && (
+        <RailSection title={t("capabilities.marketStatus.title")} className="mt-6">
+          <PropertyList>
+            <Property label={t("capabilities.marketStatus.title")}>
+              <Badge variant="neutral" dot>
+                {published ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
+              </Badge>
+              {deprecated && <span className="text-xs text-fg-muted">{t("capabilities.deprecated.badgeSource")}</span>}
+            </Property>
+            <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{installCountQ.data ?? 0}</Property>
+          </PropertyList>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/*
+              The deprecate / undeprecate toggle applies to ALL capabilities:
+              it is the single "stop offering this" admin signal. Existing
+              agent bindings keep working either way (the title says so).
+            */}
+            <Button
+              variant="outline"
+              onClick={() => requestMarketAction(deprecated ? "undeprecate" : "deprecate")}
+              title={deprecated ? t("capabilities.marketStatus.undeprecateTooltip") : t("capabilities.marketStatus.deprecateTooltip")}
+            >
+              {deprecated ? t("capabilities.marketStatus.actions.undeprecate") : t("capabilities.marketStatus.actions.deprecate")}
+            </Button>
+            <Button variant="outline" onClick={() => requestMarketAction(published ? "unpublish" : "publish")}>
+              {published ? t("capabilities.marketStatus.actions.unpublish") : t("capabilities.marketStatus.actions.publish")}
+            </Button>
+          </div>
+        </RailSection>
+      )}
 
       <EditCapabilityDialog
         open={editOpen}
@@ -1079,25 +1190,54 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         onConfirm={submitMarketAction}
       />
       <ViewVersionContentDialog version={viewVersion} capability={capability} onOpenChange={(open) => !open && setViewVersion(null)} />
-    </AdminLayout>
+    </DetailRail>
   )
 }
 
-export function CapabilityTypeBadge({ type }: { type: Capability["type"] }) {
-  if (type === "skill") return <Badge variant="primary">Skill</Badge>
-  if (type === "plugin") return <Badge variant="success">Plugin</Badge>
-  if (type === "bundle") return <Badge variant="success">Plugin Bundle</Badge>
-  if (type === "system_prompt") return <Badge variant="warning">System Prompt</Badge>
-  return <Badge variant="neutral">MCP</Badge>
+function VersionRow({ version, latestLabel, count, onOpen }: { version: CapabilityVersion; latestLabel?: string; count: number; onOpen: () => void }) {
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onOpen()
+    }
+  }
+  return (
+    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown}>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-mono text-xs text-fg">{version.version}</span>
+        {latestLabel && <span className="shrink-0 text-xs text-fg-muted">{latestLabel}</span>}
+      </span>
+      <span className="truncate font-mono text-xs text-fg">{formatDate(version.created_at)}</span>
+      <LedgerNum muted={count === 0}>{count}</LedgerNum>
+    </LedgerRow>
+  )
+}
+
+function AgentInstallRow({ name, version, oldLabel, onOpen }: { name: string; version: string; oldLabel?: string; onOpen: () => void }) {
+  const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onOpen()
+    }
+  }
+  return (
+    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown}>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <InitialTile name={name} />
+        <span className="truncate font-medium">{name}</span>
+      </span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-mono text-xs text-fg">{version}</span>
+        {oldLabel && <span className="shrink-0 text-xs text-fg-muted">{oldLabel}</span>}
+      </span>
+      <ArrowUpRight className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+    </LedgerRow>
+  )
 }
 
 /**
- * EditCapabilityDialog — minimal name + description editor.
- *
- * The pre-M4 page used CreateCapabilityDialog in mode="edit" for this, which
- * dragged in the full create form just to disable most of it. Now that the
- * create path goes through the import flow, this dialog is small enough to
- * inline.
+ * EditCapabilityDialog — minimal name + description editor. The create
+ * path goes through the import flow, so this stays small.
  */
 function EditCapabilityDialog({ open, capability, pending, error, onOpenChange, onSubmit }: {
   open: boolean
@@ -1133,18 +1273,19 @@ function EditCapabilityDialog({ open, capability, pending, error, onOpenChange, 
           <DialogDescription>{t("capabilities.edit.description")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <FormField label={t("capabilities.fields.name.label")} help={t("capabilities.fields.name.help")} required>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("capabilities.fields.name.placeholder")} />
-          </FormField>
-          <FormField label={t("capabilities.fields.description.label")}>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("capabilities.fields.description.placeholder")} />
-          </FormField>
-          {(validationError || errMsg) && <ErrorBanner message={validationError ?? errMsg ?? ""} />}
+          <Field label={t("capabilities.fields.name.label")} htmlFor="capability-edit-name" hint={t("capabilities.fields.name.help")}>
+            <Input id="capability-edit-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("capabilities.fields.name.placeholder")} />
+          </Field>
+          <Field label={t("capabilities.fields.description.label")} htmlFor="capability-edit-description">
+            <Input id="capability-edit-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("capabilities.fields.description.placeholder")} />
+          </Field>
+          {(validationError || errMsg) && <InlineNotice tone="error">{validationError ?? errMsg}</InlineNotice>}
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>{t("capabilities.actions.cancel")}</Button>
-          <Button size="sm" disabled={pending || !!validationError} onClick={() => onSubmit({ name: trimmedName, description: description.trim() })}>
-            {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("capabilities.actions.save")}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>{t("capabilities.actions.cancel")}</Button>
+          <Button disabled={pending || !!validationError} onClick={() => onSubmit({ name: trimmedName, description: description.trim() })}>
+            {pending && <Loader2 className="animate-spin" />}
+            {t("capabilities.actions.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1164,7 +1305,7 @@ function ViewVersionContentDialog({ version, capability, onOpenChange }: { versi
         </DialogHeader>
         {body}
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t("capabilities.actions.close")}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("capabilities.actions.close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1173,20 +1314,16 @@ function ViewVersionContentDialog({ version, capability, onOpenChange }: { versi
 
 type Translate = ReturnType<typeof useTranslation<"admin">>["t"]
 
+const CODE_BLOCK_CLASS = "m-0 max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg"
+
 /**
  * Picks the right body for "view version content":
- *   - mcp + canonical_spec present → pretty-print canonical_spec.mcp (the
- *     M3-and-onward format that the version-import flow writes)
- *   - mcp without canonical_spec  → fall back to legacy `content` (pre-M3
- *     versions that pre-date the import flow)
- *   - skill + canonical_spec      → render parsed slug/title/description/
- *     instruction/trigger from canonical_spec.skill
+ *   - mcp + canonical_spec present → pretty-print canonical_spec.mcp
+ *   - mcp without canonical_spec  → fall back to legacy `content`
+ *   - skill + canonical_spec      → parsed slug/title/description/instruction/trigger
  *   - skill without canonical_spec→ legacy git_repo_url/git_ref/path layout
- *
- * The fallbacks keep old versions readable after we drop the legacy add-version
- * write path; the canonical_spec branch is what every NEW version will hit.
  */
-function renderViewVersionBody(version: CapabilityVersion, capability: Capability, t: Translate): React.ReactNode {
+function renderViewVersionBody(version: CapabilityVersion, capability: Capability, t: Translate): ReactNode {
   const canonicalSpec = version.canonical_spec as
     | {
         mcp?: Record<string, unknown>
@@ -1199,51 +1336,33 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (capability.type === "system_prompt") {
     const sp = canonicalSpec?.system_prompt
     return (
-      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
-        <DetailField label="mode" value={sp?.mode ?? "append"} mono />
-        <DetailField
-          label="prompt"
-          value={
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-fg-muted">
-              {sp?.prompt ?? t("capabilities.none")}
-            </pre>
-          }
-        />
+      <div className="space-y-2">
+        <PropertyList>
+          <Property label="mode" mono>{sp?.mode ?? "append"}</Property>
+        </PropertyList>
+        <pre className={CODE_BLOCK_CLASS}>{sp?.prompt ?? t("capabilities.none")}</pre>
       </div>
     )
   }
 
   if (capability.type === "mcp") {
-    if (canonicalSpec?.mcp) {
-      return (
-        <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-line bg-surface-subtle p-3 font-mono text-sm leading-relaxed text-fg-muted">
-          {JSON.stringify(canonicalSpec.mcp, null, 2)}
-        </pre>
-      )
-    }
-    return (
-      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md border border-line bg-surface-subtle p-3 font-mono text-sm leading-relaxed text-fg-muted">
-        {JSON.stringify(version.content ?? {}, null, 2)}
-      </pre>
-    )
+    return <pre className={CODE_BLOCK_CLASS}>{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</pre>
   }
 
   if (capability.type === "plugin") {
     const plugin = canonicalSpec?.plugin
+    if (!plugin) return <p className="text-sm text-fg-muted">{t("capabilities.none")}</p>
     return (
-      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
-        {plugin?.name && <DetailField label="name" value={plugin.name} mono />}
-        {plugin?.version && <DetailField label="version" value={plugin.version} mono />}
-        {plugin?.description && <DetailField label="description" value={plugin.description} />}
-        {plugin?.author && <DetailField label="author" value={plugin.author} />}
-        {plugin?.upload_source && <DetailField label="upload_source" value={plugin.upload_source} mono />}
-        {plugin?.oss_key && <DetailField label="oss_key" value={plugin.oss_key} mono />}
-        {plugin?.sha256 && <DetailField label="sha256" value={plugin.sha256} mono />}
-        {plugin?.github_repo && <DetailField label="github_repo" value={plugin.github_repo} mono />}
-        {!plugin && (
-          <p className="text-sm text-fg-subtle">{t("capabilities.none")}</p>
-        )}
-      </div>
+      <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+        {plugin.name && <Property label="name" mono>{plugin.name}</Property>}
+        {plugin.version && <Property label="version" mono>{plugin.version}</Property>}
+        {plugin.description && <Property label="description">{plugin.description}</Property>}
+        {plugin.author && <Property label="author">{plugin.author}</Property>}
+        {plugin.upload_source && <Property label="upload_source" mono>{plugin.upload_source}</Property>}
+        {plugin.oss_key && <Property label="oss_key" mono>{plugin.oss_key}</Property>}
+        {plugin.sha256 && <Property label="sha256" mono>{plugin.sha256}</Property>}
+        {plugin.github_repo && <Property label="github_repo" mono>{plugin.github_repo}</Property>}
+      </PropertyList>
     )
   }
 
@@ -1251,26 +1370,23 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
   if (canonicalSpec?.skill) {
     const skill = canonicalSpec.skill
     return (
-      <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
-        {skill.slug && <DetailField label="slug" value={skill.slug} mono />}
-        {skill.title && <DetailField label="title" value={skill.title} />}
-        {skill.description && <DetailField label="description" value={skill.description} />}
-        {skill.trigger && <DetailField label="trigger" value={skill.trigger} />}
-        {skill.instruction && (
-          <DetailField
-            label="instruction"
-            value={<pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-fg-muted">{skill.instruction}</pre>}
-          />
-        )}
+      <div className="space-y-2">
+        <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+          {skill.slug && <Property label="slug" mono>{skill.slug}</Property>}
+          {skill.title && <Property label="title">{skill.title}</Property>}
+          {skill.description && <Property label="description" className="h-auto min-h-7 whitespace-normal py-1">{skill.description}</Property>}
+          {skill.trigger && <Property label="trigger" className="h-auto min-h-7 whitespace-normal py-1">{skill.trigger}</Property>}
+        </PropertyList>
+        {skill.instruction && <pre className={CODE_BLOCK_CLASS}>{skill.instruction}</pre>}
       </div>
     )
   }
   return (
-    <div className="space-y-2 rounded-md border border-line bg-surface-subtle p-3">
-      <DetailField label={t("capabilities.fields.gitRepoUrl.label")} value={version.git_repo_url || t("capabilities.none")} mono />
-      <DetailField label={t("capabilities.fields.gitRef.label")} value={skillVersionRef(version) || t("capabilities.none")} mono />
-      <DetailField label={t("capabilities.fields.path.label")} value={version.path || t("capabilities.none")} mono />
-    </div>
+    <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+      <Property label={t("capabilities.fields.gitRepoUrl.label")} mono>{version.git_repo_url || t("capabilities.none")}</Property>
+      <Property label={t("capabilities.fields.gitRef.label")} mono>{skillVersionRef(version) || t("capabilities.none")}</Property>
+      <Property label={t("capabilities.fields.path.label")} mono>{version.path || t("capabilities.none")}</Property>
+    </PropertyList>
   )
 }
 
@@ -1369,34 +1485,6 @@ const plaintextSecretPatternRes = [
 
 function containsPlaintextSecretPattern(value: string) {
   return plaintextSecretPatternRes.some((pattern) => pattern.test(value))
-}
-
-function FormField({ label, help, required, children }: { label: string; help?: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="grid gap-1.5"><span className="text-sm font-medium text-fg-muted">{label}{required && <span className="text-danger"> *</span>}</span>{children}{help && <span className="text-xs leading-relaxed text-fg-subtle">{help}</span>}</label>
-}
-
-function DetailField({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return <div className="rounded-md border border-line bg-surface p-3"><p className="text-xs text-fg-subtle">{label}</p><div className={`mt-1 text-sm text-fg ${mono ? "font-mono" : ""}`}>{value}</div></div>
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border border-line bg-surface p-4"><h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>{children}</section>
-}
-
-function ErrorBanner({ message }: { message: string }) {
-  return <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis" role="alert">{message}</div>
-}
-
-function ToastBanner({ message }: { message: string }) {
-  return <div className="mb-4 rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">{message}</div>
-}
-
-function CapabilitiesLoading() {
-  return <div className="space-y-2 rounded-lg border border-line bg-surface p-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="flex items-center gap-3"><Wrench className="h-4 w-4 text-fg-faint" /><Skeleton className="h-5 flex-1" /></div>)}</div>
-}
-
-function CapabilityDetailLoading() {
-  return <div className="space-y-4"><Skeleton className="h-16 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-40 w-full" /></div>
 }
 
 function formatDate(value?: string) {

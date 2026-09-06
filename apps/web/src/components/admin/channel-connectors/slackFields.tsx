@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
-import { Loader2, RefreshCw } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import { ApiError } from "../../../lib/api-client"
 import {
@@ -9,7 +9,11 @@ import {
 } from "../../../lib/api-connectors"
 import { useCreateSecret } from "../../../lib/api-secrets"
 import type { CreateSecretRequest } from "../../../lib/api-types"
-import { Card, Field, SecretInput } from "./shared"
+import { Button } from "../../ui/button"
+import { Input } from "../../ui/input"
+import { Select } from "../../ui/select"
+import { InlineError } from "../../runtime/InlineError"
+import { EnabledField, Field, FormFooter, FormSection, SecretInput } from "./shared"
 import { randomHex } from "../../../lib/random"
 
 const EMPTY_CONFIG: SlackConnectorInput = {
@@ -73,6 +77,8 @@ export interface SlackConnectorFieldsProps {
   current: SlackConnectorInput | undefined
   canEdit: boolean
   onToast: (msg: string) => void
+  /** State chip rendered in the section head. */
+  status?: ReactNode
 }
 
 export function SlackConnectorFields({
@@ -80,6 +86,7 @@ export function SlackConnectorFields({
   current,
   canEdit,
   onToast,
+  status,
 }: SlackConnectorFieldsProps) {
   const currentConfig = current ?? EMPTY_CONFIG
   return (
@@ -89,6 +96,7 @@ export function SlackConnectorFields({
       current={currentConfig}
       canEdit={canEdit}
       onToast={onToast}
+      status={status}
     />
   )
 }
@@ -102,6 +110,7 @@ function SlackConnectorFieldsInner({
   current,
   canEdit,
   onToast,
+  status,
 }: SlackConnectorFieldsInnerProps) {
   const { t } = useTranslation("admin")
   const mut = useUpdateWorkspaceSlackConnector(workspaceID)
@@ -113,19 +122,19 @@ function SlackConnectorFieldsInner({
 
   const dirty = !configEqual(draft, current) || secretInputsDirty(secretInputs)
   const saving = mut.isPending || createSecretMut.isPending
+  const locked = !canEdit || saving
 
   const missingRequired = missingRequiredFor(draft, secretInputs)
   const missingDraftIdentity = !draft.app_id.trim()
 
   const onSave = async () => {
-    const nextDraft = draft
-    if (missingRequiredFor(nextDraft, secretInputs)) {
+    if (missingRequiredFor(draft, secretInputs)) {
       setErrorMsg(t("connections.connector.slack.errors.incomplete"))
       return
     }
     setErrorMsg(null)
     try {
-      const config = await buildConfigWithSecretRefs(nextDraft, secretInputs, async (body) => {
+      const config = await buildConfigWithSecretRefs(draft, secretInputs, async (body) => {
         const secret = await createSecretMut.mutateAsync({ body })
         return secret.id
       })
@@ -152,164 +161,109 @@ function SlackConnectorFieldsInner({
     }
   }
 
-  const onReset = () => {
-    setDraft(current)
-    setSecretInputs({ ...EMPTY_SECRET_INPUTS })
-    setErrorMsg(null)
-  }
-
   return (
-    <Card
+    <FormSection
       title={t("connections.connector.slack.title")}
-      description={t("connections.connector.slack.description")}
+      status={status}
       docHref={t("connections.connector.slack.docLink.href")}
       docLabel={t("connections.connector.slack.docLink.label")}
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-subtle px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-fg">
-            {draft.enabled
-              ? t("connections.connector.status.enabled")
-              : t("connections.connector.status.disabled")}
-          </p>
-          <p className="mt-0.5 text-xs text-fg-subtle">
-            {t("connections.connector.slack.fields.enabled.hint")}
-          </p>
-        </div>
-        <label className="inline-flex items-center gap-2 text-sm text-fg">
-          <input
-            type="checkbox"
-            checked={draft.enabled}
-            onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-            disabled={!canEdit || saving}
-            data-testid="slack-enabled-input"
-          />
-          {t("connections.connector.slack.fields.enabled.toggle")}
-        </label>
-      </div>
+      <EnabledField
+        label={t("connections.connector.slack.fields.enabled.toggle")}
+        checked={draft.enabled}
+        onChange={(enabled) => setDraft({ ...draft, enabled })}
+        disabled={locked}
+        testId="slack-enabled-input"
+      />
 
       <Field
         label={t("connections.connector.slack.fields.appId.label")}
-        hint={t("connections.connector.slack.fields.appId.hint")}
+        htmlFor="slack-app-id-input"
         required
       >
-        <input
+        <Input
+          id="slack-app-id-input"
           type="text"
           value={draft.app_id}
           placeholder="A0000000000000"
           onChange={(e) => setDraft({ ...draft, app_id: e.target.value })}
-          disabled={!canEdit || saving}
-          className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
+          disabled={locked}
+          className="font-mono"
           data-testid="slack-app-id-input"
         />
       </Field>
 
       <SecretInput
         label={t("connections.connector.slack.fields.botToken.label")}
-        hint={t("connections.connector.slack.fields.botToken.hint")}
-        savedHint={t("connections.connector.slack.fields.botToken.savedHint")}
         savedBadge={t("connections.connector.savedBadge")}
         value={secretInputs.botToken}
         onChange={(v) => setSecretInputs((prev) => ({ ...prev, botToken: v }))}
         required={!draft.bot_token_ref.trim()}
         hasSavedValue={Boolean(draft.bot_token_ref.trim())}
-        disabled={!canEdit || saving}
+        disabled={locked}
+        placeholder="xoxb-…"
         testId="slack-bot-token-input"
       />
+
+      <Field
+        label={t("connections.connector.slack.fields.eventMode.label")}
+        htmlFor="slack-event-mode"
+      >
+        <Select
+          id="slack-event-mode"
+          value={draft.event_mode}
+          onChange={(e) => setDraft({ ...draft, event_mode: e.target.value === "events" ? "events" : "socket" })}
+          disabled={locked}
+        >
+          {(["socket", "events"] as const).map((mode) => (
+            <option key={mode} value={mode}>
+              {t(`connections.connector.slack.fields.eventMode.options.${mode}`)}
+            </option>
+          ))}
+        </Select>
+      </Field>
 
       {draft.event_mode === "socket" ? (
         <SecretInput
           label={t("connections.connector.slack.fields.appToken.label")}
-          hint={t("connections.connector.slack.fields.appToken.hint")}
-          savedHint={t("connections.connector.slack.fields.appToken.savedHint")}
           savedBadge={t("connections.connector.savedBadge")}
           value={secretInputs.appToken}
           onChange={(v) => setSecretInputs((prev) => ({ ...prev, appToken: v }))}
           required={!draft.app_token_ref.trim()}
           hasSavedValue={Boolean(draft.app_token_ref.trim())}
-          disabled={!canEdit || saving}
+          disabled={locked}
+          placeholder="xapp-…"
           testId="slack-app-token-input"
         />
       ) : (
         <SecretInput
           label={t("connections.connector.slack.fields.signingSecret.label")}
-          hint={t("connections.connector.slack.fields.signingSecret.hint")}
-          savedHint={t("connections.connector.slack.fields.signingSecret.savedHint")}
           savedBadge={t("connections.connector.savedBadge")}
           value={secretInputs.signingSecret}
           onChange={(v) => setSecretInputs((prev) => ({ ...prev, signingSecret: v }))}
           required={!draft.signing_secret_ref.trim()}
           hasSavedValue={Boolean(draft.signing_secret_ref.trim())}
-          disabled={!canEdit || saving}
+          disabled={locked}
           testId="slack-signing-secret-input"
         />
       )}
 
-      <Field
-        label={t("connections.connector.slack.fields.eventMode.label")}
-        hint={t("connections.connector.slack.fields.eventMode.hint")}
-      >
-        <div className="grid grid-cols-2 gap-2">
-          {(["socket", "events"] as const).map((mode) => {
-            const active = draft.event_mode === mode
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setDraft({ ...draft, event_mode: mode })}
-                disabled={!canEdit || saving}
-                className={`min-h-9 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                  active
-                    ? "border-line-strong bg-surface-emphasis text-white"
-                    : "border-line bg-surface text-fg-muted hover:bg-surface-subtle"
-                } disabled:opacity-60`}
-                aria-pressed={active}
-              >
-                {t(`connections.connector.slack.fields.eventMode.options.${mode}`)}
-              </button>
-            )
-          })}
-        </div>
-      </Field>
+      {!canEdit && <p className="text-xs text-fg-muted">{t("connections.connector.adminOnly")}</p>}
+      {errorMsg && <InlineError data-testid="slack-error">{errorMsg}</InlineError>}
 
-      {!canEdit && (
-        <p className="mt-3 text-sm text-fg-faint">{t("connections.connector.adminOnly")}</p>
-      )}
-
-      {errorMsg && (
-        <p className="mt-3 text-sm text-danger" role="alert" data-testid="slack-error">
-          {errorMsg}
-        </p>
-      )}
-
-      <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-line/40 pt-4">
-        {dirty && (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-subtle disabled:opacity-60"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            {t("connections.connector.actions.reset")}
-          </button>
-        )}
-        <button
-          type="button"
+      <FormFooter>
+        <Button
           onClick={() => void onSave()}
-          disabled={
-            !canEdit || saving || !dirty || missingDraftIdentity || Boolean(missingRequired)
-          }
-          className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-subtle disabled:opacity-60"
+          disabled={locked || !dirty || missingDraftIdentity || Boolean(missingRequired)}
           data-testid="slack-save-button"
         >
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <Loader2 className="animate-spin" />}
           {draft.enabled
             ? t("connections.connector.actions.save")
             : t("connections.connector.actions.saveDraft")}
-        </button>
-      </div>
-    </Card>
+        </Button>
+      </FormFooter>
+    </FormSection>
   )
 }
 
@@ -332,7 +286,7 @@ function configKey(config: SlackConnectorInput): string {
     config.app_token_ref,
     config.signing_secret_ref,
     config.event_mode,
-  ].join("\u0000")
+  ].join(" ")
 }
 
 function applyChange(

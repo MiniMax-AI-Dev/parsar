@@ -1,19 +1,9 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  Loader2,
-  Search,
-  TerminalSquare,
-  Wrench,
-  XCircle,
-} from "lucide-react"
-
-import { cn } from "../../lib/utils"
+import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench } from "lucide-react"
 import { useToolCallElapsed } from "@assistant-ui/react"
+
+import { StatusIcon } from "../ui/status-icon"
 
 // ---------------------------------------------------------------------------
 // Tool icon / summary helpers (mirrored from StepDisplay to keep styling)
@@ -69,7 +59,9 @@ function formatElapsed(ms: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// ParsarToolCallCard — renders inside assistant-ui's message parts
+// ParsarToolCallCard — a 32px hairline row inside assistant-ui's message
+// parts: status icon, tool icon, tool name in ink, argument summary in
+// muted mono, elapsed time. Click to reveal arguments and result.
 // ---------------------------------------------------------------------------
 
 export function ParsarToolCallCard({
@@ -94,74 +86,47 @@ export function ParsarToolCallCard({
 
   const isRunning = status.type === "running"
   const isError = status.type === "incomplete" && status.reason === "error"
+  const stepStatus = isRunning ? "running" : isError ? "failed" : "completed"
+  const Chevron = expanded ? ChevronDown : ChevronRight
 
   return (
-    <div className="my-1 rounded-md border border-line/60 bg-surface shadow-sm">
+    <div className="border-b border-line text-sm last:border-b-0">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-sm transition-colors hover:bg-surface-subtle"
+        className="flex h-8 w-full items-center gap-2 text-left hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
         aria-expanded={expanded}
       >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 shrink-0 text-fg-faint" strokeWidth={2.2} />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0 text-fg-faint" strokeWidth={2.2} />
-        )}
-
-        {isRunning ? (
-          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-info" strokeWidth={2.5} />
-        ) : isError ? (
-          <XCircle className="h-3 w-3 shrink-0 text-danger" strokeWidth={2.5} />
-        ) : (
-          <CheckCircle2 className="h-3 w-3 shrink-0 text-success" strokeWidth={2.5} />
-        )}
-
-        <IconComponent className="h-3 w-3 shrink-0 text-fg-subtle" strokeWidth={2} />
-        <span
-          className={cn(
-            "shrink-0 font-medium",
-            isRunning ? "text-fg-muted" : isError ? "text-danger-emphasis" : "text-fg-subtle",
-          )}
-        >
-          {upper}
+        <Chevron className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <StatusIcon status={stepStatus} />
+        <IconComponent className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <span className="shrink-0 font-medium text-fg">{upper}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted" title={summary || undefined}>
+          {summaryDisplay}
         </span>
-
-        {summaryDisplay && (
-          <span
-            className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle"
-            title={summary}
-          >
-            {summaryDisplay}
-          </span>
-        )}
-        {!summaryDisplay && <span className="min-w-0 flex-1" aria-hidden="true" />}
-
         {elapsed != null && (
-          <span className="shrink-0 tabular-nums text-xs text-fg-faint">
-            {formatElapsed(elapsed)}
-          </span>
+          <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">{formatElapsed(elapsed)}</span>
         )}
       </button>
 
       {expanded && (
-        <div className="border-t border-line/40 px-3 py-2 text-xs">
+        <div className="space-y-2 pb-2 pl-5">
           {args && Object.keys(args).length > 0 && (
-            <div className="mb-2">
-              <p className="mb-1 font-medium text-fg-subtle">
+            <div>
+              <p className="m-0 mb-1 text-xs text-fg-muted">
                 {t("conversations.toolCall.argsLabel", { defaultValue: "Arguments" })}
               </p>
-              <pre className="max-h-32 overflow-auto rounded bg-surface-subtle p-2 text-fg-muted">
+              <pre className="m-0 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
                 {JSON.stringify(args, null, 2)}
               </pre>
             </div>
           )}
           {result != null && !isRunning && (
             <div>
-              <p className="mb-1 font-medium text-fg-subtle">
+              <p className="m-0 mb-1 text-xs text-fg-muted">
                 {t("conversations.toolCall.resultLabel", { defaultValue: "Result" })}
               </p>
-              <pre className="max-h-32 overflow-auto rounded bg-surface-subtle p-2 text-fg-muted">
+              <pre className="m-0 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
                 {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
               </pre>
             </div>

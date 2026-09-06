@@ -49,29 +49,31 @@ export function AgentDetailActions({
     <>
       <Button
         variant="outline"
-        size="sm"
         disabled={agent.status !== "active" || chatPending}
         onClick={() => void startChat()}
       >
         {chatPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />
         ) : (
-          <MessageSquare className="h-3.5 w-3.5" />
+          <MessageSquare strokeWidth={1.5} aria-hidden="true" />
         )}
         {t("agents.actions.chat")}
       </Button>
-      <Button size="sm" onClick={() => setEditOpen(true)}>
-        <Pencil className="h-3.5 w-3.5" />
-        {t("agents.actions.edit")}
-      </Button>
       <Button
         variant="outline"
-        size="sm"
         disabled={deleteMut.isPending}
         onClick={() => setDeleteOpen(true)}
       >
-        {deleteMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+        {deleteMut.isPending ? (
+          <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />
+        ) : (
+          <Trash2 strokeWidth={1.5} aria-hidden="true" />
+        )}
         {t("agents.actions.delete")}
+      </Button>
+      <Button onClick={() => setEditOpen(true)}>
+        <Pencil strokeWidth={1.5} aria-hidden="true" />
+        {t("agents.actions.edit")}
       </Button>
 
       <CreateAgentDialog

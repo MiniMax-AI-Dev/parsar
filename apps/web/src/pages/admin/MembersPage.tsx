@@ -1,25 +1,33 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
+  AlertTriangle,
   Check,
   Copy,
-  Inbox,
-  Link2,
   Loader2,
-  MoreHorizontal,
-  Plus,
-  ShieldAlert,
-  UserCircle2,
+  ShieldCheck,
   UserMinus,
   UserPlus,
   Users,
-  WifiOff,
   X,
 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { UserSearchCombobox } from "../../components/UserSearchCombobox"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
 import {
@@ -32,21 +40,20 @@ import {
 } from "../../components/ui/dialog"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
+import { Input } from "../../components/ui/input"
+import { Field } from "../../components/ui/label"
+import {
+  InitialTile,
+  Ledger,
+  LedgerGroup,
+  LedgerHeader,
+  LedgerId,
+  LedgerRow,
+  col,
+} from "../../components/ui/ledger"
+import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "../../components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import {
   useAddWorkspaceMember,
@@ -63,7 +70,6 @@ import type {
   MemberRole,
   PendingJoinRequest,
   PlatformUser,
-  UserStatus,
   WorkspaceMember,
 } from "../../lib/api-types"
 import {
@@ -77,36 +83,10 @@ import { useRelativeTime } from "../../lib/relative-time"
 import { MemberRoleBadge } from "./MemberRoleBadge"
 import { PendingInvitationsList } from "./PendingInvitationsList"
 
-type Tab = "workspace" | "pending"
 const ROLES: MemberRole[] = ["owner", "admin", "member", "viewer"]
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-function UserStatusBadge({ status }: { status: UserStatus }) {
-  const { t } = useTranslation("admin")
-  if (status === "active") {
-    return <Badge variant="success">{t("members.userStatus.active")}</Badge>
-  }
-  return <Badge variant="neutral">{t("members.userStatus.disabled")}</Badge>
-}
-
-function UserCell({ name, email }: { name: string; email: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className="rounded-full bg-surface-muted p-1.5">
-        <UserCircle2 className="h-4 w-4 text-fg-subtle" strokeWidth={1.75} />
-      </div>
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-fg">
-          {name || "—"}
-        </div>
-        <div className="truncate text-xs text-fg-subtle">{email}</div>
-      </div>
-    </div>
-  )
-}
+/** user · email / detail · role · age · actions */
+const LEDGER_COLUMNS = [col.title(), col.id(200, 1), col.meta(104), col.age(80), col.actions(2)]
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -115,8 +95,6 @@ function UserCell({ name, email }: { name: string; email: string }) {
 export function MembersPage() {
   const { t } = useTranslation("admin")
   const wsId = useWorkspaceId()
-  const [tab, setTab] = useState<Tab>("workspace")
-  const [addWsOpen, setAddWsOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [invitePermissionOpen, setInvitePermissionOpen] = useState(false)
   const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({})
@@ -124,18 +102,18 @@ export function MembersPage() {
 
   const myWorkspacesQ = useMyWorkspaces()
   const wsQ = useWorkspaceMembers(wsId)
-  const workspaceRole = myWorkspacesQ.data?.workspaces.find(
-    (workspace) => workspace.id === wsId
-  )?.role
-  const canManageInvitations =
-    workspaceRole === "owner" || workspaceRole === "admin"
+  const workspaceRole = myWorkspacesQ.data?.workspaces.find((workspace) => workspace.id === wsId)?.role
+  const canManageInvitations = workspaceRole === "owner" || workspaceRole === "admin"
   const canInviteMembers = canManageInvitations || workspaceRole === "member"
   const invitationsQ = usePendingInvitations(canInviteMembers ? wsId : null)
+  const joinRequestsQ = usePendingJoinRequests(canManageInvitations ? wsId : null)
   const addWsMut = useAddWorkspaceMember(wsId)
   const updateWsRoleMut = useUpdateWorkspaceMemberRole(wsId)
   const removeWsMut = useRemoveWorkspaceMember(wsId)
 
-  const isMockWs = !wsId
+  const members = wsQ.data?.members ?? []
+  const invitations = invitationsQ.data ?? []
+  const joinRequests = joinRequestsQ.data?.requests ?? []
 
   const handleWsRoleChange = async (m: WorkspaceMember, role: MemberRole) => {
     if (role === m.role) return
@@ -146,146 +124,126 @@ export function MembersPage() {
     }
   }
 
+  const pageTitle = t("members.page.title")
+  const loadError = wsQ.isError ? (wsQ.error as ApiError) : undefined
+  const mutationError =
+    (updateWsRoleMut.error as ApiError | null)?.message ??
+    (invitationsQ.isError ? (invitationsQ.error as ApiError).message : null)
+
   return (
-    <AdminLayout activeMenu="members">
-      <PageHeader
-        title={t("members.page.title")}
-        action={
-          tab === "workspace" ? (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (!canInviteMembers) {
-                    setInvitePermissionOpen(true)
-                    return
-                  }
-                  setInviteOpen(true)
-                }}
-                disabled={!wsId || myWorkspacesQ.isLoading}
-                title={!wsId ? t("members.add.requiresWorkspace") : undefined}
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                {t("members.invite.cta")}
-              </Button>
-              {canManageInvitations && (
-                <Button
-                  size="sm"
-                  onClick={() => setAddWsOpen(true)}
-                  disabled={!wsId}
-                  title={!wsId ? t("members.add.requiresWorkspace") : undefined}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("members.add.cta")}
-                </Button>
-              )}
-            </div>
-          ) : null
-        }
-      />
+    <AdminLayout activeMenu="members" fullBleed>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="members.page.title"
+          action={
+            <Button
+              onClick={() => {
+                if (!canInviteMembers) {
+                  setInvitePermissionOpen(true)
+                  return
+                }
+                setInviteOpen(true)
+              }}
+              disabled={!wsId || myWorkspacesQ.isLoading}
+            >
+              <UserPlus strokeWidth={1.5} aria-hidden="true" />
+              {t("members.invite.cta")}
+            </Button>
+          }
+        />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList>
-          <TabsTrigger value="workspace">
-            <Users className="h-3.5 w-3.5" />
-            {t("members.tabs.workspace")}
-            {wsQ.data && (
-              <span className="ml-1 text-xs text-fg-subtle">
-                ({wsQ.data.members.length})
-              </span>
-            )}
-          </TabsTrigger>
-          {/* Pending approval — visible even when count is 0 so admins know
-              the surface exists. Inner empty state guides workspace
-              picking rather than disabling the tab. */}
-          <TabsTrigger value="pending">
-            <Inbox className="h-3.5 w-3.5" />
-            {t("members.tabs.pending")}
-            <PendingBadge wsId={wsId} />
-          </TabsTrigger>
-        </TabsList>
-
-        {/* === Workspace tab ========================================= */}
-        <TabsContent value="workspace" className="space-y-3">
-          {isMockWs && (
-            <MockBanner hint={t("members.mockBanner.ws")} />
-          )}
-          {updateWsRoleMut.error && (
-            <ErrorBanner message={(updateWsRoleMut.error as ApiError).message} />
-          )}
-          {removeWsMut.error && (
-            <ErrorBanner message={(removeWsMut.error as ApiError).message} />
-          )}
-          {invitationsQ.isError && (
-            <ErrorBanner message={(invitationsQ.error as ApiError).message} />
-          )}
-          <MembersTable
-            loading={wsQ.isLoading}
-            error={wsQ.isError && !isMockWs ? (wsQ.error as ApiError) : undefined}
-            onRetry={() => void wsQ.refetch()}
-            members={wsQ.data?.members ?? []}
-            emptyTitle={t("members.empty.ws.title")}
-            emptyDescription={t("members.empty.ws.description")}
-            writable={!isMockWs && canManageInvitations}
-            onChangeRole={(m, role) => handleWsRoleChange(m, role)}
-            onRemove={(m) => setRemoveWsTarget(m)}
-            roleChangePending={updateWsRoleMut.isPending}
-          />
-          {canInviteMembers && wsId && (
-            <PendingInvitationsList
-              workspaceId={wsId}
-              invitations={invitationsQ.data ?? []}
-              inviteLinks={inviteLinks}
-              canEditRole={canManageInvitations}
+        {!wsId ? (
+          <div className="px-6"><ScopeRequiredState scope="workspace" resourceName={pageTitle} /></div>
+        ) : wsQ.isLoading ? (
+          <MembersLoadingSkeleton />
+        ) : loadError ? (
+          <div className="px-6 pt-6">
+            <ErrorState
+              title={loadError.envelope?.unreachable ? t("members.error.unreachable.title") : t("members.error.load.title")}
+              description={
+                loadError.envelope?.unreachable
+                  ? t("members.error.unreachable.description")
+                  : loadError.message ?? t("members.error.load.description")
+              }
+              hint={loadError.envelope?.unreachable ? t("members.error.unreachable.hint") : t("members.error.load.hint")}
+              onRetry={() => void wsQ.refetch()}
             />
-          )}
-        </TabsContent>
+          </div>
+        ) : members.length === 0 && invitations.length === 0 && joinRequests.length === 0 ? (
+          <EmptyState icon={Users} title={t("members.empty.ws.title")} description={t("members.empty.ws.description")} />
+        ) : (
+          <Ledger columns={LEDGER_COLUMNS} role="listbox" aria-label={pageTitle}>
+            <LedgerHeader>
+              <span>{t("members.table.user")}</span>
+              <span>{t("members.invite.emailLabel")}</span>
+              <span>{t("members.table.role")}</span>
+              <span className="text-right">{t("members.table.joinedAt")}</span>
+              <span />
+            </LedgerHeader>
 
-        {/* === Pending join requests tab ============================= */}
-        <TabsContent value="pending" className="space-y-3">
-          <PendingJoinRequestsTab wsId={wsId} />
-        </TabsContent>
-      </Tabs>
+            {mutationError && (
+              <p className="flex h-9 items-center gap-1.5 border-b border-line px-4 text-sm text-fg">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                <span className="truncate">{mutationError}</span>
+              </p>
+            )}
 
-      {/* === Workspace dialogs ===================================== */}
-      {addWsOpen && wsId && (
-        <AddMemberDialog
-          excludeWorkspace={wsId}
+            {members.length > 0 && (
+              <LedgerGroup label={t("members.tabs.workspace")} count={members.length}>
+                {members.map((m) => (
+                  <MemberRow
+                    key={m.id}
+                    member={m}
+                    writable={canManageInvitations && m.role !== "owner"}
+                    roleChangePending={updateWsRoleMut.isPending}
+                    onChangeRole={(role) => void handleWsRoleChange(m, role)}
+                    onRemove={() => setRemoveWsTarget(m)}
+                  />
+                ))}
+              </LedgerGroup>
+            )}
+
+            {canInviteMembers && (
+              <PendingInvitationsList
+                workspaceId={wsId}
+                invitations={invitations}
+                inviteLinks={inviteLinks}
+                canEditRole={canManageInvitations}
+              />
+            )}
+
+            {canManageInvitations && joinRequests.length > 0 && (
+              <PendingJoinRequestsGroup wsId={wsId} requests={joinRequests} />
+            )}
+          </Ledger>
+        )}
+      </div>
+
+      {inviteOpen && wsId && (
+        <InviteMemberDialog
+          wsId={wsId}
+          canManage={canManageInvitations}
           onClose={() => {
-            setAddWsOpen(false)
+            setInviteOpen(false)
             addWsMut.reset()
+          }}
+          onCreated={(invitationId, inviteLink) => {
+            setInviteLinks((current) => ({ ...current, [invitationId]: inviteLink }))
           }}
           addOne={(body) => addWsMut.mutateAsync(body)}
         />
       )}
 
-      {inviteOpen && wsId && (
-        <InviteMemberDialog
-          onClose={() => {
-            setInviteOpen(false)
-          }}
-          onCreated={(invitationId, inviteLink) => {
-            setInviteLinks((current) => ({
-              ...current,
-              [invitationId]: inviteLink,
-            }))
-          }}
-          wsId={wsId}
-          canChooseRole={canManageInvitations}
-        />
-      )}
-
       <Dialog open={invitePermissionOpen} onOpenChange={setInvitePermissionOpen}>
-        <DialogContent>
+        <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{t("members.invite.permission.title")}</DialogTitle>
-            <DialogDescription>
-              {t("members.invite.permission.description")}
-            </DialogDescription>
+            <DialogDescription>{t("members.invite.permission.description")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setInvitePermissionOpen(false)}>
+            <Button variant="outline" onClick={() => setInvitePermissionOpen(false)}>
               {t("members.invite.close")}
             </Button>
           </DialogFooter>
@@ -295,7 +253,6 @@ export function MembersPage() {
       {removeWsTarget && (
         <ConfirmRemoveDialog
           targetLabel={removeWsTarget.user_name || removeWsTarget.user_email}
-          description={t("members.remove.description")}
           pending={removeWsMut.isPending}
           error={removeWsMut.error as ApiError | undefined}
           onCancel={() => {
@@ -318,224 +275,252 @@ export function MembersPage() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Members table (shared by both tabs)                                */
+/*  Rows                                                               */
 /* ------------------------------------------------------------------ */
 
-interface MembersTableProps {
-  loading: boolean
-  error?: ApiError
-  onRetry: () => void
-  members: WorkspaceMember[]
-  emptyTitle: string
-  emptyDescription: string
-  /** When true, render the actions column (role dropdown + remove button). */
-  writable?: boolean
-  onChangeRole?: (m: WorkspaceMember, role: MemberRole) => void
-  onRemove?: (m: WorkspaceMember) => void
-  roleChangePending?: boolean
-}
-
-function MembersTable({
-  loading,
-  error,
-  onRetry,
-  members,
-  emptyTitle,
-  emptyDescription,
-  writable = false,
+function MemberRow({
+  member: m,
+  writable,
+  roleChangePending,
   onChangeRole,
   onRemove,
-  roleChangePending = false,
-}: MembersTableProps) {
+}: {
+  member: WorkspaceMember
+  writable: boolean
+  roleChangePending: boolean
+  onChangeRole: (role: MemberRole) => void
+  onRemove: () => void
+}) {
   const { t } = useTranslation("admin")
   const fmtAgo = useRelativeTime()
-
-  if (loading) {
-    return (
-      <div className="space-y-2 rounded-lg border border-line bg-surface p-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <ErrorState
-        title={
-          error.envelope?.unreachable
-            ? t("members.error.unreachable.title")
-            : t("members.error.load.title")
-        }
-        description={
-          error.envelope?.unreachable
-            ? t("members.error.unreachable.description")
-            : error.message ?? t("members.error.load.description")
-        }
-        hint={
-          error.envelope?.unreachable
-            ? t("members.error.unreachable.hint")
-            : t("members.error.load.hint")
-        }
-        onRetry={onRetry}
-      />
-    )
-  }
-
-  if (members.length === 0) {
-    return (
-      <EmptyState
-        icon={Users}
-        title={emptyTitle}
-        description={emptyDescription}
-      />
-    )
-  }
-
+  const name = m.user_name || m.user_email
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-surface">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t("members.table.user")}</TableHead>
-            <TableHead>{t("members.table.role")}</TableHead>
-            <TableHead>{t("members.table.userStatus")}</TableHead>
-            <TableHead>{t("members.table.joinedAt")}</TableHead>
-            {writable && (
-              <TableHead className="text-right">
-                {t("members.table.actions")}
-              </TableHead>
-            )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell>
-                <UserCell name={m.user_name} email={m.user_email} />
-              </TableCell>
-              <TableCell>
-                {writable && onChangeRole && m.role !== "owner" ? (
-                  <select
-                    value={m.role}
-                    disabled={roleChangePending}
-                    onChange={(e) =>
-                      onChangeRole(m, e.target.value as MemberRole)
-                    }
-                    className="rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                  >
-                    {ROLES.filter((r) => r !== "owner").map((r) => (
-                      <option key={r} value={r}>
-                        {t(`members.role.${r}`)}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <MemberRoleBadge role={m.role} />
-                )}
-              </TableCell>
-              <TableCell>
-                <UserStatusBadge status={m.user_status} />
-              </TableCell>
-              <TableCell>
-                <span className="text-sm text-fg-subtle">
-                  {fmtAgo(m.created_at)}
-                </span>
-              </TableCell>
-              {writable && (
-                <TableCell className="text-right">
-                  {onRemove && m.role !== "owner" ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemove(m)}
-                      title={t("members.remove.cta")}
-                    >
-                      <UserMinus className="h-3.5 w-3.5 text-fg-subtle" />
-                    </Button>
-                  ) : (
-                    <MoreHorizontal className="ml-auto h-4 w-4 text-fg-faint" />
-                  )}
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <LedgerRow>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <InitialTile name={name} />
+        <span className="truncate font-medium">{name}</span>
+        {m.user_status === "disabled" && (
+          <Badge variant="neutral" dot className="shrink-0">{t("members.userStatus.disabled")}</Badge>
+        )}
+      </span>
+      <LedgerId>{m.user_email}</LedgerId>
+      <span className="flex items-center">
+        <MemberRoleBadge role={m.role} />
+      </span>
+      <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(m.created_at)}</span>
+      {writable ? (
+        <RowActions>
+          <RoleMenu value={m.role} disabled={roleChangePending} onChange={onChangeRole} />
+          <ActionIconButton icon={UserMinus} label={t("members.remove.cta")} tone="danger" onClick={onRemove} />
+        </RowActions>
+      ) : (
+        <span />
+      )}
+    </LedgerRow>
+  )
+}
+
+/** Change-role menu: a ghost icon trigger with the roles as radio items. */
+function RoleMenu({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: MemberRole
+  disabled: boolean
+  onChange: (role: MemberRole) => void
+}) {
+  const { t } = useTranslation("admin")
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("members.table.role")}
+          title={t("members.table.role")}
+          disabled={disabled}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <ShieldCheck strokeWidth={1.5} aria-hidden="true" />
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={6}
+          className="app-shadow-floating z-50 min-w-[160px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
+        >
+          <DropdownMenu.RadioGroup value={value} onValueChange={(next) => onChange(next as MemberRole)}>
+            {ROLES.filter((r) => r !== "owner").map((r) => (
+              <DropdownMenu.RadioItem
+                key={r}
+                value={r}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
+              >
+                <span className="flex-1">{t(`members.role.${r}`)}</span>
+                <DropdownMenu.ItemIndicator>
+                  <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
+                </DropdownMenu.ItemIndicator>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
+function MembersLoadingSkeleton() {
+  return (
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-[18px] w-[18px] rounded" />
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
     </div>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/*  Add workspace member dialog                                        */
+/*  Pending join requests group                                        */
+/*                                                                     */
+/*  User-initiated "join workspace" requests. The server stores them as   */
+/*  workspace_members rows with status='pending'; the UI lists them as a  */
+/*  group of the same ledger with approve / reject row actions.          */
 /* ------------------------------------------------------------------ */
 
-/**
- * Multi-select picker. Loops per-user `addOne` so a partial failure
- * doesn't lose other selections; successful adds are dropped from the
- * chip row so a retry only re-runs the failing ones.
- */
-function AddMemberDialog({
-  excludeWorkspace,
+function PendingJoinRequestsGroup({ wsId, requests }: { wsId: string; requests: PendingJoinRequest[] }) {
+  const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
+  const fmtAgo = useRelativeTime()
+  const approveMut = useApproveJoinRequest()
+  const rejectMut = useRejectJoinRequest()
+  const [confirmReject, setConfirmReject] = useState<PendingJoinRequest | null>(null)
+  const busy = approveMut.isPending || rejectMut.isPending
+
+  return (
+    <>
+      <LedgerGroup label={t("members.tabs.pending")} count={requests.length}>
+        {requests.map((req) => {
+          const name = req.user_name || req.user_email
+          return (
+            <LedgerRow key={req.id}>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <InitialTile name={name} />
+                <span className="shrink-0 truncate font-medium">{name}</span>
+                <span className="min-w-0 truncate text-xs text-fg-muted" title={req.request_reason || undefined}>
+                  · {req.request_reason || t("members.pendingRequests.noReason")}
+                </span>
+              </span>
+              <LedgerId>{req.user_email}</LedgerId>
+              <span className="text-fg-muted">—</span>
+              <span className="truncate text-right text-xs text-fg-muted">{fmtAgo(req.requested_at)}</span>
+              <RowActions>
+                <ActionIconButton
+                  icon={Check}
+                  label={t("members.pendingRequests.actions.approve")}
+                  busy={approveMut.isPending && approveMut.variables?.requestId === req.id}
+                  disabled={busy}
+                  onClick={() => approveMut.mutate({ wsId, requestId: req.id, request: req })}
+                />
+                <ActionIconButton
+                  icon={X}
+                  label={t("members.pendingRequests.actions.reject")}
+                  tone="danger"
+                  disabled={busy}
+                  onClick={() => setConfirmReject(req)}
+                />
+              </RowActions>
+            </LedgerRow>
+          )
+        })}
+      </LedgerGroup>
+
+      {/* Rejecting is not destructive (the applicant can re-apply), so the
+          confirm is a primary action, not the red one. */}
+      <AlertDialog
+        open={confirmReject !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmReject(null)
+            rejectMut.reset()
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("members.pendingRequests.confirmRejectTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("members.pendingRequests.confirmRejectBody", {
+                name: confirmReject?.user_name || confirmReject?.user_email || "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline" disabled={rejectMut.isPending}>{tc("actions.cancel")}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                disabled={rejectMut.isPending}
+                onClick={(event) => {
+                  event.preventDefault()
+                  if (!confirmReject) return
+                  rejectMut.mutate(
+                    { wsId, requestId: confirmReject.id, request: confirmReject },
+                    { onSuccess: () => setConfirmReject(null) },
+                  )
+                }}
+              >
+                {rejectMut.isPending && <Loader2 className="animate-spin" />}
+                {t("members.pendingRequests.actions.reject")}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Invite dialog                                                      */
+/*                                                                     */
+/*  One entry point for growing the team. Owners and admins get two     */
+/*  segments: an invitation link for someone new, or picking existing   */
+/*  platform users; members only get the link form.                     */
+/* ------------------------------------------------------------------ */
+
+type InviteMode = "link" | "existing"
+
+interface InviteResult {
+  email: string
+  inviteLink: string
+}
+
+function InviteMemberDialog({
+  wsId,
+  canManage,
   onClose,
+  onCreated,
   addOne,
 }: {
-  excludeWorkspace: string
+  wsId: string
+  canManage: boolean
   onClose: () => void
+  onCreated: (invitationId: string, inviteLink: string) => void
   addOne: (body: AddWorkspaceMemberRequest) => Promise<unknown>
 }) {
   const { t } = useTranslation("admin")
-  const [selected, setSelected] = useState<PlatformUser[]>([])
-  const [role, setRole] = useState<MemberRole>("member")
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
-    null
-  )
-  const [failures, setFailures] = useState<
-    Array<{ user: PlatformUser; message: string }>
-  >([])
-
-  const pending = progress !== null
-  const canSubmit = selected.length > 0 && !pending
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!canSubmit) return
-    setFailures([])
-    setProgress({ done: 0, total: selected.length })
-    const fails: Array<{ user: PlatformUser; message: string }> = []
-    for (let i = 0; i < selected.length; i++) {
-      const u = selected[i]
-      try {
-        await addOne({ email: u.email, name: u.name || undefined, role })
-      } catch (err) {
-        const msg =
-          err instanceof ApiError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : String(err)
-        fails.push({ user: u, message: msg })
-      }
-      setProgress({ done: i + 1, total: selected.length })
-    }
-    if (fails.length === 0) {
-      onClose()
-      return
-    }
-    // Drop successfully-added users from the chip row so a retry only
-    // re-runs the failing ones.
-    const failedIds = new Set(fails.map((f) => f.user.id))
-    setSelected((prev) => prev.filter((u) => failedIds.has(u.id)))
-    setFailures(fails)
-    setProgress(null)
-  }
-
-  const successCount = progress
-    ? progress.done - failures.length
-    : selected.length === 0
-      ? 0
-      : 0
+  const [mode, setMode] = useState<InviteMode>("link")
+  const [pending, setPending] = useState(false)
+  const [result, setResult] = useState<InviteResult | null>(null)
 
   return (
     <Dialog
@@ -544,117 +529,55 @@ function AddMemberDialog({
         if (!next && !pending) onClose()
       }}
     >
-      <DialogContent className="max-w-md gap-0 p-0">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader className="border-b border-line-muted px-5 py-3 pr-10">
-            <DialogTitle className="text-sm">
-              {t("members.add.title")}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 px-5 py-4">
-            <DialogField label={t("members.add.field.user")} required>
-              <UserSearchCombobox
-                excludeWorkspace={excludeWorkspace}
-                selected={selected}
-                onChange={setSelected}
-                disabled={pending}
-              />
-            </DialogField>
-
-            <DialogField label={t("members.add.field.role")} required>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as MemberRole)}
-                disabled={pending}
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {t(`members.role.${r}`)}
-                  </option>
-                ))}
-              </select>
-            </DialogField>
-
-            {failures.length > 0 && (
-              <div className="space-y-1 rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
-                <p className="text-sm font-medium text-danger-emphasis">
-                  {t("members.add.partialError.title", {
-                    success: successCount,
-                    failed: failures.length,
-                    defaultValue:
-                      "{{success}} succeeded, {{failed}} failed",
-                  })}
-                </p>
-                <ul className="space-y-0.5">
-                  {failures.map((f) => (
-                    <li
-                      key={f.user.id}
-                      className="text-xs text-danger-emphasis"
-                    >
-                      {f.user.email}: {f.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+      <DialogContent>
+        {result ? (
+          <InviteResultView result={result} onClose={onClose} />
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t("members.invite.title")}</DialogTitle>
+            </DialogHeader>
+            {canManage && (
+              <Tabs value={mode} onValueChange={(v) => setMode(v as InviteMode)}>
+                <TabsList className="flex w-full">
+                  <TabsTrigger value="link" className="flex-1" disabled={pending}>{t("members.invite.tabs.link")}</TabsTrigger>
+                  <TabsTrigger value="existing" className="flex-1" disabled={pending}>{t("members.invite.tabs.existing")}</TabsTrigger>
+                </TabsList>
+              </Tabs>
             )}
-          </div>
-
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              disabled={pending}
-            >
-              {t("members.add.cancel")}
-            </Button>
-            <Button type="submit" size="sm" disabled={!canSubmit}>
-              {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {pending
-                ? t("members.add.submitting", {
-                    done: progress?.done ?? 0,
-                    total: progress?.total ?? 0,
-                    defaultValue: "Adding ({{done}}/{{total}})…",
-                  })
-                : selected.length > 1
-                  ? t("members.add.submitMany", {
-                      count: selected.length,
-                      defaultValue: "Add {{count}}",
-                    })
-                  : t("members.add.submit")}
-            </Button>
-          </DialogFooter>
-        </form>
+            {mode === "link" || !canManage ? (
+              <InviteLinkForm
+                wsId={wsId}
+                canChooseRole={canManage}
+                onPendingChange={setPending}
+                onClose={onClose}
+                onCreated={(id, link, email) => {
+                  onCreated(id, link)
+                  setResult({ email, inviteLink: link })
+                }}
+              />
+            ) : (
+              <AddExistingForm wsId={wsId} onPendingChange={setPending} onClose={onClose} addOne={addOne} />
+            )}
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Invite member dialog                                               */
-/*                                                                     */
-/*  Two-step: (1) form → POST /invitations → (2) result screen shows  */
-/*  the invite link. Admin copies the link and sends to the invitee.   */
-/* ------------------------------------------------------------------ */
-
-interface InviteResult {
-  email: string
-  inviteLink: string
-}
-
-function InviteMemberDialog({
-  onClose,
-  onCreated,
+function InviteLinkForm({
   wsId,
   canChooseRole,
+  onPendingChange,
+  onClose,
+  onCreated,
 }: {
-  onClose: () => void
-  onCreated: (invitationId: string, inviteLink: string) => void
   wsId: string
   canChooseRole: boolean
+  onPendingChange: (pending: boolean) => void
+  onClose: () => void
+  onCreated: (invitationId: string, inviteLink: string, email: string) => void
 }) {
   const { t } = useTranslation("admin")
   const [email, setEmail] = useState("")
@@ -662,8 +585,6 @@ function InviteMemberDialog({
   const [role, setRole] = useState<MemberRole>("member")
   const [pending, setPending] = useState(false)
   const [errMsg, setErrMsg] = useState<string | null>(null)
-  const [result, setResult] = useState<InviteResult | null>(null)
-  const [copied, setCopied] = useState(false)
   const createInvitation = useCreateInvitation(wsId)
 
   const canSubmit = email.trim() !== "" && !pending
@@ -673,212 +594,228 @@ function InviteMemberDialog({
     if (!canSubmit) return
     setErrMsg(null)
     setPending(true)
+    onPendingChange(true)
     try {
       const res = await createInvitation.mutateAsync({
         email: email.trim(),
         name: name.trim() || undefined,
         role: canChooseRole ? role : "member",
       })
-      setResult({
-        email: res.email,
-        inviteLink: res.invite_link,
-      })
-      onCreated(res.invitation_id, res.invite_link)
+      onCreated(res.invitation_id, res.invite_link, res.email)
     } catch (err) {
-      setErrMsg(
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      )
+      setErrMsg(err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err))
     } finally {
       setPending(false)
+      onPendingChange(false)
     }
   }
 
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
+        <Field label={t("members.invite.emailLabel")} htmlFor="invite-email">
+          <Input
+            id="invite-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={t("members.invite.emailPlaceholder")}
+            autoComplete="off"
+            required
+            disabled={pending}
+          />
+        </Field>
+        <Field label={t("members.invite.nameLabel")} htmlFor="invite-name">
+          <Input
+            id="invite-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("members.invite.namePlaceholder")}
+            autoComplete="off"
+            disabled={pending}
+          />
+        </Field>
+        <Field label={t("members.invite.roleLabel")} htmlFor="invite-role">
+          {canChooseRole ? (
+            <Select id="invite-role" value={role} onChange={(e) => setRole(e.target.value as MemberRole)} disabled={pending}>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>{t(`members.role.${r}`)}</option>
+              ))}
+            </Select>
+          ) : (
+            <span className="flex h-7 items-center"><MemberRoleBadge role="member" /></span>
+          )}
+        </Field>
+        {errMsg && <InlineError message={errMsg} />}
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+          {t("members.invite.cancel")}
+        </Button>
+        <Button type="submit" disabled={!canSubmit}>
+          {pending && <Loader2 className="animate-spin" />}
+          {pending ? t("members.invite.submitting") : t("members.invite.submit")}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+/**
+ * Multi-select picker. Loops per-user `addOne` so a partial failure
+ * doesn't lose other selections; successful adds are dropped from the
+ * chip row so a retry only re-runs the failing ones.
+ */
+function AddExistingForm({
+  wsId,
+  onPendingChange,
+  onClose,
+  addOne,
+}: {
+  wsId: string
+  onPendingChange: (pending: boolean) => void
+  onClose: () => void
+  addOne: (body: AddWorkspaceMemberRequest) => Promise<unknown>
+}) {
+  const { t } = useTranslation("admin")
+  const [selected, setSelected] = useState<PlatformUser[]>([])
+  const [role, setRole] = useState<MemberRole>("member")
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [failures, setFailures] = useState<Array<{ user: PlatformUser; message: string }>>([])
+  const [lastSuccess, setLastSuccess] = useState(0)
+
+  const pending = progress !== null
+  const canSubmit = selected.length > 0 && !pending
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit) return
+    setFailures([])
+    setProgress({ done: 0, total: selected.length })
+    onPendingChange(true)
+    const fails: Array<{ user: PlatformUser; message: string }> = []
+    for (let i = 0; i < selected.length; i++) {
+      const u = selected[i]
+      try {
+        await addOne({ email: u.email, name: u.name || undefined, role })
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
+        fails.push({ user: u, message: msg })
+      }
+      setProgress({ done: i + 1, total: selected.length })
+    }
+    onPendingChange(false)
+    if (fails.length === 0) {
+      onClose()
+      return
+    }
+    // Drop successfully-added users from the chip row so a retry only
+    // re-runs the failing ones.
+    const failedIds = new Set(fails.map((f) => f.user.id))
+    setLastSuccess(selected.length - fails.length)
+    setSelected((prev) => prev.filter((u) => failedIds.has(u.id)))
+    setFailures(fails)
+    setProgress(null)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
+        <Field label={t("members.add.field.user")}>
+          <UserSearchCombobox excludeWorkspace={wsId} selected={selected} onChange={setSelected} disabled={pending} />
+        </Field>
+        <Field label={t("members.add.field.role")} htmlFor="add-role">
+          <Select id="add-role" value={role} onChange={(e) => setRole(e.target.value as MemberRole)} disabled={pending}>
+            {ROLES.map((r) => (
+              <option key={r} value={r}>{t(`members.role.${r}`)}</option>
+            ))}
+          </Select>
+        </Field>
+        {failures.length > 0 && (
+          <div className="flex items-start gap-1.5 text-sm text-fg">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="font-medium">
+                {t("members.add.partialError.title", {
+                  success: lastSuccess,
+                  failed: failures.length,
+                  defaultValue: "{{success}} succeeded, {{failed}} failed",
+                })}
+              </p>
+              <ul className="m-0 list-none p-0">
+                {failures.map((f) => (
+                  <li key={f.user.id} className="break-words font-mono text-xs">
+                    {f.user.email}: {f.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+          {t("members.add.cancel")}
+        </Button>
+        <Button type="submit" disabled={!canSubmit}>
+          {pending && <Loader2 className="animate-spin" />}
+          {pending
+            ? t("members.add.submitting", {
+                done: progress?.done ?? 0,
+                total: progress?.total ?? 0,
+                defaultValue: "Adding ({{done}}/{{total}})…",
+              })
+            : selected.length > 1
+              ? t("members.add.submitMany", { count: selected.length, defaultValue: "Add {{count}}" })
+              : t("members.add.submit")}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+/** Step two of the link flow: the link, copyable, and one way out. */
+function InviteResultView({ result, onClose }: { result: InviteResult; onClose: () => void }) {
+  const { t } = useTranslation("admin")
+  const [copied, setCopied] = useState(false)
+
   const handleCopy = async () => {
-    if (!result) return
     try {
       await navigator.clipboard.writeText(result.inviteLink)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Silently swallow — link is visible in the modal for manual copy.
+      // Link stays visible for manual copy.
     }
   }
 
   return (
-    <Dialog
-      open
-      onOpenChange={(next) => {
-        if (!next && !pending) onClose()
-      }}
-    >
-      <DialogContent className="max-w-md gap-0 p-0">
-        {result === null ? (
-          <form onSubmit={handleSubmit}>
-            <DialogHeader className="space-y-1 border-b border-line-muted px-5 py-3 pr-10">
-              <DialogTitle className="text-sm">
-                {t("members.invite.title")}
-              </DialogTitle>
-              <DialogDescription className="text-xs leading-relaxed">
-                {t("members.invite.description")}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3 px-5 py-4">
-              <DialogField label={t("members.invite.emailLabel")} required>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t("members.invite.emailPlaceholder")}
-                  autoComplete="off"
-                  required
-                  disabled={pending}
-                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                />
-              </DialogField>
-
-              <DialogField label={t("members.invite.nameLabel")}>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={t("members.invite.namePlaceholder")}
-                  autoComplete="off"
-                  disabled={pending}
-                  className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                />
-              </DialogField>
-
-              <DialogField label={t("members.invite.roleLabel")} required>
-                {canChooseRole ? (
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as MemberRole)}
-                    disabled={pending}
-                    className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {t(`members.role.${r}`)}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex h-9 items-center rounded-md border border-line bg-surface-subtle px-3">
-                    <MemberRoleBadge role="member" />
-                  </div>
-                )}
-              </DialogField>
-
-              {errMsg && (
-                <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger-emphasis">
-                  {errMsg}
-                </p>
-              )}
-            </div>
-
-            <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onClose}
-                disabled={pending}
-              >
-                {t("members.invite.cancel")}
-              </Button>
-              <Button type="submit" size="sm" disabled={!canSubmit}>
-                {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {pending ? t("members.invite.submitting") : t("members.invite.submit")}
-              </Button>
-            </DialogFooter>
-          </form>
-        ) : (
-          <div>
-            <DialogHeader className="space-y-1 border-b border-line-muted px-5 py-3 pr-10">
-              <DialogTitle className="flex items-center gap-2 text-sm">
-                <Link2 className="h-4 w-4 text-success" />
-                {t("members.invite.resultTitle")}
-              </DialogTitle>
-              <DialogDescription className="text-xs leading-relaxed">
-                {t("members.invite.resultBody", { email: result.email })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 px-5 py-4">
-              <div className="space-y-2 rounded-md border border-line bg-surface-subtle/60 p-3">
-                <InviteCredentialRow
-                  label="Link"
-                  value={result.inviteLink}
-                  mono
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleCopy}
-                className="w-full"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                {copied ? t("members.invite.copied") : t("members.invite.copyAll")}
-              </Button>
-            </div>
-            <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-              <Button type="button" size="sm" onClick={onClose}>
-                {t("members.invite.close")}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+    <>
+      <DialogHeader>
+        <DialogTitle>{t("members.invite.resultTitle")}</DialogTitle>
+        <DialogDescription>{t("members.invite.resultBody", { email: result.email })}</DialogDescription>
+      </DialogHeader>
+      <Field label={t("members.invite.credential.url")} htmlFor="invite-link">
+        <Input id="invite-link" readOnly value={result.inviteLink} className="select-all font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+      </Field>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={handleCopy}>
+          {copied ? <Check strokeWidth={1.5} aria-hidden="true" /> : <Copy strokeWidth={1.5} aria-hidden="true" />}
+          {copied ? t("members.invite.copied") : t("members.invite.copyAll")}
+        </Button>
+        <Button type="button" onClick={onClose}>{t("members.invite.close")}</Button>
+      </DialogFooter>
+    </>
   )
 }
 
-function InviteCredentialRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-}) {
+function InlineError({ message }: { message: string }) {
   return (
-    <div className="flex items-baseline gap-3">
-      <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-fg-faint">
-        {label}
-      </span>
-      <span
-        className={`min-w-0 flex-1 select-all break-all text-sm text-fg ${mono ? "font-mono" : ""}`}
-      >
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function DialogField({
-  label,
-  required,
-  children,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium text-fg-muted">
-        {label}
-        {required && <span className="ml-0.5 text-danger">*</span>}
-      </span>
-      {children}
-    </label>
+    <p className="flex items-start gap-1.5 break-words text-sm text-fg">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+      <span>{message}</span>
+    </p>
   )
 }
 
@@ -888,16 +825,12 @@ function DialogField({
 
 function ConfirmRemoveDialog({
   targetLabel,
-  description,
-  confirmLabel,
   pending,
   error,
   onCancel,
   onConfirm,
 }: {
   targetLabel: string
-  description: string
-  confirmLabel?: string
   pending: boolean
   error?: ApiError
   onCancel: () => void
@@ -905,298 +838,32 @@ function ConfirmRemoveDialog({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <Dialog open onOpenChange={(next) => { if (!next && !pending) onCancel() }}>
-      <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-        <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5">
-          <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
-            <ShieldAlert className="h-4 w-4" />
-          </div>
-          <div className="space-y-1.5">
-            <DialogTitle className="text-sm">
-              {t("members.remove.title", { name: targetLabel })}
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {description}
-            </DialogDescription>
-            {error && (
-              <p className="text-sm text-danger-emphasis">{error.message}</p>
-            )}
-          </div>
-        </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-            disabled={pending}
-          >
-            {t("members.remove.cancel")}
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={onConfirm}
-            disabled={pending}
-          >
-            {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {confirmLabel ?? t("members.remove.confirm")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Error banner (mutation-level errors above the table)               */
-/* ------------------------------------------------------------------ */
-
-function ErrorBanner({ message }: { message: string }) {
-  const { t } = useTranslation("admin")
-  return (
-    <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
-      <p className="text-sm font-medium text-danger-emphasis">
-        {t("members.mutation.errorTitle")}
-      </p>
-      <p className="text-xs text-danger-emphasis">{message}</p>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Mock banner                                                        */
-/* ------------------------------------------------------------------ */
-
-function MockBanner({
-  hint,
-}: {
-  hint: string
-}) {
-  const { t } = useTranslation("admin")
-  return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-warning-border bg-warning-subtle/40 p-3">
-      <WifiOff
-        className="mt-0.5 h-4 w-4 shrink-0 text-warning"
-        strokeWidth={2}
-      />
-      <div className="space-y-0.5">
-        <p className="text-sm font-medium text-warning-emphasis">
-          {t("members.mockBanner.title", {
-            scope: t("members.tabs.workspace"),
-          })}
-        </p>
-        <p className="text-sm leading-relaxed text-warning-emphasis">{hint}</p>
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Pending join requests tab                                          */
-/*                                                                     */
-/*  Approval UI for user-initiated "join workspace" requests. The server       */
-/*  does not treat workspace_join_requests as a separate table — they are      */
-/*  just rows in workspace_members with status='pending' (see server SQL       */
-/*  notes). The frontend splits them into their own tab, distinct from the     */
-/*  active-members list, to keep the admin surface simple.                     */
-/* ------------------------------------------------------------------ */
-
-function PendingBadge({ wsId }: { wsId: string | null }) {
-  // Fetch via query, use length as the badge count. The tab is always mounted
-  // on the parent so this query stays alive; a 60s staleTime keeps the
-  // network cost in check.
-  const q = usePendingJoinRequests(wsId)
-  const count = q.data?.requests.length ?? 0
-  if (count === 0) return null
-  return (
-    <span className="ml-1 rounded-full bg-warning-subtle px-1.5 py-0 text-xs font-medium text-warning">
-      {count}
-    </span>
-  )
-}
-
-function PendingJoinRequestsTab({ wsId }: { wsId: string | null }) {
-  const { t } = useTranslation("admin")
-  const { t: tc } = useTranslation("common")
-  const q = usePendingJoinRequests(wsId)
-  const approveMut = useApproveJoinRequest()
-  const rejectMut = useRejectJoinRequest()
-  const [confirmReject, setConfirmReject] =
-    useState<PendingJoinRequest | null>(null)
-
-  if (!wsId) {
-    return (
-      <EmptyState
-        icon={Inbox}
-        title={t("members.add.requiresWorkspace")}
-      />
-    )
-  }
-  if (q.isLoading) {
-    return <Skeleton className="h-24 w-full" />
-  }
-  const requests = q.data?.requests ?? []
-  if (requests.length === 0) {
-    return (
-      <EmptyState
-        icon={Inbox}
-        title={t("members.pendingRequests.empty")}
-      />
-    )
-  }
-
-  return (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t("members.table.user")}</TableHead>
-            <TableHead>{t("members.pendingRequests.reason")}</TableHead>
-            <TableHead>{t("members.pendingRequests.requestedAt")}</TableHead>
-            <TableHead className="w-[160px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {requests.map((req) => (
-            <PendingRequestRow
-              key={req.id}
-              wsId={wsId}
-              req={req}
-              approving={approveMut.isPending}
-              rejecting={rejectMut.isPending}
-              onApprove={() =>
-                approveMut.mutate({ wsId, requestId: req.id, request: req })
-              }
-              onReject={() => setConfirmReject(req)}
-            />
-          ))}
-        </TableBody>
-      </Table>
-
-      {/*
-        Reject confirmation. Not using ConfirmArchiveDialog (that uses the
-        destructive red styling; rejecting isn't destructive — the applicant
-        can re-apply later). A lightweight Dialog with a simple confirm flow
-        is enough.
-      */}
-      <Dialog
-        open={confirmReject !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirmReject(null)
-            rejectMut.reset()
-          }
-        }}
-      >
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>
-              {t("members.pendingRequests.confirmRejectTitle")}
-            </DialogTitle>
-            <DialogDescription>
-              {t("members.pendingRequests.confirmRejectBody", {
-                name: confirmReject?.user_name || confirmReject?.user_email || "",
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
+    <AlertDialog open onOpenChange={(next) => { if (!next && !pending) onCancel() }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("members.remove.title", { name: targetLabel })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("members.remove.description")}</AlertDialogDescription>
+          {error && <InlineError message={error.message} />}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel asChild>
+            <Button variant="outline" disabled={pending}>{t("members.remove.cancel")}</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmReject(null)}
-              disabled={rejectMut.isPending}
-            >
-              {tc("actions.cancel")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                if (!confirmReject) return
-                rejectMut.mutate(
-                  {
-                    wsId,
-                    requestId: confirmReject.id,
-                    request: confirmReject,
-                  },
-                  {
-                    onSuccess: () => setConfirmReject(null),
-                  }
-                )
+              variant="destructive"
+              disabled={pending}
+              onClick={(event) => {
+                event.preventDefault()
+                onConfirm()
               }}
-              disabled={rejectMut.isPending}
             >
-              {rejectMut.isPending
-                ? tc("states.loading")
-                : t("members.pendingRequests.actions.reject")}
+              {pending && <Loader2 className="animate-spin" />}
+              {t("members.remove.confirm")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
-function PendingRequestRow({
-  req,
-  approving,
-  rejecting,
-  onApprove,
-  onReject,
-}: {
-  wsId: string
-  req: PendingJoinRequest
-  approving: boolean
-  rejecting: boolean
-  onApprove: () => void
-  onReject: () => void
-}) {
-  const { t } = useTranslation("admin")
-  const fmtAgo = useRelativeTime()
-  return (
-    <TableRow>
-      <TableCell>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-fg">
-            {req.user_name || req.user_email}
-          </span>
-          <span className="text-xs text-fg-subtle">{req.user_email}</span>
-        </div>
-      </TableCell>
-      <TableCell className="text-sm text-fg-muted">
-        {req.request_reason || (
-          <span className="text-fg-faint">
-            {t("members.pendingRequests.noReason")}
-          </span>
-        )}
-      </TableCell>
-      <TableCell className="text-sm text-fg-subtle">
-        {fmtAgo(req.requested_at)}
-      </TableCell>
-      <TableCell className="text-right">
-        <div className="flex justify-end gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={approving || rejecting}
-            onClick={onReject}
-          >
-            <X className="h-3.5 w-3.5" />
-            {t("members.pendingRequests.actions.reject")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={approving || rejecting}
-            onClick={onApprove}
-          >
-            <Check className="h-3.5 w-3.5" />
-            {t("members.pendingRequests.actions.approve")}
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

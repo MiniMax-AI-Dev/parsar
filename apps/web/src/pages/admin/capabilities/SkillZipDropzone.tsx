@@ -8,6 +8,8 @@ import { useDropzone, type FileRejection } from "react-dropzone"
 import { FileArchive, Loader2, Upload, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/button"
+import { cn } from "../../../lib/utils"
+import { InlineNotice } from "./notices"
 
 const ACCEPTED_MIME = {
   "application/zip": [".zip"],
@@ -18,7 +20,7 @@ const MAX_BYTES = 8 * 1024 * 1024 // mirror planned server-side cap for skill zi
 
 interface Props {
   file: File | null
-  /** Truthy = busy spinner inside the file card. */
+  /** Truthy = busy spinner inside the file row. */
   busy?: boolean
   /** Text under the spinner (e.g. "Uploading", "Parsing"). */
   busyLabel?: string
@@ -62,74 +64,50 @@ export function SkillZipDropzone({
       <div className="grid gap-2">
         <div
           {...getRootProps()}
-          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-8 text-center transition-colors ${
-            isDragActive
-              ? "border-line-strong bg-surface-muted"
-              : "border-line-strong bg-surface-subtle hover:border-line-strong"
-          }`}
+          className={cn(
+            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-line-strong px-4 py-8 text-center transition-colors duration-150 ease-settle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+            isDragActive ? "app-pressed" : "bg-surface hover:app-hover",
+          )}
         >
           <input {...getInputProps()} />
-          <Upload className="h-5 w-5 text-fg-subtle" />
-          <span className="text-sm text-fg-muted">
+          <Upload className="h-4 w-4 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+          <span className="text-sm text-fg">
             {isDragActive
               ? t("capabilities.import.skill.dropActive", "Release to import the .zip")
               : t("capabilities.import.skill.dropHint", "Drag or click to upload a Skill .zip")}
           </span>
-          <span className="text-xs text-fg-subtle">
+          <span className="text-xs text-fg-muted">
             {t("capabilities.import.skill.sizeHint", "Up to 8 MiB")}
           </span>
         </div>
-        {localError && (
-          <div
-            role="alert"
-            className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
-          >
-            {localError}
-          </div>
-        )}
+        {localError && <InlineNotice tone="error">{localError}</InlineNotice>}
       </div>
     )
   }
 
   return (
     <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <FileArchive className="h-4 w-4 shrink-0 text-fg-subtle" />
-          <div className="min-w-0">
-            <p className="truncate text-sm text-fg">{file.name}</p>
-            <p className="text-xs text-fg-subtle">
-              {formatBytes(file.size)}
-              {busy && (
-                <>
-                  {" · "}
-                  <span className="inline-flex items-center gap-1 text-fg-muted">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    {busyLabel ?? t("capabilities.import.skill.uploading", "Uploading…")}
-                  </span>
-                </>
-              )}
-            </p>
-          </div>
-        </div>
+      <div className="flex h-9 items-center gap-2 border-b border-line text-sm">
+        <FileArchive className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-fg">{file.name}</span>
+        <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">{formatBytes(file.size)}</span>
+        {busy && (
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
+            <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+            {busyLabel ?? t("capabilities.import.skill.uploading", "Uploading…")}
+          </span>
+        )}
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={onClear}
           disabled={busy}
           aria-label={t("capabilities.actions.cancel", "Cancel")}
         >
-          <X className="h-4 w-4" />
+          <X strokeWidth={1.5} />
         </Button>
       </div>
-      {localError && (
-        <div
-          role="alert"
-          className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
-        >
-          {localError}
-        </div>
-      )}
+      {localError && <InlineNotice tone="error">{localError}</InlineNotice>}
     </div>
   )
 }
