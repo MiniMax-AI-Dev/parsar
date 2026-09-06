@@ -8,14 +8,16 @@ import { Button } from "./button"
 import { ResizeHandle } from "./resize-handle"
 import { LayoutPrompt } from "../layout/LayoutPrompt"
 import { useResizableWidth } from "../../lib/layout-width"
+import { useDetailExpanded } from "../../lib/admin-router"
 
 /**
  * The right-hand detail rail: 384px by default, draggable 320–640, panel tone,
- * one hairline on the left. Header (48px) · scrolling body · footer.
+ * one hairline on the left. Header (64px) · scrolling body · footer.
  * Its width animates from and back to zero, so the main column widens and
  * narrows with it instead of jumping once the rail is gone. The expand button in
- * the header lifts the same content into a centred 70% modal with a
- * fly-in from the rail's side; the modal's only control is collapse.
+ * the header lifts the same content into a centred 70% panel; that expanded
+ * state lives in the URL (`&view=full`), so it can be linked and dismissed with
+ * the browser's back button rather than trapping the reader over the list.
  */
 export function DetailRail({
   header,
@@ -43,7 +45,7 @@ export function DetailRail({
   className?: string
 } & Omit<React.HTMLAttributes<HTMLElement>, "title">) {
   const { t } = useTranslation("common")
-  const [expanded, setExpanded] = React.useState(false)
+  const { expanded, setExpanded } = useDetailExpanded()
   const rail = useResizableWidth({ storageKey: "rail", defaultWidth: 384, min: 320, max: 640, edge: "left" })
   const expandLabel = t("actions.expand")
   const collapseLabel = t("actions.collapse")
@@ -97,8 +99,11 @@ export function DetailRail({
     return () => cancelAnimationFrame(id)
   }, [])
   const collapsed = !open || !revealed
-  // A rail on its way out cannot stay expanded into its modal.
-  if (!open && expanded) setExpanded(false)
+  // A rail on its way out cannot stay expanded: drop the URL state in place,
+  // so closing never leaves a `view=full` step to back through.
+  React.useEffect(() => {
+    if (!open && expanded) setExpanded(false, true)
+  }, [open, expanded, setExpanded])
   // Dragging must stay pixel-exact, so the width transition is off while
   // the handle is held; restoring keeps its own longer spring.
   const widthMotion = rail.dragging
@@ -133,7 +138,7 @@ export function DetailRail({
         <LayoutPrompt open={rail.dirty} onSave={rail.save} onTemporary={rail.keepTemporary} onRestore={rail.restore} />
       </div>
 
-      <DialogPrimitive.Root open={expanded} onOpenChange={setModalOpen}>
+      <DialogPrimitive.Root open={expanded && open} onOpenChange={setModalOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-surface-inverse/30 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
           <DialogPrimitive.Content
@@ -146,6 +151,21 @@ export function DetailRail({
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
     </>
+  )
+}
+
+/**
+ * A ledger and its rail, side by side. The list column flexes and scrolls on
+ * its own; the rail sits at the page's right edge and animates its own width,
+ * so both columns move together. Every list-with-detail page uses this — the
+ * shell is not something a page re-invents.
+ */
+export function RailLayout({ children, rail }: { children: ReactNode; rail?: ReactNode }) {
+  return (
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      {rail}
+    </div>
   )
 }
 

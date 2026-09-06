@@ -7,6 +7,7 @@ import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import { EmptyState } from "../../../../components/ui/empty-state"
 import { ErrorState } from "../../../../components/ui/error-state"
+import { RailLayout } from "../../../../components/ui/detail-rail"
 import { Ledger, LedgerHeader, LedgerRow, col } from "../../../../components/ui/ledger"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import {
@@ -58,8 +59,12 @@ export function MCPDirectory({
     () => filterMCPDirectoryItems(items, { query, ...filters }),
     [items, query, filters],
   )
-  const selectedSummary = items.find((item) => item.id === itemID) ?? null
-  const selected = detailQ.data?.id === itemID ? detailQ.data : selectedSummary
+  // Hold the id through the rail's exit so closing animates instead of
+  // vanishing — the same pattern every ledger uses.
+  const [railID, setRailID] = useState<string | null>(itemID)
+  if (itemID && itemID !== railID) setRailID(itemID)
+  const railSummary = items.find((item) => item.id === railID) ?? null
+  const railItem = detailQ.data?.id === railID ? detailQ.data : railSummary
   const confirmItem = detailQ.data?.id === confirmID ? detailQ.data : items.find((item) => item.id === confirmID) ?? null
 
   useEffect(() => {
@@ -139,28 +144,24 @@ export function MCPDirectory({
     </>
   )
 
-  if (itemID) {
-    return (
-      <>
-        <DirectoryDetail
-          item={selected}
-          loading={detailQ.isLoading}
-          error={detailQ.error}
-          canImport={canImport}
-          notices={notices}
-          onBack={() => onSelectItem(null)}
-          onRetry={() => void detailQ.refetch()}
-          onImport={() => requestImport(itemID)}
-          onConnect={() => connectOAuth(itemID)}
-          onViewCapability={onViewCapability}
-        />
-        {importDialog}
-      </>
-    )
-  }
+  const rail = railID ? (
+    <DirectoryDetail
+      item={railItem}
+      loading={detailQ.isLoading}
+      error={detailQ.error}
+      canImport={canImport}
+      open={!!itemID}
+      onClosed={() => setRailID(null)}
+      onClose={() => onSelectItem(null)}
+      onRetry={() => void detailQ.refetch()}
+      onImport={() => requestImport(railID)}
+      onConnect={() => connectOAuth(railID)}
+      onViewCapability={onViewCapability}
+    />
+  ) : null
 
   return (
-    <>
+    <RailLayout rail={rail}>
       {notices}
       {directoryQ.error ? (
         <div className="px-4 pt-4">
@@ -196,7 +197,8 @@ export function MCPDirectory({
                 key={item.id}
                 item={item}
                 canImport={canImport}
-                onOpen={() => onSelectItem(item.id)}
+                selected={item.id === itemID}
+                onOpen={() => onSelectItem(item.id === itemID ? null : item.id)}
                 onImport={() => requestImport(item.id)}
                 onConnect={() => connectOAuth(item.id)}
                 onViewCapability={onViewCapability}
@@ -206,13 +208,14 @@ export function MCPDirectory({
         </Ledger>
       )}
       {importDialog}
-    </>
+    </RailLayout>
   )
 }
 
-function DirectoryRow({ item, canImport, onOpen, onImport, onConnect, onViewCapability }: {
+function DirectoryRow({ item, canImport, selected, onOpen, onImport, onConnect, onViewCapability }: {
   item: MCPDirectoryItem
   canImport: boolean
+  selected: boolean
   onOpen: () => void
   onImport: () => void
   onConnect: () => void
@@ -232,7 +235,7 @@ function DirectoryRow({ item, canImport, onOpen, onImport, onConnect, onViewCapa
       : t("capabilities.mcpDirectory.oauth.required")
     : t("capabilities.mcpDirectory.detail.noAuthentication")
   return (
-    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown} data-testid="mcp-directory-row" data-catalog-id={item.id}>
+    <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown} data-testid="mcp-directory-row" data-catalog-id={item.id}>
       <span className="flex min-w-0 items-center gap-2">
         <ConnectorIcon item={item} />
         <span className="shrink-0 truncate font-medium">{item.name}</span>

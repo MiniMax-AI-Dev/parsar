@@ -20,7 +20,6 @@ import {
 
 import { AdminLayout } from "../../../components/layout/AdminLayout"
 import { PageHeader } from "../../../components/layout/PageHeader"
-import { DetailHeading } from "../../../components/ui/section"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
@@ -32,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog"
-import { RailSection } from "../../../components/ui/detail-rail"
+import { DetailRail, RailLayout, RailSection } from "../../../components/ui/detail-rail"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Field } from "../../../components/ui/label"
@@ -79,8 +78,8 @@ import { useWorkspaceId } from "../../../lib/workspace"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
 import { CapabilityTypeBadge } from "./CapabilityTypeBadge"
-import { BackLink, InlineNotice } from "./notices"
-import { MarketplaceCapabilityDetail } from "./MarketplaceCapabilityDetail"
+import { InlineNotice } from "./notices"
+import { MarketplaceCapabilityRail } from "./MarketplaceCapabilityRail"
 import { MarketplaceTab } from "./MarketplaceTab"
 import { DeprecateCapabilityDialog } from "./DeprecateCapabilityDialog"
 import { DeleteCapabilityDialog } from "./DeleteCapabilityDialog"
@@ -114,7 +113,7 @@ const TYPE_FILTERS: { value: CapabilityTypeFilter; label: string }[] = [
 ]
 
 /** name (+type, +description) · version · source · enabled agents · credentials · updated · actions */
-const LEDGER_COLUMNS = [col.title(), col.id(96, 0.4), col.meta(132), col.num(96), col.meta(150), col.age(80), col.actions(2)]
+const LEDGER_COLUMNS = [col.title(), col.id(96, 0.4), col.meta(104), col.num(96), col.meta(120), col.age(80), col.actions(2)]
 
 export function CapabilitiesPage() {
   const { t, i18n } = useTranslation("admin")
@@ -165,7 +164,8 @@ export function CapabilitiesPage() {
     })),
   })
 
-  const routeTab = useAdminView().tab
+  const { tab: routeTab, entityId } = useAdminView()
+  const fromMarketplace = useUrlParam("from") === "marketplace"
   const itemParam = useUrlParam("item")
   // Tab is URL-driven; default lands on the workspace list. A selected
   // marketplace / directory item also lives in the URL (`item`).
@@ -264,7 +264,27 @@ export function CapabilitiesPage() {
 
   const pageTitle = t("capabilities.page.title")
   const openCapability = (cap: Capability, fromMarketplace: boolean) =>
-    navigate("capabilities", { id: cap.id, from: fromMarketplace ? "marketplace" : null })
+    navigate("capabilities", {
+      id: cap.id === entityId ? null : cap.id,
+      from: cap.id === entityId ? null : fromMarketplace ? "marketplace" : null,
+    })
+  // Hold the id through the rail's exit so closing animates instead of
+  // vanishing — the same pattern every ledger uses.
+  const [railID, setRailID] = useState<string | null>(entityId)
+  const [railFromMarket, setRailFromMarket] = useState(fromMarketplace)
+  if (entityId && entityId !== railID) {
+    setRailID(entityId)
+    setRailFromMarket(fromMarketplace)
+  }
+  const RailForCapability = railFromMarket ? MarketplaceCapabilityRail : CapabilityRail
+  const workspaceRail = railID ? (
+    <RailForCapability
+      id={railID}
+      open={!!entityId}
+      onClose={() => navigate("capabilities")}
+      onClosed={() => setRailID(null)}
+    />
+  ) : null
 
   const own = ownCapabilities
   const installs = pageInstalls
@@ -286,6 +306,7 @@ export function CapabilitiesPage() {
         enabledCount={enabledCount}
         credentials={requiredCredentialsLabel(cap.required_credentials, i18n.language, t("capabilities.credentials.none"))}
         age={fmtAgo(cap.updated_at ?? cap.created_at)}
+        selected={cap.id === entityId}
         onOpen={() => openCapability(cap, fromMarketplace)}
         actions={
           <CapabilityRowActions
@@ -392,74 +413,72 @@ export function CapabilitiesPage() {
   return (
     <AdminLayout activeMenu="capabilities" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
-        {selectedItem ? (
-          marketplaceTab
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="capabilities.page.title"
+          action={
+            <>
+              <div className="relative w-72">
+                <Search
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  className="pl-7"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t("capabilities.filters.search")}
+                  aria-label={t("capabilities.filters.search")}
+                />
+              </div>
+              {pageTab !== "skills" && (
+                <CapabilitiesFilterMenu
+                  tab={pageTab}
+                  typeFilter={pageTab === "workspace" ? typeFilter : marketplaceTypeFilter}
+                  onTypeFilterChange={setTypeFilter}
+                  hideInstalled={hideInstalled}
+                  onHideInstalledChange={setHideInstalled}
+                  directory={directoryFilters}
+                  onDirectoryChange={setDirectoryFilters}
+                  categories={directoryCategories}
+                />
+              )}
+              {pageTab === "workspace" && (
+                <Button
+                  onClick={() => setImportOpen(true)}
+                  disabled={!isAdmin}
+                  title={isAdmin ? undefined : t("capabilities.permission.adminOnly")}
+                >
+                  <Plus strokeWidth={1.5} aria-hidden="true" />
+                  {t("capabilities.actions.create")}
+                </Button>
+              )}
+            </>
+          }
+        />
+
+        <div className="flex h-10 shrink-0 items-center border-b border-line px-4">
+          <Tabs value={pageTab} onValueChange={(value) => setPageTab(value as PageTab)}>
+            <TabsList>
+              {PAGE_TABS.map((tab) => (
+                <TabsTrigger key={tab} value={tab}>
+                  {tab === "connectors" ? t("capabilities.mcpDirectory.title") : t(`capabilities.tabs.${tab}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {toast && <InlineNotice tone="success" className="border-b border-line px-4 py-2">{toast}</InlineNotice>}
+        {marketClientError && <InlineNotice tone="error" className="border-b border-line px-4 py-2">{marketClientError}</InlineNotice>}
+
+        {pageTab === "workspace" ? (
+          <RailLayout rail={workspaceRail}>{workspaceBody}</RailLayout>
         ) : (
-          <>
-            <PageHeader
-              className="static mx-0 mb-0"
-              title={pageTitle}
-              subtitleFor="capabilities.page.title"
-              action={
-                <>
-                  <div className="relative w-72">
-                    <Search
-                      className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                    />
-                    <Input
-                      type="search"
-                      className="pl-7"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder={t("capabilities.filters.search")}
-                      aria-label={t("capabilities.filters.search")}
-                    />
-                  </div>
-                  {pageTab !== "skills" && (
-                    <CapabilitiesFilterMenu
-                      tab={pageTab}
-                      typeFilter={pageTab === "workspace" ? typeFilter : marketplaceTypeFilter}
-                      onTypeFilterChange={setTypeFilter}
-                      hideInstalled={hideInstalled}
-                      onHideInstalledChange={setHideInstalled}
-                      directory={directoryFilters}
-                      onDirectoryChange={setDirectoryFilters}
-                      categories={directoryCategories}
-                    />
-                  )}
-                  {pageTab === "workspace" && (
-                    <Button
-                      onClick={() => setImportOpen(true)}
-                      disabled={!isAdmin}
-                      title={isAdmin ? undefined : t("capabilities.permission.adminOnly")}
-                    >
-                      <Plus strokeWidth={1.5} aria-hidden="true" />
-                      {t("capabilities.actions.create")}
-                    </Button>
-                  )}
-                </>
-              }
-            />
-
-            <div className="flex h-10 shrink-0 items-center border-b border-line px-4">
-              <Tabs value={pageTab} onValueChange={(value) => setPageTab(value as PageTab)}>
-                <TabsList>
-                  {PAGE_TABS.map((tab) => (
-                    <TabsTrigger key={tab} value={tab}>
-                      {tab === "connectors" ? t("capabilities.mcpDirectory.title") : t(`capabilities.tabs.${tab}`)}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            </div>
-
-            {toast && <InlineNotice tone="success" className="border-b border-line px-4 py-2">{toast}</InlineNotice>}
-            {marketClientError && <InlineNotice tone="error" className="border-b border-line px-4 py-2">{marketClientError}</InlineNotice>}
-
-            {pageTab === "workspace" ? workspaceBody : marketplaceTab}
-          </>
+          marketplaceTab
         )}
       </div>
 
@@ -564,6 +583,7 @@ function CapabilityRow({
   enabledCount,
   credentials,
   age,
+  selected,
   onOpen,
   actions,
 }: {
@@ -574,6 +594,7 @@ function CapabilityRow({
   enabledCount: number
   credentials: string
   age: string
+  selected: boolean
   onOpen: () => void
   actions: ReactNode
 }) {
@@ -585,7 +606,7 @@ function CapabilityRow({
     }
   }
   return (
-    <LedgerRow onClick={onOpen} onKeyDown={onKeyDown}>
+    <LedgerRow selected={selected} onClick={onOpen} onKeyDown={onKeyDown}>
       <span className="flex min-w-0 items-center gap-2">
         <span className="shrink-0 truncate font-medium">{capability.name}</span>
         <CapabilityTypeBadge type={capability.type} />
@@ -891,7 +912,17 @@ const VERSION_COLUMNS = [col.id(160, 0.7), col.id(160, 2), col.num(96)]
 /** agent · version · open */
 const AGENT_COLUMNS = [col.title(), col.id(120), col.icon()]
 
-export function CapabilityDetailPage({ id }: { id: string }) {
+/**
+ * A workspace capability, read in the rail beside the list. Identity in the
+ * header, the admin verbs in the footer; versions and the agents using it are
+ * nested ledgers, which is why this one earns the expand button.
+ */
+export function CapabilityRail({ id, open, onClose, onClosed }: {
+  id: string
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+}) {
   const { t, i18n } = useTranslation("admin")
   const wid = useWorkspaceId()
   const capQ = useCapabilityQuery(wid, id)
@@ -910,6 +941,19 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [viewVersion, setViewVersion] = useState<CapabilityVersion | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  // Switching to another capability swaps the rail's content rather than
+  // replaying its entrance, so the per-capability state is reset here instead
+  // of by a remount.
+  const [shownID, setShownID] = useState(id)
+  if (id !== shownID) {
+    setShownID(id)
+    setEditOpen(false)
+    setAddVersionOpen(false)
+    setMarketAction(null)
+    setMarketClientError(null)
+    setViewVersion(null)
+    setToast(null)
+  }
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const capability = capQ.data ?? null
@@ -918,38 +962,30 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const installationSummary = useCapabilityEnabledAgents(wid, agentsQ.data?.agents ?? [], capability, versions)
   const enabledCount = installationSummary.installations.length
 
-  const fromMarketplace = new URLSearchParams(window.location.search).get("from") === "marketplace"
-  const backLabel = t("capabilities.detail.backToList")
+  const closeLabel = t("capabilities.detail.backToList")
 
-  if (fromMarketplace) {
+  if (capQ.isLoading || capQ.error || !capability) {
     return (
-      <AdminLayout activeMenu="capabilities" fullBleed>
-        <MarketplaceCapabilityDetail id={id} />
-      </AdminLayout>
-    )
-  }
-
-  if (capQ.isLoading) {
-    return (
-      <AdminLayout activeMenu="capabilities">
-        <PageHeader backLink={<BackLink label={backLabel} onClick={() => navigateAdmin("capabilities")} />} title={<Skeleton className="h-4 w-40" />} />
-        <div className="space-y-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-3 w-full max-w-lg" />)}
-        </div>
-      </AdminLayout>
-    )
-  }
-
-  if (capQ.error || !capability) {
-    return (
-      <AdminLayout activeMenu="capabilities">
-        <PageHeader backLink={<BackLink label={backLabel} onClick={() => navigateAdmin("capabilities")} />} title={t("capabilities.detail.notFound.title")} />
-        <EmptyState
-          icon={Wrench}
-          title={t("capabilities.detail.notFound.title")}
-          description={capQ.error instanceof Error ? capQ.error.message : t("capabilities.detail.notFound.description")}
-        />
-      </AdminLayout>
+      <DetailRail
+        open={open}
+        onClose={onClose}
+        onClosed={onClosed}
+        closeLabel={closeLabel}
+        aria-label={t("capabilities.page.title")}
+        header={<Skeleton className="h-3 w-40" />}
+      >
+        {capQ.isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Wrench}
+            title={t("capabilities.detail.notFound.title")}
+            description={capQ.error instanceof Error ? capQ.error.message : t("capabilities.detail.notFound.description")}
+          />
+        )}
+      </DetailRail>
     )
   }
 
@@ -990,41 +1026,40 @@ export function CapabilityDetailPage({ id }: { id: string }) {
   const deprecated = !!capability.deprecated_at
 
   return (
-    <AdminLayout activeMenu="capabilities">
-      <PageHeader
-        backLink={<BackLink label={backLabel} onClick={() => navigateAdmin("capabilities")} />}
-        action={
+    <DetailRail
+      open={open}
+      onClose={onClose}
+      onClosed={onClosed}
+      closeLabel={closeLabel}
+      aria-label={capability.name}
+      header={
+        <>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{capability.name}</span>
+          <CapabilityTypeBadge type={capability.type} />
+          <Badge variant="neutral" dot>
+            {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
+          </Badge>
+        </>
+      }
+      footer={
+        isAdmin ? (
           <>
-            {isAdmin && <Button variant="outline" onClick={() => setEditOpen(true)}>{t("capabilities.actions.edit")}</Button>}
-            {isAdmin && (
-              <Button onClick={() => setAddVersionOpen(true)}>
-                <Plus strokeWidth={1.5} aria-hidden="true" />
-                {t("capabilities.actions.addVersion")}
-              </Button>
-            )}
+            <Button variant="outline" onClick={() => setEditOpen(true)}>{t("capabilities.actions.edit")}</Button>
+            <Button onClick={() => setAddVersionOpen(true)}>
+              <Plus strokeWidth={1.5} aria-hidden="true" />
+              {t("capabilities.actions.addVersion")}
+            </Button>
           </>
-        }
-      />
-
-      <DetailHeading
-        title={capability.name}
-        badges={
-          <>
-            <CapabilityTypeBadge type={capability.type} />
-            <Badge variant="neutral" dot>
-              {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
-            </Badge>
-          </>
-        }
-      />
-
+        ) : undefined
+      }
+    >
       {toast && <InlineNotice tone="success" className="mb-4">{toast}</InlineNotice>}
       {marketClientError && <InlineNotice tone="error" className="mb-4">{marketClientError}</InlineNotice>}
 
-      {capability.description && <p className="mb-4 max-w-3xl text-sm text-fg">{capability.description}</p>}
+      {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
 
       <RailSection title={t("capabilities.detail.basic.title")}>
-        <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+        <PropertyList>
           <Property label={t("capabilities.table.type")}><CapabilityTypeBadge type={capability.type} /></Property>
           <Property label={t("capabilities.table.credentials")}>
             {requiredCredentialsLabel(capability.required_credentials, i18n.language, t("capabilities.credentials.none"))}
@@ -1040,7 +1075,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         ) : versions.length === 0 ? (
           <EmptyState icon={PackageCheck} title={t("capabilities.versions.empty.title")} description={t("capabilities.versions.empty.description")} className="py-8" />
         ) : (
-          <Ledger columns={VERSION_COLUMNS} className="-mx-6" role="listbox" aria-label={t("capabilities.versions.title")}>
+          <Ledger columns={VERSION_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.versions.title")}>
             <LedgerHeader className="static">
               <span>{t("capabilities.versions.table.version")}</span>
               <span>{t("capabilities.versions.table.createdAt")}</span>
@@ -1067,7 +1102,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         ) : enabledCount === 0 ? (
           <p className="pt-1 text-sm text-fg-muted">{t("capabilities.detail.enabledAgents.empty")}</p>
         ) : (
-          <Ledger columns={AGENT_COLUMNS} className="-mx-6" role="listbox" aria-label={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
+          <Ledger columns={AGENT_COLUMNS} className="-mx-4" role="listbox" aria-label={t("capabilities.detail.enabledAgents.title", { count: enabledCount })}>
             <ul className="m-0 list-none p-0">
               {installationSummary.installations.map((item) => (
                 <AgentInstallRow
@@ -1085,7 +1120,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
 
       {isAdmin && (
         <RailSection title={t("capabilities.marketStatus.title")} className="mt-6">
-          <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
+          <PropertyList>
             <Property label={t("capabilities.marketStatus.title")}>
               <Badge variant="neutral" dot>
                 {published ? t("capabilities.marketStatus.published") : t("capabilities.marketStatus.unpublished")}
@@ -1155,7 +1190,7 @@ export function CapabilityDetailPage({ id }: { id: string }) {
         onConfirm={submitMarketAction}
       />
       <ViewVersionContentDialog version={viewVersion} capability={capability} onOpenChange={(open) => !open && setViewVersion(null)} />
-    </AdminLayout>
+    </DetailRail>
   )
 }
 

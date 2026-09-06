@@ -564,7 +564,17 @@
       },
       {
         "name": "The Two Levels of Arrival Rule",
-        "body": "Opening a level-one view (anything reached from the sidebar) rises in with `page-in`. Opening a level-two view (a detail page carrying an entity id on a non-rail view) is pushed in from the right with `detail-in`. Views whose `?id=` selects a rail instead of a page (runs, approvals, conversations, connections) stay level one. Two arrivals, no third.",
+        "body": "Opening a level-one view (anything reached from the sidebar) rises in with `page-in`. Opening a level-two view (a detail page carrying an entity id on a non-rail view) is pushed in from the right with `detail-in`. Views whose `?id=` selects a rail instead of a page (runs, approvals, conversations, connections, capabilities) stay level one — a view listed in `RAIL_VIEWS` must never key its page transition on the entity id, or selecting a second row replays the entrance instead of swapping the rail's content. Two arrivals, no third.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Way In Rule",
+        "body": "Clicking a row in any ledger opens the detail rail — never a second page. Clicking the row that is already open closes it, and clicking a different row swaps the rail's content in place rather than replaying its entrance. There is exactly one escalation from there, the rail's expand button, and exactly one control that means “bigger” anywhere in the console. Two forms of detail would make the user predict which list navigates and which peeks; there is nothing to predict.",
+        "section": "layout"
+      },
+      {
+        "name": "The Addressable Detail Rule",
+        "body": "Every step of the ladder lives in the URL: `?id=` (or `&item=`) selects the rail, `&view=full` lifts it into the expanded panel. The expanded panel is therefore linkable, bookmarkable, and dismissed by the browser's back button — never a dead end floating over the list. Clearing the id clears `view` with it: an expanded panel with nothing selected is not a reachable state.",
         "section": "layout"
       },
       {

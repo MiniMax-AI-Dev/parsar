@@ -1,8 +1,8 @@
 [
   {
-    "view": "runs",
-    "rows": 2,
-    "rowsAfterClicks": 2,
+    "view": "conversations",
+    "rows": 4,
+    "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -18,6 +18,60 @@
     "bad": []
   },
   {
+    "view": "runs",
+    "rows": 2,
+    "rowsAfterClicks": 2,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "scheduled",
+    "rows": 0,
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [
+      "新建任务"
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "agents",
+    "rows": 2,
+    "rowsAfterClicks": 5,
+    "dialogsOpened": [
+      "新建 Agent"
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "capabilities",
+    "rows": 2,
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [
+      "新建能力"
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "models",
+    "rows": 1,
+    "rowsAfterClicks": 1,
+    "dialogsOpened": [
+      "导入模型",
+      "新建模型"
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
     "view": "connections",
     "rows": 4,
     "rowsAfterClicks": 4,
@@ -27,23 +81,82 @@
     "bad": []
   },
   {
-    "view": "conversations",
+    "view": "members",
     "rows": 3,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [],
+    "rowsAfterClicks": 3,
+    "dialogsOpened": [
+      "邀请新成员",
+      "取消邀请"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
   },
   {
-    "view": "agents",
+    "view": "settings",
     "rows": 2,
-    "rowsAfterClicks": 4,
-    "dialogsOpened": [
-      "新建 Agent"
-    ],
+    "rowsAfterClicks": 14,
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": []
+    "bad": [
+      "settings/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
+  },
+  {
+    "view": "secrets",
+    "rows": 0,
+    "rowsAfterClicks": 14,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": [
+      "secrets/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
+  },
+  {
+    "view": "runtime",
+    "rows": 0,
+    "rowsAfterClicks": 14,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": [
+      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes",
+      "runtime/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
+  },
+  {
+    "view": "connectors",
+    "rows": 2,
+    "rowsAfterClicks": 14,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": [
+      "connectors/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
+  },
+  {
+    "view": "usage",
+    "rows": 13,
+    "rowsAfterClicks": 14,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": [
+      "usage/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
+  },
+  {
+    "view": "audit",
+    "rows": 14,
+    "rowsAfterClicks": 2,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": [
+      "audit/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
   }
 ]

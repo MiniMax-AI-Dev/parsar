@@ -2,11 +2,10 @@ import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { ArrowUpRight, ChevronDown, ChevronRight, Download, File, FileText, Folder, FolderOpen, PackageCheck, Trash2 } from "lucide-react"
 
-import { PageHeader } from "../../../components/layout/PageHeader"
 import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
-import { RailSection } from "../../../components/ui/detail-rail"
+import { DetailRail, RailLayout, RailSection } from "../../../components/ui/detail-rail"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
@@ -25,7 +24,7 @@ import { useWorkspaceId } from "../../../lib/workspace"
 import { cn } from "../../../lib/utils"
 import { requiredCredentialsLabel } from "../capability-ui"
 import { CapabilityTypeBadge } from "./CapabilityTypeBadge"
-import { BackLink, ExternalLinkValue, safeExternalURL } from "./notices"
+import { ExternalLinkValue, safeExternalURL } from "./notices"
 import { MCPDirectory } from "./mcp-directory/MCPDirectory"
 import type { DirectoryFilterState } from "./mcp-directory/filters"
 import { SkillsDirectory } from "./SkillsDirectory"
@@ -78,7 +77,11 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
   const marketplaceQ = useMarketplaceList(workspaceID)
 
   const items = useMemo(() => marketplaceQ.data ?? [], [marketplaceQ.data])
-  const selected = items.find((item) => item.id === itemID) ?? null
+  // Hold the id through the rail's exit so closing animates instead of
+  // vanishing — the same pattern every ledger uses.
+  const [railID, setRailID] = useState<string | null>(itemID)
+  if (itemID && itemID !== railID) setRailID(itemID)
+  const railItem = items.find((item) => item.id === railID) ?? null
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return items.filter((item) => {
@@ -91,38 +94,23 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
     })
   }, [items, query, typeFilter, hideInstalled])
 
-  if (itemID) {
-    if (marketplaceQ.isLoading) {
-      return (
-        <>
-          <PageHeader className="static mx-0 mb-0" backLink={<BackLink label={t("capabilities.marketplace.detail.back")} onClick={() => onSelectItem(null)} />} title={<Skeleton className="h-4 w-40" />} />
-          <div className="space-y-3 px-6 pt-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-3 w-full max-w-lg" />)}</div>
-        </>
-      )
-    }
-    if (!selected) {
-      return (
-        <>
-          <PageHeader className="static mx-0 mb-0" backLink={<BackLink label={t("capabilities.marketplace.detail.back")} onClick={() => onSelectItem(null)} />} title={t("capabilities.marketplace.empty.title")} />
-          <EmptyState icon={PackageCheck} title={t("capabilities.marketplace.empty.title")} />
-        </>
-      )
-    }
-    return (
-      <MarketplaceItemDetail
-        capability={selected}
-        language={i18n.language}
-        canManage={canManage}
-        onBack={() => onSelectItem(null)}
-        onInstall={() => onInstall(selected)}
-        onDelete={() => onDelete(selected)}
-        onViewCapability={() => onViewCapability(selected.id)}
-      />
-    )
-  }
+  const rail = railID ? (
+    <MarketplaceItemDetail
+      capability={railItem}
+      language={i18n.language}
+      canManage={canManage}
+      open={!!itemID}
+      onClosed={() => setRailID(null)}
+      onClose={() => onSelectItem(null)}
+      onInstall={() => railItem && onInstall(railItem)}
+      onDelete={() => railItem && onDelete(railItem)}
+      onViewCapability={() => railItem && onViewCapability(railItem.id)}
+    />
+  ) : null
 
   if (marketplaceQ.isLoading) {
     return (
+      <RailLayout rail={rail}>
       <div className="px-4 pt-3">
         <div className="mb-3 h-7 border-b border-line" />
         {Array.from({ length: 5 }).map((_, index) => (
@@ -133,10 +121,12 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
           </div>
         ))}
       </div>
+      </RailLayout>
     )
   }
   if (marketplaceQ.error) {
     return (
+      <RailLayout rail={rail}>
       <div className="px-4 pt-4">
         <ErrorState
           title={t("capabilities.marketplace.loadError.title")}
@@ -144,20 +134,24 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
           onRetry={() => void marketplaceQ.refetch()}
         />
       </div>
+      </RailLayout>
     )
   }
   if (filtered.length === 0) {
     return (
-      <EmptyState
-        icon={PackageCheck}
-        title={t("capabilities.marketplace.empty.title")}
-        description={t("capabilities.marketplace.empty.description")}
-      />
+      <RailLayout rail={rail}>
+        <EmptyState
+          icon={PackageCheck}
+          title={t("capabilities.marketplace.empty.title")}
+          description={t("capabilities.marketplace.empty.description")}
+        />
+      </RailLayout>
     )
   }
 
   return (
-    <Ledger columns={MARKET_COLUMNS} role="listbox" aria-label={t("capabilities.tabs.marketplace")}>
+    <RailLayout rail={rail}>
+      <Ledger columns={MARKET_COLUMNS} role="listbox" aria-label={t("capabilities.tabs.marketplace")}>
       <LedgerHeader>
         <span>{t("capabilities.table.name")}</span>
         <span>{t("capabilities.marketplaceDetail.source.title")}</span>
@@ -173,14 +167,16 @@ function PublishedMarketplaceTab({ itemID, query, typeFilter, hideInstalled, can
             capability={item}
             language={i18n.language}
             canManage={canManage}
-            onOpen={() => onSelectItem(item.id)}
+            selected={item.id === itemID}
+            onOpen={() => onSelectItem(item.id === itemID ? null : item.id)}
             onInstall={() => onInstall(item)}
             onDelete={() => onDelete(item)}
             onViewCapability={() => onViewCapability(item.id)}
           />
         ))}
-      </ul>
-    </Ledger>
+        </ul>
+      </Ledger>
+    </RailLayout>
   )
 }
 
@@ -194,10 +190,11 @@ function rowKeyHandler(onOpen: () => void) {
   }
 }
 
-function MarketplaceRow({ capability, language, canManage, onOpen, onInstall, onDelete, onViewCapability }: {
+function MarketplaceRow({ capability, language, canManage, selected, onOpen, onInstall, onDelete, onViewCapability }: {
   capability: MarketplaceCapability
   language: string
   canManage: boolean
+  selected: boolean
   onOpen: () => void
   onInstall: () => void
   onDelete: () => void
@@ -208,7 +205,7 @@ function MarketplaceRow({ capability, language, canManage, onOpen, onInstall, on
   const count = capability.install_count ?? capability.installed_workspace_count ?? 0
   const agentCount = capability.installed_agent_count ?? capability.enabled_agent_count ?? capability.install_count ?? 0
   return (
-    <LedgerRow onClick={onOpen} onKeyDown={rowKeyHandler(onOpen)}>
+    <LedgerRow selected={selected} onClick={onOpen} onKeyDown={rowKeyHandler(onOpen)}>
       <span className="flex min-w-0 items-center gap-2">
         <span className="shrink-0 truncate font-medium">{capability.name}</span>
         <CapabilityTypeBadge type={capability.type} />
@@ -245,37 +242,52 @@ function MarketplaceRow({ capability, language, canManage, onOpen, onInstall, on
   )
 }
 
-function MarketplaceItemDetail({ capability, language, canManage, onBack, onInstall, onDelete, onViewCapability }: {
-  capability: MarketplaceCapability
+/**
+ * A marketplace listing read in the rail beside the list. Identity in the
+ * header, the one thing you can do with it in the footer; the content preview
+ * is why this one is worth expanding.
+ */
+function MarketplaceItemDetail({ capability, language, canManage, open, onClosed, onClose, onInstall, onDelete, onViewCapability }: {
+  capability: MarketplaceCapability | null
   language: string
   canManage: boolean
-  onBack: () => void
+  open: boolean
+  onClosed: () => void
+  onClose: () => void
   onInstall: () => void
   onDelete: () => void
   onViewCapability: () => void
 }) {
   const { t } = useTranslation("admin")
   const workspaceID = useWorkspaceId()
-  const source = marketplaceSourceName(capability)
-  const previewable = capability.type === "mcp" || capability.type === "skill"
-  const detailQ = useMarketplaceDetail(workspaceID, previewable ? capability.id : null)
+  const previewable = capability?.type === "mcp" || capability?.type === "skill"
+  const detailQ = useMarketplaceDetail(workspaceID, previewable && capability ? capability.id : null)
+  const source = capability ? marketplaceSourceName(capability) : ""
+
   return (
-    <>
-      <PageHeader
-        className="static mx-0 mb-0"
-        backLink={<BackLink label={t("capabilities.marketplace.detail.back")} onClick={onBack} />}
-        title={
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <span className="truncate">{capability.name}</span>
+    <DetailRail
+      open={open}
+      onClosed={onClosed}
+      onClose={onClose}
+      closeLabel={t("capabilities.marketplace.detail.back")}
+      aria-label={capability?.name ?? t("capabilities.tabs.marketplace")}
+      header={
+        capability ? (
+          <>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{capability.name}</span>
             <CapabilityTypeBadge type={capability.type} />
             {capability.self_published ? (
               <Badge variant="neutral" dot>{t("capabilities.marketplace.card.selfPublished")}</Badge>
             ) : capability.installed ? (
               <Badge variant="neutral" dot>{t("capabilities.marketplace.card.installedBadge")}</Badge>
             ) : null}
-          </span>
-        }
-        action={
+          </>
+        ) : (
+          <Skeleton className="h-3 w-40" />
+        )
+      }
+      footer={
+        capability ? (
           capability.self_published ? (
             <>
               {canManage && <Button variant="outline" onClick={onDelete}>{t("capabilities.rowActions.delete")}</Button>}
@@ -287,40 +299,47 @@ function MarketplaceItemDetail({ capability, language, canManage, onBack, onInst
           ) : (
             <Button onClick={onInstall}>{t("capabilities.marketplace.card.install")}</Button>
           )
-        }
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4">
-        {capability.description && <p className="mb-4 max-w-3xl text-sm text-fg">{capability.description}</p>}
-        <RailSection title={t("capabilities.detail.basic.title")}>
-          <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
-            <Property label={t("capabilities.marketplaceDetail.source.workspace")}>{source || t("capabilities.none")}</Property>
-            <Property label={t("capabilities.table.latestVersion")} mono>{capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")}</Property>
-            <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{capability.install_count ?? capability.installed_workspace_count ?? 0}</Property>
-            <Property label={t("capabilities.table.credentials")}>
-              {requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))}
-            </Property>
-          </PropertyList>
-        </RailSection>
-        {previewable && (
-          <RailSection title={t("capabilities.marketplace.detail.contentTitle")} className="mt-6">
-            {detailQ.isLoading ? (
-              <div className="space-y-2 pt-2">
-                <Skeleton className="h-3 w-full max-w-lg" />
-                <Skeleton className="h-40 w-full" />
-              </div>
-            ) : detailQ.error ? (
-              <ErrorState
-                title={t("capabilities.marketplace.detail.loadErrorTitle")}
-                description={detailQ.error instanceof Error ? detailQ.error.message : t("capabilities.marketplace.detail.loadErrorDescription")}
-                onRetry={() => void detailQ.refetch()}
-              />
-            ) : detailQ.data ? (
-              <MarketplaceContentPreview key={detailQ.data.capability_id} detail={detailQ.data} />
-            ) : null}
+        ) : undefined
+      }
+    >
+      {!capability ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+        </div>
+      ) : (
+        <>
+          {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
+          <RailSection title={t("capabilities.detail.basic.title")}>
+            <PropertyList>
+              <Property label={t("capabilities.marketplaceDetail.source.workspace")}>{source || t("capabilities.none")}</Property>
+              <Property label={t("capabilities.table.latestVersion")} mono>{capability.latest_version ? `v${capability.latest_version}` : t("capabilities.none")}</Property>
+              <Property label={t("capabilities.marketplace.detail.addedCount")} mono>{capability.install_count ?? capability.installed_workspace_count ?? 0}</Property>
+              <Property label={t("capabilities.table.credentials")}>
+                {requiredCredentialsLabel(capability.required_credentials, language, t("capabilities.credentials.none"))}
+              </Property>
+            </PropertyList>
           </RailSection>
-        )}
-      </div>
-    </>
+          {previewable && (
+            <RailSection title={t("capabilities.marketplace.detail.contentTitle")} className="mt-6">
+              {detailQ.isLoading ? (
+                <div className="space-y-2 pt-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-40 w-full" />
+                </div>
+              ) : detailQ.error ? (
+                <ErrorState
+                  title={t("capabilities.marketplace.detail.loadErrorTitle")}
+                  description={detailQ.error instanceof Error ? detailQ.error.message : t("capabilities.marketplace.detail.loadErrorDescription")}
+                  onRetry={() => void detailQ.refetch()}
+                />
+              ) : detailQ.data ? (
+                <MarketplaceContentPreview key={detailQ.data.capability_id} detail={detailQ.data} />
+              ) : null}
+            </RailSection>
+          )}
+        </>
+      )}
+    </DetailRail>
   )
 }
 

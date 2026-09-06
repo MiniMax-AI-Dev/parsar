@@ -22,7 +22,7 @@ import { MembersPage } from "./MembersPage"
 import { RuntimePage } from "./RuntimePage"
 import { RuntimeDetailPage } from "./RuntimeDetailPage"
 import { ApprovalsPage } from "./ApprovalsPage"
-import { CapabilitiesPage, CapabilityDetailPage } from "./CapabilitiesPage"
+import { CapabilitiesPage } from "./CapabilitiesPage"
 import { ConnectionsPage } from "./ConnectionsPage"
 import { MyCredentialsPage } from "./MyCredentialsPage"
 import { ScheduledTasksPage } from "./ScheduledTasksPage"
@@ -50,7 +50,7 @@ export function AdminRouter() {
   if (v === "audit") return <AuditPage />
   if (v === "usage") return <UsagePage />
   if (v === "capabilities")
-    return entityId ? <CapabilityDetailPage id={entityId} /> : <CapabilitiesPage />
+    return <CapabilitiesPage />
   if (v === "connections") return <ConnectionsPage />
   if (v === "runtime") {
     return entityId ? <RuntimeDetailPage id={entityId} /> : <RuntimePage />
