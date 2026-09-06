@@ -264,5 +264,8 @@
     "range": "{{from}}–{{to}} of {{total}}",
     "prev": "Previous",
     "next": "Next"
+  },
+  "errors": {
+    "loadFailed": "Failed to load"
   }
 }

@@ -237,9 +237,17 @@ export function LedgerNum({ children, muted, className }: { children: React.Reac
   )
 }
 
-/** Muted mono identifier cell. */
-export function LedgerId({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <span className={cn("truncate font-mono text-xs text-fg-muted", className)}>{children}</span>
+/** Muted mono identifier cell. Truncates, but keeps the full value in the
+ *  native tooltip so a real 36-char UUID is never lost to the ellipsis. */
+export function LedgerId({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
+  return (
+    <span
+      className={cn("truncate font-mono text-xs text-fg-muted", className)}
+      title={title ?? (typeof children === "string" ? children : undefined)}
+    >
+      {children}
+    </span>
+  )
 }
 
 /** 18px initials tile used for agents and people inside rows. */

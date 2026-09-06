@@ -522,12 +522,26 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
         <Property label={t("runs.detail.duration")} mono>{fmtDuration(run.started_at, run.finished_at)}</Property>
         {run.runtime && (
           <>
-            <Property label={t("runs.detail.runtime.name")}>{run.runtime.name || shortId(run.runtime.id, 12)}</Property>
-            <Property label={t("runs.detail.runtime.agentKind")}>{enumLabel(translateDetail, run.runtime.agent_kind)}</Property>
-            <Property label={t("runs.detail.runtime.mode")}>{enumLabel(translateDetail, run.runtime.runtime_mode)}</Property>
-            <Property label={t("runs.detail.runtime.model")} mono>{run.runtime.managed_model_id || "—"}</Property>
-            <Property label={t("runs.detail.runtime.workdir")} mono>{run.runtime.working_directory || "—"}</Property>
-            <Property label={t("runs.detail.runtime.lastHeartbeat")}>{runtimeDiagnosis.heartbeatAge}</Property>
+            {/* An external HTTP agent has no node, engine or workdir: show a
+                property only when the run actually carries that fact. */}
+            {(run.runtime.name || run.runtime.id) && (
+              <Property label={t("runs.detail.runtime.name")}>{run.runtime.name || shortId(run.runtime.id, 12)}</Property>
+            )}
+            {run.runtime.agent_kind && (
+              <Property label={t("runs.detail.runtime.agentKind")}>{enumLabel(translateDetail, run.runtime.agent_kind)}</Property>
+            )}
+            {run.runtime.runtime_mode && (
+              <Property label={t("runs.detail.runtime.mode")}>{enumLabel(translateDetail, run.runtime.runtime_mode)}</Property>
+            )}
+            {run.runtime.managed_model_id && (
+              <Property label={t("runs.detail.runtime.model")} mono>{run.runtime.managed_model_id}</Property>
+            )}
+            {run.runtime.working_directory && (
+              <Property label={t("runs.detail.runtime.workdir")} mono>{run.runtime.working_directory}</Property>
+            )}
+            {run.runtime.last_heartbeat_at && (
+              <Property label={t("runs.detail.runtime.lastHeartbeat")}>{runtimeDiagnosis.heartbeatAge}</Property>
+            )}
           </>
         )}
       </PropertyList>

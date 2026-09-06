@@ -1,0 +1,96 @@
+[
+  {
+    "view": "conversations",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "approvals",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "runs",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "scheduled",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "agents",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "capabilities",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "models",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "connections",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "members",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "settings",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "secrets",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "runtime",
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ],
+    "badResponses": [
+      "503 GET /api/v1/workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+    ]
+  },
+  {
+    "view": "connectors",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "usage",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  {
+    "view": "audit",
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  }
+]

@@ -376,7 +376,8 @@
       "addContext": "Add attachment / context",
       "send": "Send",
       "sending": "Sending…",
-      "stopAria": "Stop generating"
+      "stopAria": "Stop generating",
+      "placeholderGeneric": "Send a message…"
     },
     "sandboxGuard": {
       "checking": "Checking this Agent's sandbox before sending…",
@@ -464,6 +465,14 @@
     },
     "turnNav": {
       "label": "Turn navigation"
+    },
+    "thinking": {
+      "active": "Thinking",
+      "done": "Thought"
+    },
+    "toolCall": {
+      "argsLabel": "Arguments",
+      "resultLabel": "Result"
     }
   },
   "runs": {
@@ -1808,7 +1817,11 @@
       "modelProtocolMismatch": "{{engine}} can't use this model's protocol",
       "selected": "Selected",
       "devicePicker": {
-        "hint": "Pick a connected local daemon. Cloud isolation does not need a device; Parsar lazy-starts a sandbox daemon on first run."
+        "hint": "Pick a connected local daemon. Cloud isolation does not need a device; Parsar lazy-starts a sandbox daemon on first run.",
+        "addDevice": "Connect device",
+        "placeholder": "Pick a device…",
+        "emptyTitle": "No agent daemons connected yet",
+        "noCompatibleTitle": "No online devices compatible with the current Agent engine"
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
@@ -2927,7 +2940,8 @@
       "actions": {
         "pair": "Connect device",
         "enable": "Enable",
-        "disable": "Disable"
+        "disable": "Disable",
+        "delete": "Delete device"
       },
       "table": {
         "name": "Name",
@@ -2985,7 +2999,16 @@
         "connectLabel": "Connect daemon",
         "copy": "Copy",
         "copyCommand": "Copy command",
-        "tokenOnlyToggle": "Show token only"
+        "tokenOnlyToggle": "Show token only",
+        "connected": "Device connected",
+        "copied": "Copied",
+        "copyFailed": "Select the command below",
+        "oneLineLabel": "Copy and run on the target machine",
+        "safetyClaude": "Agent CLI, files, and secrets stay on this machine.",
+        "waitingConnection": "Waiting for the device to connect…"
+      },
+      "delete": {
+        "confirm": "Delete"
       }
     }
   },

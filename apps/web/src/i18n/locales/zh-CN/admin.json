@@ -376,7 +376,8 @@
       "addContext": "添加附件 / 上下文",
       "send": "发送",
       "sending": "发送中…",
-      "stopAria": "停止生成"
+      "stopAria": "停止生成",
+      "placeholderGeneric": "发送消息…"
     },
     "sandboxGuard": {
       "checking": "发送前正在检查此 Agent 的 sandbox…",
@@ -464,6 +465,14 @@
     },
     "turnNav": {
       "label": "楼层导航"
+    },
+    "thinking": {
+      "active": "思考中",
+      "done": "已思考"
+    },
+    "toolCall": {
+      "argsLabel": "参数",
+      "resultLabel": "结果"
     }
   },
   "runs": {
@@ -1808,7 +1817,11 @@
       "modelProtocolMismatch": "{{engine}} 无法使用该模型的协议",
       "selected": "已选择",
       "devicePicker": {
-        "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。"
+        "hint": "选择一台已连接的本地 daemon。云端隔离不需要选择设备，会在首次运行时自动拉起 sandbox daemon。",
+        "addDevice": "接入新设备",
+        "placeholder": "选择设备…",
+        "emptyTitle": "尚未接入任何 agent daemon",
+        "noCompatibleTitle": "没有与当前 Agent 引擎匹配的在线设备"
       },
       "workDir": {
         "placeholder": "/Users/me/code/my-app",
@@ -2927,7 +2940,8 @@
       "actions": {
         "pair": "接入新设备",
         "enable": "启用",
-        "disable": "禁用"
+        "disable": "禁用",
+        "delete": "删除设备"
       },
       "table": {
         "name": "名称",
@@ -2985,7 +2999,16 @@
         "connectLabel": "连接 daemon",
         "copy": "复制",
         "copyCommand": "复制命令",
-        "tokenOnlyToggle": "只看 token"
+        "tokenOnlyToggle": "只看 token",
+        "connected": "设备已接入",
+        "copied": "已复制",
+        "copyFailed": "请手动选择下方命令",
+        "oneLineLabel": "复制后在目标机器上运行",
+        "safetyClaude": "Agent CLI、文件与密钥都留在这台机器上。",
+        "waitingConnection": "等待设备接入…"
+      },
+      "delete": {
+        "confirm": "删除"
       }
     }
   },
