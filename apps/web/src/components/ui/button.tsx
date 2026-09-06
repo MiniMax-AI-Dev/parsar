@@ -28,6 +28,9 @@ const buttonVariants = cva(
         default: "h-7 px-2.5 text-sm",
         sm: "h-6 px-2 text-xs",
         lg: "h-8 px-3 text-sm",
+        // Entry surfaces (login / setup / invite) use a 40px control:
+        // the one place in the product with a hero-sized button.
+        xl: "h-10 px-4 text-base",
         icon: "h-7 w-7",
       },
       /* Shape follows function: rounded (default) for controls, pill for

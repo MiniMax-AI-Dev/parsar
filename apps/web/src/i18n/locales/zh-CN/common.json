@@ -136,7 +136,18 @@
     "genericError": "发生错误,请稍后重试。",
     "ssoDivider": "SSO",
     "ssoButton": "使用 {{provider}} 登录",
-    "noAccountHint": "首次访问?请联系管理员发送邀请。"
+    "noAccountHint": "首次访问?请联系管理员发送邀请。",
+    "headline": "团队的 Agent 控制台。",
+    "headlineSub": "登录你的 Parsar 账号",
+    "orContinue": "或使用以下方式",
+    "registerButton": "注册",
+    "registerTitle": "加入工作区",
+    "registerHint": "Parsar 采用邀请制，粘贴你收到的邀请链接即可加入。",
+    "inviteLabel": "邀请链接",
+    "invitePlaceholder": "https://…/invite/…",
+    "inviteContinue": "继续",
+    "inviteInvalid": "这不像是一个 Parsar 邀请链接。",
+    "backToLogin": "返回登录"
   },
   "passwordPolicy": {
     "placeholder": "8 个字符或更多",

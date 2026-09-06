@@ -136,7 +136,18 @@
     "genericError": "Something went wrong. Please try again.",
     "ssoDivider": "SSO",
     "ssoButton": "Sign in with {{provider}}",
-    "noAccountHint": "First time here? Ask your admin for an invite."
+    "noAccountHint": "First time here? Ask your admin for an invite.",
+    "headline": "Your team's agent console.",
+    "headlineSub": "Log in to your Parsar account",
+    "orContinue": "or continue with",
+    "registerButton": "Sign up",
+    "registerTitle": "Join a workspace",
+    "registerHint": "Parsar is invite-only. Paste the invite link you received.",
+    "inviteLabel": "Invite link",
+    "invitePlaceholder": "https://…/invite/…",
+    "inviteContinue": "Continue",
+    "inviteInvalid": "That does not look like a Parsar invite link.",
+    "backToLogin": "Back to log in"
   },
   "passwordPolicy": {
     "placeholder": "8 characters or more",
