@@ -11,6 +11,15 @@ async function open(theme) {
   await page.getByRole("option", { name: /Review PR/ }).click(); await page.waitForTimeout(2500)
   return { ctx, page }
 }
+// Dark first: the deny click below consumes the pending permission, so the
+// ApprovalBar only exists in the run before any decision is made.
+{
+  const dark = await open("dark")
+  await dark.page.screenshot({ path: path.join(OUT, "conversations-trace-dark.png") })
+  console.log("dark approval bar:", await dark.page.getByRole("button", { name: "允许一次" }).count())
+  await dark.ctx.close()
+}
+
 let { ctx, page } = await open("light")
 await page.screenshot({ path: path.join(OUT, "conversations-trace-light.png") })
 // expand the first tool row of the running trace
@@ -37,8 +46,5 @@ await page.getByRole("option", { name: /Review PR/ }).click(); await page.waitFo
 await page.getByRole("button", { name: "拒绝" }).click(); await page.waitForTimeout(1500)
 await page.screenshot({ path: path.join(OUT, "composer-running-light.png") })
 console.log("stop button:", await page.getByRole("button", { name: /停止|Stop/ }).count())
-await ctx.close()
-;({ ctx, page } = await open("dark"))
-await page.screenshot({ path: path.join(OUT, "conversations-trace-dark.png") })
 await ctx.close()
 await browser.close()
