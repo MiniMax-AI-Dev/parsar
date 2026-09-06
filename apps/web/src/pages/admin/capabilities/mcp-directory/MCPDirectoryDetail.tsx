@@ -99,19 +99,21 @@ export function DirectoryDetail({
   return (
     <>
       {header(
-        <span className="inline-flex min-w-0 items-center gap-2">
-          <span className="truncate">{item.name}</span>
-          {item.verified ? <VerifiedBadge /> : null}
-          {item.installed ? (
-            <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
-          ) : item.connected ? (
-            <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
-          ) : null}
-        </span>,
+        <span className="min-w-0 truncate">{item.name}</span>,
         action,
       )}
       {notices}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4" data-testid="mcp-directory-detail">
+        {(item.verified || item.installed || item.connected) && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {item.verified ? <VerifiedBadge /> : null}
+            {item.installed ? (
+              <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
+            ) : item.connected ? (
+              <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
+            ) : null}
+          </div>
+        )}
         {item.description && <p className="mb-4 max-w-3xl text-sm text-fg">{item.description}</p>}
         <RailSection title={t("capabilities.detail.basic.title")}>
           <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">
