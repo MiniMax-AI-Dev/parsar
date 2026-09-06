@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { Bot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { KeyboardEvent } from "react"

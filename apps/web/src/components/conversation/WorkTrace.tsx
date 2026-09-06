@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench, type LucideIcon } from "lucide-react"
@@ -325,13 +326,18 @@ export function WorkTrace({
     status === "running" || status === "queued"
       ? t("conversations.trace.running")
       : t(DONE_LABEL[status])
-  const label = elapsed ? `${word} · ${elapsed}` : word
   const current = running ? [...steps].reverse().find((s) => s.status === "running") : undefined
 
   const header = (
     <>
       <StatusIcon status={status} />
-      <span className="shrink-0 text-sm text-fg-muted">{label}</span>
+      <span className="shrink-0 text-sm text-fg-muted">{word}</span>
+      {elapsed && (
+        <span className="shrink-0 text-sm text-fg-muted">
+          <span aria-hidden="true">· </span>
+          <span className="font-mono text-xs tabular-nums">{elapsed}</span>
+        </span>
+      )}
       {hasDetails && (
         <ChevronDown
           className={cn(

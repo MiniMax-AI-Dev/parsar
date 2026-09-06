@@ -85,7 +85,7 @@ const FOLD_KEY = "parsar:conv:sidebarFolded"
 const THREAD_STYLE = { ["--thread-max-width" as string]: "48rem" }
 
 /** title · conversation id · age (actions replace the age on hover) */
-const LIST_COLUMNS = [col.title(120, 2), col.id(56, 0.3), col.age(56, 0.3), col.actions(2)]
+const LIST_COLUMNS = [col.title(120, 2), col.id(64, 0.3), col.age(56, 0.3), col.actions(2)]
 
 interface SandboxSendGuard {
   blocked: boolean
@@ -806,7 +806,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
 function ComposerFooter({ children }: { children: React.ReactNode }) {
   return (
     <div className="shrink-0 px-4 pb-5 pt-2">
-      <div className="mx-auto w-full max-w-[var(--thread-max-width)]">{children}</div>
+      <div className="mx-auto w-full max-w-[var(--thread-max-width)] px-4">{children}</div>
     </div>
   )
 }
@@ -1186,7 +1186,23 @@ function ChatStream({
         {pendingPermissions.length > 0 && convWorkspaceId ? (
           // The approval takes the composer's slot: one control for the
           // decision, none for typing until the agent may continue.
-          <ApprovalBar interactions={pendingPermissions} workspaceID={convWorkspaceId} />
+          <ApprovalBar
+            interactions={pendingPermissions}
+            workspaceID={convWorkspaceId}
+            stop={
+              activeRunId
+                ? {
+                    label: t("conversations.composer.stopAria"),
+                    pending: cancelRunMut.isPending,
+                    onStop: () => {
+                      const runID = activeRunId
+                      setActiveRunId(null)
+                      cancelRunMut.mutate({ runID, reason: "user_clicked_stop" })
+                    },
+                  }
+                : undefined
+            }
+          />
         ) : (
           <ComposerForm
             conversationId={conversationId}

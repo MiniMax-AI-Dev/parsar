@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, Loader2, Terminal, Wrench, X } from "lucide-react"
+import { Check, Loader2, Square, Terminal, Wrench, X } from "lucide-react"
 
 import { useResolveAgentInteraction } from "../../lib/api-interactions"
 import type { AgentInteraction } from "../../lib/api-types"
@@ -56,11 +56,17 @@ export function ApprovalBar({
   interactions,
   workspaceID,
   className,
+  stop,
 }: {
   /** Pending permission interactions of this conversation, oldest first. */
   interactions: AgentInteraction[]
   workspaceID: string
   className?: string
+  /**
+   * The conversation's single cancel control while the bar owns the
+   * composer slot: the same round ink stop button the composer shows.
+   */
+  stop?: { onStop: () => void; pending?: boolean; label: string }
 }) {
   const { t } = useTranslation("admin")
   const resolve = useResolveAgentInteraction(workspaceID)
@@ -148,7 +154,7 @@ export function ApprovalBar({
         )}
       </div>
 
-      <p className="m-0 mt-1 text-sm font-medium text-fg">
+      <p className="m-0 mt-1 text-sm text-fg">
         {t("conversations.approval.body", { agent, tool })}
       </p>
       {summary && (
@@ -183,6 +189,22 @@ export function ApprovalBar({
           )}
           {t("approvals.actions.allowOnce")}
         </Button>
+        {stop && (
+          <button
+            type="button"
+            onClick={stop.onStop}
+            disabled={stop.pending}
+            aria-label={stop.label}
+            title={stop.label}
+            className="ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-emphasis text-fg-on-emphasis active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+          >
+            {stop.pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Square className="h-3 w-3 fill-current" strokeWidth={1.5} aria-hidden="true" />
+            )}
+          </button>
+        )}
       </div>
     </section>
   )

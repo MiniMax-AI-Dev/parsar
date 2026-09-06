@@ -19,9 +19,20 @@ const n = await rowToggles.count(); console.log("aria-expanded toggles:", n)
 for (let i = 0; i < n; i++) { const el = rowToggles.nth(i); const tag = await el.evaluate((e) => e.tagName + "|" + (e.getAttribute("aria-expanded")) + "|" + (e.textContent || "").trim().slice(0, 30)); console.log("  ", i, tag) }
 if (n > 2) { await rowToggles.nth(2).click(); await page.waitForTimeout(500) }
 await page.screenshot({ path: path.join(OUT, "conversations-trace-open-light.png") })
-// rail hover
-const markers = page.locator('nav[aria-label] button'); console.log("rail markers:", await markers.count())
-if (await markers.count() > 1) { await markers.nth(1).hover(); await page.waitForTimeout(500); await page.screenshot({ path: path.join(OUT, "conversations-rail-light.png") }) }
+// rail hover: use the 5-turn conversation so the rail has a real ladder
+await page.getByRole("option", { name: /Why does/ }).click(); await page.waitForTimeout(2000)
+const markers = page.locator('nav[aria-label="楼层导航"] button')
+console.log("rail markers:", await markers.count())
+if (await markers.count() > 1) {
+  const m = markers.nth(1)
+  const box = await m.boundingBox(); console.log("marker box:", JSON.stringify(box))
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.waitForTimeout(450)
+  const preview = page.locator('nav[aria-label="楼层导航"] [role="presentation"]')
+  console.log("preview visible:", await preview.count(), await preview.first().isVisible().catch(() => false))
+  await page.screenshot({ path: path.join(OUT, "conversations-rail-light.png") })
+}
+await page.getByRole("option", { name: /Review PR/ }).click(); await page.waitForTimeout(2000)
 // decide → composer with stop button
 await page.getByRole("button", { name: "拒绝" }).click(); await page.waitForTimeout(1500)
 await page.screenshot({ path: path.join(OUT, "composer-running-light.png") })

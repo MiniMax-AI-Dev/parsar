@@ -330,12 +330,12 @@ function InteractionRail({
         <>
           {pending && isPermission && (
             <>
+              <Button variant="outline" onClick={() => submit({ approved: false })} disabled={resolve.isPending}>
+                {t("approvals.actions.deny")}
+              </Button>
               <Button onClick={() => submit({ approved: true })} disabled={resolve.isPending}>
                 {resolve.isPending && <Loader2 className="animate-spin" />}
                 {t("approvals.actions.allowOnce")}
-              </Button>
-              <Button variant="outline" onClick={() => submit({ approved: false })} disabled={resolve.isPending}>
-                {t("approvals.actions.deny")}
               </Button>
             </>
           )}
