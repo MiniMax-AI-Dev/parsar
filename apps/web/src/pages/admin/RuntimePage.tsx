@@ -30,7 +30,6 @@ import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
-import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useRuntimeStatus, type ConnectivityResult, type RuntimeStatus } from "../../lib/api-runtime"
 import {
@@ -103,7 +102,6 @@ function useConnectivityCheckLabel(): (name: string) => string {
 
 export function RuntimePage() {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
   const workspaceID = useWorkspaceId()
   const statusQuery = useRuntimeStatus(workspaceID)
   const sandboxesQuery = useWorkspaceSandboxes(workspaceID)
@@ -250,8 +248,7 @@ export function RuntimePage() {
             onSortChange={setSortKey}
             onToggleOne={toggleOne}
             onToggleAll={toggleAll}
-            onOpenDetail={(sandboxID) => navigate("runtime", { id: sandboxID })}
-            onClearBulkErrors={() => setBulkErrors([])}
+              onClearBulkErrors={() => setBulkErrors([])}
             onConfirmBulkKill={() => setConfirming(true)}
           />
         </TabsContent>
@@ -301,7 +298,6 @@ function CloudSandboxPanel({
   onSortChange,
   onToggleOne,
   onToggleAll,
-  onOpenDetail,
   onClearBulkErrors,
   onConfirmBulkKill,
 }: {
@@ -324,7 +320,6 @@ function CloudSandboxPanel({
   onSortChange: (next: SortKey) => void
   onToggleOne: (bindingID: string) => void
   onToggleAll: () => void
-  onOpenDetail: (sandboxID: string) => void
   onClearBulkErrors: () => void
   onConfirmBulkKill: () => void
 }) {
@@ -362,7 +357,6 @@ function CloudSandboxPanel({
           onSortChange={onSortChange}
           onToggleOne={onToggleOne}
           onToggleAll={onToggleAll}
-          onOpenDetail={onOpenDetail}
           onClearBulkErrors={onClearBulkErrors}
           onConfirmBulkKill={onConfirmBulkKill}
         />
@@ -414,7 +408,6 @@ function CloudInstancesPanel({
   onSortChange,
   onToggleOne,
   onToggleAll,
-  onOpenDetail,
   onClearBulkErrors,
   onConfirmBulkKill,
 }: {
@@ -431,7 +424,6 @@ function CloudInstancesPanel({
   onSortChange: (next: SortKey) => void
   onToggleOne: (bindingID: string) => void
   onToggleAll: () => void
-  onOpenDetail: (sandboxID: string) => void
   onClearBulkErrors: () => void
   onConfirmBulkKill: () => void
 }) {
@@ -560,17 +552,7 @@ function CloudInstancesPanel({
                 <React.Fragment key={b.binding_id}>
                   <LedgerRow
                     selected={selected.has(b.binding_id)}
-                    onClick={() => onOpenDetail(b.sandbox_id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        const target = e.target as HTMLElement
-                        if (target.tagName === "INPUT" || target.tagName === "BUTTON") return
-                        e.preventDefault()
-                        onOpenDetail(b.sandbox_id)
-                      }
-                    }}
                     aria-label={rowLabel}
-                    className="cursor-pointer"
                     data-testid={`runtime-row-${b.binding_id}`}
                   >
                     <span className="flex items-center" onClick={(e) => e.stopPropagation()}>

@@ -61,7 +61,9 @@ export function MarketplaceTab(props: MarketplaceTabProps) {
   }
 
   if (props.view === "skills") {
-    return <SkillsDirectory query={props.query} canImport={props.canImport} onViewCapability={props.onViewCapability} />
+    // Installing a Skill needs workspace-admin rights (main #278), not the
+    // weaker import permission the other directories use.
+    return <SkillsDirectory query={props.query} canImport={props.canManage} onViewCapability={props.onViewCapability} />
   }
 
   return <PublishedMarketplaceTab {...props} />

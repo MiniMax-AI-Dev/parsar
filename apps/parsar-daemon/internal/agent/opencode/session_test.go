@@ -1,10 +1,17 @@
 package opencode_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -29,6 +36,20 @@ func TestMain(m *testing.M) {
 }
 
 func runFakeOpenCode(role string) {
+	if dumpPath := os.Getenv("OPENCODE_TESTHELPER_CONFIG_DUMP"); dumpPath != "" {
+		body, err := json.Marshal(map[string]string{
+			"config_dir":      os.Getenv("OPENCODE_CONFIG_DIR"),
+			"xdg_config_home": os.Getenv("XDG_CONFIG_HOME"),
+		})
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "encode managed config env: %v\n", err)
+			os.Exit(65)
+		}
+		if err := os.WriteFile(dumpPath, body, 0o600); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "dump managed config: %v\n", err)
+			os.Exit(65)
+		}
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
 
@@ -165,6 +186,91 @@ func TestSessionJSONSuccessEmitsDeltaUsageAndDone(t *testing.T) {
 	if done.Usage.Provider != "opencode" || done.Usage.InputTokens != 4 || done.Usage.OutputTokens != 2 {
 		t.Fatalf("done usage = %#v", done.Usage)
 	}
+}
+
+func TestSessionInstallsAndRegistersManagedSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PARSAR_HOME", home)
+	t.Setenv("OPENCODE_CONFIG_DIR", "")
+	userConfigHome := filepath.Join(t.TempDir(), "user-config")
+	t.Setenv("XDG_CONFIG_HOME", userConfigHome)
+	body := openCodeSkillZip(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	dumpPath := filepath.Join(t.TempDir(), "opencode.json")
+	out := make(chan proto.Envelope, 32)
+	req := opencodeHelperReq("run_skills", "hello", "json-success")
+	req.ConversationID = "conv-skills"
+	req.AgentStateKey = "conv-skills/agent-1/opencode"
+	req.AgentOptions["skills"] = []any{map[string]any{
+		"name": "find-skills", "version": "1.0.0", "download_url": srv.URL,
+		"sha256": fmt.Sprintf("%x", sha256.Sum256(body)),
+	}}
+	req.AgentOptions["env"].(map[string]any)["OPENCODE_TESTHELPER_CONFIG_DUMP"] = dumpPath
+
+	sess, err := opencode.NewSessionForTest(context.Background(), req, out, opencodeHelperConfig())
+	if err != nil {
+		t.Fatalf("NewSessionForTest: %v", err)
+	}
+	defer sess.Cancel(context.Background())
+	if _, closed := drainOpenCode(t, out, 5*time.Second); !closed {
+		t.Fatal("out did not close")
+	}
+
+	skillRoot := filepath.Join(home, "runtime", "opencode", "state", "conv-skills", "agent-1", "opencode", "skills")
+	if _, err := os.Stat(filepath.Join(skillRoot, "find-skills", "SKILL.md")); err != nil {
+		t.Fatalf("managed skill missing: %v", err)
+	}
+	dumped, err := os.ReadFile(dumpPath)
+	if err != nil {
+		t.Fatalf("read dumped config: %v", err)
+	}
+	var configEnv map[string]string
+	if err := json.Unmarshal(dumped, &configEnv); err != nil {
+		t.Fatalf("decode dumped config env: %v", err)
+	}
+	if got, want := configEnv["config_dir"], filepath.Dir(skillRoot); got != want {
+		t.Fatalf("OPENCODE_CONFIG_DIR = %q, want %q", got, want)
+	}
+	if got := configEnv["xdg_config_home"]; got != userConfigHome {
+		t.Fatalf("XDG_CONFIG_HOME = %q, want inherited %q", got, userConfigHome)
+	}
+
+	cleanupReq := opencodeHelperReq("run_skills_cleanup", "hello", "json-success")
+	cleanupReq.ConversationID = req.ConversationID
+	cleanupReq.AgentStateKey = req.AgentStateKey
+	cleanupOut := make(chan proto.Envelope, 32)
+	cleanupSession, err := opencode.NewSessionForTest(context.Background(), cleanupReq, cleanupOut, opencodeHelperConfig())
+	if err != nil {
+		t.Fatalf("cleanup session: %v", err)
+	}
+	defer cleanupSession.Cancel(context.Background())
+	if _, closed := drainOpenCode(t, cleanupOut, 5*time.Second); !closed {
+		t.Fatal("cleanup out did not close")
+	}
+	if _, err := os.Stat(filepath.Join(skillRoot, "find-skills")); !os.IsNotExist(err) {
+		t.Fatalf("unbound skill still exists: %v", err)
+	}
+}
+
+func openCodeSkillZip(t *testing.T) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	entry, err := writer.Create("SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("---\nname: find-skills\ndescription: Find skills\n---\nUse the catalog.")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
 }
 
 func TestSessionPlainStdoutFallsBackToDeltaAndDone(t *testing.T) {

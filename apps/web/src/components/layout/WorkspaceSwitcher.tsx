@@ -150,6 +150,7 @@ export function WorkspaceSwitcher() {
 
             {workspaces.map((ws) => {
               const isActive = ws.id === wsId
+              const canManage = ws.role === "owner" || ws.role === "admin"
               return (
                 <div
                   key={ws.id}
@@ -178,17 +179,21 @@ export function WorkspaceSwitcher() {
                       <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={2} />
                     )}
                   </DropdownMenu.Item>
-                  <RowAction
-                    title={t("workspaceCrud.workspace.renameTitle")}
-                    onSelect={() => setRenameWs(ws)}
-                    icon={<Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                  />
-                  <RowAction
-                    title={t("workspaceCrud.workspace.archiveTitle")}
-                    onSelect={() => setArchiveWs(ws)}
-                    icon={<Archive className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                    danger
-                  />
+                  {canManage && (
+                    <>
+                      <RowAction
+                        title={t("workspaceCrud.workspace.renameTitle")}
+                        onSelect={() => setRenameWs(ws)}
+                        icon={<Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                      />
+                      <RowAction
+                        title={t("workspaceCrud.workspace.archiveTitle")}
+                        onSelect={() => setArchiveWs(ws)}
+                        icon={<Archive className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                        danger
+                      />
+                    </>
+                  )}
                 </div>
               )
             })}

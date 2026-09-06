@@ -61,6 +61,7 @@ import {
 } from "../../lib/api-conversations"
 import { useAgentInteractions } from "../../lib/api-interactions"
 import { useSandboxBinding, type SandboxBinding } from "../../lib/api-sandbox"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import type {
   AgentInteraction,
   ConversationListItem,
@@ -103,6 +104,15 @@ export function ConversationsPage() {
   const wsId = useWorkspaceId()
   const restoreViewState = !entityId && focusTarget !== "compose"
   const savedViewState = useMemo(() => readConversationViewState(wsId), [wsId])
+  const workspacesQ = useMyWorkspaces()
+  const workspaces = workspacesQ.data?.workspaces ?? []
+  const writableWorkspaceIds = new Set(
+    workspaces
+      .filter((w) => w.role === "owner" || w.role === "admin" || w.role === "member")
+      .map((w) => w.id),
+  )
+  const workspaceRole = workspaces.find((w) => w.id === wsId)?.role
+  const canWrite = writableWorkspaceIds.has(wsId ?? "")
 
   const agentsQ = useAgents(wsId)
   const allAgents: Agent[] = useMemo(
@@ -197,43 +207,64 @@ export function ConversationsPage() {
   }
 
   const qc = useQueryClient()
+  const firstSend = useRef<{
+    workspaceId: string
+    agentId: string
+    conversationId?: string
+  } | null>(null)
+
+  useEffect(() => {
+    firstSend.current = null
+  }, [wsId, selectedAgentId, entityId])
 
   // "New conversation" navigates to an empty composer without pre-creating a
   // conv — the conv is created on first send via handleSendFromEmpty,
   // so the list only shows rows with a real first user turn.
   const openCreate = () => {
+    firstSend.current = null
     navigate("conversations", { id: "", focus: "compose" })
   }
 
   // First-send creates the conv + posts the message + navigates in.
   // Title derives from the first 30 chars so the list gets a
   // meaningful name immediately (server defaults to "Untitled conversation").
-  const handleSendFromEmpty = async (content: string): Promise<void> => {
+  const handleSendFromEmpty = async (content: string): Promise<boolean> => {
     if (!wsId || !selectedAgentId) {
       throw new Error("workspace_id and agent_id required for empty-state send")
     }
-    const conv = await createConversation(wsId, {
-      title: content.slice(0, 30),
-      surface: "web",
-      form: "thread",
-      agent_id: selectedAgentId,
-    })
+    let attempt = firstSend.current
+    if (!attempt || attempt.workspaceId !== wsId || attempt.agentId !== selectedAgentId) {
+      attempt = { workspaceId: wsId, agentId: selectedAgentId }
+      firstSend.current = attempt
+    }
+    if (!attempt.conversationId) {
+      const conv = await createConversation(wsId, {
+        title: content.slice(0, 30),
+        surface: "web",
+        form: "thread",
+        agent_id: selectedAgentId,
+      })
+      attempt.conversationId = conv.id
+    }
+    const cid = attempt.conversationId
     try {
-      await sendUserMessage(conv.id, { content })
+      await sendUserMessage(cid, { content })
     } finally {
-      // Invalidate even on first-message failure — the empty conv is
-      // still real and the user can retry from the chat view.
+      // A failed first message still leaves a real conversation in the list.
       qc.invalidateQueries({
         predicate: (q) =>
           q.queryKey[0] === "admin" && q.queryKey[1] === "conversations" && q.queryKey[2] === wsId,
       })
-      qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", conv.id] })
+      qc.invalidateQueries({ queryKey: ["admin", "conversationTimeline", cid] })
     }
+    if (firstSend.current !== attempt) return false
+    firstSend.current = null
     writeConversationViewState(wsId, {
       agentId: selectedAgentId,
-      conversationId: conv.id,
+      conversationId: cid,
     })
-    navigate("conversations", { id: conv.id })
+    navigate("conversations", { id: cid })
+    return true
   }
 
   const renameMutation = useUpdateConversationTitle(wsId)
@@ -259,8 +290,11 @@ export function ConversationsPage() {
         {!folded && (
           <ConversationList
             agents={allAgents}
+            canWrite={canWrite}
+            canDelete={workspaceRole === "owner" || workspaceRole === "admin"}
             selectedAgentId={selectedAgentId}
             onPickAgent={(id) => {
+              firstSend.current = null
               setPickedAgent({ workspaceId: wsId, agentId: id })
               writeConversationViewState(wsId, { agentId: id })
               navigate("conversations", { id: "", focus: "compose" })
@@ -269,6 +303,7 @@ export function ConversationsPage() {
             conversations={conversations}
             selectedConversationId={entityId ?? ""}
             onPickConversation={(id) => {
+              firstSend.current = null
               writeConversationViewState(wsId, {
                 agentId: selectedAgentId,
                 conversationId: id,
@@ -284,6 +319,7 @@ export function ConversationsPage() {
         )}
         <ConversationMain
           conv={currentConv}
+          canWrite={entityId ? writableWorkspaceIds.has(currentConv?.workspace_id ?? "") : canWrite}
           convLoading={currentConvQ.isLoading}
           convError={currentConvQ.error}
           agent={selectedAgent}
@@ -335,6 +371,8 @@ function sandboxSendGuard(
 
 interface ListProps {
   agents: Agent[]
+  canWrite: boolean
+  canDelete: boolean
   selectedAgentId: string
   onPickAgent: (id: string) => void
   agentsLoading: boolean
@@ -363,6 +401,10 @@ function ConversationList(p: ListProps) {
   const [deleteError, setDeleteError] = useState<string>("")
   const renameInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
+    if (!p.canWrite) setRenamingConvId(null)
+    if (!p.canDelete) setDeleteConvId(null)
+  }, [p.canWrite, p.canDelete])
+  useEffect(() => {
     if (renamingConvId && renameInputRef.current) {
       renameInputRef.current.focus()
       renameInputRef.current.select()
@@ -380,7 +422,7 @@ function ConversationList(p: ListProps) {
     setRenameError("")
   }
   const commitRename = async () => {
-    if (!renamingConvId) return
+    if (!p.canWrite || !renamingConvId) return
     const trimmed = renameDraft.trim()
     if (trimmed === "") {
       setRenameError(t("conversations.sidebar.renameEmpty"))
@@ -403,7 +445,7 @@ function ConversationList(p: ListProps) {
 
   const deleteConv = p.conversations.find((c) => c.id === deleteConvId)
   const confirmDelete = async () => {
-    if (!deleteConvId) return
+    if (!p.canDelete || !deleteConvId) return
     setDeleteBusy(true)
     setDeleteError("")
     try {
@@ -582,12 +624,17 @@ function ConversationList(p: ListProps) {
                       <span className="truncate text-right text-xs text-fg-muted">
                         {fmtAgo(c.last_message_at ?? c.updated_at)}
                       </span>
+                      {/* Viewers see the row but none of its actions (main #283). */}
+                      {(p.canWrite || p.canDelete) && (
                       <RowActions>
+                        {p.canWrite && (
                         <ActionIconButton
                           icon={Pencil}
                           label={t("conversations.sidebar.renameAria")}
                           onClick={() => startRename(c)}
                         />
+                        )}
+                        {p.canDelete && (
                         <ActionIconButton
                           icon={Trash2}
                           tone="danger"
@@ -597,7 +644,9 @@ function ConversationList(p: ListProps) {
                             setDeleteConvId(c.id)
                           }}
                         />
+                        )}
                       </RowActions>
+                      )}
                     </>
                   )}
                 </LedgerRow>
@@ -608,7 +657,7 @@ function ConversationList(p: ListProps) {
       )}
 
       <Dialog
-        open={deleteConvId !== null}
+        open={p.canDelete && deleteConvId !== null}
         onOpenChange={(next) => {
           if (!next && !deleteBusy) setDeleteConvId(null)
         }}
@@ -649,6 +698,7 @@ function ConversationList(p: ListProps) {
 
 interface MainProps {
   conv: import("../../lib/api-types").Conversation | undefined
+  canWrite: boolean
   convLoading: boolean
   convError: unknown
   agent: Agent | undefined
@@ -658,7 +708,7 @@ interface MainProps {
   folded: boolean
   onExpand: () => void
   /** Empty-state send: create conv + post first message + navigate. */
-  onSendFromEmpty: (content: string) => Promise<void>
+  onSendFromEmpty: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
   sandboxGuard?: SandboxSendGuard
@@ -767,6 +817,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
     return (
       <EmptyChat
         agent={p.agent}
+        canWrite={p.canWrite}
         folded={p.folded}
         onExpand={p.onExpand}
         onSendFromEmpty={p.onSendFromEmpty}
@@ -782,6 +833,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
     return (
       <EmptyChat
         agent={p.agent}
+        canWrite={p.canWrite}
         folded={p.folded}
         onExpand={p.onExpand}
         conversationId={p.conversationId}
@@ -796,6 +848,7 @@ function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boo
   return (
     <ChatStream
       conversationId={p.conversationId}
+      canWrite={p.canWrite}
       agent={p.agent}
       folded={p.folded}
       onExpand={p.onExpand}
@@ -827,6 +880,7 @@ function EmptyChat({
   onRenameAfterFirstMessage,
   focusComposer,
   sandboxGuard,
+  canWrite,
 }: {
   agent: Agent | undefined
   folded: boolean
@@ -835,10 +889,11 @@ function EmptyChat({
   conversationId?: string
   workspaceID?: string
   /** Create-then-send flow (required when conversationId is unset). */
-  onSendFromEmpty?: (content: string) => Promise<void>
+  onSendFromEmpty?: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage?: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
   sandboxGuard?: SandboxSendGuard
+  canWrite: boolean
 }) {
   const { t } = useTranslation("admin")
   return (
@@ -872,7 +927,7 @@ function EmptyChat({
         <ComposerForm
           conversationId={conversationId ?? ""}
           agentName={agent?.name}
-          disabled={!agent || sandboxGuard?.blocked}
+          disabled={!canWrite || !agent || sandboxGuard?.blocked}
           autoFocus={focusComposer}
           placeholder={
             agent
@@ -898,12 +953,14 @@ function EmptyChat({
 
 function ChatStream({
   conversationId,
+  canWrite,
   agent,
   folded,
   onExpand,
   sandboxGuard,
 }: {
   conversationId: string
+  canWrite: boolean
   agent: Agent | undefined
   folded: boolean
   onExpand: () => void
@@ -1210,7 +1267,7 @@ function ChatStream({
             conversationId={conversationId}
             agentName={agent?.name}
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
-            disabled={!agent || sandboxGuard?.blocked}
+            disabled={!canWrite || !agent || sandboxGuard?.blocked}
             onRunStarted={startRun}
             onStartError={setChatToast}
             activeRunId={activeRunId}
@@ -1221,7 +1278,7 @@ function ChatStream({
             // abort. Server-side useCancelRun handles the actual run
             // cancellation + connector.Abort.
             onCancelActiveRun={
-              activeRunId
+              canWrite && activeRunId
                 ? () => {
                     const runID = activeRunId
                     setActiveRunId(null)
@@ -1230,7 +1287,7 @@ function ChatStream({
                 : undefined
             }
             cancelling={cancelRunMut.isPending}
-            blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+            blockReason={!canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
           />
         )}
       </ComposerFooter>
@@ -1539,6 +1596,7 @@ function stringMeta(metadata: Record<string, unknown> | undefined, key: string):
 
 function ComposerForm({
   conversationId,
+  agentId,
   placeholder,
   disabled,
   autoFocus,
@@ -1553,6 +1611,7 @@ function ComposerForm({
   agentName,
 }: {
   conversationId: string
+  agentId?: string
   placeholder: string
   /** Name of the agent that receives the message; shown in the toolbar. */
   agentName?: string
@@ -1563,7 +1622,7 @@ function ComposerForm({
    * calls this instead of the conversationId-scoped send hook. Lets the
    * parent atomically createConversation + sendUserMessage + navigate.
    */
-  onSendDirect?: (content: string) => Promise<void>
+  onSendDirect?: (content: string) => Promise<boolean>
   onAfterSend?: (title: string) => Promise<void>
   /**
    * Called after a successful send with the dispatched agent_run_id (if any).
@@ -1596,6 +1655,10 @@ function ComposerForm({
   const { t } = useTranslation("admin")
   const [content, setContent] = useState("")
   const [busy, setBusy] = useState(false)
+  // A send failure belongs to the conversation (or the agent, before one
+  // exists) it was typed into, so switching away clears it (main #280).
+  const [sendError, setSendError] = useState<{ targetId: string; message: string } | null>(null)
+  const sendTargetId = conversationId || agentId || ""
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const sendMut = useSendUserMessage(conversationId || null)
 
@@ -1617,17 +1680,24 @@ function ComposerForm({
 
   const submit = async () => {
     if (!canSubmit) return
+    setSendError(null)
     const text = trimmed
+    const handleSendError = (err: unknown) => {
+      setSendError({ targetId: sendTargetId, message: err instanceof Error ? err.message : String(err) })
+    }
     if (onSendDirect) {
       setBusy(true)
       try {
-        await onSendDirect(text)
-        setContent("")
+        const sentToCurrentConversation = await onSendDirect(text)
+        if (sentToCurrentConversation) setContent("")
+      } catch (err) {
+        handleSendError(err)
       } finally {
         setBusy(false)
       }
     } else {
-      const resp = await sendMut.mutateAsync({ content: text })
+      const resp = await sendMut.mutateAsync({ content: text }).catch(handleSendError)
+      if (!resp) return
       if (onAfterSend) await onAfterSend(text.slice(0, 30))
       setContent("")
       // Pick the first dispatched run id (1v1 currently dispatches at most
@@ -1665,6 +1735,9 @@ function ComposerForm({
         void submit()
       }}
     >
+      {sendError?.targetId === sendTargetId && (
+        <ChatErrorToast message={sendError.message} onDismiss={() => setSendError(null)} />
+      )}
       {blockReason && <InlineError className="mb-2">{blockReason}</InlineError>}
       {/* The composer: one tonal, borderless 16px panel (the ChatGPT idiom
           in our greys), text on top, a toolbar row below with the bound

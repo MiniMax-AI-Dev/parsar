@@ -114,8 +114,9 @@ export function useScheduledTasksByWorkspace(
     enabled: Boolean(workspaceID),
     retry: noUnreachableRetry,
     staleTime: 15_000,
-    // Keep the previous page on screen while the next one fetches.
-    placeholderData: (prev) => prev,
+    // Keep pagination placeholders within one workspace so task rows never cross boundaries.
+    placeholderData: (prev, previousQuery) =>
+      previousQuery?.queryKey[2] === (workspaceID ?? "_none") ? prev : undefined,
   })
 }
 

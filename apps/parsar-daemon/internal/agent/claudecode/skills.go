@@ -23,11 +23,11 @@ type skillDescriptor struct {
 	SHA256      string
 }
 
-// SkillInstallResult carries warnings the session should surface. Unlike
-// PluginInstallResult there is no Dirs list — skill targets are auto-
-// scanned by Claude Code from <workDir>/.claude/skills/, no CLI flag.
+// SkillInstallResult carries installed directories and warnings. Claude Code
+// auto-scans its project root; other adapters register the returned root.
 type SkillInstallResult struct {
-	Warnings []string
+	SkillDirs []string
+	Warnings  []string
 }
 
 // installSkills materialises every skill under
@@ -40,26 +40,55 @@ func installSkills(
 	workDir string,
 	skills []skillDescriptor,
 ) (SkillInstallResult, error) {
-	if logger == nil {
-		logger = obslog.Bg()
-	}
 	if len(skills) == 0 {
 		return SkillInstallResult{}, nil
 	}
 	if strings.TrimSpace(workDir) == "" {
 		return SkillInstallResult{}, errors.New("claudecode skills: workDir is required")
 	}
+	return installSkillsAtRoot(ctx, logger, filepath.Join(workDir, ".claude", "skills"), skills, "claudecode skills")
+}
 
-	root := filepath.Join(workDir, ".claude", "skills")
+// InstallManagedSkills decodes the portable agent_options["skills"] payload,
+// materializes it below root, and removes entries that are no longer active.
+func InstallManagedSkills(ctx context.Context, logger *slog.Logger, root string, raw any) (SkillInstallResult, error) {
+	if strings.TrimSpace(root) == "" {
+		return SkillInstallResult{}, errors.New("managed skills: root is required")
+	}
+	skills, decodeWarnings := decodeSkillDescriptors(raw)
+	result, err := installSkillsAtRoot(ctx, logger, root, skills, "managed skills")
+	result.Warnings = append(decodeWarnings, result.Warnings...)
+	if err != nil {
+		return result, err
+	}
+	if err := pruneManagedSkills(root, result.SkillDirs); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func installSkillsAtRoot(
+	ctx context.Context,
+	logger *slog.Logger,
+	root string,
+	skills []skillDescriptor,
+	logLabel string,
+) (SkillInstallResult, error) {
+	if logger == nil {
+		logger = obslog.Bg()
+	}
+	if len(skills) == 0 {
+		return SkillInstallResult{}, nil
+	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
-		return SkillInstallResult{}, fmt.Errorf("claudecode skills: mkdir %s: %w", root, err)
+		return SkillInstallResult{}, fmt.Errorf("%s: mkdir %s: %w", logLabel, root, err)
 	}
 
 	result := SkillInstallResult{}
 	for _, s := range skills {
 		if err := s.validate(); err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("skip skill (invalid descriptor): %v", err))
-			logger.Warn("claudecode skills: invalid descriptor", "err", err.Error())
+			logger.Warn(logLabel+": invalid descriptor", "err", err.Error())
 			continue
 		}
 
@@ -68,26 +97,55 @@ func installSkills(
 		expectedKey := s.cacheKey()
 
 		if existing, err := os.ReadFile(cacheKey); err == nil && string(existing) == expectedKey {
-			logger.Info("claudecode skills: cache hit",
+			logger.Info(logLabel+": cache hit",
 				"name", s.Name, "version", s.Version, "dir", dir)
+			result.SkillDirs = append(result.SkillDirs, dir)
 			continue
 		}
 
 		// Same timeout / cap as plugins — they share the install pipeline.
 		perCtx, cancel := context.WithTimeout(ctx, pluginInstallTimeout)
-		err := installOneSkill(perCtx, logger, root, dir, cacheKey, expectedKey, s)
+		err := installOneSkill(perCtx, logger, root, dir, cacheKey, expectedKey, s, logLabel)
 		cancel()
 		if err != nil {
 			result.Warnings = append(result.Warnings,
 				fmt.Sprintf("skill %s@%s: %v", s.Name, s.Version, err))
-			logger.Warn("claudecode skills: install failed",
+			logger.Warn(logLabel+": install failed",
 				"name", s.Name, "version", s.Version, "err", err.Error())
 			continue
 		}
-		logger.Info("claudecode skills: installed",
+		result.SkillDirs = append(result.SkillDirs, dir)
+		logger.Info(logLabel+": installed",
 			"name", s.Name, "version", s.Version, "dir", dir)
 	}
 	return result, nil
+}
+
+func pruneManagedSkills(root string, activeDirs []string) error {
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("managed skills: read root %s: %w", root, err)
+	}
+	active := make(map[string]struct{}, len(activeDirs))
+	for _, dir := range activeDirs {
+		active[filepath.Base(dir)] = struct{}{}
+	}
+	for _, entry := range entries {
+		if entry.Name() == ".tmp" {
+			continue
+		}
+		if _, ok := active[entry.Name()]; ok {
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("managed skills: remove stale entry %s: %w", path, err)
+		}
+	}
+	return nil
 }
 
 // installOneSkill: same shape as installOnePlugin, only target dir differs.
@@ -99,6 +157,7 @@ func installOneSkill(
 	logger *slog.Logger,
 	root, dir, cacheKey, expectedKey string,
 	s skillDescriptor,
+	logLabel string,
 ) error {
 	tmpDir := filepath.Join(root, ".tmp")
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
@@ -139,7 +198,7 @@ func installOneSkill(
 	}
 
 	if err := os.WriteFile(cacheKey, []byte(expectedKey), 0o644); err != nil {
-		logger.Warn("claudecode skills: write cache key failed",
+		logger.Warn(logLabel+": write cache key failed",
 			"path", cacheKey, "err", err.Error())
 	}
 	return nil

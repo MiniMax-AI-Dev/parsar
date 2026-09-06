@@ -1,0 +1,302 @@
+import { expect, test } from "@playwright/test";
+import {
+  mockApp, json, WORKSPACE_ID, CONVERSATION_ID, OTHER_CONVERSATION_ID, type Surface, type Failure,
+} from "./helpers/conversation-app";
+
+const DRAFT = "Keep this draft\n    with indentation\nand line breaks";
+
+for (const surface of ["existing", "empty", "new"] as const) {
+  test(`${surface} composer preserves multiline input and sends with Enter`, async ({ page }) => {
+    const state = await mockApp(page, surface, null);
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&${surface === "new" ? "focus=compose" : `id=${CONVERSATION_ID}`}`);
+    const input = page.locator("form").getByRole("textbox");
+    await input.click();
+    await page.keyboard.insertText(DRAFT);
+    await expect(input).toHaveValue(DRAFT);
+    await input.press("Shift+Enter");
+    await page.keyboard.insertText("One more line");
+    const message = `${DRAFT}\nOne more line`;
+    await expect(input).toHaveValue(message);
+    expect(state.messageRequests).toBe(0);
+    await input.press("Enter");
+    await expect.poll(() => state.sent).toEqual([message]);
+    await expect(input).toHaveValue("");
+    expect(state.messageRequests).toBe(1);
+    const rendered = page.getByText(message, { exact: true });
+    await expect(rendered).toBeVisible();
+    expect(await rendered.textContent()).toBe(message);
+  });
+
+  test(`${surface} composer does not send while confirming IME input`, async ({ page }) => {
+    const state = await mockApp(page, surface, null);
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&${surface === "new" ? "focus=compose" : `id=${CONVERSATION_ID}`}`);
+    const input = page.locator("form").getByRole("textbox");
+    await input.fill("中文输入");
+    await input.dispatchEvent("compositionstart", { data: "输入" });
+    await input.dispatchEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, isComposing: true });
+    await input.dispatchEvent("compositionend", { data: "输入" });
+    await input.dispatchEvent("keydown", { key: "Enter", code: "Enter", keyCode: 229 });
+    await expect(input).toHaveValue("中文输入");
+    expect(state.messageRequests).toBe(0);
+    await input.press("Enter");
+    await expect.poll(() => state.sent).toEqual(["中文输入"]);
+    expect(state.messageRequests).toBe(1);
+  });
+}
+
+test("blank or repeated Enter does not send", async ({ page }) => {
+  const state = await mockApp(page, "existing", null);
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${CONVERSATION_ID}`);
+  const input = page.locator("form").getByRole("textbox");
+  await input.fill(" \n ");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "send", exact: true })).toBeDisabled();
+  await input.fill(DRAFT);
+  await input.dispatchEvent("keydown", { key: "Enter", repeat: true });
+  await expect(input).toHaveValue(DRAFT);
+  expect(state.messageRequests).toBe(0);
+});
+
+const cases: Array<{ surface: Surface; failure: Failure }> = [
+  { surface: "existing", failure: "message" },
+  { surface: "existing", failure: "network" },
+  { surface: "empty", failure: "message" },
+  { surface: "new", failure: "create" },
+  { surface: "new", failure: "message" },
+  { surface: "new", failure: "network" },
+];
+
+for (const { surface, failure } of cases) {
+  test(`${surface} conversation shows ${failure} failure and allows another send`, async ({ page }) => {
+    const state = await mockApp(page, surface, failure);
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&${surface === "new" ? "focus=compose" : `id=${CONVERSATION_ID}`}`);
+    const composer = page.locator("form").filter({ has: page.getByRole("button", { name: "send", exact: true }) });
+    const input = composer.getByRole("textbox");
+    const send = composer.getByRole("button", { name: "send", exact: true });
+    await input.fill(DRAFT);
+    await send.click();
+
+    const error = composer.getByText(failure === "network" ? "Failed to fetch" : `${failure} rejected`, { exact: true });
+    await expect(error).toBeVisible();
+    await expect(input).toHaveValue(DRAFT);
+    await expect(send).toBeEnabled();
+    expect(state.sent).toEqual([]);
+    if (failure === "create") expect(state.messageRequests).toBe(0);
+    expect(pageErrors).toEqual([]);
+
+    state.failure = null;
+    let releaseSend!: () => void;
+    state.waitForSend = new Promise<void>((resolve) => { releaseSend = resolve; });
+    await send.click();
+    await expect(error).toHaveCount(0);
+    await expect(send).toBeDisabled();
+    await expect(input).toHaveValue(DRAFT);
+    releaseSend();
+    await expect.poll(() => state.sent).toEqual([DRAFT]);
+    await expect(input).toHaveValue("");
+    await expect(page.getByText(DRAFT, { exact: true })).toBeVisible();
+    expect(pageErrors).toEqual([]);
+    if (surface === "new") {
+      expect(state.createRequests).toBe(failure === "create" ? 2 : 1);
+      expect(new Set(state.messageTargets).size).toBe(1);
+    }
+  });
+}
+
+test("first-send retries reuse the created conversation after repeated failures", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  for (const content of [DRAFT, "Edited draft", "Final draft"]) {
+    await input.fill(content);
+    await send.click();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    await expect(send).toBeEnabled();
+  }
+  expect(state.createRequests).toBe(1);
+  expect(new Set(state.messageTargets).size).toBe(1);
+  state.failure = null;
+  await send.click();
+  await expect.poll(() => state.sent).toEqual(["Final draft"]);
+  await expect(page).toHaveURL(new RegExp(`id=${state.messageTargets[0]}`));
+  expect(state.createRequests).toBe(1);
+});
+
+for (const action of ["new", "agent", "workspace", "conversation", "delete"] as const) {
+  test(`first-send retry does not reuse a conversation after ${action}`, async ({ page }) => {
+    const state = await mockApp(page, "new", "message");
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+    const input = page.locator("form").getByRole("textbox");
+    const send = page.getByRole("button", { name: "send", exact: true });
+    await input.fill(DRAFT);
+    await send.click();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    if (action === "agent") {
+      for (const name of ["Other Agent", "Test Agent"]) {
+        await page.getByRole("button", { name: "Switch Agent", exact: true }).click();
+        await page.getByRole("option", { name, exact: true }).click();
+      }
+    } else if (action === "workspace") {
+      for (const name of ["Other Workspace", "Send Test"]) {
+        await page.getByRole("button", { name: "Switch workspace", exact: true }).click();
+        await page.getByRole("menuitem").filter({ hasText: name }).click();
+        await expect(page.getByRole("button", { name: "Switch workspace", exact: true })).toHaveText(name);
+      }
+    } else if (action === "delete") {
+      await page.getByRole("button", { name: "Delete conversation", exact: true }).first().click();
+      await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    } else {
+      if (action === "conversation") {
+        await page.getByText("Other Conversation", { exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`id=${OTHER_CONVERSATION_ID}`));
+      }
+      await page.getByRole("button", { name: "New conversation", exact: true }).click();
+    }
+    state.failure = null;
+    await input.fill("A separate message");
+    await send.click();
+    await expect.poll(() => state.sent).toEqual(["A separate message"]);
+    expect(state.createRequests).toBe(2);
+    expect(new Set(state.messageTargets).size).toBe(2);
+  });
+}
+
+test("late creation does not restore an abandoned first-send target", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  let releaseCreate!: () => void;
+  state.waitForCreate = new Promise<void>((resolve) => { releaseCreate = resolve; });
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  await input.fill(DRAFT);
+  await send.click();
+  await expect.poll(() => state.createRequests).toBe(1);
+  await page.getByRole("button", { name: "New conversation", exact: true }).click();
+  releaseCreate();
+  await expect(send).toBeEnabled();
+  state.failure = null;
+  await send.click();
+  await expect.poll(() => state.sent).toEqual([DRAFT]);
+  expect(state.createRequests).toBe(2);
+  expect(new Set(state.messageTargets).size).toBe(2);
+});
+
+test("an abandoned retry cannot clear the new conversation draft", async ({ page }) => {
+  const state = await mockApp(page, "new", "message");
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+  const input = page.locator("form").getByRole("textbox");
+  const send = page.getByRole("button", { name: "send", exact: true });
+  await input.fill(DRAFT);
+  await send.click();
+  await expect(page.locator("form").getByRole("alert")).toBeVisible();
+  state.failure = null;
+  let releaseSend!: () => void;
+  state.waitForSend = new Promise<void>((resolve) => { releaseSend = resolve; });
+  await send.click();
+  await expect.poll(() => state.messageRequests).toBe(2);
+  await page.getByRole("button", { name: "New conversation", exact: true }).click();
+  await input.fill("A different draft");
+  releaseSend();
+  await expect.poll(() => state.sent).toEqual([DRAFT]);
+  await expect(input).toHaveValue("A different draft");
+  await expect(page).toHaveURL(/focus=compose/);
+  await send.click();
+  await expect.poll(() => state.sent).toEqual([DRAFT, "A different draft"]);
+  await expect(input).toHaveValue("");
+  expect(state.createRequests).toBe(2);
+});
+
+test("send errors can be dismissed without losing the draft", async ({ page }) => {
+  await mockApp(page, "existing", "message");
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${CONVERSATION_ID}`);
+  const composer = page.locator("form");
+  await composer.getByRole("textbox").fill(DRAFT);
+  await composer.getByRole("button", { name: "send", exact: true }).click();
+  await expect(composer.getByText("message rejected", { exact: true })).toBeVisible();
+  await composer.getByRole("button", { name: "×", exact: true }).click();
+  await expect(composer.getByText("message rejected", { exact: true })).toHaveCount(0);
+  await expect(composer.getByRole("textbox")).toHaveValue(DRAFT);
+});
+
+for (const surface of ["existing", "new"] as const) {
+  for (const lateFailure of [false, true]) {
+    test(`${surface} send errors stay with their target when switching ${lateFailure ? "before" : "after"} failure`, async ({ page }) => {
+      await mockApp(page, surface, "message");
+      let rejectSend!: () => void;
+      const waitForFailure = new Promise<void>((resolve) => { rejectSend = resolve; });
+      await page.route("**/api/v1/conversations/*/messages", async (route) => {
+        await waitForFailure;
+        return json(route, { error: "server_unreachable", message: "message rejected" }, 503);
+      });
+      const input = page.locator("form").getByRole("textbox");
+      if (surface === "existing") {
+        await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${OTHER_CONVERSATION_ID}`);
+        await expect(input).toBeEnabled();
+        await page.getByText("Test Conversation", { exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`id=${CONVERSATION_ID}`));
+      } else {
+        await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&focus=compose`);
+      }
+      await input.fill(DRAFT);
+      const request = page.waitForRequest("**/api/v1/conversations/*/messages");
+      await page.getByRole("button", { name: "send", exact: true }).click();
+      await request;
+      if (!lateFailure) {
+        rejectSend();
+        await expect(page.locator("form").getByRole("alert")).toHaveText("message rejected×");
+      }
+      if (surface === "existing") {
+        await page.getByText("Other Conversation", { exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`id=${OTHER_CONVERSATION_ID}`));
+      } else {
+        await page.getByRole("button", { name: "Switch Agent", exact: true }).click();
+        await page.getByRole("option", { name: "Other Agent", exact: true }).click();
+      }
+      if (lateFailure) rejectSend();
+      await expect(page.getByRole("button", { name: "send", exact: true })).toBeEnabled();
+      await expect(page.locator("form").getByRole("alert")).toHaveCount(0);
+      await expect(input).toHaveValue(DRAFT);
+    });
+  }
+}
+
+test("long send errors stay within the composer", async ({ page }) => {
+  await mockApp(page, "existing", "message");
+  const message = "unbroken-error-".repeat(100);
+  await page.route(`**/api/v1/conversations/${CONVERSATION_ID}/messages`, (route) =>
+    json(route, { error: "rejected", message }, 422));
+  await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${CONVERSATION_ID}`);
+  const composer = page.locator("form");
+  await composer.getByRole("textbox").fill(DRAFT);
+  await composer.getByRole("button", { name: "send", exact: true }).click();
+  const alert = composer.getByRole("alert");
+  await expect(alert).toHaveText(`${message}×`);
+  expect(await alert.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
+for (const response of [{ agent_run_id: "run-1" }, { run_ids: ["run-1"] }]) {
+  test(`run start failures remain separate from sends with ${Object.keys(response)[0]}`, async ({ page }) => {
+    const state = await mockApp(page, "existing", "message");
+    await page.route(`**/api/v1/conversations/${CONVERSATION_ID}/messages`, (route) => {
+      state.sent.push(route.request().postDataJSON().content);
+      return json(route, { message_id: "message-new", ...response }, 201);
+    });
+    await page.route("**/runs/run-1/start", (route) => json(route, { error: "unavailable", message: "run start rejected" }, 503));
+    await page.route("**/runs/run-1/stream", (route) => route.fulfill({
+      contentType: "text/event-stream", body: 'event: done\ndata: {"final":{"content":""}}\n\n',
+    }));
+    await page.goto(`/?admin=conversations&ws=${WORKSPACE_ID}&id=${CONVERSATION_ID}`);
+    const composer = page.locator("form");
+    await composer.getByRole("textbox").fill(DRAFT);
+    await composer.getByRole("button", { name: "send", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveText("run start rejected×");
+    await expect(composer.getByRole("alert")).toHaveCount(0);
+    await expect(composer.getByRole("textbox")).toHaveValue("");
+    await expect(page.getByText(DRAFT, { exact: true })).toBeVisible();
+    expect(state.sent).toEqual([DRAFT]);
+  });
+}

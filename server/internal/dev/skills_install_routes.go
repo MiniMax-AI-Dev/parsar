@@ -15,11 +15,13 @@ import (
 	"strings"
 
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/capability/canonical"
+	"github.com/MiniMax-AI-Dev/parsar/server/internal/paths"
 	"github.com/MiniMax-AI-Dev/parsar/server/internal/storage/blob"
 )
 
 const (
 	skillsRegistryName    = "skills.sh"
+	skillsCLIPackage      = "skills@1.5.23"
 	skillInstallAgentName = "claude-code"
 	skillInstallTmpPrefix = "teamgent-skill-*"
 )
@@ -40,7 +42,24 @@ type defaultSkillInstallRunner struct{}
 func (defaultSkillInstallRunner) Run(ctx context.Context, dir string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	env, err := skillInstallCommandEnv()
+	if err != nil {
+		return nil, err
+	}
+	cmd.Env = env
 	return cmd.CombinedOutput()
+}
+
+func skillInstallCommandEnv() ([]string, error) {
+	root, err := paths.Root()
+	if err != nil {
+		return nil, fmt.Errorf("resolve Skills install cache directory: %w", err)
+	}
+	return append(os.Environ(),
+		"DISABLE_TELEMETRY=1",
+		"NPM_CONFIG_CACHE="+filepath.Join(root, "cache", "npm"),
+		"NODE_COMPILE_CACHE="+filepath.Join(root, "cache", "node"),
+	), nil
 }
 
 type skillInstallHTTPDoer interface {
@@ -249,7 +268,7 @@ func validSkillRefPart(part string) bool {
 }
 
 func downloadSkillToTemp(ctx context.Context, runner skillInstallCommandRunner, tmpDir, source, slug string) (string, error) {
-	output, err := runner.Run(ctx, tmpDir, "npx", "--yes", "skills", "add", strings.TrimSpace(source), "--skill", strings.TrimSpace(slug), "--agent", skillInstallAgentName, "--copy", "--yes")
+	output, err := runner.Run(ctx, tmpDir, "npx", "--yes", skillsCLIPackage, "add", strings.TrimSpace(source), "--skill", strings.TrimSpace(slug), "--agent", skillInstallAgentName, "--copy", "--yes")
 	if err != nil {
 		return "", fmt.Errorf("skills add failed: %s", compactCommandOutput(output, err))
 	}

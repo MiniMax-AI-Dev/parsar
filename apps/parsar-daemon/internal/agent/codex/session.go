@@ -105,10 +105,17 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 	if cfg.killTimeout <= 0 {
 		cfg.killTimeout = rpcKillTimeout
 	}
+	req.AgentStateKey = effectiveAgentStateKey(req)
 
 	plan, err := BuildSessionPlan(req.RunID, req.AgentStateKey, req.WorkDir, req.AgentOptions)
 	if err != nil {
 		return nil, fmt.Errorf("codex: build session plan: %w", err)
+	}
+
+	skillRoot, err := prepareManagedSkills(parent, cfg.logger, req)
+	if err != nil {
+		plan.Cleanup()
+		return nil, err
 	}
 
 	cancelCtx, cancelFn := context.WithCancel(parent)
@@ -151,6 +158,14 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cancelFn()
 		plan.Cleanup()
 		return nil, fmt.Errorf("codex: rpc start: %w", err)
+	}
+	if skillRoot != "" {
+		if err := setSkillExtraRoots(cancelCtx, rpc, []string{skillRoot}); err != nil {
+			cancelFn()
+			_ = rpc.Close()
+			plan.Cleanup()
+			return nil, fmt.Errorf("codex: register skill root: %w", err)
+		}
 	}
 
 	// thread/start (or resume) + turn/start happen in the run goroutine

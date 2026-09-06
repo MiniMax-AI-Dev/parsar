@@ -271,6 +271,7 @@
       "allow": "已允许",
       "deny": "已拒绝",
       "alreadyDecided": "这条审批已经处理过，不能再操作。",
+      "readOnly": "当前为只读模式。工作区所有者、管理员和成员可以处理。",
       "relatedLinks": "关联跳转",
       "openRun": "打开 Run Detail",
       "openConversation": "打开 Conversation",
@@ -371,6 +372,7 @@
       "generic": "运行期能力启动失败，请稍后重试或联系管理员。"
     },
     "composer": {
+      "readOnly": "当前为只读权限，无法发送消息。",
       "label": "发送消息",
       "placeholder": "和 {{agent}} 聊聊…",
       "addContext": "添加附件 / 上下文",
@@ -3069,7 +3071,6 @@
       "actions": {
         "save": "保存",
         "saveDraft": "保存草稿",
-        "saveAndEnable": "保存并启用",
         "reset": "重置"
       },
       "status": {
@@ -3253,6 +3254,7 @@
     "subtitle": "到点用独立 session 自动触发一次 agent run，结果落到运行历史。",
     "new": "新建任务",
     "empty": "还没有定时任务，点右上角新建一个。",
+    "emptyReadOnly": "还没有定时任务。",
     "loadError": "加载定时任务失败",
     "noAgents": "当前项目还没有可用的 Agent，请先创建并启用一个 Agent 再配置定时任务。",
     "never": "—",
@@ -3333,8 +3335,6 @@
       "cronLabel": "cron 表达式",
       "cronPlaceholder": "0 9 * * *",
       "preview": "频率预览",
-      "feishu": "推送到飞书群",
-      "feishuDisabledHint": "后续版本开放，当前仅 Web 查看。",
       "save": "保存",
       "saving": "保存中…",
       "cancel": "取消",

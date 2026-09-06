@@ -25,7 +25,6 @@ const TABS: SettingsTab[] = [
   "general",
   "credentials",
   "runtime",
-  "connectors",
   "usage",
   "audit",
 ]

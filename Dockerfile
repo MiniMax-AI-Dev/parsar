@@ -36,7 +36,7 @@
 ###############################################################################
 ARG NODE_VERSION=22-alpine
 ARG GO_VERSION=1.25-bookworm
-ARG RUNTIME_BASE=debian:bookworm-slim
+ARG RUNTIME_BASE=node:22.22.0-bookworm-slim
 
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION} AS web-builder
 ENV PNPM_HOME=/pnpm
@@ -118,10 +118,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     done
 
 ###############################################################################
-# Stage 3: runtime — debian-slim with a non-root user.
+# Stage 3: runtime — Node.js on debian-slim with a non-root user.
 #
-# debian-slim (not distroless / scratch) on purpose:
+# Node.js on debian-slim (not distroless / scratch) on purpose:
 #   - ca-certificates + tini ship pre-built.
+#   - Server-side Skills.sh installs require npx and git.
 #   - Operators can `docker exec -it ... bash` to debug.
 #   - The opencode local runner may shell out (rg, basic core utils);
 #     keeping a real userland avoids surprises.
@@ -135,12 +136,17 @@ ARG PARSAR_GID=10001
 # Single RUN to limit the resulting layer count. The apt operations
 # touch the package index and would inflate the image if split.
 RUN set -eux; \
+    node --version; \
+    NODE_DISABLE_COMPILE_CACHE=1 npx --version; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        git \
         tini \
         wget \
     ; \
+    git --version; \
+    test ! -e /tmp/node-compile-cache; \
     rm -rf /var/lib/apt/lists/*; \
     groupadd --system --gid ${PARSAR_GID} ${PARSAR_USER}; \
     useradd  --system --uid ${PARSAR_UID} --gid ${PARSAR_GID} \

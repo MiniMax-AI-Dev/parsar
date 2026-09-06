@@ -47,6 +47,7 @@ import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
 import { Textarea } from "../../components/ui/textarea"
 import { ApiError } from "../../lib/api-client"
 import { useAgents } from "../../lib/api-agents"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 import type { Agent } from "../../lib/api-types"
 import {
@@ -204,6 +205,7 @@ export function ScheduledTasksPage() {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const workspaceID = useWorkspaceId()
+  const workspacesQ = useMyWorkspaces()
   const [offset, setOffset] = useState(0)
   const tasksQ = useScheduledTasksByWorkspace(workspaceID, { offset, limit: SCHED_PAGE_SIZE })
   const agentsQ = useAgents(workspaceID)
@@ -228,6 +230,8 @@ export function ScheduledTasksPage() {
   const weekdays = (t("scheduledTasks.weekdays", { returnObjects: true }) as unknown as string[]) ?? []
   const tasks = tasksQ.data?.scheduled_tasks ?? []
   const total = tasksQ.data?.total ?? 0
+  const role = workspacesQ.data?.workspaces.find((workspace) => workspace.id === workspaceID)?.role
+  const canManageTasks = role === "owner" || role === "admin" || role === "member"
 
   const allAgents = useMemo(() => agentsQ.data?.agents ?? [], [agentsQ.data])
   // active agents are selectable for new tasks; name lookup covers every agent
@@ -294,10 +298,12 @@ export function ScheduledTasksPage() {
           title={pageTitle}
           subtitleFor="scheduledTasks.title"
           action={
-            <Button onClick={openCreate} disabled={!workspaceID || noAgents} data-testid="scheduled-new">
-              <Plus strokeWidth={1.5} aria-hidden="true" />
-              {t("scheduledTasks.new")}
-            </Button>
+            canManageTasks ? (
+              <Button onClick={openCreate} disabled={!workspaceID || noAgents} data-testid="scheduled-new">
+                <Plus strokeWidth={1.5} aria-hidden="true" />
+                {t("scheduledTasks.new")}
+              </Button>
+            ) : undefined
           }
         />
 
@@ -326,7 +332,10 @@ export function ScheduledTasksPage() {
             />
           </div>
         ) : tasks.length === 0 ? (
-          <EmptyState icon={CalendarClock} title={t("scheduledTasks.empty")} />
+          <EmptyState
+            icon={CalendarClock}
+            title={t(canManageTasks ? "scheduledTasks.empty" : "scheduledTasks.emptyReadOnly")}
+          />
         ) : (
           <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={pageTitle}>
             <LedgerHeader>
@@ -369,6 +378,7 @@ export function ScheduledTasksPage() {
                     </span>
                     <LedgerNum muted={!task.next_run_at}>{fmtWhen(task.next_run_at)}</LedgerNum>
                     <LedgerNum muted={!task.last_run_at}>{fmtWhen(task.last_run_at)}</LedgerNum>
+                    {canManageTasks ? (
                     <RowActions>
                       <ActionIconButton
                         icon={Power}
@@ -396,6 +406,9 @@ export function ScheduledTasksPage() {
                         }}
                       />
                     </RowActions>
+                    ) : (
+                      <span />
+                    )}
                   </LedgerRow>
                 )
               })}
@@ -414,7 +427,7 @@ export function ScheduledTasksPage() {
         )}
       </div>
 
-      {dialogOpen && (
+      {dialogOpen && canManageTasks && (
         <ScheduledTaskDialog
           open={dialogOpen}
           task={editing}

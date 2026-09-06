@@ -73,7 +73,12 @@ func newSession(parent context.Context, req proto.PromptRequestPayload, out chan
 		cfg.killTimeout = 3 * time.Second
 	}
 
-	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, req.AgentOptions)
+	opts, err := prepareManagedSkills(parent, cfg.logger, req)
+	if err != nil {
+		return nil, err
+	}
+
+	buildRes, err := BuildArgs(req.RunID, req.Prompt, req.WorkDir, opts)
 	if err != nil {
 		return nil, fmt.Errorf("opencode: build args: %w", err)
 	}

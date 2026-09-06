@@ -71,7 +71,9 @@ import {
   useAgentRuns,
   useRequeueRun,
 } from "../../lib/api-agents"
+import { formatRawRunEvents } from "../../lib/agent-run-event-format"
 import type { AgentRunDetail, AgentRunEvent, AgentRunStatus, AgentRunSummary } from "../../lib/api-types"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
@@ -393,6 +395,7 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
   const { navigate } = useAdminView()
 
   const runQ = useAgentRun(id, wsId)
+  const workspacesQ = useMyWorkspaces()
   const cancelRun = useCancelRun(wsId)
   const requeueRun = useRequeueRun(wsId)
   const [confirmCancel, setConfirmCancel] = useState(false)
@@ -453,7 +456,10 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
   const translateDetail = (key: string, options?: Record<string, unknown>) => t(key as never, options as never) as unknown as string
   const diagnosis = buildRunDiagnosis(run, events, translateDetail)
   const runtimeDiagnosis = buildRuntimeDiagnosis(run, translateDetail)
-  const isCancellable = run.status === "running" || run.status === "queued"
+  // Viewers may watch a run but not stop it (main #234ef56).
+  const role = workspacesQ.data?.workspaces.find((w) => w.id === run.workspace_id)?.role
+  const canCancel = role === "owner" || role === "admin" || role === "member"
+  const isCancellable = canCancel && (run.status === "running" || run.status === "queued")
   const isRetryable = run.status === "failed" || run.status === "interrupted" || run.status === "cancelled"
 
   function handleRetry() {
@@ -715,9 +721,9 @@ function RunSteps({ events, loading }: { events: AgentRunEvent[]; loading: boole
               </div>
               {open && step.rawEvents.length > 0 && (
                 <div className="space-y-2 pb-2">
-                  {step.rawEvents.map((ev) => (
-                    <pre key={ev.id} className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
-                      {`#${ev.sequence} ${ev.event_kind}\n${JSON.stringify(ev.payload ?? {}, null, 2)}`}
+                  {formatRawRunEvents(step.rawEvents).map((block) => (
+                    <pre key={block.key} className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                      {block.text}
                     </pre>
                   ))}
                 </div>

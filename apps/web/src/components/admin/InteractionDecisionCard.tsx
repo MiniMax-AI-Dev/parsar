@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowUpRight, Check, X } from "lucide-react"
 
 import { useAdminView } from "../../lib/admin-router"
 import { useResolveAgentInteraction } from "../../lib/api-interactions"
+import { useMyWorkspaces } from "../../lib/api-workspaces"
 import type {
   AgentInteraction,
   AgentInteractionQuestion,
@@ -39,6 +40,9 @@ export function InteractionDecisionCard({
   const fmtAgo = useRelativeTime()
   const fmtUntil = useTimeUntil()
   const resolve = useResolveAgentInteraction(workspaceID)
+  const workspacesQ = useMyWorkspaces()
+  const role = workspacesQ.data?.workspaces.find((workspace) => workspace.id === workspaceID)?.role
+  const canResolve = role === "owner" || role === "admin" || role === "member"
   const [answers, setAnswers] = useState<Record<string, string[]>>({})
   const [custom, setCustom] = useState<Record<string, string>>({})
   const questions = interactionQuestions(interaction)
@@ -50,6 +54,11 @@ export function InteractionDecisionCard({
       return (answers[key]?.length ?? 0) > 0 || !!custom[key]?.trim()
     })
 
+  const submit = (body: ResolveAgentInteractionRequest) => {
+    if (!canResolve) return
+    resolve.mutate({ id: interaction.id, body })
+  }
+
   const submitChoice = () => {
     const answerPayload = Object.fromEntries(
       questions.map((question, index) => {
@@ -59,11 +68,8 @@ export function InteractionDecisionCard({
         return [key, values]
       }),
     )
-    resolve.mutate({ id: interaction.id, body: { answers: answerPayload } })
+    submit({ answers: answerPayload })
   }
-
-  const submit = (body: ResolveAgentInteractionRequest) =>
-    resolve.mutate({ id: interaction.id, body })
 
   const kindLabel = t(`approvals.kind.${interaction.kind === "permission" ? "permission" : "userChoice"}`)
   const title =
@@ -114,7 +120,7 @@ export function InteractionDecisionCard({
             const key = questionKey(question, index)
             const selected = answers[key] ?? []
             return (
-              <fieldset key={key} disabled={!pending || resolve.isPending} className="m-0 min-w-0 border-0 p-0">
+              <fieldset key={key} disabled={!canResolve || !pending || resolve.isPending} className="m-0 min-w-0 border-0 p-0">
                 <legend className="mb-1 text-sm font-medium text-fg">
                   {question.header ? `${question.header} · ` : ""}
                   {question.question}
@@ -177,9 +183,12 @@ export function InteractionDecisionCard({
       ) : null}
 
       {!pending && <p className="text-sm text-fg-muted">{t("approvals.detail.alreadyDecided")}</p>}
+      {pending && !canResolve && (
+        <p className="text-sm text-fg-muted">{t("approvals.detail.readOnly")}</p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-        {pending &&
+        {pending && canResolve &&
           (interaction.kind === "permission" ? (
             <>
               <Button onClick={() => submit({ approved: true })} disabled={resolve.isPending}>

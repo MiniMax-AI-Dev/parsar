@@ -271,6 +271,7 @@
       "allow": "Allowed",
       "deny": "Denied",
       "alreadyDecided": "This approval has been handled — actions are no longer available.",
+      "readOnly": "Read-only access. Workspace owners, admins, and members can respond.",
       "relatedLinks": "Related",
       "openRun": "Open Run Detail",
       "openConversation": "Open Conversation",
@@ -371,6 +372,7 @@
       "generic": "A runtime capability failed to start. Please retry later or contact an administrator."
     },
     "composer": {
+      "readOnly": "Read-only access. You cannot send messages.",
       "label": "Send message",
       "placeholder": "Chat with {{agent}}…",
       "addContext": "Add attachment / context",
@@ -3069,7 +3071,6 @@
       "actions": {
         "save": "Save",
         "saveDraft": "Save draft",
-        "saveAndEnable": "Save and enable",
         "reset": "Reset"
       },
       "status": {
@@ -3253,6 +3254,7 @@
     "subtitle": "At each fire time, runs the agent once in a clean session; results land in run history.",
     "new": "New task",
     "empty": "No scheduled tasks yet — create one from the top right.",
+    "emptyReadOnly": "No scheduled tasks yet.",
     "loadError": "Failed to load scheduled tasks",
     "noAgents": "This project has no available agents yet — create and enable an agent before configuring scheduled tasks.",
     "never": "—",
@@ -3333,8 +3335,6 @@
       "cronLabel": "cron expression",
       "cronPlaceholder": "0 9 * * *",
       "preview": "Schedule preview",
-      "feishu": "Push to Feishu group",
-      "feishuDisabledHint": "Coming in a later release; Web-only for now.",
       "save": "Save",
       "saving": "Saving…",
       "cancel": "Cancel",
