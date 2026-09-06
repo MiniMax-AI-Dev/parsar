@@ -20,6 +20,7 @@ import {
 
 import { AdminLayout } from "../../../components/layout/AdminLayout"
 import { PageHeader } from "../../../components/layout/PageHeader"
+import { DetailHeading } from "../../../components/ui/section"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { ActionIconButton, RowActions } from "../../../components/ui/action-button"
@@ -992,17 +993,8 @@ export function CapabilityDetailPage({ id }: { id: string }) {
     <AdminLayout activeMenu="capabilities">
       <PageHeader
         backLink={<BackLink label={backLabel} onClick={() => navigateAdmin("capabilities")} />}
-        title={
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <span className="truncate">{capability.name}</span>
-            <CapabilityTypeBadge type={capability.type} />
-          </span>
-        }
         action={
           <>
-            <Badge variant="neutral" dot>
-              {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
-            </Badge>
             {isAdmin && <Button variant="outline" onClick={() => setEditOpen(true)}>{t("capabilities.actions.edit")}</Button>}
             {isAdmin && (
               <Button onClick={() => setAddVersionOpen(true)}>
@@ -1010,6 +1002,18 @@ export function CapabilityDetailPage({ id }: { id: string }) {
                 {t("capabilities.actions.addVersion")}
               </Button>
             )}
+          </>
+        }
+      />
+
+      <DetailHeading
+        title={capability.name}
+        badges={
+          <>
+            <CapabilityTypeBadge type={capability.type} />
+            <Badge variant="neutral" dot>
+              {t(deprecated ? "capabilities.status.deprecated" : "capabilities.status.active")}
+            </Badge>
           </>
         }
       />

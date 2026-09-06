@@ -1,66 +1,63 @@
 [
   {
-    "view": "conversations",
+    "view": "capabilities",
     "rows": 2,
     "rowsAfterClicks": 0,
-    "dialogsOpened": [],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": [
-      "conversations/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/agents/ae658bed-13db-4b88-8f0c-f727401c6b5a/sandbox",
-      "conversations/row: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/agents/ae658bed-13db-4b88-8f0c-f727401c6b5a/sandbox",
-      "conversations/open-detail: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/agents/ae658bed-13db-4b88-8f0c-f727401c6b5a/sandbox"
-    ]
-  },
-  {
-    "view": "runs",
-    "rows": 0,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": []
-  },
-  {
-    "view": "scheduled",
-    "rows": 0,
-    "rowsAfterClicks": 0,
     "dialogsOpened": [
-      "新建任务"
+      "新建能力"
     ],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": []
-  },
-  {
-    "view": "approvals",
-    "rows": 0,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
   },
   {
     "view": "agents",
-    "rows": 1,
+    "rows": 2,
     "rowsAfterClicks": 3,
     "dialogsOpened": [
       "新建 Agent"
     ],
     "pageErrors": [],
     "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "connectors",
+    "rows": 2,
+    "rowsAfterClicks": 14,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
     "bad": [
-      "agents/click:聊一下: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/agents/ae658bed-13db-4b88-8f0c-f727401c6b5a/sandbox"
+      "connectors/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
     ]
   },
   {
-    "view": "capabilities",
-    "rows": 0,
-    "rowsAfterClicks": 0,
+    "view": "members",
+    "rows": 3,
+    "rowsAfterClicks": 3,
     "dialogsOpened": [
-      "新建能力"
+      "邀请新成员",
+      "取消邀请"
     ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "runs",
+    "rows": 2,
+    "rowsAfterClicks": 2,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "conversations",
+    "rows": 3,
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []

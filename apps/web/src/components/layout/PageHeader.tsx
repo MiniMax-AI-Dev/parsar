@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 
 interface PageHeaderProps {
-  title: ReactNode
+  /** Omit on a detail whose back link already says where you are. */
+  title?: ReactNode
   /** Quiet secondary name beside the title (e.g. the English page name). */
   subtitle?: ReactNode
   /**
@@ -39,12 +40,14 @@ export function PageHeader({ title, subtitle, subtitleFor, action, backLink, cla
       )}
     >
       {backLink && <div className="shrink-0 text-xs text-fg-muted">{backLink}</div>}
-      <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl leading-none text-fg">
-        <span className="truncate">{title}</span>
-        {resolvedSubtitle && (
-          <span className="shrink-0 text-xs font-normal tracking-normal text-fg-muted">{resolvedSubtitle}</span>
-        )}
-      </h1>
+      {title && (
+        <h1 className="font-display flex min-w-0 items-baseline gap-2 text-xl leading-none text-fg">
+          <span className="truncate">{title}</span>
+          {resolvedSubtitle && (
+            <span className="shrink-0 text-xs font-normal tracking-normal text-fg-muted">{resolvedSubtitle}</span>
+          )}
+        </h1>
+      )}
       {action && <div className="ml-auto flex shrink-0 items-center gap-2">{action}</div>}
     </header>
   )

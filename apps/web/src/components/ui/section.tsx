@@ -33,3 +33,26 @@ export function PageSection({
     </section>
   )
 }
+
+/**
+ * The subject of a detail page: its name at the page-title size with its
+ * badges beside it, centred on one line. Detail topbars carry only the
+ * back link and the actions, so this is where the reader learns what
+ * they are looking at.
+ */
+export function DetailHeading({
+  title,
+  badges,
+  className,
+}: {
+  title: ReactNode
+  badges?: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("mb-3 flex flex-wrap items-center gap-x-2 gap-y-1", className)}>
+      <h2 className="font-display min-w-0 truncate text-xl text-fg">{title}</h2>
+      {badges}
+    </div>
+  )
+}

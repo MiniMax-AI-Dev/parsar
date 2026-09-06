@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowUpRight, Cable, Search } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { DetailHeading } from "../../components/ui/section"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { Badge } from "../../components/ui/badge"
@@ -205,15 +206,20 @@ export function ConnectorDetailPage({ id }: { id: string }) {
   const connector = (query.data?.connectors ?? []).find((c) => c.connector_type === id)
 
   const back = (
-    <Button variant="ghost" size="icon" onClick={() => navigate("connectors")} aria-label={t("connectors.page.title")}>
-      <ArrowLeft strokeWidth={1.5} aria-hidden="true" />
-    </Button>
+    <button
+      type="button"
+      onClick={() => navigate("connectors")}
+      className="inline-flex items-center gap-1 rounded text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+      {t("connectors.page.title")}
+    </button>
   )
 
   if (query.isLoading) {
     return (
       <AdminLayout activeMenu="settings">
-        <PageHeader backLink={back} title={id} action={<SettingsTabs active="connectors" />} />
+        <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-3 w-64" />
@@ -226,7 +232,7 @@ export function ConnectorDetailPage({ id }: { id: string }) {
   if (!connector) {
     return (
       <AdminLayout activeMenu="settings">
-        <PageHeader backLink={back} title={id} action={<SettingsTabs active="connectors" />} />
+        <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
         <EmptyState
           icon={Cable}
           title={t("connectors.detail.notFound.title")}
@@ -238,7 +244,12 @@ export function ConnectorDetailPage({ id }: { id: string }) {
 
   return (
     <AdminLayout activeMenu="settings">
-      <PageHeader backLink={back} title={connector.label} subtitle={connector.connector_type} action={<SettingsTabs active="connectors" />} />
+      <PageHeader backLink={back} action={<SettingsTabs active="connectors" />} />
+
+      <DetailHeading
+        title={connector.label}
+        badges={<span className="font-mono text-xs text-fg-muted">{connector.connector_type}</span>}
+      />
 
       <Tabs defaultValue="overview" className="max-w-2xl">
         <TabsList>

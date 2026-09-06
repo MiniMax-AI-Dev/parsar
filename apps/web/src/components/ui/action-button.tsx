@@ -99,7 +99,14 @@ export function RowActions({
           "flex min-h-7 items-center justify-end gap-0.5",
           !inline &&
             "group-[.grid]:absolute group-[.grid]:right-4 group-[.grid]:top-1/2 group-[.grid]:-translate-y-1/2 group-[.grid]:rounded-md group-[.grid]:app-hover-solid group-[.grid]:px-0.5",
-          !always && !inline && "opacity-0 transition-opacity duration-150 ease-settle focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100",
+          // Reveal on hover and on KEYBOARD focus only. A mouse click leaves
+          // :focus on the row, so focus-within would pin the cluster open
+          // long after the pointer left — and every row the focus passed
+          // through would keep its actions showing. :focus-visible does not
+          // match a mouse click, so the row goes quiet again.
+          !always &&
+            !inline &&
+            "opacity-0 transition-opacity duration-150 ease-settle group-hover:opacity-100 group-focus-visible:opacity-100 group-has-[:focus-visible]:opacity-100 has-[:focus-visible]:opacity-100",
           className,
         )}
       >

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ArrowUpRight, PackageCheck } from "lucide-react"
 
 import { PageHeader } from "../../../components/layout/PageHeader"
+import { DetailHeading } from "../../../components/ui/section"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { RailSection } from "../../../components/ui/detail-rail"
@@ -73,20 +74,22 @@ export function MarketplaceCapabilityDetail({ id }: { id: string }) {
       <PageHeader
         className="static mx-0 mb-0"
         backLink={<BackLink label={backLabel} onClick={back} />}
-        title={
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <span className="truncate">{capability.name}</span>
-            <CapabilityTypeBadge type={capability.type} />
-            {deprecated ? (
-              <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeTarget")}</Badge>
-            ) : (
-              <Badge variant="neutral" dot>{t("capabilities.marketplaceDetail.badge")}</Badge>
-            )}
-          </span>
-        }
         action={<Button variant="outline" onClick={() => setUninstallOpen(true)}>{t("capabilities.uninstall.action")}</Button>}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4">
+        <DetailHeading
+          title={capability.name}
+          badges={
+            <>
+              <CapabilityTypeBadge type={capability.type} />
+              {deprecated ? (
+                <Badge variant="neutral" dot>{t("capabilities.deprecated.badgeTarget")}</Badge>
+              ) : (
+                <Badge variant="neutral" dot>{t("capabilities.marketplaceDetail.badge")}</Badge>
+              )}
+            </>
+          }
+        />
         {deprecated && <InlineNotice tone="warning" className="mb-4">{t("capabilities.deprecated.bannerTarget")}</InlineNotice>}
         {capability.description && <p className="mb-4 max-w-3xl text-sm text-fg">{capability.description}</p>}
 

@@ -44,6 +44,7 @@ import { AgentsListTable } from "./agents/AgentsListTable"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 import { DeleteAgentDialog } from "./agents/DeleteAgentDialog"
 import { DetailSection } from "./agents/DetailSection"
+import { DetailHeading } from "../../components/ui/section"
 
 function usePendingCapability(workspaceID: string | null) {
   const id = new URLSearchParams(window.location.search).get("pendingCapability")
@@ -434,21 +435,25 @@ export function AgentDetailPage({ id }: { id: string }) {
         <PageHeader
           className="static mx-0 mb-0"
           backLink={backLink}
-          title={agent.name}
           action={
-            <>
-              <AgentStatusBadge status={agent.status} />
-              <AgentDetailActions
-                agent={agent}
-                workspaceID={wid}
-                workspaceName={currentWorkspace?.name}
-                workspaceRole={workspaceRole}
-                models={models}
-                onToast={setToast}
-              />
-            </>
+            <AgentDetailActions
+              agent={agent}
+              workspaceID={wid}
+              workspaceName={currentWorkspace?.name}
+              workspaceRole={workspaceRole}
+              models={models}
+              onToast={setToast}
+            />
           }
         />
+
+        <div className="px-6 pt-4">
+          <DetailHeading
+            title={agent.name}
+            badges={<AgentStatusBadge status={agent.status} />}
+            className="mb-0"
+          />
+        </div>
 
         {toast && <SuccessNotice>{toast}</SuccessNotice>}
         {pendingCapability.id && (

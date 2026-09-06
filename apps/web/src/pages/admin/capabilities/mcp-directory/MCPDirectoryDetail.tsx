@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { ArrowUpRight, Download, Link2, Server } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { DetailHeading } from "../../../../components/ui/section"
 import { PageHeader } from "../../../../components/layout/PageHeader"
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
@@ -98,22 +99,22 @@ export function DirectoryDetail({
 
   return (
     <>
-      {header(
-        <span className="min-w-0 truncate">{item.name}</span>,
-        action,
-      )}
+      {header(null, action)}
       {notices}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-4" data-testid="mcp-directory-detail">
-        {(item.verified || item.installed || item.connected) && (
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {item.verified ? <VerifiedBadge /> : null}
-            {item.installed ? (
-              <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
-            ) : item.connected ? (
-              <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
-            ) : null}
-          </div>
-        )}
+        <DetailHeading
+          title={item.name}
+          badges={
+            <>
+              {item.verified ? <VerifiedBadge /> : null}
+              {item.installed ? (
+                <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.actions.installed")}</Badge>
+              ) : item.connected ? (
+                <Badge variant="neutral" dot>{t("capabilities.mcpDirectory.oauth.connected")}</Badge>
+              ) : null}
+            </>
+          }
+        />
         {item.description && <p className="mb-4 max-w-3xl text-sm text-fg">{item.description}</p>}
         <RailSection title={t("capabilities.detail.basic.title")}>
           <PropertyList className="grid-cols-[160px_minmax(0,1fr)]">

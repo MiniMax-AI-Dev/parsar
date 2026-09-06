@@ -12,7 +12,8 @@ import { useResizableWidth } from "../../lib/layout-width"
 /**
  * The right-hand detail rail: 384px by default, draggable 320–640, panel tone,
  * one hairline on the left. Header (48px) · scrolling body · footer.
- * Enters with the spring ease once per selection. The expand button in
+ * Its width animates from and back to zero, so the main column widens and
+ * narrows with it instead of jumping once the rail is gone. The expand button in
  * the header lifts the same content into a centred 70% modal with a
  * fly-in from the rail's side; the modal's only control is collapse.
  */
@@ -48,7 +49,7 @@ export function DetailRail({
   const expandLabel = t("actions.expand")
   const collapseLabel = t("actions.collapse")
   const resolvedCloseLabel = closeLabel ?? t("actions.close", { defaultValue: "Close" })
-  const setOpen = (next: boolean) => setExpanded(next)
+  const setModalOpen = (next: boolean) => setExpanded(next)
 
   const frame = (mode: "rail" | "modal") => (
     <>
@@ -58,7 +59,7 @@ export function DetailRail({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setOpen(mode === "rail")}
+            onClick={() => setModalOpen(mode === "rail")}
             aria-label={mode === "rail" ? expandLabel : collapseLabel}
             title={mode === "rail" ? expandLabel : collapseLabel}
           >
@@ -88,25 +89,40 @@ export function DetailRail({
     </>
   )
 
+  // The rail's WIDTH is what the main column reads, so it has to animate
+  // too: opening from 0 and closing back to 0 makes both columns move as
+  // one instead of the rail sliding out and the page jumping after it.
+  const [revealed, setRevealed] = React.useState(false)
+  React.useLayoutEffect(() => {
+    const id = requestAnimationFrame(() => setRevealed(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  const collapsed = closing || !revealed
+  // Dragging must stay pixel-exact, so the width transition is off while
+  // the handle is held; restoring keeps its own longer spring.
+  const widthMotion = rail.dragging
+    ? undefined
+    : rail.restoring
+      ? "transition-[width] duration-[420ms] ease-spring"
+      : "transition-[width] duration-[260ms] ease-spring"
+
   return (
     <>
       <div
-        className={cn("relative flex shrink-0", rail.restoring && "transition-[width] duration-[420ms] ease-spring")}
-        style={{ width: rail.width }}
+        className={cn("relative flex shrink-0 overflow-hidden", widthMotion)}
+        style={{ width: collapsed ? 0 : rail.width }}
+        onTransitionEnd={(e) => {
+          if (!closing || e.propertyName !== "width" || e.target !== e.currentTarget) return
+          setClosing(false)
+          onClose?.()
+        }}
       >
         <aside
           className={cn(
-            "flex w-full flex-col overflow-hidden border-l border-line bg-surface-subtle",
-            closing ? "animate-rail-out" : "animate-rail-in",
+            "flex shrink-0 flex-col overflow-hidden border-l border-line bg-surface-subtle",
             className,
           )}
-          onAnimationEnd={(e) => {
-            if (!closing || e.target !== e.currentTarget) return
-            // Hand off to the parent, then reset so a rail the parent
-            // keeps mounted (or re-selects) can enter again.
-            setClosing(false)
-            onClose?.()
-          }}
+          style={{ width: rail.width }}
           {...props}
         >
           {frame("rail")}
@@ -115,7 +131,7 @@ export function DetailRail({
         <LayoutPrompt open={rail.dirty} onSave={rail.save} onTemporary={rail.keepTemporary} onRestore={rail.restore} />
       </div>
 
-      <DialogPrimitive.Root open={expanded} onOpenChange={setOpen}>
+      <DialogPrimitive.Root open={expanded} onOpenChange={setModalOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-surface-inverse/30 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
           <DialogPrimitive.Content
