@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
+import { BrandMark } from "../ui/brand-mark"
 import {
   setWorkspaceId,
   useWorkspaceId,
@@ -114,6 +115,7 @@ export function WorkspaceSwitcher() {
             aria-label={t("workspaceSwitcher.triggerAriaLabel")}
             className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 data-[state=open]:app-pressed"
           >
+            <BrandMark size={14} />
             <span className="shrink-0 font-medium text-fg" translate="no">Parsar</span>
             <span className="shrink-0 text-fg-muted" aria-hidden="true">/</span>
             <span className="min-w-0 flex-1 truncate text-fg-muted">{triggerLabel}</span>
