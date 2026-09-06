@@ -159,8 +159,16 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
     [filtered],
   )
 
+  // The rail outlives the selection by one animation: `railId` holds the
+  // run being shown so the panel can play its exit before unmounting,
+  // whether the user clicked the X, the open row, or navigated.
+  const [railId, setRailId] = useState<string | null>(selectedId ?? null)
+  if (selectedId && selectedId !== railId) setRailId(selectedId)
+
+  // Clicking the row that is already open closes the rail: the row is a
+  // toggle, not a re-selection.
   const select = (id: string | null) => {
-    if (id) navigate("runs", { id })
+    if (id && id !== selectedId) navigate("runs", { id })
     else navigate("runs")
   }
 
@@ -321,8 +329,14 @@ export function RunsPage({ selectedId }: { selectedId?: string | null }) {
           )}
         </div>
 
-        {selectedId && wsId && (
-          <RunDetailRail key={selectedId} id={selectedId} wsId={wsId} onClose={() => select(null)} />
+        {railId && wsId && (
+          <RunDetailRail
+            id={railId}
+            wsId={wsId}
+            open={!!selectedId}
+            onClose={() => select(null)}
+            onClosed={() => setRailId(null)}
+          />
         )}
       </div>
     </AdminLayout>
@@ -389,17 +403,38 @@ function RunsLoadingSkeleton() {
 /*  Detail rail                                                        */
 /* ------------------------------------------------------------------ */
 
-function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClose: () => void }) {
+function RunDetailRail({
+  id,
+  wsId,
+  open,
+  onClose,
+  onClosed,
+}: {
+  id: string
+  wsId: string
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+}) {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const { navigate } = useAdminView()
 
+  // The rail is not remounted between runs (that would replay its
+  // entrance), so per-run state resets here when the id changes.
+  const [shownId, setShownId] = useState(id)
   const runQ = useAgentRun(id, wsId)
   const workspacesQ = useMyWorkspaces()
   const cancelRun = useCancelRun(wsId)
   const requeueRun = useRequeueRun(wsId)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+
+  if (shownId !== id) {
+    setShownId(id)
+    setConfirmCancel(false)
+    setCancelError(null)
+  }
 
   const runData = runQ.data
   const eventsQ = useAgentRunEvents(runData?.id ?? null, wsId, { status: runData?.status, initialEvents: runData?.events })
@@ -409,7 +444,7 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
 
   if (runQ.isLoading) {
     return (
-      <DetailRail header={<Skeleton className="h-3 w-40" />} onClose={onClose} closeLabel={closeLabel}>
+      <DetailRail open={open} onClosed={onClosed} header={<Skeleton className="h-3 w-40" />} onClose={onClose} closeLabel={closeLabel}>
         <div className="space-y-3">
           <Skeleton className="h-4 w-48" />
           {Array.from({ length: 8 }).map((_, i) => (
@@ -427,7 +462,7 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
     // deleted), so say that instead of "check the server is running".
     const isMissing = err instanceof ApiError && err.envelope.status === 404
     return (
-      <DetailRail header={<LedgerId>{shortId(id, 12)}</LedgerId>} onClose={onClose} closeLabel={closeLabel}>
+      <DetailRail open={open} onClosed={onClosed} header={<LedgerId>{shortId(id, 12)}</LedgerId>} onClose={onClose} closeLabel={closeLabel}>
         <ErrorState
           title={
             isMissing
@@ -483,6 +518,8 @@ function RunDetailRail({ id, wsId, onClose }: { id: string; wsId: string; onClos
 
   return (
     <DetailRail
+      open={open}
+      onClosed={onClosed}
       aria-label={`${agent} · ${run.id}`}
       onClose={onClose}
       closeLabel={closeLabel}

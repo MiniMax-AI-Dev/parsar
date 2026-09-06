@@ -103,7 +103,11 @@ export function ConnectionsPage() {
   const pageTitle = t("connections.page.title")
   const platformName = (p: ConnectorPlatform) => t(`connections.connector.platformSelect.options.${p}`)
   const err = connectorsQ.error
-  const selectedRow = rows.find((r) => r.platform === selected)
+  // Hold the platform through the rail's exit so closing animates instead
+  // of vanishing (same path for the X and for clicking the open row).
+  const [railPlatform, setRailPlatform] = useState<ConnectorPlatform | null>(selected)
+  if (selected && selected !== railPlatform) setRailPlatform(selected)
+  const railRow = rows.find((r) => r.platform === railPlatform)
 
   return (
     <AdminLayout activeMenu="connections" fullBleed>
@@ -160,14 +164,14 @@ export function ConnectionsPage() {
                   const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
-                      setSelected(row.platform)
+                      setSelected((cur) => (cur === row.platform ? null : row.platform))
                     }
                   }
                   return (
                     <LedgerRow
                       key={row.platform}
                       selected={selected === row.platform}
-                      onClick={() => setSelected(row.platform)}
+                      onClick={() => setSelected((cur) => (cur === row.platform ? null : row.platform))}
                       onKeyDown={onKeyDown}
                     >
                       <StatusIcon status={STATUS_ICON[row.status]} title={statusLabel} />
@@ -185,17 +189,18 @@ export function ConnectionsPage() {
           )}
         </div>
 
-        {wsId && selected && selectedRow && (
+        {wsId && railPlatform && railRow && (
           <DetailRail
-            key={selected}
-            aria-label={platformName(selected)}
+            open={!!selected}
+            onClosed={() => setRailPlatform(null)}
+            aria-label={platformName(railPlatform)}
             onClose={() => setSelected(null)}
             closeLabel={t("connections.detail.close")}
             header={
               <>
-                <StatusIcon status={STATUS_ICON[selectedRow.status]} />
-                <span className="shrink-0 text-sm font-medium text-fg">{platformName(selected)}</span>
-                <LedgerId className="min-w-0 flex-1">{selectedRow.appID || "—"}</LedgerId>
+                <StatusIcon status={STATUS_ICON[railRow.status]} />
+                <span className="shrink-0 text-sm font-medium text-fg">{platformName(railPlatform)}</span>
+                <LedgerId className="min-w-0 flex-1">{railRow.appID || "—"}</LedgerId>
               </>
             }
           >

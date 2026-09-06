@@ -107,8 +107,14 @@ export function ApprovalsPage() {
     (entityId ? rows.find((r) => r.id === entityId) : undefined) ??
     (entityId || dismissed ? undefined : rows.find((r) => r.status === "pending"))
 
+  // The rail outlives the selection by one animation so it can play its
+  // exit, whether the X, the open row, or the route closed it.
+  const [railInteraction, setRailInteraction] = useState<AgentInteraction | null>(selected ?? null)
+  if (selected && selected !== railInteraction) setRailInteraction(selected)
+
+  // The row is a toggle: clicking the open one closes the rail.
   const select = (id: string | null) => {
-    if (id) {
+    if (id && id !== selected?.id) {
       setDismissed(false)
       navigate("approvals", { id })
     } else {
@@ -181,12 +187,13 @@ export function ApprovalsPage() {
           )}
         </div>
 
-        {selected && workspaceID && (
+        {railInteraction && workspaceID && (
           <InteractionRail
-            key={selected.id}
-            interaction={selected}
+            interaction={railInteraction}
             workspaceID={workspaceID}
+            open={!!selected}
             onClose={() => select(null)}
+            onClosed={() => setRailInteraction(null)}
           />
         )}
       </div>
@@ -269,11 +276,15 @@ function ApprovalsLoadingSkeleton() {
 function InteractionRail({
   interaction,
   workspaceID,
+  open,
   onClose,
+  onClosed,
 }: {
   interaction: AgentInteraction
   workspaceID: string
+  open: boolean
   onClose: () => void
+  onClosed: () => void
 }) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
@@ -282,6 +293,15 @@ function InteractionRail({
   const resolve = useResolveAgentInteraction(workspaceID)
   const [answers, setAnswers] = useState<Record<string, string[]>>({})
   const [custom, setCustom] = useState<Record<string, string>>({})
+  // The rail stays mounted while the user moves between requests (so it
+  // swaps instead of flying in again), so the half-typed answers of the
+  // previous request are cleared here rather than by a remount.
+  const [shownId, setShownId] = useState(interaction.id)
+  if (shownId !== interaction.id) {
+    setShownId(interaction.id)
+    setAnswers({})
+    setCustom({})
+  }
 
   const questions = interactionQuestions(interaction)
   const pending = interaction.status === "pending"
@@ -313,6 +333,8 @@ function InteractionRail({
 
   return (
     <DetailRail
+      open={open}
+      onClosed={onClosed}
       aria-label={`${agent} · ${interaction.id}`}
       data-testid="interaction-card"
       data-interaction-kind={interaction.kind}

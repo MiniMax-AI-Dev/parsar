@@ -20,7 +20,9 @@ import { useResizableWidth } from "../../lib/layout-width"
 export function DetailRail({
   header,
   footer,
+  open = true,
   onClose,
+  onClosed,
   closeLabel,
   expandable = true,
   children,
@@ -29,7 +31,11 @@ export function DetailRail({
 }: {
   header: ReactNode
   footer?: ReactNode
+  /** False starts the exit; keep the rail mounted until `onClosed` fires. */
+  open?: boolean
   onClose?: () => void
+  /** The exit finished — the caller can drop the mount now. */
+  onClosed?: () => void
   closeLabel?: string
   /** Show the expand-to-modal button (default true). */
   expandable?: boolean
@@ -38,13 +44,6 @@ export function DetailRail({
 } & Omit<React.HTMLAttributes<HTMLElement>, "title">) {
   const { t } = useTranslation("common")
   const [expanded, setExpanded] = React.useState(false)
-  // Close plays rail-out on the panel and only then unmounts via onClose.
-  const [closing, setClosing] = React.useState(false)
-  const requestClose = () => {
-    if (!onClose) return
-    setExpanded(false)
-    setClosing(true)
-  }
   const rail = useResizableWidth({ storageKey: "rail", defaultWidth: 384, min: 320, max: 640, edge: "left" })
   const expandLabel = t("actions.expand")
   const collapseLabel = t("actions.collapse")
@@ -70,7 +69,7 @@ export function DetailRail({
           <Button
             variant="ghost"
             size="icon"
-            onClick={requestClose}
+            onClick={onClose}
             aria-label={resolvedCloseLabel}
             title={resolvedCloseLabel}
           >
@@ -97,7 +96,9 @@ export function DetailRail({
     const id = requestAnimationFrame(() => setRevealed(true))
     return () => cancelAnimationFrame(id)
   }, [])
-  const collapsed = closing || !revealed
+  const collapsed = !open || !revealed
+  // A rail on its way out cannot stay expanded into its modal.
+  if (!open && expanded) setExpanded(false)
   // Dragging must stay pixel-exact, so the width transition is off while
   // the handle is held; restoring keeps its own longer spring.
   const widthMotion = rail.dragging
@@ -112,9 +113,10 @@ export function DetailRail({
         className={cn("relative flex shrink-0 overflow-hidden", widthMotion)}
         style={{ width: collapsed ? 0 : rail.width }}
         onTransitionEnd={(e) => {
-          if (!closing || e.propertyName !== "width" || e.target !== e.currentTarget) return
-          setClosing(false)
-          onClose?.()
+          // Every closer (the X, a row toggle, the route) flips `open`, so
+          // they all play the same exit and unmount at the same moment.
+          if (open || e.propertyName !== "width" || e.target !== e.currentTarget) return
+          onClosed?.()
         }}
       >
         <aside

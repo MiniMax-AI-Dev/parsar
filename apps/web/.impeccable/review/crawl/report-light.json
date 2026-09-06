@@ -1,53 +1,26 @@
 [
   {
-    "view": "capabilities",
-    "rows": 2,
-    "rowsAfterClicks": 0,
-    "dialogsOpened": [
-      "新建能力"
-    ],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": []
-  },
-  {
-    "view": "agents",
-    "rows": 2,
-    "rowsAfterClicks": 3,
-    "dialogsOpened": [
-      "新建 Agent"
-    ],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": []
-  },
-  {
-    "view": "connectors",
-    "rows": 2,
-    "rowsAfterClicks": 14,
-    "dialogsOpened": [],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": [
-      "connectors/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
-  },
-  {
-    "view": "members",
-    "rows": 3,
-    "rowsAfterClicks": 3,
-    "dialogsOpened": [
-      "邀请新成员",
-      "取消邀请"
-    ],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": []
-  },
-  {
     "view": "runs",
     "rows": 2,
     "rowsAfterClicks": 2,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "approvals",
+    "rows": 0,
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "connections",
+    "rows": 4,
+    "rowsAfterClicks": 4,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -58,6 +31,17 @@
     "rows": 3,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "bad": []
+  },
+  {
+    "view": "agents",
+    "rows": 2,
+    "rowsAfterClicks": 4,
+    "dialogsOpened": [
+      "新建 Agent"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
