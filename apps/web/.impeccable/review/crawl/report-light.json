@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 7,
+    "rows": 8,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -40,7 +40,7 @@
   {
     "view": "agents",
     "rows": 2,
-    "rowsAfterClicks": 8,
+    "rowsAfterClicks": 9,
     "dialogsOpened": [
       "新建 Agent"
     ],
@@ -61,12 +61,9 @@
   },
   {
     "view": "models",
-    "rows": 1,
+    "rows": 0,
     "rowsAfterClicks": 0,
-    "dialogsOpened": [
-      "导入模型",
-      "新建模型"
-    ],
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
@@ -99,14 +96,12 @@
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": [
-      "settings/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
+    "bad": []
   },
   {
     "view": "secrets",
     "rows": 0,
-    "rowsAfterClicks": 0,
+    "rowsAfterClicks": 14,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -115,13 +110,14 @@
   {
     "view": "runtime",
     "rows": 0,
-    "rowsAfterClicks": 14,
-    "dialogsOpened": [],
+    "rowsAfterClicks": 0,
+    "dialogsOpened": [
+      "接入新设备"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": [
-      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes",
-      "runtime/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
     ]
   },
   {
@@ -131,9 +127,7 @@
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": [
-      "connectors/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
+    "bad": []
   },
   {
     "view": "usage",
@@ -142,9 +136,7 @@
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": [
-      "usage/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
+    "bad": []
   },
   {
     "view": "audit",
@@ -153,8 +145,6 @@
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": [
-      "audit/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
+    "bad": []
   }
 ]

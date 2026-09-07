@@ -4,7 +4,6 @@ import { AlertTriangle, Loader2, Skull, Zap } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ConnectivityResultPanel } from "../../components/runtime/ConnectivityResultPanel"
 import { RuntimeCredentialCard } from "../../components/runtime/RuntimeCredentialCard"
 import { RuntimeStatusBanner } from "../../components/runtime/RuntimeStatusBanner"
@@ -191,21 +190,18 @@ export function RuntimePage() {
   }
 
   return (
-    <AdminLayout activeMenu="settings" fullBleed>
+    <AdminLayout activeMenu="runtime" fullBleed>
       <Tabs value={tab} onValueChange={(v) => setTab(v as RuntimeTab)} className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
           title={t("runtime.page.title")}
           subtitleFor="runtime.page.title"
           action={
-            <>
-              <SettingsTabs active="runtime" />
-              {tab === "local_device" && workspaceID && (
-                <Button onClick={() => setPairOpen(true)} data-testid="agent-daemon-pair-button">
-                  {t("runtime.agentDaemon.actions.pair", { defaultValue: "Pair a new device" })}
-                </Button>
-              )}
-            </>
+            tab === "local_device" && workspaceID ? (
+              <Button onClick={() => setPairOpen(true)} data-testid="agent-daemon-pair-button">
+                {t("runtime.agentDaemon.actions.pair", { defaultValue: "Pair a new device" })}
+              </Button>
+            ) : undefined
           }
         />
         <div className="flex h-10 shrink-0 items-center border-b border-line px-4">

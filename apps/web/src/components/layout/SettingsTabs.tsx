@@ -6,7 +6,6 @@ import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
 export type SettingsTab =
   | "general"
   | "credentials"
-  | "runtime"
   | "connectors"
   | "usage"
   | "audit"
@@ -15,7 +14,6 @@ export type SettingsTab =
 const TAB_TO_VIEW: Record<SettingsTab, AdminView> = {
   general: "settings",
   credentials: "secrets",
-  runtime: "runtime",
   connectors: "connectors",
   usage: "usage",
   audit: "audit",
@@ -24,7 +22,6 @@ const TAB_TO_VIEW: Record<SettingsTab, AdminView> = {
 const TABS: SettingsTab[] = [
   "general",
   "credentials",
-  "runtime",
   "connectors",
   "usage",
   "audit",

@@ -3,7 +3,6 @@ import { ArrowLeft, Box } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ManagedBadge } from "../../components/ui/managed-badge"
@@ -19,7 +18,7 @@ export function RuntimeDetailPage({ id }: RuntimeDetailPageProps) {
   const { t } = useTranslation("admin")
   const { navigate } = useAdminView()
   return (
-    <AdminLayout activeMenu="settings">
+    <AdminLayout activeMenu="runtime">
       <PageHeader
         title={t("runtime.detail.placeholderTitle")}
         backLink={
@@ -27,7 +26,6 @@ export function RuntimeDetailPage({ id }: RuntimeDetailPageProps) {
             <ArrowLeft strokeWidth={1.5} aria-hidden="true" />
           </Button>
         }
-        action={<SettingsTabs active="runtime" />}
       />
       <div data-testid="runtime-detail-placeholder">
         <EmptyState
