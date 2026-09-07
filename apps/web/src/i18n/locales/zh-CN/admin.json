@@ -1397,7 +1397,7 @@
         "capabilities": "Capabilities",
         "sandbox": "Sandbox",
         "runs": "Runs",
-        "audit": "Audit",
+        "audit": "审计",
         "dynamics": "动态",
         "config": "配置",
         "scheduled": "定时任务"
@@ -1450,7 +1450,7 @@
           "binding": "Runtime 绑定"
         },
         "capabilities": {
-          "title": "Capabilities",
+          "title": "能力",
           "add": "+ 添加",
           "empty": "还没有启用任何 capability。点击右上角「+ 添加」从工作区可装 capability 中挑一个。",
           "loadError": "加载 capability 失败。"

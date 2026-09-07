@@ -18,12 +18,13 @@ import { AgentRuntimeCell } from "./AgentRuntimeCell"
 import { AgentStatusIcon } from "./AgentStatusBadge"
 
 /** status icon · agent (+ description) · engine · runtime · connector · model · last enabled · actions */
-export const AGENTS_LEDGER_COLUMNS = [col.icon(), col.title(), col.meta(104), col.text(200, 1), col.meta(104), col.id(168, 0.8), col.age(80), col.actions(2)]
+export const AGENTS_LEDGER_COLUMNS = [col.icon(), col.title(180), col.meta(88), col.text(120, 1), col.meta(80), col.id(120, 0.8), col.age(72), col.actions(2)]
 
 export function AgentsListTable({
   agents,
   models,
   keyword,
+  selectedID,
   chatPendingID,
   deletePending,
   formatRelativeTime,
@@ -36,6 +37,7 @@ export function AgentsListTable({
   agents: Agent[]
   models: Model[]
   keyword: string
+  selectedID: string | null
   chatPendingID: string | null
   deletePending: boolean
   formatRelativeTime: (value: string) => string
@@ -92,7 +94,7 @@ export function AgentsListTable({
             }
           }
           return (
-            <LedgerRow key={agent.id} onClick={() => onOpenAgent(agent)} onKeyDown={onKeyDown}>
+            <LedgerRow key={agent.id} selected={agent.id === selectedID} onClick={() => onOpenAgent(agent)} onKeyDown={onKeyDown}>
               <AgentStatusIcon status={agent.status} />
               <span className="flex min-w-0 items-center gap-1.5">
                 <InitialTile name={agent.name} />

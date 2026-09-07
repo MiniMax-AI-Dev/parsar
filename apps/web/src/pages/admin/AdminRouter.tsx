@@ -12,7 +12,7 @@ import { Button } from "../../components/ui/button"
 import { ModelsPage } from "./ModelsPage"
 import { ConversationsPage } from "./ConversationsPage"
 import { RunsPage } from "./RunsPage"
-import { AgentsPage, AgentDetailPage } from "./AgentsPage"
+import { AgentsPage } from "./AgentsPage"
 import { ConnectorsPage, ConnectorDetailPage } from "./ConnectorsPage"
 import { SettingsPage } from "./SettingsPage"
 import { AuditPage } from "./AuditPage"
@@ -43,7 +43,7 @@ export function AdminRouter() {
   const v = view ?? "agents"
 
   if (v === "agents") {
-    return entityId ? <AgentDetailPage id={entityId} /> : <AgentsPage />
+    return <AgentsPage />
   }
   if (v === "models") return <ModelsPage />
   if (v === "settings") return <SettingsPage />

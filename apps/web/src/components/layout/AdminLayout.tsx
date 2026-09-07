@@ -40,7 +40,7 @@ interface AdminLayoutProps {
 }
 
 /** Views where `?id=` selects a rail on the same page instead of a detail page. */
-const RAIL_VIEWS = new Set<string>(["runs", "approvals", "conversations", "connections", "capabilities"])
+const RAIL_VIEWS = new Set<string>(["runs", "approvals", "conversations", "connections", "capabilities", "agents"])
 
 interface MenuItem {
   id: AdminView

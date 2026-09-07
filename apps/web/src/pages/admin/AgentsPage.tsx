@@ -4,6 +4,7 @@ import { Bot, Plus, Search, Wrench } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
+import { DetailRail, RailLayout } from "../../components/ui/detail-rail"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimeline"
 import { Button } from "../../components/ui/button"
@@ -11,6 +12,7 @@ import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { Skeleton } from "../../components/ui/skeleton"
+import { InitialTile } from "../../components/ui/ledger"
 import { StatusIcon } from "../../components/ui/status-icon"
 import {
   Tabs,
@@ -18,7 +20,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs"
-import { useAdminView } from "../../lib/admin-router"
+import { useAdminView, useAppRoute } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { createAgentConversation } from "../../lib/api-conversations"
 import {
@@ -44,7 +46,6 @@ import { AgentsListTable } from "./agents/AgentsListTable"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
 import { DeleteAgentDialog } from "./agents/DeleteAgentDialog"
 import { DetailSection } from "./agents/DetailSection"
-import { DetailHeading } from "../../components/ui/section"
 
 function usePendingCapability(workspaceID: string | null) {
   const id = new URLSearchParams(window.location.search).get("pendingCapability")
@@ -84,7 +85,7 @@ function PendingCapabilityBanner({ children, onCancel, cancelLabel }: { children
 
 export function AgentsPage() {
   const { t, i18n } = useTranslation("admin")
-  const { navigate } = useAdminView()
+  const { navigate, entityId } = useAdminView()
   const wid = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
@@ -122,6 +123,19 @@ export function AgentsPage() {
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
   const pageTitle = t("agents.page.title")
 
+  // Hold the id through the rail's exit so closing animates instead of
+  // vanishing — the same pattern every ledger uses.
+  const [railID, setRailID] = useState<string | null>(entityId)
+  if (entityId && entityId !== railID) setRailID(entityId)
+  const agentRail = railID ? (
+    <AgentDetailRail
+      id={railID}
+      open={!!entityId}
+      onClose={() => navigate("agents")}
+      onClosed={() => setRailID(null)}
+    />
+  ) : null
+
   async function startChatWith(a: Agent) {
     if (!wid || chatPendingID) return
     setChatPendingID(a.id)
@@ -137,7 +151,7 @@ export function AgentsPage() {
 
   return (
     <AdminLayout activeMenu="agents" fullBleed>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <RailLayout rail={agentRail}>
         <PageHeader
           className="static mx-0 mb-0"
           title={pageTitle}
@@ -215,17 +229,18 @@ export function AgentsPage() {
             agents={agents}
             models={models}
             keyword={keyword}
+            selectedID={entityId}
             chatPendingID={chatPendingID}
             deletePending={deleteMut.isPending}
             formatRelativeTime={fmtAgo}
-            onOpenAgent={(agent) => navigate("agents", { id: agent.id })}
+            onOpenAgent={(agent) => navigate("agents", { id: agent.id === entityId ? null : agent.id })}
             onChat={(agent) => void startChatWith(agent)}
             onEdit={setEditAgent}
             onClone={setCloneAgent}
             onDelete={setDeleteTarget}
           />
         )}
-      </div>
+      </RailLayout>
 
       <CreateAgentDialog
         open={createOpen}
@@ -361,9 +376,21 @@ function AgentsLoadingSkeleton() {
   )
 }
 
-export function AgentDetailPage({ id }: { id: string }) {
+/**
+ * An Agent read in the rail beside the list. It is the console's one true
+ * workplace — three tabs, an editable config, an audit trail — so it is the
+ * rail's widest brief: identity in the header, its verbs in the footer, and
+ * the expand button for the times the config form wants room.
+ */
+export function AgentDetailRail({ id, open, onClose, onClosed }: {
+  id: string
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+}) {
   const { t } = useTranslation("admin")
   const { navigate, tab: requestedTab } = useAdminView()
+  const { railView } = useAppRoute()
   const wid = useWorkspaceId()
   const [toast, setToast] = useState<string | null>(null)
 
@@ -376,135 +403,108 @@ export function AgentDetailPage({ id }: { id: string }) {
   const workspaceRole = currentWorkspace?.role
   const pendingCapability = usePendingCapability(wid)
 
-  const backLink = (
-    <button type="button" onClick={() => navigate("agents")} className="hover:text-fg">
-      ← {t("agents.page.title")}
-    </button>
-  )
-
-  if (query.isLoading) {
-    return (
-      <AdminLayout activeMenu="agents" fullBleed>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <PageHeader className="static mx-0 mb-0" backLink={backLink} title={<Skeleton className="h-4 w-40" />} />
-          <div className="flex flex-col gap-3 px-4 pt-4">
-            <Skeleton className="h-7 w-64" />
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-3 w-1/2" />)}
-          </div>
-        </div>
-      </AdminLayout>
-    )
+  // Switching to another agent swaps the rail's content rather than replaying
+  // its entrance, so the per-agent state is reset here instead of by a remount.
+  const [shownID, setShownID] = useState(id)
+  if (id !== shownID) {
+    setShownID(id)
+    setToast(null)
   }
 
-  if (query.error) {
+  if (query.isLoading || query.error || !agent) {
     return (
-      <AdminLayout activeMenu="agents" fullBleed>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <PageHeader className="static mx-0 mb-0" backLink={backLink} title={t("agents.page.title")} />
-          <div className="px-6 pt-6">
-            <ErrorState
-              title={t("agents.detail.loadError.title")}
-              description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
-              onRetry={() => void query.refetch()}
-            />
+      <DetailRail
+        open={open}
+        onClose={onClose}
+        onClosed={onClosed}
+        aria-label={t("agents.page.title")}
+        header={<Skeleton className="h-3 w-40" />}
+      >
+        {query.isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
           </div>
-        </div>
-      </AdminLayout>
-    )
-  }
-
-  if (!agent) {
-    return (
-      <AdminLayout activeMenu="agents" fullBleed>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <PageHeader className="static mx-0 mb-0" backLink={backLink} title={t("agents.page.title")} />
-          <EmptyState
-            icon={Bot}
-            title={t("agents.empty.title")}
-            description={t("agents.empty.description")}
+        ) : query.error ? (
+          <ErrorState
+            title={t("agents.detail.loadError.title")}
+            description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
+            onRetry={() => void query.refetch()}
           />
-        </div>
-      </AdminLayout>
+        ) : (
+          <EmptyState icon={Bot} title={t("agents.empty.title")} description={t("agents.empty.description")} />
+        )}
+      </DetailRail>
     )
   }
 
   const model = defaultModelOf(agent, models, t("agents.modelUnavailable"))
   return (
-    <AdminLayout activeMenu="agents" fullBleed>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <PageHeader
-          className="static mx-0 mb-0"
-          backLink={backLink}
-          action={
-            <AgentDetailActions
-              agent={agent}
-              workspaceID={wid}
-              workspaceName={currentWorkspace?.name}
-              workspaceRole={workspaceRole}
-              models={models}
-              onToast={setToast}
-            />
-          }
+    <DetailRail
+      open={open}
+      onClose={onClose}
+      onClosed={onClosed}
+      aria-label={agent.name}
+      header={
+        <>
+          <InitialTile name={agent.name} />
+          <span className="min-w-0 truncate text-sm font-medium text-fg">{agent.name}</span>
+          <AgentStatusBadge status={agent.status} />
+        </>
+      }
+      footer={
+        <AgentDetailActions
+          agent={agent}
+          workspaceID={wid}
+          workspaceName={currentWorkspace?.name}
+          workspaceRole={workspaceRole}
+          models={models}
+          onToast={setToast}
         />
+      }
+    >
+      {toast && <SuccessNotice>{toast}</SuccessNotice>}
+      {pendingCapability.id && (
+        <PendingCapabilityBanner
+          cancelLabel={t("agents.pendingCapability.cancel")}
+          onCancel={() => navigate("agents", { id: agent.id, tab: "config", pendingCapability: null, view: railView })}
+        >
+          {t("agents.pendingCapability.detailBanner", {
+            name: pendingCapability.capability?.name ?? pendingCapability.id,
+            source: pendingCapability.capability?.source_workspace_name ?? "—",
+          })}
+        </PendingCapabilityBanner>
+      )}
 
-        <div className="px-6 pt-4">
-          <DetailHeading
-            title={agent.name}
-            badges={<AgentStatusBadge status={agent.status} />}
-            className="mb-0"
+      <Tabs
+        value={requestedTab ?? "dynamics"}
+        onValueChange={(tab) => navigate("agents", { id: agent.id, tab, view: railView })}
+      >
+        <TabsList className="flex w-full">
+          <TabsTrigger value="dynamics" className="flex-1">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
+          <TabsTrigger value="config" className="flex-1">{t("agents.detail.tabs.config")}</TabsTrigger>
+          <TabsTrigger value="audit" className="flex-1">{t("agents.detail.tabs.audit")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dynamics">
+          <AgentDynamicsTab workspaceID={wid} agent={agent} />
+        </TabsContent>
+
+        <TabsContent value="config">
+          <AgentConfigTab
+            agent={agent}
+            workspaceID={wid}
+            workspaceRole={workspaceRole}
+            modelLabel={model}
+            onToast={setToast}
           />
-        </div>
+        </TabsContent>
 
-        {toast && <SuccessNotice>{toast}</SuccessNotice>}
-        {pendingCapability.id && (
-          <PendingCapabilityBanner
-            cancelLabel={t("agents.pendingCapability.cancel")}
-            onCancel={() => navigate("agents", { id: agent.id, tab: "config", pendingCapability: null })}
-          >
-            {t("agents.pendingCapability.detailBanner", {
-              name: pendingCapability.capability?.name ?? pendingCapability.id,
-              source: pendingCapability.capability?.source_workspace_name ?? "—",
-            })}
-          </PendingCapabilityBanner>
-        )}
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-4">
-          <Tabs
-            value={requestedTab ?? "dynamics"}
-            onValueChange={(tab) => navigate("agents", { id: agent.id, tab })}
-          >
-            <TabsList>
-              <TabsTrigger value="dynamics">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
-              <TabsTrigger value="config">{t("agents.detail.tabs.config")}</TabsTrigger>
-              <TabsTrigger value="audit">{t("agents.detail.tabs.audit")}</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="dynamics">
-              <AgentDynamicsTab workspaceID={wid} agent={agent} />
-            </TabsContent>
-
-            <TabsContent value="config">
-              <AgentConfigTab
-                agent={agent}
-                workspaceID={wid}
-                workspaceRole={workspaceRole}
-                modelLabel={model}
-                onToast={setToast}
-              />
-            </TabsContent>
-
-            <TabsContent value="audit">
-              <DetailSection title={t("agents.detail.audit.title")}>
-                <ResourceAuditTimeline
-                  wsId={wid}
-                  targetType="agent"
-                  targetID={agent.id}
-                />
-              </DetailSection>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-    </AdminLayout>
+        <TabsContent value="audit">
+          <DetailSection title={t("agents.detail.audit.title")}>
+            <ResourceAuditTimeline wsId={wid} targetType="agent" targetID={agent.id} />
+          </DetailSection>
+        </TabsContent>
+      </Tabs>
+    </DetailRail>
   )
 }

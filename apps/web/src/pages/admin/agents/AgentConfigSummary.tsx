@@ -13,8 +13,9 @@ import {
 import type { AgentDetail } from "../../../lib/api-types"
 import { DetailSection } from "./DetailSection"
 
-/* The page is wide, so the label column grows past the rail's 84px. */
-export const CONFIG_PROPERTY_LIST = "max-w-3xl grid-cols-[140px_minmax(0,1fr)]"
+/* Config reads in the rail now, so it takes the shared property grid: no
+   page-local widening, no measure of its own. */
+export const CONFIG_PROPERTY_LIST = ""
 
 export function AgentConfigSummary({
   agent,

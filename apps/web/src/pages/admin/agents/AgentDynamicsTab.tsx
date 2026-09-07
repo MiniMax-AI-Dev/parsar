@@ -23,8 +23,8 @@ import { DetailSection } from "./DetailSection"
 
 const RECENT_RUNS_LIMIT = 10
 
-/** status icon · run id · conversation · duration · age */
-const RUNS_COLUMNS = [col.icon(), col.id(132), col.id(200, 2), col.num(64), col.age(80)]
+/** status icon · run id · duration · age — sized for the rail, not a page */
+const RUNS_COLUMNS = [col.icon(), col.id(96, 2), col.num(56), col.age(64)]
 
 export function AgentDynamicsTab({ workspaceID, agent }: { workspaceID: string | null; agent: Agent }) {
   const { t } = useTranslation("admin")
@@ -92,7 +92,6 @@ function RunsLedger({ runs, loading, emptyLabel }: { runs: AgentRunSummary[]; lo
       <LedgerHeader>
         <span />
         <span>{t("runs.table.run")}</span>
-        <span>{t("runs.table.conversation")}</span>
         <span className="text-right">{t("runs.table.duration")}</span>
         <span className="text-right">{t("runs.table.age")}</span>
       </LedgerHeader>
@@ -110,7 +109,6 @@ function RunsLedger({ runs, loading, emptyLabel }: { runs: AgentRunSummary[]; lo
           >
             <StatusIcon status={run.status} title={t(`runStatus.${run.status}`)} />
             <LedgerId>{shortRunId(run.id)}</LedgerId>
-            <LedgerId>{run.conversation_id || "—"}</LedgerId>
             <LedgerNum muted={!run.started_at || !run.finished_at}>
               {run.started_at && run.finished_at ? formatDurationMs(durationMs(run.started_at, run.finished_at)) : "—"}
             </LedgerNum>
@@ -135,7 +133,7 @@ function MetricsList({ metrics, loading }: { metrics?: AgentMetrics; loading: bo
     return <p className="text-sm text-fg-muted">{t("agents.detail.dynamics.metrics.empty")}</p>
   }
   return (
-    <PropertyList className="max-w-2xl grid-cols-[140px_minmax(0,1fr)]">
+    <PropertyList>
       <Property label={t("agents.detail.dynamics.metrics.completed")} mono>
         {metrics.completed_count}
       </Property>

@@ -141,6 +141,7 @@ export function useAppRoute(): AppRoute {
 export function useNavigateAdmin() {
   return useCallback((next: AdminView, opts?: NavigateOptions) => {
     const url = new URL(window.location.href)
+    const previousId = url.searchParams.get("id")
     url.searchParams.set("admin", next)
     url.searchParams.delete("profile")
     url.searchParams.delete("kind")
@@ -155,8 +156,7 @@ export function useNavigateAdmin() {
     } else {
       url.searchParams.delete("tab")
     }
-    if (opts?.id && opts?.view) url.searchParams.set("view", opts.view)
-    else url.searchParams.delete("view")
+    applyRailView(url, previousId, opts)
     setOptionalParam(url, "marketplace", opts?.marketplace)
     setOptionalParam(url, "item", opts?.item)
     setOptionalParam(url, "from", opts?.from)
@@ -195,13 +195,13 @@ export function safeReturnTo(raw: string | null): string {
 
 export function navigateAdmin(next: AdminView, opts?: NavigateOptions) {
   const url = new URL(window.location.href)
+  const previousId = url.searchParams.get("id")
   url.searchParams.set("admin", next)
   if (opts?.id) url.searchParams.set("id", opts.id)
   else url.searchParams.delete("id")
   if (opts?.tab) url.searchParams.set("tab", opts.tab)
   else url.searchParams.delete("tab")
-  if (opts?.id && opts?.view) url.searchParams.set("view", opts.view)
-  else url.searchParams.delete("view")
+  applyRailView(url, previousId, opts)
   setOptionalParam(url, "marketplace", opts?.marketplace)
   setOptionalParam(url, "item", opts?.item)
   setOptionalParam(url, "from", opts?.from)
@@ -209,6 +209,22 @@ export function navigateAdmin(next: AdminView, opts?: NavigateOptions) {
   setOneShotParam(url, "focus", opts?.focus)
   window.history.pushState({}, "", url.toString())
   window.dispatchEvent(new Event("admin:navigate"))
+}
+
+/**
+ * `view=full` belongs to the selected entity, not to the route: it survives a
+ * tab change on the same entity (so the expanded panel does not collapse when
+ * you switch tabs inside it) and is dropped the moment the selection changes
+ * or clears. An expanded panel with nothing selected is not a reachable state.
+ */
+function applyRailView(url: URL, previousId: string | null, opts?: NavigateOptions) {
+  if (opts?.view !== undefined) {
+    if (opts.view && opts.id) url.searchParams.set("view", opts.view)
+    else url.searchParams.delete("view")
+    return
+  }
+  const nextId = opts?.id ?? null
+  if (!nextId || nextId !== previousId) url.searchParams.delete("view")
 }
 
 function setOptionalParam(url: URL, key: string, value?: string | null) {
