@@ -10,6 +10,7 @@ import {
   Bot,
   Wrench,
   Database,
+  Cpu,
   Plug,
   Users,
   Settings,
@@ -40,7 +41,7 @@ interface AdminLayoutProps {
 }
 
 /** Views where `?id=` selects a rail on the same page instead of a detail page. */
-const RAIL_VIEWS = new Set<string>(["runs", "approvals", "conversations", "connections", "capabilities", "agents", "connectors"])
+const RAIL_VIEWS = new Set<string>(["runs", "approvals", "conversations", "connections", "capabilities", "agents"])
 
 interface MenuItem {
   id: AdminView
@@ -56,9 +57,52 @@ interface MenuGroup {
   items: MenuItem[]
 }
 
+/** One sidebar row: 30px, icon then label, pressed tint when it is the view. */
+function NavRow({ item, activeMenu, onNavigate }: {
+  item: MenuItem
+  activeMenu?: string
+  onNavigate: (view: AdminView) => void
+}) {
+  const { t } = useTranslation("common")
+  const Icon = item.icon
+  const isActive = activeMenu === item.id
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onNavigate(item.id)}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "flex h-[30px] w-full items-center gap-2 rounded-md px-2 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+          isActive ? "app-pressed font-medium text-fg" : "text-inherit hover:app-hover",
+        )}
+      >
+        <Icon
+          className={cn("h-4 w-4 shrink-0", isActive ? "text-fg" : "text-fg-muted")}
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1 truncate">{t(`nav.items.${item.itemKey}` as never)}</span>
+        {item.badge !== undefined && (
+          <span className="app-tile rounded-full px-1.5 text-xs tabular-nums text-fg-muted">
+            {item.badge}
+          </span>
+        )}
+      </button>
+    </li>
+  )
+}
+
+/**
+ * The Agent is the product's first-class object, so it stands alone above the
+ * groups rather than sitting as a sibling of the things it is assembled from.
+ */
+const primaryItem: MenuItem = { id: "agents", itemKey: "agents", icon: Bot }
+
 const menuGroups: MenuGroup[] = [
   {
-    groupKey: "collaborationGroup",
+    // What agents are doing right now.
+    groupKey: "activityGroup",
     items: [
       { id: "conversations", itemKey: "conversations", icon: MessageSquare },
       { id: "approvals", itemKey: "approvals", icon: Inbox },
@@ -67,11 +111,13 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    groupKey: "agentGroup",
+    // What an agent is assembled from: its brain, its skills, where it runs,
+    // and the platforms it can be let out on.
+    groupKey: "buildGroup",
     items: [
-      { id: "agents", itemKey: "agents", icon: Bot },
-      { id: "capabilities", itemKey: "capabilities", icon: Wrench },
       { id: "models", itemKey: "models", icon: Database },
+      { id: "capabilities", itemKey: "capabilities", icon: Wrench },
+      { id: "runtime", itemKey: "runtime", icon: Cpu },
       { id: "connections", itemKey: "connections", icon: Plug },
     ],
   },
@@ -119,45 +165,21 @@ export function AdminLayout({
         <aside className="app-sidebar flex w-full flex-col overflow-y-auto border-r border-line bg-surface-subtle p-2.5">
           <WorkspaceSwitcher />
 
+          <nav aria-label={t("nav.items.agents")} className="pt-3.5">
+            <ul className="flex flex-col gap-px">
+              <NavRow item={primaryItem} activeMenu={activeMenu} onNavigate={navigate} />
+            </ul>
+          </nav>
+
           {menuGroups.map((group) => (
             <nav key={group.groupKey} aria-label={t(`nav.${group.groupKey}` as never)}>
               <div className="px-2 pb-1 pt-3.5 text-xs text-fg-muted">
                 {t(`nav.${group.groupKey}` as never)}
               </div>
               <ul className="flex flex-col gap-px">
-                {group.items.map((item) => {
-                  const Icon = item.icon
-                  const isActive = activeMenu === item.id
-                  return (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => navigate(item.id)}
-                        aria-current={isActive ? "page" : undefined}
-                        className={cn(
-                          "flex h-[30px] w-full items-center gap-2 rounded-md px-2 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                          isActive
-                            ? "app-pressed font-medium text-fg"
-                            : "text-inherit hover:app-hover",
-                        )}
-                      >
-                        <Icon
-                          className={cn("h-4 w-4 shrink-0", isActive ? "text-fg" : "text-fg-muted")}
-                          strokeWidth={1.5}
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {t(`nav.items.${item.itemKey}` as never)}
-                        </span>
-                        {item.badge !== undefined && (
-                          <span className="app-tile rounded-full px-1.5 text-xs tabular-nums text-fg-muted">
-                            {item.badge}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  )
-                })}
+                {group.items.map((item) => (
+                  <NavRow key={item.id} item={item} activeMenu={activeMenu} onNavigate={navigate} />
+                ))}
               </ul>
             </nav>
           ))}

@@ -199,8 +199,6 @@
     "back": "返回上一页"
   },
   "nav": {
-    "collaborationGroup": "协作",
-    "agentGroup": "Agent",
     "teamGroup": "团队",
     "items": {
       "approvals": "收件箱",
@@ -212,17 +210,18 @@
       "capabilities": "能力",
       "models": "模型",
       "members": "成员",
-      "settings": "设置"
+      "settings": "设置",
+      "runtime": "执行层"
     },
     "settingsTabs": {
       "general": "通用",
       "credentials": "凭据",
-      "runtime": "运行环境",
-      "connectors": "Agent 连接器",
       "usage": "用量",
       "audit": "审计"
     },
-    "p1Hint": "P1"
+    "p1Hint": "P1",
+    "activityGroup": "运行中",
+    "buildGroup": "构建"
   },
   "notFound": {
     "title": "页面不存在",

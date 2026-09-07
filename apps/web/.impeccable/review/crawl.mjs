@@ -21,7 +21,7 @@ const THEME = process.env.THEME ?? "light"
 const ALL = [
   "conversations", "approvals", "runs", "scheduled", "agents", "capabilities",
   "models", "connections", "members", "settings", "secrets", "runtime",
-  "connectors", "usage", "audit",
+  "usage", "audit",
 ]
 const views = process.argv.slice(2).filter((a) => !a.startsWith("--"))
 const VIEWS = views.length ? views : ALL

@@ -1,5 +1,6 @@
-# Fixtures for the Runtime (?admin=runtime) and Connectors (?admin=connectors)
-# settings pages. Receives WS, NOW, iso from mock-api.py.
+"""Fixtures for the 执行层 (?admin=runtime) page: runtimes, sandbox
+lifecycle bindings, and the cloud provider status."""
+# Receives WS, NOW, iso from mock-api.py.
 from datetime import timedelta
 
 def ago(**kw):
@@ -46,17 +47,6 @@ SANDBOXES = [{
     "created_at": ago(hours=5), "last_active_at": ago(minutes=4), "expires_at": iso(NOW + timedelta(days=9, hours=3)),  # noqa: F821
     "metadata": {},
 }]
-
-# /connector-usage answers with AGENT connector types (how Parsar drives an
-# agent), not the IM platforms below. The fixture used to carry feishu/slack
-# here, which made the Agent-connectors page look like a copy of Channels.
-CONNECTOR_USAGE = {"connectors": [
-    {"connector_type": "agent_daemon", "label": "Agent Daemon", "status": "ready", "agent_count": 3,
-     "agent_slugs": ["reviewer-bot", "release-notes", "triage"]},
-    {"connector_type": "http", "label": "HTTP Agent", "status": "ready", "agent_count": 1,
-     "agent_slugs": ["docs-writer"]},
-    {"connector_type": "a2a", "label": "A2A", "status": "needs_config", "agent_count": 0, "agent_slugs": []},
-]}
 
 IM_CONNECTORS = {"master_key_configured": True, "connectors": [
     {"id": "imc_01J8ZT1", "workspace_id": WS, "workspace_name": "MiniMax · Infra", "platform": "feishu",  # noqa: F821
@@ -110,7 +100,6 @@ ROUTES = [
     (r"^/api/v1/workspaces/([^/]+)/sandboxes$", lambda m, q: (200, {"sandboxes": SANDBOXES})),
     (r"^/api/v1/workspaces/([^/]+)/agents/([^/]+)/sandbox/test-connection$", test_connection),
     (r"^/api/v1/workspaces/([^/]+)/agents/([^/]+)/sandbox$", lambda m, q: (200, SANDBOXES[0])),
-    (r"^/api/v1/workspaces/([^/]+)/connector-usage$", lambda m, q: (200, CONNECTOR_USAGE)),
     (r"^/api/v1/workspaces/([^/]+)/connectors$", lambda m, q: (200, IM_CONNECTORS)),
     (r"^/api/v1/bootstrap/status$", lambda m, q: (200, {"needs_setup": False, "public_url": "https://parsar.minimax.io"})),
 ]

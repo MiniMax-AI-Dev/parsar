@@ -5,8 +5,6 @@ import { useTranslation } from "react-i18next"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
   ArrowUpRight,
-  Check,
-  ListFilter,
   Loader2,
   MoreHorizontal,
   PackageCheck,
@@ -32,6 +30,8 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog"
 import { DetailRail, RailLayout, RailSection } from "../../../components/ui/detail-rail"
+import { FilterGroup, FilterMenu, FilterOption, FilterSeparator, FilterToggle } from "../../../components/ui/filter-menu"
+import { menuContentClass, menuItemClass } from "../../../components/ui/menu"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Field } from "../../../components/ui/label"
@@ -650,35 +650,6 @@ function LedgerSkeleton() {
 /*  Header filter menu                                                  */
 /* ------------------------------------------------------------------ */
 
-const MENU_CONTENT_CLASS = "app-shadow-floating z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
-const MENU_ITEM_CLASS = "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
-
-function MenuRadio({ value, label }: { value: string; label: string }) {
-  return (
-    <DropdownMenu.RadioItem value={value} className={MENU_ITEM_CLASS}>
-      <span className="flex-1">{label}</span>
-      <DropdownMenu.ItemIndicator>
-        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
-      </DropdownMenu.ItemIndicator>
-    </DropdownMenu.RadioItem>
-  )
-}
-
-function MenuCheck({ checked, onCheckedChange, label }: { checked: boolean; onCheckedChange: (next: boolean) => void; label: string }) {
-  return (
-    <DropdownMenu.CheckboxItem checked={checked} onCheckedChange={onCheckedChange} className={MENU_ITEM_CLASS}>
-      <span className="flex-1">{label}</span>
-      <DropdownMenu.ItemIndicator>
-        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} />
-      </DropdownMenu.ItemIndicator>
-    </DropdownMenu.CheckboxItem>
-  )
-}
-
-function MenuSeparator() {
-  return <DropdownMenu.Separator className="my-1 h-px bg-line" />
-}
-
 function CapabilitiesFilterMenu({
   tab,
   typeFilter,
@@ -703,59 +674,48 @@ function CapabilitiesFilterMenu({
   const activeType = TYPE_FILTERS.find((opt) => opt.value === typeFilter && typeFilter !== "")
   const summary = tab === "connectors" ? directory.category || null : activeType?.label ?? null
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <Button variant="outline" aria-haspopup="menu">
-          <ListFilter strokeWidth={1.5} aria-hidden="true" />
-          {t("capabilities.filters.label")}
-          {summary && <span className="text-fg-muted">· {summary}</span>}
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={6} className={MENU_CONTENT_CLASS}>
+    <FilterMenu label={t("capabilities.filters.label")} summary={summary}>
           {tab === "connectors" ? (
             <>
-              <DropdownMenu.RadioGroup value={directory.sort} onValueChange={(v) => onDirectoryChange({ ...directory, sort: v as DirectorySort })}>
-                <MenuRadio value="featured" label={t("capabilities.mcpDirectory.sort.featured")} />
-                <MenuRadio value="name" label={t("capabilities.mcpDirectory.sort.name")} />
-              </DropdownMenu.RadioGroup>
-              <MenuSeparator />
-              <MenuCheck
+              <FilterGroup value={directory.sort} onValueChange={(v) => onDirectoryChange({ ...directory, sort: v as DirectorySort })}>
+                <FilterOption value="featured" label={t("capabilities.mcpDirectory.sort.featured")} />
+                <FilterOption value="name" label={t("capabilities.mcpDirectory.sort.name")} />
+              </FilterGroup>
+              <FilterSeparator />
+              <FilterToggle
                 checked={directory.verifiedOnly}
                 onCheckedChange={(next) => onDirectoryChange({ ...directory, verifiedOnly: next })}
                 label={t("capabilities.mcpDirectory.filters.verified")}
               />
               {categories.length > 0 && (
                 <>
-                  <MenuSeparator />
-                  <DropdownMenu.RadioGroup value={directory.category} onValueChange={(v) => onDirectoryChange({ ...directory, category: v })}>
-                    <MenuRadio value="" label={t("capabilities.mcpDirectory.filters.allCategories")} />
+                  <FilterSeparator />
+                  <FilterGroup value={directory.category} onValueChange={(v) => onDirectoryChange({ ...directory, category: v })}>
+                    <FilterOption value="" label={t("capabilities.mcpDirectory.filters.allCategories")} />
                     {categories.map((category) => (
-                      <MenuRadio key={category} value={category} label={category} />
+                      <FilterOption key={category} value={category} label={category} />
                     ))}
-                  </DropdownMenu.RadioGroup>
+                  </FilterGroup>
                 </>
               )}
             </>
           ) : (
             <>
-              <DropdownMenu.RadioGroup value={typeFilter} onValueChange={(v) => onTypeFilterChange(v as CapabilityTypeFilter)}>
-                <MenuRadio value="" label={t("capabilities.filters.all")} />
+              <FilterGroup value={typeFilter} onValueChange={(v) => onTypeFilterChange(v as CapabilityTypeFilter)}>
+                <FilterOption value="" label={t("capabilities.filters.all")} />
                 {typeOptions.map((opt) => (
-                  <MenuRadio key={opt.value} value={opt.value} label={opt.label} />
+                  <FilterOption key={opt.value} value={opt.value} label={opt.label} />
                 ))}
-              </DropdownMenu.RadioGroup>
+              </FilterGroup>
               {tab === "marketplace" && (
                 <>
-                  <MenuSeparator />
-                  <MenuCheck checked={hideInstalled} onCheckedChange={onHideInstalledChange} label={t("capabilities.marketplace.filters.hideInstalled")} />
+                  <FilterSeparator />
+                  <FilterToggle checked={hideInstalled} onCheckedChange={onHideInstalledChange} label={t("capabilities.marketplace.filters.hideInstalled")} />
                 </>
               )}
             </>
           )}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+    </FilterMenu>
   )
 }
 
@@ -882,18 +842,18 @@ function CapabilityRowMoreMenu({
         </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={6} className={MENU_CONTENT_CLASS}>
+        <DropdownMenu.Content align="end" sideOffset={6} className={menuContentClass}>
           {/*
             "Delete" releases the capability.name workspace-unique index,
             allowing a same-name capability to be re-imported. The server
             rejects deletes that still have bound agents (409).
             "Deprecate" lives on the detail page's market section.
           */}
-          <DropdownMenu.Item className={MENU_ITEM_CLASS} onSelect={() => onMarketAction(published ? "unpublish" : "publish")}>
+          <DropdownMenu.Item className={menuItemClass} onSelect={() => onMarketAction(published ? "unpublish" : "publish")}>
             <Share2 className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
             <span>{t(published ? "capabilities.rowActions.unpublish" : "capabilities.rowActions.publish")}</span>
           </DropdownMenu.Item>
-          <DropdownMenu.Item className={MENU_ITEM_CLASS} onSelect={onDelete}>
+          <DropdownMenu.Item className={menuItemClass} onSelect={onDelete}>
             <Trash2 className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
             <span>{t("capabilities.rowActions.delete")}</span>
           </DropdownMenu.Item>

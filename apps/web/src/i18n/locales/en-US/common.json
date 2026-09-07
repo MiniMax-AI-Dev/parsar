@@ -199,8 +199,6 @@
     "back": "Go back"
   },
   "nav": {
-    "collaborationGroup": "Collaborate",
-    "agentGroup": "Agent",
     "teamGroup": "Team",
     "items": {
       "approvals": "Inbox",
@@ -212,17 +210,18 @@
       "capabilities": "Capabilities",
       "models": "Models",
       "members": "Members",
-      "settings": "Settings"
+      "settings": "Settings",
+      "runtime": "Runtime"
     },
     "settingsTabs": {
       "general": "General",
       "credentials": "Credentials",
-      "runtime": "Runtime",
-      "connectors": "Agent connectors",
       "usage": "Usage",
       "audit": "Audit"
     },
-    "p1Hint": "P1"
+    "p1Hint": "P1",
+    "activityGroup": "Activity",
+    "buildGroup": "Build"
   },
   "notFound": {
     "title": "Page not found",

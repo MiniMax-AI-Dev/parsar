@@ -5,6 +5,7 @@ import { Bot, Plus, Search, Wrench } from "lucide-react"
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { DetailRail, RailLayout } from "../../components/ui/detail-rail"
+import { FilterGroup, FilterMenu, FilterOption } from "../../components/ui/filter-menu"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
 import { ResourceAuditTimeline } from "../../components/admin/ResourceAuditTimeline"
 import { Button } from "../../components/ui/button"
@@ -34,7 +35,13 @@ import {
 import { useModels } from "../../lib/api-models"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useMarketplaceList } from "../../lib/api-marketplace"
-import { defaultModelOf } from "../../lib/agent-view-model"
+import {
+  AGENT_CONNECTOR_TYPES,
+  searchAgents,
+  agentConnectorKey,
+  agentConnectorLabel,
+  defaultModelOf,
+} from "../../lib/agent-view-model"
 import type { Agent } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
@@ -88,6 +95,7 @@ export function AgentsPage() {
   const { navigate, entityId } = useAdminView()
   const wid = useWorkspaceId()
   const [keyword, setKeyword] = useState("")
+  const [connectorFilter, setConnectorFilter] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
@@ -113,7 +121,22 @@ export function AgentsPage() {
       return tb.localeCompare(ta)
     })
   }, [query.data])
-  const models = modelsQ.data?.models ?? []
+  const models = useMemo(() => modelsQ.data?.models ?? [], [modelsQ.data])
+  // Counted over the agents the search already narrowed to, so the menu
+  // describes the list on screen rather than one the reader cannot see.
+  // The known set is always listed — a connector with nothing on it is
+  // usually what you opened the menu to check — plus any type actually in
+  // use, because `connector_type` is unconstrained text on the server.
+  const searched = useMemo(() => searchAgents(agents, keyword, models, t), [agents, keyword, models, t])
+  const connectorCounts = useMemo(() => {
+    const counts = new Map<string, number>(AGENT_CONNECTOR_TYPES.map((c) => [c, 0]))
+    for (const agent of searched) {
+      const key = agentConnectorKey(agent.connector_type)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return counts
+  }, [searched])
+  const connectorOptions = useMemo(() => [...connectorCounts.keys()], [connectorCounts])
   const currentWorkspace = workspacesQ.data?.workspaces.find((w) => w.id === wid)
   const workspaceRole = currentWorkspace?.role
   const workspaceName = currentWorkspace?.name
@@ -173,6 +196,22 @@ export function AgentsPage() {
                   onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
+              <FilterMenu
+                label={t("agents.filters.label")}
+                summary={connectorFilter ? agentConnectorLabel(connectorFilter) : null}
+              >
+                <FilterGroup value={connectorFilter} onValueChange={setConnectorFilter}>
+                  <FilterOption value="" label={t("agents.filters.allConnectors")} count={searched.length} />
+                  {connectorOptions.map((connector) => (
+                    <FilterOption
+                      key={connector}
+                      value={connector}
+                      label={agentConnectorLabel(connector)}
+                      count={connectorCounts.get(connector) ?? 0}
+                    />
+                  ))}
+                </FilterGroup>
+              </FilterMenu>
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus strokeWidth={1.5} aria-hidden="true" />
                 {t("agents.actions.create")}
@@ -229,6 +268,11 @@ export function AgentsPage() {
             agents={agents}
             models={models}
             keyword={keyword}
+            connectorFilter={connectorFilter}
+            onClearFilters={() => {
+              setKeyword("")
+              setConnectorFilter("")
+            }}
             selectedID={entityId}
             chatPendingID={chatPendingID}
             deletePending={deleteMut.isPending}

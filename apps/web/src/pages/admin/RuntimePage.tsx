@@ -4,13 +4,11 @@ import { AlertTriangle, Loader2, Skull, Zap } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
-import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ConnectivityResultPanel } from "../../components/runtime/ConnectivityResultPanel"
 import { RuntimeCredentialCard } from "../../components/runtime/RuntimeCredentialCard"
 import { RuntimeStatusBanner } from "../../components/runtime/RuntimeStatusBanner"
 import { PairDaemonDialog } from "../../components/admin/PairDaemonDialog"
-import { LocalDeviceRuntimesPanel } from "./runtimes/LocalDeviceRuntimesPanel"
-import { LIVENESS_STATUS, formatAgentKindLabel } from "./runtimes/runtime-status"
+import { RuntimeLedger } from "./runtimes/RuntimeLedger"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,16 +27,8 @@ import { Ledger, LedgerHeader, LedgerId, LedgerRow, col } from "../../components
 import { Select } from "../../components/ui/select"
 import { Skeleton } from "../../components/ui/skeleton"
 import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import { useRuntimeStatus, type ConnectivityResult, type RuntimeStatus } from "../../lib/api-runtime"
-import {
-  isSandboxDaemonRuntime,
-  supportedAgentKinds,
-  useWorkspaceRuntimes,
-  type Runtime,
-} from "../../lib/api-runtimes"
-import { isSandboxPairingExpired } from "../../lib/sandbox-runtime"
 import {
   killSandboxRequestRaw,
   useSandboxConnectivityTest,
@@ -51,11 +41,9 @@ import { useRelativeTime } from "../../lib/relative-time"
 import { useNow } from "../../lib/use-now"
 import { useWorkspaceId } from "../../lib/workspace"
 
-type RuntimeTab = "sandbox" | "local_device" | "external"
 type CloudState = "loading" | "notConfigured" | "ready" | "error" | "unknown"
 type SortKey = "last_active" | "created_at" | "agent"
 
-const TABS: RuntimeTab[] = ["local_device", "sandbox", "external"]
 
 const SANDBOX_STATUS: Record<SandboxStatusKind, StatusKind> = {
   live: "completed",
@@ -65,8 +53,6 @@ const SANDBOX_STATUS: Record<SandboxStatusKind, StatusKind> = {
 
 /** select · sandbox id · agent · status · image · last active · created · actions */
 const INSTANCE_COLUMNS = [col.check(), col.id(200, 2), col.id(120), col.meta(112), col.meta(120), col.age(80), col.age(80), col.actions(1)]
-/** status icon · runtime · agent · sandbox kind · agent engines · last heartbeat */
-const DAEMON_COLUMNS = [col.icon(), col.title(), col.id(140), col.meta(104), col.meta(120), col.age(96)]
 
 function sortBindings(bindings: SandboxBinding[], sortKey: SortKey): SandboxBinding[] {
   const copy = bindings.slice()
@@ -105,10 +91,8 @@ export function RuntimePage() {
   const workspaceID = useWorkspaceId()
   const statusQuery = useRuntimeStatus(workspaceID)
   const sandboxesQuery = useWorkspaceSandboxes(workspaceID)
-  const daemonRuntimesQuery = useWorkspaceRuntimes(workspaceID ?? "", "agent_daemon")
   const workspacesQ = useMyWorkspaces()
 
-  const [tab, setTab] = useState<RuntimeTab>("local_device")
   const [pairOpen, setPairOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortKey, setSortKey] = useState<SortKey>("last_active")
@@ -133,18 +117,6 @@ export function RuntimePage() {
     [sandboxesQuery.data, sortKey],
   )
   const activeBindings = sandboxesQuery.error ? [] : bindings
-  // Offline rows are stale: runtime row is owned by the agent
-  // (deterministic name), not sandbox lifecycle, so when the sandbox
-  // dies the row stays and the heartbeat sweeper just flips it offline.
-  // Surfacing them as live daemons would mislead.
-  const sandboxDaemonRuntimes = useMemo(
-    () =>
-      (daemonRuntimesQuery.data ?? [])
-        .filter(isSandboxDaemonRuntime)
-        .filter((rt) => rt.liveness !== "offline"),
-    [daemonRuntimesQuery.data],
-  )
-
   async function performBulkKill() {
     if (selected.size === 0 || !workspaceID) return
     setBulkPending(true)
@@ -184,46 +156,24 @@ export function RuntimePage() {
     else setSelected(new Set(activeBindings.map((b) => b.binding_id)))
   }
 
-  const tabLabel: Record<RuntimeTab, string> = {
-    local_device: t("runtime.providers.localDevice.title", { defaultValue: "Local Device" }),
-    sandbox: t("runtime.providers.sandbox.title"),
-    external: t("runtime.providers.external.title"),
-  }
-
   return (
-    <AdminLayout activeMenu="settings" fullBleed>
-      <Tabs value={tab} onValueChange={(v) => setTab(v as RuntimeTab)} className="flex min-h-0 flex-1 flex-col">
+    <AdminLayout activeMenu="runtime" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
         <PageHeader
           className="static mx-0 mb-0"
           title={t("runtime.page.title")}
           subtitleFor="runtime.page.title"
           action={
-            <>
-              <SettingsTabs active="runtime" />
-              {tab === "local_device" && workspaceID && (
-                <Button onClick={() => setPairOpen(true)} data-testid="agent-daemon-pair-button">
-                  {t("runtime.agentDaemon.actions.pair", { defaultValue: "Pair a new device" })}
-                </Button>
-              )}
-            </>
+            workspaceID ? (
+              <Button onClick={() => setPairOpen(true)} data-testid="agent-daemon-pair-button">
+                {t("runtime.agentDaemon.actions.pair", { defaultValue: "Pair a new device" })}
+              </Button>
+            ) : undefined
           }
         />
-        <div className="flex h-10 shrink-0 items-center border-b border-line px-4">
-          <TabsList aria-label={t("runtime.page.title")}>
-            {TABS.map((id) => (
-              <TabsTrigger key={id} value={id} data-testid={`runtime-tab-${id.replace("_", "-")}`}>
-                {tabLabel[id]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
+          {workspaceID && <RuntimeLedger workspaceID={workspaceID} />}
 
-        <TabsContent value="local_device" className="mt-0">
-          {workspaceID && <LocalDeviceRuntimesPanel workspaceID={workspaceID} />}
-        </TabsContent>
-
-        <TabsContent value="sandbox" className="mt-0">
           <CloudSandboxPanel
             workspaceID={workspaceID}
             status={statusQuery.data}
@@ -231,9 +181,6 @@ export function RuntimePage() {
             cloudState={cloudState}
             isAdmin={isAdmin}
             bindings={activeBindings}
-            sandboxDaemonRuntimes={sandboxDaemonRuntimes}
-            sandboxDaemonLoading={daemonRuntimesQuery.isLoading && Boolean(workspaceID)}
-            sandboxDaemonError={daemonRuntimesQuery.error}
             listLoading={sandboxesQuery.isLoading}
             listError={sandboxesQuery.error}
             sortKey={sortKey}
@@ -243,21 +190,15 @@ export function RuntimePage() {
             onRefresh={() => {
               void statusQuery.refetch()
               void sandboxesQuery.refetch()
-              void daemonRuntimesQuery.refetch()
             }}
             onSortChange={setSortKey}
             onToggleOne={toggleOne}
             onToggleAll={toggleAll}
-              onClearBulkErrors={() => setBulkErrors([])}
+            onClearBulkErrors={() => setBulkErrors([])}
             onConfirmBulkKill={() => setConfirming(true)}
           />
-        </TabsContent>
-
-        <TabsContent value="external" className="mt-0 pt-4">
-          <p className="max-w-2xl text-sm text-fg">{t("runtime.external.body")}</p>
-        </TabsContent>
         </div>
-      </Tabs>
+      </div>
 
       {workspaceID && (
         <PairDaemonDialog open={pairOpen} onClose={() => setPairOpen(false)} workspaceID={workspaceID} />
@@ -285,9 +226,6 @@ function CloudSandboxPanel({
   cloudState,
   isAdmin,
   bindings,
-  sandboxDaemonRuntimes,
-  sandboxDaemonLoading,
-  sandboxDaemonError,
   listLoading,
   listError,
   sortKey,
@@ -307,9 +245,6 @@ function CloudSandboxPanel({
   cloudState: CloudState
   isAdmin: boolean
   bindings: SandboxBinding[]
-  sandboxDaemonRuntimes: Runtime[]
-  sandboxDaemonLoading: boolean
-  sandboxDaemonError: unknown
   listLoading: boolean
   listError: unknown
   sortKey: SortKey
@@ -323,24 +258,19 @@ function CloudSandboxPanel({
   onClearBulkErrors: () => void
   onConfirmBulkKill: () => void
 }) {
+  const { t } = useTranslation("admin")
   const showCredentialControl =
     cloudState !== "loading" && cloudState !== "unknown" && status?.profile !== "managed"
   const showInstances = !statusError && Boolean(workspaceID)
 
   return (
-    <div>
+    <div className="mt-8 border-t border-line pt-4">
+      <SectionHead title={t("runtime.cloud.provider.title")} />
       <RuntimeStatusBanner workspaceID={workspaceID} />
 
       {showCredentialControl && (
         <RuntimeCredentialCard workspaceID={workspaceID} isAdmin={isAdmin} className="mt-4" />
       )}
-
-      <CloudDaemonRuntimesPanel
-        runtimes={sandboxDaemonRuntimes}
-        loading={sandboxDaemonLoading}
-        error={sandboxDaemonError}
-        onRefresh={onRefresh}
-      />
 
       {showInstances ? (
         <CloudInstancesPanel
@@ -602,121 +532,6 @@ function CloudInstancesPanel({
       )}
     </section>
   )
-}
-
-function CloudDaemonRuntimesPanel({
-  runtimes,
-  loading,
-  error,
-  onRefresh,
-}: {
-  runtimes: Runtime[]
-  loading: boolean
-  error: unknown
-  onRefresh: () => void
-}) {
-  const { t } = useTranslation("admin")
-  const fmtAgo = useRelativeTime()
-  const title = t("runtime.cloud.daemonRuntimes.title", { defaultValue: "Sandbox daemons" })
-
-  if (loading) {
-    return (
-      <section>
-        <SectionHead title={title} />
-        <LedgerSkeleton rows={2} />
-      </section>
-    )
-  }
-
-  if (error) {
-    return (
-      <section>
-        <SectionHead title={title} />
-        <ErrorState
-          title={t("runtime.cloud.daemonRuntimes.errors.loadFailed", { defaultValue: "Failed to load sandbox daemons" })}
-          description={error instanceof Error ? error.message : String(error)}
-          onRetry={onRefresh}
-        />
-      </section>
-    )
-  }
-
-  if (runtimes.length === 0) return null
-
-  return (
-    <section>
-      <SectionHead title={title} meta={runtimes.length} />
-      <Ledger columns={DAEMON_COLUMNS} className="-mx-6" role="listbox" aria-label={title}>
-        <LedgerHeader>
-          <span />
-          <span>{t("runtime.cloud.daemonRuntimes.table.runtime", { defaultValue: "Runtime" })}</span>
-          <span>{t("runtime.cloud.daemonRuntimes.table.agent", { defaultValue: "Agent" })}</span>
-          <span>{t("runtime.cloud.daemonRuntimes.table.kind", { defaultValue: "Sandbox type" })}</span>
-          <span>{t("runtime.cloud.daemonRuntimes.table.agentEngines", { defaultValue: "Agent engines" })}</span>
-          <span className="text-right">{t("runtime.cloud.daemonRuntimes.table.heartbeat", { defaultValue: "Last heartbeat" })}</span>
-        </LedgerHeader>
-        <ul className="m-0 list-none p-0">
-          {runtimes.map((runtime) => {
-            const state = sandboxDaemonState(runtime)
-            return (
-              <LedgerRow key={runtime.id} data-testid={`sandbox-daemon-runtime-row-${runtime.id}`} title={runtime.id}>
-                <StatusIcon status={state.status} title={t(state.labelKey, { defaultValue: state.fallback })} />
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate font-medium">{runtime.name || shortID(runtime.id)}</span>
-                  {state.status !== "completed" && (
-                    <span className="shrink-0 text-xs text-fg-muted">· {t(state.labelKey, { defaultValue: state.fallback })}</span>
-                  )}
-                </span>
-                <LedgerId>{runtimeConfigText(runtime, "agent_id") || "—"}</LedgerId>
-                <span className="truncate text-xs text-fg-muted">{runtimeConfigText(runtime, "sandbox_kind") || runtime.provider}</span>
-                <span className="truncate text-xs text-fg-muted">{formatRuntimeAgentKinds(runtime)}</span>
-                <span className="truncate text-right text-xs text-fg-muted" title={runtime.last_heartbeat_at ?? undefined}>
-                  {fmtAgo(runtime.last_heartbeat_at)}
-                </span>
-              </LedgerRow>
-            )
-          })}
-        </ul>
-      </Ledger>
-    </section>
-  )
-}
-
-type DaemonStateKey =
-  | "runtime.cloud.daemonRuntimes.status.timedOut"
-  | "runtime.cloud.daemonRuntimes.status.preparing"
-  | "runtime.agentDaemon.status.online"
-  | "runtime.agentDaemon.status.offline"
-  | "runtime.agentDaemon.status.error"
-  | "runtime.agentDaemon.status.pending_pairing"
-
-function sandboxDaemonState(runtime: Runtime): { status: StatusKind; labelKey: DaemonStateKey; fallback: string } {
-  if (runtime.liveness === "pending_pairing") {
-    return isSandboxPairingExpired(runtime)
-      ? { status: "failed", labelKey: "runtime.cloud.daemonRuntimes.status.timedOut", fallback: "Startup timed out" }
-      : { status: "running", labelKey: "runtime.cloud.daemonRuntimes.status.preparing", fallback: "Preparing" }
-  }
-  return {
-    status: LIVENESS_STATUS[runtime.liveness],
-    labelKey: `runtime.agentDaemon.status.${runtime.liveness}` as DaemonStateKey,
-    fallback: runtime.liveness,
-  }
-}
-
-function runtimeConfigText(runtime: Runtime, key: string): string {
-  const raw = runtime.config[key]
-  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : ""
-}
-
-function formatRuntimeAgentKinds(runtime: Runtime): string {
-  const labels = supportedAgentKinds(runtime)
-    .filter((kind) => kind.available)
-    .map((kind) => formatAgentKindLabel(kind.kind))
-  return labels.length > 0 ? labels.join(" · ") : "—"
-}
-
-function shortID(id: string): string {
-  return id.length > 12 ? id.slice(0, 12) : id
 }
 
 function ConfirmBulkKillDialog({
