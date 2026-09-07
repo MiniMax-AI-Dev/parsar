@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 12,
+    "rows": 14,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -40,7 +40,7 @@
   {
     "view": "agents",
     "rows": 2,
-    "rowsAfterClicks": 13,
+    "rowsAfterClicks": 15,
     "dialogsOpened": [
       "新建 Agent"
     ],
@@ -61,20 +61,17 @@
   },
   {
     "view": "models",
-    "rows": 1,
+    "rows": 0,
     "rowsAfterClicks": 0,
-    "dialogsOpened": [
-      "导入模型",
-      "新建模型"
-    ],
+    "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
   },
   {
     "view": "connections",
-    "rows": 4,
-    "rowsAfterClicks": 4,
+    "rows": 0,
+    "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
@@ -94,8 +91,8 @@
   },
   {
     "view": "settings",
-    "rows": 2,
-    "rowsAfterClicks": 14,
+    "rows": 0,
+    "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],

@@ -326,7 +326,9 @@
       "deleteConfirmDesc": "Are you sure you want to delete \"{{title}}\"? The conversation and its chat history will no longer appear in the list (audit records are preserved).",
       "deleteCancel": "Cancel",
       "deleteConfirm": "Delete",
-      "deleteFailed": "Delete failed, please retry"
+      "deleteFailed": "Delete failed, please retry",
+      "copyLinkAria": "Copy share link",
+      "copied": "Link copied"
     },
     "empty": {
       "greet": "What would you like to talk about?",
@@ -1400,7 +1402,8 @@
         "audit": "Audit",
         "dynamics": "Activity",
         "config": "Config",
-        "scheduled": "Scheduled"
+        "scheduled": "Scheduled",
+        "exposure": "Exposure"
       },
       "dynamics": {
         "current": {
@@ -1898,6 +1901,26 @@
     "filters": {
       "label": "Filter",
       "allConnectors": "All connectors"
+    },
+    "exposure": {
+      "conversation": {
+        "title": "Conversation",
+        "open": "View {{count}} conversation(s)"
+      },
+      "feishu": {
+        "title": "Feishu",
+        "configure": "Configure",
+        "hide": "Collapse"
+      },
+      "mcp": {
+        "title": "MCP"
+      },
+      "state": {
+        "alwaysOn": "Always on · console and shared link",
+        "on": "On",
+        "off": "Not configured",
+        "notYet": "Coming"
+      }
     }
   },
   "connectors": {
@@ -3257,6 +3280,12 @@
       "agentRequired": "Select an executing agent",
       "promptRequired": "Prompt is required",
       "cronInvalid": "cron must have 5 fields (min hour dom mon dow)"
+    }
+  },
+  "shared": {
+    "noAccess": {
+      "title": "You cannot open this conversation",
+      "description": "It belongs to a workspace you are not in, or it has been deleted. Check with whoever shared the link."
     }
   }
 }

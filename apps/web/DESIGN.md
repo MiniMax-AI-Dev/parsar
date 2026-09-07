@@ -595,6 +595,18 @@ Dialogs are built like the rail, not like a card: a floating paper panel (448px 
 - **Footer:** a hairline-topped bar, 12px/16px padding, actions right-aligned 8px apart: outline cancel, then primary or destructive confirm.
 - **Motion:** `pop-in` on open, `pop-out` on close, over a 30% inverse overlay that fades in with `overlay-in` and out with `overlay-out`. The overlay never snaps.
 
+### Shared conversation (`/c/<id>`)
+One link is one conversation: everyone who opens it lands in the same thread, and that thread is the row the console already lists. The link is an **address, not a ticket** — who may read it is decided by signing in and being a workspace member, which the server enforces on every call the page makes (`requireWorkspaceMember`), so there is no second permission to keep in step with the first.
+
+The surface is shared, the shell is not. `ConversationMain` takes `chrome="bare"`: no admin topbar, no turn-nav rail, no "view run" link — those index and address things a colleague has no use for, and the rail would anchor to the window while the thread stays measured. What remains is the thread, the work trace, the approval bar and the composer, under a 56px bar carrying the mark, who you are talking to, and the theme toggle. Same world, same greys, same accent; the console's density relaxed because this page is read now and then rather than watched all day.
+
+Its states are all three: signing in returns to the link rather than the console (`stashReturnTo` covers the SSO redirect and the 401 bounce, not just the form); a conversation in another workspace says **you cannot open this**, never 404, because 404 reads as a mistyped link; and the composer carries the same sandbox guard the console does, so a send that cannot be served is refused with a reason instead of failing silently.
+
+### Agent exposure (signature)
+An Agent is only useful once someone outside the console can reach it, so its exits are a tab on the Agent rather than a setting filed elsewhere. The list is deliberately complete — the always-open exits sit beside the ones you configure, because "which doors are open" is the question and an answer that omits the open ones does not answer it.
+
+A conversation is **one** exit, not two: the console frames it in admin chrome and `/c/<id>` frames it bare, but it is the same thread behind the same membership. The share affordance therefore lives on a conversation row, not on the Agent — and copying a link needs no write access, since a viewer may share what they can already read.
+
 ### Filter menu (signature)
 `FilterMenu` with `FilterGroup` / `FilterOption` / `FilterToggle` / `FilterSeparator`, over the shared `menuContentClass` / `menuItemClass` in `ui/menu.tsx`. One outline trigger with the `ListFilter` icon, the word 筛选, and the active facet after a muted "·"; a floating panel of single-choice groups and toggles, hairline-separated. `FilterOption` takes an optional `count`, which turns the menu into the list's distribution as well as its filter — and the count is rendered for every known value including zero, because a value with nothing on it is usually the thing the reader opened the menu to check. A list that filters does not invent its own control.
 
