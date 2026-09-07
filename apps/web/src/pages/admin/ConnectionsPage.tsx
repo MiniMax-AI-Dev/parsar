@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react"
+import { useMemo, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
@@ -27,6 +27,7 @@ import {
 } from "../../lib/api-connectors"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import { useRelativeTime } from "../../lib/relative-time"
+import { useToast } from "../../components/ui/toast"
 import { useWorkspaceId } from "../../lib/workspace"
 
 const PLATFORMS: ConnectorPlatform[] = ["feishu", "slack", "discord", "teams"]
@@ -56,12 +57,12 @@ export function ConnectionsPage() {
   const { t } = useTranslation("admin")
   const { t: tc } = useTranslation("common")
   const wsId = useWorkspaceId()
+  const toast = useToast()
   const fmtAgo = useRelativeTime()
   const { data: myWorkspaces } = useMyWorkspaces()
   const connectorsQ = useWorkspaceIMConnectors(wsId)
   const connectors = connectorsQ.data?.connectors
   const [selected, setSelected] = useState<ConnectorPlatform | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
 
   const canEdit = useMemo(() => {
     const role = myWorkspaces?.workspaces.find((w) => w.id === wsId)?.role
@@ -93,13 +94,6 @@ export function ConnectionsPage() {
     [configs, connectors],
   )
 
-  // Saved confirmations are transient: one inline line in the header.
-  useEffect(() => {
-    if (!toast) return
-    const timer = window.setTimeout(() => setToast(null), 4000)
-    return () => window.clearTimeout(timer)
-  }, [toast])
-
   const pageTitle = t("connections.page.title")
   const platformName = (p: ConnectorPlatform) => t(`connections.connector.platformSelect.options.${p}`)
   const err = connectorsQ.error
@@ -117,14 +111,6 @@ export function ConnectionsPage() {
             className="static mx-0 mb-0"
             title={pageTitle}
             subtitleFor="connections.page.title"
-            action={
-              toast ? (
-                <span className="flex items-center gap-1.5 text-sm text-fg animate-pop-in data-[state=closed]:animate-pop-out" role="status">
-                  <StatusIcon status="completed" />
-                  {toast}
-                </span>
-              ) : undefined
-            }
           />
 
           {!wsId ? (
@@ -210,17 +196,17 @@ export function ConnectionsPage() {
                 current={configs.feishu}
                 masterKeyConfigured={connectorsQ.data?.master_key_configured}
                 canEdit={canEdit}
-                onToast={setToast}
+                onToast={toast.show}
               />
             )}
             {selected === "slack" && (
-              <SlackConnectorFields workspaceID={wsId} current={configs.slack} canEdit={canEdit} onToast={setToast} />
+              <SlackConnectorFields workspaceID={wsId} current={configs.slack} canEdit={canEdit} onToast={toast.show} />
             )}
             {selected === "discord" && (
-              <DiscordConnectorFields workspaceID={wsId} current={configs.discord} canEdit={canEdit} onToast={setToast} />
+              <DiscordConnectorFields workspaceID={wsId} current={configs.discord} canEdit={canEdit} onToast={toast.show} />
             )}
             {selected === "teams" && (
-              <TeamsConnectorFields workspaceID={wsId} current={configs.teams} canEdit={canEdit} onToast={setToast} />
+              <TeamsConnectorFields workspaceID={wsId} current={configs.teams} canEdit={canEdit} onToast={toast.show} />
             )}
           </DetailRail>
         )}

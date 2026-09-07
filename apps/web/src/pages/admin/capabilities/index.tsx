@@ -74,6 +74,7 @@ import {
 import { navigateAdmin, useAdminView } from "../../../lib/admin-router"
 import type { AgentCapability, Capability, CapabilityVersion } from "../../../lib/api-types"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
+import { useToast } from "../../../components/ui/toast"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
@@ -146,7 +147,7 @@ export function CapabilitiesPage() {
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<TargetMarketplaceInstall | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Capability | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
   const canImportDirectory = isAdmin || workspaceRole === "member"
@@ -256,7 +257,7 @@ export function CapabilitiesPage() {
           : undeprecateMut
     mutation.mutate(capability.id, {
       onSuccess: () => {
-        setToast(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
+        toast.show(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
         setMarketTarget(null)
       },
     })
@@ -471,8 +472,6 @@ export function CapabilitiesPage() {
             </TabsList>
           </Tabs>
         </div>
-
-        {toast && <InlineNotice tone="success" className="border-b border-line px-4 py-2">{toast}</InlineNotice>}
         {marketClientError && <InlineNotice tone="error" className="border-b border-line px-4 py-2">{marketClientError}</InlineNotice>}
 
         {pageTab === "workspace" ? (
@@ -487,7 +486,7 @@ export function CapabilitiesPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onCreated={(capabilityID) => {
-          setToast(t("capabilities.toast.created", { name: capabilityID }))
+          toast.show(t("capabilities.toast.created", { name: capabilityID }))
         }}
       />
       {addVersionCapability && (
@@ -503,7 +502,7 @@ export function CapabilitiesPage() {
           onCommitted={() => {
             const name = addVersionCapability.name
             setAddVersionCapability(null)
-            setToast(t("capabilities.toast.versionAdded", { name }))
+            toast.show(t("capabilities.toast.versionAdded", { name }))
           }}
         />
       )}
@@ -540,7 +539,7 @@ export function CapabilitiesPage() {
           deleteMut.mutate(deleteTarget.id, {
             onSuccess: () => {
               setDeleteTarget(null)
-              setToast(t("capabilities.delete.toast.success", { name }))
+              toast.show(t("capabilities.delete.toast.success", { name }))
             },
           })
         }}
@@ -560,7 +559,7 @@ export function CapabilitiesPage() {
           onConfirm={() => {
             uninstallMut.mutate(uninstallTarget.id, {
               onSuccess: () => {
-                setToast(t("capabilities.uninstall.toast", { name: uninstallTarget.name }))
+                toast.show(t("capabilities.uninstall.toast", { name: uninstallTarget.name }))
                 setUninstallTarget(null)
               },
             })
@@ -900,7 +899,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
   const [marketAction, setMarketAction] = useState<MarketAction>(null)
   const [marketClientError, setMarketClientError] = useState<string | null>(null)
   const [viewVersion, setViewVersion] = useState<CapabilityVersion | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   // Switching to another capability swaps the rail's content rather than
   // replaying its entrance, so the per-capability state is reset here instead
   // of by a remount.
@@ -912,7 +911,6 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
     setMarketAction(null)
     setMarketClientError(null)
     setViewVersion(null)
-    setToast(null)
   }
   const workspaceRole = workspacesQ.data?.workspaces.find((w) => w.id === wid)?.role
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin"
@@ -964,7 +962,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
     if (!action) return
     mutation.mutate(capability.id, {
       onSuccess: () => {
-        setToast(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
+        toast.show(t(`capabilities.marketStatus.toast.${action}`, { name: capability.name }))
         setMarketAction(null)
       },
     })
@@ -1013,7 +1011,6 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         ) : undefined
       }
     >
-      {toast && <InlineNotice tone="success" className="mb-4">{toast}</InlineNotice>}
       {marketClientError && <InlineNotice tone="error" className="mb-4">{marketClientError}</InlineNotice>}
 
       {capability.description && <p className="mb-4 text-sm text-fg">{capability.description}</p>}
@@ -1122,7 +1119,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
           updateMut.mutate({ capabilityID: capability.id, body }, {
             onSuccess: () => {
               setEditOpen(false)
-              setToast(t("capabilities.toast.updated", { name: body.name ?? capability.name }))
+              toast.show(t("capabilities.toast.updated", { name: body.name ?? capability.name }))
             },
           })
         }}
@@ -1137,7 +1134,7 @@ export function CapabilityRail({ id, open, onClose, onClosed }: {
         }}
         onCommitted={() => {
           setAddVersionOpen(false)
-          setToast(t("capabilities.toast.versionAdded", { name: capability.name }))
+          toast.show(t("capabilities.toast.versionAdded", { name: capability.name }))
         }}
       />
       <DeprecateCapabilityDialog
