@@ -2954,6 +2954,10 @@
       "emptyTitle": "No runtime connected yet",
       "emptyDescription": "Pair a local device with the button above; a cloud sandbox starts on an Agent's first run; an External Agent is chosen when you create the Agent.",
       "preparing": "Preparing"
+    },
+    "tabs": {
+      "environments": "Environments",
+      "instances": "Instances"
     }
   },
   "scopeRequired": {

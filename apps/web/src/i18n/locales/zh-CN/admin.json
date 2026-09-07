@@ -2954,6 +2954,10 @@
       "emptyTitle": "尚未接入任何运行环境",
       "emptyDescription": "本地设备用右上角的按钮生成接入命令；云端沙盒在 Agent 首次运行时自动拉起；外部 Agent 在创建 Agent 时选择。",
       "preparing": "准备中"
+    },
+    "tabs": {
+      "environments": "运行环境",
+      "instances": "运行实例"
     }
   },
   "scopeRequired": {
