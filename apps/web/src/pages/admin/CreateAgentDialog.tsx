@@ -721,7 +721,7 @@ export function CreateAgentDialog({
   const showDevicePicker = connector === "agent_daemon" && executionMode === "local_device" && Boolean(workspaceID)
   const errMsg = extractErrorMessage(error)
 
-  function prefillQuery(target: "models" | "connectors") {
+  function prefillQuery(target: "models" | "runtime") {
     const url = new URL(window.location.href)
     url.searchParams.set("admin", target)
     url.searchParams.delete("id")

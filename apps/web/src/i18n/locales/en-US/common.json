@@ -216,8 +216,6 @@
     "settingsTabs": {
       "general": "General",
       "credentials": "Credentials",
-      "runtime": "Runtime",
-      "connectors": "Agent connectors",
       "usage": "Usage",
       "audit": "Audit"
     },

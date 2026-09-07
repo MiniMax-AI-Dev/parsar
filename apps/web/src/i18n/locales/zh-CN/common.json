@@ -216,8 +216,6 @@
     "settingsTabs": {
       "general": "通用",
       "credentials": "凭据",
-      "runtime": "运行环境",
-      "connectors": "Agent 连接器",
       "usage": "用量",
       "audit": "审计"
     },

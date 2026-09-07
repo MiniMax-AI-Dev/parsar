@@ -1682,8 +1682,9 @@
       }
     },
     "emptyFiltered": {
-      "title": "No matching agents",
-      "description": "Adjust the keyword or switch to the All tab to see every agent."
+      "title": "No Agent matches",
+      "description": "Try another search term, or clear the filters.",
+      "clear": "Clear filters"
     },
     "form": {
       "title": {
@@ -1893,68 +1894,15 @@
         "title": "OpenCode",
         "description": "Run OpenCode CLI through parsar-daemon for local or sandbox daemon workflows."
       }
+    },
+    "filters": {
+      "label": "Filter",
+      "allConnectors": "All connectors"
     }
   },
   "connectors": {
-    "page": {
-      "title": "Agent connectors",
-      "description": "How Agents actually run. A Connector is the integration layer — one connector can carry multiple Agents."
-    },
-    "aggregateHint": "This view aggregates connector types in use by Agents in the current workspace. Connectors don't have their own registry table by design (anti-overengineering: connector identity lives directly on each Agent's connector_type field).",
-    "summary": "{{count}} connector type(s) in use",
-    "actions": {
-      "add": "Add connector",
-      "test": "Test connection",
-      "rotate": "Rotate secret"
-    },
-    "search": {
-      "placeholder": "Search connector name / type…"
-    },
     "table": {
-      "connector": "Connector",
-      "status": "Status",
-      "agentCount": "Agents",
-      "agents": "Agents",
-      "agentSummary": "{{count}} Agent(s)"
-    },
-    "status": {
-      "ready": "Ready",
-      "needsConfig": "Needs config",
-      "offline": "Offline",
-      "unknown": "Unknown"
-    },
-    "loadError": {
-      "title": "Failed to load connectors",
-      "description": "Backend returned an error.",
-      "hint": "Make sure the server is running and the current workspace exists.",
-      "unreachable": {
-        "title": "Cannot reach the Parsar server",
-        "description": "The frontend cannot access the backend API (/api/v1/...). The server might be down, the port might be occupied, or the Vite proxy is misconfigured.",
-        "hint": "Check that the backend is running on port 18080: `make server` or `make dev`."
-      }
-    },
-    "mockBanner": {
-      "title": "Choose a data scope",
-      "hint": "Choose the matching Workspace in the header."
-    },
-    "empty": {
-      "title": "No Agents in this workspace use any connector yet",
-      "description": "Create an Agent in Agents and set its connector_type — this view aggregates automatically."
-    },
-    "detail": {
-      "agentCount": "Agents",
-      "status": "Status",
-      "type": "Type",
-      "agents": "Agents using this connector",
-      "noAgents": "No agents use this connector.",
-      "notFound": {
-        "title": "Connector type not found",
-        "description": "It may have been removed, or no Agent in the current workspace uses it."
-      },
-      "agentSummary": "View {{count}} Agent(s)",
-      "tabs": {
-        "overview": "Overview"
-      }
+      "status": "Status"
     }
   },
   "secrets": {
@@ -2842,27 +2790,6 @@
       "suggestionLabel": "Suggestion",
       "notRunAfter": "Subsequent checks were not run (prerequisite failed)."
     },
-    "providers": {
-      "sandbox": {
-        "title": "Cloud Sandbox",
-        "description": "Run Agents in isolated cloud environments for stronger isolation and credential governance."
-      },
-      "localDevice": {
-        "title": "Local Device",
-        "description": "Connect team-owned machines to Parsar so Agents can use local CLIs, workdirs, and BYO credentials.",
-        "badge": "Paired device"
-      },
-      "external": {
-        "title": "External Agent",
-        "description": "Attach an existing Agent service to Parsar from the Agent configuration.",
-        "badge": "Per Agent"
-      },
-      "agent_daemon": {
-        "title": "Local Device",
-        "description": "Connect team-owned machines to Parsar so Agents can use local CLIs, workdirs, and BYO credentials.",
-        "badge": "Paired device"
-      }
-    },
     "cloud": {
       "state": {
         "loading": {
@@ -2912,37 +2839,13 @@
         "emptyTitle": "No active Cloud Sandbox yet",
         "emptyBody": "Agents using Cloud Sandbox start an isolated environment on their next message and appear here."
       },
-      "daemonRuntimes": {
-        "title": "Sandbox Daemons",
-        "description": "parsar-daemon processes running inside Cloud Sandboxes. They belong to Cloud Sandbox, not Local Device.",
-        "status": {
-          "preparing": "Preparing",
-          "preparingDetail": "Starting the sandbox and waiting for parsar-daemon to pair. First local Docker startup may include pulling the sandbox image.",
-          "timedOut": "Startup timed out",
-          "timedOutDetail": "The sandbox did not pair before the startup token expired. Retry provisioning from the Agent detail."
-        },
-        "errors": {
-          "loadFailed": "Failed to load Sandbox Daemons"
-        },
-        "table": {
-          "runtime": "Runtime",
-          "agent": "Agent",
-          "kind": "Sandbox kind",
-          "agentEngines": "Agent engines",
-          "status": "Status",
-          "heartbeat": "Last heartbeat"
-        }
+      "provider": {
+        "title": "Cloud sandbox provider"
       }
-    },
-    "external": {
-      "body": "External Agents do not need workspace-level setup. Create or edit an Agent, choose External Agent, then fill in its endpoint and auth method."
     },
     "agentDaemon": {
       "intro": "Local devices connect back to Parsar through parsar-daemon so Agents can use Claude Code / OpenCode CLIs on that machine.",
-      "empty": "No local device is connected yet. Generate a connection command from the button on the right.",
-      "errors": {
-        "loadFailed": "Failed to load Local Devices"
-      },
+      "errors": {},
       "actions": {
         "pair": "Connect device",
         "enable": "Enable",
@@ -2951,7 +2854,6 @@
       },
       "table": {
         "name": "Name",
-        "hostname": "Hostname",
         "version": "Version",
         "agentEngines": "Agent engines",
         "status": "Status",
@@ -2973,7 +2875,6 @@
         "available": "available",
         "unavailable": "unavailable",
         "notDetected": "{{label}} not detected",
-        "version": "{{label}} {{version}}",
         "usable": "{{label}} available"
       },
       "capabilities": {
@@ -3016,6 +2917,20 @@
       "delete": {
         "confirm": "Delete"
       }
+    },
+    "placement": {
+      "local_device": "Local device",
+      "cloud_sandbox": "Cloud sandbox",
+      "external_agent": "External agent"
+    },
+    "ledger": {
+      "label": "Runtimes",
+      "host": "Host / Agent",
+      "pairingExpired": "Startup timed out",
+      "loadError": "Failed to load runtimes",
+      "emptyTitle": "No runtime connected yet",
+      "emptyDescription": "Pair a local device with the button above; a cloud sandbox starts on an Agent's first run; an External Agent is chosen when you create the Agent.",
+      "preparing": "Preparing"
     }
   },
   "scopeRequired": {

@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next"
+
 import type { Agent, AgentDetail, CapabilityType, Model } from "./api-types"
 
 export type AgentEngine = "claude_code" | "codex" | "pi" | "opencode"
@@ -174,8 +176,43 @@ export function defaultModelOf(agent: AgentSource, models: Model[], unavailableL
   return found.name || found.model_key || id
 }
 
+/**
+ * The free-text search behind the Agent list. It lives here rather than in the
+ * table because the filter menu counts the same set: two copies of this
+ * predicate would let the counts disagree with the rows under them.
+ */
+export function searchAgents(
+  agents: Agent[],
+  keyword: string,
+  models: Model[],
+  t: TFunction<"admin">,
+): Agent[] {
+  const query = keyword.trim().toLowerCase()
+  if (!query) return agents
+  const unavailable = t("agents.modelUnavailable")
+  return agents.filter((agent) =>
+    agent.name.toLowerCase().includes(query)
+    || agent.description.toLowerCase().includes(query)
+    || agent.slug.toLowerCase().includes(query)
+    || t(agentEngineLabel(agentEngineOf(agent))).toLowerCase().includes(query)
+    || defaultModelOf(agent, models, unavailable).toLowerCase().includes(query)
+    || agentConnectorLabel(agent.connector_type).toLowerCase().includes(query),
+  )
+}
+
+/** The connector types an Agent can carry, in the order the filter lists them. */
+export const AGENT_CONNECTOR_TYPES = ["agent_daemon", "http", "a2a"] as const
+
+/** Normalises the legacy `http-agent` spelling onto the value space above. */
+export function agentConnectorKey(connectorType: string): string {
+  return connectorType === "http-agent" ? "http" : connectorType
+}
+
 export function agentConnectorLabel(connectorType: string): string {
-  if (connectorType === "agent_daemon") return "Agent Daemon"
-  if (connectorType === "http-agent" || connectorType === "http") return "HTTP Agent"
-  return connectorType
+  switch (agentConnectorKey(connectorType)) {
+    case "agent_daemon": return "Agent Daemon"
+    case "http": return "HTTP Agent"
+    case "a2a": return "A2A"
+    default: return connectorType
+  }
 }

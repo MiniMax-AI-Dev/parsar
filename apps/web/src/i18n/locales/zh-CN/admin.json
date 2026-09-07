@@ -1683,7 +1683,8 @@
     },
     "emptyFiltered": {
       "title": "没有匹配的 Agent",
-      "description": "调整搜索词，或切到「全部」tab 查看所有 Agent。"
+      "description": "换个搜索词，或清除筛选条件。",
+      "clear": "清除筛选"
     },
     "form": {
       "title": {
@@ -1893,68 +1894,15 @@
         "title": "OpenCode",
         "description": "通过 parsar-daemon 运行 OpenCode CLI，适合本机或 sandbox daemon 的 OpenCode 工作流。"
       }
+    },
+    "filters": {
+      "label": "筛选",
+      "allConnectors": "全部连接方式"
     }
   },
   "connectors": {
-    "page": {
-      "title": "Agent 连接器",
-      "description": "Agent 的执行接入方式。Connector 是接入层抽象，一个 Connector 可以承载多个 Agent 的运行。"
-    },
-    "aggregateHint": "当前展示的是当前工作区内 Agent 使用的 connector 类型聚合视图。Connector 没有独立的注册表/实例表（反过度设计：connector 身份直接长在每个 Agent 的 connector_type 字段上）。",
-    "summary": "共 {{count}} 个 connector 类型在用",
-    "actions": {
-      "add": "接入连接器",
-      "test": "测试连接",
-      "rotate": "Rotate secret"
-    },
-    "search": {
-      "placeholder": "搜索连接器名称 / 类型…"
-    },
     "table": {
-      "connector": "连接器",
-      "status": "状态",
-      "agentCount": "Agent 数",
-      "agents": "Agents",
-      "agentSummary": "{{count}} 个 Agent"
-    },
-    "status": {
-      "ready": "就绪",
-      "needsConfig": "需配置",
-      "offline": "离线",
-      "unknown": "未知"
-    },
-    "loadError": {
-      "title": "无法加载连接器列表",
-      "description": "后端返回错误。",
-      "hint": "确认 server 在跑、且当前工作区存在。",
-      "unreachable": {
-        "title": "无法连接到 Parsar server",
-        "description": "前端无法访问后端 API（/api/v1/...）。可能 server 没启动、端口被占用，或者 Vite proxy 配置不对。",
-        "hint": "检查后端是否在 18080 端口运行：`make server` 或 `make dev`。"
-      }
-    },
-    "mockBanner": {
-      "title": "选择数据范围",
-      "hint": "请在顶部选择对应的 Workspace。"
-    },
-    "empty": {
-      "title": "当前工作区还没有 Agent 接入 connector",
-      "description": "先在 Agents 页创建 Agent 并配置 connector_type，这里会自动聚合显示。"
-    },
-    "detail": {
-      "agentCount": "Agent 数",
-      "status": "状态",
-      "type": "类型",
-      "agents": "使用此连接器的 Agent",
-      "noAgents": "暂无 Agent 使用此连接器。",
-      "notFound": {
-        "title": "连接器类型未找到",
-        "description": "可能已被移除或当前工作区没有 Agent 在用。"
-      },
-      "agentSummary": "查看 {{count}} 个 Agent",
-      "tabs": {
-        "overview": "概览"
-      }
+      "status": "状态"
     }
   },
   "secrets": {
@@ -2842,27 +2790,6 @@
       "suggestionLabel": "建议",
       "notRunAfter": "后续检查未执行（前置依赖未通过）。"
     },
-    "providers": {
-      "sandbox": {
-        "title": "云端沙盒",
-        "description": "Agent 在隔离云环境中运行，适合需要稳定隔离和统一凭据治理的任务。"
-      },
-      "localDevice": {
-        "title": "本地设备",
-        "description": "把团队自己的机器接入 Parsar，让 Agent 使用本机 CLI、代码目录和 BYO 凭据。",
-        "badge": "设备配对"
-      },
-      "external": {
-        "title": "外部 Agent",
-        "description": "把已有 Agent 服务接入 Parsar，由具体 Agent 配置入口地址。",
-        "badge": "按 Agent 配置"
-      },
-      "agent_daemon": {
-        "title": "本地设备",
-        "description": "把团队自己的机器接入 Parsar，让 Agent 使用本机 CLI、代码目录和 BYO 凭据。",
-        "badge": "设备配对"
-      }
-    },
     "cloud": {
       "state": {
         "loading": {
@@ -2912,37 +2839,13 @@
         "emptyTitle": "还没有正在运行的云端沙盒",
         "emptyBody": "选择云端沙盒的 Agent 收到消息后，会自动启动隔离环境并出现在这里。"
       },
-      "daemonRuntimes": {
-        "title": "沙盒内 Daemon",
-        "description": "运行在云端沙盒里的 parsar-daemon 进程。它们属于云端沙盒，不是本地设备。",
-        "status": {
-          "preparing": "准备中",
-          "preparingDetail": "正在启动沙盒，并等待 parsar-daemon 完成配对。本地 Docker 首次启动可能需要先拉取沙盒镜像。",
-          "timedOut": "启动超时",
-          "timedOutDetail": "沙盒没有在启动 token 过期前完成配对。请到 Agent 详情页重试分配。"
-        },
-        "errors": {
-          "loadFailed": "无法加载沙盒内 Daemon"
-        },
-        "table": {
-          "runtime": "Runtime",
-          "agent": "Agent",
-          "kind": "沙盒类型",
-          "agentEngines": "Agent 引擎",
-          "status": "状态",
-          "heartbeat": "最后心跳"
-        }
+      "provider": {
+        "title": "云端沙盒供应商"
       }
-    },
-    "external": {
-      "body": "外部 Agent 不需要工作区级配置。创建或编辑 Agent 时选择外部 Agent，并填写服务入口与认证方式即可。"
     },
     "agentDaemon": {
       "intro": "本地设备通过 parsar-daemon 反向连接 Parsar，让 Agent 使用这台机器上的 Claude Code / OpenCode 等 CLI。",
-      "empty": "尚未接入任何本地设备。点击右上角按钮生成连接命令。",
-      "errors": {
-        "loadFailed": "无法加载本地设备列表"
-      },
+      "errors": {},
       "actions": {
         "pair": "接入新设备",
         "enable": "启用",
@@ -2951,7 +2854,6 @@
       },
       "table": {
         "name": "名称",
-        "hostname": "主机名",
         "version": "版本",
         "agentEngines": "Agent 引擎",
         "status": "状态",
@@ -2973,7 +2875,6 @@
         "available": "available",
         "unavailable": "unavailable",
         "notDetected": "{{label}} 未检测到",
-        "version": "{{label}} {{version}}",
         "usable": "{{label}} 可用"
       },
       "capabilities": {
@@ -3016,6 +2917,20 @@
       "delete": {
         "confirm": "删除"
       }
+    },
+    "placement": {
+      "local_device": "本地设备",
+      "cloud_sandbox": "云端沙盒",
+      "external_agent": "外部 Agent"
+    },
+    "ledger": {
+      "label": "运行环境",
+      "host": "主机 / Agent",
+      "pairingExpired": "启动超时",
+      "loadError": "无法加载运行环境列表",
+      "emptyTitle": "尚未接入任何运行环境",
+      "emptyDescription": "本地设备用右上角的按钮生成接入命令；云端沙盒在 Agent 首次运行时自动拉起；外部 Agent 在创建 Agent 时选择。",
+      "preparing": "准备中"
     }
   },
   "scopeRequired": {

@@ -15,7 +15,6 @@ export type AdminView =
   // Settings sub-pages — reachable via the settings tab strip
   | "secrets"
   | "runtime"
-  | "connectors"
   | "usage"
   | "audit"
 
@@ -35,7 +34,6 @@ const ALL_ADMIN_VIEWS: AdminView[] = [
   "settings",
   "secrets",
   "runtime",
-  "connectors",
   "usage",
   "audit",
 ]
@@ -65,6 +63,17 @@ function parsePrefill(raw: string | null): string[] | null {
   return items.length > 0 ? items : null
 }
 
+/**
+ * Views that were folded into another one. A link someone saved still has to
+ * land somewhere true, and the unknown-view fallback is the agent list — which
+ * would be a silent, wrong answer rather than a redirect.
+ */
+const RETIRED_VIEWS: Record<string, AdminView> = {
+  // A connector is an attribute of an Agent, not an object of its own, so the
+  // aggregate became a counted filter on the Agent list.
+  connectors: "agents",
+}
+
 function parseRoute(search: string): AppRoute {
   const cleaned = search.replace(/^\?+/, '?')
   const params = new URLSearchParams(cleaned)
@@ -82,9 +91,13 @@ function parseRoute(search: string): AppRoute {
     }
   }
 
-  const v = params.get("admin")
+  const requested = params.get("admin") ?? ""
+  const retiredTo = Object.hasOwn(RETIRED_VIEWS, requested) ? RETIRED_VIEWS[requested] : undefined
+  const v = retiredTo ?? requested
   const view = v && ALL_ADMIN_VIEWS.includes(v as AdminView) ? (v as AdminView) : null
-  const entityId = params.get("id")
+  // A retired view's id names an object the successor does not have, so it is
+  // dropped rather than carried into a detail that cannot resolve it.
+  const entityId = retiredTo ? null : params.get("id")
   const tab = params.get("tab")
   const railView = params.get("view")
   return { mode: "admin", view, entityId, tab, railView, credentialKind: null, credentialPrefill: null, returnTo: null }

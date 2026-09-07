@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 8,
+    "rows": 12,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -40,7 +40,7 @@
   {
     "view": "agents",
     "rows": 2,
-    "rowsAfterClicks": 9,
+    "rowsAfterClicks": 13,
     "dialogsOpened": [
       "新建 Agent"
     ],
@@ -61,9 +61,12 @@
   },
   {
     "view": "models",
-    "rows": 0,
+    "rows": 1,
     "rowsAfterClicks": 0,
-    "dialogsOpened": [],
+    "dialogsOpened": [
+      "导入模型",
+      "新建模型"
+    ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": []
@@ -112,22 +115,15 @@
     "rows": 0,
     "rowsAfterClicks": 0,
     "dialogsOpened": [
-      "接入新设备"
+      "接入新设备",
+      "录入 E2B API Key"
     ],
     "pageErrors": [],
     "consoleErrors": [],
     "bad": [
-      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
+      "runtime/load: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes",
+      "runtime/click:重试: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
     ]
-  },
-  {
-    "view": "connectors",
-    "rows": 2,
-    "rowsAfterClicks": 14,
-    "dialogsOpened": [],
-    "pageErrors": [],
-    "consoleErrors": [],
-    "bad": []
   },
   {
     "view": "usage",

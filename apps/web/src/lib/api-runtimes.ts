@@ -140,6 +140,18 @@ export function isLocalDeviceRuntime(runtime: Runtime): boolean {
   return runtime.type === "agent_daemon" && !isSandboxDaemonRuntime(runtime)
 }
 
+/**
+ * Where a runtime sits, as the one question the 执行层 list is grouped by.
+ * `placement` is a server-side filter too; this derives the same answer from
+ * a row already in hand.
+ */
+export function runtimePlacementOf(runtime: Runtime): RuntimePlacement {
+  if (isSandboxDaemonRuntime(runtime)) return "cloud_sandbox"
+  if (runtime.type === "agent_daemon") return "local_device"
+  if (runtime.type === "sandbox") return "cloud_sandbox"
+  return "external_agent"
+}
+
 export function isRuntimeSelectableForDispatch(runtime: Runtime): boolean {
   return runtime.liveness === "online"
 }

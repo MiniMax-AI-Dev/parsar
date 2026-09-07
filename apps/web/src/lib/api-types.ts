@@ -850,18 +850,6 @@ export interface SendUserMessageResponse {
 
 /* --- Connectors (registry view) ---------------------------------------- */
 
-export interface ConnectorSummary {
-  connector_type: string
-  label: string
-  status: "ready" | "needs_config" | "offline" | "unknown" | string
-  agent_count: number
-  agent_slugs: string[]
-}
-
-export interface ListConnectorsResponse {
-  connectors: ConnectorSummary[]
-}
-
 /* --- Gateways (built-in registry) -------------------------------------- */
 
 export type GatewayStatus = "active" | "not_configured" | "degraded" | "offline"

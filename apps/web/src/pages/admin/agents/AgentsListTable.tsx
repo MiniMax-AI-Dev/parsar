@@ -3,10 +3,13 @@ import { Bot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { KeyboardEvent } from "react"
 
+import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { InitialTile, Ledger, LedgerHeader, LedgerRow, col } from "../../../components/ui/ledger"
 import {
+  agentConnectorKey,
   agentConnectorLabel,
+  searchAgents,
   agentEngineLabel,
   agentEngineOf,
   defaultModelOf,
@@ -24,6 +27,8 @@ export function AgentsListTable({
   agents,
   models,
   keyword,
+  connectorFilter,
+  onClearFilters,
   selectedID,
   chatPendingID,
   deletePending,
@@ -37,6 +42,8 @@ export function AgentsListTable({
   agents: Agent[]
   models: Model[]
   keyword: string
+  connectorFilter: string
+  onClearFilters: () => void
   selectedID: string | null
   chatPendingID: string | null
   deletePending: boolean
@@ -49,17 +56,9 @@ export function AgentsListTable({
 }) {
   const { t } = useTranslation("admin")
   const unavailable = t("agents.modelUnavailable")
-  const filtered = agents.filter((agent) => {
-    if (!keyword) return true
-    const query = keyword.toLowerCase()
-    const engine = t(agentEngineLabel(agentEngineOf(agent))).toLowerCase()
-    const model = defaultModelOf(agent, models, unavailable).toLowerCase()
-    return agent.name.toLowerCase().includes(query)
-      || agent.description.toLowerCase().includes(query)
-      || agent.slug.toLowerCase().includes(query)
-      || engine.includes(query)
-      || model.includes(query)
-  })
+  const filtered = searchAgents(agents, keyword, models, t).filter(
+    (agent) => !connectorFilter || agentConnectorKey(agent.connector_type) === connectorFilter,
+  )
 
   if (filtered.length === 0) {
     return (
@@ -67,6 +66,11 @@ export function AgentsListTable({
         icon={Bot}
         title={t("agents.emptyFiltered.title")}
         description={t("agents.emptyFiltered.description")}
+        action={
+          <Button size="sm" variant="outline" onClick={onClearFilters}>
+            {t("agents.emptyFiltered.clear")}
+          </Button>
+        }
       />
     )
   }
