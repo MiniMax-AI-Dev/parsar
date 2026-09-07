@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench, ty
 
 import { StatusIcon, type StatusKind } from "../ui/status-icon"
 import { cn } from "../../lib/utils"
+import { MachineText } from "../../components/ui/machine-text"
 
 /**
  * One tool call or step of a run, normalised from the timeline's `ToolStep`
@@ -239,17 +240,17 @@ function StepRow({ step, now }: { step: TraceStep; now: number }) {
               {hasArgs && (
                 <div>
                   <p className="m-0 mb-1 text-xs text-fg-muted">{t("conversations.trace.args")}</p>
-                  <pre className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                  <MachineText>
                     {stringify(step.args)}
-                  </pre>
+                  </MachineText>
                 </div>
               )}
               {hasResult && (
                 <div>
                   <p className="m-0 mb-1 text-xs text-fg-muted">{t("conversations.trace.result")}</p>
-                  <pre className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                  <MachineText>
                     {stringify(step.result)}
-                  </pre>
+                  </MachineText>
                 </div>
               )}
             </div>

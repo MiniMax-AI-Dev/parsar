@@ -106,7 +106,8 @@ export function OrgSecretsTab({ workspaceID, query = "", createRequest = 0 }: Or
       <div className="px-4 pt-4">
         <ErrorState
           title={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.title") : t("secrets.error.load.title")}
-          description={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.description") : errorObj?.message ?? t("secrets.error.load.description")}
+          description={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.description") : t("secrets.error.load.description")}
+          detail={errorObj?.envelope?.unreachable ? undefined : errorObj?.message}
           hint={errorObj?.envelope?.unreachable ? t("secrets.error.unreachable.hint") : t("secrets.error.load.hint")}
           onRetry={() => void secretsQ.refetch()}
         />
@@ -306,7 +307,7 @@ function CreateDialog({ onClose, onSubmit, pending, error }: CreateDialogProps) 
               <Input id="secret-api-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-..." autoComplete="off" required />
             </Field>
             {error && (
-              <ErrorState title={t("secrets.create.error.title")} description={error.message} className="py-0" />
+              <ErrorState title={t("secrets.create.error.title")} detail={error.message} className="py-0" />
             )}
           </div>
           <DialogFooter>

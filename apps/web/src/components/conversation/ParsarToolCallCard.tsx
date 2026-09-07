@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench } f
 import { useToolCallElapsed } from "@assistant-ui/react"
 
 import { StatusIcon } from "../ui/status-icon"
+import { MachineText } from "../../components/ui/machine-text"
 
 // ---------------------------------------------------------------------------
 // Tool icon / summary helpers (mirrored from StepDisplay to keep styling)
@@ -116,9 +117,9 @@ export function ParsarToolCallCard({
               <p className="m-0 mb-1 text-xs text-fg-muted">
                 {t("conversations.toolCall.argsLabel", { defaultValue: "Arguments" })}
               </p>
-              <pre className="m-0 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+              <MachineText className="max-h-32">
                 {JSON.stringify(args, null, 2)}
-              </pre>
+              </MachineText>
             </div>
           )}
           {result != null && !isRunning && (
@@ -126,9 +127,9 @@ export function ParsarToolCallCard({
               <p className="m-0 mb-1 text-xs text-fg-muted">
                 {t("conversations.toolCall.resultLabel", { defaultValue: "Result" })}
               </p>
-              <pre className="m-0 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+              <MachineText className="max-h-32">
                 {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-              </pre>
+              </MachineText>
             </div>
           )}
         </div>

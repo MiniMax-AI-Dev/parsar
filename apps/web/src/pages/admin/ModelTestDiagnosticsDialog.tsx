@@ -15,6 +15,7 @@ import type {
   ModelConnectivityEndpointResult,
   ModelConnectivityResult,
 } from "../../lib/api-models"
+import { MachineText } from "../../components/ui/machine-text"
 
 interface ModelTestDiagnosticsDialogProps {
   open: boolean
@@ -173,9 +174,9 @@ function DiagnosticsBlock({
           <Copy strokeWidth={1.5} />
         </Button>
       </div>
-      <pre className="m-0 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+      <MachineText className="max-h-72 break-words">
         {value}
-      </pre>
+      </MachineText>
     </div>
   )
 }

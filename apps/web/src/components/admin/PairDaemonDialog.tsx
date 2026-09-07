@@ -18,6 +18,7 @@ import { InlineError } from "../runtime/InlineError"
 import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
 import { copyText } from "../../lib/clipboard"
+import { MachineText } from "../../components/ui/machine-text"
 
 interface PairDaemonDialogProps {
   open: boolean
@@ -254,9 +255,9 @@ function DaemonCommandBlock({
               : t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
         </Button>
       </div>
-      <pre className="m-0 mt-1 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+      <MachineText className="mt-1 max-h-none">
         {command}
-      </pre>
+      </MachineText>
       <p className="mt-1 text-xs text-fg-muted">{description}</p>
     </div>
   )

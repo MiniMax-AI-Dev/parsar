@@ -21,6 +21,7 @@ import { useAuditRecords } from "../../lib/api-governance"
 import type { AuditRecord, AuditSource } from "../../lib/api-types"
 import { useWorkspaceId } from "../../lib/workspace"
 import { cn } from "../../lib/utils"
+import { MachineText } from "../../components/ui/machine-text"
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -298,9 +299,9 @@ export function AuditPage() {
                   />
                   {openRow === r.id && (
                     <li className="border-b border-line px-4 py-2">
-                      <pre className="m-0 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+                      <MachineText className="max-h-none">
                         {`#${r.id} ${r.event_type}\n${JSON.stringify(r.payload ?? {}, null, 2)}`}
-                      </pre>
+                      </MachineText>
                     </li>
                   )}
                 </Fragment>

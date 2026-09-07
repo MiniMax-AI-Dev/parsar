@@ -172,7 +172,7 @@ export function CredentialDialog({
             )}
 
             {error && (
-              <ErrorState title={t("myCredentials.dialog.errorTitle")} description={error.message} className="py-0" />
+              <ErrorState title={t("myCredentials.dialog.errorTitle")} detail={error.message} className="py-0" />
             )}
           </div>
 

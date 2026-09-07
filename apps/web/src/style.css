@@ -116,7 +116,6 @@
   --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
   --animate-spin-slow: spin 1.8s linear infinite;
   --animate-rail-in: rail-in 260ms var(--ease-spring) both;
-  --animate-fade-out: fade-out 2s ease-out forwards;
   --animate-pop-in: pop-in 200ms var(--ease-spring) both;
   --animate-pop-out: pop-out 150ms var(--ease-settle) both;
   --animate-rail-out: rail-out 200ms var(--ease-settle) both;
@@ -215,11 +214,6 @@ html[data-theme="dark"] {
   --app-chat-user-bubble: var(--color-surface-muted);
   --app-chat-agent-text: var(--color-fg);
   --app-chat-composer-shadow: rgb(0 0 0 / 35%);
-}
-
-@keyframes fade-out {
-  0%, 70% { opacity: 1; }
-  100% { opacity: 0; }
 }
 
 @keyframes spin {

@@ -17,6 +17,7 @@ import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Property, PropertyList } from "../ui/property-list"
+import { MachineText } from "../../components/ui/machine-text"
 
 /**
  * One approval / user-input request, flat: a status badge and title, the
@@ -111,9 +112,9 @@ export function InteractionDecisionCard({
       </PropertyList>
 
       {interaction.kind === "permission" ? (
-        <pre className="m-0 max-h-52 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+        <MachineText className="max-h-52 overflow-y-auto">
           {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-        </pre>
+        </MachineText>
       ) : (
         <div className="space-y-4">
           {questions.map((question, index) => {

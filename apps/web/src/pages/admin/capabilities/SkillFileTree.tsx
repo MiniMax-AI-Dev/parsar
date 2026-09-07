@@ -22,6 +22,7 @@ import {
 } from "../../../components/ui/collapsible"
 import { cn } from "../../../lib/utils"
 import type { CanonicalSkillSpec, SkillFile } from "./types"
+import { MachineText } from "../../../components/ui/machine-text"
 
 interface Props {
   skill: CanonicalSkillSpec
@@ -200,9 +201,9 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
 
   if (err || html === null) {
     return (
-      <pre className="m-0 my-2 max-h-[420px] overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+      <MachineText className="my-2 max-h-[420px] overflow-y-auto">
         {content}
-      </pre>
+      </MachineText>
     )
   }
   return (

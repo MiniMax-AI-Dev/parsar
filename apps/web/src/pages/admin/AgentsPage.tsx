@@ -464,7 +464,8 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
         ) : query.error ? (
           <ErrorState
             title={t("agents.detail.loadError.title")}
-            description={query.error instanceof Error ? query.error.message : t("agents.detail.loadError.description")}
+            description={t("agents.detail.loadError.description")}
+            detail={query.error instanceof Error ? query.error.message : undefined}
             onRetry={() => void query.refetch()}
           />
         ) : (

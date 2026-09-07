@@ -163,7 +163,7 @@ export function SandboxPanel({
     return (
       <ErrorState
         title={t("agents.detail.sandbox.errorTitle")}
-        description={(query.error as Error).message}
+        detail={(query.error as Error).message}
         onRetry={() => void query.refetch()}
       />
     )
@@ -201,7 +201,7 @@ export function SandboxPanel({
         {acquireMut.error && (
           <ErrorState
             title={t("agents.detail.sandbox.provisionError")}
-            description={(acquireMut.error as Error).message}
+            detail={(acquireMut.error as Error).message}
           />
         )}
       </Section>
@@ -268,13 +268,13 @@ export function SandboxPanel({
       {rebuildMut.error && (
         <ErrorState
           title={t("agents.detail.sandbox.rebuildError")}
-          description={(rebuildMut.error as Error).message}
+          detail={(rebuildMut.error as Error).message}
         />
       )}
       {renewMut.error && (
         <ErrorState
           title={t("agents.detail.sandbox.renewError")}
-          description={(renewMut.error as Error).message}
+          detail={(renewMut.error as Error).message}
         />
       )}
       {renewMut.isSuccess && renewMut.data?.expires_at && (

@@ -22,6 +22,7 @@ import { ImportPreview } from "./ImportPreview"
 import { SkillFileTree } from "./SkillFileTree"
 import { SkillZipDropzone } from "./SkillZipDropzone"
 import type { CanonicalSpec, SourceFormat } from "./types"
+import { MachineText } from "../../../components/ui/machine-text"
 
 interface Props {
   workspaceID: string | null
@@ -373,9 +374,9 @@ function SinglePreview({
         <p className="mb-1 text-xs text-fg-muted">
           {t("capabilities.import.skill.instruction", "Instruction (injected into the model)")}
         </p>
-        <pre className="m-0 max-h-[280px] overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+        <MachineText className="max-h-[280px]">
           {skill.instruction}
-        </pre>
+        </MachineText>
       </div>
     </section>
   )

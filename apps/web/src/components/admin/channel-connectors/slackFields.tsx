@@ -15,6 +15,7 @@ import { Select } from "../../ui/select"
 import { InlineError } from "../../runtime/InlineError"
 import { EnabledField, Field, FormFooter, FormSection, SecretInput } from "./shared"
 import { randomHex } from "../../../lib/random"
+import type { ShowToast } from "../../../components/ui/toast"
 
 const EMPTY_CONFIG: SlackConnectorInput = {
   enabled: false,
@@ -76,7 +77,7 @@ export interface SlackConnectorFieldsProps {
   workspaceID: string | null
   current: SlackConnectorInput | undefined
   canEdit: boolean
-  onToast: (msg: string) => void
+  onToast: ShowToast
   /** State chip rendered in the section head. */
   status?: ReactNode
 }

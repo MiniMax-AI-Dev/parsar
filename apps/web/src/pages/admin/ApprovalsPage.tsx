@@ -35,6 +35,7 @@ import type {
 import { firstInteractionQuestion, interactionQuestions } from "../../lib/interaction-questions"
 import { useRelativeTime, useTimeUntil } from "../../lib/relative-time"
 import { useWorkspaceId } from "../../lib/workspace"
+import { MachineText } from "../../components/ui/machine-text"
 
 /* ------------------------------------------------------------------ */
 /*  List page: the approvals ledger + decision rail                    */
@@ -417,9 +418,9 @@ function InteractionRail({
 
       {isPermission ? (
         <RailSection title={t("approvals.detail.payload")}>
-          <pre className="m-0 mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+          <MachineText className="mt-1.5 max-h-60">
             {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-          </pre>
+          </MachineText>
         </RailSection>
       ) : (
         questions.map((question, index) => {

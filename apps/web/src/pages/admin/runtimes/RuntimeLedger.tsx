@@ -77,7 +77,7 @@ export function RuntimeLedger({ workspaceID }: { workspaceID: string }) {
     return (
       <ErrorState
         title={t("runtime.ledger.loadError")}
-        description={(listQ.error as Error).message}
+        detail={(listQ.error as Error).message}
         onRetry={() => void listQ.refetch()}
       />
     )

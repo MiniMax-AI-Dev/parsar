@@ -10,6 +10,7 @@ import type {
   ConnectivityResult,
 } from "../../lib/api-runtime"
 import { cn } from "../../lib/utils"
+import { MachineText } from "../../components/ui/machine-text"
 
 interface ConnectivityResultPanelProps {
   result: ConnectivityResult
@@ -108,9 +109,9 @@ export function ConnectivityResultPanel({ result, checkLabelFor, onDismiss }: Co
             </p>
           )}
           {rawDetails.length > 0 && (
-            <pre className="mt-2 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+            <MachineText className="mt-2 max-h-none">
               {rawDetails.join("\n")}
-            </pre>
+            </MachineText>
           )}
         </div>
       )}

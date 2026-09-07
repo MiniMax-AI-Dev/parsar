@@ -50,6 +50,7 @@ import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog
 import { credentialKindLabel } from "../capability-ui"
 import { AgentConfigSummary } from "./AgentConfigSummary"
 import { DetailSection, InlineError } from "./DetailSection"
+import type { ShowToast } from "../../../components/ui/toast"
 
 type CapabilityCardItem = { capability?: Capability; binding?: AgentCapability }
 
@@ -152,7 +153,7 @@ function BuiltinCapabilityCard({
   agent: Agent
   workspaceID: string | null
   isAdmin: boolean
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const capability = binding.capability
@@ -163,7 +164,12 @@ function BuiltinCapabilityCard({
     if (!key || mut.isPending) return
     mut.mutate(
       { key, enabled: next },
-      { onError: (e) => onToast(t("agents.detail.capabilities.builtin.toggleError", { message: e instanceof Error ? e.message : String(e) })) },
+      {
+        onError: (e) =>
+          onToast(t("agents.detail.capabilities.builtin.toggleError", { message: e instanceof Error ? e.message : String(e) }), {
+            tone: "error",
+          }),
+      },
     )
   }
   return (
@@ -207,7 +213,7 @@ function CapabilityCard({
   credentials: UserCredential[]
   sharedSecrets: Secret[]
   mode: "enabled" | "available"
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const capability = item.capability
@@ -504,7 +510,7 @@ function CapabilityVersionDialog({
   triggerLabel?: string
   triggerVariant?: "ghost" | "link"
   disabled?: boolean
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(false)
@@ -651,7 +657,7 @@ function RemoveCapabilityDialog({
   binding: AgentCapability
   capabilityName: string
   workspaceID: string | null
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const [open, setOpen] = useState(false)
@@ -703,7 +709,7 @@ export function AgentConfigTab({
   workspaceID: string | null
   workspaceRole?: string
   modelLabel: string
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const agentCapabilitiesQ = useAgentCapabilitiesQuery(workspaceID, agent.id)
   const workspaceCapabilitiesQ = useCapabilitiesQuery(workspaceID)
@@ -780,7 +786,7 @@ function ConfigCapabilitiesSection({
   sharedSecrets: Secret[]
   loading: boolean
   error: unknown
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const [addOpen, setAddOpen] = useState(false)
@@ -800,7 +806,7 @@ function ConfigCapabilitiesSection({
       <DetailSection title={title}>
         <ErrorState
           title={t("agents.detail.config.capabilities.loadError")}
-          description={error instanceof Error ? error.message : undefined}
+          detail={error instanceof Error ? error.message : undefined}
         />
       </DetailSection>
     )
@@ -879,7 +885,7 @@ function AddCapabilityDialog({
   installable: Capability[]
   credentials: UserCredential[]
   sharedSecrets: Secret[]
-  onToast: (message: string) => void
+  onToast: ShowToast
 }) {
   const { t } = useTranslation("admin")
   const [q, setQ] = useState("")
@@ -925,8 +931,8 @@ function AddCapabilityDialog({
                     credentials={credentials}
                     sharedSecrets={sharedSecrets}
                     mode="available"
-                    onToast={(msg) => {
-                      onToast(msg)
+                    onToast={(msg, options) => {
+                      onToast(msg, options)
                       onOpenChange(false)
                     }}
                   />

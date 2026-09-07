@@ -159,7 +159,7 @@ export function UsagePage() {
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto pb-10">
-            <PropertyList className="grid-cols-[132px_minmax(0,1fr)] px-6 pt-3">
+            <PropertyList className="px-6 pt-3">
               <Property label={t("usage.stats.runs")} mono className="tabular-nums">{fmtInt(summary.runs.size)}</Property>
               <Property label={t("usage.stats.inputTokens")} mono className="tabular-nums">{fmtInt(summary.inputTokens)}</Property>
               <Property label={t("usage.stats.outputTokens")} mono className="tabular-nums">{fmtInt(summary.outputTokens)}</Property>

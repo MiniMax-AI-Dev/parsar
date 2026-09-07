@@ -156,7 +156,8 @@ export function PersonalCredentialsTab({ standalone = false, query = "", createR
       <div className="px-4 pt-4">
         <ErrorState
           title={isUnreachable ? t("myCredentials.error.unreachable.title") : t("myCredentials.error.load.title")}
-          description={isUnreachable ? t("myCredentials.error.unreachable.description") : loadErr instanceof Error ? loadErr.message : t("myCredentials.error.load.hint")}
+          description={isUnreachable ? t("myCredentials.error.unreachable.description") : t("myCredentials.error.load.hint")}
+          detail={!isUnreachable && loadErr instanceof Error ? loadErr.message : undefined}
           hint={isUnreachable ? t("myCredentials.error.unreachable.hint") : t("myCredentials.error.load.hint")}
           onRetry={() => void credentialsQ.refetch()}
         />

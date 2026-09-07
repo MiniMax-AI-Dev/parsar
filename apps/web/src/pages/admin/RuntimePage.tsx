@@ -453,7 +453,7 @@ function CloudInstancesPanel({
       ) : error ? (
         <ErrorState
           title={t("runtime.list.errors.loadFailed")}
-          description={error instanceof Error ? error.message : String(error)}
+          detail={error instanceof Error ? error.message : String(error)}
           onRetry={onRefresh}
         />
       ) : bindings.length === 0 ? (
