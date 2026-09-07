@@ -6,6 +6,8 @@ import type { ApiErrorEnvelope } from "./api-types"
  * so UI can switch to a friendlier "server offline" affordance.
  */
 
+import { stashReturnTo } from "./join-intent"
+
 export class ApiError extends Error {
   readonly envelope: ApiErrorEnvelope
   constructor(env: ApiErrorEnvelope) {
@@ -103,6 +105,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
       opts.redirectOnUnauthorized !== false &&
       typeof window !== "undefined"
     ) {
+      stashReturnTo()
       window.location.assign("/login")
     }
 

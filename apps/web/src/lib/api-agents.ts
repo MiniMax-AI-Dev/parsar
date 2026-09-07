@@ -607,6 +607,7 @@ export function useUpdateAgentFeishuConnector(workspaceID: string | null) {
     }) => updateAgentFeishuConnectorRequest(agentID, config),
     onSuccess: (_change, variables) => {
       void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+      void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
       void qc.invalidateQueries({ queryKey: KEY_FEISHU_DIAGNOSTICS(variables.agentID) })
     },
   })
@@ -643,6 +644,7 @@ export function usePollAgentFeishuProvisioning(workspaceID: string | null) {
     onSuccess: (res, variables) => {
       if (res.status === "success") {
         void qc.invalidateQueries({ queryKey: KEY_AGENTS(workspaceID ?? "_none") })
+        void qc.invalidateQueries({ queryKey: KEY_AGENT_DETAIL(workspaceID ?? "_none", variables.agentID) })
         void qc.invalidateQueries({ queryKey: KEY_FEISHU_DIAGNOSTICS(variables.agentID) })
         void qc.invalidateQueries({ queryKey: ["admin", "secrets"] })
       }

@@ -48,6 +48,7 @@ import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
 import { AgentConfigTab } from "./agents/AgentConfigTab"
 import { AgentDetailActions } from "./agents/AgentDetailActions"
+import { AgentExposureTab } from "./agents/AgentExposureTab"
 import { AgentDynamicsTab } from "./agents/AgentDynamicsTab"
 import { AgentsListTable } from "./agents/AgentsListTable"
 import { AgentStatusBadge } from "./agents/AgentStatusBadge"
@@ -526,6 +527,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
         <TabsList className="flex w-full">
           <TabsTrigger value="dynamics" className="flex-1">{t("agents.detail.tabs.dynamics")}</TabsTrigger>
           <TabsTrigger value="config" className="flex-1">{t("agents.detail.tabs.config")}</TabsTrigger>
+          <TabsTrigger value="exposure" className="flex-1">{t("agents.detail.tabs.exposure")}</TabsTrigger>
           <TabsTrigger value="audit" className="flex-1">{t("agents.detail.tabs.audit")}</TabsTrigger>
         </TabsList>
 
@@ -539,6 +541,15 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
             workspaceID={wid}
             workspaceRole={workspaceRole}
             modelLabel={model}
+            onToast={setToast}
+          />
+        </TabsContent>
+
+        <TabsContent value="exposure">
+          <AgentExposureTab
+            agent={agent}
+            workspaceID={wid}
+            canEdit={workspaceRole === "owner" || workspaceRole === "admin"}
             onToast={setToast}
           />
         </TabsContent>

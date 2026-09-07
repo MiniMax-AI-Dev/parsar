@@ -326,7 +326,9 @@
       "deleteConfirmDesc": "确定要删除 \"{{title}}\" 吗？删除后会话和聊天记录将无法在列表中看到（系统仍保留审计记录）。",
       "deleteCancel": "取消",
       "deleteConfirm": "删除",
-      "deleteFailed": "删除失败，请重试"
+      "deleteFailed": "删除失败，请重试",
+      "copyLinkAria": "复制分享链接",
+      "copied": "链接已复制"
     },
     "empty": {
       "greet": "今天想聊点什么？",
@@ -1400,7 +1402,8 @@
         "audit": "审计",
         "dynamics": "动态",
         "config": "配置",
-        "scheduled": "定时任务"
+        "scheduled": "定时任务",
+        "exposure": "暴露"
       },
       "dynamics": {
         "current": {
@@ -1898,6 +1901,26 @@
     "filters": {
       "label": "筛选",
       "allConnectors": "全部连接方式"
+    },
+    "exposure": {
+      "conversation": {
+        "title": "对话",
+        "open": "查看 {{count}} 条对话"
+      },
+      "feishu": {
+        "title": "飞书",
+        "configure": "配置",
+        "hide": "收起"
+      },
+      "mcp": {
+        "title": "MCP"
+      },
+      "state": {
+        "alwaysOn": "常开 · 控制台与分享链接",
+        "on": "已开启",
+        "off": "未配置",
+        "notYet": "即将支持"
+      }
     }
   },
   "connectors": {
@@ -3257,6 +3280,12 @@
       "agentRequired": "请选择执行 Agent",
       "promptRequired": "请填写 Prompt",
       "cronInvalid": "cron 表达式需为 5 段（分 时 日 月 周）"
+    }
+  },
+  "shared": {
+    "noAccess": {
+      "title": "你无权访问这个对话",
+      "description": "这条对话属于你尚未加入的工作区，或者已经被删除。找分享给你的人确认一下。"
     }
   }
 }
