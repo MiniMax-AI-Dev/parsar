@@ -1,0 +1,14 @@
+---
+title: Discord
+description: 配置 Discord Gateway 和工作区级机器人连接器。
+---
+
+Discord 工作区连接器保存 `app_id`、`bot_token_ref`、可选 `public_key_ref`、可选 `intents` 和 `enabled`。启用时必须提供 App ID 和 Bot Token 引用。
+
+## 进程模式
+
+设置 `PARSAR_DISCORD_GATEWAY=true` 并提供 `PARSAR_DISCORD_BOT_TOKEN`；共享机器人中的 `PARSAR_DISCORD_APP_ID` 可选。设置 `PARSAR_DISCORD_CONNECTORS=true` 启用数据库驱动的多租户 reconciler。配置 `PARSAR_MASTER_KEY` 后启用交互操作路由；Gateway 会把选择菜单交互折叠到提交操作中。
+
+收到消息后，Parsar 先解析工作区和 Agent，再创建或恢复 Conversation。启动 Run 前会检查发送者和 Agent 可见性。Bot Token 必须保存在密钥保险库中，泄露后立即轮换。
+
+参见[集成](/zh/integrations)、[配置](/zh/configuration)和[运行、审批和日志](/zh/runs-approvals-logs)。

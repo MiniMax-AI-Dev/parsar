@@ -1,0 +1,14 @@
+---
+title: Microsoft Teams
+description: 配置 Teams webhook 投递和多租户连接器。
+---
+
+Teams 工作区连接器保存 `app_id`、`app_password_ref`、可选 `tenant_id` 和 `enabled`。Webhook 地址是 `/api/teams/messages`。
+
+## 进程模式
+
+单部署机器人使用 `PARSAR_TEAMS_WEBHOOK=true`、`PARSAR_TEAMS_APP_ID`、`PARSAR_TEAMS_APP_PASSWORD`。数据库驱动的多租户连接器使用 `PARSAR_TEAMS_CONNECTORS=true` 和 `PARSAR_MASTER_KEY`；环境凭据仍可作为可选回退。`PARSAR_TEAMS_TENANT_ID` 可选，留空时使用 Bot Framework 多租户 authority。
+
+入站 webhook JWT 校验和出站 AAD client-credential bearer token 是有意区分的，不能把入站 token 当作出站凭据。Parsar 解析目标工作区和 Agent，执行可见性与成员校验，然后创建或恢复 Conversation 和 Run。
+
+参见[集成](/zh/integrations)、[配置](/zh/configuration)和[运行、审批和日志](/zh/runs-approvals-logs)。

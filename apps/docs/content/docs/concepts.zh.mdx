@@ -3,7 +3,7 @@ title: 核心概念
 description: 用一页了解 Parsar 工作区中的核心对象。
 ---
 
-Parsar 把协作和执行分开：服务端保存团队上下文与持久化记录，Runtime 实际执行 Agent，并把事件回传。
+Parsar 把协作和执行分开：服务端保存团队上下文与持久化记录，Runtime 实际执行 Agent，并把事件回传。下面的值均来自当前服务端和数据库约束。
 
 ## 工作区对象
 
@@ -15,15 +15,50 @@ Parsar 把协作和执行分开：服务端保存团队上下文与持久化记�
 | Conversation | 面向 Web、即时通讯或 API 的持久化交互上下文。 |
 | Agent Run | 由对话或其他入口触发的一次具体执行。 |
 | Capability | 可以挂载到 Agent 的 Skill、MCP、Plugin、System Prompt 或 Bundle。 |
-| Connector | 工作交付所经过的协议或渠道边界，例如 Agent Daemon Connector 或工作区 IM 连接器。 |
+| Connector | 工作交付所经过的协议边界。Agent 连接器是 `agent_daemon` 和 `http`；飞书、Slack、Discord、Teams 是工作区即时通讯连接器。 |
 
 ## 最容易混淆的区别
 
 Agent 不是常驻 daemon 进程，而是身份和配置。Runtime 决定在哪里执行。Run 是一次执行记录。同一个 Runtime 可以服务多个 Agent，同一个 Agent 也可以持续产生多次 Run。
 
+## Parsar 的工作模型
+
+Parsar 当前以 Conversation 和 Agent Run 作为主要工作记录。Conversation 保存面向人的上下文，Run 记录一次具体执行；Scheduled Task 提供周期性触发。这与独立的 first-class 项目或 Issue 管理器不同：Conversation 没有项目字段、Issue 编号或项目资源 checkout。
+
+在集成和自动化中，应引用 Workspace、Agent、Runtime、Capability 和 Scheduled Task 这些稳定对象。
+
+## API 中会看到的枚举
+
+### Agent 类型与连接器
+
+Agent 的 `config.agent_kind` 选择 daemon 发现到的命令行引擎：
+
+| Agent 类型 | 流式输出 | 权限请求 | 恢复运行 | 用量上报 |
+| --- | --- | --- | --- | --- |
+| `claude_code` | 是 | 是 | 是 | 是 |
+| `codex` | 是 | 是 | 是 | 是 |
+| `opencode` | 是 | 否 | 否 | 是 |
+| `pi` | 是 | 否（使用 `--no-approve`） | 是 | 是 |
+
+配对 daemon 或托管 daemon 使用 `agent_daemon` 连接器，外部 HTTP Agent 使用 `http`。daemon 连接时才会发现可用性和版本，浏览器端不会假设固定版本。
+
+### 可见性、成员和 Runtime 状态
+
+Agent 可见性只有三种：
+
+| 值 | 可以打开 Agent 的人 |
+| --- | --- |
+| `workspace` | 所属工作区的 active 成员 |
+| `tenant` | 任意已注册 Parsar 用户（包含工作区成员） |
+| `public` | 已注册用户和未登录访客（访客会看到注册提示） |
+
+工作区可见性是另一个字段，只有 `private` 和 `public`。成员状态是 `pending`、`active`、`rejected`；只有 `active` 成员参与工作区访问检查。Runtime 存活状态是 `pending_pairing`、`offline`、`online`、`error`。
+
 ## Run 生命周期
 
-Run 状态包括 `queued`、`running`、`completed`、`failed`、`cancelled` 和 `interrupted`。Run 完成不等于 Conversation 结束；对话会保留消息，并可以再次触发运行。
+Run 恰好有六种状态：`queued`（等待启动）、`running`（正在执行）、`completed`（正常完成）、`failed`（执行错误）、`cancelled`（用户取消）和 `interrupted`（系统中断或 Runtime 失败）。后四种是终态。Run 完成不等于 Conversation 结束；对话会保留消息，并可以再次触发运行。
+
+不要把 Run 状态和 Agent Interaction 混淆。审批和选择交互有自己的状态：`pending`、`resolving`、`approved`、`denied`、`answered`、`cancelled`、`expired`。
 
 ## 人工交互
 

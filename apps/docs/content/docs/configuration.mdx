@@ -1,0 +1,53 @@
+---
+title: Configuration and environment variables
+description: Configure Parsar from YAML, environment variables, and deployment templates.
+---
+
+Parsar loads configuration in this order: built-in defaults, the YAML file named by `PARSAR_CONFIG_FILE`, then environment variables. An empty environment variable does not erase a non-empty YAML value. The config path must be absolute or begin with `~/`; Parsar never falls back to the current directory.
+
+## Server configuration
+
+The supported process variables are:
+
+| Group | Variables |
+| --- | --- |
+| Server | `PARSAR_CONFIG_FILE`, `PARSAR_ADDR` (default `:8080`), `PARSAR_PUBLIC_URL`, `PARSAR_DATA_DIR` (default `~/.parsar`) |
+| Database and secrets | `DATABASE_URL`, `PARSAR_MASTER_KEY` |
+| Development and auth | `PARSAR_DEV_AUTH`, `PARSAR_PLATFORM_ADMIN_USER_IDS`, `PARSAR_LOGIN_REDIRECT_URL` |
+| Agent execution | `PARSAR_OPENCODE_BIN`, `PARSAR_OPENCODE_RUNNER`, `PARSAR_PLUGIN_HOST_PATH` |
+| Feishu | `PARSAR_FEISHU_MOCK`, `PARSAR_FEISHU_APP_ID`, `PARSAR_FEISHU_APP_SECRET`, `PARSAR_FEISHU_REDIRECT_URI`, `PARSAR_FEISHU_SCOPE`, `PARSAR_FEISHU_AUTHORIZE_BASE`, `PARSAR_FEISHU_API_BASE`, `PARSAR_FEISHU_VERIFICATION_TOKEN`, `PARSAR_FEISHU_ENCRYPT_KEY` |
+| Audit | `PARSAR_AUDIT_OTLP_ENABLED`, `PARSAR_AUDIT_OTLP_ADDR` (default `:4318`), `PARSAR_AUDIT_OTLP_SIGNING_KEY`, `PARSAR_AUDIT_OTLP_EXTERNAL_ENDPOINT`, `PARSAR_AUDIT_OTLP_FANOUT_ENDPOINT` |
+| Storage | `PARSAR_BLOB_BACKEND` (`pg` or `oss`), `PARSAR_OSS_REGION`, `PARSAR_OSS_ENDPOINT`, `PARSAR_OSS_BUCKET`, `PARSAR_OSS_ACCESS_KEY_ID`, `PARSAR_OSS_ACCESS_KEY_SECRET`, `PARSAR_OSS_BASE_URL` |
+
+The YAML equivalent is documented in [`docs/deploy/config.example.yaml`](https://github.com/MiniMax-AI-Dev/parsar/blob/main/docs/deploy/config.example.yaml): `server`, `database`, `auth`, `secret`, `gateway.feishu`, `model`, `storage`, and `audit.otlp`. Keep secrets in environment variables or a secret manager. Production validation requires a public URL, Postgres URL, master key, and secure cookies; development mode is explicitly enabled with the supported dev switches.
+
+The example's concrete keys are `server.addr`, `server.public_url`, `server.data_dir`, `server.plugin_host_path`, `database.url`, `auth.dev_auth`, `auth.cookie.secure`, `auth.platform_admin_user_ids`, `secret.master_key`, `gateway.feishu.mock`, `gateway.feishu.app_id`, `gateway.feishu.app_secret`, `gateway.feishu.redirect_uri`, `gateway.feishu.scope`, `gateway.feishu.authorize_base`, `gateway.feishu.api_base`, `gateway.feishu.verification_token`, `gateway.feishu.encrypt_key`, `gateway.feishu.login_redirect_url`, `model.opencode_bin`, `sandbox.runner`, `storage.blob_backend`, `storage.oss.region`, `storage.oss.endpoint`, `storage.oss.bucket`, `storage.oss.access_key_id`, `storage.oss.access_key_secret`, `storage.oss.base_url`, `audit.otlp.enabled`, `audit.otlp.addr`, `audit.otlp.signing_key`, `audit.otlp.external_endpoint`, and `audit.otlp.fanout_endpoint`. The example intentionally leaves `server.plugin_host_path` out of the rendered sample in some releases; the loader still supports it.
+
+## Current repository templates
+
+The committed root `.env.example` contains 26 assignments for local development and LAN Compose. They are:
+
+`PARSAR_FEISHU_MOCK`, `PARSAR_FEISHU_APP_ID`, `PARSAR_FEISHU_APP_SECRET`, `PARSAR_FEISHU_REDIRECT_URI`, `PARSAR_FEISHU_VERIFICATION_TOKEN`, `PARSAR_FEISHU_ENCRYPT_KEY`, `DATABASE_URL`, `PARSAR_MASTER_KEY`, `PARSAR_LOCAL_PORT`, `PARSAR_PG_PORT`, `PARSAR_HOST_IP`, `PARSAR_SERVER_IMAGE`, `PARSAR_SHARED_RUNTIME_TOKEN`, `PARSAR_AGENT_DAEMON_WS_URL`, `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID`, `AGENT_DAEMON_SANDBOX_TEMPLATE`, `PARSAR_E2B_API_KEY`, `AGENT_DAEMON_SANDBOX_TEMPLATE_XL`, `AGENT_DAEMON_SANDBOX_TTL`, `AGENT_DAEMON_SANDBOX_AUTO_RENEW`, `AGENT_DAEMON_SANDBOX_TTL_HOURS` (deprecated compatibility), `PARSAR_E2B_API_BASE_URL`, `PARSAR_E2B_SANDBOX_HOST`, `PARSAR_E2B_CA_CERT`, `HTTP_PROXY`, and `HTTPS_PROXY`.
+
+The self-hosted Compose template at `deploy/compose/.env.example` contains 44 assignments. In addition to the groups above, it defines:
+
+- host/image/database: `PARSAR_SERVER_IMAGE`, `PARSAR_HOST_PORT`, `PARSAR_PG_HOST_PORT`, `PARSAR_PG_USER`, `PARSAR_PG_PASSWORD`, `PARSAR_PG_DB`, `PARSAR_PUBLIC_URL`;
+- OAuth: `PARSAR_LOGIN_REDIRECT_URL`, `PARSAR_FEISHU_AUTHORIZE_BASE`, `PARSAR_FEISHU_API_BASE`, `PARSAR_GITHUB_CLIENT_ID`, `PARSAR_GITHUB_CLIENT_SECRET`, `PARSAR_GITHUB_REDIRECT_URI`, `PARSAR_GITHUB_SCOPE`;
+- daemon/sandbox: `PARSAR_DAEMON_REPO`, `PARSAR_AGENT_DAEMON_OWNER_URL`, `PARSAR_E2B_API_KEY`, `AGENT_DAEMON_SANDBOX_TEMPLATE`, `AGENT_DAEMON_SANDBOX_TEMPLATE_XL`, `AGENT_DAEMON_SANDBOX_TTL`, `AGENT_DAEMON_SANDBOX_AUTO_RENEW`, `PARSAR_E2B_API_BASE_URL`, `PARSAR_E2B_SANDBOX_HOST`, `PARSAR_E2B_CA_CERT`;
+- object storage: `PARSAR_OSS_REGION`, `PARSAR_OSS_BUCKET`, `PARSAR_OSS_ACCESS_KEY_ID`, `PARSAR_OSS_ACCESS_KEY_SECRET`, `PARSAR_OSS_BASE_URL`, `PARSAR_OSS_ENDPOINT`;
+- audit and mounts: `PARSAR_AUDIT_OTLP_ENABLED`, `PARSAR_AUDIT_OTLP_ADDR`, `PARSAR_AUDIT_OTLP_SIGNING_KEY`, `PARSAR_AUDIT_OTLP_EXTERNAL_ENDPOINT`, `PARSAR_AUDIT_OTLP_FANOUT_ENDPOINT`, `PARSAR_CONFIG_HOST_PATH`, `PARSAR_DATA_HOST_PATH`.
+
+Template variables are Compose wiring; they are not additional Agent fields. Copy the relevant template to `.env`, replace placeholders, and never commit the resulting file.
+
+## Connector-specific runtime flags
+
+Messaging workers are opt-in process flags. Feishu uses `PARSAR_FEISHU_WS_REFRESH_SECONDS` and `PARSAR_FEISHU_OUTBOUND_POLL_SECONDS`; Slack Socket Mode uses `PARSAR_SLACK_SOCKET=true` with `PARSAR_SLACK_BOT_TOKEN` and `PARSAR_SLACK_APP_TOKEN`; Discord Gateway uses `PARSAR_DISCORD_GATEWAY=true` with `PARSAR_DISCORD_BOT_TOKEN`; Teams webhook uses `PARSAR_TEAMS_WEBHOOK=true` with `PARSAR_TEAMS_APP_ID` and `PARSAR_TEAMS_APP_PASSWORD`. DB-backed multi-tenant reconcilers are enabled with `PARSAR_SLACK_CONNECTORS`, `PARSAR_DISCORD_CONNECTORS`, or `PARSAR_TEAMS_CONNECTORS` and require the master key where noted on the integration pages.
+
+## Safe changes
+
+- Back up the database before changing the master key; existing ciphertext cannot be decrypted with a different key.
+- Keep public URLs and OAuth redirect URIs aligned with the reverse proxy.
+- Use absolute host paths outside the repository for production bind mounts.
+- Restart the server after changing startup-time provider flags and inspect `/healthz` and `/readyz`.
+
+See [Self-hosting quickstart](/self-host-quickstart), [Security model](/security), and [Troubleshooting](/troubleshooting).

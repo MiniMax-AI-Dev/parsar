@@ -1,0 +1,39 @@
+---
+title: Install an Agent Runtime
+description: Install parsar-daemon, pair a machine, and verify its Runtime.
+---
+
+An Agent Runtime is a machine where `parsar-daemon` launches the selected Agent CLI. The installer supports macOS and Linux on `amd64` and `arm64`.
+
+## Install
+
+Run this command against the Parsar server that will own the Runtime:
+
+```bash
+curl -fsSL https://<your-parsar-server>/api/v1/parsar-daemon/install.sh | bash
+```
+
+The script first prefers a server-local binary and falls back to GitHub Releases. Set `PARSAR_DAEMON_VERSION=v0.1.0` to pin a release, or `PARSAR_DAEMON_REPO=owner/repo` to select a release repository. `PARSAR_DAEMON_OUT_DIR` changes the output directory; the default is `${HOME}/Downloads`.
+
+The installer intentionally has no `--no-sandbox` flag. Unsupported operating systems or CPU architectures stop with an error instead of installing an incompatible binary.
+
+## Pair the daemon
+
+Create a Runtime in the Parsar UI and copy its short-lived pairing token. On the machine where the daemon will run:
+
+```bash
+parsar-daemon connect \
+  --url https://<your-parsar-server> \
+  --token rtk_… \
+  --device-name build-runner-01
+```
+
+Use `-b` to run in the background. The command scrubs the token from the child process arguments and passes it through the environment while pairing. The resulting long-lived runner credential is stored in the profile's `auth.json`.
+
+The equivalent environment variables are `PARSAR_DAEMON_CONNECT_URL`, `PARSAR_DAEMON_CONNECT_TOKEN`, and `PARSAR_DAEMON_CONNECT_DEVICE_NAME`. Prefer a secret manager or protected shell history when supplying the token.
+
+## Verify
+
+Confirm that the Runtime is online in the workspace UI, then run a small Agent prompt. Inspect the Runtime snapshot and Run detail for the adapter, version, liveness, events, and usage. If it remains offline, check `connect.log`, the PID file, outbound network access, and the daemon's `PATH`.
+
+See [Runtimes and Agent Daemon](/runtimes), [Tokens and credential storage](/authentication-tokens), and [Agent tools](/agent-tools).

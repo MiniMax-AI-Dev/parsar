@@ -1,0 +1,45 @@
+---
+title: 安全模型
+description: 了解 Parsar 的工作区、凭据、Runtime 和审计边界。
+---
+
+Parsar 将授权、执行和 Secret 存储分开。每个工作区、Agent、Runtime、连接器和凭据都应视为独立的安全边界。
+
+## 授权层次
+
+1. **身份认证**确认用户或服务身份；
+2. **工作区成员关系**决定可以读取哪些租户数据；
+3. **工作区角色**控制团队和工作区管理操作；
+4. **Agent 可见性与 Access**决定成员能否调用某个 Agent；
+5. **Runtime 绑定**决定已授权的 Run 在哪里执行；
+6. **Capability 与凭据检查**决定执行期间可使用哪些工具和 Provider。
+
+通过上一层并不会绕过下一层。例如，owner 可以管理 Agent，但如果 Agent Access 不包含当前调用者，仍然不能运行它。
+
+## Secret 处理
+
+Provider Key、连接器 Token、Runtime 配对凭据和模型凭据都属于 Secret。Parsar 会加密保存服务端管理的 Secret，只返回元数据或掩码预览。交互请求中的秘密回答不会进入普通日志和 API 读取结果。
+
+使用环境变量或产品提供的凭据表单保存，不要提交 `.env`，不要把 Token 写入 Prompt，也不要在截图和 Run 产物中暴露凭据。
+
+## Runtime 隔离
+
+Run 只会在绑定的 Runtime 上执行。本地 daemon、沙盒 Provider 和外部 HTTP Agent 具有不同的信任与网络边界；授予 Agent 代码仓库或外部服务访问前，应先确认实际执行类型。
+
+妥善保管 daemon 配对 Token，怀疑泄露后立即轮换。Runtime 在线不代表它可以访问所有工作区或 Agent。
+
+## 审计和恢复
+
+管理员操作、Agent 操作、交互请求和 Run 事件都会记录为审计或执行记录。调查问题时，应从 Audit 和 Run 页面确认谁发起了操作、使用了哪个 Agent 和 Runtime，以及 Provider 返回了什么。
+
+移除成员、删除或归档资源可能取消活动工作或停用其拥有的资源。如果只是希望停止新工作，优先使用归档/禁用并保留证据。
+
+## 部署基线
+
+- 生产环境使用 HTTPS 和受限网络路径；
+- 替换 Compose 中所有开发默认值；
+- 将 PostgreSQL 和持久化数据放在仓库之外；
+- 限制 `PARSAR_MASTER_KEY` 和共享 Runtime Token 的访问；
+- 将加密数据和密钥一起备份，密钥丢失后密文无法恢复。
+
+参见[配置与环境变量](/zh/configuration)、[成员与角色](/zh/members-roles)和[故障排查](/zh/troubleshooting)。

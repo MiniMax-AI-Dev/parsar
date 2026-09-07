@@ -1,0 +1,39 @@
+---
+title: 安装 Agent Runtime
+description: 安装 parsar-daemon、配对机器并验证 Runtime。
+---
+
+Agent Runtime 是运行 `parsar-daemon` 并启动指定 Agent CLI 的机器。安装脚本支持 macOS 和 Linux 的 `amd64`、`arm64` 架构。
+
+## 安装
+
+针对将要拥有该 Runtime 的 Parsar 服务执行：
+
+```bash
+curl -fsSL https://<your-parsar-server>/api/v1/parsar-daemon/install.sh | bash
+```
+
+脚本优先下载服务端本地二进制，失败时回退到 GitHub Releases。设置 `PARSAR_DAEMON_VERSION=v0.1.0` 可以固定版本，设置 `PARSAR_DAEMON_REPO=owner/repo` 可以选择 Release 仓库。`PARSAR_DAEMON_OUT_DIR` 可修改输出目录，默认是 `${HOME}/Downloads`。
+
+安装脚本没有 `--no-sandbox` 参数。遇到不支持的操作系统或 CPU 架构时会直接报错，不会安装不兼容的二进制。
+
+## 配对 Daemon
+
+在 Parsar UI 中创建 Runtime 并复制短期配对令牌。在 Daemon 所在机器执行：
+
+```bash
+parsar-daemon connect \
+  --url https://<your-parsar-server> \
+  --token rtk_… \
+  --device-name build-runner-01
+```
+
+使用 `-b` 可以后台运行。命令会从子进程参数中清理令牌，并通过环境变量传递给配对过程。配对完成后，长期运行凭据会保存到 profile 的 `auth.json`。
+
+等价的环境变量是 `PARSAR_DAEMON_CONNECT_URL`、`PARSAR_DAEMON_CONNECT_TOKEN` 和 `PARSAR_DAEMON_CONNECT_DEVICE_NAME`。传入令牌时优先使用密钥管理器或受保护的 shell 历史记录。
+
+## 验证
+
+在工作区 UI 中确认 Runtime 在线，然后运行一个简单的 Agent 提示。检查 Runtime 快照和 Run 详情中的适配器、版本、存活状态、事件和用量。若仍然离线，请检查 `connect.log`、PID 文件、出站网络，以及 Daemon 进程的 `PATH`。
+
+参阅[Runtime 与 Agent Daemon](/zh/runtimes)、[令牌与凭据存储](/zh/authentication-tokens)和[Agent 工具](/zh/agent-tools)。

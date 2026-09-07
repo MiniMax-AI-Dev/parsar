@@ -1,0 +1,49 @@
+---
+title: CLI reference
+description: Exact subcommands and flags for parsar and parsar-daemon.
+---
+
+There are two Go command-line surfaces. Run `--help` on the installed binary when a newer release adds a flag.
+
+## `parsar`
+
+API commands require `PARSAR_SERVER_URL` and `PARSAR_RUNNER_TOKEN`. Optional context variables are `PARSAR_RUNTIME_ID`, `PARSAR_WORKSPACE_ID`, `PARSAR_USER_ID`, `PARSAR_CONNECTOR`, `PARSAR_AGENT_ID`, and `PARSAR_CONVERSATION_ID`.
+
+| Command | Flags |
+| --- | --- |
+| `parsar spec list` | `--tag` CSV, `--source` (`manual\|agent\|import\|user\|auto-review`), `--limit` (0 = server default), `--json` |
+| `parsar spec add` | required `--title`, required `--body` (`-` reads stdin), `--tag` CSV, `--json` |
+| `parsar spec edit <id>` | `--title`, `--body` (`-` stdin), `--tag`, `--clear-tags`, `--json`; empty fields keep current values |
+| `parsar spec rm <id>` | no command-specific flags |
+| `parsar memory list` | `--scope` (`user\|workspace`, default `user`), `--type` (`user\|feedback\|workspace\|reference`), `--tag` CSV, `--limit`, `--json` |
+| `parsar memory add` | `--scope`, required `--type`, optional `--title`, required `--body` (`-` stdin), `--why`, `--tag`, `--json` |
+| `parsar memory edit <id>` | `--title`, `--body`, `--why`, `--tag`, `--clear-tags`, `--json` |
+| `parsar memory rm <id>` | no command-specific flags |
+| `parsar inject snapshot` | no command-specific flags; prints JSON |
+| `parsar inject incremental` | required `--since` RFC3339 timestamp; prints JSON delta |
+| `parsar sync` | no flags; prints the human-readable injection snapshot |
+| `parsar plugin add <path>` | `--json`; path must contain `manifest.json`; requires workspace context |
+| `parsar plugin list` | `--json`; requires workspace context |
+| `parsar plugin remove <name>` | no command-specific flags; requires workspace context |
+| `parsar version` | no command-specific flags |
+
+Global help is available with `parsar --help`, `parsar -h`, or `parsar help`; `--version`/`-v` prints the version.
+
+`plugin add` installs under `PARSAR_DATA_DIR` (default `~/.parsar`), builds an optional client entry with esbuild, and uploads the bundle through the server. A manifest must provide `name` and `version`; optional sections include `server`, `client`, `tools`, `skills`, `hooks`, and `credentials`.
+
+## `parsar-daemon`
+
+Profiles live under `~/.parsar/parsar-daemon/<profile>/`.
+
+| Command | Flags |
+| --- | --- |
+| `parsar-daemon connect` | `--profile` (default `default`), `-b`/`--background`, `--url`, `--token`, `--device-name` (defaults hostname) |
+| `parsar-daemon status` | `--profile` |
+| `parsar-daemon stop` | `--profile` |
+| `parsar-daemon logs` | `--profile`, `-f`/`--follow`, `-n`/`--lines` (default 100) |
+| `parsar-daemon logout` | `--profile` |
+| `parsar-daemon version` | no flags |
+
+`connect --url <server> --token <pairing-token>` performs one-shot pairing via `/api/v1/runtimes/pair`. `-b` writes `connect.pid` and `connect.log`. `stop` sends SIGTERM and escalates after three seconds; `logout` only removes the local credential—the server Runtime must be disabled separately.
+
+Never include runner tokens, pairing tokens, or full environment dumps in bug reports. See [Runtimes](/runtimes) and [Configuration](/configuration).

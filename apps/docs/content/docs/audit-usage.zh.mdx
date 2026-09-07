@@ -1,0 +1,30 @@
+---
+title: 审计与用量
+description: 检查管理变更、执行事件、产物和模型用量。
+---
+
+Parsar 将人类可读的 Conversation 与执行证据分开。Audit 记录说明谁修改了资源；Run 事件、产物和 Usage 说明某一次执行发生了什么。
+
+## 审计记录
+
+使用**审计**页面调查工作区管理、Agent 和 Capability 变更、连接器操作、Runtime 操作以及其他安全敏感事件。先按工作区和时间筛选，再与相关 Run 对照。
+
+Audit 更接近追加式证据。当前界面标签或资源状态不能替代完整的历史变更记录。
+
+## 用量记录
+
+Usage 与 Agent Run 关联，可能包含 Provider、模型、Token 和耗时信息。汇总数据适合运维复盘；遇到一次异常费用或耗时过长时，应以 Run 详情为准。
+
+## 产物和保留
+
+Run 产物可能包含工具输出、截图、附件或 Provider 生成的数据。产物可能包含敏感内容，应遵循服务端展示的可见性和存储元数据，不要直接复制到公开 Issue 或聊天频道。
+
+## 调查流程
+
+1. 确认工作区和受影响的 Agent；
+2. 打开 Run，记录状态、请求者、Connector 和 Runtime 快照；
+3. 按顺序检查工具调用、权限决定、Provider 变化和错误事件；
+4. 将事件时间线与 Audit、Usage 详情对照；
+5. 分享诊断报告前去除 Secret。
+
+参见[查看运行、审批和日志](/zh/runs-approvals-logs)、[安全模型](/zh/security)和[故障排查](/zh/troubleshooting)。

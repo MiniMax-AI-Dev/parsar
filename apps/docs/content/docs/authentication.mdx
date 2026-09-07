@@ -1,0 +1,33 @@
+---
+title: Authentication and sessions
+description: Sign in, register the first workspace owner, and manage session boundaries.
+---
+
+Parsar authenticates a user before exposing workspace data. The current deployment can expose email/password and configured OAuth or OIDC providers; the login page lists only providers enabled by the server.
+
+## First-time setup
+
+On a fresh self-hosted instance, complete the setup form or use the documented bootstrap command to create the first user and workspace. The first workspace owner should immediately replace development defaults and invite additional members with the minimum role they need.
+
+## Sign in and sign out
+
+Use the login page with the enabled provider. Password login creates a server session cookie; OAuth/OIDC login returns through the configured callback and creates the same kind of authenticated application session.
+
+Signing out invalidates the application session from the server side. Close or revoke sessions through your deployment's normal account and incident procedures if a device is lost.
+
+## Invitations
+
+An invitation links an email address to a workspace role. The recipient must sign in with the invited address before accepting. An invitation does not automatically add unrelated accounts to the workspace.
+
+## OAuth and public URLs
+
+OAuth providers require a client ID, client secret, redirect URI, and provider-specific scopes. The redirect URI must use the externally reachable Parsar public URL, not an internal Compose service name. Keep OAuth secrets out of the repository and rotate them through the provider when needed.
+
+## Session troubleshooting
+
+- A redirect loop usually means the public URL, cookie security, or proxy headers are inconsistent.
+- A 401 after login can indicate an expired session or a browser blocking cookies.
+- A successful login with no workspace leads to onboarding; it does not imply that the account can read another workspace.
+- A valid session still requires active workspace membership and Agent Access for protected operations.
+
+See [Workspaces](/workspace), [Members and roles](/members-roles), and [Configuration](/configuration).

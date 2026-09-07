@@ -1,0 +1,47 @@
+---
+title: Conversations and shared conversations
+description: Use Agent conversations, preserve context, and share access safely.
+---
+
+A Conversation is the user-facing context for an Agent. Messages, Agent responses, Run references, and interaction prompts remain visible in the conversation timeline.
+
+## Start a conversation
+
+From the Agent page, choose **Chat** to create a conversation. Each sent message can create one or more Agent Runs, depending on the selected Agent and connector behavior. The response is streamed into the timeline while the Run is active.
+
+Conversation history is not the same as a Run transcript. The timeline shows the collaboration context; a Run detail shows the execution evidence, tool events, runtime snapshot, artifacts, and usage for one attempt.
+
+## Context and boundaries
+
+The current workspace is part of the authorization boundary. A user can only read conversations that the API exposes for a workspace they belong to. Agent Access is checked again when a message would start a Run.
+
+Do not assume that changing the Agent's configuration rewrites old messages. Historical messages and Run snapshots preserve what was used at the time of execution.
+
+## Share a conversation
+
+Parsar supports a shared conversation route for an existing conversation. Sharing does not create a second copy of the conversation or a new Agent. The recipient must still satisfy the workspace membership and access checks enforced by the server.
+
+Treat a shared link as a pointer to workspace data. Revoke access by removing the user's membership or changing the relevant Agent/workspace policy; do not rely on obscurity of the URL.
+
+## Interactions
+
+When an Agent asks for permission or a user choice, the request appears in the conversation and in the Approvals view. A response is recorded with its resolution source and associated Run. Secret answers are intentionally excluded from ordinary logs and API reads.
+
+## Mention an Agent
+
+In a Web conversation, mention an active Agent by its `@name` or `@slug` to target it. Parsar resolves the mention against the current workspace, ignores unknown, inactive, self, and duplicate targets, and creates a separate Run for each resolved Agent. A mention therefore starts execution; it is not merely formatting text.
+
+Agent-to-Agent calls are supported only when the workspace and Agent policy allow them. The default maximum chain depth is 3, which prevents an accidental mention loop from creating unbounded Runs. In Feishu, Slack, Teams, and Discord group conversations, the bot must be mentioned to gate inbound work; once a thread is active, replies can continue in that thread according to the channel adapter's rules.
+
+## Troubleshooting
+
+- No response: check whether the Agent is active, has a bound Runtime, and has valid credentials.
+- Run is queued: inspect Runtime liveness and daemon pairing.
+- Conversation is unavailable: confirm workspace membership and the conversation URL.
+- Output is incomplete: open the Run detail and inspect events and artifacts instead of relying only on the final message.
+
+## Next steps
+
+- [Create and configure an Agent](/create-agent)
+- [View Runs, approvals, and logs](/runs-approvals-logs)
+- [Runtimes and execution](/runtimes)

@@ -1,0 +1,58 @@
+---
+title: 能力、Skill 与 MCP
+description: 使用可复用的 prompt、工具、插件和 Bundle 扩展 Agent。
+---
+
+能力是挂载到 Agent 的可复用、带版本构件。规范只接受五种类型：`mcp`、`skill`、`plugin`、`system_prompt` 和 `bundle`。
+
+## 能力类型
+
+| 类型 | 用途 | 规范载荷 |
+| --- | --- | --- |
+| `skill` | Markdown 指南、脚本或资源。 | `files[]`，文件类型为 `markdown`、`script` 或 `asset` |
+| `mcp` | Model Context Protocol 服务及工具。 | 服务命令/URL 与环境变量项 |
+| `plugin` | 同时包含服务端和客户端部分的打包扩展。 | Plugin manifest 与上传归档 |
+| `system_prompt` | 可复用的指令块。 | Prompt 文本 |
+| `bundle` | 聚合相关能力的组合包。 | 包元数据和成员 |
+
+每个版本都有 `schema_version`（当前为 `1`）、类型专属 spec 和不可变内容哈希。服务端会校验字段，页面表单不能把一种类型变成另一种。保存前应检查导入预览，尤其是 Plugin 归档和必需凭据。
+
+## 版本绑定
+
+能力有元数据和一个或多个版本。Agent 绑定有两种策略：`latest`（每次派发时解析最新的启用版本）和 `pinned`（固定一个版本，保证运行可复现）。禁用或弃用能力后，服务端会根据状态检查阻止新的选择；已有 Run 的快照仍保留该次执行使用的版本。
+
+## MCP 环境变量
+
+MCP 环境项有 `literal`、`inline_secret`、`credential_ref` 三种模式。推荐 `credential_ref`：运行时从工作区密钥保险库解析。凭据占位符格式是 `${PARSAR_CREDENTIAL:<kind>}`。`inline_secret` 仅为导入兼容保留，不应提交到 manifest。
+
+Skill 文件类型明确区分为 `markdown`、`script`、`asset`；脚本和资源不会被默认为 Markdown。
+
+## Plugin 和 Bundle 行为
+
+Plugin 可以包含由 plugin host 加载的服务端工具、客户端插槽、Skill、hooks 和凭据声明。安装 Plugin 会创建或更新带版本的 Bundle 能力；移除时删除能力绑定，并尽力清理本地插件文件。上传 Plugin 归档需要配置对象存储；MCP 和 Skill 导入不需要对象存储。
+
+## 凭据
+
+能力可以声明必需的凭据类型。启动 Agent 前配置对应的个人或工作区凭据。Parsar 加密保存密钥，仅通过 API 返回元数据或掩码预览。凭据缺失时，能力仍可能显示，但 Run 会在真正需要该凭据时降级或失败。
+
+不要把 API 密钥放进 Skill 文件、system prompt、任务描述或仓库。参见[配置](/zh/configuration)和[安全模型](/zh/security)。
+
+## 把能力挂载到 Agent
+
+1. 打开 Agent，进入**配置**。
+2. 添加已启用的能力。
+3. 在可用时选择 `latest` 或 `pinned`。
+4. 填写能力配置并绑定所需凭据。
+5. 保存后运行一个小型测试对话。
+
+有效能力集合会写入 Run 的 Runtime 快照。能力不可用时，检查状态、凭据、版本策略和 Agent 绑定。
+
+## 市场与共享
+
+公开能力可以通过市场流程发现并导入工作区。复制后的能力拥有自己的工作区绑定；源能力更新不会授予目标工作区额外访问权，也不会绕过其策略。
+
+## 下一步
+
+- [创建和配置 Agent](/zh/create-agent)
+- [Runtime 与执行](/zh/runtimes)
+- [查看运行、审批和日志](/zh/runs-approvals-logs)

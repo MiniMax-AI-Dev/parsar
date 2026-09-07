@@ -1,0 +1,45 @@
+---
+title: Agent tools and adapters
+description: Understand the coding tools that a Runtime can launch for an Agent.
+---
+
+An Agent connector describes how Parsar dispatches work; an agent kind describes the tool or adapter that runs inside the Runtime. Keeping these concepts separate makes provider failures easier to diagnose.
+
+## Agent Daemon adapter kinds
+
+The four accepted `config.agent_kind` values are `claude_code`, `codex`, `opencode`, and `pi`. Availability and version are discovered when the daemon connects; an Agent configuration alone does not install a tool.
+
+| Adapter | Streaming | Permission requests | Usage | Resume |
+| --- | ---: | ---: | ---: | ---: |
+| `claude_code` | Yes | Yes | Yes | Yes |
+| `codex` | Yes | Yes | Yes | Yes |
+| `opencode` | Yes | No advertised support | Yes | No advertised support |
+| `pi` | Yes | No (`--no-approve`) | Yes | Yes |
+
+## Install on the execution machine
+
+1. Install the chosen CLI using its vendor instructions.
+2. Authenticate it as the operating-system user that runs `parsar-daemon`.
+3. Confirm the executable is on `PATH`, or configure an absolute binary path where supported.
+4. Pair the daemon and verify the Runtime is online.
+5. Run a small prompt and inspect the Runtime snapshot for the selected adapter.
+
+Do not authenticate a shared machine with a personal account unless the team has agreed on that ownership and its audit implications.
+
+## Capability compatibility
+
+Capabilities are rendered for the target adapter. A Skill, MCP server, Plugin, or System Prompt that is valid for one tool may be unsupported by another. Parsar records disabled or skipped capability notices rather than pretending the tool was available.
+
+When an Agent Run reports an unsupported capability, check the adapter kind, capability type, version, and required credentials before changing the Agent prompt.
+
+## Provider error categories
+
+| Category | First check |
+| --- | --- |
+| Missing executable | Installation and `PATH` on the daemon host |
+| Authentication or quota | Tool login and provider account |
+| Unsupported capability | Adapter compatibility and capability version |
+| Network failure | Daemon egress and provider endpoint |
+| Invalid configuration | Agent model, connector, Runtime, and credential bindings |
+
+See [Runtimes and Agent Daemon](/runtimes), [Capabilities](/capabilities), and [Troubleshooting](/troubleshooting).

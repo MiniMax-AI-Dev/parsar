@@ -1,0 +1,18 @@
+---
+title: Architecture
+description: The service boundaries and execution path that contributors must preserve.
+---
+
+Parsar is a Go service plus two frontends: the Go API and WebSocket server in `server/`, the product SPA in `apps/web`, and this independent documentation app in `apps/docs`. The `parsar-daemon` binary in `apps/parsar-daemon` connects execution machines to the server.
+
+## Request and execution boundaries
+
+The server owns authentication, workspace authorization, Agents, Conversations, Runs, capabilities, credentials, schedules, audit records, and Runtime state. PostgreSQL is the source of truth for these resources. HTTP handlers should call the store and domain services rather than reaching into another package's private state.
+
+The Web frontend calls the API and subscribes to Run events; it does not execute Agent tools. The daemon maintains the Runtime connection, launches the selected adapter, streams events, and reports liveness. Credentials cross this boundary only through the runner protocol and are never put in user-facing messages.
+
+## Change boundaries
+
+API or handler changes require swaggo annotations and regenerated `docs/openapi/openapi.yaml`. SQL query changes require sqlc generation and regenerated files. A new architecture rule, ownership boundary, required check, or generated contract belongs in the canonical `CONTRIBUTING.md`, not only in an issue or PR description.
+
+For a more detailed repository map, read [`docs/architecture.md`](https://github.com/AllureCurtain/parsar/blob/main/docs/architecture.md) in the source repository.

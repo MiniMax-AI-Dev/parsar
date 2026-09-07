@@ -1,0 +1,33 @@
+---
+title: 身份认证与会话
+description: 登录、创建首个工作区 Owner，并理解会话边界。
+---
+
+Parsar 在暴露工作区数据前会先完成用户认证。当前部署可以提供邮箱/密码和已配置的 OAuth/OIDC Provider；登录页只会显示服务端启用的 Provider。
+
+## 首次设置
+
+全新的自托管实例需要通过初始化表单或文档中的 bootstrap 命令创建第一个用户和工作区。创建后应立即替换开发默认值，并按最小权限原则邀请其他成员。
+
+## 登录和退出
+
+使用登录页中已启用的 Provider。密码登录会创建服务端会话 Cookie；OAuth/OIDC 登录通过配置的回调地址返回后，也会创建同一类应用会话。
+
+退出登录会从服务端使应用会话失效。设备丢失时，应按照部署的账号和安全事件流程撤销相关会话。
+
+## 邀请
+
+邀请会将邮箱地址与工作区角色关联。受邀者必须使用被邀请的邮箱登录后才能接受邀请；邀请不会自动将其他账号加入工作区。
+
+## OAuth 和公开 URL
+
+OAuth Provider 需要 Client ID、Client Secret、Redirect URI 和 Provider 特定 Scope。Redirect URI 必须使用外部可访问的 Parsar 公共 URL，不能使用 Compose 内部服务名。OAuth Secret 不得提交到仓库，必要时应在 Provider 侧轮换。
+
+## 会话排查
+
+- 登录循环通常表示公共 URL、Cookie 安全属性或反向代理 Header 不一致；
+- 登录后立即出现 401，可能是会话过期或浏览器阻止 Cookie；
+- 登录成功但没有工作区会进入 onboarding，这不代表可以读取其他工作区；
+- 会话有效仍需满足 active 工作区成员关系和 Agent Access。
+
+参见[工作区](/zh/workspace)、[成员与角色](/zh/members-roles)和[配置与环境变量](/zh/configuration)。

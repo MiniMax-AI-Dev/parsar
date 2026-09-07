@@ -1,0 +1,17 @@
+---
+title: Contributing
+description: Prepare a clean worktree, make focused changes, and run the required checks.
+---
+
+Work in a dedicated Git worktree and branch. Keep unrelated user changes intact, read the root `CONTRIBUTING.md` before substantial implementation, and write comments and documentation in English unless the text is intentionally localized copy.
+
+## Before opening a PR
+
+1. Rebase the feature branch on the latest `upstream/main` so the PR has a linear, reviewable history.
+2. Keep commits focused and do not commit secrets, daemon `auth.json`, generated local state, or build output.
+3. Run `make check` from WSL/Linux. For this docs package, also run `pnpm --filter @parsar/docs typecheck` and `pnpm --filter @parsar/docs build`.
+4. Describe the implementation, verification, and any intentionally deferred deployment work in the PR.
+
+If a check fails, include the exact command and failure in the PR rather than marking it as passed. Resolve rebase conflicts deliberately; do not use a hard reset to discard work.
+
+The canonical rules and generated-artifact contracts live in [`CONTRIBUTING.md`](https://github.com/AllureCurtain/parsar/blob/main/CONTRIBUTING.md).

@@ -1,0 +1,52 @@
+---
+title: Runtimes and Agent Daemon
+description: Choose where an Agent runs, pair a daemon, and diagnose liveness.
+---
+
+A Runtime is the execution location registered to a workspace. Parsar keeps the control plane, Agent configuration, and execution location separate so that a Run can be audited without hiding where it actually ran.
+
+## Runtime modes
+
+| Mode | Description |
+| --- | --- |
+| Local | A local Runner/daemon executes work on a developer or server machine |
+| Sandbox | Parsar provisions or uses an isolated provider sandbox, such as E2B |
+| External | An external HTTP Agent endpoint receives the run |
+
+The exact providers available depend on deployment configuration. An Agent with no valid runtime binding cannot be dispatched successfully.
+
+The server's Runtime type values are `agent_daemon`, `sandbox`, and `external`. Provider values currently include `agent_daemon`, `agent_daemon_sandbox`, `e2b_compatible`, and `http_agent`. Liveness is `pending_pairing`, `offline`, `online`, or `error`; it is independent from a Run's six statuses.
+
+## Pair a local daemon
+
+1. [Install the `parsar-daemon` binary](/install-runtime) on the machine that should execute work.
+2. Start the daemon and choose **Pair runtime** in the Parsar UI.
+3. Enter the one-time pairing information and keep the resulting credentials private.
+4. Confirm that the Runtime appears as `online`.
+5. Bind an Agent to this Runtime and run a small test conversation.
+
+The daemon maintains a heartbeat and receives only work authorized for its workspace and Agent. It is not a replacement for the Parsar API or database.
+
+## Runtime liveness and queues
+
+Runs are bound to a Runtime. If that Runtime is offline, a queued Run waits for recovery or eventually fails according to the server's queue and heartbeat policy. A queued Run does not silently move to another machine.
+
+When a daemon restarts, the server can mark interrupted work for recovery or retry. Open the Run detail and daemon logs to distinguish an infrastructure failure from an Agent or provider error.
+
+## Sandbox execution
+
+Sandbox mode requires a configured provider and image. Keep provider credentials in environment variables or encrypted workspace credentials. Do not put sandbox tokens in Agent prompts or repository files.
+
+The sandbox may be created, reused, or released according to the Agent and server configuration. The Runtime snapshot in each Run is the source of truth for the actual execution location.
+
+Internally, a sandbox can be `spawning`, `running`, `renewing`, `killing`, `killed`, `killed_orphaned`, or `killed_error`. These provider lifecycle values explain why a Runtime may be online while a particular sandbox is being replaced.
+
+## Operational checklist
+
+- Runtime status is `online` and its heartbeat is current.
+- The Agent is explicitly bound to that Runtime.
+- The Runtime can reach the Parsar server and the configured model provider.
+- The working directory exists and is accessible to the daemon user.
+- Required credentials and capabilities are enabled.
+
+See [View Runs, approvals, and logs](/runs-approvals-logs) and [Troubleshooting](/troubleshooting) when a Run does not start.

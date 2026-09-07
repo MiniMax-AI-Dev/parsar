@@ -1,0 +1,53 @@
+---
+title: Members and roles
+description: Manage workspace members, invitations, join requests, and role boundaries.
+---
+
+Every active workspace membership has one role. Parsar currently supports `owner`, `admin`, `member`, and `viewer`.
+
+Role is separate from membership status. A membership can be `pending`, `active`, or `rejected`; only `active` rows participate in access checks. `viewer` is read-only, while `member` can use resources when the Agent's own access policy allows it.
+
+## Role summary
+
+| Operation | owner | admin | member | viewer |
+| --- | --- | --- | --- | --- |
+| View the workspace | Yes | Yes | Yes | Yes |
+| Use resources allowed by Agent Access | Yes | Yes | Yes | No |
+| Invite or manage members | Yes | Yes | No | No |
+| Manage workspace settings | Yes | Yes | No | No |
+| Change an owner | Yes | No | No | No |
+| Delete or archive the workspace | Yes | No | No | No |
+
+`viewer` is read-only at the workspace level. Agent Access remains a separate check for every role; an owner or admin cannot use an Agent whose Access policy does not include them.
+
+## Invite a member
+
+1. Open **Settings → Members**.
+2. Choose **Invite member**.
+3. Enter the user's email and optional display name.
+4. Select a role and submit.
+
+Owners and admins can grant `admin`, `member`, or `viewer` roles. Only an owner can promote another owner or remove an owner, and the server preserves at least one owner. Invitations do not directly create an owner membership.
+
+## Join requests
+
+Public workspaces can receive self-service join requests. Owners and admins see pending requests in **Members**, where they can approve or reject them. A requester can withdraw their own pending request. Rejected membership rows are retained for audit and do not block a later request.
+
+## Change a role or remove a member
+
+Owners and admins can change `admin`, `member`, and `viewer` memberships. Only an owner can promote, demote, or remove another owner. Parsar always preserves at least one owner.
+
+Removing a member immediately revokes workspace access. Their historical conversations, runs, messages, and audit records remain associated with the workspace. Runtime ownership and Agent bindings owned by that member are disabled or detached according to the resource lifecycle rules; review the resulting warnings before confirming.
+
+## Troubleshooting invitations
+
+- If the invite action is unavailable, verify that you are an owner or admin and that a workspace is selected.
+- If a user cannot join, check that the invitation email matches the account they use to sign in.
+- If a public workspace does not appear in discovery, check its visibility and the server's registration policy.
+- If a role change appears delayed, refresh the Members page; role changes are enforced by the API immediately.
+
+## Next steps
+
+- [Workspaces](/workspace)
+- [Create and configure an Agent](/create-agent)
+- [Security model](/security)

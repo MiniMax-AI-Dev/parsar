@@ -1,0 +1,42 @@
+---
+title: Integrations and connectors
+description: Connect Parsar to chat platforms, GitHub, models, and external runtimes.
+---
+
+Integrations connect a workspace to an identity provider, chat gateway, model provider, or execution service. Availability depends on the server configuration and the connector registry exposed by the deployment.
+
+## Integration categories
+
+| Category | Parsar capabilities |
+| --- | --- |
+| Authentication | Email/password and configured OAuth providers, including GitHub OAuth when enabled |
+| Chat gateways | Feishu/Lark, Slack, Discord, and Microsoft Teams gateway paths in the server |
+| Model providers | Configurable model endpoints and encrypted provider credentials |
+| Agent connectors | Agent Daemon, HTTP Agent, and connector-specific dispatch |
+| Capability sources | MCP directory, Skills, Plugins, system prompts, and marketplace imports |
+
+The UI shows whether a gateway is `active`, `not_configured`, `degraded`, or `offline`. A listed gateway is not necessarily enabled in your deployment. Read the provider-specific pages for the exact credential fields and process flags: [Feishu](/feishu), [Slack](/slack), [Microsoft Teams](/teams), and [Discord](/discord). For personal GitHub OAuth, see [GitHub integration](/github).
+
+## Connect a gateway safely
+
+1. Confirm that the server has the provider's required environment variables or secret configuration.
+2. Open **Settings → Connections** (or the connector section shown for the current Agent).
+3. Complete the provider authorization or enter the requested token.
+4. Select the workspace and Agent scope where applicable.
+5. Send a test message and verify the resulting Conversation and Run.
+
+Gateway credentials are secrets. Store them through the supported credential form; do not paste them into prompts, issues, logs, or source control.
+
+## Message routing
+
+For a chat gateway, Parsar resolves the receiving workspace and Agent, verifies the sender's identity and membership, then creates or resumes a Conversation and starts a Run. Group messages normally require an explicit bot mention. The exact command and thread behavior is connector-specific.
+
+## GitHub and repositories
+
+GitHub OAuth is used only when the deployment has configured a client ID, secret, redirect URI, and scope. OAuth connection is separate from a Runtime's local checkout. A successful GitHub login does not grant an Agent permission to modify every repository; the Runtime working directory and Agent policy still apply.
+
+## Disconnect and rotate
+
+Owners and admins should disconnect integrations that are no longer used and rotate provider tokens after a suspected exposure. Disconnecting a gateway stops new deliveries but does not delete existing Conversations, Runs, or audit records.
+
+For provider-specific deployment details, use the repository's `docs/deploy` runbooks and the generated API reference.

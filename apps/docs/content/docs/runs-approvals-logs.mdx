@@ -13,8 +13,8 @@ An Agent Run is one execution record. The Conversation timeline shows the user-f
 | `running` | The Runtime has started the Agent process. |
 | `completed` | The Agent finished and the server persisted the result. |
 | `failed` | Execution ended with an error or provider failure. |
-| `cancelled` | A user or system cancellation ended the Run. |
-| `interrupted` | Execution stopped before a normal terminal result. |
+| `cancelled` | A user-initiated cancellation ended the Run. |
+| `interrupted` | A system interrupt or Runtime failure stopped execution before a normal terminal result. |
 
 ## Read a Run
 
@@ -33,7 +33,7 @@ Open **Runs** and select a record. Depending on the Run, the detail view can inc
 
 Some providers pause for permission or ask the user to choose an option. Parsar persists these as Interactions with a bounded lifetime. Resolve them in **Approvals** or in the active Conversation. The decision is applied only after the runtime acknowledges it.
 
-Never paste secrets into a non-secret answer field. Secret answers are redacted from durable interaction responses, audit events, logs, API reads, and rendered receipts.
+Interaction status is separate from Run status: `pending`, `resolving`, `approved`, `denied`, `answered`, `cancelled`, and `expired`. Never paste secrets into a non-secret answer field. Secret answers are redacted from durable interaction responses, audit events, logs, API reads, and rendered receipts.
 
 ## When a Run is queued or failed
 

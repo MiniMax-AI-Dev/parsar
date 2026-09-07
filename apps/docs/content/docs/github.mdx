@@ -1,0 +1,29 @@
+---
+title: GitHub integration
+description: Connect a GitHub account to Parsar using the implemented personal OAuth flow.
+---
+
+Parsar supports connecting a user's GitHub account from the workspace settings. The integration is a personal OAuth credential used by Agents and capabilities; it is not a GitHub App installation or a pull-request synchronization service.
+
+## OAuth flow
+
+The server starts the authorization flow with the configured GitHub client and validates the `parsar_github_oauth_state` cookie on callback. The default scope is `repo read:user user:email`. Deployments can override the authorize URL, API URL, redirect URI, and scope with environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `PARSAR_GITHUB_CLIENT_ID` | OAuth application client ID |
+| `PARSAR_GITHUB_CLIENT_SECRET` | OAuth application secret |
+| `PARSAR_GITHUB_REDIRECT_URI` | Public callback URL |
+| `PARSAR_GITHUB_SCOPE` | Space-separated scope override |
+| `PARSAR_GITHUB_AUTHORIZE_BASE` | GitHub or GitHub Enterprise authorize base URL |
+| `PARSAR_GITHUB_API_BASE` | GitHub API base URL |
+
+The callback fetches the account profile and stores a `github_pat` credential containing the token, token type, granted scope, login, GitHub ID, display name, avatar URL, and provider metadata. Parsar encrypts the credential with `PARSAR_MASTER_KEY`; the token is not placed in conversation messages or ordinary logs.
+
+## Current boundaries
+
+The current UI describes this integration as access to public GitHub repositories. Private repository access, SSH keys, GitLab, and GitHub App/PR automation are not implemented in this product surface. Do not document a repository webhook, PR review loop, or VCS provider matrix until those APIs exist in the codebase.
+
+If the callback fails, verify the public redirect URI, client credentials, state cookie, and outbound access to the configured GitHub API. Revoke the OAuth token at GitHub before deleting a compromised Parsar credential.
+
+See [Tokens and credential storage](/authentication-tokens), [Capabilities](/capabilities), and [Configuration](/configuration).

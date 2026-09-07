@@ -1,0 +1,18 @@
+---
+title: Slack
+description: 配置 Slack Socket Mode 和工作区级 Slack 连接器。
+---
+
+Slack 连接器保存 `app_id`、`bot_token_ref`、`app_token_ref`、`signing_secret_ref`、`event_mode` 和 `enabled`。`socket` 是规范化默认模式；`events`、`events_api`、`http`、`webhook` 会规范化为 `events`。
+
+## 启用共享机器人
+
+设置 `PARSAR_SLACK_SOCKET=true`，并提供 `PARSAR_SLACK_BOT_TOKEN`（`xoxb-…`）和 `PARSAR_SLACK_APP_TOKEN`（`xapp-…`）。`PARSAR_SLACK_APP_ID` 可选。配置 `PARSAR_MASTER_KEY` 后启用卡片操作路由和按团队从数据库解析 Token；没有 master key 时只能确认收到按钮点击。
+
+设置 `PARSAR_SLACK_CONNECTORS=true` 启用数据库驱动的多租户 reconciler。工作区连接器需要 App ID、Bot Token 引用，以及 Socket Mode 的 App Token 引用或 Events API 模式的 Signing Secret 引用。
+
+## 路由
+
+Parsar 将 Slack team/channel 映射到工作区和 Agent，验证发送者后创建或恢复 Conversation。审批和选择卡片的交互会通过连接器回传。凭据泄露后同时轮换 Bot Token 和 App Token，Token 引用不要进入源码管理。
+
+参见[集成](/zh/integrations)、[配置](/zh/configuration)和[运行、审批和日志](/zh/runs-approvals-logs)。

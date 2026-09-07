@@ -1,0 +1,22 @@
+---
+title: Feishu / Lark
+description: Configure Feishu SSO, workspace bots, WebSocket events, and outbound delivery.
+---
+
+Parsar uses Feishu in two roles: OAuth for sign-in and a workspace bot connector for inbound/outbound messages. OAuth settings are deployment-wide; bot credentials are workspace-scoped and stored as encrypted secret references.
+
+## Workspace connector fields
+
+The connector stores `app_id`, `app_secret_ref`, `verification_token_ref`, optional `encrypt_key_ref`, `bot_open_id`, `event_mode`, and `enabled`. Enabling a webhook-style connector requires the app ID, app secret, bot open ID, and verification token. `websocket` mode does not require a verification token because events arrive through the Feishu WebSocket client.
+
+## Process flags
+
+For the database-driven WebSocket manager, set `PARSAR_MASTER_KEY`; `PARSAR_FEISHU_WS_REFRESH_SECONDS` controls reconciliation (default 30, capped at 600), and `PARSAR_FEISHU_OPENAPI_BASE_URL` optionally overrides the Open API host. A deployment-wide fallback bot can use `PARSAR_FEISHU_DEFAULT_BOT_APP_ID`, `PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET`, and `PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID` (the app and secret also fall back to `PARSAR_FEISHU_APP_ID` and `PARSAR_FEISHU_APP_SECRET`).
+
+Outbound delivery polls at `PARSAR_FEISHU_OUTBOUND_POLL_SECONDS` (default 10, capped at 600). The legacy `PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT` is parsed only to warn and is not an active tuning knob.
+
+## Routing and safety
+
+Inbound events resolve a workspace and Agent, check sender identity and membership/visibility, then create or resume a Conversation and Run. Group messages normally require an explicit bot mention. Keep app secrets and verification tokens in the secret vault; never put them in prompts or capability files.
+
+See [Authentication](/authentication), [Configuration](/configuration), and [Integrations](/integrations).

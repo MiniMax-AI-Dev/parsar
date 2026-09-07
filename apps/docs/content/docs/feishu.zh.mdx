@@ -1,0 +1,22 @@
+---
+title: 飞书 / Lark
+description: 配置飞书 SSO、工作区机器人、WebSocket 事件和出站消息。
+---
+
+Parsar 使用飞书完成登录 OAuth，也使用工作区级机器人连接器收发消息。OAuth 是部署级配置；机器人凭据按工作区保存为加密的 secret 引用。
+
+## 工作区连接器字段
+
+连接器保存 `app_id`、`app_secret_ref`、`verification_token_ref`、可选 `encrypt_key_ref`、`bot_open_id`、`event_mode` 和 `enabled`。启用 webhook 模式需要 App ID、App Secret、Bot Open ID 和 Verification Token；`websocket` 模式通过飞书 WebSocket 客户端接收事件，因此不要求 Verification Token。
+
+## 进程开关
+
+数据库驱动的 WebSocket manager 需要 `PARSAR_MASTER_KEY`；`PARSAR_FEISHU_WS_REFRESH_SECONDS` 控制 reconciler 周期（默认 30，最大 600），`PARSAR_FEISHU_OPENAPI_BASE_URL` 可覆盖 Open API 地址。部署级默认机器人可设置 `PARSAR_FEISHU_DEFAULT_BOT_APP_ID`、`PARSAR_FEISHU_DEFAULT_BOT_APP_SECRET`、`PARSAR_FEISHU_DEFAULT_BOT_OPEN_ID`（App ID 和 Secret 也会回退到 `PARSAR_FEISHU_APP_ID`、`PARSAR_FEISHU_APP_SECRET`）。
+
+出站投递轮询 `PARSAR_FEISHU_OUTBOUND_POLL_SECONDS`（默认 10，最大 600）。旧的 `PARSAR_FEISHU_OUTBOUND_BATCH_LIMIT` 只解析并发出警告，不再是实际调优开关。
+
+## 路由与安全
+
+收到事件后，Parsar 解析工作区和 Agent，检查发送者身份及成员/可见性，然后创建或恢复 Conversation 并启动 Run。群聊通常需要明确 @Bot。App Secret 和 Verification Token 必须放在密钥保险库中，不要放进 prompt 或能力文件。
+
+参见[认证](/zh/authentication)、[配置](/zh/configuration)和[集成](/zh/integrations)。

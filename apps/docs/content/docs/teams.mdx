@@ -1,0 +1,14 @@
+---
+title: Microsoft Teams
+description: Configure Teams webhook delivery and multi-tenant connectors.
+---
+
+Teams workspace connectors store `app_id`, `app_password_ref`, optional `tenant_id`, and `enabled`. The webhook endpoint is `/api/teams/messages`.
+
+## Process modes
+
+For a single deployment-wide bot, set `PARSAR_TEAMS_WEBHOOK=true`, `PARSAR_TEAMS_APP_ID`, and `PARSAR_TEAMS_APP_PASSWORD`. For database-backed multi-tenant connectors, set `PARSAR_TEAMS_CONNECTORS=true` and `PARSAR_MASTER_KEY`; environment credentials remain an optional fallback. `PARSAR_TEAMS_TENANT_ID` is optional—when empty, the Bot Framework multi-tenant authority is used.
+
+Inbound webhook JWT verification and outbound AAD client-credential bearer tokens are intentionally asymmetric. Do not reuse an inbound token as an outbound credential. Parsar resolves the target workspace and Agent, enforces visibility and membership, then creates or resumes the Conversation and Run.
+
+See [Integrations](/integrations), [Configuration](/configuration), and [Runs, approvals, and logs](/runs-approvals-logs).

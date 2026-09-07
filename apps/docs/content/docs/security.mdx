@@ -1,0 +1,45 @@
+---
+title: Security model
+description: Understand Parsar's workspace, credential, runtime, and audit boundaries.
+---
+
+Parsar separates authorization, execution, and secret storage. Treat every workspace, Agent, Runtime, connector, and credential as an independent security boundary.
+
+## Authorization layers
+
+1. **Authentication** identifies the user or service.
+2. **Workspace membership** determines which tenant data can be read.
+3. **Workspace role** controls team and workspace administration.
+4. **Agent visibility and Access** controls whether a member may invoke a particular Agent.
+5. **Runtime binding** controls where an authorized Run executes.
+6. **Capability and credential checks** control which tools and providers are available during execution.
+
+Passing one layer never bypasses the next one. For example, an owner can manage an Agent but still cannot invoke it if its Access policy excludes the caller.
+
+## Secret handling
+
+Provider keys, connector tokens, Runtime pairing credentials, and model credentials are secrets. Parsar encrypts server-managed secret payloads and exposes metadata or masked previews instead of plaintext. Secret answers to interactions are omitted from ordinary logs and API read responses.
+
+Use environment variables or the supported credential forms. Do not commit `.env` files, paste tokens into prompts, or include secrets in screenshots and Run artifacts.
+
+## Runtime isolation
+
+Runs execute only on their bound Runtime. Local daemons, sandbox providers, and external HTTP agents have different trust and network boundaries; document which one an Agent uses before granting it access to a repository or external service.
+
+Keep daemon pairing tokens private and rotate them after a suspected exposure. A Runtime being online does not grant it access to every workspace or Agent.
+
+## Audit and recovery
+
+Administrative changes, Agent operations, interactions, and Run events are recorded as audit or execution records. Use the Audit and Run views to investigate who initiated an action, which Agent and Runtime were selected, and what the provider returned.
+
+Deletion and removal operations may cancel active work or disable owned resources. Prefer archive/disable controls when the goal is to stop new work while preserving evidence.
+
+## Deployment baseline
+
+- Use HTTPS and a restricted network path for production deployments.
+- Replace all Compose development defaults.
+- Keep PostgreSQL and persistent data outside the repository checkout.
+- Restrict access to `PARSAR_MASTER_KEY` and shared Runtime tokens.
+- Back up encrypted data and keys together; losing the key makes ciphertext unrecoverable.
+
+See [Configuration](/configuration), [Members and roles](/members-roles), and [Troubleshooting](/troubleshooting).

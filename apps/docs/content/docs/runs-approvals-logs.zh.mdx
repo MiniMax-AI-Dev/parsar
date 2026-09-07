@@ -13,8 +13,8 @@ Agent Run 是一次具体执行记录。Conversation 时间线展示用户看到
 | `running` | Runtime 已启动 Agent 进程。 |
 | `completed` | Agent 完成工作，服务端已持久化结果。 |
 | `failed` | 执行以错误或 Provider 失败结束。 |
-| `cancelled` | 用户或系统取消了本次运行。 |
-| `interrupted` | 执行在正常终态前停止。 |
+| `cancelled` | 用户发起的取消结束 Run。 |
+| `interrupted` | 系统中断或 Runtime 失败，执行未产生正常终态。 |
 
 ## 查看 Run
 
@@ -33,7 +33,7 @@ Agent Run 是一次具体执行记录。Conversation 时间线展示用户看到
 
 部分 Provider 会暂停等待权限，或者要求用户选择选项。Parsar 会将它们持久化为有生命周期的 Interaction。可以在 **审批** 页面或当前 Conversation 中处理。只有 Runtime 返回确认后，决定才会应用。
 
-不要把秘密填入普通回答字段。秘密回答不会写入持久化 Interaction 响应、审计事件、日志、API 读取结果或渲染后的回执。
+Interaction 状态与 Run 状态分开：`pending`、`resolving`、`approved`、`denied`、`answered`、`cancelled`、`expired`。不要把秘密填入普通回答字段。秘密回答不会写入持久化 Interaction 响应、审计事件、日志、API 读取结果或渲染后的回执。
 
 ## Run 排队或失败时
 

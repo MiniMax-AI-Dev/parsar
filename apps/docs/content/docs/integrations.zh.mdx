@@ -1,0 +1,42 @@
+---
+title: 集成与连接器
+description: 将 Parsar 连接到聊天平台、GitHub、模型服务和外部 Runtime。
+---
+
+集成用于连接工作区与身份提供商、聊天网关、模型服务或执行服务。是否可用取决于服务端配置和当前部署暴露的连接器注册表。
+
+## 集成类别
+
+| 类别 | Parsar 能力 |
+| --- | --- |
+| 身份认证 | 邮箱/密码，以及部署启用的 OAuth（包括可选 GitHub OAuth） |
+| 聊天网关 | 服务端提供飞书/Lark、Slack、Discord 和 Microsoft Teams 路径 |
+| 模型服务 | 可配置的模型端点和加密 Provider 凭据 |
+| Agent 连接器 | Agent Daemon、HTTP Agent 及连接器特定派发 |
+| 能力来源 | MCP 目录、Skills、Plugins、System Prompt 和 Marketplace 导入 |
+
+界面会显示网关是 `active`、`not_configured`、`degraded` 还是 `offline`。出现在列表中不代表当前部署一定已经启用。字段和进程开关请查看：[飞书](/zh/feishu)、[Slack](/zh/slack)、[Microsoft Teams](/zh/teams) 和 [Discord](/zh/discord)。个人 GitHub OAuth 见 [GitHub 集成](/zh/github)。
+
+## 安全连接网关
+
+1. 确认服务端已经配置 Provider 所需的环境变量或 Secret。
+2. 打开**设置 → 连接**，或进入当前 Agent 显示的连接器区域。
+3. 完成 Provider 授权或输入请求的 Token。
+4. 按页面提示选择工作区和 Agent 范围。
+5. 发送测试消息，确认生成了对应 Conversation 和 Run。
+
+网关凭据属于秘密信息。使用产品提供的凭据表单保存，不要把它粘贴到 Prompt、任务、日志或代码仓库。
+
+## 消息路由
+
+聊天网关收到消息后，Parsar 会解析目标工作区和 Agent，检查发送者身份与成员关系，然后创建或恢复 Conversation 并启动 Run。群聊通常要求明确 @Bot；命令和线程行为取决于具体连接器。
+
+## GitHub 与代码仓库
+
+只有在部署配置了 Client ID、Secret、Redirect URI 和 Scope 时，GitHub OAuth 才会启用。OAuth 登录与 Runtime 本地 checkout 是两件事；登录成功不代表 Agent 可以修改所有仓库，工作目录和 Agent 策略仍然独立生效。
+
+## 断开和轮换
+
+不再使用的集成应由 owner 或 admin 断开；怀疑泄露时应立即轮换 Provider Token。断开网关只会停止新的消息投递，不会删除已有 Conversation、Run 或审计记录。
+
+Provider 的部署细节请参见仓库 `docs/deploy` 下的运行手册和生成的 API 参考。

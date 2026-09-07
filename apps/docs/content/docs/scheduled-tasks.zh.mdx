@@ -1,0 +1,39 @@
+---
+title: 定时任务
+description: 按 cron 计划运行 Agent，并检查每次执行结果。
+---
+
+Scheduled Task 会在指定时间触发 Agent Run。它是绑定到一个 Agent 的工作区资源，不等同于一次临时对话。
+
+## 创建计划
+
+1. 打开当前工作区的**定时任务**。
+2. 选择一个 active 且绑定有效 Runtime 的 Agent。
+3. 输入任务 Prompt、五字段 cron 表达式和 IANA 时区。
+4. 选择是否启用；如果当前版本支持，可配置飞书投递目标。
+5. 保存并检查下一次执行时间。
+
+服务端会以 UTC 计算下一次触发时间，但会按照你选择的时区解释 cron 表达式。
+
+## 管理和测试
+
+可以在任务行中编辑或删除计划、临时禁用，或点击**立即运行**。手动运行仍会创建独立的 Agent Run、Conversation 和审计记录。
+
+每个定时任务会记录最近一次 Run、连续失败次数和下一次运行时间。可以从工作区列表或 Agent 详情查看任务。
+
+## 失败行为
+
+调度器按任务记录连续的终态失败。`failed`、`cancelled` 和 `interrupted` 会增加计数，`completed` 会将计数重置为 0。连续失败达到 **5 次**后，Parsar 会禁用任务，并记录 `last_status=auto_disabled`。手动点击**立即运行**不会改变该计数。如果触发时已有执行正在进行，会记录为 `skipped_overlap`，不会创建重复 Run。
+
+任务被自动禁用通常表示需要处理问题。先检查 Runtime 在线状态、凭据、Agent 配置和原始错误，再重新启用。
+
+计划任务创建的 Run 使用 `trigger_source=scheduled_task`。外部平台消息创建的 Run 使用 `trigger_source=message`。数据库还保留了表示外部事件的 `webhook` 触发源，但 Parsar 当前没有暴露通用的、用户可配置的 Webhook 端点。飞书、Slack、Teams 和 Discord 的入站事件见[集成](/zh/integrations)。
+
+## 安全使用
+
+- 先保持禁用状态，用**立即运行**验证 Prompt；
+- 明确设置时区，不要依赖服务器本地时区；
+- 让 Prompt 尽量幂等，以应对重试；
+- 启用向聊天平台投递前，检查 Agent Access 和能力凭据。
+
+参见[Runtime 与 Agent Daemon](/zh/runtimes)和[查看运行、审批和日志](/zh/runs-approvals-logs)。

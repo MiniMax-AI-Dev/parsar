@@ -15,12 +15,16 @@ Agent 是工作区中的可复用成员。它保存指令和执行配置，但�
 
 1. 打开 **Agent**，点击 **新建 Agent**。
 2. 填写名称和可选描述。
-3. 选择连接器类型和默认模型。
-4. 选择 Runtime 模式，并把 Agent 绑定到具体 Runtime。
+3. 选择连接器类型（`agent_daemon` 或 `http`）和默认模型。
+4. 选择 Runtime 模式，并把 Agent 绑定到具体 Runtime。daemon 可以运行在已配对的本地设备或托管沙盒中。
 5. 添加 System Prompt 和 Agent 需要的能力。
 6. 保存 Agent。
 
-当前产品把 Runtime 作为 Agent 执行身份的一部分。之后如果要切换执行位置，应按照当前版本提供的编辑选项操作，不要假设系统会静默回退到其他 Runtime。
+Runtime 是 Agent 执行身份的一部分。`agent_daemon` 通过反向 WebSocket 派发流式 prompt；`http` 调用外部 Agent 地址。连接器不会自动转换，也不会静默回退。
+
+## Agent 引擎与执行选项
+
+`config.agent_kind` 必须是 daemon 宣布的四种引擎之一：`claude_code`、`codex`、`opencode` 或 `pi`。`codex` 额外支持 `config.mode=default|plan`；切换到其他引擎时服务端会清除该字段。daemon 模式是 `local` 或 `sandbox`。本地模式可以设置绝对 `work_dir`（或以 `~/` 开头的路径）；沙盒模式选择托管沙盒的大小和生命周期设置。
 
 ## 能力
 
@@ -30,7 +34,7 @@ Parsar 当前支持的 Capability 类型包括 `skill`、`mcp`、`plugin`、`sys
 
 ## 可见性和访问权限
 
-Agent 可见性包括 workspace、tenant 和 public。访问权限决定哪些成员可以运行它。将 Agent 暴露到 IM 渠道前，应同时审查可见性和连接器策略。
+Agent 可见性只有 `workspace`、`tenant`、`public` 三种。`workspace` 允许所属工作区的 active 成员；`tenant` 允许任意已注册 Parsar 用户；`public` 还允许未登录访客。服务端会在创建 Conversation 或 Run 前检查可见性，即时通讯入口也执行相同的工作区成员和策略检查。
 
 ## 检查配置
 

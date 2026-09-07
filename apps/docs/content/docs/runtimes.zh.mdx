@@ -1,0 +1,52 @@
+---
+title: Runtime 与 Agent Daemon
+description: 选择 Agent 的执行位置、配对 daemon，并排查在线状态。
+---
+
+Runtime 是注册到工作区的执行位置。Parsar 将控制面、Agent 配置和执行位置分开，这样每一次 Run 都能明确记录实际在哪里执行。
+
+## Runtime 模式
+
+| 模式 | 说明 |
+| --- | --- |
+| Local | 由开发机或服务器上的本地 Runner/daemon 执行 |
+| Sandbox | 使用隔离的 Provider 沙盒，例如 E2B |
+| External | 将 Run 发送到外部 HTTP Agent 端点 |
+
+可用 Provider 取决于部署配置。Agent 如果没有有效的 Runtime 绑定，就无法成功派发。
+
+服务端的 Runtime 类型值为 `agent_daemon`、`sandbox` 和 `external`。当前 Provider 值包括 `agent_daemon`、`agent_daemon_sandbox`、`e2b_compatible` 和 `http_agent`。存活状态是 `pending_pairing`、`offline`、`online`、`error`，与 Run 的六种状态独立。
+
+## 配对本地 daemon
+
+1. 在要执行工作的机器上[安装 `parsar-daemon`](/zh/install-runtime)。
+2. 启动 daemon，在 Parsar 界面选择**配对 Runtime**。
+3. 输入一次性配对信息，并妥善保存生成的凭据。
+4. 确认 Runtime 状态显示为 `online`。
+5. 将 Agent 绑定到该 Runtime，并发送一条小范围测试对话。
+
+Daemon 会维持心跳，只接收属于对应工作区且经过 Agent 权限检查的工作。它不是 Parsar API 或数据库的替代品。
+
+## 在线状态和队列
+
+Run 会绑定到指定 Runtime。Runtime 离线时，排队中的 Run 会等待恢复，或按照服务端队列与心跳策略最终失败；它不会静默转移到另一台机器。
+
+Daemon 重启后，服务端可能回收中断的工作或触发重试。打开 Run 详情和 daemon 日志，区分基础设施故障与 Agent/Provider 错误。
+
+## Sandbox 执行
+
+Sandbox 模式需要配置对应 Provider 和镜像。Provider 凭据应放在环境变量或加密的工作区凭据中，不要写入 Agent Prompt 或代码仓库。
+
+沙盒的创建、复用和释放取决于 Agent 与服务端配置。每次 Run 中的 Runtime 快照才是实际执行位置的依据。
+
+沙盒内部生命周期可能是 `spawning`、`running`、`renewing`、`killing`、`killed`、`killed_orphaned` 或 `killed_error`。这些 Provider 生命周期值可以解释 Runtime 在线但某个沙盒正在替换的情况。
+
+## 运维检查清单
+
+- Runtime 状态为 `online`，且最近心跳正常；
+- Agent 已明确绑定该 Runtime；
+- Runtime 可以访问 Parsar 服务和模型 Provider；
+- daemon 用户可以访问工作目录；
+- 所需凭据和 Capability 已启用。
+
+Run 无法启动时，参见[查看运行、审批和日志](/zh/runs-approvals-logs)和[故障排查](/zh/troubleshooting)。

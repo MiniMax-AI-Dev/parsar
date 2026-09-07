@@ -1,0 +1,39 @@
+---
+title: Scheduled tasks
+description: Run an Agent on a cron schedule and inspect each execution.
+---
+
+Scheduled Tasks trigger an Agent Run at a defined time. They are workspace resources anchored to one Agent; they are not a replacement for a one-off conversation.
+
+## Create a schedule
+
+1. Open **Scheduled tasks** for the current workspace.
+2. Choose an active Agent with a valid Runtime.
+3. Enter the task prompt, a five-field cron expression, and an IANA timezone.
+4. Choose whether the task is enabled and configure an optional Feishu delivery target when supported.
+5. Save and review the next scheduled time.
+
+The server calculates the next fire time in UTC while interpreting the expression in the selected timezone.
+
+## Manage and test
+
+Use the task row to edit or delete a schedule, disable it temporarily, or choose **Run now**. A manual run still creates a normal Agent Run with its own conversation and audit trail.
+
+Each scheduled task records the most recent Run, consecutive failures, and the next run time. A task can be listed from the workspace or from its Agent detail page.
+
+## Failure behavior
+
+The scheduler tracks consecutive terminal failures per task. `failed`, `cancelled`, and `interrupted` increment the counter; `completed` resets it to zero. After **5 consecutive failures**, Parsar disables the task and records `last_status=auto_disabled`. A manual **Run now** does not change this counter. If a fire overlaps an existing execution, it is recorded as `skipped_overlap` rather than starting a duplicate Run.
+
+An automatically disabled task should be treated as an operational signal. Check Runtime liveness, credentials, Agent configuration, and the original error before re-enabling it.
+
+Scheduled Runs use `trigger_source=scheduled_task`. Runs created by an inbound platform message use `trigger_source=message`; the database also reserves `webhook` for an external-event trigger source, but Parsar does not currently expose a generic user-configurable webhook endpoint. Feishu, Slack, Teams, and Discord inbound events are documented under [Integrations](/integrations).
+
+## Safe scheduling
+
+- Start with a disabled schedule and use **Run now** to validate the prompt.
+- Use an explicit timezone instead of relying on the server's local timezone.
+- Keep prompts idempotent when the same schedule may be retried.
+- Review the Agent's Access and capability credentials before enabling delivery to a chat platform.
+
+See [Runtimes and Agent Daemon](/runtimes) and [View Runs, approvals, and logs](/runs-approvals-logs).

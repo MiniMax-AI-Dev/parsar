@@ -1,0 +1,49 @@
+---
+title: CLI 参考
+description: parsar 与 parsar-daemon 的真实子命令和参数。
+---
+
+Parsar 有两个 Go 命令行入口。新版本可能增加参数，安装后可用 `--help` 查看最终结果。
+
+## `parsar`
+
+访问 API 时需要 `PARSAR_SERVER_URL` 和 `PARSAR_RUNNER_TOKEN`。可选上下文变量有 `PARSAR_RUNTIME_ID`、`PARSAR_WORKSPACE_ID`、`PARSAR_USER_ID`、`PARSAR_CONNECTOR`、`PARSAR_AGENT_ID`、`PARSAR_CONVERSATION_ID`。
+
+| 命令 | 参数 |
+| --- | --- |
+| `parsar spec list` | `--tag`（CSV）、`--source`（`manual\|agent\|import\|user\|auto-review`）、`--limit`（0 使用服务端默认值）、`--json` |
+| `parsar spec add` | 必填 `--title`、必填 `--body`（`-` 从 stdin 读取）、`--tag`、`--json` |
+| `parsar spec edit <id>` | `--title`、`--body`（`-` 从 stdin）、`--tag`、`--clear-tags`、`--json`；空值保留原值 |
+| `parsar spec rm <id>` | 无专属参数 |
+| `parsar memory list` | `--scope`（`user\|workspace`，默认 `user`）、`--type`（`user\|feedback\|workspace\|reference`）、`--tag`、`--limit`、`--json` |
+| `parsar memory add` | `--scope`、必填 `--type`、可选 `--title`、必填 `--body`（`-` 从 stdin）、`--why`、`--tag`、`--json` |
+| `parsar memory edit <id>` | `--title`、`--body`、`--why`、`--tag`、`--clear-tags`、`--json` |
+| `parsar memory rm <id>` | 无专属参数 |
+| `parsar inject snapshot` | 无专属参数，输出 JSON |
+| `parsar inject incremental` | 必填 `--since`（RFC3339 时间戳），输出 JSON 增量 |
+| `parsar sync` | 无参数，输出人类可读的注入快照 |
+| `parsar plugin add <path>` | `--json`；路径必须包含 `manifest.json`，需要工作区上下文 |
+| `parsar plugin list` | `--json`；需要工作区上下文 |
+| `parsar plugin remove <name>` | 无专属参数，需要工作区上下文 |
+| `parsar version` | 无专属参数 |
+
+全局帮助可用 `parsar --help`、`parsar -h` 或 `parsar help`；`--version`/`-v` 输出版本。
+
+`plugin add` 将插件安装到 `PARSAR_DATA_DIR`（默认 `~/.parsar`），使用 esbuild 构建可选客户端入口，并通过服务端上传 Bundle。manifest 必须提供 `name` 和 `version`；`server`、`client`、`tools`、`skills`、`hooks`、`credentials` 为可选段。
+
+## `parsar-daemon`
+
+配置文件位于 `~/.parsar/parsar-daemon/<profile>/`。
+
+| 命令 | 参数 |
+| --- | --- |
+| `parsar-daemon connect` | `--profile`（默认 `default`）、`-b`/`--background`、`--url`、`--token`、`--device-name`（默认主机名） |
+| `parsar-daemon status` | `--profile` |
+| `parsar-daemon stop` | `--profile` |
+| `parsar-daemon logs` | `--profile`、`-f`/`--follow`、`-n`/`--lines`（默认 100） |
+| `parsar-daemon logout` | `--profile` |
+| `parsar-daemon version` | 无参数 |
+
+`connect --url <server> --token <pairing-token>` 通过 `/api/v1/runtimes/pair` 完成一次性配对。`-b` 写入 `connect.pid` 和 `connect.log`。`stop` 先发送 SIGTERM，3 秒后才升级；`logout` 只删除本地凭据，服务端 Runtime 仍需在管理界面单独禁用。
+
+问题报告不要包含 runner token、配对 token 或完整环境变量。参见 [Runtime](/zh/runtimes) 和[配置](/zh/configuration)。

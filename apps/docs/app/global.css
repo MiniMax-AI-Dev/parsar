@@ -38,6 +38,8 @@ body {
 [role="dialog"][data-side] {
   width: min(11rem, calc(100vw - 2rem));
   min-width: 0 !important;
+  /* Radix anchors this bottom-left menu at x=0; keep it off the viewport edge. */
+  margin-left: 0.75rem;
 }
 
 [role="dialog"][data-side] button {

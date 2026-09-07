@@ -15,12 +15,16 @@ An Agent is a reusable workspace member. It holds instructions and execution con
 
 1. Open **Agents** and choose **New Agent**.
 2. Enter a name and optional description.
-3. Choose the connector type and default model.
-4. Choose the Runtime mode and bind the Agent to a concrete Runtime.
+3. Choose the connector type (`agent_daemon` or `http`) and default model.
+4. Choose the Runtime mode and bind the Agent to a concrete Runtime. A daemon can run on a paired local device or a managed sandbox.
 5. Add a system prompt and any Capabilities the Agent needs.
 6. Save the Agent.
 
-The Runtime is part of the Agent's execution identity in the current product. To switch execution placement later, create or edit the Agent according to the options shown by the current release rather than assuming a silent fallback.
+The Runtime is part of the Agent's execution identity. `agent_daemon` dispatches streaming prompts over the reverse WebSocket; `http` calls an external Agent endpoint. There is no implicit connector conversion or silent fallback.
+
+## Agent engine and execution options
+
+Set `config.agent_kind` to one of the four engines advertised by the daemon: `claude_code`, `codex`, `opencode`, or `pi`. `codex` additionally supports `config.mode=default|plan`; the server clears that field when another engine is selected. Daemon mode is `local` or `sandbox`. A local mode may set an absolute `work_dir` (or a path beginning with `~/`); sandbox mode selects managed sandbox size and lifetime settings.
 
 ## Capabilities
 
@@ -30,7 +34,7 @@ New bindings can follow the latest Capability version or pin a specific version.
 
 ## Visibility and access
 
-Agent visibility can be workspace, tenant, or public. Access determines which members can run it. Document and review visibility together with your connector policy before exposing an Agent to an IM channel.
+Agent visibility is exactly one of `workspace`, `tenant`, or `public`. `workspace` permits active members of the owning Workspace; `tenant` permits any registered Parsar user; `public` also permits unauthenticated guests. Visibility is checked before a Conversation or Run is created, and IM delivery performs the same workspace membership and policy checks.
 
 ## Verify the configuration
 

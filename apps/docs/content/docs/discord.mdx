@@ -1,0 +1,14 @@
+---
+title: Discord
+description: Configure the Discord Gateway and workspace-scoped bot connectors.
+---
+
+Discord workspace connectors store `app_id`, `bot_token_ref`, optional `public_key_ref`, optional `intents`, and `enabled`. Enabling requires an app ID and bot token reference.
+
+## Process modes
+
+Set `PARSAR_DISCORD_GATEWAY=true` and provide `PARSAR_DISCORD_BOT_TOKEN`; `PARSAR_DISCORD_APP_ID` is optional for the shared bot. Set `PARSAR_DISCORD_CONNECTORS=true` to enable the database-backed multi-tenant reconciler. With `PARSAR_MASTER_KEY`, interactive action routing is enabled; the gateway folds select-menu interactions into the submit action.
+
+Inbound messages resolve the workspace and Agent before creating or resuming a Conversation. The sender and Agent visibility are checked before a Run is started. Keep bot tokens in the secret vault and rotate them after exposure.
+
+See [Integrations](/integrations), [Configuration](/configuration), and [Runs, approvals, and logs](/runs-approvals-logs).

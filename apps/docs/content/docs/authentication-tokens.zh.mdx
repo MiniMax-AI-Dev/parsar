@@ -1,0 +1,45 @@
+---
+title: 令牌与凭据存储
+description: 了解 Parsar 的会话 Cookie、配对令牌、运行时凭据和第三方凭据。
+---
+
+Parsar 会为浏览器会话、Daemon 配对、Runtime 执行和外部服务分别使用不同的凭据。它们的作用域和有效期不同，不能相互替代。
+
+## 浏览器会话
+
+登录后，服务端设置 `parsar_session` Cookie。Cookie 值由 32 字节密码学随机数生成，并编码为 64 个十六进制字符（256 位熵）。数据库保存会话记录和过期时间，不会把 Cookie 当作可读的用户令牌。
+
+默认会话有效期为 30 天。Parsar 使用会话时会更新 `last_seen_at`，但这不是滑动过期：原始过期时间仍然有效。退出登录会撤销服务端会话。生产环境应通过 HTTPS 提供 Parsar，并保持 Cookie 的 `Secure`、`HttpOnly` 属性。
+
+## OAuth 状态
+
+OAuth 和 OIDC 回调使用短时状态 Cookie 保护。状态 Cookie 有效期为 10 分钟，并在回调校验时消费。状态过期或重复使用时，应丢弃并重新开始授权流程；不要为了绕过回调错误而关闭状态校验。
+
+## Runtime 配对与运行凭据
+
+**Connect** 流程使用一次性配对令牌：
+
+- 前缀：`rtk_`。
+- 有效期：15 分钟。
+- 编码：前缀之后是 32 字节随机数的十六进制文本。
+- 存储：数据库只保存 SHA-256 哈希。
+- 消费：配对成功一次后令牌立即失效。
+
+配对会将短期令牌交换为带 `rtc_` 前缀的长期运行凭据。Parsar 只在 Runtime 配置中保存该凭据的哈希。Daemon 连接和其他需要 Runner 鉴权的请求使用 `Authorization: Bearer <credential>`。同一个 Bearer 会以 `PARSAR_RUNNER_TOKEN` 传入沙箱内 CLI 进程，必须按密钥保护。
+
+在 Daemon 主机上，凭据会以 `0600` 权限原子写入 `~/.parsar/parsar-daemon/<profile>/auth.json`。该文件还记录服务地址和 Runtime 身份。默认 profile 的日志和 PID 文件位于同目录下，名称为 `connect.log` 和 `connect.pid`。机器退役时应删除或轮换 profile；绝不要提交 `auth.json`，也不要把其中的 Bearer 粘贴到工单。
+
+## 第三方凭据
+
+第三方凭据在持久化前使用 `PARSAR_MASTER_KEY` 加密。内置的 GitHub 个人令牌凭据类型是 `github_pat`，支持 `ghp_…`、`github_pat_…` 和 `gho_…` 等格式。其他内置类型包括 `slack_bot_token`、`postgres_dsn`、`notion_integration` 和 `jira_api_token`。运行时解析凭据引用，明文不会出现在普通会话或审计输出中。
+
+轮换第三方令牌时，应先在服务商处撤销旧令牌，再更新 Parsar 凭据并重新运行 Agent。轮换 `PARSAR_MASTER_KEY` 属于部署迁移，不是单个用户的令牌轮换，因为已有加密凭据需要被有计划地重新加密。
+
+## 运维检查清单
+
+- 生产环境使用 HTTPS 和安全 Cookie 配置。
+- 通过私密渠道传递配对令牌，并在 15 分钟有效期内完成配对。
+- 限制 `auth.json` 权限，只通过批准的密钥管理流程备份。
+- 发生事件时分别撤销会话、配对材料、运行凭据和第三方令牌。
+
+参阅[认证与会话](/zh/authentication)、[Runtime 与 Agent Daemon](/zh/runtimes)和[GitHub 集成](/zh/github)。

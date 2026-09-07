@@ -1,0 +1,18 @@
+---
+title: 架构
+description: 贡献者需要保持的服务边界与执行路径。
+---
+
+Parsar 由 Go 服务和两个前端组成：`server/` 中的 Go API/WebSocket 服务、`apps/web` 中的产品 SPA，以及本独立的 `apps/docs` 文档站。`apps/parsar-daemon` 中的 `parsar-daemon` 二进制负责将执行机器连接到服务端。
+
+## 请求与执行边界
+
+服务端负责认证、工作区授权、Agent、Conversation、Run、能力、凭据、计划任务、审计记录和 Runtime 状态。PostgreSQL 是这些资源的事实来源。HTTP handler 应调用 store 和领域服务，不要直接访问其他包的私有状态。
+
+Web 前端调用 API 并订阅 Run 事件，不执行 Agent 工具。Daemon 维护 Runtime 连接、启动适配器、流式上报事件并报告存活状态。凭据跨越边界时只能通过 Runner 协议传递，不能写入面向用户的消息。
+
+## 变更边界
+
+API 或 handler 变更需要 swaggo 注释并重新生成 `docs/openapi/openapi.yaml`。SQL 查询变更需要运行 sqlc 生成并更新生成文件。新增架构规则、所有权边界、必需检查或生成契约时，应写入规范来源 `CONTRIBUTING.md`，不能只写在 Issue 或 PR 描述中。
+
+完整仓库地图请阅读源代码仓库中的 [`docs/architecture.md`](https://github.com/AllureCurtain/parsar/blob/main/docs/architecture.md)。

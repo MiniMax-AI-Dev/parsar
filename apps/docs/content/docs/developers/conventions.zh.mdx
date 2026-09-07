@@ -1,0 +1,20 @@
+---
+title: 仓库约定
+description: Parsar 变更中的包边界、生成契约与质量规则。
+---
+
+Parsar 遵循“先搜索再编写”：新增近似实现前，先复用已有 formatter、parser、错误映射器或共享前端 helper。Web 的共享格式化和标签逻辑应放在 `apps/web/src/lib/`，不要复制到各个页面。
+
+## 文件大小与所有权
+
+Go 文件超过约 500 行、React 组件超过约 400 行时，应考虑拆出聚焦模块。`server/internal/dev/routes.go`、`server/internal/store/store.go` 和 `apps/web/src/pages/admin/AgentsPage.tsx` 已经偏大，修改相邻行为时不要继续堆积代码。
+
+## 生成契约
+
+- Handler/API 变更：添加 swaggo 注释，运行 `make openapi`，检查 `docs/openapi/openapi.yaml`。
+- 数据库查询变更：运行 `make sqlc-generate`，检查生成的 sqlc 文件。
+- 每次变更：在报告完成前运行 `make check`。
+
+优先使用明确的错误映射，并为每个 API 面保留一个响应 helper。文档示例必须与真实 flag、环境变量、枚举值和文件路径保持一致。
+
+简要 Agent 索引见 [`AGENTS.md`](https://github.com/AllureCurtain/parsar/blob/main/AGENTS.md)，完整规范见 [`CONTRIBUTING.md`](https://github.com/AllureCurtain/parsar/blob/main/CONTRIBUTING.md)。

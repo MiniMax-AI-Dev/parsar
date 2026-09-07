@@ -1,0 +1,30 @@
+---
+title: Audit and usage
+description: Inspect administrative changes, execution events, artifacts, and model usage.
+---
+
+Parsar separates the human-readable conversation from the evidence of execution. Audit records explain who changed a resource; Run events, artifacts, and usage explain what happened during one execution.
+
+## Audit records
+
+Use the **Audit** page to investigate workspace administration, Agent and capability changes, connector operations, Runtime actions, and other security-sensitive events. Filter by workspace and time before comparing an event with the related Run.
+
+Audit data is append-oriented evidence. Do not treat a UI label or a current resource state as a complete history of who changed it.
+
+## Usage records
+
+Usage is associated with Agent Runs and can include provider, model, token, and timing information. Totals are useful for operational review, but the Run detail remains the best place to understand a single unexpected charge or long execution.
+
+## Artifacts and retention
+
+Run artifacts can include tool output, screenshots, attachments, or other provider-generated data. Treat artifacts as potentially sensitive. Use the visibility and storage metadata shown by the server, and avoid copying them into public issues or chat channels.
+
+## Investigation flow
+
+1. Identify the workspace and the affected Agent.
+2. Open the Run and record its status, requester, connector, and Runtime snapshot.
+3. Inspect ordered events for tool calls, permission decisions, provider changes, and errors.
+4. Compare the event timeline with Audit records and Usage details.
+5. Redact secrets before sharing a diagnostic report.
+
+See [View Runs, approvals, and logs](/runs-approvals-logs), [Security model](/security), and [Troubleshooting](/troubleshooting).

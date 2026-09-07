@@ -1,0 +1,18 @@
+---
+title: Slack
+description: Configure Slack Socket Mode and workspace-scoped Slack connectors.
+---
+
+Slack connectors store `app_id`, `bot_token_ref`, `app_token_ref`, `signing_secret_ref`, `event_mode`, and `enabled`. `socket` is the normalized default event mode; `events`, `events_api`, `http`, and `webhook` normalize to `events`.
+
+## Enable a shared bot
+
+Set `PARSAR_SLACK_SOCKET=true` and provide `PARSAR_SLACK_BOT_TOKEN` (`xoxb-…`) plus `PARSAR_SLACK_APP_TOKEN` (`xapp-…`). `PARSAR_SLACK_APP_ID` is optional. With `PARSAR_MASTER_KEY`, card-action routing and per-team database token resolution are enabled; without it, button clicks are only acknowledged as received.
+
+Set `PARSAR_SLACK_CONNECTORS=true` to run the database-backed multi-tenant connector reconciler. Workspace connectors require an app ID, bot token reference, and either an app token reference for Socket Mode or a signing secret reference for Events API mode.
+
+## Routing
+
+Parsar maps a Slack team/channel to a workspace and Agent, verifies the sender, and creates or resumes a Conversation. Interactive approval and choice cards are routed back through the connector. Rotate both bot and app tokens after exposure and keep token references out of source control.
+
+See [Integrations](/integrations), [Configuration](/configuration), and [Runs, approvals, and logs](/runs-approvals-logs).
