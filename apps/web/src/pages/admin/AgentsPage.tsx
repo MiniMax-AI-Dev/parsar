@@ -14,7 +14,6 @@ import { ErrorState } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
 import { Skeleton } from "../../components/ui/skeleton"
 import { InitialTile } from "../../components/ui/ledger"
-import { StatusIcon } from "../../components/ui/status-icon"
 import {
   Tabs,
   TabsContent,
@@ -43,6 +42,7 @@ import {
   defaultModelOf,
 } from "../../lib/agent-view-model"
 import type { Agent } from "../../lib/api-types"
+import { useToast } from "../../components/ui/toast"
 import { useWorkspaceId } from "../../lib/workspace"
 import { useRelativeTime } from "../../lib/relative-time"
 import { CreateAgentDialog } from "./CreateAgentDialog"
@@ -76,10 +76,6 @@ function InlineNotice({ icon, children, action }: { icon: ReactNode; children: R
   )
 }
 
-function SuccessNotice({ children }: { children: ReactNode }) {
-  return <InlineNotice icon={<StatusIcon status="completed" />}>{children}</InlineNotice>
-}
-
 function PendingCapabilityBanner({ children, onCancel, cancelLabel }: { children: ReactNode; onCancel: () => void; cancelLabel: string }) {
   return (
     <InlineNotice
@@ -101,7 +97,7 @@ export function AgentsPage() {
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [cloneAgent, setCloneAgent] = useState<Agent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
   const [chatPendingID, setChatPendingID] = useState<string | null>(null)
   const fmtAgo = useRelativeTime()
 
@@ -220,7 +216,6 @@ export function AgentsPage() {
             </>
           }
         />
-        {toast && <SuccessNotice>{toast}</SuccessNotice>}
         {pendingCapability.id && (
           <PendingCapabilityBanner
             cancelLabel={t("agents.pendingCapability.cancel")}
@@ -374,7 +369,7 @@ export function AgentsPage() {
           cloneMut.mutate(body as Parameters<typeof cloneMut.mutate>[0], {
             onSuccess: (created) => {
               setCloneAgent(null)
-              setToast(t("agents.listActions.clonedToast", { name: created.name }))
+              toast.show(t("agents.listActions.clonedToast", { name: created.name }))
             },
           })
         }}
@@ -394,7 +389,7 @@ export function AgentsPage() {
           deleteMut.mutate(deleteTarget.id, {
             onSuccess: () => {
               setDeleteTarget(null)
-              setToast(t("agents.delete.deletedToast", { name }))
+              toast.show(t("agents.delete.deletedToast", { name }))
             },
           })
         }}
@@ -437,7 +432,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
   const { navigate, tab: requestedTab } = useAdminView()
   const { railView } = useAppRoute()
   const wid = useWorkspaceId()
-  const [toast, setToast] = useState<string | null>(null)
+  const toast = useToast()
 
   const query = useAgentDetail(wid, id)
   const modelsQ = useModels(wid)
@@ -451,10 +446,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
   // Switching to another agent swaps the rail's content rather than replaying
   // its entrance, so the per-agent state is reset here instead of by a remount.
   const [shownID, setShownID] = useState(id)
-  if (id !== shownID) {
-    setShownID(id)
-    setToast(null)
-  }
+  if (id !== shownID) setShownID(id)
 
   if (query.isLoading || query.error || !agent) {
     return (
@@ -503,11 +495,10 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
           workspaceName={currentWorkspace?.name}
           workspaceRole={workspaceRole}
           models={models}
-          onToast={setToast}
+          onToast={toast.show}
         />
       }
     >
-      {toast && <SuccessNotice>{toast}</SuccessNotice>}
       {pendingCapability.id && (
         <PendingCapabilityBanner
           cancelLabel={t("agents.pendingCapability.cancel")}
@@ -541,7 +532,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
             workspaceID={wid}
             workspaceRole={workspaceRole}
             modelLabel={model}
-            onToast={setToast}
+            onToast={toast.show}
           />
         </TabsContent>
 
@@ -550,7 +541,7 @@ export function AgentDetailRail({ id, open, onClose, onClosed }: {
             agent={agent}
             workspaceID={wid}
             canEdit={workspaceRole === "owner" || workspaceRole === "admin"}
-            onToast={setToast}
+            onToast={toast.show}
           />
         </TabsContent>
 

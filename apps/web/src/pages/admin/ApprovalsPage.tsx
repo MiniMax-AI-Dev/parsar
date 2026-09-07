@@ -98,14 +98,10 @@ export function ApprovalsPage() {
   const unreachable = error instanceof ApiError && error.envelope.unreachable
   const loading = pendingQ.isLoading || decidedQ.isLoading || expiredQ.isLoading
 
-  // The newest pending request is the thing to act on; it is selected
-  // until the user picks something else.
-  // Closing the rail must not re-select the default row; `dismissed`
-  // holds the rail shut until the user picks a row or the route changes.
-  const [dismissed, setDismissed] = useState(false)
-  const selected =
-    (entityId ? rows.find((r) => r.id === entityId) : undefined) ??
-    (entityId || dismissed ? undefined : rows.find((r) => r.status === "pending"))
+  // Nothing opens on arrival. The inbox used to select the newest pending
+  // request for you, which made it the one list that opened a rail you had not
+  // asked for — every other ledger waits to be clicked, and so does this.
+  const selected = entityId ? rows.find((r) => r.id === entityId) : undefined
 
   // The rail outlives the selection by one animation so it can play its
   // exit, whether the X, the open row, or the route closed it.
@@ -114,13 +110,8 @@ export function ApprovalsPage() {
 
   // The row is a toggle: clicking the open one closes the rail.
   const select = (id: string | null) => {
-    if (id && id !== selected?.id) {
-      setDismissed(false)
-      navigate("approvals", { id })
-    } else {
-      setDismissed(true)
-      navigate("approvals")
-    }
+    if (id && id !== selected?.id) navigate("approvals", { id })
+    else navigate("approvals")
   }
 
   // The page is titled exactly as the nav item names it (common:nav.items.approvals).

@@ -9,6 +9,7 @@ import { InviteAcceptPage } from "./pages/InviteAcceptPage"
 import { SharedConversationPage } from "./pages/SharedConversationPage"
 import { AuthProvider, useAuth } from "./lib/auth-context"
 import { ThemeProvider } from "./lib/theme-provider"
+import { ToastProvider } from "./components/ui/toast"
 import { useMyWorkspaces } from "./lib/api-workspaces"
 import { SingleSlot } from "./components/plugin/SlotRenderer"
 import { usePluginClients } from "./lib/use-plugins"
@@ -108,7 +109,9 @@ export function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Root />
+        <ToastProvider>
+          <Root />
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   )
