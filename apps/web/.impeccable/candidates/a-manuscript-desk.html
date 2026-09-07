@@ -1,0 +1,487 @@
+<!doctype html>
+<!--
+  Parsar · Runs — candidate A: 书案控制台 / The Manuscript Desk
+  SYNTHETIC DATA: every run id, agent, conversation, cost, timestamp and
+  host name in this file is fabricated for a design prototype.
+-->
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运行 (Runs) · Parsar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ───────── neutral ramp: light and dark are the two ends of one scale ───────── */
+html[data-theme="light"] {
+  color-scheme: light;
+  --n0: #fbfbfa;  --n1: #f5f5f3;  --n2: #ebebe8;  --n3: #dcdcd8;  --n4: #c6c6c1;
+  --n5: #a4a49e;  --n6: #80807a;  --n7: #61615c;  --n8: #464642;  --n9: #2a2a27;
+  --n10: #161614;
+  --accent: #233c8c;
+  --selected: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --n0: #1b1b1a;  --n1: #222221;  --n2: #2b2b29;  --n3: #363634;  --n4: #474744;
+  --n5: #66665f;  --n6: #8c8c86;  --n7: #a6a6a0;  --n8: #c0c0ba;  --n9: #dededa;
+  --n10: #f1f1ee;
+  --accent: #97a9e9;
+  --selected: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+:root {
+  --bg: var(--n0);
+  --fg: var(--n10);
+  --fg-secondary: var(--n8);
+  --fg-muted: var(--n7);
+  --fg-disabled: var(--n6);
+  --line: var(--n2);
+  --line-strong: var(--n3);
+  --dot-settled: var(--n5);
+  --hover: color-mix(in srgb, var(--n10) 2%, transparent);
+  --selection: color-mix(in srgb, var(--accent) 16%, transparent);
+  --scroll: var(--n4);
+  --font-ui: "Geist", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "Noto Sans SC", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --marker: 12px;         /* gutter that holds the 2px marker, left of the text axis */
+  --label-col: 88px;      /* pane's first column: dl labels and step numbers */
+}
+
+/* ───────── browser surfaces ───────── */
+* { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 8px; border: 2px solid var(--bg); }
+::selection { background: var(--selection); color: var(--fg); }
+:focus-visible { outline: 1.5px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+html, body { height: 100%; }
+body {
+  font: 400 14px/1.55 var(--font-ui);
+  color: var(--fg);
+  background: var(--bg);
+  caret-color: var(--accent);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-width: 960px;
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr) 440px;
+  height: 100vh;
+  overflow: hidden;
+}
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:disabled { cursor: default; }
+svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+code { font-family: var(--font-mono); font-size: 0.94em; }
+
+/* ───────── left column: table of contents ───────── */
+.toc { padding: 28px 12px 28px 28px; overflow-y: auto; font-size: 13px; }
+.brand {
+  display: block; padding-left: var(--marker);
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; line-height: 32px;
+}
+.ws {
+  margin-top: 14px; padding-left: var(--marker);
+  display: flex; align-items: center; gap: 4px; line-height: 20px;
+  font-weight: 500; color: var(--fg);
+}
+.ws svg { width: 14px; height: 14px; color: var(--fg-muted); }
+.ws:hover svg { color: var(--fg); }
+.group { margin-top: 28px; }
+.group-label {
+  padding-left: var(--marker); margin-bottom: 4px;
+  font-size: 11.5px; letter-spacing: 0.04em; color: var(--fg-muted);
+}
+.toc nav a {
+  position: relative; display: flex; justify-content: space-between; align-items: baseline;
+  padding: 4px 8px 4px var(--marker); line-height: 20px; color: var(--fg-secondary);
+}
+.toc nav a:hover { color: var(--fg); }
+.toc nav a[aria-current="page"] { color: var(--fg); font-weight: 500; }
+.toc nav a[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px; background: var(--accent);
+}
+.count { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.toc nav a:hover .count { color: var(--fg); }
+
+/* ───────── main column: the document ───────── */
+.doc { padding: 28px 32px 32px 44px; overflow-y: auto; min-width: 0; }
+.doc-top { height: 32px; }
+.title-row { margin-top: 20px; display: flex; align-items: baseline; gap: 14px; }
+h1 { font-size: 32px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.2; }
+.title-en {
+  font-size: 13px; font-weight: 500; letter-spacing: 0.08em; color: var(--fg-muted);
+  font-variant-caps: all-small-caps;
+}
+.desc { margin-top: 10px; max-width: 68ch; color: var(--fg-muted); }
+
+.toolbar {
+  margin-top: 36px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.tabs { display: flex; gap: 20px; flex: none; }
+.tab {
+  padding: 4px 0 10px; margin-bottom: -1px; color: var(--fg-muted);
+  border-bottom: 1px solid transparent; line-height: 20px; white-space: nowrap;
+}
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { color: var(--fg); font-weight: 500; border-bottom-color: var(--fg); }
+.search {
+  display: flex; align-items: center; gap: 8px; width: 240px; padding: 4px 0 8px; margin-bottom: -1px;
+  color: var(--fg-muted); border-bottom: 1px solid transparent;
+}
+.search:focus-within { color: var(--fg); border-bottom-color: var(--fg); }
+.search input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; color: var(--fg); outline: none; }
+.search input::placeholder { color: var(--fg-muted); }
+
+/* ledger */
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 216px 66px minmax(0, 1fr) 100px 48px 40px;
+  column-gap: 12px; align-items: center;
+}
+.ledger-head { padding: 12px 0 10px; font-size: 12px; color: var(--fg-muted); border-bottom: 1px solid var(--line); }
+.ledger-head .c-model, .ledger-head .c-num { font: inherit; color: inherit; }
+.run {
+  margin-left: calc(-1 * var(--marker)); padding: 12px 0 12px var(--marker);
+  min-height: 44px; font-size: 13px; cursor: pointer;
+}
+.run::after { content: ""; position: absolute; left: var(--marker); right: 0; bottom: 0; height: 1px; background: var(--line); }
+.run:hover { background: var(--hover); }
+.run[aria-selected="true"] { background: var(--selected); }
+.run[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.run.ended, .run.ended .agent, .run.ended .c-model { color: var(--fg-muted); }
+
+.c-run { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.id { font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.agent { color: var(--fg-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-status { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.c-conv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-model { font-family: var(--font-mono); font-size: 12.5px; color: var(--fg-secondary); white-space: nowrap; }
+.c-num { font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.dot.running { background: var(--fg); animation: breathe 2.4s ease-in-out infinite; }
+.dot.queued { border: 1px solid var(--fg); }
+.dot.completed { background: var(--dot-settled); }
+.dot.failed, .dot.cancelled, .dot.interrupted { border: 1px solid var(--dot-settled); }
+
+.pager { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; font-size: 12.5px; color: var(--fg-muted); }
+.pager .btns { display: flex; gap: 20px; }
+.tbtn { color: var(--fg); line-height: 20px; }
+.tbtn:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line-strong); }
+.tbtn:disabled { color: var(--fg-disabled); }
+
+/* ───────── right column: reading pane ───────── */
+.pane {
+  border-left: 1px solid var(--line-strong);
+  padding: 28px 32px 28px 32px; overflow-y: auto; overflow-x: hidden; min-width: 0;
+  display: flex; flex-direction: column;
+  animation: pane-in 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.pane-top { height: 32px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--fg-muted); }
+.icon-btn:hover { color: var(--fg); background: var(--hover); }
+html[data-theme="light"] .icon-sun { display: none; }
+html[data-theme="dark"] .icon-moon { display: none; }
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong);
+  display: grid; place-items: center; font-size: 11px; font-weight: 500; letter-spacing: 0.02em;
+}
+
+.pane h2 { margin-top: 30px; font-family: var(--font-mono); font-size: 18px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.3; }
+.pane-status { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-secondary); }
+.pane-status .dot { margin-right: 2px; }
+.pane-status .sep { color: var(--fg-muted); }
+
+.pane .toolbar { margin-top: 20px; }
+.pane .tabs { gap: 12px; }
+.pane .tab { font-size: 12.5px; padding-bottom: 8px; }
+
+.facts { font-size: 13px; }
+.facts.first { margin-top: 4px; }
+.facts > div {
+  display: grid; grid-template-columns: var(--label-col) minmax(0, 1fr); column-gap: 12px;
+  padding: 7px 0; border-bottom: 1px solid var(--line);
+}
+.facts dt { color: var(--fg-muted); }
+.facts dd { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pane h3 { margin: 24px 0 6px; font-size: 13px; font-weight: 500; }
+
+.steps { list-style: none; font-size: 13px; }
+.steps li { display: grid; grid-template-columns: var(--label-col) minmax(0, 1fr); column-gap: 12px; padding: 5px 0; }
+.steps .num { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+
+.pane-body { padding-bottom: 32px; }
+.actions {
+  margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; gap: 20px; font-size: 13px;
+}
+.actions .tbtn:disabled { color: var(--fg-disabled); }
+.actions .link {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px;
+}
+.actions .link svg { width: 13px; height: 13px; }
+
+/* ───────── motion ───────── */
+@keyframes breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+@keyframes pane-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .dot.running, .pane { animation: none; }
+}
+
+/* ───────── 1280 ───────── */
+@media (max-width: 1399px) {
+  body { grid-template-columns: 212px minmax(0, 1fr) 400px; }
+  .doc { padding-left: 40px; padding-right: 28px; }
+  .pane { padding-left: 24px; padding-right: 24px; }
+  .row { grid-template-columns: 216px 66px minmax(0, 1fr) 48px 40px; }
+  .c-model { display: none; }
+}
+</style>
+</head>
+<body>
+
+<aside class="toc" aria-label="导航">
+  <a class="brand" href="#">Parsar</a>
+  <button class="ws" aria-haspopup="listbox" aria-label="切换工作区">
+    MiniMax · Infra
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+  </button>
+  <nav>
+    <div class="group">
+      <div class="group-label">协作</div>
+      <a href="#">对话</a>
+      <a href="#">收件箱 <span class="count" aria-label="3 条未读">3</span></a>
+      <a href="#" aria-current="page">运行</a>
+      <a href="#">定时任务</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Agent</div>
+      <a href="#">Agent</a>
+      <a href="#">能力</a>
+      <a href="#">模型</a>
+      <a href="#">连接</a>
+    </div>
+    <div class="group">
+      <div class="group-label">团队</div>
+      <a href="#">成员</a>
+      <a href="#">设置</a>
+    </div>
+  </nav>
+</aside>
+
+<main class="doc">
+  <div class="doc-top"></div>
+  <div class="title-row">
+    <h1>运行</h1>
+    <span class="title-en">Runs</span>
+  </div>
+  <p class="desc">Agent 每一次执行都对应一条 Run。这里能看到正在跑、卡住、失败、待审批的 run。</p>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="筛选">
+      <button class="tab" role="tab" aria-selected="true">全部</button>
+      <button class="tab" role="tab" aria-selected="false">进行中</button>
+      <button class="tab" role="tab" aria-selected="false">失败</button>
+    </div>
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" placeholder="搜索 run id / agent / 对话…" aria-label="搜索 run">
+    </label>
+  </div>
+
+  <div class="ledger" role="listbox" aria-label="Run 列表">
+    <div class="row ledger-head" aria-hidden="true">
+      <span>Run</span><span>状态</span><span>对话</span><span class="c-model">模型</span><span class="c-num">耗时</span><span class="c-num">成本</span>
+    </div>
+
+    <div class="row run" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZM3Q7K</span><span class="agent">reviewer-bot</span></div>
+      <div class="c-status"><span class="dot running"></span>运行中</div>
+      <div class="c-conv" title="#infra-alerts · 修复 nightly 构建失败">#infra-alerts · 修复 nightly 构建失败</div>
+      <div class="c-model">claude-opus-5</div>
+      <div class="c-num">4m 12s</div>
+      <div class="c-num">¥0.38</div>
+    </div>
+
+    <div class="row run" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZKX2P9</span><span class="agent">release-notes</span></div>
+      <div class="c-status"><span class="dot completed"></span>已完成</div>
+      <div class="c-conv" title="#release · v0.9.2 发布说明">#release · v0.9.2 发布说明</div>
+      <div class="c-model">MiniMax-M2</div>
+      <div class="c-num">2m 51s</div>
+      <div class="c-num">¥0.12</div>
+    </div>
+
+    <div class="row run" role="option" aria-selected="true" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZKR8T4</span><span class="agent">reviewer-bot</span></div>
+      <div class="c-status"><span class="dot completed"></span>已完成</div>
+      <div class="c-conv" title="PR #271 · store: split routes.go">PR #271 · store: split routes.go</div>
+      <div class="c-model">claude-opus-5</div>
+      <div class="c-num">6m 03s</div>
+      <div class="c-num">¥0.71</div>
+    </div>
+
+    <div class="row run ended" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZK9A1M</span><span class="agent">migrate-helper</span></div>
+      <div class="c-status"><span class="dot failed"></span>失败</div>
+      <div class="c-conv" title="#backend · 迁移 0042 回滚">#backend · 迁移 0042 回滚</div>
+      <div class="c-model">gpt-5-codex</div>
+      <div class="c-num">0m 48s</div>
+      <div class="c-num">¥0.05</div>
+    </div>
+
+    <div class="row run" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZJH6W2</span><span class="agent">reviewer-bot</span></div>
+      <div class="c-status"><span class="dot queued"></span>等待调度</div>
+      <div class="c-conv" title="#frontend · 对话页 assistant-ui 接入">#frontend · 对话页 assistant-ui 接入</div>
+      <div class="c-model">claude-opus-5</div>
+      <div class="c-num">—</div>
+      <div class="c-num">—</div>
+    </div>
+
+    <div class="row run" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZJ3C5N</span><span class="agent">docs-writer</span></div>
+      <div class="c-status"><span class="dot completed"></span>已完成</div>
+      <div class="c-conv" title="#docs · CONTRIBUTING 补充 e2b 章节">#docs · CONTRIBUTING 补充 e2b 章节</div>
+      <div class="c-model">MiniMax-M2</div>
+      <div class="c-num">1m 37s</div>
+      <div class="c-num">¥0.06</div>
+    </div>
+
+    <div class="row run ended" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZHT0X8</span><span class="agent">migrate-helper</span></div>
+      <div class="c-status"><span class="dot cancelled"></span>已取消</div>
+      <div class="c-conv" title="#backend · sqlc 重新生成">#backend · sqlc 重新生成</div>
+      <div class="c-model">gpt-5-codex</div>
+      <div class="c-num">0m 12s</div>
+      <div class="c-num">¥0.01</div>
+    </div>
+
+    <div class="row run" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZH2R9Q</span><span class="agent">reviewer-bot</span></div>
+      <div class="c-status"><span class="dot completed"></span>已完成</div>
+      <div class="c-conv" title="PR #268 · web: marketplace tab filter">PR #268 · web: marketplace tab filter</div>
+      <div class="c-model">claude-opus-5</div>
+      <div class="c-num">3m 44s</div>
+      <div class="c-num">¥0.42</div>
+    </div>
+
+    <div class="row run ended" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZGF4K7</span><span class="agent">release-notes</span></div>
+      <div class="c-status"><span class="dot interrupted"></span>已中断</div>
+      <div class="c-conv" title="#release · v0.9.1 发布说明">#release · v0.9.1 发布说明</div>
+      <div class="c-model">MiniMax-M2</div>
+      <div class="c-num">5m 20s</div>
+      <div class="c-num">¥0.19</div>
+    </div>
+
+    <div class="row run" role="option" aria-selected="false" tabindex="0">
+      <div class="c-run"><span class="id">run_01J8ZFQ1B3</span><span class="agent">docs-writer</span></div>
+      <div class="c-status"><span class="dot completed"></span>已完成</div>
+      <div class="c-conv" title="#docs · README 快速开始">#docs · README 快速开始</div>
+      <div class="c-model">MiniMax-M2</div>
+      <div class="c-num">0m 58s</div>
+      <div class="c-num">¥0.03</div>
+    </div>
+  </div>
+
+  <div class="pager">
+    <span class="mono">第 1-10 条,共 128 条</span>
+    <div class="btns">
+      <button class="tbtn" disabled>上一页</button>
+      <button class="tbtn">下一页</button>
+    </div>
+  </div>
+</main>
+
+<aside class="pane" aria-label="Run 详情">
+  <div class="pane-top">
+    <button class="icon-btn" id="theme" aria-label="切换到深色">
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+    <button class="avatar" aria-label="FJ 的账户">FJ</button>
+  </div>
+
+  <div class="pane-body">
+    <h2>run_01J8ZKR8T4</h2>
+    <p class="pane-status">
+      <span class="dot completed"></span>已完成
+      <span class="sep">·</span>reviewer-bot
+      <span class="sep">·</span>来自飞书线程 · PR #271
+    </p>
+
+    <div class="toolbar">
+      <div class="tabs" role="tablist" aria-label="详情分区">
+        <button class="tab" role="tab" aria-selected="true">Overview</button>
+        <button class="tab" role="tab" aria-selected="false">Events</button>
+        <button class="tab" role="tab" aria-selected="false">Steps</button>
+        <button class="tab" role="tab" aria-selected="false">Artifacts</button>
+        <button class="tab" role="tab" aria-selected="false">Permissions</button>
+        <button class="tab" role="tab" aria-selected="false">Audit</button>
+      </div>
+    </div>
+
+    <dl class="facts first">
+      <div><dt>创建</dt><dd class="mono">09:41:02</dd></div>
+      <div><dt>开始</dt><dd class="mono">09:41:05</dd></div>
+      <div><dt>完成</dt><dd class="mono">09:47:08</dd></div>
+      <div><dt>耗时</dt><dd class="mono">6m 03s</dd></div>
+      <div><dt>成本</dt><dd class="mono">¥0.71</dd></div>
+    </dl>
+
+    <h3>运行环境</h3>
+    <dl class="facts">
+      <div><dt>运行节点</dt><dd class="mono">mbp-fanjingluo</dd></div>
+      <div><dt>Agent 引擎</dt><dd>Claude Code</dd></div>
+      <div><dt>运行模式</dt><dd>沙盒 (docker)</dd></div>
+      <div><dt>托管模型</dt><dd class="mono">claude-opus-5</dd></div>
+      <div><dt>工作目录</dt><dd class="mono">~/dev/parsar</dd></div>
+      <div><dt>最近心跳</dt><dd>12 秒前</dd></div>
+    </dl>
+
+    <h3>步骤</h3>
+    <ol class="steps">
+      <li><span class="num">1</span><span>读取 PR #271 的 diff 与评论</span></li>
+      <li><span class="num">2</span><span>搜索 <code>store.go</code> 中的相关调用</span></li>
+      <li><span class="num">3</span><span>修改 3 个文件（<span class="mono">+142 −37</span>）</span></li>
+      <li><span class="num">4</span><span>运行 <code>make check-web</code></span></li>
+      <li><span class="num">5</span><span>推送修订并更新 PR 描述</span></li>
+      <li><span class="num">6</span><span>回帖到飞书线程</span></li>
+    </ol>
+  </div>
+
+  <div class="actions">
+    <button class="tbtn">重试</button>
+    <button class="tbtn" disabled title="已完成的 run 无法取消">取消运行</button>
+    <a class="link" href="#">打开对话
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+    </a>
+  </div>
+</aside>
+
+<script>
+  const root = document.documentElement;
+  const themeBtn = document.getElementById('theme');
+  themeBtn.addEventListener('click', () => {
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    themeBtn.setAttribute('aria-label', next === 'dark' ? '切换到浅色' : '切换到深色');
+  });
+  document.querySelectorAll('[role="tablist"]').forEach(list => {
+    list.addEventListener('click', e => {
+      const tab = e.target.closest('[role="tab"]');
+      if (!tab) return;
+      list.querySelectorAll('[role="tab"]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+    });
+  });
+</script>
+</body>
+</html>

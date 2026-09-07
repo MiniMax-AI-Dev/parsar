@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -10,10 +9,10 @@ import {
   TerminalSquare,
   Wrench,
   X,
-  XCircle,
 } from "lucide-react"
 
-import { cn } from "../../lib/utils"
+import { Button } from "../ui/button"
+import { StatusIcon } from "../ui/status-icon"
 import type { ToolStep } from "../../lib/api-types"
 import type { StreamingStep } from "../../lib/api-conversations"
 
@@ -27,18 +26,8 @@ const TOOL_ICONS: Record<string, typeof TerminalSquare> = {
 }
 
 function ToolIcon({ name }: { name: string }) {
-  const key = name.toLowerCase()
-  const iconClassName = "h-3 w-3 shrink-0 text-fg-subtle"
-  switch (TOOL_ICONS[key]) {
-    case TerminalSquare:
-      return <TerminalSquare className={iconClassName} strokeWidth={2} />
-    case FileText:
-      return <FileText className={iconClassName} strokeWidth={2} />
-    case Search:
-      return <Search className={iconClassName} strokeWidth={2} />
-    default:
-      return <Wrench className={iconClassName} strokeWidth={2} />
-  }
+  const Icon = TOOL_ICONS[name.toLowerCase()] ?? Wrench
+  return <Icon className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
 }
 
 const SUMMARY_MAX = 80
@@ -101,6 +90,11 @@ function useElapsedTicker(active: boolean): number {
   return now
 }
 
+/**
+ * One tool step as a 32px hairline row: status icon, tool icon, the tool
+ * name in ink, its one-line argument summary in muted mono, and the
+ * duration right-aligned. State lives in the icon only.
+ */
 export function StepItem({
   name,
   status,
@@ -117,35 +111,15 @@ export function StepItem({
   const upper = (name || "tool").toUpperCase()
   const summary = detail ? ellipsizeMiddle(detail) : ""
   return (
-    <div className="flex items-center gap-1.5 py-0.5 text-sm">
-      {status === "running" ? (
-        <Loader2 className="h-3 w-3 shrink-0 animate-spin text-info" strokeWidth={2.5} />
-      ) : status === "failed" ? (
-        <XCircle className="h-3 w-3 shrink-0 text-danger" strokeWidth={2.5} />
-      ) : (
-        <CheckCircle2 className="h-3 w-3 shrink-0 text-success" strokeWidth={2.5} />
-      )}
+    <div className="flex h-8 items-center gap-2 border-b border-line text-sm last:border-b-0">
+      <StatusIcon status={status} />
       <ToolIcon name={name} />
-      <span
-        className={cn(
-          "shrink-0 font-medium",
-          status === "running"
-            ? "text-fg-muted"
-            : status === "failed"
-              ? "text-danger-emphasis"
-              : "text-fg-subtle",
-        )}
-      >
-        {upper}
+      <span className="shrink-0 font-medium text-fg">{upper}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted" title={detail}>
+        {summary}
       </span>
-      {summary && (
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle" title={detail}>
-          {summary}
-        </span>
-      )}
-      {!summary && <span className="min-w-0 flex-1" aria-hidden="true" />}
       {durationMs !== undefined && (
-        <span className="shrink-0 tabular-nums text-xs text-fg-faint">
+        <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
           {formatElapsed(durationMs)}
         </span>
       )}
@@ -183,92 +157,56 @@ export function WorkingSteps({
     : null
   const overallMs = firstStart === null ? 0 : (lastEnded ?? now) - firstStart
 
+  const toggleLabel = expanded
+    ? t("conversations.steps.collapseAria")
+    : t("conversations.steps.expandAria")
+  const cancelLabel = t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })
+
   return (
-    <div className="flex w-fit min-w-[240px] flex-col gap-1 rounded-md bg-surface px-3 py-2 text-sm shadow-sm ring-1 ring-slate-200/70">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
+    <div className="text-sm">
+      <div className="flex h-8 items-center gap-2 border-b border-line">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="-ml-1.5 h-6 w-6"
           aria-expanded={expanded}
-          aria-label={
-            expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")
-          }
+          aria-label={toggleLabel}
           onClick={() => setExpanded((v) => !v)}
-          className="flex shrink-0 items-center text-fg-faint transition-colors hover:text-fg-muted"
         >
-          {expanded ? (
-            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.2} />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.2} />
-          )}
-        </button>
-        <div className="min-w-0 flex-1">
-          {active ? (
-            <div className="flex items-center gap-2 text-sm">
-              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-info" strokeWidth={2.5} />
-              <span className="font-medium text-fg-muted">{t("conversations.steps.working")}</span>
-              {completedCount > 0 && (
-                <span className="text-fg-subtle">
-                  {t("conversations.steps.completedInline", {
-                    count: completedCount,
-                    defaultValue: "{{count}} completed",
-                  })}
-                </span>
-              )}
-              {runningCount > 0 && (
-                <span className="text-info">
-                  {t("conversations.steps.runningInline", {
-                    count: runningCount,
-                    defaultValue: "{{count}} running",
-                  })}
-                </span>
-              )}
-            </div>
-          ) : total > 0 ? (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-fg-muted">
-                {t("conversations.steps.totalLabel", {
-                  count: total,
-                  defaultValue: "{{count}} steps",
-                })}
-              </span>
-              {completedCount > 0 && (
-                <span className="text-success">
-                  {t("conversations.steps.doneInline", {
-                    count: completedCount,
-                    defaultValue: "{{count}} done",
-                  })}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-fg-subtle">
-              <Loader2 className="h-3 w-3 animate-spin text-info" strokeWidth={2.5} />
-              <span>{t("conversations.steps.working")}</span>
-            </div>
-          )}
-        </div>
+          {expanded ? <ChevronDown strokeWidth={1.5} /> : <ChevronRight strokeWidth={1.5} />}
+        </Button>
+        {active && <StatusIcon status="running" />}
+        <span className="font-medium text-fg">
+          {active
+            ? t("conversations.steps.working")
+            : t("conversations.steps.totalLabel", { count: total, defaultValue: "{{count}} steps" })}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+          {active && completedCount > 0 &&
+            t("conversations.steps.completedInline", { count: completedCount, defaultValue: "{{count}} completed" })}
+          {active && completedCount > 0 && runningCount > 0 && " · "}
+          {active && runningCount > 0 &&
+            t("conversations.steps.runningInline", { count: runningCount, defaultValue: "{{count}} running" })}
+          {!active && completedCount > 0 &&
+            t("conversations.steps.doneInline", { count: completedCount, defaultValue: "{{count}} done" })}
+        </span>
         {overallMs > 0 && (
-          <span className="shrink-0 tabular-nums text-xs text-fg-faint">
+          <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
             {formatElapsed(overallMs)}
           </span>
         )}
         {onCancel && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             onClick={onCancel}
             disabled={cancelling}
-            aria-label={t("conversations.steps.cancelAria", {
-              defaultValue: "Cancel current task",
-            })}
-            title={t("conversations.steps.cancelAria", { defaultValue: "Cancel current task" })}
-            className="rounded p-0.5 text-fg-faint transition-colors hover:bg-surface-muted hover:text-danger disabled:opacity-40"
+            aria-label={cancelLabel}
+            title={cancelLabel}
           >
-            {cancelling ? (
-              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
-            ) : (
-              <X className="h-3 w-3" strokeWidth={2.5} />
-            )}
-          </button>
+            {cancelling ? <Loader2 className="animate-spin" strokeWidth={1.5} /> : <X strokeWidth={1.5} />}
+          </Button>
         )}
       </div>
 
@@ -282,25 +220,20 @@ export function WorkingSteps({
         />
       )}
 
-      {expanded && total > 0 && (
-        <div className="mt-0.5 space-y-0 border-l border-line pl-2">
-          {steps.map((s) => {
-            const isRunning = s.status === "running"
-            const baseMs = isRunning
-              ? now - s.started_at
-              : (s.ended_at ?? s.started_at) - s.started_at
-            return (
-              <StepItem
-                key={s.tool_call_id}
-                name={s.name}
-                status={s.status}
-                detail={summarizeArgs(s.name, s.args)}
-                durationMs={Math.max(0, baseMs)}
-              />
-            )
-          })}
-        </div>
-      )}
+      {expanded &&
+        steps.map((s) => {
+          const isRunning = s.status === "running"
+          const baseMs = isRunning ? now - s.started_at : (s.ended_at ?? s.started_at) - s.started_at
+          return (
+            <StepItem
+              key={s.tool_call_id}
+              name={s.name}
+              status={s.status}
+              detail={summarizeArgs(s.name, s.args)}
+              durationMs={Math.max(0, baseMs)}
+            />
+          )
+        })}
     </div>
   )
 }
@@ -313,24 +246,18 @@ export function StepTrace({ steps }: { steps: ToolStep[] }) {
 
   return (
     <div className="mt-2">
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2"
         aria-expanded={expanded}
-        aria-label={
-          expanded ? t("conversations.steps.collapseAria") : t("conversations.steps.expandAria")
-        }
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg-muted"
       >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3" strokeWidth={2.2} />
-        ) : (
-          <ChevronRight className="h-3 w-3" strokeWidth={2.2} />
-        )}
+        {expanded ? <ChevronDown strokeWidth={1.5} /> : <ChevronRight strokeWidth={1.5} />}
         {t("conversations.steps.traceLabel", { count: steps.length })}
-      </button>
+      </Button>
       {expanded && (
-        <div className="mt-1 space-y-0 border-l border-line pl-3">
+        <div className="mt-1 border-t border-line">
           {steps.map((step, i) => (
             <StepItem
               key={step.tool_call_id || i}

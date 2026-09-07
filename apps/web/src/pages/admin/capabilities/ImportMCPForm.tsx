@@ -10,6 +10,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { Label } from "../../../components/ui/label"
+import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
+import { Textarea } from "../../../components/ui/textarea"
 import { ApiError } from "../../../lib/api-client"
 import { useImportPreviewMutation } from "./api"
 import { EnvCredentialPicker } from "./EnvCredentialPicker"
@@ -139,9 +142,19 @@ export function ImportMCPForm({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,1fr)]">
       {/* ---- LEFT: raw input ---- */}
-      <div className="min-w-0 space-y-2">
-        <FormatPicker value={format} onChange={setFormat} />
-        <textarea
+      <div className="min-w-0">
+        <div className="mb-2 flex items-center gap-2">
+          <Label className="mb-0">{t("capabilities.import.mcp.format", "Format")}</Label>
+          <Tabs value={format} onValueChange={(next) => setFormat(next as SourceFormat)}>
+            <TabsList>
+              <TabsTrigger value="json">JSON</TabsTrigger>
+              <TabsTrigger value="toml">TOML</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        <Textarea
+          id="import-mcp-source"
+          aria-label={t("capabilities.import.tab.mcp", "MCP")}
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           rows={20}
@@ -156,12 +169,12 @@ export function ImportMCPForm({
                   `{\n  "mcpServers": {\n    "github": {\n      "command": "docker",\n      "args": ["run", "-i", "ghcr.io/github/github-mcp-server"],\n      "env": {\n        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxx"\n      }\n    }\n  }\n}`,
                 )
           }
-          className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
+          className="font-mono text-xs"
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
         />
-        <p className="text-xs text-fg-subtle">
+        <p className="mt-1 text-xs text-fg-muted">
           {t(
             "capabilities.import.mcp.pasteHelp",
             "Supports Claude Code (env) / OpenCode (environment) JSON and Codex TOML. You can also paste just the inner mcpServers object.",
@@ -170,7 +183,7 @@ export function ImportMCPForm({
       </div>
 
       {/* ---- RIGHT: parsed preview ---- */}
-      <div className="min-w-0 space-y-3">
+      <div className="min-w-0 space-y-4 lg:pt-9">
         <ImportPreview
           status={status as "idle" | "loading" | "error" | "ready"}
           errorMessage={errorMessage}
@@ -180,9 +193,9 @@ export function ImportMCPForm({
         />
 
         {status === "ready" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {servers.map((srv) => (
-              <ServerCard
+              <ServerSection
                 key={srv.name}
                 workspaceID={workspaceID}
                 server={srv}
@@ -227,47 +240,6 @@ export function ImportMCPForm({
   )
 }
 
-function FormatPicker({
-  value,
-  onChange,
-}: {
-  value: SourceFormat
-  onChange: (f: SourceFormat) => void
-}) {
-  const { t } = useTranslation("admin")
-  const options: { value: SourceFormat; label: string }[] = [
-    { value: "json", label: "JSON" },
-    { value: "toml", label: "TOML" },
-  ]
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="font-medium text-fg-muted">
-        {t("capabilities.import.mcp.format", "Format")}
-      </span>
-      <div className="flex overflow-hidden rounded-md border border-line bg-surface-subtle">
-        {options.map((opt) => {
-          const active = opt.value === value
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onChange(opt.value)}
-              className={`h-7 px-2.5 text-xs transition-colors ${
-                active
-                  ? "bg-surface text-fg shadow-inner"
-                  : "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted"
-              }`}
-              aria-pressed={active}
-            >
-              {opt.label}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 function startsWithEnvPlaceholder(value: string | undefined): boolean {
   return (value ?? "").trimStart().startsWith("$")
 }
@@ -303,7 +275,8 @@ function needsEnvCredentialHandling(value: CanonicalEnvValue): boolean {
   return startsWithEnvPlaceholder(value.literal)
 }
 
-function ServerCard({
+/** One parsed server: a hairline-separated head plus its credential rows. */
+function ServerSection({
   workspaceID,
   server,
   inlineSecrets,
@@ -327,21 +300,19 @@ function ServerCard({
     inlineSecrets.find((s) => s.server_name === server.name && s.env_key === envKey)?.plaintext
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-lg border border-line bg-surface p-3">
-      <header className="flex min-w-0 flex-col gap-1 border-b border-line-muted pb-2">
-        <h4 className="text-sm font-semibold text-fg">{server.name}</h4>
-        <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-xs text-fg-subtle">
-          {server.command}
-          {server.args && server.args.length > 0 ? ` ${server.args.join(" ")}` : ""}
-        </code>
-      </header>
+    <section className="min-w-0 border-t border-line pt-3">
+      <h4 className="text-sm font-medium text-fg">{server.name}</h4>
+      <code className="block max-w-full whitespace-pre-wrap break-all font-mono text-xs text-fg-muted">
+        {server.command}
+        {server.args && server.args.length > 0 ? ` ${server.args.join(" ")}` : ""}
+      </code>
 
       {credentialEnvEntries.length === 0 ? (
-        <p className="mt-2 text-sm text-fg-subtle">
+        <p className="mt-2 text-sm text-fg-muted">
           {t("capabilities.import.envEmpty.noCredentialPlaceholders", "No credential placeholders to fill")}
         </p>
       ) : (
-        <div className="mt-2 space-y-2">
+        <div className="mt-3 space-y-4">
           {credentialEnvEntries.map(([key, ev]) => (
             <EnvCredentialPicker
               key={key}

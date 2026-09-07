@@ -15,13 +15,16 @@ interface ActionIconButtonProps
   stopPropagation?: boolean
 }
 
+/* Tone never colours the resting icon (state lives in icons that mean
+   status, not in action buttons); danger only tints the hover. */
 const toneClasses: Record<ActionTone, string> = {
-  neutral: "text-fg-subtle hover:bg-surface-muted hover:text-fg",
-  primary: "text-fg-muted hover:bg-surface-muted hover:text-fg",
-  success: "text-success hover:bg-success-subtle hover:text-success-emphasis",
-  danger: "text-fg-subtle hover:bg-danger-subtle hover:text-danger-emphasis",
+  neutral: "text-fg-muted hover:app-hover hover:text-fg",
+  primary: "text-fg-muted hover:app-hover hover:text-fg",
+  success: "text-fg-muted hover:app-hover hover:text-fg",
+  danger: "text-fg-muted hover:app-hover hover:text-status-failed",
 }
 
+/** 28px ghost icon button with a tooltip label; the row-action idiom. */
 export function ActionIconButton({
   icon: Icon,
   label,
@@ -45,7 +48,7 @@ export function ActionIconButton({
             aria-label={label}
             disabled={disabled || busy}
             className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-45",
+              "inline-flex h-7 w-7 items-center justify-center rounded-md active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-50",
               toneClasses[tone],
               className,
             )}
@@ -55,30 +58,58 @@ export function ActionIconButton({
             }}
             {...props}
           >
-            <CurrentIcon className={cn("h-3.5 w-3.5", busy && "animate-spin")} strokeWidth={1.8} />
+            <CurrentIcon className={cn("h-3.5 w-3.5", busy && "animate-spin")} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </span>
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content className="z-50 rounded-md border border-line bg-surface px-2 py-1 text-sm text-fg-muted shadow-md">
+        <Tooltip.Content
+          sideOffset={4}
+          className="app-shadow-floating z-50 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-fg animate-pop-in data-[state=closed]:animate-pop-out"
+        >
           {label}
-          <Tooltip.Arrow className="fill-white" />
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
   )
 }
 
+/**
+ * Row action cluster. Inside a `LedgerRow` (a `group`) it floats over the
+ * row's right end, invisible until the row is hovered or focused, so the
+ * last content column of every ledger ends on the same edge and rows read
+ * as content, not as toolbars; pass `always` to keep it visible.
+ */
 export function RowActions({
   children,
   className,
+  always = false,
+  inline = false,
 }: {
   children: React.ReactNode
   className?: string
+  always?: boolean
+  /** Stay in flow and visible: for rows whose actions belong to a form control (rename, confirm). */
+  inline?: boolean
 }) {
   return (
     <Tooltip.Provider delayDuration={150}>
-      <div className={cn("flex min-h-7 items-center justify-end gap-1", className)}>
+      <div
+        className={cn(
+          "flex min-h-7 items-center justify-end gap-0.5",
+          !inline &&
+            "group-[.grid]:absolute group-[.grid]:right-4 group-[.grid]:top-1/2 group-[.grid]:-translate-y-1/2 group-[.grid]:rounded-md group-[.grid]:app-hover-solid group-[.grid]:px-0.5",
+          // Reveal on hover and on KEYBOARD focus only. A mouse click leaves
+          // :focus on the row, so focus-within would pin the cluster open
+          // long after the pointer left — and every row the focus passed
+          // through would keep its actions showing. :focus-visible does not
+          // match a mouse click, so the row goes quiet again.
+          !always &&
+            !inline &&
+            "opacity-0 transition-opacity duration-150 ease-settle group-hover:opacity-100 group-focus-visible:opacity-100 group-has-[:focus-visible]:opacity-100 has-[:focus-visible]:opacity-100",
+          className,
+        )}
+      >
         {children}
       </div>
     </Tooltip.Provider>

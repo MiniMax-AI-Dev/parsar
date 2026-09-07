@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, Copy, X } from "lucide-react"
+import { Check, Copy, Loader2, X } from "lucide-react"
 
 import { Button } from "../ui/button"
 import {
@@ -11,6 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog"
+import { Field } from "../ui/label"
+import { Input } from "../ui/input"
+import { StatusIcon } from "../ui/status-icon"
+import { InlineError } from "../runtime/InlineError"
 import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
 import { copyText } from "../../lib/clipboard"
@@ -29,6 +33,7 @@ interface PairDaemonDialogProps {
 
 export function PairDaemonDialog({ open, onClose, workspaceID, onPaired }: PairDaemonDialogProps) {
   const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
   const create = useCreateRuntimePairing(workspaceID)
   // Prefer the server's configured public URL (PARSAR_PUBLIC_URL) over the
   // browser origin so the minted command is correct even when the admin
@@ -105,30 +110,32 @@ export function PairDaemonDialog({ open, onClose, workspaceID, onPaired }: PairD
         </DialogHeader>
 
         {!result ? (
-          <div className="space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1 block text-fg-muted">
-                {t("runtime.agentDaemon.pair.nameLabel", { defaultValue: "Device name" })}
-              </span>
-              <input
-                className="w-full rounded border border-line-strong px-2 py-1 font-mono text-sm"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="my-laptop"
-                data-testid="agent-daemon-pair-name"
-              />
-            </label>
-            <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
-              <p className="mb-1 font-medium">
-                {t("runtime.agentDaemon.pair.safetyTitle", {
-                  defaultValue: "How the connection works",
-                })}
-              </p>
-              <ul className="space-y-1 pl-4">
+          <>
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void submit()
+              }}
+            >
+              <Field
+                label={t("runtime.agentDaemon.pair.nameLabel", { defaultValue: "Device name" })}
+                htmlFor="agent-daemon-pair-name"
+              >
+                <Input
+                  id="agent-daemon-pair-name"
+                  className="font-mono"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="my-laptop"
+                  autoFocus
+                  data-testid="agent-daemon-pair-name"
+                />
+              </Field>
+              <ul className="m-0 flex list-disc flex-col gap-0.5 pl-4 text-xs text-fg-muted">
                 <li>
                   {t("runtime.agentDaemon.pair.safetyOutbound", {
-                    defaultValue:
-                      "This host opens an outbound connection — no inbound ports required.",
+                    defaultValue: "This host opens an outbound connection — no inbound ports required.",
                   })}
                 </li>
                 <li>
@@ -138,80 +145,64 @@ export function PairDaemonDialog({ open, onClose, workspaceID, onPaired }: PairD
                 </li>
                 <li>
                   {t("runtime.agentDaemon.pair.safetyOnce", {
-                    defaultValue:
-                      "The token is shown once — it cannot be recovered after this dialog closes.",
+                    defaultValue: "The token is shown once — it cannot be recovered after this dialog closes.",
                   })}
                 </li>
               </ul>
-            </div>
-            {create.error && (
-              <p className="text-sm text-danger">{(create.error as Error).message}</p>
-            )}
+              {create.error && <InlineError>{(create.error as Error).message}</InlineError>}
+            </form>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={close}>
-                {t("common.actions.cancel", { defaultValue: "Cancel" })}
+              <Button variant="outline" onClick={close}>
+                {tc("actions.cancel")}
               </Button>
               <Button
-                size="sm"
                 disabled={!name.trim() || create.isPending}
                 onClick={() => void submit()}
                 data-testid="agent-daemon-pair-submit"
               >
+                {create.isPending && <Loader2 className="animate-spin" />}
                 {create.isPending
-                  ? t("runtime.agentDaemon.pair.minting", {
-                      defaultValue: "Generating…",
-                    })
-                  : t("runtime.agentDaemon.pair.mint", {
-                      defaultValue: "Generate connection command",
-                    })}
+                  ? t("runtime.agentDaemon.pair.minting", { defaultValue: "Generating…" })
+                  : t("runtime.agentDaemon.pair.mint", { defaultValue: "Generate connection command" })}
               </Button>
             </DialogFooter>
-          </div>
+          </>
         ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-success">
-              {t("runtime.agentDaemon.pair.successOneLine", {
-                defaultValue:
-                  "Run this one command on {{name}} to connect (it downloads and connects automatically — no binary to install manually):",
-                name: result.runtimeName,
-              })}
-            </p>
-            <DaemonCommandBlock
-              command={buildOneLineCommand(result.token, result.runtimeName, serverPublicURL)}
-              label={t("runtime.agentDaemon.pair.oneLineLabel", {
-                defaultValue: "Copy and run on the target machine",
-              })}
-              description={t("runtime.agentDaemon.pair.oneLineHint", {
-                defaultValue:
-                  "The target machine must have one of Claude Code / OpenCode / Codex installed. Once connected, this device flips to “Online”.",
-              })}
-              testId="agent-daemon-pair-copy-oneline"
-            />
-            <div className="flex items-center gap-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm">
-              {connected ? (
-                <>
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-success" />
-                  <span className="text-success">
-                    {t("runtime.agentDaemon.pair.connected", { defaultValue: "Device connected" })}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-warning" />
-                  <span className="text-fg-muted">
-                    {t("runtime.agentDaemon.pair.waitingConnection", {
+          <>
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-fg">
+                {t("runtime.agentDaemon.pair.successOneLine", {
+                  defaultValue:
+                    "Run this one command on {{name}} to connect (it downloads and connects automatically — no binary to install manually):",
+                  name: result.runtimeName,
+                })}
+              </p>
+              <DaemonCommandBlock
+                command={buildOneLineCommand(result.token, result.runtimeName, serverPublicURL)}
+                label={t("runtime.agentDaemon.pair.oneLineLabel", {
+                  defaultValue: "Copy and run on the target machine",
+                })}
+                description={t("runtime.agentDaemon.pair.oneLineHint", {
+                  defaultValue:
+                    "The target machine must have one of Claude Code / OpenCode / Codex installed. Once connected, this device flips to “Online”.",
+                })}
+                testId="agent-daemon-pair-copy-oneline"
+              />
+              <p className="flex h-8 items-center gap-2 border-t border-line text-sm text-fg" role="status">
+                <StatusIcon status={connected ? "completed" : "running"} />
+                {connected
+                  ? t("runtime.agentDaemon.pair.connected", { defaultValue: "Device connected" })
+                  : t("runtime.agentDaemon.pair.waitingConnection", {
                       defaultValue: "Waiting for the device to connect…",
                     })}
-                  </span>
-                </>
-              )}
+              </p>
             </div>
             <DialogFooter>
-              <Button size="sm" onClick={close} data-testid="agent-daemon-pair-done">
-                {t("common.actions.done", { defaultValue: "Done" })}
+              <Button onClick={close} data-testid="agent-daemon-pair-done">
+                {tc("actions.done")}
               </Button>
             </DialogFooter>
-          </div>
+          </>
         )}
       </DialogContent>
     </Dialog>
@@ -239,38 +230,34 @@ function DaemonCommandBlock({
   }
 
   return (
-    <div className="rounded-md border border-line bg-surface-subtle p-3 text-xs text-fg-muted">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-medium text-fg-emphasis">{label}</p>
-          <p className="mt-0.5 text-xs text-fg-subtle">{description}</p>
-        </div>
-        <button
-          type="button"
+    <div>
+      <div className="flex h-7 items-center justify-between gap-2">
+        <span className="text-xs font-medium text-fg">{label}</span>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => void copyCommand()}
-          className="inline-flex shrink-0 items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-xs text-fg-muted hover:bg-surface-muted"
           data-testid={testId}
           title={t("runtime.agentDaemon.pair.copyCommand", { defaultValue: "Copy command" })}
         >
           {copyStatus === "copied" ? (
-            <Check className="h-3 w-3 text-success" />
+            <Check strokeWidth={1.5} aria-hidden="true" />
           ) : copyStatus === "failed" ? (
-            <X className="h-3 w-3 text-danger" />
+            <X strokeWidth={1.5} aria-hidden="true" />
           ) : (
-            <Copy className="h-3 w-3" />
+            <Copy strokeWidth={1.5} aria-hidden="true" />
           )}
           {copyStatus === "copied"
             ? t("runtime.agentDaemon.pair.copied", { defaultValue: "Copied" })
             : copyStatus === "failed"
-              ? t("runtime.agentDaemon.pair.copyFailed", {
-                  defaultValue: "Select the command below",
-                })
+              ? t("runtime.agentDaemon.pair.copyFailed", { defaultValue: "Select the command below" })
               : t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
-        </button>
+        </Button>
       </div>
-      <code className="block break-all rounded bg-surface p-2 font-mono text-xs leading-relaxed text-fg-emphasis">
+      <pre className="m-0 mt-1 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
         {command}
-      </code>
+      </pre>
+      <p className="mt-1 text-xs text-fg-muted">{description}</p>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import QRCode from "qrcode"
 import { ExternalLink, Loader2, QrCode, RefreshCw } from "lucide-react"
@@ -9,7 +9,10 @@ import {
   usePollWorkspaceFeishuProvisioning,
   type FeishuConnectorInput,
 } from "../../../lib/api-connectors"
-import { Card, ProvisionStatusIcon } from "./shared"
+import { Button } from "../../ui/button"
+import { PropertyList, Property } from "../../ui/property-list"
+import { InlineError } from "../../runtime/InlineError"
+import { FormSection, ProvisionStatusIcon } from "./shared"
 
 const EMPTY_CONFIG: FeishuConnectorInput = {
   enabled: false,
@@ -38,6 +41,8 @@ export interface FeishuConnectorFieldsProps {
   masterKeyConfigured?: boolean
   canEdit: boolean
   onToast: (msg: string) => void
+  /** State chip rendered in the section head. */
+  status?: ReactNode
 }
 
 export function FeishuConnectorFields({
@@ -46,6 +51,7 @@ export function FeishuConnectorFields({
   masterKeyConfigured,
   canEdit,
   onToast,
+  status,
 }: FeishuConnectorFieldsProps) {
   const currentConfig = current ?? EMPTY_CONFIG
   return (
@@ -56,6 +62,7 @@ export function FeishuConnectorFields({
       masterKeyConfigured={masterKeyConfigured}
       canEdit={canEdit}
       onToast={onToast}
+      status={status}
     />
   )
 }
@@ -66,6 +73,7 @@ function FeishuConnectorFieldsInner({
   masterKeyConfigured,
   canEdit,
   onToast,
+  status,
 }: FeishuConnectorFieldsProps & { current: FeishuConnectorInput }) {
   const { t } = useTranslation("admin")
   const beginProvisionMut = useBeginWorkspaceFeishuProvisioning(workspaceID)
@@ -153,10 +161,11 @@ function FeishuConnectorFieldsInner({
           return
         }
         try {
+          // The QR must stay black-on-white for phone cameras regardless of theme.
           const qrDataUrl = await QRCode.toDataURL(begin.verification_uri_complete, {
             width: 224,
             margin: 2,
-            color: { dark: "#020617", light: "#ffffff" },
+            color: { dark: "#000000", light: "#ffffff" },
           })
           setProvision({
             deviceCode: begin.device_code,
@@ -187,104 +196,85 @@ function FeishuConnectorFieldsInner({
   const busy = beginProvisionMut.isPending || pollProvisionPending
 
   return (
-    <Card
-      title={t("connections.connector.feishu.title")}
-      description={t("connections.connector.feishu.description")}
-    >
+    <FormSection title={t("connections.connector.feishu.title")} status={status}>
       {masterKeyMissing && (
-        <p className="mb-3 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
-          {t("connections.connector.feishu.masterKeyMissing")}
-        </p>
+        <InlineError>{t("connections.connector.feishu.masterKeyMissing")}</InlineError>
       )}
-      <div className="rounded-md border border-line bg-surface-subtle p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <QrCode className="h-4 w-4 text-fg-muted" strokeWidth={1.75} />
-            <div>
-              <p className="text-sm font-medium text-fg">
-                {provisionConnected
-                  ? t("connections.connector.feishu.provision.connected")
-                  : t("connections.connector.feishu.provision.title")}
-              </p>
-              <p className="text-sm text-fg-subtle">
-                {provisionConnected
-                  ? t("connections.connector.feishu.provision.connectedSubtitle")
-                  : t("connections.connector.feishu.provision.subtitle")}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onBeginProvision}
-            disabled={!canEdit || masterKeyMissing || busy || provision?.status === "pending"}
-            className="inline-flex items-center gap-2 rounded-md bg-surface-emphasis px-3 py-1.5 text-sm font-medium text-white hover:bg-surface-emphasis disabled:opacity-60"
-            data-testid="feishu-provision-begin-button"
-          >
-            {busy
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              : provisionConnected
-                ? <RefreshCw className="h-3.5 w-3.5" />
-                : <QrCode className="h-3.5 w-3.5" />}
-            {provisionConnected
-              ? t("connections.connector.feishu.provision.reconnect")
-              : t("connections.connector.feishu.provision.start")}
-          </button>
-        </div>
 
-        {provision && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr]">
-            {provision.qrDataUrl && provision.status === "pending" && (
-              <img
-                src={provision.qrDataUrl}
-                alt={t("connections.connector.feishu.provision.qrAlt")}
-                className="h-40 w-40 rounded-md border border-line bg-surface p-2"
-                data-testid="feishu-provision-qr"
-              />
-            )}
-            <div className="min-w-0 space-y-2 text-sm text-fg-muted">
-              <ProvisionStatusIcon
-                status={provision.status}
-                loading={pollProvisionPending}
-                labels={{
-                  waiting: t("connections.connector.feishu.provision.status.waiting"),
-                  connected: t("connections.connector.feishu.provision.status.connected"),
-                  stopped: t("connections.connector.feishu.provision.status.stopped"),
-                }}
-              />
-              <p className="font-mono text-sm text-fg-emphasis">{provision.userCode}</p>
-              <a
-                href={provision.verificationUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex max-w-full items-center gap-1 text-sm text-fg-muted underline underline-offset-2"
-              >
-                <span className="truncate">{t("connections.connector.feishu.provision.openLink")}</span>
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-              </a>
-              {provision.status === "pending" && (
-                <p className="inline-flex items-center gap-1 text-fg-subtle">
-                  {t("connections.connector.feishu.provision.pending")}
-                </p>
-              )}
-              {provision.message && (
-                <p className={provision.status === "success" ? "text-success" : "text-danger"}>
-                  {provision.message}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+      <div className="flex h-8 items-center gap-2 border-b border-line text-sm text-fg">
+        <QrCode className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">
+          {provisionConnected
+            ? t("connections.connector.feishu.provision.connected")
+            : t("connections.connector.feishu.provision.title")}
+        </span>
+        <Button
+          size="sm"
+          variant={provisionConnected ? "outline" : "default"}
+          onClick={onBeginProvision}
+          disabled={!canEdit || masterKeyMissing || busy || provision?.status === "pending"}
+          data-testid="feishu-provision-begin-button"
+        >
+          {busy
+            ? <Loader2 className="animate-spin" />
+            : provisionConnected
+              ? <RefreshCw strokeWidth={1.5} aria-hidden="true" />
+              : <QrCode strokeWidth={1.5} aria-hidden="true" />}
+          {provisionConnected
+            ? t("connections.connector.feishu.provision.reconnect")
+            : t("connections.connector.feishu.provision.start")}
+        </Button>
       </div>
 
-      {!canEdit && (
-        <p className="mt-3 text-sm text-fg-faint">{t("connections.connector.adminOnly")}</p>
+      {connected && (
+        <PropertyList>
+          <Property label="App ID" mono>{current.app_id}</Property>
+          {current.bot_open_id && <Property label="Bot" mono>{current.bot_open_id}</Property>}
+        </PropertyList>
       )}
-      {errorMsg && (
-        <p className="mt-3 text-sm text-danger" role="alert" data-testid="feishu-error">
-          {errorMsg}
-        </p>
+
+      {provision && (
+        <div className="flex gap-4">
+          {provision.qrDataUrl && provision.status === "pending" && (
+            <img
+              src={provision.qrDataUrl}
+              alt={t("connections.connector.feishu.provision.qrAlt")}
+              width={160}
+              height={160}
+              className="h-40 w-40 shrink-0 rounded-md border border-line"
+              data-testid="feishu-provision-qr"
+            />
+          )}
+          <div className="flex min-w-0 flex-col gap-2">
+            <ProvisionStatusIcon
+              status={provision.status}
+              loading={pollProvisionPending}
+              labels={{
+                waiting: t("connections.connector.feishu.provision.status.waiting"),
+                connected: t("connections.connector.feishu.provision.status.connected"),
+                stopped: t("connections.connector.feishu.provision.status.stopped"),
+              }}
+            />
+            {/* The pairing code is the one thing read across a room: mono, 20px. */}
+            <p className="font-mono text-xl tabular-nums text-fg">{provision.userCode}</p>
+            <Button asChild variant="link" size="sm" className="self-start px-0">
+              <a href={provision.verificationUrl} target="_blank" rel="noreferrer">
+                {t("connections.connector.feishu.provision.openLink")}
+                <ExternalLink strokeWidth={1.5} aria-hidden="true" />
+              </a>
+            </Button>
+            {provision.message && (
+              provision.status === "success"
+                ? <p className="text-sm text-fg">{provision.message}</p>
+                : <InlineError>{provision.message}</InlineError>
+            )}
+          </div>
+        </div>
       )}
-    </Card>
+
+      {!canEdit && <p className="text-xs text-fg-muted">{t("connections.connector.adminOnly")}</p>}
+      {errorMsg && <InlineError data-testid="feishu-error">{errorMsg}</InlineError>}
+    </FormSection>
   )
 }
 
@@ -297,5 +287,5 @@ function configKey(config: FeishuConnectorInput): string {
     config.encrypt_key_ref,
     config.bot_open_id,
     config.event_mode,
-  ].join("\u0000")
+  ].join(" ")
 }

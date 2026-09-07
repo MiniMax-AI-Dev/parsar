@@ -82,3 +82,4 @@ semantic-review/
 # parsar-daemon / parsar are compiled on the host and COPY'd in by
 # infra/sandbox/e2b.Dockerfile. Build artefacts, never committed.
 infra/sandbox/.build/
+apps/web/src/i18n/locales/.i18n.lock

@@ -1,12 +1,15 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronRight, X } from "lucide-react"
+import { ChevronDown, X } from "lucide-react"
 
+import { Button } from "../ui/button"
+import { StatusIcon, type StatusKind } from "../ui/status-icon"
 import type {
   ConnectivityCheck,
   ConnectivityCheckCategory,
   ConnectivityResult,
 } from "../../lib/api-runtime"
+import { cn } from "../../lib/utils"
 
 interface ConnectivityResultPanelProps {
   result: ConnectivityResult
@@ -30,132 +33,111 @@ function nextStepsKey(cat: ConnectivityCheckCategory): NextStepsKey {
   return `runtime.connectivity.nextSteps.${cat}` as const
 }
 
-export function ConnectivityResultPanel({
-  result,
-  checkLabelFor,
-  onDismiss,
-}: ConnectivityResultPanelProps) {
-  const { t } = useTranslation("admin")
-  const [expanded, setExpanded] = useState<boolean>(result.overall !== "pass")
+const STATUS_FOR_OVERALL: Record<ConnectivityResult["overall"], StatusKind> = {
+  pass: "completed",
+  partial: "interrupted",
+  fail: "failed",
+}
 
-  useEffect(() => {
-    setExpanded(result.overall !== "pass")
-  }, [result.started_at, result.overall])
+/** The summary copy carries a leading glyph; the status icon already says it. */
+function stripLeadingGlyph(s: string): string {
+  return s.replace(/^[^\p{L}\p{N}]+/u, "")
+}
+
+/**
+ * Result of a connectivity test: a 32px summary row (status icon, ink
+ * sentence, collapse toggle, dismiss), then one hairline row per check and
+ * the raw error output in a mono `pre` on the muted tone.
+ */
+export function ConnectivityResultPanel({ result, checkLabelFor, onDismiss }: ConnectivityResultPanelProps) {
+  const { t } = useTranslation("admin")
+  // A new result (new started_at) resets the disclosure: open unless it passed.
+  const resultKey = `${result.started_at}:${result.overall}`
+  const [expandedFor, setExpandedFor] = useState<{ key: string; open: boolean } | null>(null)
+  const expanded = expandedFor?.key === resultKey ? expandedFor.open : result.overall !== "pass"
+  const setExpanded = (update: (prev: boolean) => boolean) =>
+    setExpandedFor({ key: resultKey, open: update(expanded) })
 
   const seconds = (result.duration_ms / 1000).toFixed(1)
-  const Icon = ICON_FOR_OVERALL[result.overall]
-  const styles = SHAPE_FOR_OVERALL[result.overall]
+  const firstFail = result.checks.find((c) => !c.pass && c.error)
+  const failIdx = firstFail ? result.checks.indexOf(firstFail) : -1
+  const hasSkipped = failIdx >= 0 && result.checks.slice(failIdx + 1).some((c) => !c.pass && !c.error)
+  const rawDetails = result.checks.filter((c) => c.error?.detail).map((c) => `${c.name}: ${c.error?.detail}`)
 
   return (
     <div
-      className={`mb-3 rounded-md border ${styles.container}`}
+      className="text-sm text-fg"
       role={result.overall === "pass" ? "status" : "alert"}
       data-testid="connectivity-result-panel"
       data-overall={result.overall}
     >
-      <div className="flex items-start gap-2.5 px-3 py-2.5">
-        <Icon
-          className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`}
-          strokeWidth={1.75}
-        />
+      <div className="flex h-8 items-center gap-2">
+        <StatusIcon status={STATUS_FOR_OVERALL[result.overall]} />
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className={`flex min-w-0 flex-1 items-center gap-1 text-left text-sm font-medium ${styles.title} focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong`}
+          className="flex min-w-0 flex-1 items-center gap-1 rounded text-left font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           aria-expanded={expanded}
           data-testid="connectivity-result-toggle"
         >
-          <span className="truncate">{t(summaryKey(result.overall), { seconds })}</span>
-          {expanded ? (
-            <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-60" />
-          ) : (
-            <ChevronRight className="ml-1 h-3.5 w-3.5 shrink-0 opacity-60" />
-          )}
+          <span className="truncate">{stripLeadingGlyph(t(summaryKey(result.overall), { seconds }))}</span>
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 text-fg-muted transition-transform duration-200 ease-spring", !expanded && "-rotate-90")}
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
         </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-normal ${styles.dismiss} focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong`}
-          data-testid="connectivity-result-dismiss"
-        >
-          <X className="h-3 w-3" />
+        <Button variant="ghost" size="sm" onClick={onDismiss} data-testid="connectivity-result-dismiss">
+          <X strokeWidth={1.5} aria-hidden="true" />
           {t("runtime.connectivity.collapse")}
-        </button>
+        </Button>
       </div>
 
       {expanded && (
-        <div className={`border-t px-3 pb-3 pt-2.5 ${styles.detailBorder}`}>
-          <ul className="space-y-1">
+        <div className="pb-2">
+          <ul className="m-0 list-none p-0">
             {result.checks.map((c) => (
               <CheckRow key={c.name} check={c} label={checkLabelFor(c.name)} />
             ))}
           </ul>
-
-          {result.overall !== "pass" && <FailureSuggestion checks={result.checks} />}
+          {firstFail?.error && (
+            <p className="mt-2 text-sm text-fg">
+              <span className="font-medium">{t("runtime.connectivity.suggestionLabel")}：</span>
+              {t(nextStepsKey(normalizeCheckCategory(firstFail.error.category)))}
+              {hasSkipped && <span className="text-fg-muted"> {t("runtime.connectivity.notRunAfter")}</span>}
+            </p>
+          )}
+          {rawDetails.length > 0 && (
+            <pre className="mt-2 whitespace-pre-wrap break-all rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
+              {rawDetails.join("\n")}
+            </pre>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function CheckRow({
-  check,
-  label,
-}: {
-  check: ConnectivityCheck
-  label: string
-}) {
+function CheckRow({ check, label }: { check: ConnectivityCheck; label: string }) {
   const { t } = useTranslation("admin")
   const seconds = (check.duration_ms / 1000).toFixed(1)
-  const Icon = check.pass ? CheckCircle2 : XCircle
-  const iconClr = check.pass ? "text-success" : "text-danger"
   const isSkipped = !check.pass && !check.error
+  const status: StatusKind = check.pass ? "completed" : isSkipped ? "cancelled" : "failed"
   return (
-    <li className="flex items-start gap-2 text-sm">
-      {isSkipped ? (
-        <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full bg-surface-muted" aria-hidden />
-      ) : (
-        <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconClr}`} strokeWidth={2} />
-      )}
-      <span className={isSkipped ? "text-fg-faint" : "text-fg-muted"}>
+    <li className="flex h-8 items-center gap-2 border-t border-line text-sm">
+      <StatusIcon status={status} />
+      <span className={cn("min-w-0 truncate", isSkipped ? "text-fg-muted" : "text-fg")}>
         {label}
+        {check.error && (
+          <span className="text-fg-muted" data-testid={`connectivity-error-${check.name}`}>
+            {" · "}
+            {t(errorCategoryKey(normalizeCheckCategory(check.error.category)))}
+          </span>
+        )}
+        {isSkipped && <span className="text-fg-muted"> · {t("runtime.connectivity.checks.notRun")}</span>}
       </span>
-      <span className="text-fg-faint">{seconds}s</span>
-      {check.error && (
-        <span
-          className="text-danger-emphasis"
-          title={check.error.detail ?? ""}
-          data-testid={`connectivity-error-${check.name}`}
-        >
-          — {t(errorCategoryKey(normalizeCheckCategory(check.error.category)))}
-        </span>
-      )}
-      {isSkipped && (
-        <span className="text-fg-faint">
-          — {t("runtime.connectivity.checks.notRun")}
-        </span>
-      )}
+      <span className="ml-auto shrink-0 font-mono text-xs tabular-nums text-fg-muted">{seconds}s</span>
     </li>
-  )
-}
-
-function FailureSuggestion({ checks }: { checks: ConnectivityCheck[] }): ReactNode {
-  const { t } = useTranslation("admin")
-  const firstFail = checks.find((c) => !c.pass && c.error)
-  if (!firstFail || !firstFail.error) return null
-  const category = normalizeCheckCategory(firstFail.error.category)
-  const failIdx = checks.findIndex((c) => c === firstFail)
-  const hasSkipped = checks.slice(failIdx + 1).some((c) => !c.pass && !c.error)
-  return (
-    <div className="mt-2 rounded-md bg-surface-subtle/70 px-2.5 py-2 text-sm text-fg-muted">
-      <span className="font-medium text-fg-emphasis">
-        {t("runtime.connectivity.suggestionLabel")}：
-      </span>
-      <span className="ml-1">{t(nextStepsKey(category))}</span>
-      {hasSkipped && (
-        <p className="mt-1 text-fg-subtle">{t("runtime.connectivity.notRunAfter")}</p>
-      )}
-    </div>
   )
 }
 
@@ -172,37 +154,4 @@ function normalizeCheckCategory(category: unknown): ConnectivityCheckCategory {
   return KNOWN_ERROR_CATEGORIES.has(category as ConnectivityCheckCategory)
     ? (category as ConnectivityCheckCategory)
     : "unknown"
-}
-
-const ICON_FOR_OVERALL: Record<ConnectivityResult["overall"], typeof CheckCircle2> = {
-  pass: CheckCircle2,
-  partial: AlertTriangle,
-  fail: XCircle,
-}
-
-const SHAPE_FOR_OVERALL: Record<
-  ConnectivityResult["overall"],
-  { container: string; icon: string; title: string; dismiss: string; detailBorder: string }
-> = {
-  pass: {
-    container: "border-success-border bg-success-subtle/60",
-    icon: "text-success",
-    title: "text-success-emphasis",
-    dismiss: "text-success hover:bg-success-subtle/60",
-    detailBorder: "border-success-border",
-  },
-  partial: {
-    container: "border-warning-border bg-warning-subtle/70",
-    icon: "text-warning",
-    title: "text-warning-emphasis",
-    dismiss: "text-warning hover:bg-warning-subtle/60",
-    detailBorder: "border-warning-border",
-  },
-  fail: {
-    container: "border-danger-border bg-danger-subtle/60",
-    icon: "text-danger",
-    title: "text-danger-emphasis",
-    dismiss: "text-danger-emphasis hover:bg-danger-subtle/60",
-    detailBorder: "border-danger-border",
-  },
 }

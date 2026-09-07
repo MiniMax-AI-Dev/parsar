@@ -1,42 +1,48 @@
+import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
-import { CheckCircle2, Info, AlertTriangle, RefreshCw } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 
 import { Skeleton } from "../ui/skeleton"
 import { Button } from "../ui/button"
-import { useRuntimeStatus } from "../../lib/api-runtime"
+import { StatusIcon, type StatusKind } from "../ui/status-icon"
+import { useRuntimeStatus, type RuntimeStatus } from "../../lib/api-runtime"
 
 interface RuntimeStatusBannerProps {
   workspaceID: string | null
+  /** One action for the row's right edge (e.g. the credential button). */
+  action?: ReactNode
+  className?: string
 }
 
-type Shape = "ok" | "info" | "warn"
-
-export function RuntimeStatusBanner({ workspaceID }: RuntimeStatusBannerProps) {
+/**
+ * Cloud runtime status as a 32px hairline row: a 14px status icon, the
+ * status sentence in ink, and at most one action on the right.
+ */
+export function RuntimeStatusBanner({ workspaceID, action, className }: RuntimeStatusBannerProps) {
   const { t } = useTranslation("admin")
   const query = useRuntimeStatus(workspaceID)
 
   if (query.isLoading) {
     return (
-      <div className="mb-3" data-testid="runtime-status-banner-loading">
-        <Skeleton className="h-10 w-full rounded-md" />
+      <div className={className} data-testid="runtime-status-banner-loading">
+        <div className="flex h-8 items-center border-b border-line">
+          <Skeleton className="h-3 w-56" />
+        </div>
       </div>
     )
   }
 
-  // Soft-warn until status endpoint is reachable.
   if (query.error || !query.data) {
     return (
-      <BannerView
-        shape="warn"
+      <StatusRow
+        status="failed"
         title={t("runtime.status.unreachable")}
+        role="alert"
+        testId="runtime-status-banner-warn"
+        className={className}
         action={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void query.refetch()}
-            data-testid="runtime-status-retry"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
+          <Button size="sm" variant="outline" onClick={() => void query.refetch()} data-testid="runtime-status-retry">
+            <RefreshCw strokeWidth={1.5} aria-hidden="true" />
             {t("runtime.status.retry")}
           </Button>
         }
@@ -46,138 +52,74 @@ export function RuntimeStatusBanner({ workspaceID }: RuntimeStatusBannerProps) {
 
   const copy = describeStatus(query.data)
   return (
-    <BannerView
-      shape={copy.shape}
+    <StatusRow
+      status={copy.status}
       title={t(copy.titleKey)}
-      hint={copy.hintKey ? t(copy.hintKey) : undefined}
+      role={copy.status === "interrupted" ? "alert" : "status"}
+      testId={`runtime-status-banner-${copy.shape}`}
+      className={className}
+      action={action}
     />
   )
 }
 
-// Returns i18n keys (not strings) so the typed TFunction at the call site
-// can resolve them without weakening the key-union type to `string`.
 type StatusCopyKey =
   | "runtime.status.cloudReady"
-  | "runtime.status.cloudReadyHint"
-  | "runtime.status.cloudReadyManaged"
-  | "runtime.status.cloudReadyOps"
   | "runtime.status.cloudOff"
-  | "runtime.status.cloudOffHint"
   | "runtime.status.cloudMisconfigured"
   | "runtime.status.cloudRunnerUnavailable"
-  | "runtime.status.cloudRunnerUnavailableHint"
+
+type Shape = "ok" | "info" | "warn"
 
 interface BannerKeys {
   shape: Shape
+  status: StatusKind
   titleKey: StatusCopyKey
-  hintKey?: StatusCopyKey
 }
 
-function describeStatus(
-  s: {
-    has_credential: boolean
-    available: boolean
-    sandbox_agent_count: number
-    profile: string
-    configured_by?: string
-    credential_masked?: string | null
-  },
-): BannerKeys {
-  // Managed: Parsar owns the credential; admins never see the
-  // missing-cred path, regardless of sandbox-agent count.
+function describeStatus(s: RuntimeStatus): BannerKeys {
+  // Managed: Parsar owns the credential; admins never see the missing-cred path.
   if (s.profile === "managed") {
-    if (s.available) {
-      return {
-        shape: "ok",
-        titleKey: "runtime.status.cloudReady",
-        hintKey: "runtime.status.cloudReadyManaged",
-      }
-    }
-    return { shape: "warn", titleKey: "runtime.status.cloudMisconfigured" }
+    return s.available
+      ? { shape: "ok", status: "completed", titleKey: "runtime.status.cloudReady" }
+      : { shape: "warn", status: "interrupted", titleKey: "runtime.status.cloudMisconfigured" }
   }
-
-  // selfhost / oss: cred-aware branching.
   if (s.has_credential) {
-    if (s.available) {
-      return {
-        shape: "ok",
-        titleKey: "runtime.status.cloudReady",
-        hintKey: s.profile === "selfhost"
-          ? "runtime.status.cloudReadyOps"
-          : "runtime.status.cloudReadyHint",
-      }
-    }
-    return {
-      shape: "warn",
-      titleKey: "runtime.status.cloudRunnerUnavailable",
-      hintKey: "runtime.status.cloudRunnerUnavailableHint",
-    }
+    return s.available
+      ? { shape: "ok", status: "completed", titleKey: "runtime.status.cloudReady" }
+      : { shape: "warn", status: "interrupted", titleKey: "runtime.status.cloudRunnerUnavailable" }
   }
-
-  // No credential. If sandbox-agents already exist this is blocking
-  // (pending wizard); otherwise the workspace just hasn't opted in.
+  // No credential: blocking when sandbox agents already exist, otherwise opt-in.
   if (s.sandbox_agent_count > 0) {
-    return { shape: "warn", titleKey: "runtime.status.cloudMisconfigured" }
+    return { shape: "warn", status: "interrupted", titleKey: "runtime.status.cloudMisconfigured" }
   }
-  return {
-    shape: "info",
-    titleKey: "runtime.status.cloudOff",
-    hintKey: "runtime.status.cloudOffHint",
-  }
+  return { shape: "info", status: "queued", titleKey: "runtime.status.cloudOff" }
 }
 
-function BannerView({
-  shape,
+function StatusRow({
+  status,
   title,
-  hint,
+  role,
+  testId,
   action,
+  className,
 }: {
-  shape: Shape
+  status: StatusKind
   title: string
-  hint?: string
-  action?: React.ReactNode
+  role: "status" | "alert"
+  testId: string
+  action?: ReactNode
+  className?: string
 }) {
-  const styles = SHAPE_STYLES[shape]
-  const Icon = SHAPE_ICONS[shape]
   return (
     <div
-      className={`mb-3 flex items-start gap-3 rounded-md border px-3 py-2.5 ${styles.container}`}
-      role={shape === "warn" ? "alert" : "status"}
-      data-testid={`runtime-status-banner-${shape}`}
+      className={`flex h-8 items-center gap-2 border-b border-line text-sm text-fg ${className ?? ""}`}
+      role={role}
+      data-testid={testId}
     >
-      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${styles.icon}`} strokeWidth={1.75} />
-      <div className="min-w-0 flex-1">
-        <p className={`text-sm font-medium ${styles.title}`}>{title}</p>
-        {hint && <p className={`mt-0.5 text-sm leading-relaxed ${styles.hint}`}>{hint}</p>}
-      </div>
-      {action}
+      <StatusIcon status={status} />
+      <span className="min-w-0 flex-1 truncate">{title}</span>
+      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
     </div>
   )
-}
-
-const SHAPE_STYLES: Record<Shape, { container: string; icon: string; title: string; hint: string }> = {
-  ok: {
-    container: "border-success-border bg-success-subtle/60",
-    icon: "text-success",
-    title: "text-success-emphasis",
-    hint: "text-success",
-  },
-  info: {
-    container: "border-line bg-surface-subtle/80",
-    icon: "text-fg-subtle",
-    title: "text-fg-emphasis",
-    hint: "text-fg-muted",
-  },
-  warn: {
-    container: "border-warning-border bg-warning-subtle/70",
-    icon: "text-warning",
-    title: "text-warning-emphasis",
-    hint: "text-warning",
-  },
-}
-
-const SHAPE_ICONS: Record<Shape, typeof CheckCircle2> = {
-  ok: CheckCircle2,
-  info: Info,
-  warn: AlertTriangle,
 }

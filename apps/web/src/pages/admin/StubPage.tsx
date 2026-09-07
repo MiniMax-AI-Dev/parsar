@@ -12,8 +12,6 @@ interface StubPageProps {
   /** key under nav.items.* — same key used in sidebar */
   itemKey: string
   icon?: LucideIcon
-  /** optional richer description */
-  hint?: string
 }
 
 /**
@@ -21,13 +19,12 @@ interface StubPageProps {
  * Renders a proper PageHeader + EmptyState so navigation works
  * end-to-end while individual pages get filled in.
  */
-export function StubPage({ view, itemKey, icon, hint }: StubPageProps) {
+export function StubPage({ view, itemKey, icon }: StubPageProps) {
   const { t } = useTranslation("common")
   return (
     <AdminLayout activeMenu={view}>
       <PageHeader
         title={t(`nav.items.${itemKey}` as never)}
-        description={hint}
       />
       <EmptyState
         icon={icon ?? Construction}

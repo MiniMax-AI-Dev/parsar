@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
+import { BrandMark } from "../ui/brand-mark"
 import {
   setWorkspaceId,
   useWorkspaceId,
@@ -112,9 +113,12 @@ export function WorkspaceSwitcher() {
           <button
             type="button"
             aria-label={t("workspaceSwitcher.triggerAriaLabel")}
-            className="ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-fg-muted hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong data-[state=open]:bg-surface-muted"
+            className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 data-[state=open]:app-pressed"
           >
-            <span className="font-medium">{triggerLabel}</span>
+            <BrandMark size={14} />
+            <span className="shrink-0 font-medium text-fg" translate="no">Parsar</span>
+            <span className="shrink-0 text-fg-muted" aria-hidden="true">/</span>
+            <span className="min-w-0 flex-1 truncate text-fg-muted">{triggerLabel}</span>
             {!wsId && (
               <span
                 title={t("workspace.mockTooltip")}
@@ -123,7 +127,7 @@ export function WorkspaceSwitcher() {
                 {t("workspace.mockBadge")}
               </span>
             )}
-            <ChevronsUpDown className="h-3 w-3 text-fg-faint" strokeWidth={1.75} />
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} />
           </button>
         </DropdownMenu.Trigger>
 
@@ -131,7 +135,7 @@ export function WorkspaceSwitcher() {
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            className="z-50 min-w-[300px] overflow-hidden rounded-md border border-line bg-surface p-1 text-sm text-fg-muted shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+            className="app-shadow-floating z-50 min-w-[300px] overflow-hidden rounded-lg border border-line bg-surface p-1 text-sm text-fg-muted animate-pop-in data-[state=closed]:animate-pop-out"
           >
             <DropdownMenu.Label className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-fg-subtle">
               <Layers className="h-3 w-3" strokeWidth={1.75} />

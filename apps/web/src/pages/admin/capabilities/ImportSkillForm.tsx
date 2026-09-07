@@ -9,6 +9,9 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ClipboardPaste, FileArchive } from "lucide-react"
 
+import { Label } from "../../../components/ui/label"
+import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
+import { Textarea } from "../../../components/ui/textarea"
 import { ApiError } from "../../../lib/api-client"
 import {
   putToPresignedURL,
@@ -240,7 +243,18 @@ export function ImportSkillForm({
 
   return (
     <div className="grid gap-3">
-      <SourceModeSwitch value={source} onChange={onSourceChange} />
+      <Tabs value={source} onValueChange={(next) => onSourceChange(next as SourceMode)}>
+        <TabsList aria-label={t("capabilities.import.skill.source.label", "Import method")}>
+          <TabsTrigger value="paste">
+            <ClipboardPaste className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+            {t("capabilities.import.skill.source.paste", "Paste Markdown")}
+          </TabsTrigger>
+          <TabsTrigger value="zip">
+            <FileArchive className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+            {t("capabilities.import.skill.source.zip", "Upload zip")}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Layout:
        *   paste mode → two columns (editor on the left, live preview on
@@ -249,26 +263,13 @@ export function ImportSkillForm({
        *     looks lonely in a half-width column, and the preview wants
        *     every pixel it can get (SKILL.md and supporting files all stack
        *     vertically). Stack input above preview instead. */}
-      <div
-        className={
-          source === "paste"
-            ? "grid gap-4 md:grid-cols-2"
-            : "grid gap-4"
-        }
-      >
-        {/* In paste mode the editor stays narrow (max-w-3xl) so the
-         *  side-by-side preview reads naturally. In zip mode the dropzone
-         *  is the only thing here and it should match the dialog width —
-         *  half-width looks unbalanced against the full-width preview
-         *  below. min-w-0 keeps long unbroken copy from pushing the grid
-         *  wider than the dialog. */}
-        <div className={`min-w-0 space-y-2 ${source === "paste" ? "max-w-3xl" : ""}`}>
+      <div className={source === "paste" ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
+        <div className={`min-w-0 ${source === "paste" ? "max-w-3xl" : ""}`}>
           {source === "paste" ? (
             <>
-              <p className="text-sm font-medium text-fg-muted">
-                {t("capabilities.import.skill.markdown", "Markdown content")}
-              </p>
-              <textarea
+              <Label htmlFor="import-skill-markdown">{t("capabilities.import.skill.markdown", "Markdown content")}</Label>
+              <Textarea
+                id="import-skill-markdown"
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
                 rows={20}
@@ -276,12 +277,12 @@ export function ImportSkillForm({
                   "capabilities.import.skill.placeholder",
                   `---\nname: code-reviewer\ndescription: Review a diff and call out risky changes\n---\n\nYou are a careful code reviewer. When the user pastes a diff, walk through:\n\n1. Correctness — does the change do what it claims?\n2. Risk — what could break in production?\n3. Style — does it match the surrounding conventions?\n\nKeep responses concise.`,
                 )}
-                className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong"
+                className="font-mono text-xs"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
               />
-              <p className="text-xs text-fg-subtle">
+              <p className="mt-1 text-xs text-fg-muted">
                 {t(
                   "capabilities.import.skill.pasteHelp",
                   "Supports Markdown with YAML frontmatter. name + description come from the frontmatter; the body is injected into the model as the instruction.",
@@ -290,9 +291,7 @@ export function ImportSkillForm({
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-fg-muted">
-                {t("capabilities.import.skill.zipLabel", "Upload Skill zip")}
-              </p>
+              <Label>{t("capabilities.import.skill.zipLabel", "Upload Skill zip")}</Label>
               <SkillZipDropzone
                 file={zipFile}
                 busy={busy}
@@ -307,7 +306,7 @@ export function ImportSkillForm({
                 onClear={clearZip}
                 localError={zipError}
               />
-              <p className="text-xs text-fg-subtle">
+              <p className="mt-1 text-xs text-fg-muted">
                 {t(
                   "capabilities.import.skill.zipHelp",
                   "The zip must contain a SKILL.md at the root or one level deep. Any supporting files and directories are optional and imported alongside it.",
@@ -317,13 +316,8 @@ export function ImportSkillForm({
           )}
         </div>
 
-        {/* ---- PREVIEW ----------------------------------
-         *  In paste mode the parent grid keeps this at half-width so
-         *  side-by-side comparison works. In zip mode the preview
-         *  takes the full dialog width — the user uploaded a directory
-         *  worth of files and wants to see every line, no point
-         *  capping at 768px and wasting the right ~30% as whitespace.
-         *  min-w-0 same reason as the input column above. */}
+        {/* ---- PREVIEW: half-width beside the editor in paste mode, full
+         *  width under the dropzone in zip mode. ---- */}
         <div className={`min-w-0 space-y-3 ${source === "paste" ? "max-w-3xl" : ""}`}>
           <ImportPreview
             status={status}
@@ -338,7 +332,7 @@ export function ImportSkillForm({
             (skill.files && skill.files.length > 0) ? (
               <SkillFileTree skill={skill} />
             ) : (
-              <SinglePreviewCard skill={skill} />
+              <SinglePreview skill={skill} />
             )
           )}
         </div>
@@ -352,116 +346,38 @@ export function ImportSkillForm({
   )
 }
 
-function SourceModeSwitch({
-  value,
-  onChange,
-}: {
-  value: SourceMode
-  onChange: (next: SourceMode) => void
-}) {
-  const { t } = useTranslation("admin")
-  return (
-    <div
-      className="inline-flex items-center gap-1 self-start rounded-md border border-line bg-surface-subtle p-0.5"
-      role="tablist"
-      aria-label={t("capabilities.import.skill.source.label", "Import method")}
-    >
-      <ModeButton
-        active={value === "paste"}
-        icon={<ClipboardPaste className="h-3.5 w-3.5" />}
-        label={t("capabilities.import.skill.source.paste", "Paste Markdown")}
-        onClick={() => onChange("paste")}
-      />
-      <ModeButton
-        active={value === "zip"}
-        icon={<FileArchive className="h-3.5 w-3.5" />}
-        label={t("capabilities.import.skill.source.zip", "Upload zip")}
-        onClick={() => onChange("zip")}
-      />
-    </div>
-  )
-}
-
-function ModeButton({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean
-  icon: React.ReactNode
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-sm transition-colors ${
-        active
-          ? "bg-surface text-fg shadow-sm"
-          : "text-fg-subtle hover:bg-surface-muted hover:text-fg-muted"
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
-
-function SinglePreviewCard({
+function SinglePreview({
   skill,
 }: {
   skill: NonNullable<CanonicalSpec["skill"]>
 }) {
   const { t } = useTranslation("admin")
   return (
-    <section className="space-y-3 rounded-lg border border-line bg-surface p-3">
-      <header className="border-b border-line-muted pb-2">
-        <h4 className="text-sm font-semibold text-fg">
-          {skill.title || skill.slug}
-        </h4>
-        <code className="font-mono text-xs text-fg-subtle">{skill.slug}</code>
-      </header>
+    <section className="border-t border-line pt-3">
+      <h4 className="text-sm font-medium text-fg">{skill.title || skill.slug}</h4>
+      <code className="font-mono text-xs text-fg-muted">{skill.slug}</code>
 
       {/* description intentionally omitted — ImportPreview above already
-       *  surfaces it on the "ready" card, repeating it here was noisy. */}
+       *  surfaces it on the "ready" line, repeating it here was noisy. */}
 
       {skill.trigger && (
-        <Field label={t("capabilities.import.skill.trigger", "Trigger")}>
-          <code className="block whitespace-pre-wrap rounded bg-surface-subtle px-2 py-1.5 font-mono text-xs text-fg-muted">
+        <div className="mt-3">
+          <p className="mb-1 text-xs text-fg-muted">{t("capabilities.import.skill.trigger", "Trigger")}</p>
+          <code className="block whitespace-pre-wrap rounded-md bg-surface-muted p-2 font-mono text-xs text-fg">
             {skill.trigger}
           </code>
-        </Field>
+        </div>
       )}
 
-      <Field
-        label={t("capabilities.import.skill.instruction", "Instruction (injected into the model)")}
-      >
-        <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap rounded bg-surface-subtle px-2 py-1.5 font-mono text-xs leading-relaxed text-fg-muted">
+      <div className="mt-3">
+        <p className="mb-1 text-xs text-fg-muted">
+          {t("capabilities.import.skill.instruction", "Instruction (injected into the model)")}
+        </p>
+        <pre className="m-0 max-h-[280px] overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-2 font-mono text-xs leading-relaxed text-fg">
           {skill.instruction}
         </pre>
-      </Field>
+      </div>
     </section>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="space-y-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
-        {label}
-      </span>
-      {children}
-    </div>
   )
 }
 

@@ -1,28 +1,31 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import {
   AlertTriangle,
-  Bot,
+  ArrowUp,
+  ArrowUpRight,
   Check,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Clock,
+  ChevronsUpDown,
+  Loader2,
+  MessageSquare,
   MessageSquarePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
-  Send,
-  ShieldAlert,
   Square,
   Trash2,
   X,
-  Loader2,
 } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
+import { PageHeader } from "../../components/layout/PageHeader"
+import { ApprovalBar } from "../../components/conversation/ApprovalBar"
 import { ConversationInteractionCards } from "../../components/conversation/ConversationInteractionCards"
-import { WorkingSteps, StepTrace } from "../../components/conversation/StepDisplay"
+import { WorkTrace, type TraceStep } from "../../components/conversation/WorkTrace"
+import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { Button } from "../../components/ui/button"
 import {
   Dialog,
@@ -32,12 +35,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog"
-import { ErrorState } from "../../components/ui/error-state"
+import { EmptyState } from "../../components/ui/empty-state"
+import { ErrorState, InlineError } from "../../components/ui/error-state"
 import { Input } from "../../components/ui/input"
+import { InitialTile, Ledger, LedgerId, LedgerRow, col } from "../../components/ui/ledger"
 import { Skeleton } from "../../components/ui/skeleton"
+import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import { TurnNavRail, turnPreview, useActiveTurnKey } from "../../components/ui/turn-nav-rail"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
-import { useAgents, useCancelRun, useCancelConversation } from "../../lib/api-agents"
+import { useAgents, useCancelRun } from "../../lib/api-agents"
 import { agentNeedsSandbox } from "../../lib/agent-runtime"
 import {
   createConversation,
@@ -50,10 +57,13 @@ import {
   useConversations,
   useSendUserMessage,
   useUpdateConversationTitle,
+  type StreamingStep,
 } from "../../lib/api-conversations"
+import { useAgentInteractions } from "../../lib/api-interactions"
 import { useSandboxBinding, type SandboxBinding } from "../../lib/api-sandbox"
 import { useMyWorkspaces } from "../../lib/api-workspaces"
 import type {
+  AgentInteraction,
   ConversationListItem,
   ConversationTimelineRun,
   Agent,
@@ -72,13 +82,19 @@ import { ToolCardSlot, SingleSlot, ListSlot } from "../../components/plugin/Slot
 
 const FOLD_KEY = "parsar:conv:sidebarFolded"
 
+/** Reading measure of the thread column; the components below read it. */
+const THREAD_STYLE = { ["--thread-max-width" as string]: "48rem" }
+
+/** title · conversation id · age (actions replace the age on hover) */
+const LIST_COLUMNS = [col.title(120, 2), col.id(64, 0.3), col.age(56, 0.3), col.actions(2)]
+
 interface SandboxSendGuard {
   blocked: boolean
   message: string
 }
 
 /* ============================================================== */
-/*  ConversationsPage — top-level: 3-col shell (admin | conv | main) */
+/*  ConversationsPage — shell: conversation list | thread          */
 /* ============================================================== */
 
 export function ConversationsPage() {
@@ -104,7 +120,7 @@ export function ConversationsPage() {
     [agentsQ.data],
   )
 
-  // Sidebar selection follows the active conv's primary_agent_id; when
+  // List selection follows the active conv's primary_agent_id; when
   // there's no active conv, fall back to user pick / first active agent.
   const currentConvQ = useConversation(entityId ?? null, wsId)
   const currentConv = currentConvQ.data
@@ -166,7 +182,7 @@ export function ConversationsPage() {
     navigate("conversations", { id: "", focus: "compose" })
   }, [wsId, entityId, currentConvQ.error, navigate])
 
-  // Sidebar conversations: scoped to the selected agent.
+  // List conversations: scoped to the selected agent.
   const convsQ = useConversations(wsId, selectedAgentId)
   const conversations: ConversationListItem[] = convsQ.data?.conversations ?? []
 
@@ -203,14 +219,14 @@ export function ConversationsPage() {
 
   // "New conversation" navigates to an empty composer without pre-creating a
   // conv — the conv is created on first send via handleSendFromEmpty,
-  // so the sidebar only shows rows with a real first user turn.
+  // so the list only shows rows with a real first user turn.
   const openCreate = () => {
     firstSend.current = null
     navigate("conversations", { id: "", focus: "compose" })
   }
 
   // First-send creates the conv + posts the message + navigates in.
-  // Title derives from the first 30 chars so the sidebar gets a
+  // Title derives from the first 30 chars so the list gets a
   // meaningful name immediately (server defaults to "Untitled conversation").
   const handleSendFromEmpty = async (content: string): Promise<boolean> => {
     if (!wsId || !selectedAgentId) {
@@ -257,22 +273,22 @@ export function ConversationsPage() {
     await renameMutation.mutateAsync({ cid, title })
   }
   const handleDeleteConversation = async (cid: string): Promise<void> => {
-    await deleteMutation.mutateAsync(cid)
-    if (firstSend.current?.conversationId === cid) firstSend.current = null
-    forgetConversationViewConversation(wsId, cid)
-    // If we just deleted the active conv, navigate away — otherwise
-    // useConversation 404s and the UI jumps to EmptyChat.
+    // Clear the selection BEFORE the mutation: deleting invalidates the
+    // conversation queries, and a still-mounted detail would refetch the
+    // row we are deleting and 404. If the delete then fails the dialog
+    // reports it and the conversation is still in the list.
     if (cid === entityId) {
       navigate("conversations", { id: "", focus: "compose" })
     }
+    await deleteMutation.mutateAsync(cid)
+    forgetConversationViewConversation(wsId, cid)
   }
 
   return (
     <AdminLayout activeMenu="conversations" fullBleed>
-      <div className="flex h-[calc(100vh-65px)] min-h-0">
+      <div className="flex min-h-0 flex-1">
         {!folded && (
-          <ConversationSidebar
-            key={wsId}
+          <ConversationList
             agents={allAgents}
             canWrite={canWrite}
             canDelete={workspaceRole === "owner" || workspaceRole === "admin"}
@@ -311,7 +327,6 @@ export function ConversationsPage() {
           messageCount={conversations.find((c) => c.id === entityId)?.message_count ?? 0}
           folded={folded}
           onExpand={toggleFold}
-          onPageDescription={t("conversations.page.description")}
           onSendFromEmpty={handleSendFromEmpty}
           onRenameAfterFirstMessage={handleRenameConversation}
           focusComposer={focusTarget === "compose"}
@@ -351,10 +366,10 @@ function sandboxSendGuard(
 }
 
 /* ============================================================== */
-/*  Sidebar (column 2)                                              */
+/*  Conversation list (panel tone, ledger rows)                    */
 /* ============================================================== */
 
-interface SidebarProps {
+interface ListProps {
   agents: Agent[]
   canWrite: boolean
   canDelete: boolean
@@ -371,9 +386,10 @@ interface SidebarProps {
   onDeleteConversation: (cid: string) => Promise<void>
 }
 
-function ConversationSidebar(p: SidebarProps) {
+function ConversationList(p: ListProps) {
   const { t } = useTranslation("admin")
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const { t: tc } = useTranslation("common")
+  const fmtAgo = useRelativeTime()
   const selectedAgent = p.agents.find((a) => a.id === p.selectedAgentId)
 
   const [renamingConvId, setRenamingConvId] = useState<string | null>(null)
@@ -442,239 +458,203 @@ function ConversationSidebar(p: SidebarProps) {
     }
   }
 
+  const agentLabel = selectedAgent?.name || t("conversations.sidebar.allAgentsHint")
+  const listLabel = tc("nav.items.conversations")
+
   return (
-    <aside className="relative flex w-[244px] shrink-0 flex-col border-r border-line/70 bg-surface-subtle/70 px-2.5 py-2.5">
-      {/* Current agent header (click to switch) */}
-      <button
-        type="button"
-        onClick={() => setPickerOpen((v) => !v)}
-        className="flex w-full items-start gap-2.5 rounded-lg border border-transparent bg-surface/70 px-2.5 py-2 text-left shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition-colors hover:border-line hover:bg-surface"
-        aria-haspopup="listbox"
-        aria-expanded={pickerOpen}
-        aria-label={t("conversations.sidebar.switchAgent")}
-      >
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-1">
-            <span className="truncate text-base font-semibold text-fg">
-              {selectedAgent?.name || t("conversations.sidebar.allAgentsHint")}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-fg-faint" strokeWidth={2} />
-          </div>
-          {selectedAgent && (
-            <span className="mt-0.5 truncate text-xs text-fg-subtle">
-              {selectedAgent.description || t("conversations.sidebar.currentAgentDesc")}
-            </span>
-          )}
-        </div>
-      </button>
+    <aside className="flex w-[300px] shrink-0 flex-col border-r border-line bg-surface-subtle">
+      {/* 64px header (matches the shell topbar): agent switcher · new conversation · fold */}
+      <div className="flex h-16 shrink-0 items-center gap-1 border-b border-line pl-2 pr-2">
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              aria-label={t("conversations.sidebar.switchAgent")}
+              className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-sm hover:app-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 data-[state=open]:app-pressed"
+            >
+              {selectedAgent && <InitialTile name={selectedAgent.name} />}
+              <span className={cn("min-w-0 flex-1 truncate", selectedAgent ? "font-medium text-fg" : "text-fg-muted")}>
+                {agentLabel}
+              </span>
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="start"
+              sideOffset={6}
+              className="app-shadow-floating z-50 min-w-[260px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
+            >
+              {p.agentsLoading ? (
+                <div className="space-y-2 p-2">
+                  <Skeleton className="h-3 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ) : p.agents.length === 0 ? (
+                <p className="m-0 px-2 py-1.5 text-sm text-fg-muted">{t("conversations.sidebar.allAgentsHint")}</p>
+              ) : (
+                <DropdownMenu.RadioGroup value={p.selectedAgentId} onValueChange={p.onPickAgent}>
+                  {p.agents.map((a) => (
+                    <DropdownMenu.RadioItem
+                      key={a.id}
+                      value={a.id}
+                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
+                    >
+                      <InitialTile name={a.name} />
+                      <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                      <DropdownMenu.ItemIndicator>
+                        <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+                      </DropdownMenu.ItemIndicator>
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              )}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
 
-      {pickerOpen && (
-        <div
-          role="listbox"
-          className="absolute left-2 right-2 top-[54px] z-10 max-h-72 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg"
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={p.onNewConversation}
+          disabled={!p.selectedAgentId}
+          aria-label={t("conversations.sidebar.newConversation")}
+          title={t("conversations.sidebar.newConversation")}
         >
-          {p.agentsLoading ? (
-            <div className="p-3">
-              <Skeleton className="h-8 w-full" />
-            </div>
-          ) : p.agents.length === 0 ? (
-            <p className="p-3 text-sm text-fg-subtle">{t("conversations.sidebar.allAgentsHint")}</p>
-          ) : (
-            p.agents.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                role="option"
-                aria-selected={a.id === p.selectedAgentId}
-                onClick={() => {
-                  p.onPickAgent(a.id)
-                  setPickerOpen(false)
-                }}
-                className={cn(
-                  "block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-surface-subtle",
-                  a.id === p.selectedAgentId && "bg-info-subtle text-info",
-                )}
-              >
-                <div className="font-medium">{a.name}</div>
-                {a.description && (
-                  <div className="mt-0.5 truncate text-xs text-fg-subtle">{a.description}</div>
-                )}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Primary action */}
-      <button
-        type="button"
-        onClick={p.onNewConversation}
-        disabled={!p.canWrite || !p.selectedAgentId}
-        className={cn(
-          "mt-3 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-sm font-medium text-fg shadow-sm transition-[color,background-color,border-color,box-shadow]",
-          "hover:border-line-strong hover:bg-surface-muted",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/30",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-        )}
-      >
-        <MessageSquarePlus className="h-4 w-4" strokeWidth={1.9} />
-        {t("conversations.sidebar.newConversation")}
-      </button>
-
-      {/* Recent conversations are secondary navigation, visually separated
-          from the agent context and primary action above. */}
-      <div className="mb-1 mt-5 flex items-center px-2">
-        <span className="text-xs font-semibold text-fg-faint">
-          {t("conversations.sidebar.recents")}
-        </span>
+          <MessageSquarePlus strokeWidth={1.5} aria-hidden="true" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={p.onFold}
+          aria-label={t("conversations.sidebar.foldAria")}
+          title={t("conversations.sidebar.foldAria")}
+        >
+          <PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
+        </Button>
       </div>
 
-      <div className="flex-1 space-y-0.5 overflow-y-auto pb-1">
-        {p.convsLoading ? (
-          <div className="space-y-2 px-2 pt-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : p.conversations.length === 0 ? (
-          <p className="px-3 pt-4 text-sm leading-relaxed text-fg-faint">
-            {t("conversations.sidebar.emptyForAgent")}
-          </p>
-        ) : (
-          p.conversations.map((c) => {
-            const isActive = c.id === p.selectedConversationId
-            const isRenaming = p.canWrite && renamingConvId === c.id
-            // div+role="button" not <button>, so rename/delete can nest.
-            return (
-              <div
-                key={c.id}
-                role="button"
-                tabIndex={isRenaming ? -1 : 0}
-                onClick={() => {
-                  if (!isRenaming) p.onPickConversation(c.id)
-                }}
-                onKeyDown={(e) => {
-                  if (isRenaming) return
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    p.onPickConversation(c.id)
-                  }
-                }}
-                className={cn(
-                  "group/row relative flex min-h-10 w-full items-center rounded-md px-2.5 py-2 text-left transition-colors",
-                  isActive
-                    ? "bg-surface-muted text-fg"
-                    : "text-fg-muted hover:bg-surface-muted/70 hover:text-fg",
-                  isRenaming ? "cursor-default" : "cursor-pointer",
-                )}
-              >
-                {isRenaming ? (
-                  <div className="flex flex-col gap-1">
-                    <Input
-                      ref={renameInputRef}
-                      value={renameDraft}
-                      onChange={(e) => {
-                        setRenameDraft(e.target.value)
-                        if (renameError) setRenameError("")
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          void commitRename()
-                        } else if (e.key === "Escape") {
-                          e.preventDefault()
-                          cancelRename()
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      disabled={renameBusy}
-                      className="h-7 text-sm"
-                      aria-label={t("conversations.sidebar.renameAria")}
-                    />
-                    <div className="flex items-center justify-end gap-1">
-                      {renameError && (
-                        <span className="mr-auto text-xs text-danger">{renameError}</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          cancelRename()
-                        }}
-                        disabled={renameBusy}
-                        aria-label={t("conversations.sidebar.renameCancel")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted disabled:opacity-50"
-                      >
-                        <X className="h-3.5 w-3.5" strokeWidth={2} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void commitRename()
-                        }}
-                        disabled={renameBusy}
-                        aria-label={t("conversations.sidebar.renameCommit")}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-info transition-colors hover:bg-info-subtle disabled:opacity-50"
-                      >
-                        {renameBusy ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Check className="h-3.5 w-3.5" strokeWidth={2.25} />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="min-w-0 flex-1 pr-12">
-                      <div
-                        className={cn(
-                          "truncate text-sm",
-                          isActive ? "font-medium text-fg" : "font-normal",
-                        )}
-                      >
-                        {truncate(c.title || "", 24)}
-                      </div>
-                    </div>
-                    {/* Hover-only action cluster. opacity-0 → */}
-                    {/* group-hover:opacity-100 keeps the resting state clean. */}
-                    <div className="absolute right-1.5 top-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
-                      {p.canWrite && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            startRename(c)
+      {p.convsLoading ? (
+        <div className="px-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+              <Skeleton className="h-3 flex-1" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+          ))}
+        </div>
+      ) : p.conversations.length === 0 ? (
+        <p className="m-0 px-4 py-6 text-center text-sm text-fg-muted">
+          {t("conversations.sidebar.emptyForAgent")}
+        </p>
+      ) : (
+        <Ledger columns={LIST_COLUMNS} role="listbox" aria-label={listLabel}>
+          <ul className="m-0 list-none p-0">
+            {p.conversations.map((c) => {
+              const isActive = c.id === p.selectedConversationId
+              const isRenaming = renamingConvId === c.id
+              const onKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
+                if (isRenaming) return
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  p.onPickConversation(c.id)
+                }
+              }
+              return (
+                <LedgerRow
+                  key={c.id}
+                  selected={isActive}
+                  tabIndex={isRenaming ? -1 : 0}
+                  onClick={() => {
+                    if (!isRenaming) p.onPickConversation(c.id)
+                  }}
+                  onKeyDown={onKeyDown}
+                  className={cn(isRenaming && "h-auto min-h-9 py-1")}
+                >
+                  {isRenaming ? (
+                    <div className="col-span-4 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          ref={renameInputRef}
+                          value={renameDraft}
+                          onChange={(e) => {
+                            setRenameDraft(e.target.value)
+                            if (renameError) setRenameError("")
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              void commitRename()
+                            } else if (e.key === "Escape") {
+                              e.preventDefault()
+                              cancelRename()
+                            }
+                          }}
+                          disabled={renameBusy}
                           aria-label={t("conversations.sidebar.renameAria")}
-                          className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-surface-muted hover:text-fg-muted"
-                        >
-                          <Pencil className="h-3 w-3" strokeWidth={2} />
-                        </button>
+                        />
+                        <RowActions inline>
+                          <ActionIconButton
+                            icon={X}
+                            label={t("conversations.sidebar.renameCancel")}
+                            onClick={cancelRename}
+                            disabled={renameBusy}
+                          />
+                          <ActionIconButton
+                            icon={Check}
+                            label={t("conversations.sidebar.renameCommit")}
+                            onClick={() => void commitRename()}
+                            busy={renameBusy}
+                          />
+                        </RowActions>
+                      </div>
+                      {renameError && (
+                        <p className="m-0 flex items-start gap-1.5 text-xs text-fg">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                          <span>{renameError}</span>
+                        </p>
                       )}
-                      {p.canDelete && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
+                    </div>
+                  ) : (
+                    <>
+                      <span className="truncate font-medium" title={c.title || undefined}>
+                        {c.title || t("conversations.detail.unnamed")}
+                      </span>
+                      <LedgerId>{tailId(c.id)}</LedgerId>
+                      <span className="truncate text-right text-xs text-fg-muted">
+                        {fmtAgo(c.last_message_at ?? c.updated_at)}
+                      </span>
+                      {/* Viewers see the row but none of its actions (main #283). */}
+                      {(p.canWrite || p.canDelete) && (
+                      <RowActions>
+                        {p.canWrite && (
+                        <ActionIconButton
+                          icon={Pencil}
+                          label={t("conversations.sidebar.renameAria")}
+                          onClick={() => startRename(c)}
+                        />
+                        )}
+                        {p.canDelete && (
+                        <ActionIconButton
+                          icon={Trash2}
+                          tone="danger"
+                          label={t("conversations.sidebar.deleteAria")}
+                          onClick={() => {
                             setDeleteError("")
                             setDeleteConvId(c.id)
                           }}
-                          aria-label={t("conversations.sidebar.deleteAria")}
-                          className="flex h-6 w-6 items-center justify-center rounded-md text-fg-faint transition-colors hover:bg-danger-subtle hover:text-danger"
-                        >
-                          <Trash2 className="h-3 w-3" strokeWidth={2} />
-                        </button>
+                        />
+                        )}
+                      </RowActions>
                       )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )
-          })
-        )}
-      </div>
+                    </>
+                  )}
+                </LedgerRow>
+              )
+            })}
+          </ul>
+        </Ledger>
+      )}
 
       <Dialog
         open={p.canDelete && deleteConvId !== null}
@@ -682,60 +662,38 @@ function ConversationSidebar(p: SidebarProps) {
           if (!next && !deleteBusy) setDeleteConvId(null)
         }}
       >
-        <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-          <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-            <div className="shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis">
-              <ShieldAlert className="h-4 w-4" />
-            </div>
-            <div className="space-y-1.5">
-              <DialogTitle className="text-sm">
-                {t("conversations.sidebar.deleteConfirmTitle")}
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-relaxed">
-                {t("conversations.sidebar.deleteConfirmDesc", {
-                  title: deleteConv?.title || t("conversations.detail.unnamed"),
-                })}
-              </DialogDescription>
-            </div>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{t("conversations.sidebar.deleteConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("conversations.sidebar.deleteConfirmDesc", {
+                title: deleteConv?.title || t("conversations.detail.unnamed"),
+              })}
+            </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-            {deleteError && <span className="mr-auto text-sm text-danger">{deleteError}</span>}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteConvId(null)}
-              disabled={deleteBusy}
-            >
+          <DialogFooter>
+            {deleteError && (
+              <p className="m-0 mr-auto flex items-start gap-1.5 text-sm text-fg">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                <span>{deleteError}</span>
+              </p>
+            )}
+            <Button variant="outline" onClick={() => setDeleteConvId(null)} disabled={deleteBusy}>
               {t("conversations.sidebar.deleteCancel")}
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => void confirmDelete()}
-              disabled={deleteBusy}
-            >
-              {deleteBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleteBusy}>
+              {deleteBusy && <Loader2 className="animate-spin" aria-hidden="true" />}
               {t("conversations.sidebar.deleteConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Fold handle: vertical edge, VS Code style */}
-      <button
-        type="button"
-        onClick={p.onFold}
-        aria-label={t("conversations.sidebar.foldAria")}
-        className="absolute -right-[11px] top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-surface text-fg-subtle opacity-0 shadow-sm transition-opacity hover:border-info-border hover:bg-info-subtle hover:text-info group-hover:opacity-100 [aside:hover_&]:opacity-100"
-      >
-        <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
-      </button>
     </aside>
   )
 }
 
 /* ============================================================== */
-/*  Main (column 3) — header + body (empty or stream) + composer    */
+/*  Main column — header + body (empty or stream) + composer        */
 /* ============================================================== */
 
 interface MainProps {
@@ -749,7 +707,6 @@ interface MainProps {
   messageCount: number
   folded: boolean
   onExpand: () => void
-  onPageDescription: string
   /** Empty-state send: create conv + post first message + navigate. */
   onSendFromEmpty: (content: string) => Promise<boolean>
   onRenameAfterFirstMessage: (cid: string, title: string) => Promise<void>
@@ -758,12 +715,11 @@ interface MainProps {
 }
 
 function ConversationMain(p: MainProps) {
-  const { t } = useTranslation("admin")
   const err = p.convError
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
 
   // workspace.content slot: plugin can replace the conversation content
-  // area while keeping the navigation sidebar intact.
+  // area while keeping the navigation list intact.
   return (
     <SingleSlot
       slotId="workspace.content"
@@ -775,107 +731,160 @@ function ConversationMain(p: MainProps) {
   )
 }
 
+/** The page's 48px topbar; the fold toggle sits before the title when the list is hidden. */
+function ThreadHeader({
+  folded,
+  onExpand,
+  actions,
+}: {
+  folded: boolean
+  onExpand: () => void
+  actions?: React.ReactNode
+}) {
+  const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
+  const pageTitle = tc("nav.items.conversations")
+  return (
+    <PageHeader
+      className="static mx-0 mb-0"
+      title={pageTitle}
+      subtitleFor="conversations.page.title"
+      backLink={
+        folded ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onExpand}
+            aria-label={t("conversations.sidebar.expandAria")}
+            title={t("conversations.sidebar.expandAria")}
+          >
+            <PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+        ) : undefined
+      }
+      action={actions}
+    />
+  )
+}
+
 function ConversationMainInner(p: MainProps & { err: unknown; isUnreachable: boolean }) {
   const { t } = useTranslation("admin")
   const { err, isUnreachable } = p
 
-  return (
-    <main className="relative flex min-w-0 flex-1 flex-col bg-surface-subtle">
-      {p.folded && (
-        <button
-          type="button"
-          onClick={p.onExpand}
-          aria-label={t("conversations.sidebar.expandAria")}
-          className="absolute left-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface text-fg-subtle shadow-sm transition-colors hover:border-line-strong hover:bg-surface-subtle hover:text-fg"
-        >
-          <ChevronRight className="h-4 w-4" strokeWidth={2} />
-        </button>
-      )}
-
-      {/* Body */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {err ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            <ErrorState
-              title={
-                isUnreachable
-                  ? t("conversations.loadError.unreachable.title")
-                  : t("conversations.loadError.title")
-              }
-              description={
-                isUnreachable
-                  ? t("conversations.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("conversations.loadError.description")
-              }
-              hint={
-                isUnreachable
-                  ? t("conversations.loadError.unreachable.hint")
-                  : t("conversations.loadError.hint")
-              }
-            />
-          </div>
-        ) : p.convLoading ? (
-          <div className="flex-1 space-y-4 p-8">
-            <Skeleton className="h-20 w-2/3" />
-            <Skeleton className="h-20 w-3/4 ml-auto" />
-            <Skeleton className="h-32 w-2/3" />
-          </div>
-        ) : !p.conversationId || !p.conv ? (
-          <EmptyChat
-            agent={p.agent}
-            canWrite={p.canWrite}
-            pageDescription={p.onPageDescription}
-            onSendFromEmpty={p.onSendFromEmpty}
-            focusComposer={p.focusComposer}
-            sandboxGuard={p.sandboxGuard}
+  if (err) {
+    return (
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ThreadHeader folded={p.folded} onExpand={p.onExpand} />
+        <div className="px-6 pt-6">
+          <ErrorState
+            title={
+              isUnreachable
+                ? t("conversations.loadError.unreachable.title")
+                : t("conversations.loadError.title")
+            }
+            description={
+              isUnreachable
+                ? t("conversations.loadError.unreachable.description")
+                : err instanceof Error
+                  ? err.message
+                  : t("conversations.loadError.description")
+            }
+            hint={
+              isUnreachable
+                ? t("conversations.loadError.unreachable.hint")
+                : t("conversations.loadError.hint")
+            }
           />
-        ) : p.messageCount === 0 ? (
-          // 0 messages: keep the EmptyChat aurora so a new conv looks
-          // like the initial no-conversation state until the first send.
-          <EmptyChat
-            agent={p.agent}
-            canWrite={p.canWrite}
-            pageDescription={p.onPageDescription}
-            conversationId={p.conversationId}
-            workspaceID={p.conv.workspace_id}
-            onRenameAfterFirstMessage={p.onRenameAfterFirstMessage}
-            focusComposer={p.focusComposer}
-            sandboxGuard={p.sandboxGuard}
-          />
-        ) : (
-          <ChatStream
-            conversationId={p.conversationId}
-            canWrite={p.canWrite}
-            agent={p.agent}
-            sidebarFolded={p.folded}
-            sandboxGuard={p.sandboxGuard}
-          />
-        )}
+        </div>
       </div>
-    </main>
+    )
+  }
+
+  if (p.convLoading) {
+    return (
+      <div className="flex min-w-0 flex-1 flex-col" style={THREAD_STYLE}>
+        <ThreadHeader folded={p.folded} onExpand={p.onExpand} />
+        <div className="mx-auto w-full max-w-[var(--thread-max-width)] space-y-4 px-4 py-6">
+          <Skeleton className="ml-auto h-9 w-2/3" />
+          <Skeleton className="h-16 w-3/4" />
+          <Skeleton className="ml-auto h-9 w-1/2" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!p.conversationId || !p.conv) {
+    return (
+      <EmptyChat
+        agent={p.agent}
+        canWrite={p.canWrite}
+        folded={p.folded}
+        onExpand={p.onExpand}
+        onSendFromEmpty={p.onSendFromEmpty}
+        focusComposer={p.focusComposer}
+        sandboxGuard={p.sandboxGuard}
+      />
+    )
+  }
+
+  if (p.messageCount === 0) {
+    // 0 messages: same empty surface as the no-conversation state until
+    // the first send; interaction cards still show for this conv.
+    return (
+      <EmptyChat
+        agent={p.agent}
+        canWrite={p.canWrite}
+        folded={p.folded}
+        onExpand={p.onExpand}
+        conversationId={p.conversationId}
+        workspaceID={p.conv.workspace_id}
+        onRenameAfterFirstMessage={p.onRenameAfterFirstMessage}
+        focusComposer={p.focusComposer}
+        sandboxGuard={p.sandboxGuard}
+      />
+    )
+  }
+
+  return (
+    <ChatStream
+      conversationId={p.conversationId}
+      canWrite={p.canWrite}
+      agent={p.agent}
+      folded={p.folded}
+      onExpand={p.onExpand}
+      sandboxGuard={p.sandboxGuard}
+    />
+  )
+}
+
+/** Hairline-topped footer that holds the composer at the thread's measure. */
+function ComposerFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="shrink-0 px-4 pb-5 pt-2">
+      <div className="mx-auto w-full max-w-[var(--thread-max-width)] px-4">{children}</div>
+    </div>
   )
 }
 
 /* ============================================================== */
-/*  Empty state — workbench surface + composer                    */
+/*  Empty state — greeting + composer                              */
 /* ============================================================== */
 
 function EmptyChat({
   agent,
-  canWrite,
-  pageDescription,
+  folded,
+  onExpand,
   conversationId,
   workspaceID,
   onSendFromEmpty,
   onRenameAfterFirstMessage,
   focusComposer,
   sandboxGuard,
+  canWrite,
 }: {
   agent: Agent | undefined
-  canWrite: boolean
-  pageDescription: string
+  folded: boolean
+  onExpand: () => void
   /** When set, composer sends into this conv (in-chat flow). */
   conversationId?: string
   workspaceID?: string
@@ -884,83 +893,77 @@ function EmptyChat({
   onRenameAfterFirstMessage?: (cid: string, title: string) => Promise<void>
   focusComposer?: boolean
   sandboxGuard?: SandboxSendGuard
+  canWrite: boolean
 }) {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto bg-surface-subtle px-5 py-6 sm:px-8">
-      <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface/80 px-2 py-1 font-medium shadow-sm">
-            <Bot className="h-3.5 w-3.5 text-fg-subtle" strokeWidth={2} />
-            {agent?.name || t("conversations.sidebar.allAgentsHint")}
-          </span>
-          <span className="rounded-md border border-success-border bg-success-subtle px-2 py-1 font-medium text-success">
-            {t("conversations.empty.mode")}
-          </span>
-        </div>
-
-        {conversationId && workspaceID ? (
-          <div className="mt-5">
-            <ConversationInteractionCards
-              workspaceID={workspaceID}
-              conversationID={conversationId}
-              onOpenInbox={() => navigate("approvals")}
-            />
-          </div>
-        ) : null}
-
-        <div className="grid flex-1 place-items-center py-8">
-          <div className="w-full max-w-3xl">
-            <div className="mb-7 text-center">
-              <h2 className="text-2xl font-semibold tracking-display text-fg">
-                {t("conversations.empty.greet")}
-              </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-fg-subtle">
-                {pageDescription}
-              </p>
+    <div className="flex min-w-0 flex-1 flex-col" style={THREAD_STYLE}>
+      <ThreadHeader
+        folded={folded}
+        onExpand={onExpand}
+        actions={
+          conversationId ? (
+            <ListSlot slotId="conversation.header.actions" context={{ conversationId, agent }} />
+          ) : undefined
+        }
+      />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-4">
+          {conversationId && workspaceID ? (
+            <div className="pt-6">
+              <ConversationInteractionCards workspaceID={workspaceID} conversationID={conversationId} />
             </div>
-
-            <ComposerForm
-              conversationId={conversationId ?? ""}
-              agentId={agent?.id}
-              disabled={!canWrite || !agent || sandboxGuard?.blocked}
-              autoFocus={focusComposer}
-              placeholder={
-                agent
-                  ? t("conversations.empty.placeholderWithAgent", { agent: agent.name })
-                  : t("conversations.empty.placeholderNoAgent")
-              }
-              onSendDirect={!conversationId && agent ? onSendFromEmpty : undefined}
-              onAfterSend={
-                conversationId && onRenameAfterFirstMessage
-                  ? (title) => onRenameAfterFirstMessage(conversationId, title)
-                  : undefined
-              }
-              blockReason={!canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+          ) : null}
+          <div className="flex flex-1 items-center justify-center">
+            <EmptyState
+              icon={MessageSquare}
+              title={t("conversations.empty.greet")}
+              description={agent ? undefined : t("conversations.empty.placeholderNoAgent")}
             />
           </div>
         </div>
       </div>
+      <ComposerFooter>
+        <ComposerForm
+          conversationId={conversationId ?? ""}
+          agentName={agent?.name}
+          disabled={!canWrite || !agent || sandboxGuard?.blocked}
+          autoFocus={focusComposer}
+          placeholder={
+            agent
+              ? t("conversations.empty.placeholderWithAgent", { agent: agent.name })
+              : t("conversations.empty.placeholderNoAgent")
+          }
+          onSendDirect={!conversationId && agent ? onSendFromEmpty : undefined}
+          onAfterSend={
+            conversationId && onRenameAfterFirstMessage
+              ? (title) => onRenameAfterFirstMessage(conversationId, title)
+              : undefined
+          }
+          blockReason={sandboxGuard?.blocked ? sandboxGuard.message : undefined}
+        />
+      </ComposerFooter>
     </div>
   )
 }
 
 /* ============================================================== */
-/*  Chat stream — user (right bubble) + agent (left plain text)     */
+/*  Chat stream — user (muted block, right) + agent (ink, left)     */
 /* ============================================================== */
 
 function ChatStream({
   conversationId,
   canWrite,
   agent,
-  sidebarFolded,
+  folded,
+  onExpand,
   sandboxGuard,
 }: {
   conversationId: string
   canWrite: boolean
   agent: Agent | undefined
-  sidebarFolded?: boolean
+  folded: boolean
+  onExpand: () => void
   sandboxGuard?: SandboxSendGuard
 }) {
   const { t } = useTranslation("admin")
@@ -969,20 +972,26 @@ function ChatStream({
   const qc = useQueryClient()
   const openRun = useCallback((runID: string) => navigate("runs", { id: runID }), [navigate])
 
-  // /cancel infra: per-run cancel (X on the working card) + bulk
+  // /cancel infra: per-run cancel (X on the working steps) + bulk
   // cancel (header button when at least one queued/running run exists).
   // Workspace id is read from useConversation so the hook is workspace-aware
   // without threading the id through every parent prop bag.
   const convInfoQ = useConversation(conversationId, null)
   const convWorkspaceId = convInfoQ.data?.workspace_id ?? null
   const cancelRunMut = useCancelRun(convWorkspaceId)
-  const cancelConvMut = useCancelConversation()
 
   // SSE state: ComposerForm hands us a run_id after send; we open the
-  // EventSource and append delta tokens into the streaming bubble. While
+  // EventSource and append delta tokens into the streaming message. While
   // a stream is active we pause timeline polling so the half-written
   // assistant message doesn't get clobbered by a stale GET.
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  // Wall clock of the moment the composer handed us a run id: the trace's
+  // clock until the timeline carries the run's own started_at.
+  const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null)
+  const startRun = useCallback((runId: string) => {
+    setLiveStartedAt(Date.now())
+    setActiveRunId(runId)
+  }, [])
   // Surface fire-and-forget /start failures (e.g. daemon offline,
   // network error). Server now auto-starts agent_daemon runs, so a
   // /start that returns 200 `already running` is fine; only true
@@ -1014,7 +1023,8 @@ function ChatStream({
     return () => window.clearTimeout(timer)
   }, [activeRunId, runs])
 
-  // Map output_message_id → runs[] so MessageRow can render StepTrace
+  // Map output_message_id → runs[] so MessageRow can read the presentation
+  // and the failed-run link from the run that produced the answer.
   const runsByOutputMessage = useMemo(() => {
     const m = new Map<string, ConversationTimelineRun[]>()
     for (const r of runs) {
@@ -1026,10 +1036,83 @@ function ChatStream({
     return m
   }, [runs])
 
-  // We trust SSE status while a stream is active; otherwise fall back to
-  // the run table (covers external runs or page-refresh-during-run cases).
-  const someRunActive =
-    hasActiveStream || runs.some((r) => r.status === "queued" || r.status === "running")
+  // Traces anchor on the user turn that triggered the run; a run the server
+  // only tied to its answer sits directly before that answer instead.
+  const runsByTrigger = useMemo(() => {
+    const m = new Map<string, ConversationTimelineRun[]>()
+    for (const r of runs) {
+      if (!r.trigger_message_id) continue
+      const arr = m.get(r.trigger_message_id)
+      if (arr) arr.push(r)
+      else m.set(r.trigger_message_id, [r])
+    }
+    return m
+  }, [runs])
+  const orphanRunsByOutput = useMemo(() => {
+    const m = new Map<string, ConversationTimelineRun[]>()
+    for (const r of runs) {
+      if (r.trigger_message_id || !r.output_message_id) continue
+      const arr = m.get(r.output_message_id)
+      if (arr) arr.push(r)
+      else m.set(r.output_message_id, [r])
+    }
+    return m
+  }, [runs])
+  const liveRunAnchored = !!activeRunId && runs.some((r) => r.id === activeRunId)
+
+  // Pending permission requests of this conversation, oldest first: they
+  // take the composer's slot as the approval bar and open the run's trace.
+  const interactionsQ = useAgentInteractions(convWorkspaceId, "pending")
+  const pendingPermissions = useMemo<AgentInteraction[]>(
+    () =>
+      (interactionsQ.data?.interactions ?? [])
+        .filter(
+          (i) => i.conversation_id === conversationId && i.kind === "permission" && i.status === "pending",
+        )
+        .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)),
+    [interactionsQ.data?.interactions, conversationId],
+  )
+  const runsAwaitingUser = useMemo(
+    () => new Set(pendingPermissions.map((i) => i.agent_run_id)),
+    [pendingPermissions],
+  )
+  // The stream announces the request before the 2s poll would: refetch now.
+  const pendingRequestId = stream.pendingInteraction?.requestId
+  useEffect(() => {
+    if (!pendingRequestId || !convWorkspaceId) return
+    qc.invalidateQueries({ queryKey: ["admin", "interactions", convWorkspaceId, "pending"] })
+  }, [pendingRequestId, convWorkspaceId, qc])
+
+  // Turn navigation: one marker per user turn, the active one follows scroll.
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null)
+  const turns = useMemo(
+    () =>
+      messages
+        .filter((m) => m.sender_type === "user")
+        .map((m) => ({ key: m.id, preview: turnPreview(m.content) })),
+    [messages],
+  )
+  const turnKeys = useMemo(() => turns.map((turn) => turn.key), [turns])
+  const activeTurnKey = useActiveTurnKey(viewport, turnKeys)
+
+  const liveTrace = (run: ConversationTimelineRun | null) => (
+    <RunTrace
+      key={run ? run.id : "live"}
+      run={run}
+      live={hasActiveStream ? { steps: stream.steps, startedAt: liveStartedAt ?? undefined } : null}
+      attention={
+        (!!run && runsAwaitingUser.has(run.id)) ||
+        (!!activeRunId && runsAwaitingUser.has(activeRunId)) ||
+        stream.pendingInteraction?.kind === "permission"
+      }
+    />
+  )
+  const traceFor = (run: ConversationTimelineRun) =>
+    run.id === activeRunId ? (
+      liveTrace(run)
+    ) : (
+      <RunTrace key={run.id} run={run} live={null} attention={runsAwaitingUser.has(run.id)} />
+    )
 
   // When the stream finishes, refetch the timeline so the persisted
   // assistant message replaces the in-memory deltaText, then drop the
@@ -1056,98 +1139,60 @@ function ChatStream({
   }, [stream.status, streamErrorMessage, activeRunId, conversationId, qc])
 
   return (
-    <>
-      <div
-        className={cn(
-          "border-b border-line/70 bg-surface/80 px-5 py-3 sm:px-6 lg:px-10",
-          sidebarFolded && "pl-14 sm:pl-16 lg:pl-[72px]",
-        )}
-      >
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase text-fg-faint">
-              {t("conversations.detail.kind")}
-            </p>
-            <h2 className="truncate text-base font-semibold text-fg">
-              {agent?.name || t("conversations.sidebar.allAgentsHint")}
-            </h2>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 text-xs text-fg-subtle">
-            <span
-              className={cn(
-                "rounded-md border px-2 py-1 font-medium",
-                someRunActive
-                  ? "border-success-border bg-success-subtle text-success"
-                  : "border-line bg-surface text-fg-subtle",
-              )}
-            >
-              {someRunActive ? t("conversations.stream.thinking") : t("conversations.stream.ready")}
-            </span>
-            {canWrite && someRunActive && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={cancelConvMut.isPending}
-                onClick={() => {
-                  // Drop activeRunId immediately so useAgentRunStream
-                  // closes the EventSource without waiting for the
-                  // server to send a done frame — daemon may take
-                  // seconds to react to the abort, and the user
-                  // expects the "thinking" + button to disappear at
-                  // the moment of the click. The server still sees
-                  // the EventSource close (it cancels the ctx and
-                  // bails). The /stream re-subscription path that
-                  // hits writeStreamHangError with status='cancelled'
-                  // is handled by isUserCancelledError in
-                  // api-conversations.ts — no banner shown.
-                  setActiveRunId(null)
-                  cancelConvMut.mutate({
-                    conversationID: conversationId,
-                    reason: "user_clicked_cancel_all",
-                  })
-                }}
-                className="h-7 gap-1 px-2 text-xs text-danger hover:text-danger-emphasis"
-                title={t("conversations.detail.cancelAllAria", {
-                  defaultValue: "Cancel all in-flight tasks in this conversation",
-                })}
-              >
-                {cancelConvMut.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
-                ) : (
-                  <X className="h-3 w-3" strokeWidth={2.5} />
-                )}
-                {t("conversations.detail.cancelAll", { defaultValue: "Cancel all" })}
-              </Button>
-            )}
+    <div className="flex min-w-0 flex-1 flex-col" style={THREAD_STYLE}>
+      <ThreadHeader
+        folded={folded}
+        onExpand={onExpand}
+        actions={
+          <>
             <ListSlot slotId="conversation.header.actions" context={{ conversationId, agent }} />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      <div className="flex flex-1 flex-col overflow-y-auto bg-surface-subtle">
-        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-5 py-6 sm:px-6 lg:px-10">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <TurnNavRail turns={turns} activeKey={activeTurnKey} />
+        <div ref={setViewport} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col gap-5 px-4 py-6">
           {timelineQ.isLoading ? (
-            <Skeleton className="h-24 w-3/4" />
+            <Skeleton className="h-16 w-3/4" />
           ) : messages.length === 0 ? (
-            <p className="text-center text-sm text-fg-faint">
+            <p className="m-0 py-6 text-center text-sm text-fg-muted">
               {t("conversations.detail.emptyTimeline")}
             </p>
           ) : (
-            messages.map((m) => (
-              <MessageRow
-                key={m.id}
-                senderType={m.sender_type}
-                messageType={m.kind}
-                content={m.content}
-                metadata={m.metadata}
-                outputRuns={runsByOutputMessage.get(m.id)}
-                stamp={fmtAgo(m.created_at)}
-                agentName={agent?.name ?? ""}
-                conversationId={conversationId}
-                onOpenRun={openRun}
-              />
-            ))
+            messages.map((m) => {
+              const row = (
+                <MessageRow
+                  senderType={m.sender_type}
+                  messageType={m.kind}
+                  content={m.content}
+                  metadata={m.metadata}
+                  outputRuns={runsByOutputMessage.get(m.id)}
+                  stamp={fmtAgo(m.created_at)}
+                  agentName={agent?.name ?? ""}
+                  conversationId={conversationId}
+                  onOpenRun={openRun}
+                />
+              )
+              if (m.sender_type === "user") {
+                // The turn and the work it triggered share one anchor.
+                return (
+                  <div key={m.id} data-turn-key={m.id} className="flex flex-col gap-3">
+                    {row}
+                    {(runsByTrigger.get(m.id) ?? []).map(traceFor)}
+                  </div>
+                )
+              }
+              return (
+                <Fragment key={m.id}>
+                  {(orphanRunsByOutput.get(m.id) ?? []).map(traceFor)}
+                  {row}
+                </Fragment>
+              )
+            })
           )}
+          {activeRunId && !liveRunAnchored && liveTrace(null)}
           {hasActiveStream && stream.deltaText && (
             <MessageRow
               senderType="agent"
@@ -1160,75 +1205,70 @@ function ChatStream({
           <ConversationInteractionCards
             workspaceID={convWorkspaceId}
             conversationID={conversationId}
-            preferredRequestID={stream.pendingInteraction?.requestId}
-            onOpenInbox={() => navigate("approvals")}
+            preferredRequestID={
+              stream.pendingInteraction?.kind === "user_choice" ? stream.pendingInteraction.requestId : undefined
+            }
+            omitPermission
           />
           {stream.status === "error" && (
-            <div className="rounded-lg border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {streamErrorMessage}
-            </div>
-          )}
-          {someRunActive && (
-            <div
-              className="flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-line/70"
-              role="status"
-              aria-live="polite"
-            >
-              <Loader2
-                className="h-3.5 w-3.5 shrink-0 animate-spin text-success motion-reduce:animate-none"
-                strokeWidth={2.25}
-                aria-hidden="true"
-              />
-              <span>{t("conversations.stream.thinking")}</span>
-            </div>
-          )}
-          {someRunActive && stream.steps.length > 0 && (
-            <WorkingSteps
-              steps={stream.steps}
-              active={someRunActive}
-              cancelling={cancelRunMut.isPending}
-              onCancel={
-                canWrite && activeRunId
-                  ? () => {
-                      cancelRunMut.mutate({ runID: activeRunId, reason: "user_clicked_cancel" })
-                    }
-                  : undefined
-              }
-            />
+            <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+              <span>{streamErrorMessage}</span>
+            </p>
           )}
           {/*
-            Queued runs render an independent "queued" chip per run,
-            distinct from the inflight working/thinking indicator
-            above. Mirrors the Feishu queue-card driver behaviour
-            (one chip per blocked message). Position is the timeline
-            snapshot — same staleness budget as the surrounding
-            5-second polling.
+            Queued runs render one "queued" line per run, distinct from the
+            in-flight working/thinking indicator above. Mirrors the Feishu
+            queue-card driver behaviour (one line per blocked message).
+            Position is the timeline snapshot — same staleness budget as
+            the surrounding 5-second polling.
           */}
           {runs
             .filter((r) => r.status === "queued")
             .map((r) => (
-              <div
-                key={r.id}
-                className="flex w-fit items-center gap-2 rounded-md border border-line/70 bg-surface-subtle px-3 py-2 text-sm text-fg-subtle shadow-sm"
-              >
-                <Clock className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden="true" />
-                {r.queue_position && r.queue_position > 1
-                  ? t("conversations.stream.queuedWithPosition", { position: r.queue_position })
-                  : t("conversations.stream.queued")}
-              </div>
+              <p key={r.id} className="m-0 flex items-center gap-2 text-sm text-fg">
+                <StatusIcon status="queued" />
+                <span>
+                  {r.queue_position && r.queue_position > 1
+                    ? t("conversations.stream.queuedWithPosition", { position: r.queue_position })
+                    : t("conversations.stream.queued")}
+                </span>
+              </p>
             ))}
+        </div>
         </div>
       </div>
 
-      <div className="border-t border-line/60 bg-surface/95 px-5 pb-4 pt-2 sm:px-6 lg:px-10">
-        <div className="mx-auto max-w-4xl">
-          <ListSlot slotId="conversation.input.dock" context={{ conversationId }} />
-          {chatToast && <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />}
+      <ComposerFooter>
+        <ListSlot slotId="conversation.input.dock" context={{ conversationId }} />
+        {chatToast && <ChatErrorToast message={chatToast} onDismiss={() => setChatToast(null)} />}
+        {pendingPermissions.length > 0 && convWorkspaceId ? (
+          // The approval takes the composer's slot: one control for the
+          // decision, none for typing until the agent may continue.
+          <ApprovalBar
+            interactions={pendingPermissions}
+            workspaceID={convWorkspaceId}
+            stop={
+              activeRunId
+                ? {
+                    label: t("conversations.composer.stopAria"),
+                    pending: cancelRunMut.isPending,
+                    onStop: () => {
+                      const runID = activeRunId
+                      setActiveRunId(null)
+                      cancelRunMut.mutate({ runID, reason: "user_clicked_stop" })
+                    },
+                  }
+                : undefined
+            }
+          />
+        ) : (
           <ComposerForm
             conversationId={conversationId}
+            agentName={agent?.name}
             placeholder={t("conversations.composer.placeholder", { agent: agent?.name ?? "" })}
             disabled={!canWrite || !agent || sandboxGuard?.blocked}
-            onRunStarted={setActiveRunId}
+            onRunStarted={startRun}
             onStartError={setChatToast}
             activeRunId={activeRunId}
             // Drop activeRunId immediately on click for the same reason
@@ -1249,24 +1289,119 @@ function ChatStream({
             cancelling={cancelRunMut.isPending}
             blockReason={!canWrite ? t("conversations.composer.readOnly") : sandboxGuard?.blocked ? sandboxGuard.message : undefined}
           />
-        </div>
-      </div>
-    </>
+        )}
+      </ComposerFooter>
+    </div>
   )
 }
 
-/** Inline error banner for conversation send and run failures. */
-function ChatErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+/* ============================================================== */
+/*  Run trace — timeline / SSE steps normalised for WorkTrace        */
+/* ============================================================== */
+
+const RUN_STATUS_KINDS: readonly StatusKind[] = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted",
+]
+
+function runStatusKind(run: ConversationTimelineRun): StatusKind {
+  if ((RUN_STATUS_KINDS as readonly string[]).includes(run.status)) return run.status as StatusKind
+  return run.started_at ? "completed" : "queued"
+}
+
+function isoMs(iso?: string): number | undefined {
+  if (!iso) return undefined
+  const ms = Date.parse(iso)
+  return isNaN(ms) ? undefined : ms
+}
+
+function timelineTraceSteps(run: ConversationTimelineRun): TraceStep[] {
+  return (run.steps ?? []).map((s) => ({
+    id: s.tool_call_id,
+    name: s.name,
+    // Server never emits step.status="failed": a step still "running" in a
+    // failed run is the one that took the run down (see store.buildToolSteps).
+    status: run.status === "failed" && s.status === "running" ? "failed" : s.status,
+    args: s.args,
+    result: s.result,
+    startedAt: isoMs(s.occurred_at),
+  }))
+}
+
+/**
+ * SSE steps carry page-relative clocks and no results. Replayed events for a
+ * step the timeline already knows borrow its wall-clock start and result, so
+ * a resumed run does not restart every counter at the moment of subscribing.
+ */
+function streamTraceSteps(steps: StreamingStep[], known: ToolStep[]): TraceStep[] {
+  const origin = performance.timeOrigin
+  const byId = new Map(known.map((s) => [s.tool_call_id, s]))
+  return steps.map((s) => {
+    const persisted = byId.get(s.tool_call_id)
+    const persistedStart = isoMs(persisted?.occurred_at)
+    return {
+      id: s.tool_call_id,
+      name: s.name,
+      status: s.status,
+      args: s.args ?? persisted?.args,
+      result: persisted?.result,
+      startedAt: persistedStart ?? origin + s.started_at,
+      endedAt: persistedStart !== undefined ? undefined : s.ended_at === undefined ? undefined : origin + s.ended_at,
+    }
+  })
+}
+
+/**
+ * One run's WorkTrace. `live` carries the SSE steps while this run streams
+ * (they replay the persisted events and then follow, so they supersede the
+ * timeline snapshot); `run` is null only for a run the timeline has not
+ * caught up with yet. Finished runs without steps render nothing.
+ */
+function RunTrace({
+  run,
+  live,
+  attention,
+}: {
+  run: ConversationTimelineRun | null
+  live: { steps: StreamingStep[]; startedAt?: number } | null
+  attention: boolean
+}) {
+  const status: StatusKind = live ? "running" : run ? runStatusKind(run) : "running"
+  const steps = useMemo(() => {
+    if (live && live.steps.length > 0) return streamTraceSteps(live.steps, run?.steps ?? [])
+    return run ? timelineTraceSteps(run) : []
+  }, [live, run])
+  if (status !== "running" && status !== "queued" && steps.length === 0) return null
+  if (status === "queued" && !live) return null
   return (
-    <div role="alert" className="mb-2 flex items-start justify-between gap-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-      <span className="min-w-0 break-all">{message}</span>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-danger-emphasis hover:bg-danger-subtle"
-      >
-        ×
-      </button>
+    <WorkTrace
+      steps={steps}
+      status={status}
+      startedAt={isoMs(run?.started_at) ?? live?.startedAt}
+      finishedAt={isoMs(run?.finished_at)}
+      attentionRequired={attention}
+    />
+  )
+}
+
+/**
+ * Inline error line above the chat composer: a failed-red triangle, the
+ * message in ink, one ghost dismiss button. Ad-hoc on purpose — it is
+ * rendered in one place today.
+ */
+function ChatErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const { t: tc } = useTranslation("common")
+  return (
+    <div className="mb-2 flex items-start gap-1.5 text-sm text-fg">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+      <span className="min-w-0 flex-1 break-words">{message}</span>
+      <Button variant="ghost" size="icon" className="-my-1.5 h-6 w-6" onClick={onDismiss} aria-label={tc("actions.close")}>
+        <X strokeWidth={1.5} aria-hidden="true" />
+      </Button>
     </div>
   )
 }
@@ -1307,40 +1442,32 @@ const MessageRow = memo(function MessageRow({
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="flex max-w-[88%] flex-col items-end sm:max-w-[78%]">
-          <div className="rounded-lg border border-success-border bg-success-subtle px-4 py-2.5 text-base leading-relaxed text-success-emphasis shadow-sm">
-            <p className="whitespace-pre-wrap">{content}</p>
+        <div className="flex max-w-[85%] flex-col items-end">
+          <div className="rounded-md bg-surface-muted px-3 py-2 text-base text-fg">
+            <p className="m-0 whitespace-pre-wrap break-words">{content}</p>
           </div>
-          <div className="mt-1.5 text-right text-xs text-fg-faint">{stamp}</div>
+          <div className="mt-1 text-xs text-fg-muted">{stamp}</div>
         </div>
       </div>
     )
   }
+  const byline = agentName ? `${agentName} · ${stamp}` : stamp
   if (messageType === "runtime_error") {
     const runtimeError = runtimeErrorViewModel(metadata, content, conversationId, i18n.language, t)
     return (
-      <div className="flex">
-        <div className="max-w-[78%]">
-          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-danger-emphasis">
-            <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
-            <span>{t("conversations.runtime_error.badge")}</span>
-          </div>
-          <div className="rounded-xl border border-danger-border bg-danger-subtle px-3 py-2.5 text-base leading-relaxed text-danger-emphasis shadow-sm">
-            <p className="font-medium">{runtimeError.message}</p>
+      <div className="max-w-[85%]">
+        <div className="mb-1 text-xs text-fg-muted">{byline}</div>
+        <div className="flex items-start gap-1.5 text-base text-fg">
+          <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="m-0 font-medium">{t("conversations.runtime_error.badge")}</p>
+            <p className="m-0 mt-1 break-words">{runtimeError.message}</p>
             {runtimeError.href && runtimeError.action && (
-              <a
-                href={runtimeError.href}
-                className="mt-2 inline-flex items-center rounded-md border border-danger-border bg-surface px-2.5 py-1 text-sm font-medium text-danger-emphasis transition-colors hover:bg-danger-subtle"
-              >
-                {runtimeError.action}
-              </a>
+              <Button asChild variant="outline" size="sm" className="mt-2">
+                <a href={runtimeError.href}>{runtimeError.action}</a>
+              </Button>
             )}
-            <p className="mt-2 text-sm text-danger-emphasis/80">
-              {t("conversations.runtime_error.retryHint")}
-            </p>
-          </div>
-          <div className="mt-1.5 text-xs text-fg-faint">
-            {agentName ? `${stamp} · ${agentName}` : stamp}
+            <p className="m-0 mt-2 text-xs text-fg-muted">{t("conversations.runtime_error.retryHint")}</p>
           </div>
         </div>
       </div>
@@ -1362,30 +1489,19 @@ const MessageRow = memo(function MessageRow({
   const presentation = (metadata?.presentation as { kind?: string; data?: unknown } | undefined)
     ?? extractPresentationFromSteps(allSteps)
   return (
-    <div className="flex">
-      <div className="max-w-[82%] border-l border-line pl-4">
-        <div className="mb-1.5 text-xs font-medium text-fg-faint">{agentName || "Agent"}</div>
-        <ToolCardSlot
-          presentation={presentation}
-          content={content}
-          fallback={
-            <div className="text-base leading-[1.7] text-fg">
-              <p className="whitespace-pre-wrap">{content}</p>
-            </div>
-          }
-        />
-        {allSteps.length > 0 && <StepTrace steps={allSteps} />}
-        {failedRun && onOpenRun && (
-          <button
-            type="button"
-            onClick={() => onOpenRun(failedRun.id)}
-            className="mt-1.5 text-sm text-fg-subtle hover:text-fg-muted hover:underline"
-          >
-            {t("conversations.detail.viewRunLink")} →
-          </button>
-        )}
-        <div className="mt-1.5 text-xs text-fg-faint">{stamp}</div>
-      </div>
+    <div className="max-w-[85%]">
+      <div className="mb-1 text-xs text-fg-muted">{byline}</div>
+      <ToolCardSlot
+        presentation={presentation}
+        content={content}
+        fallback={<p className="m-0 whitespace-pre-wrap break-words text-base text-fg">{content}</p>}
+      />
+      {failedRun && onOpenRun && (
+        <Button variant="link" size="sm" className="mt-1 px-0" onClick={() => onOpenRun(failedRun.id)}>
+          {t("conversations.detail.viewRunLink")}
+          <ArrowUpRight strokeWidth={1.5} aria-hidden="true" />
+        </Button>
+      )}
     </div>
   )
 })
@@ -1475,7 +1591,7 @@ function stringMeta(metadata: Record<string, unknown> | undefined, key: string):
 }
 
 /* ============================================================== */
-/*  Composer — task input, Enter to send                            */
+/*  Composer — Textarea, Enter to send, Shift+Enter for a newline   */
 /* ============================================================== */
 
 function ComposerForm({
@@ -1492,10 +1608,13 @@ function ComposerForm({
   onCancelActiveRun,
   cancelling,
   blockReason,
+  agentName,
 }: {
   conversationId: string
   agentId?: string
   placeholder: string
+  /** Name of the agent that receives the message; shown in the toolbar. */
+  agentName?: string
   disabled?: boolean
   autoFocus?: boolean
   /**
@@ -1536,6 +1655,8 @@ function ComposerForm({
   const { t } = useTranslation("admin")
   const [content, setContent] = useState("")
   const [busy, setBusy] = useState(false)
+  // A send failure belongs to the conversation (or the agent, before one
+  // exists) it was typed into, so switching away clears it (main #280).
   const [sendError, setSendError] = useState<{ targetId: string; message: string } | null>(null)
   const sendTargetId = conversationId || agentId || ""
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -1557,8 +1678,7 @@ function ComposerForm({
     !busy &&
     (onSendDirect ? true : !!conversationId)
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const submit = async () => {
     if (!canSubmit) return
     setSendError(null)
     const text = trimmed
@@ -1608,73 +1728,82 @@ function ComposerForm({
     !onSendDirect && !!activeRunId && !!onCancelActiveRun && trimmed.length === 0 && !isBusy
 
   return (
-    <form onSubmit={submit}>
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void submit()
+      }}
+    >
       {sendError?.targetId === sendTargetId && (
         <ChatErrorToast message={sendError.message} onDismiss={() => setSendError(null)} />
       )}
-      {blockReason && (
-        <div className="mb-2 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-          <span className="break-words">{blockReason}</span>
-        </div>
-      )}
-      <div
-        className={cn(
-          "flex min-h-[64px] items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04),_0_12px_34px_rgba(15,23,42,0.08)] transition-shadow",
-          "hover:shadow-[0_1px_2px_rgba(15,23,42,0.06),_0_16px_40px_rgba(15,23,42,0.10)]",
-          disabled && "opacity-60",
-        )}
-      >
+      {blockReason && <InlineError className="mb-2">{blockReason}</InlineError>}
+      {/* The composer: one tonal, borderless 16px panel (the ChatGPT idiom
+          in our greys), text on top, a toolbar row below with the bound
+          agent and the round ink send / stop button. */}
+      <div className="rounded-2xl bg-surface-muted px-4 pb-3 pt-4">
         <textarea
           ref={inputRef}
-          rows={2}
+          rows={1}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => {
+            setContent(e.target.value)
+            // Grow with the text up to eight lines, then scroll.
+            const el = e.currentTarget
+            el.style.height = "auto"
+            el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+          }}
           onKeyDown={(e) => {
-            if (e.key !== "Enter" || e.shiftKey) return
-            // Safari can report IME confirmation after composition ends.
-            if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return
-            e.preventDefault()
-            if (!e.repeat) e.currentTarget.form?.requestSubmit()
+            // Enter sends; Shift+Enter inserts a newline; never fire mid-IME.
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              void submit()
+            }
           }}
           placeholder={placeholder}
+          aria-label={t("conversations.composer.label")}
           disabled={disabled || (!conversationId && !onSendDirect)}
-          className="max-h-48 min-w-0 flex-1 resize-y border-0 bg-transparent px-2 text-base outline-none focus-visible:ring-0 disabled:cursor-not-allowed"
+          className="block max-h-[200px] min-h-[40px] w-full resize-none bg-transparent text-base leading-relaxed text-fg placeholder:text-fg-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
-        {showStop ? (
-          <button
-            type="button"
-            onClick={onCancelActiveRun}
-            disabled={cancelling}
-            aria-label={t("conversations.composer.stopAria", { defaultValue: "Stop" })}
-            title={t("conversations.composer.stopAria", { defaultValue: "Stop" })}
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-colors",
-              "bg-surface-inverse text-white hover:bg-surface-emphasis",
-              cancelling && "opacity-60",
-            )}
-          >
-            {cancelling ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Square className="h-3.5 w-3.5 fill-current" />
-            )}
-          </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-colors",
-              canSubmit
-                ? "bg-surface-inverse text-white hover:bg-surface-emphasis"
-                : "bg-surface-muted text-fg-faint",
-            )}
-            aria-label="send"
-          >
-            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
-        )}
+        <div className="mt-2 flex h-8 items-center justify-end gap-3">
+          {agentName && (
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
+              <InitialTile name={agentName} />
+              <span className="truncate">{agentName}</span>
+            </span>
+          )}
+          {showStop ? (
+            <button
+              type="button"
+              onClick={onCancelActiveRun}
+              disabled={cancelling}
+              aria-label={t("conversations.composer.stopAria")}
+              title={t("conversations.composer.stopAria")}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-emphasis text-fg-on-emphasis active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+            >
+              {cancelling ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Square className="h-3 w-3 fill-current" strokeWidth={1.5} aria-hidden="true" />
+              )}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              aria-label={isBusy ? t("conversations.composer.sending") : t("conversations.composer.send")}
+              title={t("conversations.composer.send")}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-emphasis text-fg-on-emphasis transition-opacity duration-150 ease-settle active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30"
+            >
+              {isBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </form>
   )
@@ -1713,8 +1842,8 @@ function extractPresentationFromSteps(steps: ToolStep[]): { kind?: string; data?
   return undefined
 }
 
-function truncate(s: string, n: number): string {
-  if (!s) return ""
-  if (s.length <= n) return s
-  return s.slice(0, n) + "…"
+/** Distinguishing tail of a long id: the prefix is shared, the tail is not. */
+function tailId(s?: string, n = 8): string {
+  if (!s) return "—"
+  return s.length <= n ? s : s.slice(-n)
 }

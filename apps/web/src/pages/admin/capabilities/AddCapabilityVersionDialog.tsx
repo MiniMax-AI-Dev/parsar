@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog"
 import { Button } from "../../../components/ui/button"
+import { Field } from "../../../components/ui/label"
 import { Input } from "../../../components/ui/input"
 import { ApiError } from "../../../lib/api-client"
 import { preventDialogDismissForCredentialMenu } from "../../../lib/dialog-interactions"
@@ -38,6 +39,7 @@ import { ImportMCPForm } from "./ImportMCPForm"
 import { ImportSkillForm } from "./ImportSkillForm"
 import { ImportPluginForm, type PluginUploadState } from "./ImportPluginForm"
 import { isImportSpecReady } from "./importValidation"
+import { InlineNotice } from "./notices"
 import type {
   CanonicalKind,
   CanonicalSpec,
@@ -250,43 +252,45 @@ export function AddCapabilityVersionDialog({
         </DialogHeader>
 
         {prefill.didPrefill && (
-          <InfoBanner>
+          <InlineNotice>
             {t("capabilities.versions.add.prefillFromLatest", {
               version: latestVersion?.version ?? "",
               defaultValue:
                 "Pre-filled with the previous version ({{version}}). Edits will be submitted as a new version.",
             })}
-          </InfoBanner>
+          </InlineNotice>
         )}
         {inheritedOssLabel && (kind === "plugin" || kind === "skill") && (
-          <InfoBanner>
+          <InlineNotice>
             {t("capabilities.versions.add.reuseExistingZip", {
               filename: inheritedOssLabel,
               defaultValue:
                 "Current version package: {{filename}}. If you do not re-upload, the new version will reuse this package.",
             })}
-          </InfoBanner>
+          </InlineNotice>
         )}
         {inheritedInlineSecrets.length > 0 && (
-          <WarningBanner>
+          <InlineNotice tone="warning">
             {t("capabilities.versions.add.inlineSecretLostWarning", {
               keys: inheritedInlineSecrets.map((e) => `${e.server}.${e.envKey}`).join(", "),
               defaultValue:
                 "Previous-version inline secrets ({{keys}}) are hidden. Re-enter them in plaintext to keep, or switch to managed credentials.",
             })}
-          </WarningBanner>
+          </InlineNotice>
         )}
 
-        <div className="mt-2 grid gap-3 md:grid-cols-2">
-          <Field label={t("capabilities.fields.name.label")} required>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label={t("capabilities.fields.name.label")} htmlFor="add-version-name">
             <Input
+              id="add-version-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("capabilities.fields.name.placeholder")}
             />
           </Field>
-          <Field label={t("capabilities.fields.description.label")}>
+          <Field label={t("capabilities.fields.description.label")} htmlFor="add-version-description">
             <Input
+              id="add-version-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("capabilities.fields.description.placeholder")}
@@ -294,16 +298,9 @@ export function AddCapabilityVersionDialog({
           </Field>
         </div>
 
-        {nameError && (
-          <div
-            role="alert"
-            className="mt-2 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
-          >
-            {nameError}
-          </div>
-        )}
+        {nameError && <InlineNotice tone="error">{nameError}</InlineNotice>}
 
-        <div className="mt-3">
+        <div>
           {kind === "mcp" ? (
             <ImportMCPForm
               workspaceID={workspaceID}
@@ -347,28 +344,18 @@ export function AddCapabilityVersionDialog({
           )}
         </div>
 
-        {errMsg && (
-          <div
-            role="alert"
-            className="break-all rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
-          >
-            {errMsg}
-          </div>
-        )}
+        {errMsg && <InlineNotice tone="error">{errMsg}</InlineNotice>}
 
         <DialogFooter>
           <Button
             variant="outline"
-            size="sm"
             disabled={commitMut.isPending || updateMut.isPending}
             onClick={() => onOpenChange(false)}
           >
             {t("capabilities.actions.cancel")}
           </Button>
-          <Button size="sm" disabled={!canSubmit} onClick={submit}>
-            {(commitMut.isPending || updateMut.isPending) && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            )}
+          <Button disabled={!canSubmit} onClick={submit}>
+            {(commitMut.isPending || updateMut.isPending) && <Loader2 className="animate-spin" />}
             {t("capabilities.actions.addVersion")}
           </Button>
         </DialogFooter>
@@ -406,7 +393,7 @@ function usePrefillFromLatest(latestVersion: CapabilityVersion | undefined): {
  * Walks the parsed spec for inline_secret env entries that already carry a
  * server-allocated secret_id. Those secret rows belong to the PREVIOUS version
  * and cannot be reused — the new version needs either a fresh plaintext or a
- * switch to credential_ref. We render a single warning banner listing the
+ * switch to credential_ref. We render a single warning listing the
  * affected (server, env_key) pairs.
  */
 function collectInheritedInlineSecrets(
@@ -423,43 +410,4 @@ function collectInheritedInlineSecrets(
     }
   }
   return out
-}
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-sm font-medium text-fg-muted">
-        {label}
-        {required && <span className="text-danger"> *</span>}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-function InfoBanner({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-2 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
-      {children}
-    </div>
-  )
-}
-
-function WarningBanner({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      role="alert"
-      className="mt-2 break-all rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-emphasis"
-    >
-      {children}
-    </div>
-  )
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Loader2, Plus, Search } from "lucide-react"
+import { Check, Loader2, Search } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { SandboxPanel } from "../../../components/admin/SandboxPanel"
@@ -8,6 +8,8 @@ import { Button } from "../../../components/ui/button"
 import { EmptyState } from "../../../components/ui/empty-state"
 import { ErrorState } from "../../../components/ui/error-state"
 import { Input } from "../../../components/ui/input"
+import { Field } from "../../../components/ui/label"
+import { Select } from "../../../components/ui/select"
 import { Skeleton } from "../../../components/ui/skeleton"
 import {
   Dialog,
@@ -41,13 +43,18 @@ import { agentExecutionPlacement } from "../../../lib/agent-runtime"
 import { agentEngineLabel, agentEngineOf, agentEngineSupportsCapability, agentEnginesSupportingCapability } from "../../../lib/agent-view-model"
 import { credentialBinding, hasCredentialKind, sharedSecretsForKind } from "../../../lib/credential-bindings"
 import type { Agent, AgentCapability, AgentDetail, Capability, CapabilityVersion, Secret, UserCredential } from "../../../lib/api-types"
+import { cn } from "../../../lib/utils"
 import { CredentialBindingSelect } from "../../../components/admin/CredentialBindingSelect"
 import { CapabilityTypeBadge } from "../CapabilitiesPage"
 import { UpgradeCapabilityDialog } from "../capabilities/UpgradeCapabilityDialog"
 import { credentialKindLabel } from "../capability-ui"
 import { AgentConfigSummary } from "./AgentConfigSummary"
+import { DetailSection, InlineError } from "./DetailSection"
 
 type CapabilityCardItem = { capability?: Capability; binding?: AgentCapability }
+
+/* Native <select> inside the shared CredentialBindingSelect, dressed as ui/Select. */
+const SELECT_CLASS = "app-shadow-control h-7 w-full rounded-md border border-line-strong bg-surface px-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
 
 function runtimeOf(agent: Agent): "local" | "sandbox" {
   const placement = agentExecutionPlacement(agent)
@@ -129,6 +136,11 @@ function useCapabilityVersions(
   return { latest, versions, versionsQ }
 }
 
+/** One hairline-separated capability row: name and flags left, controls right. */
+function CapabilityRow({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <li className={cn("border-b border-line py-3 last:border-b-0", className)}>{children}</li>
+}
+
 function BuiltinCapabilityCard({
   binding,
   agent,
@@ -155,20 +167,20 @@ function BuiltinCapabilityCard({
     )
   }
   return (
-    <div className="rounded-md border border-line p-3">
+    <CapabilityRow>
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-fg">{capability?.name ?? key}</span>
             {capability?.type && <CapabilityTypeBadge type={capability.type} />}
             <Badge variant="neutral">{t("agents.detail.capabilities.builtin.badge")}</Badge>
           </div>
-          {capability?.description && <p className="mt-1 text-sm text-fg-subtle">{capability.description}</p>}
+          {capability?.description && <p className="mt-0.5 text-xs text-fg-muted">{capability.description}</p>}
         </div>
-        <label className={`flex shrink-0 items-center gap-2 text-sm ${isAdmin ? "cursor-pointer" : "cursor-not-allowed opacity-60"} text-fg-subtle`}>
+        <label className={cn("flex h-7 shrink-0 items-center gap-2 text-sm text-fg", isAdmin ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
           <input
             type="checkbox"
-            className="h-4 w-4"
+            className="h-3.5 w-3.5 accent-accent"
             checked={enabled}
             disabled={!isAdmin || mut.isPending}
             onChange={(e) => onToggle(e.target.checked)}
@@ -176,7 +188,7 @@ function BuiltinCapabilityCard({
           <span>{enabled ? t("agents.detail.capabilities.builtin.on") : t("agents.detail.capabilities.builtin.off")}</span>
         </label>
       </div>
-    </div>
+    </CapabilityRow>
   )
 }
 
@@ -209,21 +221,24 @@ function CapabilityCard({
     : false
   const fromMarketplace = !!capability?.from_marketplace || (!!capability?.source_workspace_id && capability.source_workspace_id !== workspaceID)
   const deprecated = !!capability?.deprecated_at
-  const border = mode === "available" ? "border-dashed border-line-strong" : "border-line"
 
   if (!capability && binding) {
     return (
-      <div className="rounded-md border border-warning-border bg-warning-subtle/60 p-3">
-        <p className="text-sm font-medium text-warning-emphasis">{t("agents.detail.capabilities.deletedCapability.title")}</p>
-        <p className="mt-1 text-sm text-warning-emphasis">{t("agents.detail.capabilities.deletedCapability.description")}</p>
-        <RemoveCapabilityDialog
-          agent={agent}
-          binding={binding}
-          capabilityName={t("agents.detail.capabilities.deletedCapability.fallbackName")}
-          workspaceID={workspaceID}
-          onToast={onToast}
-        />
-      </div>
+      <CapabilityRow>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <InlineError className="font-medium">{t("agents.detail.capabilities.deletedCapability.title")}</InlineError>
+            <p className="mt-0.5 pl-5 text-xs text-fg-muted">{t("agents.detail.capabilities.deletedCapability.description")}</p>
+          </div>
+          <RemoveCapabilityDialog
+            agent={agent}
+            binding={binding}
+            capabilityName={t("agents.detail.capabilities.deletedCapability.fallbackName")}
+            workspaceID={workspaceID}
+            onToast={onToast}
+          />
+        </div>
+      </CapabilityRow>
     )
   }
   if (!capability) return null
@@ -237,18 +252,23 @@ function CapabilityCard({
         engines: agentEnginesSupportingCapability(capability.type).map((engine) => t(agentEngineLabel(engine))).join(", "),
       })
     : ""
+  const versionLabel = binding
+    ? (boundVersion ? `v${boundVersion.version}` : "v—")
+    : latest
+      ? `v${latest.version} · ${t("agents.detail.capabilities.switchDialog.latest")}`
+      : null
 
   return (
-    <div className={`rounded-md border ${border} p-3`}>
+    <CapabilityRow>
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-fg">{capability.name}</span>
             <CapabilityTypeBadge type={capability.type} />
             {fromMarketplace && <Badge variant="primary">{t("agents.detail.capabilities.marketplace.badge")}</Badge>}
-            {incompatible && <Badge variant="destructive">{t("agents.detail.capabilities.compatibility.badge")}</Badge>}
-            {missingCredential && <Badge variant="destructive">{t("agents.detail.capabilities.credential.missingBadge")}</Badge>}
-            {versionDeleted && <Badge variant="destructive">{t("agents.detail.capabilities.bindings.versionDeleted.warning")}</Badge>}
+            {incompatible && <Badge variant="destructive" dot>{t("agents.detail.capabilities.compatibility.badge")}</Badge>}
+            {missingCredential && <Badge variant="destructive" dot>{t("agents.detail.capabilities.credential.missingBadge")}</Badge>}
+            {versionDeleted && <Badge variant="destructive" dot>{t("agents.detail.capabilities.bindings.versionDeleted.warning")}</Badge>}
             {versionDeleted && versions.length > 0 && binding && (
               <CapabilityVersionDialog
                 mode="switch"
@@ -262,46 +282,11 @@ function CapabilityCard({
               />
             )}
           </div>
-          {capability.description && <p className="mt-1 text-sm text-fg-subtle">{capability.description}</p>}
-          {fromMarketplace && <p className="mt-1 text-sm text-fg-subtle">{t("agents.detail.capabilities.marketplace.source", { source: capability.source_workspace_name ?? "—", version: boundVersion?.version ?? capability.pinned_version ?? latest?.version ?? "—" })}</p>}
+          {capability.description && <p className="mt-0.5 text-xs text-fg-muted">{capability.description}</p>}
+          {fromMarketplace && <p className="mt-0.5 text-xs text-fg-muted">{t("agents.detail.capabilities.marketplace.source", { source: capability.source_workspace_name ?? "—", version: boundVersion?.version ?? capability.pinned_version ?? latest?.version ?? "—" })}</p>}
         </div>
-      </div>
-
-      {mode === "enabled" && deprecated && (
-        <div className="mt-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm leading-5 text-danger-emphasis">
-          {t("agents.detail.capabilities.marketplace.deprecatedBanner", { version: boundVersion?.version ?? capability.pinned_version ?? "—" })}
-        </div>
-      )}
-
-      {incompatible && (
-        <div className="mt-3 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm leading-5 text-warning-emphasis">
-          {compatibilityMessage}
-        </div>
-      )}
-
-      {mode === "enabled" && fromMarketplace && binding && latest && latest.id !== binding.capability_version_id && (
-        <UpgradeCapabilityDialog
-          agent={agent}
-          capability={capability}
-          binding={binding}
-          latestVersion={latest}
-          workspaceID={workspaceID}
-          disabled={deprecated}
-          onToast={onToast}
-        />
-      )}
-
-      <CredentialStatus capability={capability} binding={binding} agent={agent} credentials={credentials} sharedSecrets={sharedSecrets} catalogID={catalogID} />
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {binding ? (
-            <Badge variant="neutral" className="font-mono">{boundVersion ? `v${boundVersion.version}` : "v—"}</Badge>
-          ) : latest ? (
-            <Badge variant="neutral" className="font-mono">v{latest.version} · {t("agents.detail.capabilities.switchDialog.latest")}</Badge>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {versionLabel && <span className="font-mono text-xs text-fg-muted">{versionLabel}</span>}
           {mode === "available" ? (
             <CapabilityVersionDialog
               mode="enable"
@@ -336,7 +321,29 @@ function CapabilityCard({
           ) : null}
         </div>
       </div>
-    </div>
+
+      {mode === "enabled" && deprecated && (
+        <InlineError className="mt-2">
+          {t("agents.detail.capabilities.marketplace.deprecatedBanner", { version: boundVersion?.version ?? capability.pinned_version ?? "—" })}
+        </InlineError>
+      )}
+
+      {incompatible && <InlineError className="mt-2">{compatibilityMessage}</InlineError>}
+
+      {mode === "enabled" && fromMarketplace && binding && latest && latest.id !== binding.capability_version_id && (
+        <UpgradeCapabilityDialog
+          agent={agent}
+          capability={capability}
+          binding={binding}
+          latestVersion={latest}
+          workspaceID={workspaceID}
+          disabled={deprecated}
+          onToast={onToast}
+        />
+      )}
+
+      <CredentialStatus capability={capability} binding={binding} agent={agent} credentials={credentials} sharedSecrets={sharedSecrets} catalogID={catalogID} />
+    </CapabilityRow>
   )
 }
 
@@ -358,10 +365,10 @@ function CredentialStatus({
   const { t, i18n } = useTranslation("admin")
   const requiredCreds = capability.required_credentials ?? []
   if (requiredCreds.length === 0) {
-    return <p className="mt-3 text-sm text-fg-subtle">{t("agents.detail.capabilities.credential.none")}</p>
+    return <p className="mt-2 text-xs text-fg-muted">{t("agents.detail.capabilities.credential.none")}</p>
   }
   return (
-    <div className="mt-3 space-y-1.5">
+    <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
       {requiredCreds.map((rc) => {
         const sharedID = boundSharedSecretID(agent, binding, rc.kind)
         const sharedSecret = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID).find((secret) => secret.id === sharedID)
@@ -369,17 +376,24 @@ function CredentialStatus({
         const available = sharedSecret ?? credential
         const label = credentialKindLabel(rc.kind, i18n.language, rc.kind)
         return (
-          <div key={rc.kind} className={`rounded-md border px-3 py-2 text-sm ${available ? "border-success-border bg-success-subtle text-success-emphasis" : "border-danger-border bg-danger-subtle text-danger-emphasis"}`}>
+          <li key={rc.kind} className="flex items-center gap-1.5 text-xs text-fg">
             {available ? (
-              <span>{t("agents.detail.capabilities.credential.present", { kind: label, name: sharedSecret?.name || credential?.display_name || t("agents.detail.capabilities.credential.defaultName") })}</span>
+              <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
             ) : (
-              <span>{t("agents.detail.capabilities.credential.missing", { kind: label })}</span>
+              <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden="true">
+                <span className="h-1.5 w-1.5 rounded-full bg-status-failed" />
+              </span>
             )}
-            {!sharedSecret && <CredentialLink kind={rc.kind} className="ml-2 font-medium underline underline-offset-2" />}
-          </div>
+            <span className="min-w-0 truncate">
+              {available
+                ? t("agents.detail.capabilities.credential.present", { kind: label, name: sharedSecret?.name || credential?.display_name || t("agents.detail.capabilities.credential.defaultName") })
+                : t("agents.detail.capabilities.credential.missing", { kind: label })}
+            </span>
+            {!sharedSecret && <CredentialLink kind={rc.kind} className="shrink-0 text-xs text-fg underline underline-offset-4" />}
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }
 
@@ -387,7 +401,7 @@ function CredentialLink({ kind, className, children }: { kind?: string; classNam
   const { t } = useTranslation("admin")
   if (!kind) return null
   return (
-    <a className={className ?? "text-sm font-medium text-fg underline underline-offset-2"} href={credentialURL(kind)}>
+    <a className={className ?? "text-sm text-fg underline underline-offset-4"} href={credentialURL(kind)}>
       {children ?? t("agents.detail.capabilities.credential.addCta")}
     </a>
   )
@@ -404,21 +418,17 @@ function mutationError(error: unknown) {
 
 function MutationError({ error }: { error: unknown }) {
   const message = mutationError(error)
-  return message ? <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">{message}</p> : null
+  return message ? <InlineError>{message}</InlineError> : null
 }
 
 function VersionSelect({ versions, value, onChange }: { versions: CapabilityVersion[]; value: string; onChange: (value: string) => void }) {
   const { t } = useTranslation("admin")
   return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-8 w-full rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
-    >
+    <Select value={value} onChange={(event) => onChange(event.target.value)}>
       {versions.map((version, index) => (
         <option key={version.id} value={version.id}>v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}</option>
       ))}
-    </select>
+    </Select>
   )
 }
 
@@ -441,24 +451,14 @@ function EnableCredentialBindingList({
 }) {
   const { t, i18n } = useTranslation("admin")
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-3">
       {requiredKinds.map((rc) => {
         const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID)
         const selectedSecretID = bindings[rc.kind] ?? ""
         const hasPersonal = !publicAgent && hasCredentialKind(credentials, rc.kind)
         const ready = !!selectedSecretID || hasPersonal
         return (
-          <div
-            key={rc.kind}
-            className={
-              ready
-                ? "rounded-md border border-success-border bg-success-subtle px-3 py-2"
-                : "rounded-md border border-warning-border bg-warning-subtle px-3 py-2"
-            }
-          >
-            <label className="mb-1 block text-xs font-medium text-fg-muted">
-              {credentialKindLabel(rc.kind, i18n.language, rc.kind)}
-            </label>
+          <Field key={rc.kind} label={credentialKindLabel(rc.kind, i18n.language, rc.kind)}>
             <CredentialBindingSelect
               value={selectedSecretID}
               secrets={kindSecrets}
@@ -467,14 +467,14 @@ function EnableCredentialBindingList({
               personalPlaceholder={t("credentialCheck.sharedPlaceholder")}
               sharedLabel={t("credentialCheck.sourceShared")}
               onChange={(value) => onChange(rc.kind, value)}
-              className="h-8 w-full rounded-md border border-line bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-line-strong"
+              className={SELECT_CLASS}
             />
             {!ready && (
-              <p className="mt-1 text-xs text-warning-emphasis">
+              <InlineError className="mt-1 text-xs">
                 {publicAgent ? t("credentialCheck.sharedNoneAvailable") : t("credentialCheck.personalYouMissing")}
-              </p>
+              </InlineError>
             )}
-          </div>
+          </Field>
         )
       })}
     </div>
@@ -524,7 +524,7 @@ function CapabilityVersionDialog({
     const defaults: Record<string, string> = {}
     for (const rc of requiredKinds) {
       const kindSecrets = sharedSecretsForKind(sharedSecrets, rc.kind, catalogID)
-      const oauthSecret = kindSecrets.find((secret) => rc.kind === "mcp_oauth")
+      const oauthSecret = kindSecrets.find(() => rc.kind === "mcp_oauth")
       if (oauthSecret) defaults[rc.kind] = oauthSecret.id
       else if (agent.visibility === "public" && kindSecrets[0]) defaults[rc.kind] = kindSecrets[0].id
     }
@@ -577,9 +577,8 @@ function CapabilityVersionDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Button
-        variant={isSwitch ? triggerVariant : "default"}
+        variant={isSwitch ? triggerVariant : "outline"}
         size="sm"
-        className={isSwitch && triggerVariant === "link" ? "h-auto px-1 py-0 text-sm text-danger-emphasis" : undefined}
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
@@ -590,20 +589,27 @@ function CapabilityVersionDialog({
           <DialogTitle>{t(isSwitch ? "agents.detail.capabilities.switchDialog.title" : "agents.detail.capabilities.enableDialog.title", { agent: agent.name, cap: capability.name })}</DialogTitle>
           <DialogDescription>{t(isSwitch ? "agents.detail.capabilities.switchDialog.description" : "agents.detail.capabilities.enableDialog.description")}</DialogDescription>
         </DialogHeader>
-        <div className={isSwitch ? "space-y-2" : "space-y-4"}>
+        <div className="flex flex-col gap-3">
           {isSwitch ? (
-            versionsQ.isLoading ? <Skeleton className="h-28 w-full" /> : versions.map((version, index) => (
-              <label key={version.id} className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 ${selected === version.id ? "border-line-strong bg-surface-subtle" : "border-line"}`}>
-                <input type="radio" name="capability-version" className="mt-1" checked={selected === version.id} onChange={() => setSelected(version.id)} />
-                <span className="flex-1 text-sm text-fg-emphasis">v{version.version}{index === 0 ? ` · ${t("agents.detail.capabilities.switchDialog.latest")}` : ""}{version.id === binding?.capability_version_id ? ` · ${t("agents.detail.capabilities.switchDialog.current")}` : ""}</span>
-              </label>
-            ))
+            versionsQ.isLoading ? <Skeleton className="h-28 w-full" /> : (
+              <ul className="m-0 list-none p-0">
+                {versions.map((version, index) => (
+                  <li key={version.id}>
+                    <label className="flex h-7 cursor-pointer items-center gap-2 text-sm text-fg">
+                      <input type="radio" name="capability-version" className="h-3.5 w-3.5 accent-accent" checked={selected === version.id} onChange={() => setSelected(version.id)} />
+                      <span className="font-mono text-xs">v{version.version}</span>
+                      {index === 0 && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.latest")}</span>}
+                      {version.id === binding?.capability_version_id && <span className="text-xs text-fg-muted">· {t("agents.detail.capabilities.switchDialog.current")}</span>}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )
           ) : (
             <>
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium text-fg-muted">{t("agents.detail.capabilities.enableDialog.version")}</label>
-                {versionsQ.isLoading ? <Skeleton className="h-8 w-full" /> : <VersionSelect versions={versions} value={selectedVersion?.id ?? ""} onChange={setSelected} />}
-              </div>
+              <Field label={t("agents.detail.capabilities.enableDialog.version")}>
+                {versionsQ.isLoading ? <Skeleton className="h-7 w-full" /> : <VersionSelect versions={versions} value={selectedVersion?.id ?? ""} onChange={setSelected} />}
+              </Field>
               {requiredKinds.length > 0 ? (
                 <EnableCredentialBindingList
                   requiredKinds={requiredKinds}
@@ -615,18 +621,19 @@ function CapabilityVersionDialog({
                   onChange={(kind, secretID) => setCredentialBindingChoices((current) => ({ ...current, [kind]: secretID }))}
                 />
               ) : (
-                <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
+                <p className="flex items-center gap-1.5 text-sm text-fg">
+                  <Check className="h-3.5 w-3.5 shrink-0 text-status-completed" strokeWidth={1.5} aria-hidden="true" />
                   {t("agents.detail.capabilities.enableDialog.noCredential")}
-                </div>
+                </p>
               )}
             </>
           )}
-          {isSwitch && <p className="rounded-md border border-info-border bg-info-subtle px-3 py-2 text-sm text-info-emphasis">{t("agents.detail.capabilities.switchDialog.notice", { agent: agent.name })}</p>}
+          {isSwitch && <p className="text-sm text-fg-muted">{t("agents.detail.capabilities.switchDialog.notice", { agent: agent.name })}</p>}
           <MutationError error={mut.error} />
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
-          <Button size="sm" disabled={!canSubmit} onClick={submit}>{mut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{confirmLabel}</Button>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button>
+          <Button disabled={!canSubmit} onClick={submit}>{mut.isPending && <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />}{confirmLabel}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -666,27 +673,18 @@ function RemoveCapabilityDialog({
           <AlertDialogTitle>{t("agents.detail.capabilities.removeDialog.title", { agent: agent.name, cap: capabilityName })}</AlertDialogTitle>
           <AlertDialogDescription>{t("agents.detail.capabilities.removeDialog.description")}</AlertDialogDescription>
         </AlertDialogHeader>
-        <ul className="space-y-1 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
+        <ul className="m-0 flex list-disc flex-col gap-1 pl-4 text-sm text-fg-muted">
           <li>{t("agents.detail.capabilities.removeDialog.impactRun")}</li>
           <li>{t("agents.detail.capabilities.removeDialog.impactCapability")}</li>
           <li>{t("agents.detail.capabilities.removeDialog.impactCredential")}</li>
         </ul>
         <MutationError error={mut.error} />
         <AlertDialogFooter>
-          <AlertDialogCancel asChild><Button variant="outline" size="sm" disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button></AlertDialogCancel>
-          <Button variant="destructive" size="sm" disabled={mut.isPending} onClick={submit}>{mut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("agents.detail.capabilities.actions.removeConfirm")}</Button>
+          <AlertDialogCancel asChild><Button variant="outline" disabled={mut.isPending}>{t("agents.detail.capabilities.actions.cancel")}</Button></AlertDialogCancel>
+          <Button variant="destructive" disabled={mut.isPending} onClick={submit}>{mut.isPending && <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />}{t("agents.detail.capabilities.actions.removeConfirm")}</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
-}
-
-function Card({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
-  return (
-    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
-      {children}
-    </section>
   )
 }
 
@@ -736,11 +734,13 @@ export function AgentConfigTab({
     || workspaceRole === "member"
 
   return (
-    <div className="space-y-4">
+    <>
       <AgentConfigSummary agent={agent} modelLabel={modelLabel} />
 
       {runtimeOf(agent) === "sandbox" && (
-        <SandboxPanel workspaceID={workspaceID} agentID={agent.id} />
+        <div className="mt-6">
+          <SandboxPanel workspaceID={workspaceID} agentID={agent.id} />
+        </div>
       )}
 
       <ConfigCapabilitiesSection
@@ -755,7 +755,7 @@ export function AgentConfigTab({
         error={agentCapabilitiesQ.error ?? workspaceCapabilitiesQ.error}
         onToast={onToast}
       />
-    </div>
+    </>
   )
 }
 
@@ -784,52 +784,44 @@ function ConfigCapabilitiesSection({
 }) {
   const { t } = useTranslation("admin")
   const [addOpen, setAddOpen] = useState(false)
+  const title = t("agents.detail.config.capabilities.title")
 
   if (loading) {
     return (
-      <Card title={t("agents.detail.config.capabilities.title")}>
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+      <DetailSection title={title}>
+        <div className="flex flex-col gap-3 pt-1">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-3 w-2/3" />)}
         </div>
-      </Card>
+      </DetailSection>
     )
   }
   if (error) {
     return (
-      <ErrorState
-        title={t("agents.detail.config.capabilities.loadError")}
-        description={error instanceof Error ? error.message : undefined}
-      />
+      <DetailSection title={title}>
+        <ErrorState
+          title={t("agents.detail.config.capabilities.loadError")}
+          description={error instanceof Error ? error.message : undefined}
+        />
+      </DetailSection>
     )
   }
 
   return (
-    <section className="rounded-lg border border-line bg-surface p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-fg">
-          {t("agents.detail.config.capabilities.title")}
-        </h3>
-        {isAdmin && installable.length > 0 && (
+    <DetailSection
+      title={title}
+      meta={enabledCaps.length || undefined}
+      action={
+        isAdmin && installable.length > 0 ? (
           <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
             {t("agents.detail.config.capabilities.add")}
           </Button>
-        )}
-      </div>
-
+        ) : undefined
+      }
+    >
       {enabledCaps.length === 0 ? (
-        <EmptyState
-          icon={Plus}
-          title={t("agents.detail.config.capabilities.empty")}
-          action={
-            isAdmin && installable.length > 0 ? (
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                {t("agents.detail.config.capabilities.add")}
-              </Button>
-            ) : undefined
-          }
-        />
+        <EmptyState title={t("agents.detail.config.capabilities.empty")} className="py-8" />
       ) : (
-        <div className="space-y-2">
+        <ul className="m-0 list-none border-t border-line p-0">
           {enabledCaps.map((item) =>
             item.binding.built_in ? (
               <BuiltinCapabilityCard
@@ -853,7 +845,7 @@ function ConfigCapabilitiesSection({
               />
             )
           )}
-        </div>
+        </ul>
       )}
 
       <AddCapabilityDialog
@@ -866,7 +858,7 @@ function ConfigCapabilitiesSection({
         sharedSecrets={sharedSecrets}
         onToast={onToast}
       />
-    </section>
+    </DetailSection>
   )
 }
 
@@ -900,47 +892,51 @@ function AddCapabilityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("agents.detail.config.capabilities.add")}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
             <Input
+              type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("agents.detail.config.capabilities.add")}
-              className="pl-8"
+              aria-label={t("agents.detail.config.capabilities.add")}
+              className="pl-7"
               autoFocus
             />
           </div>
-          <div className="max-h-80 space-y-2 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-fg-subtle">
+              <p className="py-6 text-center text-sm text-fg-muted">
                 {t("agents.detail.capabilities.emptyAvailable")}
               </p>
             ) : (
-              filtered.map((capability) => (
-                <CapabilityCard
-                  key={capability.id}
-                  item={{ capability }}
-                  agent={agent}
-                  workspaceID={workspaceID}
-                  credentials={credentials}
-                  sharedSecrets={sharedSecrets}
-                  mode="available"
-                  onToast={(msg) => {
-                    onToast(msg)
-                    onOpenChange(false)
-                  }}
-                />
-              ))
+              <ul className="m-0 list-none border-t border-line p-0">
+                {filtered.map((capability) => (
+                  <CapabilityCard
+                    key={capability.id}
+                    item={{ capability }}
+                    agent={agent}
+                    workspaceID={workspaceID}
+                    credentials={credentials}
+                    sharedSecrets={sharedSecrets}
+                    mode="available"
+                    onToast={(msg) => {
+                      onToast(msg)
+                      onOpenChange(false)
+                    }}
+                  />
+                ))}
+              </ul>
             )}
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("agents.detail.capabilities.actions.cancel")}
           </Button>
         </DialogFooter>

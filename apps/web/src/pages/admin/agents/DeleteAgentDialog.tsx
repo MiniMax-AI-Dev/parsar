@@ -13,8 +13,10 @@ import {
 } from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
+import { Label } from "../../../components/ui/label"
 import { ApiError } from "../../../lib/api-client"
 import type { Agent } from "../../../lib/api-types"
+import { InlineError } from "./DetailSection"
 
 function errorMessage(error: unknown): string | null {
   if (!error) return null
@@ -74,39 +76,38 @@ export function DeleteAgentDialog({
           <AlertDialogTitle>{t("agents.delete.title", { name: expected })}</AlertDialogTitle>
           <AlertDialogDescription>{t("agents.delete.description")}</AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="space-y-2">
-          <label className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-fg" htmlFor="delete-agent-confirmation">
-            <span>{t("agents.delete.confirmNamePrefix")}</span>
-            <span className="rounded border border-danger-border bg-danger-subtle px-1.5 py-0.5 font-mono text-xs font-semibold text-danger-emphasis">
-              {expected}
-            </span>
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!expected || pending}
-              title={t("agents.delete.copyName")}
-              aria-label={t("agents.delete.copyName")}
-              onClick={() => void copyAgentName()}
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-            </button>
-            <span>{t("agents.delete.confirmNameSuffix")}</span>
-          </label>
-          <Input
-            id="delete-agent-confirmation"
-            value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
-            disabled={pending}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {msg && <p className="text-sm text-danger">{msg}</p>}
+        <div className="flex flex-col gap-3">
+          <div>
+            <Label htmlFor="delete-agent-confirmation" className="flex flex-wrap items-center gap-1.5">
+              <span>{t("agents.delete.confirmNamePrefix")}</span>
+              <code className="font-mono text-xs text-fg">{expected}</code>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={!expected || pending}
+                aria-label={t("agents.delete.copyName")}
+                onClick={() => void copyAgentName()}
+              >
+                {copied ? <Check strokeWidth={1.5} aria-hidden="true" /> : <Copy strokeWidth={1.5} aria-hidden="true" />}
+              </Button>
+              <span>{t("agents.delete.confirmNameSuffix")}</span>
+            </Label>
+            <Input
+              id="delete-agent-confirmation"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              disabled={pending}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          {msg && <InlineError>{msg}</InlineError>}
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel asChild>
             <Button
               variant="outline"
-              size="sm"
               disabled={pending}
               onClick={() => {
                 setConfirmation("")
@@ -116,8 +117,8 @@ export function DeleteAgentDialog({
               {t("agents.listActions.cancel")}
             </Button>
           </AlertDialogCancel>
-          <Button variant="destructive" size="sm" disabled={!canDelete} onClick={onConfirm}>
-            {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button variant="destructive" disabled={!canDelete} onClick={onConfirm}>
+            {pending && <Loader2 className="animate-spin" strokeWidth={1.5} aria-hidden="true" />}
             {t("agents.delete.confirm")}
           </Button>
         </AlertDialogFooter>

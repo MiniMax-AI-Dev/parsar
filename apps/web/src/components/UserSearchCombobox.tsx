@@ -3,7 +3,7 @@
 // open-toggle, so an input nested via asChild never receives keystrokes.
 import { useEffect, useMemo, useRef, useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import { Check, ChevronsUpDown, Loader2, Search, X } from "lucide-react"
+import { AlertTriangle, Check, ChevronsUpDown, Loader2, Search, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { ApiError } from "../lib/api-client"
@@ -11,6 +11,7 @@ import { useUserSearchQuery } from "../lib/api-users"
 import type { PlatformUser } from "../lib/api-types"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
+import { InitialTile } from "./ui/ledger"
 import { cn } from "../lib/utils"
 
 interface Props {
@@ -88,24 +89,20 @@ export function UserSearchCombobox({
         })
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("flex flex-col gap-2", className)}>
       {/* Nested in a dialog; non-modal lets its footer receive the first click. */}
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild disabled={disabled}>
           <Button
             type="button"
             variant="outline"
-            size="sm"
-            className={cn(
-              "w-full justify-between font-normal",
-              selected.length === 0 && "text-fg-subtle"
-            )}
+            className={cn("w-full justify-between font-normal", selected.length === 0 && "text-fg-muted")}
           >
-            <span className="flex min-w-0 items-center gap-2">
-              <Search className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
-              <span className="truncate text-sm">{triggerLabel}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Search className="text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+              <span className="truncate">{triggerLabel}</span>
             </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+            <ChevronsUpDown className="text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
           </Button>
         </DropdownMenu.Trigger>
 
@@ -113,12 +110,12 @@ export function UserSearchCombobox({
           <DropdownMenu.Content
             align="start"
             sideOffset={4}
-            className="z-50 max-h-[360px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
+            className="app-shadow-floating z-50 max-h-[360px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
             // Stay open across multiple selections — picking several
             // teammates at once is the expected flow.
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="border-b border-line-muted p-1">
+            <div className="border-b border-line p-1">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -127,25 +124,27 @@ export function UserSearchCombobox({
                 // Content level; without stopPropagation those steal
                 // the input's cursor movement.
                 onKeyDown={(e) => e.stopPropagation()}
-                className="h-8 text-sm"
                 autoFocus
               />
             </div>
 
             <div className="max-h-[280px] overflow-auto py-1">
               {trimmed.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-fg-subtle">
+                <p className="px-2 py-1.5 text-sm text-fg-muted">
                   {t("members.add.search.typeToSearch")}
                 </p>
               ) : isLoading ? (
-                <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <div className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-fg-muted">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} aria-hidden="true" />
                   {t("members.add.search.loading")}
                 </div>
               ) : errMsg ? (
-                <p className="px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
+                <p className="flex items-start gap-1.5 px-2 py-1.5 text-sm text-fg">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+                  <span className="break-words">{errMsg}</span>
+                </p>
               ) : showEmpty ? (
-                <p className="px-3 py-2 text-sm text-fg-subtle">
+                <p className="px-2 py-1.5 text-sm text-fg-muted">
                   {t("members.add.search.empty")}
                 </p>
               ) : (
@@ -164,21 +163,22 @@ export function UserSearchCombobox({
       </DropdownMenu.Root>
 
       {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {selected.map((u) => (
-            <button
+            <Button
               key={u.id}
               type="button"
+              variant="outline"
+              size="sm"
+              shape="pill"
               onClick={() => remove(u.id)}
               disabled={disabled}
-              className="group inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-subtle px-2 py-0.5 text-xs text-fg-muted hover:border-line-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="font-normal"
             >
-              <UserAvatar user={u} size="xs" />
-              <span className="max-w-[140px] truncate">
-                {u.name || u.email}
-              </span>
-              <X className="h-3 w-3 text-fg-faint group-hover:text-fg-muted" />
-            </button>
+              <UserAvatar user={u} />
+              <span className="max-w-[140px] truncate">{u.name || u.email}</span>
+              <X className="text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
+            </Button>
           ))}
         </div>
       )}
@@ -203,53 +203,32 @@ function UserRow({
         onSelect()
       }}
       className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 outline-none",
-        selected ? "bg-surface-muted" : "hover:bg-surface-subtle focus:bg-surface-subtle"
+        "flex h-8 cursor-pointer items-center gap-2 rounded px-2 text-sm text-fg outline-none data-[highlighted]:app-pressed",
+        selected && "app-hover",
       )}
     >
-      <UserAvatar user={user} size="sm" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-fg">
-          {user.name || user.email.split("@")[0]}
-        </div>
+      <UserAvatar user={user} />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium">{user.name || user.email.split("@")[0]}</span>
         {user.name && (
-          <div className="truncate text-xs text-fg-subtle">
-            {user.email}
-          </div>
+          <span className="font-mono text-xs text-fg-muted"> · {user.email}</span>
         )}
-      </div>
-      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
+      </span>
+      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />}
     </DropdownMenu.Item>
   )
 }
 
-function UserAvatar({
-  user,
-  size,
-}: {
-  user: PlatformUser
-  size: "xs" | "sm"
-}) {
-  const dims = size === "xs" ? "h-4 w-4 text-xs" : "h-6 w-6 text-xs"
+/** 18px tile: the avatar image when the user has one, else their initial. */
+function UserAvatar({ user }: { user: PlatformUser }) {
   if (user.avatar_url) {
     return (
       <img
         src={user.avatar_url}
         alt=""
-        className={cn("rounded-full object-cover", dims)}
+        className="h-[18px] w-[18px] shrink-0 rounded object-cover"
       />
     )
   }
-  const seed = (user.name || user.email || "?").trim()
-  const initial = seed.charAt(0).toUpperCase()
-  return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-full bg-surface-muted font-medium text-fg-muted",
-        dims
-      )}
-    >
-      {initial}
-    </div>
-  )
+  return <InitialTile name={user.name || user.email || "?"} />
 }

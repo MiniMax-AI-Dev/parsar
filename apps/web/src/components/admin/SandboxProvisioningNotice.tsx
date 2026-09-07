@@ -1,20 +1,13 @@
 import { useTranslation } from "react-i18next"
-import { Loader2 } from "lucide-react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 
 import { Button } from "../ui/button"
+import { PropertyList, Property } from "../ui/property-list"
+import { StatusIcon } from "../ui/status-icon"
 import type { Runtime } from "../../lib/api-runtimes"
 import { useNow } from "../../lib/use-now"
 
 type StepState = "active" | "pending"
-
-function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className={`text-sm text-fg-emphasis ${mono ? "font-mono break-all" : ""}`}>{value}</dd>
-    </div>
-  )
-}
 
 function elapsedSeconds(startedAt?: string): number {
   if (!startedAt) return 0
@@ -23,21 +16,14 @@ function elapsedSeconds(startedAt?: string): number {
   return Math.max(0, Math.floor((Date.now() - started) / 1000))
 }
 
+/** One 32px hairline step row: status icon, title in ink, detail muted after " · ". */
 function Step({ state, label, detail }: { state: StepState; label: string; detail?: string }) {
   return (
-    <li className="grid grid-cols-[1rem_1fr] gap-2">
-      <span
-        className={
-          state === "active"
-            ? "mt-1 h-2 w-2 rounded-full bg-warning-emphasis"
-            : "mt-1 h-2 w-2 rounded-full border border-warning-border bg-surface"
-        }
-      />
-      <span>
-        <span className="block text-sm font-medium text-warning-emphasis">{label}</span>
-        {detail && (
-          <span className="block text-sm leading-relaxed text-warning-emphasis">{detail}</span>
-        )}
+    <li className="flex h-8 items-center gap-2 border-b border-line text-sm last:border-b-0">
+      <StatusIcon status={state === "active" ? "running" : "queued"} />
+      <span className="min-w-0 truncate text-fg" title={detail ? `${label} · ${detail}` : label}>
+        {label}
+        {detail && <span className="text-fg-muted"> · {detail}</span>}
       </span>
     </li>
   )
@@ -56,18 +42,12 @@ export function SandboxPreparingNotice({
   const imagePullActive = elapsed >= 10
   const slowImagePull = elapsed >= 30
   return (
-    <div className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2">
-      <div className="flex items-center gap-2 text-sm font-medium text-warning-emphasis">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+    <div role="status">
+      <p className="flex h-8 items-center gap-2 text-sm font-medium text-fg">
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-fg-muted motion-reduce:animate-none" strokeWidth={1.5} aria-hidden="true" />
         {t("agents.detail.sandbox.preparing.title")}
-      </div>
-      <p className="mt-1 text-sm leading-relaxed text-warning-emphasis">
-        {t("agents.detail.sandbox.preparing.body")}
       </p>
-      <p className="mt-1 text-sm leading-relaxed text-warning-emphasis">
-        {t("agents.detail.sandbox.preparing.coldStartBody")}
-      </p>
-      <ol className="mt-3 space-y-2">
+      <ol className="m-0 list-none border-t border-line p-0">
         <Step
           state={imagePullActive ? "pending" : "active"}
           label={t("agents.detail.sandbox.preparing.steps.prepareImage")}
@@ -93,17 +73,18 @@ export function SandboxPreparingNotice({
           detail={t("agents.detail.sandbox.preparing.steps.pairDaemonDetail")}
         />
       </ol>
-      <dl className="mt-2 space-y-1">
-        {runtime && (
-          <Detail label={t("agents.detail.sandbox.preparing.runtimeId")} value={runtime.id} mono />
-        )}
-        {startedAt && (
-          <Detail
-            label={t("agents.detail.sandbox.preparing.started")}
-            value={new Date(startedAt).toLocaleString()}
-          />
-        )}
-      </dl>
+      {(runtime || startedAt) && (
+        <PropertyList className="mt-2">
+          {runtime && (
+            <Property label={t("agents.detail.sandbox.preparing.runtimeId")} mono>{runtime.id}</Property>
+          )}
+          {startedAt && (
+            <Property label={t("agents.detail.sandbox.preparing.started")} mono>
+              {new Date(startedAt).toLocaleString()}
+            </Property>
+          )}
+        </PropertyList>
+      )}
     </div>
   )
 }
@@ -119,18 +100,19 @@ export function SandboxStartupTimedOutNotice({
 }) {
   const { t } = useTranslation("admin")
   return (
-    <div className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2">
-      <div className="text-sm font-medium text-danger-emphasis">
-        {t("agents.detail.sandbox.startupTimedOut.title")}
+    <div role="alert" className="text-sm">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="font-medium text-fg">{t("agents.detail.sandbox.startupTimedOut.title")}</p>
+          <p className="text-xs text-fg-muted">{t("agents.detail.sandbox.startupTimedOut.body")}</p>
+        </div>
       </div>
-      <p className="mt-1 text-sm leading-relaxed text-danger-emphasis">
-        {t("agents.detail.sandbox.startupTimedOut.body")}
-      </p>
-      <dl className="mt-2">
-        <Detail label={t("agents.detail.sandbox.preparing.runtimeId")} value={runtime.id} mono />
-      </dl>
-      <Button size="sm" variant="outline" className="mt-3" disabled={retrying} onClick={onRetry}>
-        {retrying && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+      <PropertyList className="mt-2">
+        <Property label={t("agents.detail.sandbox.preparing.runtimeId")} mono>{runtime.id}</Property>
+      </PropertyList>
+      <Button size="sm" variant="outline" className="mt-2" disabled={retrying} onClick={onRetry}>
+        {retrying && <Loader2 className="animate-spin" />}
         {t("agents.detail.sandbox.actions.retryProvision")}
       </Button>
     </div>

@@ -1,20 +1,23 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Box, CalendarClock, Loader2, RotateCcw, ShieldAlert } from "lucide-react"
+import { Box, CalendarClock, Loader2, RotateCcw } from "lucide-react"
 
-import { Badge } from "../ui/badge"
-import { Button } from "../ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog"
+import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
 import { ErrorState } from "../ui/error-state"
+import { PropertyList, Property } from "../ui/property-list"
 import { Skeleton } from "../ui/skeleton"
+import { StatusIcon, type StatusKind } from "../ui/status-icon"
 import {
   useSandboxBinding,
   useRebuildSandbox,
@@ -25,189 +28,72 @@ import {
 import { useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { findSandboxRuntimeForAgent, isSandboxPairingExpired } from "../../lib/sandbox-runtime"
 import { useNow } from "../../lib/use-now"
+import { useRelativeTime } from "../../lib/relative-time"
 import { SandboxPreparingNotice, SandboxStartupTimedOutNotice } from "./SandboxProvisioningNotice"
 
-function Card({
+const STATUS_FOR_KIND: Record<SandboxStatusKind, StatusKind> = {
+  live: "completed",
+  transient: "running",
+  terminal: "cancelled",
+}
+
+function Section({
   title,
-  className,
+  action,
   children,
 }: {
   title: string
-  className?: string
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-surface p-4 ${className ?? ""}`}>
-      <h3 className="mb-3 text-base font-semibold text-fg">{title}</h3>
+    <section>
+      <div className="flex h-7 items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-fg">{title}</h3>
+        {action}
+      </div>
       {children}
     </section>
   )
 }
 
-function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div className="mb-2 last:mb-0">
-      <dt className="mb-0.5 text-xs uppercase tracking-wider text-fg-faint">{label}</dt>
-      <dd className={`text-sm text-fg-emphasis ${mono ? "font-mono break-all" : ""}`}>{value}</dd>
-    </div>
-  )
-}
-
-function SandboxStatusBadge({ kind, status }: { kind: SandboxStatusKind; status: string }) {
-  if (kind === "live")
-    return (
-      <Badge variant="success" dot>
-        {status}
-      </Badge>
-    )
-  if (kind === "transient")
-    return (
-      <Badge variant="warning" dot>
-        {status}
-      </Badge>
-    )
-  return <Badge variant="neutral">{status}</Badge>
-}
-
-function relativeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0 || Number.isNaN(ms)) return iso
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s ago`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 48) return `${hr}h ago`
-  const day = Math.floor(hr / 24)
-  return `${day}d ago`
-}
-
 function Timestamp({ iso }: { iso: string }) {
   // Subscribe to the ticking clock so "Xm ago" advances; the value itself is unused.
   useNow()
-  return (
-    <span title={iso} className="text-sm text-fg-emphasis">
-      {relativeAgo(iso)}
-    </span>
-  )
+  const fmtAgo = useRelativeTime()
+  return <span title={iso}>{fmtAgo(iso)}</span>
 }
 
-// Tone thresholds: green > 7d, amber 1–7d, red < 1d.
-interface RemainingDescriptor {
-  /** Pre-rendered duration for the i18n `{{value}}` slot. */
-  value: string
-  tone: "green" | "amber" | "red"
-  state: "expired" | "remaining"
-}
-
-function describeRemaining(iso: string | undefined, now: number): RemainingDescriptor | null {
-  if (!iso) return null
+function describeRemaining(iso: string, now: number): string | null {
   const target = new Date(iso).getTime()
   if (Number.isNaN(target)) return null
   const ms = target - now
-  if (ms <= 0) return { value: "", tone: "red", state: "expired" }
+  if (ms <= 0) return ""
   const totalMinutes = Math.floor(ms / 60_000)
   const days = Math.floor(totalMinutes / (60 * 24))
   const hours = Math.floor((totalMinutes - days * 60 * 24) / 60)
   const minutes = totalMinutes - days * 60 * 24 - hours * 60
-  let value: string
-  if (days >= 1) value = hours > 0 ? `${days}d ${hours}h` : `${days}d`
-  else if (hours >= 1) value = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
-  else value = `${Math.max(minutes, 1)}m`
-  const tone: RemainingDescriptor["tone"] = days < 1 ? "red" : days < 7 ? "amber" : "green"
-  return { value, tone, state: "remaining" }
+  if (days >= 1) return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  if (hours >= 1) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+  return `${Math.max(minutes, 1)}m`
 }
 
 function ExpiresValue({ iso }: { iso?: string }) {
   const { t } = useTranslation("admin")
   const now = useNow()
-  if (!iso) {
-    return (
-      <span className="text-sm text-fg-subtle">
-        {t("agents.detail.sandbox.fields.expiresAtUnknown")}
-      </span>
-    )
-  }
-  const desc = describeRemaining(iso, now)
-  const toneClass =
-    desc?.tone === "red" ? "text-danger" : desc?.tone === "amber" ? "text-warning" : "text-success"
-  const absolute = new Date(iso).toLocaleString()
+  if (!iso) return <>{t("agents.detail.sandbox.fields.expiresAtUnknown")}</>
+  const remaining = describeRemaining(iso, now)
   const label =
-    desc?.state === "expired"
+    remaining === ""
       ? t("agents.detail.sandbox.expires.expired")
-      : desc
-        ? t("agents.detail.sandbox.expires.remaining", { value: desc.value })
+      : remaining
+        ? t("agents.detail.sandbox.expires.remaining", { value: remaining })
         : null
   return (
-    <span title={iso} className="text-sm text-fg-emphasis">
-      {absolute}
-      {label && <span className={`ml-2 text-sm ${toneClass}`}>({label})</span>}
+    <span title={iso} className="truncate">
+      {new Date(iso).toLocaleString()}
+      {label && <span className="text-fg-muted"> · {label}</span>}
     </span>
-  )
-}
-
-interface ConfirmDialogProps {
-  open: boolean
-  title: string
-  description: string
-  confirmLabel?: string
-  destructive?: boolean
-  onConfirm: () => void
-  onCancel: () => void
-  loading?: boolean
-}
-
-function ConfirmDialog({
-  open,
-  title,
-  description,
-  confirmLabel,
-  destructive,
-  onConfirm,
-  onCancel,
-  loading,
-}: ConfirmDialogProps) {
-  const { t } = useTranslation("common")
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && !loading) onCancel()
-      }}
-    >
-      <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-        <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <div
-            className={
-              destructive
-                ? "shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis"
-                : "shrink-0 rounded-full bg-warning-subtle p-2 text-warning"
-            }
-          >
-            <ShieldAlert className="h-4 w-4" />
-          </div>
-          <div className="space-y-1.5">
-            <DialogTitle className="text-sm">{title}</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">{description}</DialogDescription>
-          </div>
-        </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>
-            {t("actions.cancel")}
-          </Button>
-          <Button
-            variant={destructive ? "destructive" : "default"}
-            size="sm"
-            onClick={onConfirm}
-            disabled={loading}
-            data-testid="sandbox-confirm-button"
-          >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {confirmLabel ?? t("actions.confirm")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -219,6 +105,7 @@ export function SandboxPanel({
   agentID: string
 }) {
   const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
   const query = useSandboxBinding(workspaceID, agentID)
   const runtimeQuery = useWorkspaceRuntimes(workspaceID ?? "", "agent_daemon")
   const rebuildMut = useRebuildSandbox(workspaceID, agentID)
@@ -266,7 +153,7 @@ export function SandboxPanel({
   if (query.isLoading) {
     return (
       <div className="space-y-3">
-        <Skeleton className="h-8 w-1/3" />
+        <Skeleton className="h-3 w-1/3" />
         <Skeleton className="h-24" />
       </div>
     )
@@ -283,7 +170,7 @@ export function SandboxPanel({
   }
   if (!binding) {
     return (
-      <Card title={t("agents.detail.sandbox.title")}>
+      <Section title={t("agents.detail.sandbox.title")}>
         {preparing ? (
           <SandboxPreparingNotice
             runtime={sandboxRuntime}
@@ -299,20 +186,17 @@ export function SandboxPanel({
             onRetry={triggerAcquire}
           />
         ) : (
-          <>
-            <EmptyState icon={Box} title={t("agents.detail.sandbox.empty.title")} />
-            <div className="mt-3 flex justify-center">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={acquireMut.isPending}
-                onClick={triggerAcquire}
-              >
-                {acquireMut.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+          <EmptyState
+            icon={Box}
+            title={t("agents.detail.sandbox.empty.title")}
+            className="py-8"
+            action={
+              <Button size="sm" variant="outline" disabled={acquireMut.isPending} onClick={triggerAcquire}>
+                {acquireMut.isPending && <Loader2 className="animate-spin" />}
                 {t("agents.detail.sandbox.actions.provision")}
               </Button>
-            </div>
-          </>
+            }
+          />
         )}
         {acquireMut.error && (
           <ErrorState
@@ -320,97 +204,66 @@ export function SandboxPanel({
             description={(acquireMut.error as Error).message}
           />
         )}
-      </Card>
+      </Section>
     )
   }
 
+  const busy = renewMut.isPending || rebuildMut.isPending || binding.status_kind !== "live"
+
   return (
     <div className="space-y-4">
-      <Card title={t("agents.detail.sandbox.title")}>
-        <div className="mb-4 flex items-center justify-between">
-          <SandboxStatusBadge kind={binding.status_kind} status={binding.status} />
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="sandbox-renew-button"
-              disabled={
-                renewMut.isPending || rebuildMut.isPending || binding.status_kind !== "live"
-              }
-              onClick={() => renewMut.mutate()}
-            >
-              <CalendarClock className="mr-1 h-3.5 w-3.5" strokeWidth={2} />
+      <Section
+        title={t("agents.detail.sandbox.title")}
+        action={
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" data-testid="sandbox-renew-button" disabled={busy} onClick={() => renewMut.mutate()}>
+              <CalendarClock strokeWidth={1.5} aria-hidden="true" />
               {renewMut.isPending
                 ? t("agents.detail.sandbox.actions.renewing")
                 : t("agents.detail.sandbox.actions.renew")}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="sandbox-rebuild-button"
-              disabled={
-                rebuildMut.isPending || renewMut.isPending || binding.status_kind !== "live"
-              }
-              onClick={() => setConfirmingRebuild(true)}
-            >
-              <RotateCcw className="mr-1 h-3.5 w-3.5" strokeWidth={2} />
+            <Button size="sm" variant="outline" data-testid="sandbox-rebuild-button" disabled={busy} onClick={() => setConfirmingRebuild(true)}>
+              <RotateCcw strokeWidth={1.5} aria-hidden="true" />
               {rebuildMut.isPending
                 ? t("agents.detail.sandbox.actions.rebuilding")
                 : t("agents.detail.sandbox.actions.rebuild")}
             </Button>
           </div>
-        </div>
-        <dl>
-          <Field
-            label={t("agents.detail.sandbox.fields.sandboxId")}
-            value={binding.sandbox_id}
-            mono
-          />
-          <Field
-            label={t("agents.detail.sandbox.fields.templateId")}
-            value={binding.template_id}
-            mono
-          />
-          <Field
-            label={t("agents.detail.sandbox.fields.expiresAt")}
-            value={<ExpiresValue iso={binding.expires_at} />}
-          />
-          <Field
-            label={t("agents.detail.sandbox.fields.lastActive")}
-            value={<Timestamp iso={binding.last_active_at} />}
-          />
-          <Field
-            label={t("agents.detail.sandbox.fields.createdAt")}
-            value={<Timestamp iso={binding.created_at} />}
-          />
+        }
+      >
+        <PropertyList>
+          <Property label={t("runtime.detail.fields.status")}>
+            <StatusIcon status={STATUS_FOR_KIND[binding.status_kind]} />
+            <span className="truncate">{binding.status}</span>
+          </Property>
+          <Property label={t("agents.detail.sandbox.fields.sandboxId")} mono>{binding.sandbox_id}</Property>
+          <Property label={t("agents.detail.sandbox.fields.templateId")} mono>{binding.template_id}</Property>
+          <Property label={t("agents.detail.sandbox.fields.expiresAt")} mono>
+            <ExpiresValue iso={binding.expires_at} />
+          </Property>
+          <Property label={t("agents.detail.sandbox.fields.lastActive")}>
+            <Timestamp iso={binding.last_active_at} />
+          </Property>
+          <Property label={t("agents.detail.sandbox.fields.createdAt")}>
+            <Timestamp iso={binding.created_at} />
+          </Property>
           {binding.killed_at && (
-            <Field
-              label={t("agents.detail.sandbox.fields.killedAt")}
-              value={<Timestamp iso={binding.killed_at} />}
-            />
+            <Property label={t("agents.detail.sandbox.fields.killedAt")}>
+              <Timestamp iso={binding.killed_at} />
+            </Property>
           )}
-          <Field
-            label={t("agents.detail.sandbox.fields.bindingId")}
-            value={binding.binding_id}
-            mono
-          />
-          <Field
-            label={t("agents.detail.sandbox.fields.cacheKey")}
-            value={binding.cache_key}
-            mono
-          />
-        </dl>
+          <Property label={t("agents.detail.sandbox.fields.bindingId")} mono>{binding.binding_id}</Property>
+          <Property label={t("agents.detail.sandbox.fields.cacheKey")} mono>{binding.cache_key}</Property>
+        </PropertyList>
         {binding.status_kind !== "live" && (
-          <p className="mt-3 rounded-md border border-line bg-surface-subtle px-3 py-2 text-sm text-fg-muted">
-            {t("agents.detail.sandbox.notLiveHint")}
-          </p>
+          <p className="mt-2 text-xs text-fg-muted">{t("agents.detail.sandbox.notLiveHint")}</p>
         )}
         {preparing && (
-          <div className="mt-3">
+          <div className="mt-3 border-t border-line">
             <SandboxPreparingNotice runtime={sandboxRuntime} />
           </div>
         )}
-      </Card>
+      </Section>
 
       {rebuildMut.error && (
         <ErrorState
@@ -425,22 +278,45 @@ export function SandboxPanel({
         />
       )}
       {renewMut.isSuccess && renewMut.data?.expires_at && (
-        <div className="rounded-md border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-emphasis">
+        <p className="flex h-8 items-center gap-2 border-t border-line text-sm text-fg" role="status">
+          <StatusIcon status="completed" />
           {t("agents.detail.sandbox.renewedToast", {
             expiresAt: new Date(renewMut.data.expires_at).toLocaleString(),
           })}
-        </div>
+        </p>
       )}
 
-      <ConfirmDialog
+      <AlertDialog
         open={confirmingRebuild}
-        title={t("agents.detail.sandbox.confirm.rebuild.title")}
-        description={t("agents.detail.sandbox.confirm.rebuild.description")}
-        confirmLabel={t("agents.detail.sandbox.confirm.rebuild.confirmLabel")}
-        loading={rebuildMut.isPending}
-        onCancel={() => setConfirmingRebuild(false)}
-        onConfirm={handleConfirm}
-      />
+        onOpenChange={(next) => {
+          if (!next && !rebuildMut.isPending) setConfirmingRebuild(false)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("agents.detail.sandbox.confirm.rebuild.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("agents.detail.sandbox.confirm.rebuild.description")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline" disabled={rebuildMut.isPending}>{tc("actions.cancel")}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                onClick={(e) => {
+                  e.preventDefault()
+                  handleConfirm()
+                }}
+                disabled={rebuildMut.isPending}
+                data-testid="sandbox-confirm-button"
+              >
+                {rebuildMut.isPending && <Loader2 className="animate-spin" />}
+                {t("agents.detail.sandbox.confirm.rebuild.confirmLabel")}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

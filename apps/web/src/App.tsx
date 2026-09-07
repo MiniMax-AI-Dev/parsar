@@ -15,8 +15,8 @@ import { useWorkspaceId } from "./lib/workspace"
 
 function LoadingScreen({ message }: { message: string }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-surface text-base text-fg-subtle">
-      {message}
+    <main className="grid min-h-screen place-items-center bg-surface">
+      <p className="text-sm text-fg-muted">{message}</p>
     </main>
   )
 }

@@ -1,5 +1,8 @@
 import { useTranslation } from "react-i18next"
 
+import { Field } from "../../ui/label"
+import { Select } from "../../ui/select"
+
 export type ConnectorPlatform = "feishu" | "slack" | "discord" | "teams"
 
 interface PlatformSelectorProps {
@@ -10,10 +13,8 @@ interface PlatformSelectorProps {
 }
 
 /**
- * Dropdown that lets the admin pick which IM platform's connector config to
- * render in the ChannelConnectorPanel. Each option maps 1:1 to a per-platform
- * fields module (feishuFields / slackFields / discordFields) and a per-platform
- * PATCH route on the backend.
+ * Select that picks which IM platform's connector config to render. Each
+ * option maps 1:1 to a per-platform fields module and PATCH route.
  */
 export function PlatformSelector({
   value,
@@ -23,21 +24,15 @@ export function PlatformSelector({
 }: PlatformSelectorProps) {
   const { t } = useTranslation("admin")
   const options: ConnectorPlatform[] = ["feishu", "slack", "discord", "teams"]
+  const id = testId ?? "channel-connector-platform"
 
   return (
-    <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2">
-      <label
-        htmlFor={testId ?? "channel-connector-platform"}
-        className="text-xs font-medium text-fg-subtle"
-      >
-        {t("connections.connector.platformSelect.label")}
-      </label>
-      <select
-        id={testId ?? "channel-connector-platform"}
+    <Field label={t("connections.connector.platformSelect.label")} htmlFor={id} className="w-60">
+      <Select
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value as ConnectorPlatform)}
         disabled={disabled}
-        className="h-8 rounded-md border border-line bg-surface px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:cursor-not-allowed disabled:bg-surface-subtle"
         data-testid={testId ?? "channel-connector-platform-select"}
       >
         {options.map((opt) => (
@@ -45,7 +40,7 @@ export function PlatformSelector({
             {t(`connections.connector.platformSelect.options.${opt}`)}
           </option>
         ))}
-      </select>
-    </div>
+      </Select>
+    </Field>
   )
 }

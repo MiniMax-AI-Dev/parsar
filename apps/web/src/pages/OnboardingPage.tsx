@@ -10,7 +10,10 @@ import { useAuth } from "../lib/auth-context"
 import { setWorkspaceId } from "../lib/workspace"
 import { workspaceOwnerName } from "../lib/workspace-defaults"
 import { Button } from "../components/ui/button"
+import { EntryFooter, EntryPage, EntryPanel } from "../components/ui/entry-panel"
+import { InlineError } from "../components/ui/error-state"
 import { Input } from "../components/ui/input"
+import { Field } from "../components/ui/label"
 
 function extractErrorMessage(err: unknown): string | null {
   if (!err) return null
@@ -34,19 +37,10 @@ export function OnboardingPage() {
   const errMsg = extractErrorMessage(create.error)
 
   return (
-    <main className="grid min-h-screen place-items-center bg-surface px-6 text-fg">
-      <section className="w-full max-w-[440px]">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-display">
-            {t("onboarding.title")}
-          </h1>
-          <p className="mt-2 text-base text-fg-subtle">
-            {t("onboarding.subtitle")}
-          </p>
-        </div>
-
+    <EntryPage>
+      <EntryPanel title={t("onboarding.title")}>
         <form
-          className="rounded-2xl border border-line bg-surface p-6 shadow-sm"
+          className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault()
             const trimmed = name.trim()
@@ -65,13 +59,7 @@ export function OnboardingPage() {
             )
           }}
         >
-          <div className="grid gap-1.5">
-            <label
-              className="text-sm font-medium text-fg-muted"
-              htmlFor="onboarding-ws-name"
-            >
-              {t("onboarding.fields.name")}
-            </label>
+          <Field label={t("onboarding.fields.name")} htmlFor="onboarding-ws-name">
             <Input
               id="onboarding-ws-name"
               value={name}
@@ -81,25 +69,15 @@ export function OnboardingPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder={t("onboarding.fields.namePlaceholder")}
             />
-          </div>
+          </Field>
 
-          {errMsg && (
-            <p className="mt-3 rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {errMsg}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            className="mt-5 w-full"
-            disabled={create.isPending || !name.trim()}
-          >
-            {create.isPending
-              ? t("states.loading")
-              : t("onboarding.actions.create")}
-          </Button>
+          <EntryFooter message={errMsg && <InlineError>{errMsg}</InlineError>}>
+            <Button type="submit" disabled={create.isPending || !name.trim()}>
+              {create.isPending ? t("states.loading") : t("onboarding.actions.create")}
+            </Button>
+          </EntryFooter>
         </form>
-      </section>
-    </main>
+      </EntryPanel>
+    </EntryPage>
   )
 }

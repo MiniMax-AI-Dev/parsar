@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog"
 import { Button } from "../../../components/ui/button"
+import { Field } from "../../../components/ui/label"
 import { Input } from "../../../components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { ApiError } from "../../../lib/api-client"
@@ -27,6 +28,7 @@ import { useImportCommitMutation } from "./api"
 import { ImportMCPForm } from "./ImportMCPForm"
 import { ImportSkillForm } from "./ImportSkillForm"
 import { isImportSpecReady } from "./importValidation"
+import { InlineNotice } from "./notices"
 import type {
   CanonicalSpec,
   ImportCommitRequest,
@@ -197,8 +199,9 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
               the source-of-truth markdown and silently overwrite it. */}
           {kind !== "skill" && (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Field label={t("capabilities.import.dialog.name", "Name")} required>
+              <Field label={t("capabilities.import.dialog.name", "Name")} htmlFor="import-capability-name">
                 <Input
+                  id="import-capability-name"
                   value={name}
                   onChange={(e) => {
                     nameTouched.current = true
@@ -207,8 +210,9 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
                   placeholder={t("capabilities.import.dialog.namePlaceholder", "e.g. github-mcp")}
                 />
               </Field>
-              <Field label={t("capabilities.import.dialog.descriptionLabel", "Description")}>
+              <Field label={t("capabilities.import.dialog.descriptionLabel", "Description")} htmlFor="import-capability-description">
                 <Input
+                  id="import-capability-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={t(
@@ -255,50 +259,18 @@ export function ImportCapabilityDialog({ workspaceID, open, onOpenChange, onCrea
           </TabsContent>
         </Tabs>
 
-        {errMsg && (
-          <div
-            role="alert"
-            className="break-all rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis"
-          >
-            {errMsg}
-          </div>
-        )}
+        {errMsg && <InlineNotice tone="error">{errMsg}</InlineNotice>}
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={commitMut.isPending}
-            onClick={() => onOpenChange(false)}
-          >
+          <Button variant="outline" disabled={commitMut.isPending} onClick={() => onOpenChange(false)}>
             {t("capabilities.actions.cancel", "Cancel")}
           </Button>
-          <Button size="sm" disabled={!canSubmit} onClick={submit}>
-            {commitMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button disabled={!canSubmit} onClick={submit}>
+            {commitMut.isPending && <Loader2 className="animate-spin" />}
             {t("capabilities.import.dialog.submit", "Import")}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-sm font-medium text-fg-muted">
-        {label}
-        {required && <span className="text-danger"> *</span>}
-      </span>
-      {children}
-    </label>
   )
 }

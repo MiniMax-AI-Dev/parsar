@@ -2,16 +2,28 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ApiError } from "../../lib/api-client"
 import type { WorkspaceVisibility } from "../../lib/api-types"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog"
 import { Button } from "../ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog"
+import { InlineError } from "../ui/error-state"
 import { Input } from "../ui/input"
+import { Field } from "../ui/label"
+import { Select } from "../ui/select"
+import { Textarea } from "../ui/textarea"
 
 type FormMode = "create" | "rename"
 
@@ -71,30 +83,22 @@ export function WorkspaceFormDialog({
     mode === "create"
       ? t("workspaceCrud.workspace.createTitle")
       : t("workspaceCrud.workspace.renameTitle")
-  const description =
-    mode === "create"
-      ? t("workspaceCrud.workspace.createDescription")
-      : t("workspaceCrud.workspace.renameDescription")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <form
-          className="grid gap-3"
+          className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault()
             onSubmit({ name: name.trim(), visibility })
           }}
         >
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium text-fg-muted" htmlFor="ws-name">
-              {t("workspaceCrud.fields.name")}
-            </label>
+          <Field label={t("workspaceCrud.fields.name")} htmlFor="ws-name">
             <Input
               id="ws-name"
               value={name}
@@ -103,53 +107,28 @@ export function WorkspaceFormDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder={t("workspaceCrud.workspace.namePlaceholder")}
             />
-          </div>
+          </Field>
 
-          <fieldset className="grid gap-1.5">
-            <legend className="text-sm font-medium text-fg-muted">
-              {t("workspaceCrud.fields.visibility")}
-            </legend>
-            <div className="grid grid-cols-2 gap-2">
-              {(["private", "public"] as const).map((v) => (
-                <label
-                  key={v}
-                  className={
-                    "flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm " +
-                    (visibility === v
-                      ? "border-line-strong bg-surface-subtle text-fg"
-                      : "border-line text-fg-muted hover:bg-surface-subtle")
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="ws-visibility"
-                    value={v}
-                    checked={visibility === v}
-                    onChange={() => setVisibility(v)}
-                    className="h-3 w-3"
-                  />
-                  {t(`workspaceCrud.visibility.${v}`)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {errMsg && (
-            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {errMsg}
-            </p>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
+          <Field label={t("workspaceCrud.fields.visibility")} htmlFor="ws-visibility">
+            <Select
+              id="ws-visibility"
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as WorkspaceVisibility)}
             >
+              {(["private", "public"] as const).map((v) => (
+                <option key={v} value={v}>
+                  {t(`workspaceCrud.visibility.${v}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <DialogFooter className="mt-1">
+            {errMsg && <InlineError className="mr-auto">{errMsg}</InlineError>}
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("actions.cancel")}
             </Button>
-            <Button type="submit" size="sm" disabled={pending || !name.trim()}>
+            <Button type="submit" disabled={pending || !name.trim()}>
               {pending ? t("states.loading") : submitLabel}
             </Button>
           </DialogFooter>
@@ -181,41 +160,26 @@ export function ConfirmArchiveDialog({
   const { t } = useTranslation("common")
   const errMsg = extractErrorMessage(error)
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
 
-        {errMsg && (
-          <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-            {errMsg}
-          </p>
-        )}
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            disabled={pending}
-          >
-            {t("actions.cancel")}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={onConfirm}
-            disabled={pending}
-          >
+        <AlertDialogFooter>
+          {errMsg && <InlineError className="mr-auto">{errMsg}</InlineError>}
+          <AlertDialogCancel asChild>
+            <Button type="button" variant="outline" disabled={pending}>
+              {t("actions.cancel")}
+            </Button>
+          </AlertDialogCancel>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={pending}>
             {pending ? t("states.loading") : t("workspaceCrud.actions.archive")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
@@ -250,7 +214,7 @@ export function JoinRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>
             {t("workspaceCrud.join.title", { name: workspaceName })}
@@ -258,56 +222,34 @@ export function JoinRequestDialog({
         </DialogHeader>
 
         <form
-          className="grid gap-3"
+          className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault()
             if (tooLong) return
             onSubmit({ reason: trimmed })
           }}
         >
-          <div className="grid gap-1.5">
-            <label
-              className="text-sm font-medium text-fg-muted"
-              htmlFor="join-reason"
-            >
-              {t("workspaceCrud.fields.reason")}
-              <span className="ml-1 text-xs font-normal text-fg-faint">
-                {t("workspaceCrud.fields.optional")}
-              </span>
-            </label>
-            <textarea
+          <Field
+            label={`${t("workspaceCrud.fields.reason")} ${t("workspaceCrud.fields.optional")}`}
+            htmlFor="join-reason"
+            hint={tooLong ? <InlineError>{t("workspaceCrud.join.reasonTooLong")}</InlineError> : undefined}
+          >
+            <Textarea
               id="join-reason"
               value={reason}
               autoFocus
               rows={3}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("workspaceCrud.join.reasonPlaceholder")}
-              className="rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-line-strong"
             />
-            {tooLong && (
-              <p className="text-xs text-danger">
-                {t("workspaceCrud.join.reasonTooLong")}
-              </p>
-            )}
-          </div>
+          </Field>
 
-          {errMsg && (
-            <p className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-              {errMsg}
-            </p>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              disabled={pending}
-            >
+          <DialogFooter className="mt-1">
+            {errMsg && <InlineError className="mr-auto">{errMsg}</InlineError>}
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
               {t("actions.cancel")}
             </Button>
-            <Button type="submit" size="sm" disabled={pending || tooLong}>
+            <Button type="submit" disabled={pending || tooLong}>
               {pending
                 ? t("states.loading")
                 : t("workspaceCrud.actions.submitJoinRequest")}

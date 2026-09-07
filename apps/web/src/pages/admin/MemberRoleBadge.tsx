@@ -1,20 +1,10 @@
 import { useTranslation } from "react-i18next"
 
-import { Badge } from "../../components/ui/badge"
+import { cn } from "../../lib/utils"
 import type { MemberRole } from "../../lib/api-types"
 
-export function MemberRoleBadge({ role }: { role: MemberRole }) {
+/** Role as 12px muted metadata after the name; no chip, no colour. */
+export function MemberRoleBadge({ role, className }: { role: MemberRole; className?: string }) {
   const { t } = useTranslation("admin")
-  const variant =
-    role === "owner"
-      ? "primary"
-      : role === "admin"
-        ? "warning"
-        : "neutral"
-
-  return (
-    <Badge variant={variant} dot>
-      {t(`members.role.${role}`)}
-    </Badge>
-  )
+  return <span className={cn("shrink-0 text-xs text-fg-muted", className)}>{t(`members.role.${role}`)}</span>
 }

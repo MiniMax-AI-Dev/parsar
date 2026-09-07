@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
-import { Loader2, RefreshCw } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import { ApiError } from "../../../lib/api-client"
 import {
@@ -9,7 +9,10 @@ import {
 } from "../../../lib/api-connectors"
 import { useCreateSecret } from "../../../lib/api-secrets"
 import type { CreateSecretRequest } from "../../../lib/api-types"
-import { Card, Field, SecretInput } from "./shared"
+import { Button } from "../../ui/button"
+import { Input } from "../../ui/input"
+import { InlineError } from "../../runtime/InlineError"
+import { EnabledField, Field, FormFooter, FormSection, SecretInput } from "./shared"
 import { randomHex } from "../../../lib/random"
 
 const EMPTY_CONFIG: DiscordConnectorInput = {
@@ -71,6 +74,8 @@ export interface DiscordConnectorFieldsProps {
   current: DiscordConnectorInput | undefined
   canEdit: boolean
   onToast: (msg: string) => void
+  /** State chip rendered in the section head. */
+  status?: ReactNode
 }
 
 export function DiscordConnectorFields({
@@ -78,6 +83,7 @@ export function DiscordConnectorFields({
   current,
   canEdit,
   onToast,
+  status,
 }: DiscordConnectorFieldsProps) {
   const currentConfig = current ?? EMPTY_CONFIG
   return (
@@ -87,6 +93,7 @@ export function DiscordConnectorFields({
       current={currentConfig}
       canEdit={canEdit}
       onToast={onToast}
+      status={status}
     />
   )
 }
@@ -100,6 +107,7 @@ function DiscordConnectorFieldsInner({
   current,
   canEdit,
   onToast,
+  status,
 }: DiscordConnectorFieldsInnerProps) {
   const { t } = useTranslation("admin")
   const mut = useUpdateWorkspaceDiscordConnector(workspaceID)
@@ -111,6 +119,7 @@ function DiscordConnectorFieldsInner({
 
   const dirty = !configEqual(draft, current) || secretInputsDirty(secretInputs)
   const saving = mut.isPending || createSecretMut.isPending
+  const locked = !canEdit || saving
 
   const missingRequired = missingRequiredFor(draft, secretInputs)
   const missingDraftIdentity = !draft.app_id.trim()
@@ -130,14 +139,13 @@ function DiscordConnectorFieldsInner({
   }
 
   const onSave = async () => {
-    const nextDraft = draft
-    if (missingRequiredFor(nextDraft, secretInputs)) {
+    if (missingRequiredFor(draft, secretInputs)) {
       setErrorMsg(t("connections.connector.discord.errors.incomplete"))
       return
     }
     setErrorMsg(null)
     try {
-      const config = await buildConfigWithSecretRefs(nextDraft, secretInputs, async (body) => {
+      const config = await buildConfigWithSecretRefs(draft, secretInputs, async (body) => {
         const secret = await createSecretMut.mutateAsync({ body })
         return secret.id
       })
@@ -164,149 +172,97 @@ function DiscordConnectorFieldsInner({
     }
   }
 
-  const onReset = () => {
-    setDraft(current)
-    setSecretInputs({ ...EMPTY_SECRET_INPUTS })
-    setErrorMsg(null)
-  }
-
   return (
-    <Card
+    <FormSection
       title={t("connections.connector.discord.title")}
-      description={t("connections.connector.discord.description")}
+      status={status}
       docHref={t("connections.connector.discord.docLink.href")}
       docLabel={t("connections.connector.discord.docLink.label")}
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-subtle px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-fg">
-            {draft.enabled
-              ? t("connections.connector.status.enabled")
-              : t("connections.connector.status.disabled")}
-          </p>
-          <p className="mt-0.5 text-xs text-fg-subtle">
-            {t("connections.connector.discord.fields.enabled.hint")}
-          </p>
-        </div>
-        <label className="inline-flex items-center gap-2 text-sm text-fg">
-          <input
-            type="checkbox"
-            checked={draft.enabled}
-            onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-            disabled={!canEdit || saving}
-            data-testid="discord-enabled-input"
-          />
-          {t("connections.connector.discord.fields.enabled.toggle")}
-        </label>
-      </div>
+      <EnabledField
+        label={t("connections.connector.discord.fields.enabled.toggle")}
+        checked={draft.enabled}
+        onChange={(enabled) => setDraft({ ...draft, enabled })}
+        disabled={locked}
+        testId="discord-enabled-input"
+      />
 
       <Field
         label={t("connections.connector.discord.fields.appId.label")}
-        hint={t("connections.connector.discord.fields.appId.hint")}
+        htmlFor="discord-app-id-input"
         required
       >
-        <input
+        <Input
+          id="discord-app-id-input"
           type="text"
           value={draft.app_id}
           placeholder="1234567890"
           onChange={(e) => setDraft({ ...draft, app_id: e.target.value })}
-          disabled={!canEdit || saving}
-          className="h-9 w-full rounded-md border border-line bg-surface px-3 font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-surface-subtle"
+          disabled={locked}
+          className="font-mono"
           data-testid="discord-app-id-input"
         />
       </Field>
 
       <SecretInput
         label={t("connections.connector.discord.fields.botToken.label")}
-        hint={t("connections.connector.discord.fields.botToken.hint")}
-        savedHint={t("connections.connector.discord.fields.botToken.savedHint")}
         savedBadge={t("connections.connector.savedBadge")}
         value={secretInputs.botToken}
         onChange={(v) => setSecretInputs((prev) => ({ ...prev, botToken: v }))}
         required={!draft.bot_token_ref.trim()}
         hasSavedValue={Boolean(draft.bot_token_ref.trim())}
-        disabled={!canEdit || saving}
+        disabled={locked}
         testId="discord-bot-token-input"
       />
 
       <SecretInput
         label={t("connections.connector.discord.fields.publicKey.label")}
-        hint={t("connections.connector.discord.fields.publicKey.hint")}
-        savedHint={t("connections.connector.discord.fields.publicKey.savedHint")}
         savedBadge={t("connections.connector.savedBadge")}
         value={secretInputs.publicKey}
         onChange={(v) => setSecretInputs((prev) => ({ ...prev, publicKey: v }))}
         required={!draft.public_key_ref.trim()}
         hasSavedValue={Boolean(draft.public_key_ref.trim())}
-        disabled={!canEdit || saving}
+        disabled={locked}
         testId="discord-public-key-input"
       />
 
       <Field
         label={t("connections.connector.discord.fields.intents.label")}
-        hint={t("connections.connector.discord.fields.intents.hint")}
       >
-        <div className="flex flex-wrap gap-2">
-          {DISCORD_INTENT_OPTIONS.map((intent) => {
-            const active = selectedIntents.includes(intent)
-            return (
-              <button
-                key={intent}
-                type="button"
-                onClick={() => toggleIntent(intent)}
-                disabled={!canEdit || saving}
-                className={`min-h-8 rounded-md border px-2.5 py-1 font-mono text-xs transition ${
-                  active
-                    ? "border-line-strong bg-surface-emphasis text-white"
-                    : "border-line bg-surface text-fg-muted hover:bg-surface-subtle"
-                } disabled:opacity-60`}
-                aria-pressed={active}
-              >
+        <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0">
+          {DISCORD_INTENT_OPTIONS.map((intent) => (
+            <li key={intent}>
+              <label className="flex h-7 items-center gap-2 font-mono text-xs text-fg">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-accent"
+                  checked={selectedIntents.includes(intent)}
+                  onChange={() => toggleIntent(intent)}
+                  disabled={locked}
+                />
                 {intent}
-              </button>
-            )
-          })}
-        </div>
+              </label>
+            </li>
+          ))}
+        </ul>
       </Field>
 
-      {!canEdit && (
-        <p className="mt-3 text-sm text-fg-faint">{t("connections.connector.adminOnly")}</p>
-      )}
+      {!canEdit && <p className="text-xs text-fg-muted">{t("connections.connector.adminOnly")}</p>}
+      {errorMsg && <InlineError data-testid="discord-error">{errorMsg}</InlineError>}
 
-      {errorMsg && (
-        <p className="mt-3 text-sm text-danger" role="alert" data-testid="discord-error">
-          {errorMsg}
-        </p>
-      )}
-
-      <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-line/40 pt-4">
-        {dirty && (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-subtle disabled:opacity-60"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            {t("connections.connector.actions.reset")}
-          </button>
-        )}
-        <button
-          type="button"
+      <FormFooter>
+        <Button
           onClick={() => void onSave()}
-          disabled={
-            !canEdit || saving || !dirty || missingDraftIdentity || Boolean(missingRequired)
-          }
-          className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-fg-muted hover:bg-surface-subtle disabled:opacity-60"
+          disabled={locked || !dirty || missingDraftIdentity || Boolean(missingRequired)}
           data-testid="discord-save-button"
         >
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <Loader2 className="animate-spin" />}
           {draft.enabled
             ? t("connections.connector.actions.save")
             : t("connections.connector.actions.saveDraft")}
-        </button>
-      </div>
-    </Card>
+        </Button>
+      </FormFooter>
+    </FormSection>
   )
 }
 
@@ -326,7 +282,7 @@ function configKey(config: DiscordConnectorInput): string {
     config.bot_token_ref,
     config.public_key_ref,
     config.intents,
-  ].join("\u0000")
+  ].join(" ")
 }
 
 function applyChange(

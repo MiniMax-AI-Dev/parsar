@@ -9,6 +9,7 @@ import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { ApiError } from "../../../lib/api-client"
+import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { cn } from "../../../lib/utils"
@@ -16,6 +17,7 @@ import { useWheelScroll } from "../../../lib/use-wheel-scroll"
 
 import { useCredentialKindsQuery } from "./api"
 import { NewCredentialKindInlineDialog } from "./NewCredentialKindInlineDialog"
+import { InlineNotice } from "./notices"
 import type { CredentialKindRead } from "./types"
 
 interface Props {
@@ -28,6 +30,8 @@ interface Props {
   /** Disable the trigger (e.g. when the mode is not credential_ref). */
   disabled?: boolean
 }
+
+const MENU_ITEM_CLASS = "flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:app-pressed"
 
 export function CredentialKindCombobox({
   workspaceID,
@@ -71,22 +75,19 @@ export function CredentialKindCombobox({
         <DropdownMenu.Trigger asChild disabled={disabled}>
           <Button
             variant="outline"
-            size="sm"
-            className={cn("justify-between font-normal", !selected && "text-fg-subtle", className)}
+            className={cn("w-full justify-between font-normal", !selected && !value && "text-fg-muted", className)}
           >
-            <span className="truncate text-sm">
-              {selected
-                ? selected.display_name
-                : value
-                  ? value
-                  : t("capabilities.import.kindPicker.placeholder", "Select a credential kind")}
-              {selected && (
-                <code className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-fg-subtle">
-                  {selected.code}
-                </code>
-              )}
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">
+                {selected
+                  ? selected.display_name
+                  : value
+                    ? value
+                    : t("capabilities.import.kindPicker.placeholder", "Select a credential kind")}
+              </span>
+              {selected && <code className="shrink-0 font-mono text-xs text-fg-muted">{selected.code}</code>}
             </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+            <ChevronsUpDown className="text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
           </Button>
         </DropdownMenu.Trigger>
 
@@ -97,15 +98,14 @@ export function CredentialKindCombobox({
           align="start"
           sideOffset={4}
           data-credential-kind-menu
-          className="z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-md border border-line bg-surface p-1 shadow-lg"
+          className="app-shadow-floating z-50 max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px] overflow-hidden rounded-lg border border-line bg-surface p-1 animate-pop-in data-[state=closed]:animate-pop-out"
         >
-          <div className="border-b border-line-muted p-1">
+          <div className="border-b border-line p-1">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("capabilities.import.kindPicker.search", "Search…")}
               onKeyDown={(e) => e.stopPropagation() /* keep arrow keys in input */}
-              className="h-8 text-sm"
               autoFocus
             />
           </div>
@@ -115,14 +115,14 @@ export function CredentialKindCombobox({
               react-remove-scroll, so the wheel wouldn't reach the list at all. */}
           <div ref={listRef} className="max-h-[200px] overflow-auto py-1">
             {kindsQ.isLoading ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-sm text-fg-subtle">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-fg-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} aria-hidden="true" />
                 {t("capabilities.import.kindPicker.loading", "Loading…")}
               </div>
             ) : errMsg ? (
-              <p className="px-3 py-2 text-sm text-danger-emphasis">{errMsg}</p>
+              <InlineNotice tone="error" className="px-2 py-1.5">{errMsg}</InlineNotice>
             ) : filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-fg-subtle">
+              <p className="px-2 py-1.5 text-sm text-fg-muted">
                 {t("capabilities.import.kindPicker.empty", "No matching credential kinds")}
               </p>
             ) : (
@@ -137,16 +137,16 @@ export function CredentialKindCombobox({
             )}
           </div>
 
-          <DropdownMenu.Separator className="my-1 h-px bg-surface-muted" />
+          <DropdownMenu.Separator className="my-1 h-px bg-line" />
 
           <DropdownMenu.Item
             onSelect={(e) => {
               e.preventDefault()
               setCreateOpen(true)
             }}
-            className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm font-medium text-fg outline-none hover:bg-surface-subtle focus:bg-surface-subtle"
+            className={cn(MENU_ITEM_CLASS, "items-center font-medium")}
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />
             {t("capabilities.import.kindPicker.createNew", "Create credential kind…")}
           </DropdownMenu.Item>
         </DropdownMenu.Content>
@@ -176,34 +176,16 @@ function KindRow({
   onSelect: () => void
 }) {
   return (
-    <DropdownMenu.Item
-      onSelect={onSelect}
-      className={cn(
-        "flex cursor-pointer items-start justify-between gap-2 rounded px-3 py-2 outline-none",
-        selected ? "bg-surface-muted" : "hover:bg-surface-subtle focus:bg-surface-subtle",
-      )}
-    >
+    <DropdownMenu.Item onSelect={onSelect} className={cn(MENU_ITEM_CLASS, selected && "app-selected")}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-fg">
-            {kind.display_name || kind.code}
-          </span>
-          {kind.built_in && (
-            <span className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-fg-muted">
-              built-in
-            </span>
-          )}
+          <span className="truncate font-medium text-fg">{kind.display_name || kind.code}</span>
+          <code className="shrink-0 font-mono text-xs text-fg-muted">{kind.code}</code>
+          {kind.built_in && <Badge variant="neutral">built-in</Badge>}
         </div>
-        <div className="mt-0.5 flex items-center gap-2">
-          <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-fg-subtle">
-            {kind.code}
-          </code>
-        </div>
-        {kind.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-fg-subtle">{kind.description}</p>
-        )}
+        {kind.description && <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{kind.description}</p>}
       </div>
-      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-fg-muted" />}
+      {selected && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={1.5} aria-hidden="true" />}
     </DropdownMenu.Item>
   )
 }

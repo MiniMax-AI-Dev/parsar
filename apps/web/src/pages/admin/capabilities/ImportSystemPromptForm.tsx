@@ -9,7 +9,9 @@
  */
 import { useTranslation } from "react-i18next"
 
+import { Field } from "../../../components/ui/label"
 import { Input } from "../../../components/ui/input"
+import { Textarea } from "../../../components/ui/textarea"
 import type { SystemPromptMode } from "./types"
 
 export interface SystemPromptDraft {
@@ -28,25 +30,24 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
   const set = (patch: Partial<SystemPromptDraft>) => onChange({ ...value, ...patch })
 
   return (
-    <div className="space-y-4">
-      <Field
-        label={t("capabilities.import.systemPrompt.versionLabel", "Version")}
-        required
-      >
+    <div className="space-y-3">
+      <Field label={t("capabilities.import.systemPrompt.versionLabel", "Version")} htmlFor="system-prompt-version">
         <Input
+          id="system-prompt-version"
           value={value.version}
           onChange={(e) => set({ version: e.target.value })}
           placeholder="1.0.0"
         />
       </Field>
 
-      <Field label={t("capabilities.import.systemPrompt.modeLabel", "Injection mode")} required>
-        <div className="flex gap-4 text-sm">
+      <Field label={t("capabilities.import.systemPrompt.modeLabel", "Injection mode")}>
+        <div className="flex flex-wrap gap-4 text-sm text-fg">
           <label className="inline-flex items-center gap-2">
             <input
               type="radio"
               name="system-prompt-mode"
               value="append"
+              className="accent-accent"
               checked={value.mode === "append"}
               onChange={() => set({ mode: "append" })}
             />
@@ -57,6 +58,7 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
               type="radio"
               name="system-prompt-mode"
               value="override"
+              className="accent-accent"
               checked={value.mode === "override"}
               onChange={() => set({ mode: "override" })}
             />
@@ -65,9 +67,10 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
         </div>
       </Field>
 
-      <Field label={t("capabilities.import.systemPrompt.promptLabel", "Prompt content")} required>
-        <textarea
-          className="min-h-[260px] w-full rounded-md border border-line bg-surface p-3 font-mono text-sm leading-relaxed text-fg-emphasis focus:outline-none focus:ring-2 focus:ring-line-strong"
+      <Field label={t("capabilities.import.systemPrompt.promptLabel", "Prompt content")} htmlFor="system-prompt-content">
+        <Textarea
+          id="system-prompt-content"
+          className="min-h-[260px] font-mono text-xs"
           value={value.prompt}
           onChange={(e) => set({ prompt: e.target.value })}
           placeholder={t(
@@ -77,25 +80,5 @@ export function ImportSystemPromptForm({ value, onChange }: Props) {
         />
       </Field>
     </div>
-  )
-}
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-sm font-medium text-fg-muted">
-        {label}
-        {required && <span className="text-danger"> *</span>}
-      </span>
-      {children}
-    </label>
   )
 }

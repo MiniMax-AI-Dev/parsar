@@ -6,18 +6,11 @@ import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { SettingsTabs } from "../../components/layout/SettingsTabs"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
-import { Badge } from "../../components/ui/badge"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
+import { Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../components/ui/ledger"
+import { Property, PropertyList } from "../../components/ui/property-list"
 import { Skeleton } from "../../components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table"
 import { useAdminView } from "../../lib/admin-router"
 import { ApiError } from "../../lib/api-client"
 import { useUsage } from "../../lib/api-governance"
@@ -107,6 +100,11 @@ function fmtTime(iso: string): string {
   return d.toLocaleString(undefined, { hour12: false })
 }
 
+/** provider · model · calls · input · output · cost */
+const MODEL_COLUMNS = [col.meta(128), col.id(200, 2), col.num(72), col.num(104), col.num(104), col.num(96)]
+/** time · run · provider · model · input · output · cost */
+const RECENT_COLUMNS = [col.id(148, 0.5), col.id(156, 0.7), col.meta(128), col.id(200, 2), col.num(104), col.num(104), col.num(96)]
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -123,145 +121,138 @@ export function UsagePage() {
 
   const err = query.error
   const isUnreachable = err instanceof ApiError && err.envelope.unreachable
+  const pageTitle = t("usage.page.title")
 
   return (
-    <AdminLayout activeMenu="settings">
-      <PageHeader
-        title={t("usage.page.title")}
-      />
-      <SettingsTabs active="usage" />
-      {!wsId ? (
-        <ScopeRequiredState scope="workspace" resourceName={t("usage.page.title")} />
-      ) : query.isLoading ? (
-        <UsageLoadingSkeleton />
-      ) : err ? (
-        <ErrorState
-          title={isUnreachable ? t("usage.loadError.unreachable.title") : t("usage.loadError.title")}
-          description={
-            isUnreachable
-              ? t("usage.loadError.unreachable.description")
-              : err instanceof Error
-                ? err.message
-                : t("usage.loadError.description")
-          }
-          hint={isUnreachable ? t("usage.loadError.unreachable.hint") : t("usage.loadError.hint")}
-          onRetry={() => void query.refetch()}
+    <AdminLayout activeMenu="settings" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="usage.page.title"
+          action={<SettingsTabs active="usage" />}
         />
-      ) : logs.length === 0 ? (
-        <EmptyState
-          icon={LineChartIcon}
-          title={t("usage.empty.title")}
-          description={t("usage.empty.description")}
-        />
-      ) : (
-        <div className="space-y-6">
-          {/* Summary stats */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label={t("usage.stats.runs")} value={String(summary.runs.size)} />
-            <Stat label={t("usage.stats.inputTokens")} value={fmtInt(summary.inputTokens)} />
-            <Stat label={t("usage.stats.outputTokens")} value={fmtInt(summary.outputTokens)} />
-            <Stat label={t("usage.stats.cost")} value={fmtUsd(summary.costUsd)} mono />
+        {!wsId ? (
+          <ScopeRequiredState scope="workspace" resourceName={pageTitle} />
+        ) : query.isLoading ? (
+          <UsageLoadingSkeleton />
+        ) : err ? (
+          <div className="px-4 pt-4">
+            <ErrorState
+              title={isUnreachable ? t("usage.loadError.unreachable.title") : t("usage.loadError.title")}
+              description={
+                isUnreachable
+                  ? t("usage.loadError.unreachable.description")
+                  : err instanceof Error
+                    ? err.message
+                    : t("usage.loadError.description")
+              }
+              hint={isUnreachable ? t("usage.loadError.unreachable.hint") : t("usage.loadError.hint")}
+              onRetry={() => void query.refetch()}
+            />
           </div>
+        ) : logs.length === 0 ? (
+          <EmptyState
+            icon={LineChartIcon}
+            title={t("usage.empty.title")}
+            description={t("usage.empty.description")}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto pb-10">
+            <PropertyList className="grid-cols-[132px_minmax(0,1fr)] px-6 pt-3">
+              <Property label={t("usage.stats.runs")} mono className="tabular-nums">{fmtInt(summary.runs.size)}</Property>
+              <Property label={t("usage.stats.inputTokens")} mono className="tabular-nums">{fmtInt(summary.inputTokens)}</Property>
+              <Property label={t("usage.stats.outputTokens")} mono className="tabular-nums">{fmtInt(summary.outputTokens)}</Property>
+              <Property label={t("usage.stats.cost")} mono className="tabular-nums">{fmtUsd(summary.costUsd)}</Property>
+            </PropertyList>
 
-          {/* By model */}
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-fg">{t("usage.byModel.title")}</h2>
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("usage.byModel.provider")}</TableHead>
-                    <TableHead>{t("usage.byModel.model")}</TableHead>
-                    <TableHead className="text-right">{t("usage.byModel.calls")}</TableHead>
-                    <TableHead className="text-right">{t("usage.byModel.input")}</TableHead>
-                    <TableHead className="text-right">{t("usage.byModel.output")}</TableHead>
-                    <TableHead className="text-right pr-4">{t("usage.byModel.cost")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {byModel.map((m) => (
-                    <TableRow key={m.key}>
-                      <TableCell className="text-sm text-fg-muted">{m.provider}</TableCell>
-                      <TableCell><code className="text-sm text-fg-emphasis">{m.model}</code></TableCell>
-                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{m.callCount}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(m.inputTokens)}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(m.outputTokens)}</TableCell>
-                      <TableCell className="text-right pr-4 font-mono text-sm tabular-nums text-fg-muted">{fmtUsd(m.costUsd)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </section>
+            <h2 className="mb-1 mt-6 px-6 text-xs font-medium text-fg">{t("usage.byModel.title")}</h2>
+            <Ledger columns={MODEL_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.byModel.title")}>
+              <LedgerHeader>
+                <span>{t("usage.byModel.provider")}</span>
+                <span>{t("usage.byModel.model")}</span>
+                <span className="text-right">{t("usage.byModel.calls")}</span>
+                <span className="text-right">{t("usage.byModel.input")}</span>
+                <span className="text-right">{t("usage.byModel.output")}</span>
+                <span className="text-right">{t("usage.byModel.cost")}</span>
+              </LedgerHeader>
+              <ul className="m-0 list-none p-0">
+                {byModel.map((m) => (
+                  <LedgerRow key={m.key} role="listitem" tabIndex={-1}>
+                    <span className="truncate text-xs text-fg-muted">{m.provider}</span>
+                    <span className="truncate font-mono text-xs text-fg">{m.model}</span>
+                    <LedgerNum>{fmtInt(m.callCount)}</LedgerNum>
+                    <LedgerNum>{fmtInt(m.inputTokens)}</LedgerNum>
+                    <LedgerNum>{fmtInt(m.outputTokens)}</LedgerNum>
+                    <LedgerNum>{fmtUsd(m.costUsd)}</LedgerNum>
+                  </LedgerRow>
+                ))}
+              </ul>
+            </Ledger>
 
-          {/* Recent calls */}
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-fg">{t("usage.recent.title")}</h2>
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("usage.recent.time")}</TableHead>
-                    <TableHead>{t("usage.recent.run")}</TableHead>
-                    <TableHead>{t("usage.recent.provider")}</TableHead>
-                    <TableHead>{t("usage.recent.model")}</TableHead>
-                    <TableHead className="text-right">{t("usage.recent.input")}</TableHead>
-                    <TableHead className="text-right">{t("usage.recent.output")}</TableHead>
-                    <TableHead className="text-right pr-4">{t("usage.recent.cost")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-mono text-xs text-fg-subtle tabular-nums">{fmtTime(u.created_at)}</TableCell>
-                      <TableCell>
-                        {u.agent_run_id ? (
-                          <button
-                            className="font-mono text-xs text-fg-muted hover:underline"
-                            onClick={() => navigate("runs", { id: u.agent_run_id! })}
-                          >
-                            {shortId(u.agent_run_id)}
-                          </button>
-                        ) : (
-                          <Badge variant="neutral">{t("usage.recent.noRun")}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-fg-muted">{u.provider}</TableCell>
-                      <TableCell><code className="text-sm text-fg-emphasis">{u.model}</code></TableCell>
-                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(u.input_tokens)}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums text-fg-muted">{fmtInt(u.output_tokens)}</TableCell>
-                      <TableCell className="text-right pr-4 font-mono text-sm tabular-nums text-fg-muted">{fmtUsd(u.cost_usd)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </section>
-        </div>
-      )}
+            <h2 className="mb-1 mt-6 px-6 text-xs font-medium text-fg">{t("usage.recent.title")}</h2>
+            <Ledger columns={RECENT_COLUMNS} className="flex-none overflow-visible" role="list" aria-label={t("usage.recent.title")}>
+              <LedgerHeader>
+                <span>{t("usage.recent.time")}</span>
+                <span>{t("usage.recent.run")}</span>
+                <span>{t("usage.recent.provider")}</span>
+                <span>{t("usage.recent.model")}</span>
+                <span className="text-right">{t("usage.recent.input")}</span>
+                <span className="text-right">{t("usage.recent.output")}</span>
+                <span className="text-right">{t("usage.recent.cost")}</span>
+              </LedgerHeader>
+              <ul className="m-0 list-none p-0">
+                {logs.map((u) => (
+                  <LedgerRow key={u.id} role="listitem" tabIndex={-1}>
+                    <span className="truncate font-mono text-xs tabular-nums text-fg-muted">{fmtTime(u.created_at)}</span>
+                    {u.agent_run_id ? (
+                      <button
+                        type="button"
+                        className="truncate text-left font-mono text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        onClick={() => navigate("runs", { id: u.agent_run_id! })}
+                        title={u.agent_run_id}
+                      >
+                        {shortId(u.agent_run_id, 18)}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-fg-muted" title={t("usage.recent.noRun")}>—</span>
+                    )}
+                    <span className="truncate text-xs text-fg-muted">{u.provider}</span>
+                    <span className="truncate font-mono text-xs text-fg">{u.model}</span>
+                    <LedgerNum>{fmtInt(u.input_tokens)}</LedgerNum>
+                    <LedgerNum>{fmtInt(u.output_tokens)}</LedgerNum>
+                    <LedgerNum>{fmtUsd(u.cost_usd)}</LedgerNum>
+                  </LedgerRow>
+                ))}
+              </ul>
+            </Ledger>
+          </div>
+        )}
+      </div>
     </AdminLayout>
-  )
-}
-
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-lg border border-line bg-surface p-4">
-      <div className="text-xs font-medium text-fg-faint">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums text-fg ${mono ? "font-mono" : ""}`}>{value}</div>
-    </div>
   )
 }
 
 function UsageLoadingSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="px-4 pt-3">
+      <div className="space-y-3 pb-6">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full" />
+          <div key={i} className="flex h-4 items-center gap-3">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
         ))}
       </div>
-      <Skeleton className="h-40 w-full" />
-      <Skeleton className="h-64 w-full" />
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
     </div>
   )
 }

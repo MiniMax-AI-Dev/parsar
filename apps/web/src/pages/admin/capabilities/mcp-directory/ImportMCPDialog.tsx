@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import { Loader2 } from "lucide-react"
 
 import { Button } from "../../../../components/ui/button"
 import {
@@ -10,8 +11,10 @@ import {
   DialogTitle,
 } from "../../../../components/ui/dialog"
 import { ErrorState } from "../../../../components/ui/error-state"
+import { PropertyList, Property } from "../../../../components/ui/property-list"
 import { Skeleton } from "../../../../components/ui/skeleton"
 import type { MCPDirectoryItem } from "../../../../lib/api-marketplace"
+import { InlineNotice } from "../notices"
 
 export function ImportMCPDialog({
   open,
@@ -46,8 +49,8 @@ export function ImportMCPDialog({
         </DialogHeader>
         {loading ? (
           <div className="space-y-2">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-2/3" />
           </div>
         ) : error ? (
           <ErrorState
@@ -57,37 +60,25 @@ export function ImportMCPDialog({
           />
         ) : item ? (
           <div className="min-w-0 space-y-3">
-            <div className="min-w-0">
-              <p className="text-xs text-fg-subtle">
-                {t("capabilities.mcpDirectory.detail.endpoint")}
-              </p>
-              <pre className="mt-1.5 max-w-full overflow-x-auto rounded-md border border-line bg-surface-muted/35 p-3 font-mono text-xs leading-5 text-fg">
-                {item.url}
-              </pre>
-            </div>
-            <div>
-              <p className="text-xs text-fg-subtle">
-                {t("capabilities.mcpDirectory.detail.authentication")}
-              </p>
-              <p className="mt-1.5 font-mono text-xs text-fg">
-				{item.authentication === "oauth2"
-				  ? item.connected
-					? t("capabilities.mcpDirectory.oauth.connected")
-					: t("capabilities.mcpDirectory.oauth.required")
-				  : t("capabilities.mcpDirectory.detail.noAuthentication")}
-              </p>
-            </div>
-            <p className="rounded-md border border-line bg-surface-muted/25 p-3 text-xs leading-5 text-fg-muted">
-              {t("capabilities.mcpDirectory.securityNotice")}
-            </p>
+            <PropertyList className="grid-cols-[120px_minmax(0,1fr)]">
+              <Property label={t("capabilities.mcpDirectory.detail.endpoint")} mono className="h-auto min-h-7 whitespace-normal break-all py-1">
+                {item.url || "—"}
+              </Property>
+              <Property label={t("capabilities.mcpDirectory.detail.authentication")}>
+                {item.authentication === "oauth2"
+                  ? item.connected
+                    ? t("capabilities.mcpDirectory.oauth.connected")
+                    : t("capabilities.mcpDirectory.oauth.required")
+                  : t("capabilities.mcpDirectory.detail.noAuthentication")}
+              </Property>
+            </PropertyList>
+            <p className="text-xs text-fg-muted">{t("capabilities.mcpDirectory.securityNotice")}</p>
           </div>
         ) : null}
         {mutationError ? (
-          <p className="text-sm text-destructive">
-            {mutationError instanceof Error
-              ? mutationError.message
-              : t("capabilities.mcpDirectory.import.failed")}
-          </p>
+          <InlineNotice tone="error">
+            {mutationError instanceof Error ? mutationError.message : t("capabilities.mcpDirectory.import.failed")}
+          </InlineNotice>
         ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
@@ -95,11 +86,10 @@ export function ImportMCPDialog({
           </Button>
           <Button
             onClick={onConfirm}
-			disabled={!item || loading || !!error || pending || item.installed || (item.authentication === "oauth2" && !item.connected)}
+            disabled={!item || loading || !!error || pending || item.installed || (item.authentication === "oauth2" && !item.connected)}
           >
-            {pending
-              ? t("capabilities.mcpDirectory.import.importing")
-              : t("capabilities.mcpDirectory.actions.import")}
+            {pending && <Loader2 className="animate-spin" />}
+            {pending ? t("capabilities.mcpDirectory.import.importing") : t("capabilities.mcpDirectory.actions.import")}
           </Button>
         </DialogFooter>
       </DialogContent>

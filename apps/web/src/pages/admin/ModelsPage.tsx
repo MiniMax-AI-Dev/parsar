@@ -6,37 +6,25 @@
  */
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import {
-  AlertCircle,
-  CheckCircle2,
-  Database,
-  Download,
-  Loader2,
-  Plus,
-  RefreshCw,
-  ShieldAlert,
-} from "lucide-react"
+import { AlertTriangle, Database, Download, Loader2, Plus, X } from "lucide-react"
 
 import { AdminLayout } from "../../components/layout/AdminLayout"
 import { PageHeader } from "../../components/layout/PageHeader"
 import { ScopeRequiredState } from "../../components/admin/ScopeRequiredState"
-import { Button } from "../../components/ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../components/ui/dialog"
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog"
+import { Button } from "../../components/ui/button"
 import { EmptyState } from "../../components/ui/empty-state"
 import { ErrorState } from "../../components/ui/error-state"
 import { Skeleton } from "../../components/ui/skeleton"
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "../../components/ui/tabs"
+import { StatusIcon } from "../../components/ui/status-icon"
+import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { ApiError } from "../../lib/api-client"
 import {
   useBackgroundTestModels,
@@ -85,127 +73,28 @@ function ConfirmDialog({
 }) {
   const { t } = useTranslation("common")
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
-      <DialogContent showCloseButton={false} className="max-w-md gap-0 p-0">
-        <DialogHeader className="flex flex-row items-start gap-3 space-y-0 p-5 pr-5">
-          <div
-            className={
-              destructive
-                ? "shrink-0 rounded-full bg-danger-subtle p-2 text-danger-emphasis"
-                : "shrink-0 rounded-full bg-warning-subtle p-2 text-warning"
-            }
-          >
-            <ShieldAlert className="h-4 w-4" />
-          </div>
-          <div className="space-y-1.5">
-            <DialogTitle className="text-sm">{title}</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              {description}
-            </DialogDescription>
-          </div>
-        </DialogHeader>
-        <DialogFooter className="flex flex-row items-center justify-end gap-2 border-t border-line-muted bg-surface-subtle/60 px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next && !loading) onCancel() }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            {destructive && (
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            )}
+            <span>{title}</span>
+          </AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>
             {t("actions.cancel")}
           </Button>
-          <Button
-            variant={destructive ? "destructive" : "default"}
-            size="sm"
-            onClick={onConfirm}
-            disabled={loading}
-          >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={loading}>
+            {loading && <Loader2 className="animate-spin" />}
             {confirmLabel ?? t("actions.confirm")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/* --- Test-result toast --------------------------------------------------- */
-
-function TestResultBanner({
-  result,
-  onDetails,
-  onClose,
-}: {
-  result: { modelID: string; data: ModelConnectivityResult } | null
-  onDetails: () => void
-  onClose: () => void
-}) {
-  const { t } = useTranslation("admin")
-  if (!result) return null
-  const { data } = result
-  const ok = data.success
-  const healthyCount = data.healthy_count ?? data.results?.filter((item) => item.success).length
-  const totalCount = data.total_count ?? data.results?.length
-  return (
-    <div className={`fixed bottom-4 right-4 z-50 max-w-md rounded-md border shadow-md ${
-      ok ? "border-success-border bg-success-subtle" : "border-danger-border bg-danger-subtle"
-    }`}>
-      <div className="flex items-start gap-2 px-4 py-3">
-        {ok ? (
-          <CheckCircle2 className="mt-0.5 h-4 w-4 text-success" />
-        ) : (
-          <AlertCircle className="mt-0.5 h-4 w-4 text-danger-emphasis" />
-        )}
-        <div className="flex-1 text-sm">
-          {ok ? (
-            <>
-              <div className="font-medium text-success-emphasis">
-                {totalCount
-                  ? t("models.test.successWithEndpoints", {
-                      healthy: healthyCount ?? 0,
-                      total: totalCount,
-                      ms: data.latency_ms,
-                    })
-                  : t("models.test.success", { ms: data.latency_ms })}
-              </div>
-              {data.sample && (
-                <div className="mt-1 text-xs text-success-emphasis/80 line-clamp-2">
-                  {data.sample}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="font-medium text-danger-emphasis">
-                {totalCount
-                  ? t("models.test.failureWithEndpoints", {
-                      healthy: healthyCount ?? 0,
-                      total: totalCount,
-                    })
-                  : data.supported
-                    ? t("models.test.failure")
-                    : t("models.test.unsupported")}
-              </div>
-              {data.error && (
-                <div className="mt-1 text-xs text-danger-emphasis/80 line-clamp-3">
-                  {data.error}
-                </div>
-              )}
-            </>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-2 h-7 px-2"
-            onClick={onDetails}
-          >
-            {t("models.test.details.open")}
-          </Button>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-fg-subtle hover:text-fg-muted"
-        >
-          ×
-        </button>
-      </div>
-    </div>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
@@ -213,9 +102,17 @@ function TestResultBanner({
 
 function ModelsLoadingSkeleton() {
   return (
-    <div className="space-y-3">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 rounded-md" />
+    <div className="px-4 pt-3">
+      <div className="mb-3 h-7 border-b border-line" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex h-9 items-center gap-3 border-b border-line">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3.5 w-3.5" />
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -260,10 +157,8 @@ export function ModelsPage() {
     modelID: string
     data: ModelConnectivityResult
   } | null>(null)
-  const [testDiagnosticsOpen, setTestDiagnosticsOpen] = useState(false)
   const [ownership, setOwnership] = useState<OwnershipFilter>("all")
 
-  const refreshing = modelsQ.isFetching || secretsQ.isFetching || kindsQ.isFetching
   function refresh() {
     void modelsQ.refetch()
     void secretsQ.refetch()
@@ -298,22 +193,13 @@ export function ModelsPage() {
 
   function performTest(m: Model) {
     testMut.mutate(m.id, {
-      onSuccess: (data) => {
-        setTestResult({ modelID: m.id, data })
-        setTestDiagnosticsOpen(true)
-      },
+      onSuccess: (data) => setTestResult({ modelID: m.id, data }),
       onError: (e) => {
         const message = e instanceof Error ? e.message : String(e)
         setTestResult({
           modelID: m.id,
-          data: {
-            supported: false,
-            success: false,
-            latency_ms: 0,
-            error: message,
-          },
+          data: { supported: false, success: false, latency_ms: 0, error: message },
         })
-        setTestDiagnosticsOpen(true)
       },
     })
   }
@@ -343,20 +229,6 @@ export function ModelsPage() {
         next.add(modelID)
       } else {
         next.delete(modelID)
-      }
-      return next
-    })
-  }
-
-  function toggleAllVisible(selected: boolean) {
-    setSelectedModelIDs((current) => {
-      const next = new Set(current)
-      for (const model of filteredModels) {
-        if (selected) {
-          next.add(model.id)
-        } else {
-          next.delete(model.id)
-        }
       }
       return next
     })
@@ -422,140 +294,66 @@ export function ModelsPage() {
     setCreateOpen(true)
   }
 
-  return (
-    <AdminLayout activeMenu="models">
-      <PageHeader
-        title={t("models.page.title")}
-        description={t("models.page.description")}
-      />
+  const pageTitle = t("models.page.title")
+  const hasModels = allModels.length > 0
+  const bulkFailed = bulkDeleteResult?.failed ?? []
 
-      {!wsId ? (
-        <ScopeRequiredState scope="workspace" resourceName={t("models.page.title")} />
-      ) : modelsQ.isLoading ? (
-        <ModelsLoadingSkeleton />
-      ) : err ? (
-        <ErrorState
-          title={
-            isUnreachable
-              ? t("models.loadError.unreachable.title")
-              : t("models.loadError.title")
-          }
-          description={
-            isUnreachable
-              ? t("models.loadError.unreachable.description")
-              : err instanceof Error
-              ? err.message
-              : t("models.loadError.description")
-          }
-          hint={
-            isUnreachable
-              ? t("models.loadError.unreachable.hint")
-              : t("models.loadError.hint")
-          }
-          onRetry={refresh}
-        />
-      ) : allModels.length === 0 ? (
-        <EmptyState
-          icon={Database}
-          title={t("models.empty.title")}
-          description={t("models.empty.description")}
+  return (
+    <AdminLayout activeMenu="models" fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PageHeader
+          className="static mx-0 mb-0"
+          title={pageTitle}
+          subtitleFor="models.page.title"
           action={
-            <div className="flex items-center justify-center gap-2">
-              <Button size="sm" shape="pill" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> {t("models.actions.addModel")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setBulkImportOpen(true)}>
-                <Download className="h-3.5 w-3.5" /> {t("models.actions.importModels")}
-              </Button>
-            </div>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <Tabs
-              value={ownership}
-              onValueChange={(v) => setOwnership(v as OwnershipFilter)}
-            >
-              <TabsList>
-                <TabsTrigger value="all">
-                  {t("models.ownershipFilter.all", { count: allModels.length })}
-                </TabsTrigger>
-                <TabsTrigger value="mine" disabled={!currentUserID}>
-                  {t("models.ownershipFilter.mine", {
-                    count: allModels.filter((m) => m.created_by === currentUserID)
-                      .length,
-                  })}
-                </TabsTrigger>
-                <TabsTrigger value="others" disabled={!currentUserID}>
-                  {t("models.ownershipFilter.others", {
-                    count: allModels.filter((m) => m.created_by !== currentUserID)
-                      .length,
-                  })}
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={refresh}
-                disabled={refreshing}
-              >
-                {refreshing ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                {tc("actions.refresh")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBulkImportOpen(true)}
-                disabled={!wsId}
-              >
-                <Download className="h-3.5 w-3.5" />
+            <>
+              {hasModels && (
+                <Tabs value={ownership} onValueChange={(v) => setOwnership(v as OwnershipFilter)}>
+                  <TabsList>
+                    <TabsTrigger value="all">{t("models.ownership.all")}</TabsTrigger>
+                    <TabsTrigger value="mine" disabled={!currentUserID}>
+                      {t("models.ownership.mine")}
+                    </TabsTrigger>
+                    <TabsTrigger value="others" disabled={!currentUserID}>
+                      {t("models.ownership.others")}
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              )}
+              <Button variant="outline" onClick={() => setBulkImportOpen(true)} disabled={!wsId}>
+                <Download strokeWidth={1.5} aria-hidden="true" />
                 {t("models.actions.importModels")}
               </Button>
-              <Button
-                size="sm"
-                shape="pill"
-                onClick={() => setCreateOpen(true)}
-                disabled={!wsId}
-              >
-                <Plus className="h-3.5 w-3.5" /> {t("models.actions.addModel")}
+              <Button onClick={() => setCreateOpen(true)} disabled={!wsId}>
+                <Plus strokeWidth={1.5} aria-hidden="true" />
+                {t("models.actions.addModel")}
               </Button>
-            </div>
+            </>
+          }
+        />
+
+        {!wsId ? (
+          <div className="px-6"><ScopeRequiredState scope="workspace" resourceName={pageTitle} /></div>
+        ) : modelsQ.isLoading ? (
+          <ModelsLoadingSkeleton />
+        ) : err ? (
+          <div className="px-6 pt-6">
+            <ErrorState
+              title={isUnreachable ? t("models.loadError.unreachable.title") : t("models.loadError.title")}
+              description={
+                isUnreachable
+                  ? t("models.loadError.unreachable.description")
+                  : err instanceof Error
+                    ? err.message
+                    : t("models.loadError.description")
+              }
+              hint={isUnreachable ? t("models.loadError.unreachable.hint") : t("models.loadError.hint")}
+              onRetry={refresh}
+            />
           </div>
-
-          {selectedModels.length > 0 && (
-            <div className="flex items-center justify-between rounded-md border border-line bg-surface px-3 py-2 text-sm">
-              <span className="text-fg-muted">
-                {t("models.bulkDelete.selectedCount", { count: selectedModels.length })}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedModelIDs(new Set())}
-                  disabled={bulkDeleteMut.isPending}
-                >
-                  {tc("actions.cancel")}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setConfirmBulkDelete(true)}
-                  disabled={bulkDeleteMut.isPending}
-                >
-                  {bulkDeleteMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {t("models.bulkDelete.deleteSelected")}
-                </Button>
-              </div>
-            </div>
-          )}
-
+        ) : !hasModels ? (
+          <EmptyState icon={Database} title={t("models.empty.title")} description={t("models.empty.description")} />
+        ) : (
           <ModelsTable
             data={filteredModels}
             selectedIDs={selectedModelIDs}
@@ -563,14 +361,64 @@ export function ModelsPage() {
             currentUserID={currentUserID}
             isAdmin={isAdmin}
             onToggleModel={toggleModelSelection}
-            onToggleAllVisible={toggleAllVisible}
             onRequestEdit={(m) => setEditModel(m)}
             onRequestDelete={(m) => setConfirmDelete(m)}
             onRequestDuplicate={performDuplicate}
             onTest={performTest}
           />
-        </div>
-      )}
+        )}
+
+        {selectedModels.length > 0 && (
+          <div className="flex h-10 shrink-0 items-center gap-3 border-t border-line px-4 text-xs text-fg-muted">
+            <span className="tabular-nums">
+              {t("models.bulkDelete.selectedCount", { count: selectedModels.length })}
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSelectedModelIDs(new Set())}
+                disabled={bulkDeleteMut.isPending}
+              >
+                {tc("actions.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setConfirmBulkDelete(true)}
+                disabled={bulkDeleteMut.isPending}
+              >
+                {bulkDeleteMut.isPending && <Loader2 className="animate-spin" />}
+                {t("models.bulkDelete.deleteSelected")}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {bulkDeleteResult && (
+          <div className="flex h-10 shrink-0 items-center gap-2 border-t border-line px-4 text-sm text-fg">
+            <StatusIcon status={bulkFailed.length === 0 ? "completed" : "failed"} />
+            <span className="min-w-0 flex-1 truncate">
+              {t("models.bulkDelete.resultSummary", {
+                deleted: bulkDeleteResult.deleted.length,
+                failed: bulkFailed.length,
+              })}
+              {bulkFailed.length > 0 && (
+                <span className="text-xs text-fg-muted"> · {bulkFailed.map((f) => f.error).join(", ")}</span>
+              )}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setBulkDeleteResult(null)}
+              aria-label={tc("actions.close")}
+            >
+              <X strokeWidth={1.5} />
+            </Button>
+          </div>
+        )}
+      </div>
 
       <CreateModelDialog
         open={createOpen}
@@ -630,9 +478,7 @@ export function ModelsPage() {
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title={t("models.delete.title", {
-          name: confirmDelete?.name ?? "",
-        })}
+        title={t("models.delete.title", { name: confirmDelete?.name ?? "" })}
         description={t("models.delete.description")}
         confirmLabel={t("models.actions.delete")}
         destructive
@@ -658,52 +504,16 @@ export function ModelsPage() {
         onConfirm={performBulkDelete}
       />
 
-      <TestResultBanner
+      <ModelTestDiagnosticsDialog
+        open={!!testResult}
         result={testResult}
-        onDetails={() => setTestDiagnosticsOpen(true)}
-        onClose={() => {
-          setTestResult(null)
-          testMut.reset()
+        onOpenChange={(open) => {
+          if (!open) {
+            setTestResult(null)
+            testMut.reset()
+          }
         }}
       />
-
-      <ModelTestDiagnosticsDialog
-        open={testDiagnosticsOpen && !!testResult}
-        result={testResult}
-        onOpenChange={setTestDiagnosticsOpen}
-      />
-
-      {bulkDeleteResult && (
-        <div className="fixed bottom-4 left-4 z-50 max-w-md rounded-md border border-line bg-surface shadow-md">
-          <div className="flex items-start gap-2 px-4 py-3">
-            {bulkDeleteResult.failed.length === 0 ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 text-success" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-4 w-4 text-warning" />
-            )}
-            <div className="flex-1 text-sm">
-              <div className="font-medium text-fg">
-                {t("models.bulkDelete.resultSummary", {
-                  deleted: bulkDeleteResult.deleted.length,
-                  failed: bulkDeleteResult.failed.length,
-                })}
-              </div>
-              {bulkDeleteResult.failed.length > 0 && (
-                <div className="mt-1 line-clamp-3 text-xs text-fg-muted">
-                  {bulkDeleteResult.failed.map((failure) => failure.error).join(", ")}
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setBulkDeleteResult(null)}
-              className="text-xs text-fg-subtle hover:text-fg-muted"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
     </AdminLayout>
   )
 }

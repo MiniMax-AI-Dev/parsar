@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Parsar · 视觉方向候选</title>
+<style>
+  :root {
+    --bg: #111213; --fg: #e8e8e6; --muted: #9a9a96; --line: #2a2b2d; --active: #ffffff; --tint: #1c1d1f;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); }
+  body { display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; gap: 20px; height: 48px; padding: 0 16px;
+    border-bottom: 1px solid var(--line); flex: 0 0 auto; font-size: 13px;
+  }
+  header .brand { font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
+  header .brand span { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  nav { display: flex; gap: 4px; }
+  nav button {
+    appearance: none; border: 1px solid transparent; background: transparent; color: var(--muted);
+    font: inherit; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  }
+  nav button:hover { color: var(--fg); background: var(--tint); }
+  nav button[aria-current="true"] { color: var(--active); background: var(--tint); border-color: var(--line); }
+  nav button kbd { font-family: inherit; color: var(--muted); margin-right: 8px; font-size: 12px; }
+  header .right { margin-left: auto; display: flex; gap: 14px; align-items: center; color: var(--muted); }
+  header a { color: var(--muted); text-decoration: none; }
+  header a:hover { color: var(--fg); }
+  main { flex: 1 1 auto; min-height: 0; background: #000; }
+  iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+  .note { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">Parsar<span>视觉方向候选 · 运行页</span></div>
+    <nav id="tabs">
+      <button data-src="a-manuscript-desk.html"><kbd>1</kbd>书案控制台</button>
+      <button data-src="b-issue-ledger.html"><kbd>2</kbd>工单账本</button>
+      <button data-src="c-notion-workspace.html"><kbd>3</kbd>工作区页面</button>
+      <button data-src="d-multica-cabin.html"><kbd>4</kbd>工作舱</button>
+      <button data-src="e-ledger-compact.html"><kbd>5</kbd>工单账本 · 紧凑侧栏</button>
+      <button data-src="f-ledger-notion.html"><kbd>6</kbd>5 + Notion 调子</button>
+    </nav>
+    <div class="right">
+      <span class="note">按 1–6 切换方案</span>
+      <a id="open" href="a-manuscript-desk.html" target="_blank" rel="noopener">新窗口打开 ↗</a>
+    </div>
+  </header>
+  <main><iframe id="frame" src="a-manuscript-desk.html" title="候选方案"></iframe></main>
+  <script>
+    const tabs = [...document.querySelectorAll('#tabs button')];
+    const frame = document.getElementById('frame');
+    const open = document.getElementById('open');
+    function srcFor(i) { return tabs[i].dataset.src; }
+    function select(i) {
+      tabs.forEach((b, j) => b.setAttribute('aria-current', String(i === j)));
+      frame.src = srcFor(i);
+      open.href = srcFor(i);
+      location.hash = String(i + 1);
+    }
+    tabs.forEach((b, i) => b.addEventListener('click', () => select(i)));
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= tabs.length) select(n - 1);
+    });
+    const initial = Number(location.hash.slice(1));
+    select(initial >= 1 && initial <= tabs.length ? initial - 1 : 4);
+  </script>
+</body>
+</html>

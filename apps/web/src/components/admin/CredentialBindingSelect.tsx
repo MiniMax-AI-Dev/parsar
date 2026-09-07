@@ -1,3 +1,4 @@
+import { Select } from "../ui/select"
 import type { Secret } from "../../lib/api-types"
 
 interface CredentialBindingSelectProps {
@@ -24,10 +25,10 @@ export function CredentialBindingSelect({
   personalPlaceholder,
   createNewLabel,
   onChange,
-  className = "h-7 w-full rounded border border-line bg-surface px-2 text-sm",
+  className,
 }: CredentialBindingSelectProps) {
   return (
-    <select
+    <Select
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onClick={(event) => event.stopPropagation()}
@@ -41,6 +42,6 @@ export function CredentialBindingSelect({
         </option>
       ))}
       {allowCreateNew && <option value="__new__">{createNewLabel ?? sharedLabel}</option>}
-    </select>
+    </Select>
   )
 }

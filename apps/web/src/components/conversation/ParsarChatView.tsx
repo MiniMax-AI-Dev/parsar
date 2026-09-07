@@ -1,27 +1,27 @@
 /**
- * ParsarChatView — replaces the old ChatStream component.
+ * ParsarChatView — the assistant-ui conversation surface.
  *
  * Integrates:
- * - Chat header (status badge + cancel all + plugin slot)
+ * - A 48px hairline header (agent name + plugin slot)
  * - AssistantRuntimeProvider with ParsarThread
  * - ConversationInteractionCards
- * - Queued run indicators
- * - Stream error banner
- * - ParsarComposer
- * - ChatErrorToast
+ * - Queued run lines, working steps, stream error line
+ * - ChatErrorToast (inline, dismissible)
  */
 
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useQueryClient } from "@tanstack/react-query"
-import { Clock } from "lucide-react"
+import { AlertTriangle, X } from "lucide-react"
 
 import { AssistantRuntimeProvider } from "@assistant-ui/react"
 
 import { ParsarThread } from "./ParsarThread"
 import { ConversationInteractionCards } from "./ConversationInteractionCards"
 import { WorkingSteps } from "./StepDisplay"
+import { Button } from "../ui/button"
 import { Skeleton } from "../ui/skeleton"
+import { StatusIcon } from "../ui/status-icon"
 import { ListSlot } from "../plugin/SlotRenderer"
 import { cn } from "../../lib/utils"
 
@@ -33,7 +33,6 @@ import {
 import { useCancelRun, useCancelConversation } from "../../lib/api-agents"
 import { useParsarChatRuntime } from "../../lib/parsar-chat-runtime"
 import type { Agent } from "../../lib/api-types"
-import { useAdminView } from "../../lib/admin-router"
 
 interface ParsarChatViewProps {
   conversationId: string
@@ -49,7 +48,7 @@ export function ParsarChatView({
   sandboxGuard,
 }: ParsarChatViewProps) {
   const { t } = useTranslation("admin")
-  const { navigate } = useAdminView()
+  const { t: tc } = useTranslation("common")
   const qc = useQueryClient()
 
   // --- Data queries ---
@@ -128,32 +127,30 @@ export function ParsarChatView({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      {/* Minimal header — agent name + plugin slot only */}
+      {/* 64px header (matches the shell topbar) — agent name + plugin slot */}
       <div
         className={cn(
-          "border-b border-line/40 px-5 py-2 sm:px-6 lg:px-10",
-          sidebarFolded && "pl-14 sm:pl-16 lg:pl-[72px]",
+          "flex h-16 shrink-0 items-center gap-2 border-b border-line px-4",
+          sidebarFolded && "pl-12",
         )}
       >
-        <div className="mx-auto flex max-w-[var(--thread-max-width,48rem)] items-center justify-between gap-4">
-          <h2 className="truncate text-sm font-medium text-fg-muted">
-            {agent?.name || t("conversations.sidebar.allAgentsHint")}
-          </h2>
-          <div className="flex shrink-0 items-center gap-2">
-            <ListSlot
-              slotId="conversation.header.actions"
-              context={{ conversationId, agent }}
-            />
-          </div>
+        <h2 className="m-0 min-w-0 flex-1 truncate text-sm font-medium text-fg">
+          {agent?.name || t("conversations.sidebar.allAgentsHint")}
+        </h2>
+        <div className="flex shrink-0 items-center gap-2">
+          <ListSlot
+            slotId="conversation.header.actions"
+            context={{ conversationId, agent }}
+          />
         </div>
       </div>
 
       {/* Thread — messages + composer with auto-scroll */}
       {timelineQ.isLoading ? (
-        <div className="flex-1 space-y-4 p-8">
-          <Skeleton className="h-20 w-2/3" />
-          <Skeleton className="ml-auto h-20 w-3/4" />
-          <Skeleton className="h-32 w-2/3" />
+        <div className="mx-auto w-full max-w-[var(--thread-max-width,48rem)] flex-1 space-y-4 px-4 py-6">
+          <Skeleton className="ml-auto h-9 w-2/3" />
+          <Skeleton className="h-16 w-3/4" />
+          <Skeleton className="ml-auto h-9 w-1/2" />
         </div>
       ) : (
         <ParsarThread
@@ -165,76 +162,67 @@ export function ParsarChatView({
         />
       )}
 
-      {/* Below thread: interaction cards + queued indicators + working steps + error */}
-      <div className="mx-auto w-full max-w-4xl px-5 sm:px-6 lg:px-10">
+      {/* Below thread: interaction cards + queued lines + working steps + error */}
+      <div className="mx-auto w-full max-w-[var(--thread-max-width,48rem)] space-y-3 px-4 empty:hidden">
         {/* Interaction cards (permission / user choice) */}
         <ConversationInteractionCards
           workspaceID={convWorkspaceId}
           conversationID={conversationId}
           preferredRequestID={pendingInteraction?.requestId}
-          onOpenInbox={() => navigate("approvals")}
         />
 
-        {/* Working steps (streaming tool calls without delta text) */}
+        {/* Thinking line (running, no streamed content or steps yet) */}
         {isRunning && !hasActiveStream && streamingSteps.length === 0 && (
-          <div className="mt-3 flex w-fit items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-fg-subtle shadow-sm ring-1 ring-line/70">
-            <span className="flex items-center gap-1" aria-hidden="true">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-300ms]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success [animation-delay:-150ms]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-success" />
-            </span>
+          <p className="m-0 flex items-center gap-2 text-sm text-fg" role="status" aria-live="polite">
+            <StatusIcon status="running" />
             {t("conversations.stream.thinking")}
-          </div>
+          </p>
         )}
 
         {isRunning && streamingSteps.length > 0 && (
-          <div className="mt-3">
-            <WorkingSteps
-              steps={streamingSteps}
-              active={isRunning}
-              cancelling={cancelRunMut.isPending}
-              onCancel={activeRunId ? handleStop : undefined}
-            />
-          </div>
+          <WorkingSteps
+            steps={streamingSteps}
+            active={isRunning}
+            cancelling={cancelRunMut.isPending}
+            onCancel={activeRunId ? handleStop : undefined}
+          />
         )}
 
-        {/* Queued run chips */}
+        {/* Queued run lines */}
         {queuedRuns.map((r) => (
-          <div
-            key={r.id}
-            className="mt-3 flex w-fit items-center gap-2 rounded-md border border-line/70 bg-surface-subtle px-3 py-2 text-sm text-fg-subtle shadow-sm"
-          >
-            <Clock className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden="true" />
+          <p key={r.id} className="m-0 flex items-center gap-2 text-sm text-fg">
+            <StatusIcon status="queued" />
             {r.queue_position && r.queue_position > 1
               ? t("conversations.stream.queuedWithPosition", { position: r.queue_position })
               : t("conversations.stream.queued")}
-          </div>
+          </p>
         ))}
 
-        {/* Stream error banner */}
+        {/* Stream error line */}
         {streamError && (
-          <div className="mt-3 rounded-lg border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-            {t("conversations.stream.error", { error: streamError })}
+          <p className="m-0 flex items-start gap-1.5 text-sm text-fg">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            <span>{t("conversations.stream.error", { error: streamError })}</span>
+          </p>
+        )}
+
+        {/* Chat toast (for /start failures) */}
+        {chatToast && (
+          <div className="flex items-start gap-1.5 text-sm text-fg">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" strokeWidth={1.5} aria-hidden="true" />
+            <span className="min-w-0 flex-1 break-words">{chatToast}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="-my-1.5 h-6 w-6"
+              onClick={() => setChatToast(null)}
+              aria-label={tc("actions.close")}
+            >
+              <X strokeWidth={1.5} aria-hidden="true" />
+            </Button>
           </div>
         )}
       </div>
-
-      {/* Chat toast (for /start failures) */}
-      {chatToast && (
-        <div className="mx-auto w-full max-w-4xl px-5 sm:px-6 lg:px-10">
-          <div className="mb-2 flex items-start justify-between gap-3 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-emphasis">
-            <span className="break-words">{chatToast}</span>
-            <button
-              type="button"
-              onClick={() => setChatToast(null)}
-              className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-danger-emphasis hover:bg-danger-subtle"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
     </AssistantRuntimeProvider>
   )
 }

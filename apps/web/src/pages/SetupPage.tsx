@@ -1,6 +1,11 @@
 import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 
+import { Button } from "../components/ui/button"
+import { EntryFooter, EntryPage, EntryPanel } from "../components/ui/entry-panel"
+import { InlineError } from "../components/ui/error-state"
+import { Input } from "../components/ui/input"
+import { Field } from "../components/ui/label"
 import { ApiError } from "../lib/api-client"
 import { useRegisterFirstOwner } from "../lib/api-bootstrap"
 import { validateNewPassword } from "../lib/password-policy"
@@ -85,126 +90,72 @@ export function SetupPage() {
   }
 
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-surface px-6 text-fg">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,var(--color-line-strong)_1px,transparent_1px)] [background-size:26px_26px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_42%,black,transparent)] opacity-50"
-      />
-      <section className="relative w-full max-w-[460px] rounded-2xl border border-line/80 bg-surface p-9 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_20px_48px_-16px_rgb(0_0_0/0.16)]">
-        <div className="mb-7 flex flex-col items-center text-center">
-          <div className="rounded-xl bg-fg-on-emphasis px-5 py-3 shadow-sm ring-1 ring-line-muted">
-            <img src="/parsar-banner.png" alt="Parsar" className="h-auto w-[260px] max-w-full" />
-          </div>
-          <h1 className="mt-4 text-lg font-semibold text-fg">{t("setup.title")}</h1>
-          <p className="mt-2 text-base leading-relaxed text-fg-subtle">{t("setup.subtitle")}</p>
-        </div>
-
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+    <EntryPage>
+      <EntryPanel title={t("setup.title")} description={t("setup.subtitle")}>
+        <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
+          <Field label={t("setup.nameLabel")} htmlFor="setup-name">
+            <Input
+              id="setup-name"
+              value={name}
+              onChange={(e) => updateName(e.target.value)}
+              placeholder={t("setup.namePlaceholder")}
+              autoComplete="name"
+            />
+          </Field>
+          <Field label={t("setup.emailLabel")} htmlFor="setup-email">
+            <Input
+              id="setup-email"
+              type="email"
+              value={email}
+              onChange={(e) => updateEmail(e.target.value)}
+              placeholder={t("setup.emailPlaceholder")}
+              autoComplete="email"
+              spellCheck={false}
+              required
+            />
+          </Field>
+          <Field label={t("setup.workspaceLabel")} htmlFor="setup-workspace">
+            <Input
+              id="setup-workspace"
+              value={workspace}
+              onChange={(e) => {
+                setWorkspaceEdited(true)
+                setWorkspace(e.target.value)
+              }}
+              placeholder={t("setup.workspacePlaceholder")}
+              autoComplete="organization"
+              required
+            />
+          </Field>
           <Field
-            label={t("setup.nameLabel")}
-            placeholder={t("setup.namePlaceholder")}
-            value={name}
-            onChange={updateName}
-            autoComplete="name"
-            required={false}
-          />
-          <Field
-            type="email"
-            label={t("setup.emailLabel")}
-            placeholder={t("setup.emailPlaceholder")}
-            value={email}
-            onChange={updateEmail}
-            autoComplete="email"
-            required
-          />
-          <Field
-            label={t("setup.workspaceLabel")}
-            placeholder={t("setup.workspacePlaceholder")}
-            value={workspace}
-            onChange={(value) => {
-              setWorkspaceEdited(true)
-              setWorkspace(value)
-            }}
-            autoComplete="organization"
-            required
-          />
-          <Field
-            type="password"
             label={t("setup.passwordLabel")}
-            placeholder={t("passwordPolicy.placeholder")}
-            value={password}
-            onChange={setPassword}
-            autoComplete="new-password"
-            required
-            hint={t("passwordPolicy.hint")}
-            error={passwordPolicyErrorMsg}
-          />
-
-          {errorMsg && (
-            <div
-              role="alert"
-              className="rounded-md border border-danger/40 bg-danger/8 px-3 py-2 text-sm text-danger"
-            >
-              {errorMsg}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={invalid || submitting}
-            className="mt-1 flex h-11 w-full items-center justify-center rounded-full bg-surface-emphasis px-5 text-lg font-medium text-white shadow-sm transition-all hover:bg-surface-inverse hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+            htmlFor="setup-password"
+            hint={
+              passwordPolicyErrorMsg ? (
+                <InlineError>{passwordPolicyErrorMsg}</InlineError>
+              ) : (
+                t("passwordPolicy.hint")
+              )
+            }
           >
-            {submitting ? t("setup.submitting") : t("setup.submitButton")}
-          </button>
+            <Input
+              id="setup-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("passwordPolicy.placeholder")}
+              autoComplete="new-password"
+              required
+            />
+          </Field>
+
+          <EntryFooter message={errorMsg && <InlineError>{errorMsg}</InlineError>}>
+            <Button type="submit" disabled={invalid || submitting}>
+              {submitting ? t("setup.submitting") : t("setup.submitButton")}
+            </Button>
+          </EntryFooter>
         </form>
-      </section>
-    </main>
-  )
-}
-
-interface FieldProps {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  type?: "text" | "email" | "password"
-  placeholder?: string
-  autoComplete?: string
-  required?: boolean
-  hint?: string
-  error?: string
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  autoComplete,
-  required,
-  hint,
-  error,
-}: FieldProps) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-fg-muted">
-        {label}
-        {required && <span className="ml-0.5 text-danger">*</span>}
-      </span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        required={required}
-        className="h-10 rounded-md border border-line bg-surface px-3 text-base text-fg placeholder:text-fg-faint focus:border-fg/40 focus:outline-none focus:ring-1 focus:ring-fg/20"
-      />
-      {error ? (
-        <span className="text-xs leading-4 text-danger">{error}</span>
-      ) : (
-        hint && <span className="text-xs leading-4 text-fg-faint">{hint}</span>
-      )}
-    </label>
+      </EntryPanel>
+    </EntryPage>
   )
 }
