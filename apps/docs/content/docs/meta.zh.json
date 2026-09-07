@@ -1,0 +1,15 @@
+{
+  "title": "文档",
+  "pages": [
+    "---从这里开始---",
+    "index",
+    "quickstart",
+    "concepts",
+    "how-parsar-works",
+    "self-host-quickstart",
+    "---核心工作流---",
+    "create-agent",
+    "runs-approvals-logs",
+    "troubleshooting"
+  ]
+}

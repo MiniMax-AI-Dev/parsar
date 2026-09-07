@@ -10,6 +10,7 @@ on:
       - "server/**"
       - "internal/**"
       - "apps/web/**"
+      - "apps/docs/**"
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
       - "packages/eslint-config/**"
@@ -30,6 +31,7 @@ on:
       - "server/**"
       - "internal/**"
       - "apps/web/**"
+      - "apps/docs/**"
       - "packages/cli/**"
       - "packages/opencode-plugin/**"
       - "packages/eslint-config/**"
@@ -61,6 +63,7 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       store: ${{ steps.filter.outputs.store }}
       web: ${{ steps.filter.outputs.web }}
+      docs: ${{ steps.filter.outputs.docs }}
       cli: ${{ steps.filter.outputs.cli }}
     steps:
       - uses: actions/checkout@v7
@@ -85,6 +88,7 @@ jobs:
           go=false
           store=false
           web=false
+          docs=false
           cli=false
           all=false
 
@@ -106,6 +110,9 @@ jobs:
               apps/web/*)
                 web=true
                 ;;
+              apps/docs/*)
+                docs=true
+                ;;
               packages/cli/*|packages/opencode-plugin/*)
                 cli=true
                 ;;
@@ -123,6 +130,7 @@ jobs:
             go=true
             store=true
             web=true
+            docs=true
             cli=true
           fi
 
@@ -130,12 +138,13 @@ jobs:
             echo "go=$go"
             echo "store=$store"
             echo "web=$web"
+            echo "docs=$docs"
             echo "cli=$cli"
           } >> "$GITHUB_OUTPUT"
 
           printf 'Changed files:\n'
           sed 's/^/  /' changed-files.txt
-          printf 'Selected checks: go=%s store=%s web=%s cli=%s\n' "$go" "$store" "$web" "$cli"
+          printf 'Selected checks: go=%s store=%s web=%s docs=%s cli=%s\n' "$go" "$store" "$web" "$docs" "$cli"
 
   check-go:
     needs: changes
@@ -229,8 +238,29 @@ jobs:
 
       - run: make check-cli
 
+  check-docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: make check-docs
+
   check-gate:
-    needs: [changes, check-go, check-store, check-web, check-cli]
+    needs: [changes, check-go, check-store, check-web, check-docs, check-cli]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -240,11 +270,13 @@ jobs:
           GO_SELECTED: ${{ needs.changes.outputs.go }}
           STORE_SELECTED: ${{ needs.changes.outputs.store }}
           WEB_SELECTED: ${{ needs.changes.outputs.web }}
+          DOCS_SELECTED: ${{ needs.changes.outputs.docs }}
           CLI_SELECTED: ${{ needs.changes.outputs.cli }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           GO_RESULT: ${{ needs.check-go.result }}
           STORE_RESULT: ${{ needs.check-store.result }}
           WEB_RESULT: ${{ needs.check-web.result }}
+          DOCS_RESULT: ${{ needs.check-docs.result }}
           CLI_RESULT: ${{ needs.check-cli.result }}
         run: |
           if [[ "$CHANGES_RESULT" != "success" ]]; then
@@ -252,18 +284,18 @@ jobs:
             exit 1
           fi
 
-          if [[ "$GO_SELECTED$STORE_SELECTED$WEB_SELECTED$CLI_SELECTED" != *true* ]]; then
+          if [[ "$GO_SELECTED$STORE_SELECTED$WEB_SELECTED$DOCS_SELECTED$CLI_SELECTED" != *true* ]]; then
             echo "No checks were selected for this change set." >&2
             exit 1
           fi
 
-          for result in "$GO_RESULT" "$STORE_RESULT" "$WEB_RESULT" "$CLI_RESULT"; do
+          for result in "$GO_RESULT" "$STORE_RESULT" "$WEB_RESULT" "$DOCS_RESULT" "$CLI_RESULT"; do
             case "$result" in
               success|skipped)
                 ;;
               *)
                 echo "A selected check failed or was cancelled." >&2
-                printf 'go=%s store=%s web=%s cli=%s\n' "$GO_RESULT" "$STORE_RESULT" "$WEB_RESULT" "$CLI_RESULT" >&2
+                printf 'go=%s store=%s web=%s docs=%s cli=%s\n' "$GO_RESULT" "$STORE_RESULT" "$WEB_RESULT" "$DOCS_RESULT" "$CLI_RESULT" >&2
                 exit 1
                 ;;
             esac

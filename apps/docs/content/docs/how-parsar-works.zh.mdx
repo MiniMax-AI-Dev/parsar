@@ -1,0 +1,50 @@
+---
+title: Parsar 的工作方式
+description: 跟踪一条请求如何从工作区进入 Agent 进程，再回到结果和审计记录。
+---
+
+Parsar 负责记录和协调工作，连接的 Runtime 负责执行。理解这条边界，就能解释为什么 Web 控制台正常，但 Runtime 离线时 Run 仍可能处于排队状态。
+
+## 一次执行链路
+
+```text
+Web / IM / API
+      |
+      v
+Parsar 服务端 ---- PostgreSQL
+      |
+      | 通过 Agent Daemon 协议派发
+      v
+parsar-daemon 或沙盒 Runtime
+      |
+      v
+Claude Code / Codex / Pi / OpenCode
+      |
+      v
+事件、输出、产物、用量、终态
+      |
+      v
+Conversation、Run 历史、Audit、Usage
+```
+
+## 服务端负责什么
+
+服务端负责认证、Workspace、Agent 记录、Runtime 绑定、Run 记录、审计和用量持久化，以及上游引擎的会话标识。
+
+## daemon 负责什么
+
+`parsar-daemon` 负责发现本机 CLI、启动和停止 Provider 进程、选择工作目录、处理 Provider 专属环境，并把 CLI 输出翻译成共享 daemon 协议。Conversation 和 Run 历史不以 daemon 内存为事实来源。
+
+## 为什么 Run 会排队
+
+服务端会先创建 Run，再开始执行。派发要求 Agent 明确绑定的 Runtime 已启用且可达。如果 Runtime 离线、达到并发上限，或者缺少选定 CLI / 凭据，Run 可能继续排队，或者以面向用户的原因失败。
+
+## 哪些内容会持久化
+
+Run 详情可以包含请求、状态变化、流式事件、输出消息、产物、用量记录、Runtime 快照和 transcript。即使 daemon 重连或浏览器刷新，也可以继续查看运行过程。
+
+## 相关页面
+
+- [Runtime 和 daemon 配置](/zh/quickstart)
+- [核心概念](/zh/concepts)
+- [查看运行、审批和日志](/zh/runs-approvals-logs)

@@ -1,0 +1,36 @@
+---
+title: Core concepts
+description: A short map of the objects that make up a Parsar workspace.
+---
+
+Parsar separates coordination from execution. The server stores the team's context and durable records; a Runtime executes the Agent and reports events back.
+
+## Workspace objects
+
+| Object | Responsibility |
+| --- | --- |
+| Workspace | Isolates members, Agents, conversations, settings, credentials, and history. |
+| Agent | Reusable identity and execution configuration: connector, model, instructions, capabilities, visibility, and Runtime binding. |
+| Runtime | Concrete execution environment such as a paired `parsar-daemon`, local sandbox, or external Agent endpoint. |
+| Conversation | Durable context for web, instant-messaging, or API interaction. |
+| Agent Run | One concrete execution triggered from a conversation or another supported entry point. |
+| Capability | A reusable Skill, MCP server, Plugin, System Prompt, or Bundle attached to an Agent. |
+| Connector | The protocol or channel boundary used to deliver work, such as the Agent Daemon Connector or a workspace IM connector. |
+
+## The important distinction
+
+An Agent is not a daemon process. It is configuration and identity. A Runtime is where execution happens. A Run is one execution record. One Runtime can serve multiple Agents; one Agent can produce many Runs over time.
+
+## Run lifecycle
+
+Runs use the statuses `queued`, `running`, `completed`, `failed`, `cancelled`, and `interrupted`. A completed Run does not automatically mean the Conversation is finished; the Conversation keeps its messages and can trigger another Run.
+
+## Human interaction
+
+Permission requests and user-choice prompts are durable interactions. They can be resolved in the Web approval inbox or in a conversation surface, and the same resolution service records the terminal decision.
+
+## Related pages
+
+- [How Parsar works](/how-parsar-works)
+- [Create and configure an Agent](/create-agent)
+- [Read runs, approvals, and logs](/runs-approvals-logs)

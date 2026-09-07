@@ -1,0 +1,49 @@
+---
+title: 创建和配置 Agent
+description: 配置 Agent 的身份、连接器、能力、模型和 Runtime。
+---
+
+Agent 是工作区中的可复用成员。它保存指令和执行配置，但不是一个永久运行的进程。
+
+## 开始前准备
+
+- 你具备创建 Agent 所需的 Workspace Owner、管理员或成员权限。
+- 至少配置了一个模型。
+- 至少有一个 Runtime 在线，或者部署提供可用的沙盒 / 外部 Agent Runtime。
+
+## 创建 Agent
+
+1. 打开 **Agent**，点击 **新建 Agent**。
+2. 填写名称和可选描述。
+3. 选择连接器类型和默认模型。
+4. 选择 Runtime 模式，并把 Agent 绑定到具体 Runtime。
+5. 添加 System Prompt 和 Agent 需要的能力。
+6. 保存 Agent。
+
+当前产品把 Runtime 作为 Agent 执行身份的一部分。之后如果要切换执行位置，应按照当前版本提供的编辑选项操作，不要假设系统会静默回退到其他 Runtime。
+
+## 能力
+
+Parsar 当前支持的 Capability 类型包括 `skill`、`mcp`、`plugin`、`system_prompt` 和 `bundle`。如果能力需要凭据，请在运行 Agent 前完成配置。
+
+新绑定可以跟随最新 Capability 版本，也可以固定到指定版本。需要可复现时使用固定版本；希望自动获得后续发布版本时使用 latest。
+
+## 可见性和访问权限
+
+Agent 可见性包括 workspace、tenant 和 public。访问权限决定哪些成员可以运行它。将 Agent 暴露到 IM 渠道前，应同时审查可见性和连接器策略。
+
+## 检查配置
+
+打开 Agent 详情，确认：
+
+- 已选择连接器和模型；
+- 已明确绑定且在线的 Runtime；
+- 所需凭据可用；
+- Capability 已启用且未废弃；
+- Agent 状态为 active。
+
+## 接下来
+
+- [快速上手](/zh/quickstart)
+- [Parsar 的工作方式](/zh/how-parsar-works)
+- [查看运行、审批和日志](/zh/runs-approvals-logs)

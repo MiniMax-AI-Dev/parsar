@@ -1,0 +1,63 @@
+---
+title: Troubleshooting
+description: Diagnose the common failure points across the Parsar server, Runtime, daemon, and Agent provider.
+---
+
+Start by identifying the layer that owns the failure. Parsar's control plane, Runtime, `parsar-daemon`, and the selected AI coding CLI have separate responsibilities.
+
+## First checks
+
+```bash
+docker compose ps
+docker compose logs --tail=100 parsar-server
+parsar-daemon status
+parsar-daemon logs -n 100
+```
+
+For a self-hosted deployment, also check the service URL:
+
+```bash
+curl -i http://127.0.0.1:18080/healthz
+curl -i http://127.0.0.1:18080/readyz
+```
+
+`healthz` tells you that the API process responds. `readyz` includes dependency checks such as database readiness.
+
+## Runtime is offline
+
+1. Confirm the Runtime is enabled in the admin console.
+2. Confirm the daemon process is running and its profile is paired with the intended server URL.
+3. Check the latest heartbeat and the daemon log.
+4. If the Runtime was deleted or its pairing expired, generate a new pairing token and reconnect it.
+
+## Run stays queued
+
+The server queues work until the Agent's explicitly bound Runtime can accept it. Check the Agent's Runtime binding, Runtime liveness, and concurrency ceiling. Do not assume Parsar will silently select another Runtime.
+
+## Run fails immediately
+
+Check, in order:
+
+1. The selected connector and Agent kind.
+2. The model credential and endpoint configuration.
+3. Required Capability credentials.
+4. The provider CLI installation and sign-in on the execution machine.
+5. The working directory and filesystem permissions.
+
+## Approval or user-choice card does not appear
+
+Open **Approvals** and refresh the active Conversation. The interaction is persisted on the server before it is delivered to Web or IM. If it is expired, the server has already denied or cancelled it and the Agent must be retried.
+
+## API docs and product docs are different
+
+`/docs` is the generated Swagger UI and `/api/v1/openapi.yaml` is the machine-readable contract. This site is the user guide. If a UI behavior and a narrative page disagree, verify the deployed version and update the page from the current code.
+
+## Report a reproducible problem
+
+Include the Parsar version, operating system, deployment mode, Runtime type, Run ID, relevant status, and a short sanitized log excerpt. Remove tokens, API keys, email addresses, and private repository content before sharing.
+
+## Related pages
+
+- [Self-host quickstart](/self-host-quickstart)
+- [How Parsar works](/how-parsar-works)
+- [Runs, approvals, and logs](/runs-approvals-logs)

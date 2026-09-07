@@ -1,0 +1,46 @@
+---
+title: 查看运行、审批和日志
+description: 了解 Run 状态，检查执行证据，并处理需要人工决定的请求。
+---
+
+Agent Run 是一次具体执行记录。Conversation 时间线展示用户看到的结果，Run 详情展示背后的运行证据。
+
+## Run 状态
+
+| 状态 | 含义 |
+| --- | --- |
+| `queued` | 服务端已接受请求，正在等待绑定的 Runtime。 |
+| `running` | Runtime 已启动 Agent 进程。 |
+| `completed` | Agent 完成工作，服务端已持久化结果。 |
+| `failed` | 执行以错误或 Provider 失败结束。 |
+| `cancelled` | 用户或系统取消了本次运行。 |
+| `interrupted` | 执行在正常终态前停止。 |
+
+## 查看 Run
+
+打开 **运行** 页面并选择一条记录。根据具体 Run，详情可能包含：
+
+- 请求和请求者；
+- Agent 和连接器；
+- Runtime 快照与心跳信息；
+- 状态事件和流式工具调用；
+- 输出消息和 transcript；
+- 截图、工具输出等产物；
+- 模型用量和 Token 数；
+- 错误摘要和面向用户的原因。
+
+## 审批和用户选择
+
+部分 Provider 会暂停等待权限，或者要求用户选择选项。Parsar 会将它们持久化为有生命周期的 Interaction。可以在 **审批** 页面或当前 Conversation 中处理。只有 Runtime 返回确认后，决定才会应用。
+
+不要把秘密填入普通回答字段。秘密回答不会写入持久化 Interaction 响应、审计事件、日志、API 读取结果或渲染后的回执。
+
+## Run 排队或失败时
+
+先查看 Runtime 快照，再检查 Agent 的连接器、模型凭据、必需 Capability 和 daemon 日志。[故障排查](/zh/troubleshooting)也按服务端 → daemon → Provider 的顺序组织。
+
+## 相关页面
+
+- [Parsar 的工作方式](/zh/how-parsar-works)
+- [创建和配置 Agent](/zh/create-agent)
+- [故障排查](/zh/troubleshooting)

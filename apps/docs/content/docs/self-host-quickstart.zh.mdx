@@ -1,0 +1,62 @@
+---
+title: 自托管快速上手
+description: 使用 Docker Compose 运行 Parsar，并完成第一个 Owner 配置。
+---
+
+默认自托管部署通过 Docker Compose 运行 Parsar 服务、PostgreSQL 和本地 Runtime 服务。
+
+## 环境要求
+
+- Docker Engine 和 Docker Compose v2。
+- Docker 管理的 Agent 沙盒镜像需要 Linux 主机。非 Linux 工作站应在
+  Linux 主机上运行控制面并配对本地 `parsar-daemon`，或使用外部
+  Runtime。安装脚本没有 `--no-sandbox` 参数。
+- 为 Parsar 数据和 PostgreSQL 数据准备持久化目录。
+
+## 1. 启动服务栈
+
+推荐使用一键安装路径：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
+```
+
+安装器会把生成的配置和状态放到 `~/.parsar/`，拉取配置的镜像，启动 PostgreSQL、`parsar-server` 和默认本地 Runtime，并等待健康检查通过。
+
+如果你已经检出仓库，根目录 Compose 文件也可以直接运行：
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+## 2. 创建第一个 Owner
+
+打开 `http://127.0.0.1:18080`，完成 Web 初始化流程。第一个注册用户会成为管理员，并拥有初始 Workspace。
+
+## 3. 检查健康状态和日志
+
+```bash
+docker compose ps
+docker compose logs -f parsar-server
+```
+
+服务端提供 liveness 和 readiness 探针。完整的部署冒烟流程见仓库中的 `docs/deploy/health-and-smoke.md`。
+
+## 4. 配置执行环境
+
+打开 Runtime 设置，确认默认本地 Runtime，或使用 `parsar-daemon` 配对开发者电脑。配置模型凭据后，再创建 Agent 并发送工作。
+
+## 数据和密钥
+
+不要提交生成的 `.env` 或凭据。安装器会把持久化数据放在仓库之外。生产部署必须替换数据库密码、`PARSAR_MASTER_KEY` 和共享 Runtime Token 等开发默认值，并使用稳定的随机值。
+
+## API 文档
+
+服务端同时提供生成的 OpenAPI 契约 `/api/v1/openapi.yaml` 和 Swagger UI `/docs`。这两个 API 参考入口应与本产品指南保持分开。
+
+## 接下来
+
+- [快速上手](/zh/quickstart)
+- [Parsar 的工作方式](/zh/how-parsar-works)
+- [故障排查](/zh/troubleshooting)

@@ -1,0 +1,63 @@
+---
+title: Self-host quickstart
+description: Run Parsar with Docker Compose and complete the first-owner setup.
+---
+
+The default self-hosted deployment runs the Parsar server, PostgreSQL, and a local Runtime service through Docker Compose.
+
+## Requirements
+
+- Docker Engine with Docker Compose v2.
+- A Linux host for the Docker-managed Agent sandbox image. On a non-Linux
+  workstation, run the control plane on a Linux host and pair a local
+  `parsar-daemon`, or use an external Runtime. The installer does not expose a
+  `--no-sandbox` flag.
+- A persistent directory for Parsar data and PostgreSQL data.
+
+## 1. Start the stack
+
+For the supported one-command path:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
+```
+
+The installer writes generated configuration and state below `~/.parsar/`, pulls the configured images, starts PostgreSQL, `parsar-server`, and the default local Runtime, then waits for the health check.
+
+For a checked-out repository, the root Compose file is also directly runnable:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+## 2. Create the first owner
+
+Open `http://127.0.0.1:18080` and complete the Web setup flow. The first registered user becomes the administrator and owns the initial Workspace.
+
+## 3. Check health and logs
+
+```bash
+docker compose ps
+docker compose logs -f parsar-server
+```
+
+The server exposes liveness and readiness probes. For the deployment smoke procedure, see `docs/deploy/health-and-smoke.md` in the repository.
+
+## 4. Configure execution
+
+Open Runtime settings and confirm the default local Runtime, or pair a developer machine with `parsar-daemon`. Configure model credentials and create an Agent before sending work.
+
+## Data and secrets
+
+Do not commit the generated `.env` or credentials. The installer keeps persistent data outside the repository. Production deployments must replace development defaults such as the database password, `PARSAR_MASTER_KEY`, and shared runtime token with stable random values.
+
+## API documentation
+
+The server also exposes the generated OpenAPI contract at `/api/v1/openapi.yaml` and a Swagger UI at `/docs`. Keep those API reference routes separate from this narrative guide.
+
+## Next steps
+
+- [Quickstart](/quickstart)
+- [How Parsar works](/how-parsar-works)
+- [Troubleshooting](/troubleshooting)

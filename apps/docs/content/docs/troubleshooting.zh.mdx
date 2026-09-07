@@ -1,0 +1,63 @@
+---
+title: 故障排查
+description: 按 Parsar 服务端、Runtime、daemon 和 Agent Provider 分层定位常见问题。
+---
+
+先确定问题属于哪一层。Parsar 控制面、Runtime、`parsar-daemon` 和选定的 AI 编程 CLI 各自负责不同部分。
+
+## 第一轮检查
+
+```bash
+docker compose ps
+docker compose logs --tail=100 parsar-server
+parsar-daemon status
+parsar-daemon logs -n 100
+```
+
+自托管部署还可以直接检查服务地址：
+
+```bash
+curl -i http://127.0.0.1:18080/healthz
+curl -i http://127.0.0.1:18080/readyz
+```
+
+`healthz` 表示 API 进程能够响应，`readyz` 还会包含数据库等依赖的就绪检查。
+
+## Runtime 离线
+
+1. 确认管理控制台中 Runtime 处于启用状态。
+2. 确认 daemon 进程正在运行，并且 Profile 配对的是目标服务地址。
+3. 查看最近一次心跳和 daemon 日志。
+4. 如果 Runtime 已删除或配对已过期，重新生成配对 Token 并连接。
+
+## Run 一直排队
+
+服务端会等 Agent 明确绑定的 Runtime 可以接收任务后才执行。检查 Agent 的 Runtime 绑定、Runtime liveness 和并发上限。不要假设 Parsar 会静默切换到其他 Runtime。
+
+## Run 立即失败
+
+按顺序检查：
+
+1. 选定的连接器和 Agent kind；
+2. 模型凭据和 endpoint 配置；
+3. Capability 所需凭据；
+4. 执行机器上的 Provider CLI 是否安装并完成登录；
+5. 工作目录和文件系统权限。
+
+## 没有出现审批或用户选择卡片
+
+打开 **审批** 页面并刷新当前 Conversation。Interaction 会先在服务端持久化，再投递到 Web 或 IM。如果它已经过期，服务端已完成拒绝或取消，需要重新运行 Agent。
+
+## API 文档和产品文档不是一回事
+
+`/docs` 是生成的 Swagger UI，`/api/v1/openapi.yaml` 是机器可读的 API 契约，本网站是面向用户的操作指南。如果界面行为和页面描述不一致，请先核对部署版本，再从当前代码更新页面。
+
+## 提交可复现问题
+
+请提供 Parsar 版本、操作系统、部署方式、Runtime 类型、Run ID、相关状态和经过脱敏的日志片段。分享前移除 Token、API Key、邮箱地址和私有仓库内容。
+
+## 相关页面
+
+- [自托管快速上手](/zh/self-host-quickstart)
+- [Parsar 的工作方式](/zh/how-parsar-works)
+- [查看运行、审批和日志](/zh/runs-approvals-logs)

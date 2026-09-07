@@ -1,0 +1,70 @@
+---
+title: 快速上手
+description: 安装 Parsar、连接执行 Runtime、创建 Agent，并完成第一次运行。
+---
+
+这篇指南使用默认的 Docker Compose 安装路径，带你从空环境完成一次 Agent Run。
+
+## 开始前准备
+
+- Docker Engine 和 Docker Compose v2。
+- 一台可以运行 Parsar 服务和 PostgreSQL 容器的机器。
+- 在 daemon 或沙盒实际执行的机器上安装 Claude Code、Codex、Pi 或 OpenCode 之一。
+
+## 1. 安装 Parsar
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MiniMax-AI-Dev/parsar/main/install.sh | bash
+```
+
+打开 `http://127.0.0.1:18080`。安装引导中创建的第一个账号会成为工作区 Owner 和管理员。
+
+安装器会把生成的配置、密钥、数据库文件和 Runtime 状态放在 `~/.parsar/` 下。
+
+## 2. 确认 Runtime
+
+进入管理控制台的 Runtime 页面。默认本地安装会提供一个可直接使用的沙盒 Runtime。如果要连接开发者电脑，可以在 Runtime 页面生成一次性配对 Token，然后执行：
+
+```bash
+parsar-daemon connect --url https://your-parsar.example --token <pairing-token> -b
+```
+
+daemon 的 Profile 保存在 `~/.parsar/parsar-daemon/<profile>/`，并持续向服务端上报心跳。
+
+成功标志：Runtime 列表中出现已启用且 liveness 为 `online` 的运行环境。
+
+## 3. 创建 Agent
+
+打开 **Agent**，点击 **新建 Agent**，配置：
+
+- 名称和可选描述；
+- 支持的连接器和模型；
+- 明确选择 Runtime：本地、沙盒或外部运行环境；
+- 可选的 Skill、MCP、Plugin、System Prompt 或 Bundle 能力。
+
+成功标志：Agent 出现在工作区列表中，并且没有因为 Runtime 未绑定或离线而被阻塞。
+
+## 4. 发送第一条消息
+
+打开 **对话**，创建一个对话，选择 Agent，发送一条简单请求，例如：`介绍一下这个工作区的组织方式。`
+
+Parsar 会创建一次 Agent Run，并把进度、工具事件和最终回复写入对话时间线。
+
+## 5. 验证结果
+
+打开 **运行** 页面或对话时间线。成功运行会从 `queued`、`running` 进入 `completed`。详情中可以查看 Runtime 快照、输出消息、产物、用量和事件历史。
+
+## 常见问题
+
+| 现象 | 优先检查 |
+| --- | --- |
+| 没有可用 Runtime | 确认沙盒健康，或确认 daemon 使用了正确的服务地址完成配对。 |
+| 运行一直排队 | 检查 Agent 是否明确绑定了在线 Runtime，以及是否达到并发上限。 |
+| 运行立即失败 | 检查模型凭据，以及对应 CLI 是否安装并完成登录。 |
+| 请求等待人工决定 | 打开审批页面，处理权限请求或用户选择请求。 |
+
+## 接下来
+
+- [核心概念](/zh/concepts)
+- [创建和配置 Agent](/zh/create-agent)
+- [查看运行、审批和日志](/zh/runs-approvals-logs)

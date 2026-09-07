@@ -1,0 +1,36 @@
+---
+title: 核心概念
+description: 用一页了解 Parsar 工作区中的核心对象。
+---
+
+Parsar 把协作和执行分开：服务端保存团队上下文与持久化记录，Runtime 实际执行 Agent，并把事件回传。
+
+## 工作区对象
+
+| 对象 | 职责 |
+| --- | --- |
+| Workspace | 隔离成员、Agent、对话、设置、凭据和历史。 |
+| Agent | 可复用的身份与执行配置，包括连接器、模型、指令、能力、可见性和 Runtime 绑定。 |
+| Runtime | 具体执行环境，例如配对的 `parsar-daemon`、本地沙盒或外部 Agent 地址。 |
+| Conversation | 面向 Web、即时通讯或 API 的持久化交互上下文。 |
+| Agent Run | 由对话或其他入口触发的一次具体执行。 |
+| Capability | 可以挂载到 Agent 的 Skill、MCP、Plugin、System Prompt 或 Bundle。 |
+| Connector | 工作交付所经过的协议或渠道边界，例如 Agent Daemon Connector 或工作区 IM 连接器。 |
+
+## 最容易混淆的区别
+
+Agent 不是常驻 daemon 进程，而是身份和配置。Runtime 决定在哪里执行。Run 是一次执行记录。同一个 Runtime 可以服务多个 Agent，同一个 Agent 也可以持续产生多次 Run。
+
+## Run 生命周期
+
+Run 状态包括 `queued`、`running`、`completed`、`failed`、`cancelled` 和 `interrupted`。Run 完成不等于 Conversation 结束；对话会保留消息，并可以再次触发运行。
+
+## 人工交互
+
+权限请求和用户选择请求都会持久化为 Interaction。它们可以在 Web 审批收件箱或对话界面中处理，并由同一套服务记录最终决定。
+
+## 相关页面
+
+- [Parsar 的工作方式](/zh/how-parsar-works)
+- [创建和配置 Agent](/zh/create-agent)
+- [查看运行、审批和日志](/zh/runs-approvals-logs)

@@ -1,0 +1,50 @@
+---
+title: How Parsar works
+description: Follow one request from the workspace to the Agent process and back.
+---
+
+Parsar records and coordinates work. The connected Runtime executes it. Keeping this boundary explicit explains why a healthy Web console can still show a queued Run when its Runtime is offline.
+
+## One execution path
+
+```text
+Web / IM / API
+      |
+      v
+Parsar server ---- PostgreSQL
+      |
+      | dispatch over the Agent Daemon protocol
+      v
+parsar-daemon or sandbox Runtime
+      |
+      v
+Claude Code / Codex / Pi / OpenCode
+      |
+      v
+events, output, artifacts, usage, terminal status
+      |
+      v
+Conversation, Run history, Audit, and Usage
+```
+
+## What the server owns
+
+The server owns authentication, workspaces, Agent records, Runtime bindings, Run records, audit and usage persistence, and upstream engine session identifiers.
+
+## What the daemon owns
+
+`parsar-daemon` discovers local CLIs, starts and stops provider processes, selects a working directory, handles provider-specific environment, and translates CLI streams into the shared daemon protocol. It does not become the source of truth for Conversation or Run history.
+
+## Why a Run can be queued
+
+The server creates the Run before execution begins. Dispatch requires the Agent's explicitly bound Runtime to be enabled and reachable. If the Runtime is offline, at its concurrency limit, or missing the selected CLI or credentials, the Run can remain queued or fail with a user-facing reason.
+
+## What is persisted
+
+Run details can include the request, status transitions, streamed events, output message, artifacts, usage records, Runtime snapshot, and transcript. This makes a Run inspectable after the daemon reconnects or the browser is refreshed.
+
+## Related pages
+
+- [Runtime and daemon setup](/quickstart)
+- [Core concepts](/concepts)
+- [Read runs, approvals, and logs](/runs-approvals-logs)

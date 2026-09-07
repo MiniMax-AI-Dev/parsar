@@ -1,0 +1,15 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Start here---",
+    "index",
+    "quickstart",
+    "concepts",
+    "how-parsar-works",
+    "self-host-quickstart",
+    "---Core workflows---",
+    "create-agent",
+    "runs-approvals-logs",
+    "troubleshooting"
+  ]
+}

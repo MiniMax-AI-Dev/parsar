@@ -1,0 +1,49 @@
+---
+title: Create and configure an Agent
+description: Configure the identity, connector, capabilities, model, and Runtime that an Agent uses for every run.
+---
+
+An Agent is a reusable workspace member. It holds instructions and execution configuration; it is not a permanently running process.
+
+## Before you start
+
+- You are a Workspace owner, admin, or member with permission to create Agents.
+- At least one model is configured.
+- At least one Runtime is online, or your deployment has a usable sandbox or external Agent Runtime.
+
+## Create an Agent
+
+1. Open **Agents** and choose **New Agent**.
+2. Enter a name and optional description.
+3. Choose the connector type and default model.
+4. Choose the Runtime mode and bind the Agent to a concrete Runtime.
+5. Add a system prompt and any Capabilities the Agent needs.
+6. Save the Agent.
+
+The Runtime is part of the Agent's execution identity in the current product. To switch execution placement later, create or edit the Agent according to the options shown by the current release rather than assuming a silent fallback.
+
+## Capabilities
+
+Parsar currently models Capabilities as `skill`, `mcp`, `plugin`, `system_prompt`, or `bundle`. A Capability can require a credential; configure that credential before running the Agent.
+
+New bindings can follow the latest Capability version or pin a specific version. Use pinning when reproducibility matters; use latest when the Agent should receive future published updates.
+
+## Visibility and access
+
+Agent visibility can be workspace, tenant, or public. Access determines which members can run it. Document and review visibility together with your connector policy before exposing an Agent to an IM channel.
+
+## Verify the configuration
+
+Open the Agent detail view and confirm:
+
+- connector and model are present;
+- the Runtime is explicitly bound and online;
+- required credentials are available;
+- Capabilities are enabled and not deprecated;
+- the Agent is active.
+
+## Next steps
+
+- [Quickstart](/quickstart)
+- [How Parsar works](/how-parsar-works)
+- [Read runs, approvals, and logs](/runs-approvals-logs)

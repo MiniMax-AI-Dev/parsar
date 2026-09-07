@@ -18,7 +18,7 @@ endif
 PARSAR_IMAGE     ?= parsar
 PARSAR_IMAGE_TAG ?= dev
 
-.PHONY: help setup node-deps dev dev-db check check-setup check-sqlc check-go check-store check-web check-cli check-hygiene test test-fast test-go test-web typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi e2b-template e2b-template-binaries
+.PHONY: help setup node-deps dev dev-db check check-setup check-sqlc check-go check-store check-web check-docs check-cli check-hygiene test test-fast test-go test-web test-docs typecheck-web lint-web-design lint-web test-cli typecheck reset-dev clean-dev paths migrate-dev sqlc-generate server web cli devgateway http-runner-once http-runner-loop dev-all smoke e2e-http-agent e2e-feishu-gateway dev-server-up dev-server-down dev-server-log bootstrap docker-build docker-build-no-cache openapi e2b-template e2b-template-binaries
 
 help:
 	@printf '%s\n' \
@@ -43,6 +43,7 @@ help:
 	  '  make check-go         Run sqlc drift check and non-store Go tests' \
 	  '  make check-store      Run migration and store integration tests' \
 	  '  make check-web        Run web typecheck and design lint' \
+	  '  make check-docs       Typecheck and compile the docs app' \
 	  '  make check-cli        Typecheck CLI/plugin packages' \
 	  '' \
 	  'Cloud sandbox (e2b):' \
@@ -86,7 +87,7 @@ dev-db:
 # Backward-compatible alias. Prefer `make dev-db` for the DB-only dev stack.
 dev: dev-db
 
-check: check-go check-store check-web check-cli check-hygiene
+check: check-go check-store check-web check-docs check-cli check-hygiene
 	@printf 'Parsar harness checks passed.\n'
 
 check-setup:
@@ -110,6 +111,10 @@ check-store: check-setup
 
 check-web: check-setup typecheck-web lint-web-design
 
+check-docs: check-setup node-deps
+	pnpm --filter @parsar/docs typecheck
+	pnpm --filter @parsar/docs build
+
 check-cli: check-setup node-deps
 	pnpm --filter @parsar/cli typecheck
 	pnpm --filter @parsar/opencode-plugin typecheck
@@ -130,12 +135,15 @@ check-hygiene: check-setup
 # code-generation drift checks, and database-backed migration tests.
 test: test-fast
 
-test-fast: test-go test-web test-cli
+test-fast: test-go test-web test-docs test-cli
 
 test-go:
 	go test $(GO_TEST_PACKAGE) $(GO_TEST_RUN_FLAG) $(GO_TEST_ARGS)
 
 test-web: typecheck-web lint-web-design
+
+test-docs: node-deps
+	pnpm --filter @parsar/docs typecheck
 
 typecheck-web: node-deps
 	pnpm --filter @parsar/web typecheck

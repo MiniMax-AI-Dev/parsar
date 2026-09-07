@@ -70,6 +70,8 @@ the change.
 - **DB toolchain**: goose migrations + sqlc-generated queries + pgx/pgxpool
   at runtime.
 - **Web**: Vite + React SPA, eventually served directly by the Go server.
+- **Docs**: Fumadocs + Next.js MDX app under `apps/docs`, deployed separately
+  from the Go-served Web SPA.
 - **API**: OpenAPI-first.
 - **Connector MVP**: Agent Daemon Connector (`connector_type=agent_daemon`,
   adapter determined by `project_agents.config.agent_kind` — `opencode`,
@@ -390,6 +392,21 @@ description and keep ownership on the side listed here.
   are committed artifacts, but never the source of truth. Change annotations
   or SQL first, then regenerate.
 
+### Product documentation app
+
+- End-user product documentation lives in `apps/docs/content/docs/` and is
+  rendered by the Fumadocs app. Keep it separate from internal design notes in
+  `docs/` and from the generated Swagger UI at `/docs`.
+- English pages are the default source (`*.mdx`); Chinese pages use the
+  matching `*.zh.mdx` filename. Keep both variants grounded in the same
+  shipped behavior and update them together.
+- Because the default locale is hidden from URLs, links in English pages use
+  the root path (`/quickstart`), while links in Chinese pages must include the
+  `/zh/` prefix (`/zh/quickstart`).
+- The docs app is a separate deployment unit in the first phase. Do not add
+  docs assets or a Next.js server to the Parsar Go image until the deployment
+  boundary is explicitly revisited.
+
 ## Code quality & architecture
 
 Parsar favors small, single-purpose files and reused helpers over growing
@@ -612,10 +629,12 @@ make check                    # full required repository gate
 make check-go                 # sqlc drift + non-store Go tests
 make check-store              # migration + store integration tests
 make check-web                # web typecheck + design lint
+make check-docs               # docs MDX generation + typecheck
 make check-cli                # CLI/plugin typechecks
 make openapi                  # regenerate docs/openapi/openapi.yaml
 make sqlc-generate            # regenerate internal/db/sqlc/*.go
 cd apps/web && pnpm typecheck # TS type-check web
+cd apps/docs && pnpm typecheck # MDX generation + TS type-check docs
 ```
 
 If `make openapi` or `make sqlc-generate` produced a diff, commit it
