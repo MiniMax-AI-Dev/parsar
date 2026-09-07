@@ -137,7 +137,7 @@ export function DetailRail({
           {frame("rail")}
         </aside>
         <ResizeHandle edge="left" dragging={rail.dragging} label={t("layout.adjusted")} {...rail.handleProps} />
-        <LayoutPrompt open={rail.dirty} onSave={rail.save} onTemporary={rail.keepTemporary} onRestore={rail.restore} />
+        <LayoutPrompt panel={rail.storageKey} open={rail.dirty} onSave={rail.save} onTemporary={rail.keepTemporary} onRestore={rail.restore} />
       </div>
 
       <DialogPrimitive.Root open={expanded && open} onOpenChange={setModalOpen}>

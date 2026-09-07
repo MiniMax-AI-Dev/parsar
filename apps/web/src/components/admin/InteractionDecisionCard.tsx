@@ -17,7 +17,7 @@ import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Property, PropertyList } from "../ui/property-list"
-import { MachineText } from "../../components/ui/machine-text"
+import { VerbatimBlock } from "../ui/verbatim"
 
 /**
  * One approval / user-input request, flat: a status badge and title, the
@@ -112,9 +112,9 @@ export function InteractionDecisionCard({
       </PropertyList>
 
       {interaction.kind === "permission" ? (
-        <MachineText className="max-h-52 overflow-y-auto">
+        <VerbatimBlock className="max-h-52">
           {JSON.stringify(interaction.request.payload ?? {}, null, 2)}
-        </MachineText>
+        </VerbatimBlock>
       ) : (
         <div className="space-y-4">
           {questions.map((question, index) => {

@@ -238,13 +238,8 @@ export function AgentsPage() {
                   ? t("agents.loadError.unreachable.title")
                   : t("agents.loadError.title")
               }
-              description={
-                isUnreachable
-                  ? t("agents.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("agents.loadError.description")
-              }
+              description={isUnreachable ? t("agents.loadError.unreachable.description") : t("agents.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={
                 isUnreachable
                   ? t("agents.loadError.unreachable.hint")

@@ -3,7 +3,7 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 
 import { InlineNotice, type NoticeTone } from "./error-state"
-import { MachineText } from "./machine-text"
+import { VerbatimBlock } from "./verbatim"
 import { cn } from "../../lib/utils"
 
 /**
@@ -20,10 +20,13 @@ import { cn } from "../../lib/utils"
  * is how one ends up covering the other's buttons; a queue cannot collide with
  * itself.
  *
- * It portals to `document.body` for the same reason the layout prompt always
- * did: a dialog marks its siblings `aria-hidden`, and the expanded rail is a
- * dialog, so a message rendered inside the app root would be shown but never
- * announced.
+ * It portals to `document.body` and sits at z-60, one step above the 50 that
+ * dialogs and their overlays use. Inside the app root at the same z it would
+ * lose to a dialog on tree order alone — Radix appends its portal later — and a
+ * message that an overlay dims is a message nobody reads. (Announcement is not
+ * the reason: `aria-hidden`'s `hideOthers`, which Radix uses, exempts
+ * `[aria-live]` and every ancestor of one, so these regions are spoken whether
+ * they sit in the root or in the body.)
  */
 export interface ToastOptions {
   tone?: NoticeTone
@@ -92,28 +95,32 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const show = React.useCallback((message: React.ReactNode, options: ToastOptions = {}) => {
     const id = nextId.current++
     const tone = options.tone ?? "success"
+    const fields = {
+      message,
+      tone,
+      detail: options.detail,
+      action: options.action,
+      persist: options.persist,
+      key: options.key,
+      durationMs: tone === "error" ? ERROR_MS : DEFAULT_MS,
+      leaving: false,
+    }
     setToasts((list) => {
-      const withoutSameKey = options.key ? list.filter((t) => t.key !== options.key) : list
-      const live = withoutSameKey.filter((t) => !t.leaving)
-      // Over the cap the oldest is asked to leave; it is never yanked.
+      // A keyed message updates the strip that is already standing rather than
+      // swapping the node: same id, same mount, so it re-words itself in place
+      // instead of playing its entrance again. A strip on its way out is caught
+      // and revived by the same path.
+      const sameKey = options.key ? list.find((t) => t.key === options.key) : undefined
+      if (sameKey) return list.map((t) => (t.id === sameKey.id ? { ...t, ...fields } : t))
+
+      // Over the cap the oldest is asked to leave; it is never yanked, and a
+      // message that is a question (`persist`) is never the one asked.
+      const live = list.filter((t) => !t.leaving && !t.persist)
       const excess = live.slice(0, Math.max(0, live.length - (MAX_VISIBLE - 1)))
-      const next = withoutSameKey.map((t) =>
+      const next = list.map((t) =>
         excess.some((e) => e.id === t.id) ? { ...t, leaving: true } : t,
       )
-      return [
-        ...next,
-        {
-          id,
-          message,
-          tone,
-          detail: options.detail,
-          action: options.action,
-          persist: options.persist,
-          key: options.key,
-          durationMs: tone === "error" ? ERROR_MS : DEFAULT_MS,
-          leaving: false,
-        },
-      ]
+      return [...next, { id, ...fields }]
     })
   }, [])
 
@@ -130,11 +137,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       {typeof document !== "undefined" &&
         createPortal(
-          <div className="pointer-events-none fixed left-1/2 top-3 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+          <div className="pointer-events-none fixed left-1/2 top-3 z-[60] flex -translate-x-1/2 flex-col items-center">
             {/* Two regions rather than one: a failure interrupts, a
                 confirmation waits its turn. Neither strip repeats the role,
                 because a live region inside a live region announces twice. */}
-            <div aria-live="assertive" className="flex flex-col items-center gap-2">
+            {/* The space between the two regions belongs to the region that
+                has something in it: an empty flex child still takes the
+                parent's gap, which pushed a lone message 8px off its mark. */}
+            <div aria-live="assertive" className="flex flex-col items-center gap-2 [&:not(:empty)]:mb-2">
               {assertive.map((toast) => (
                 <ToastStrip key={toast.id} toast={toast} onLeave={startLeaving} onDrop={drop} />
               ))}
@@ -165,6 +175,13 @@ function ToastStrip({ toast, onLeave, onDrop }: {
   const remaining = React.useRef(toast.durationMs)
   const startedAt = React.useRef(0)
 
+  // Re-worded in place (a keyed message), so the countdown starts over: the
+  // reader has not read this one yet. Declared before the countdown so its
+  // cleanup has already banked the elapsed time when this runs.
+  React.useEffect(() => {
+    remaining.current = toast.durationMs
+  }, [toast.message, toast.detail, toast.durationMs])
+
   React.useEffect(() => {
     if (toast.persist || toast.leaving || held) return
     startedAt.current = Date.now()
@@ -173,7 +190,7 @@ function ToastStrip({ toast, onLeave, onDrop }: {
       window.clearTimeout(timer)
       remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt.current))
     }
-  }, [held, toast.persist, toast.leaving, toast.id, onLeave])
+  }, [held, toast.persist, toast.leaving, toast.id, onLeave, toast.message, toast.detail, toast.durationMs])
 
   return (
     <div
@@ -198,7 +215,7 @@ function ToastStrip({ toast, onLeave, onDrop }: {
         </InlineNotice>
         {toast.action}
       </div>
-      {toast.detail && <MachineText className="max-h-24">{toast.detail}</MachineText>}
+      {toast.detail && <VerbatimBlock className="max-h-24">{toast.detail}</VerbatimBlock>}
     </div>
   )
 }

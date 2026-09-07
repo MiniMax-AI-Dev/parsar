@@ -75,6 +75,7 @@ import { navigateAdmin, useAdminView } from "../../../lib/admin-router"
 import type { AgentCapability, Capability, CapabilityVersion } from "../../../lib/api-types"
 import { useMyWorkspaces } from "../../../lib/api-workspaces"
 import { useToast } from "../../../components/ui/toast"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import { useWorkspaceId } from "../../../lib/workspace"
 import { useRelativeTime } from "../../../lib/relative-time"
 import { requiredCredentialsLabel } from "../../../lib/credential-kind-ui"
@@ -88,7 +89,6 @@ import { ImportCapabilityDialog } from "./ImportCapabilityDialog"
 import { AddCapabilityVersionDialog } from "./AddCapabilityVersionDialog"
 import { UninstallMarketplaceDialog } from "./UninstallMarketplaceDialog"
 import type { DirectoryFilterState, DirectorySort } from "./mcp-directory/filters"
-import { MachineText } from "../../../components/ui/machine-text"
 
 export { CapabilityTypeBadge } from "./CapabilityTypeBadge"
 
@@ -1298,13 +1298,13 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
         <PropertyList>
           <Property label="mode" mono>{sp?.mode ?? "append"}</Property>
         </PropertyList>
-        <MachineText className="max-h-[420px] overflow-y-auto">{sp?.prompt ?? t("capabilities.none")}</MachineText>
+        <VerbatimBlock className="max-h-[420px]">{sp?.prompt ?? t("capabilities.none")}</VerbatimBlock>
       </div>
     )
   }
 
   if (capability.type === "mcp") {
-    return <MachineText className="max-h-[420px] overflow-y-auto">{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</MachineText>
+    return <VerbatimBlock className="max-h-[420px]">{JSON.stringify(canonicalSpec?.mcp ?? version.content ?? {}, null, 2)}</VerbatimBlock>
   }
 
   if (capability.type === "plugin") {
@@ -1335,7 +1335,7 @@ function renderViewVersionBody(version: CapabilityVersion, capability: Capabilit
           {skill.description && <Property label="description" className="h-auto min-h-7 whitespace-normal py-1">{skill.description}</Property>}
           {skill.trigger && <Property label="trigger" className="h-auto min-h-7 whitespace-normal py-1">{skill.trigger}</Property>}
         </PropertyList>
-        {skill.instruction && <MachineText className="max-h-[420px] overflow-y-auto">{skill.instruction}</MachineText>}
+        {skill.instruction && <VerbatimBlock className="max-h-[420px]">{skill.instruction}</VerbatimBlock>}
       </div>
     )
   }

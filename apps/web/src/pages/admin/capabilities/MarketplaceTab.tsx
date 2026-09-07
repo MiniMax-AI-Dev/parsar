@@ -11,6 +11,7 @@ import { ErrorState } from "../../../components/ui/error-state"
 import { Ledger, LedgerHeader, LedgerNum, LedgerRow, col } from "../../../components/ui/ledger"
 import { PropertyList, Property } from "../../../components/ui/property-list"
 import { Skeleton } from "../../../components/ui/skeleton"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import {
   marketplaceSourceName,
   useMarketplaceDetail,
@@ -28,7 +29,6 @@ import { ExternalLinkValue, safeExternalURL } from "./notices"
 import { MCPDirectory } from "./mcp-directory/MCPDirectory"
 import type { DirectoryFilterState } from "./mcp-directory/filters"
 import { SkillsDirectory } from "./SkillsDirectory"
-import { MachineText } from "../../../components/ui/machine-text"
 
 interface MarketplaceTabProps {
   view: "marketplace" | "connectors" | "skills"
@@ -546,7 +546,7 @@ function MCPPreview({ detail }: { detail: MarketplaceCapabilityDetail }) {
               <CapabilityTypeBadge type="mcp" />
             </h4>
             <PreviewLabel>{t("capabilities.marketplace.detail.command")}</PreviewLabel>
-            <MachineText className="max-h-none">{command}</MachineText>
+            <VerbatimBlock>{command}</VerbatimBlock>
             <PreviewLabel>{t("capabilities.marketplace.detail.environment")}</PreviewLabel>
             {env.length === 0 ? (
               <p className="text-sm text-fg-muted">{t("capabilities.marketplace.detail.noEnvironment")}</p>

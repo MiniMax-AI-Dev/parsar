@@ -166,8 +166,9 @@ function BuiltinCapabilityCard({
       { key, enabled: next },
       {
         onError: (e) =>
-          onToast(t("agents.detail.capabilities.builtin.toggleError", { message: e instanceof Error ? e.message : String(e) }), {
+          onToast(t("agents.detail.capabilities.builtin.toggleError"), {
             tone: "error",
+            detail: e instanceof Error ? e.message : String(e),
           }),
       },
     )

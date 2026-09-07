@@ -5,7 +5,7 @@ import { StatusIcon } from "./status-icon"
 import { useTranslation } from "react-i18next"
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
-import { MachineText } from "./machine-text"
+import { VerbatimBlock } from "./verbatim"
 
 interface ErrorStateProps {
   title?: string
@@ -49,7 +49,7 @@ export function ErrorState({
           {/* Shrink to the string, then wrap at the reading measure: a short
               server message should not stretch into a grey bar the width of
               the page. */}
-          {detail && <MachineText className="w-fit max-w-[min(52rem,100%)]">{detail}</MachineText>}
+          {detail && <VerbatimBlock className="max-h-40 w-fit max-w-[min(52rem,100%)]">{detail}</VerbatimBlock>}
           {hint && <p className="text-xs text-fg-muted">{hint}</p>}
         </div>
       </div>

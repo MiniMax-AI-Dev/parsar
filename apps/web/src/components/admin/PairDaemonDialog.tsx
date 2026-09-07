@@ -14,11 +14,11 @@ import {
 import { Field } from "../ui/label"
 import { Input } from "../ui/input"
 import { StatusIcon } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import { InlineError } from "../runtime/InlineError"
 import { useCreateRuntimePairing, useWorkspaceRuntimes } from "../../lib/api-runtimes"
 import { useBootstrapStatus } from "../../lib/api-bootstrap"
 import { copyText } from "../../lib/clipboard"
-import { MachineText } from "../../components/ui/machine-text"
 
 interface PairDaemonDialogProps {
   open: boolean
@@ -255,9 +255,9 @@ function DaemonCommandBlock({
               : t("runtime.agentDaemon.pair.copy", { defaultValue: "Copy" })}
         </Button>
       </div>
-      <MachineText className="mt-1 max-h-none">
+      <VerbatimBlock className="mt-1">
         {command}
-      </MachineText>
+      </VerbatimBlock>
       <p className="mt-1 text-xs text-fg-muted">{description}</p>
     </div>
   )

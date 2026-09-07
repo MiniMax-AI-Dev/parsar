@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench } f
 import { useToolCallElapsed } from "@assistant-ui/react"
 
 import { StatusIcon } from "../ui/status-icon"
-import { MachineText } from "../../components/ui/machine-text"
+import { VerbatimBlock } from "../ui/verbatim"
 
 // ---------------------------------------------------------------------------
 // Tool icon / summary helpers (mirrored from StepDisplay to keep styling)
@@ -117,9 +117,9 @@ export function ParsarToolCallCard({
               <p className="m-0 mb-1 text-xs text-fg-muted">
                 {t("conversations.toolCall.argsLabel", { defaultValue: "Arguments" })}
               </p>
-              <MachineText className="max-h-32">
+              <VerbatimBlock className="max-h-32">
                 {JSON.stringify(args, null, 2)}
-              </MachineText>
+              </VerbatimBlock>
             </div>
           )}
           {result != null && !isRunning && (
@@ -127,9 +127,9 @@ export function ParsarToolCallCard({
               <p className="m-0 mb-1 text-xs text-fg-muted">
                 {t("conversations.toolCall.resultLabel", { defaultValue: "Result" })}
               </p>
-              <MachineText className="max-h-32">
+              <VerbatimBlock className="max-h-32">
                 {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-              </MachineText>
+              </VerbatimBlock>
             </div>
           )}
         </div>

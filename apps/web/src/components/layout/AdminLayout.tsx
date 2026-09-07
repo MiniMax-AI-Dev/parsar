@@ -192,7 +192,7 @@ export function AdminLayout({
           </div>
         </aside>
         <ResizeHandle edge="right" dragging={sidebar.dragging} label={t("layout.adjusted")} {...sidebar.handleProps} />
-        <LayoutPrompt open={sidebar.dirty} onSave={sidebar.save} onTemporary={sidebar.keepTemporary} onRestore={sidebar.restore} />
+        <LayoutPrompt panel={sidebar.storageKey} open={sidebar.dirty} onSave={sidebar.save} onTemporary={sidebar.keepTemporary} onRestore={sidebar.restore} />
         </div>
       )}
 

@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronRight, FileText, Search, TerminalSquare, Wrench, type LucideIcon } from "lucide-react"
 
 import { StatusIcon, type StatusKind } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import { cn } from "../../lib/utils"
-import { MachineText } from "../../components/ui/machine-text"
 
 /**
  * One tool call or step of a run, normalised from the timeline's `ToolStep`
@@ -240,17 +240,17 @@ function StepRow({ step, now }: { step: TraceStep; now: number }) {
               {hasArgs && (
                 <div>
                   <p className="m-0 mb-1 text-xs text-fg-muted">{t("conversations.trace.args")}</p>
-                  <MachineText>
+                  <VerbatimBlock className="max-h-40">
                     {stringify(step.args)}
-                  </MachineText>
+                  </VerbatimBlock>
                 </div>
               )}
               {hasResult && (
                 <div>
                   <p className="m-0 mb-1 text-xs text-fg-muted">{t("conversations.trace.result")}</p>
-                  <MachineText>
+                  <VerbatimBlock className="max-h-40">
                     {stringify(step.result)}
-                  </MachineText>
+                  </VerbatimBlock>
                 </div>
               )}
             </div>

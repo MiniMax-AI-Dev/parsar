@@ -6,11 +6,11 @@ import { Button } from "../ui/button"
 import { EmptyState } from "../ui/empty-state"
 import { ErrorState } from "../ui/error-state"
 import { Skeleton } from "../ui/skeleton"
+import { VerbatimBlock } from "../ui/verbatim"
 import { useAuditRecords } from "../../lib/api-governance"
 import type { AuditActorType, AuditRecord } from "../../lib/api-types"
 import { useRelativeTime } from "../../lib/relative-time"
 import { cn } from "../../lib/utils"
-import { MachineText } from "../../components/ui/machine-text"
 
 const ACTOR_ICON: Record<AuditActorType, LucideIcon> = {
   agent: Bot,
@@ -59,9 +59,9 @@ function TimelineRow({ record, fmtAgo }: { record: AuditRecord; fmtAgo: (iso: st
         )}
       </div>
       {open && hasPayload && (
-        <MachineText className="mb-2 mt-0 max-h-none">
+        <VerbatimBlock className="mb-2 mt-0">
           {`#${record.id} ${record.source}\n${JSON.stringify(record.payload ?? {}, null, 2)}`}
-        </MachineText>
+        </VerbatimBlock>
       )}
     </li>
   )

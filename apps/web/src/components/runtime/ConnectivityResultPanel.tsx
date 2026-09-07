@@ -4,13 +4,13 @@ import { ChevronDown, X } from "lucide-react"
 
 import { Button } from "../ui/button"
 import { StatusIcon, type StatusKind } from "../ui/status-icon"
+import { VerbatimBlock } from "../ui/verbatim"
 import type {
   ConnectivityCheck,
   ConnectivityCheckCategory,
   ConnectivityResult,
 } from "../../lib/api-runtime"
 import { cn } from "../../lib/utils"
-import { MachineText } from "../../components/ui/machine-text"
 
 interface ConnectivityResultPanelProps {
   result: ConnectivityResult
@@ -109,9 +109,9 @@ export function ConnectivityResultPanel({ result, checkLabelFor, onDismiss }: Co
             </p>
           )}
           {rawDetails.length > 0 && (
-            <MachineText className="mt-2 max-h-none">
+            <VerbatimBlock className="mt-2">
               {rawDetails.join("\n")}
-            </MachineText>
+            </VerbatimBlock>
           )}
         </div>
       )}

@@ -9,14 +9,14 @@ import { cn } from "../../lib/utils"
  * The label column is sized by its own longest label rather than by a number
  * someone picked: 84px was wide enough for Chinese and too narrow for
  * "Working directory", which wrapped inside a fixed 28px row and pushed its
- * value out of line with it. `fit-content` grows to the labels actually
+ * value out of line with it. `max-content` grows to the labels actually
  * present — narrower in Chinese, wider in English — while the 5.25rem floor
- * keeps sections of a rail lined up with each other. (`fit-content()` would
- * cap it, but it is not a legal max inside `minmax()`; the whole declaration
- * is dropped and the grid silently collapses to one column.) Labels never
- * wrap; values truncate, because a label is
- * a fixed word you recognise and a value is content, which already carries
- * its full text in a tooltip.
+ * keeps sections of a rail lined up with each other and a 12rem cap on the
+ * label keeps a long one from eating the value column. (`fit-content()` is the
+ * obvious tool here and cannot be used: it is not a legal max inside
+ * `minmax()`, so the whole declaration is dropped and the grid silently
+ * collapses to one column.) Label and value both truncate and both carry their
+ * full text in a tooltip.
  */
 export function PropertyList({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -43,7 +43,12 @@ export function Property({
   return (
     <>
       <dt
-        className="flex h-7 items-center truncate whitespace-nowrap text-xs text-fg-muted"
+        // A block, not a flex row: `text-overflow` only applies to block
+        // containers, so a flex `dt` clips without ever drawing the ellipsis.
+        // `leading-7` centres the one line in the 28px row instead. The cap is
+        // what keeps `max-content` honest — a label long enough to eat the
+        // value column truncates and keeps its `title`.
+        className="h-7 max-w-48 truncate leading-7 text-xs text-fg-muted"
         title={typeof label === "string" ? label : undefined}
       >
         {label}

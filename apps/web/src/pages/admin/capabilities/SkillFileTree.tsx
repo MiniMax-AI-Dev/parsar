@@ -20,9 +20,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../../../components/ui/collapsible"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import { cn } from "../../../lib/utils"
 import type { CanonicalSkillSpec, SkillFile } from "./types"
-import { MachineText } from "../../../components/ui/machine-text"
 
 interface Props {
   skill: CanonicalSkillSpec
@@ -201,9 +201,9 @@ function ShikiCode({ content, lang }: { content: string; lang: string }) {
 
   if (err || html === null) {
     return (
-      <MachineText className="my-2 max-h-[420px] overflow-y-auto">
+      <VerbatimBlock className="my-2 max-h-[420px]">
         {content}
-      </MachineText>
+      </VerbatimBlock>
     )
   }
   return (

@@ -1530,7 +1530,7 @@
           "badge": "系统内置",
           "on": "已开启",
           "off": "已关闭",
-          "toggleError": "切换失败:{{message}}"
+          "toggleError": "切换失败"
         },
         "actions": {
           "enable": "+ 启用",

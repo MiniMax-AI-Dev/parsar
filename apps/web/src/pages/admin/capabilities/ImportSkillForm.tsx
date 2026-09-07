@@ -12,6 +12,7 @@ import { ClipboardPaste, FileArchive } from "lucide-react"
 import { Label } from "../../../components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { Textarea } from "../../../components/ui/textarea"
+import { VerbatimBlock } from "../../../components/ui/verbatim"
 import { ApiError } from "../../../lib/api-client"
 import {
   putToPresignedURL,
@@ -22,7 +23,6 @@ import { ImportPreview } from "./ImportPreview"
 import { SkillFileTree } from "./SkillFileTree"
 import { SkillZipDropzone } from "./SkillZipDropzone"
 import type { CanonicalSpec, SourceFormat } from "./types"
-import { MachineText } from "../../../components/ui/machine-text"
 
 interface Props {
   workspaceID: string | null
@@ -374,9 +374,9 @@ function SinglePreview({
         <p className="mb-1 text-xs text-fg-muted">
           {t("capabilities.import.skill.instruction", "Instruction (injected into the model)")}
         </p>
-        <MachineText className="max-h-[280px]">
+        <VerbatimBlock className="max-h-[280px]">
           {skill.instruction}
-        </MachineText>
+        </VerbatimBlock>
       </div>
     </section>
   )

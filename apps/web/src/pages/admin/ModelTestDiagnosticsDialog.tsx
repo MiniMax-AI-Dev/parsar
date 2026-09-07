@@ -11,11 +11,11 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog"
 import { StatusIcon } from "../../components/ui/status-icon"
+import { VerbatimBlock } from "../../components/ui/verbatim"
 import type {
   ModelConnectivityEndpointResult,
   ModelConnectivityResult,
 } from "../../lib/api-models"
-import { MachineText } from "../../components/ui/machine-text"
 
 interface ModelTestDiagnosticsDialogProps {
   open: boolean
@@ -174,9 +174,9 @@ function DiagnosticsBlock({
           <Copy strokeWidth={1.5} />
         </Button>
       </div>
-      <MachineText className="max-h-72 break-words">
+      <VerbatimBlock className="max-h-72">
         {value}
-      </MachineText>
+      </VerbatimBlock>
     </div>
   )
 }

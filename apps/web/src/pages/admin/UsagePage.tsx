@@ -140,13 +140,8 @@ export function UsagePage() {
           <div className="px-4 pt-4">
             <ErrorState
               title={isUnreachable ? t("usage.loadError.unreachable.title") : t("usage.loadError.title")}
-              description={
-                isUnreachable
-                  ? t("usage.loadError.unreachable.description")
-                  : err instanceof Error
-                    ? err.message
-                    : t("usage.loadError.description")
-              }
+              description={isUnreachable ? t("usage.loadError.unreachable.description") : t("usage.loadError.description")}
+              detail={!isUnreachable && err instanceof Error ? err.message : undefined}
               hint={isUnreachable ? t("usage.loadError.unreachable.hint") : t("usage.loadError.hint")}
               onRetry={() => void query.refetch()}
             />
