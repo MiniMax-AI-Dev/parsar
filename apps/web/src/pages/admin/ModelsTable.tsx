@@ -9,8 +9,8 @@ import { Copy, Database, Pencil, Trash2, Zap } from "lucide-react"
 
 import { ActionIconButton, RowActions } from "../../components/ui/action-button"
 import { EmptyState } from "../../components/ui/empty-state"
-import { Ledger, LedgerGroup, LedgerHeader, LedgerRow, col } from "../../components/ui/ledger"
-import { StatusIcon, type StatusKind } from "../../components/ui/status-icon"
+import type { StatusKind } from "../../components/ui/status-icon"
+import { Ledger, LedgerGroup, LedgerHeader, LedgerRow, SelectableStatus, col } from "../../components/ui/ledger"
 import { hostFromBaseURL } from "../../lib/model-base-url"
 import { modelHealth } from "../../lib/model-health"
 import { modelProtocols, protocolListLabel } from "../../lib/model-protocol"
@@ -19,7 +19,7 @@ import { useRelativeTime } from "../../lib/relative-time"
 import type { Model } from "../../lib/api-types"
 
 /** status icon · checkbox · model key · name · endpoint host · protocol · credential mode · last test · actions */
-const LEDGER_COLUMNS = [col.icon(), col.check(), col.id(176, 1.2), col.title(160, 1), col.id(160), col.meta(104), col.meta(112), col.age(80), col.actions(4)]
+const LEDGER_COLUMNS = [col.icon(), col.id(176, 1.2), col.title(160, 1), col.id(160), col.meta(104), col.meta(112), col.age(80), col.actions(4)]
 
 interface CredentialStatus {
   labelKey: string
@@ -110,10 +110,10 @@ export function ModelsTable({
 
   // Rows carry their own checkbox, so this is a plain list, not a listbox:
   // list/listitem instead of listbox/option.
+  const anySelected = selectedIDs.size > 0
   return (
     <Ledger columns={LEDGER_COLUMNS} role="list" aria-label={t("models.page.title")}>
       <LedgerHeader>
-        <span />
         <span />
         <span>{t("models.table.modelKey")}</span>
         <span>{t("models.table.model")}</span>
@@ -142,17 +142,13 @@ export function ModelsTable({
                 selected={selected}
                 onClick={() => onToggleModel(m.id, !selected)}
               >
-                <StatusIcon
+                <SelectableStatus
                   status={status.icon}
                   title={status.detail ? `${statusLabel} · ${status.detail}` : statusLabel}
-                />
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-accent"
-                  checked={selected}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => onToggleModel(m.id, event.currentTarget.checked)}
-                  aria-label={t("models.bulkDelete.selectOne", { name: m.name })}
+                  selected={selected}
+                  selecting={anySelected}
+                  onSelectedChange={(next) => onToggleModel(m.id, next)}
+                  label={t("models.bulkDelete.selectOne", { name: m.name })}
                 />
                 <span className="truncate font-mono text-xs text-fg" title={m.model_key}>
                   {m.model_key}
