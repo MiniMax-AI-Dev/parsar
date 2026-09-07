@@ -208,7 +208,7 @@
       "runs": "Runs",
       "scheduled": "Scheduled Tasks",
       "agents": "Agents",
-      "connections": "Connections",
+      "connections": "Integrations",
       "capabilities": "Capabilities",
       "models": "Models",
       "members": "Members",
@@ -218,7 +218,7 @@
       "general": "General",
       "credentials": "Credentials",
       "runtime": "Runtime",
-      "connectors": "Connectors",
+      "connectors": "Agent connectors",
       "usage": "Usage",
       "audit": "Audit"
     },

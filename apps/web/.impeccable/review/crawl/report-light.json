@@ -1,7 +1,7 @@
 [
   {
     "view": "conversations",
-    "rows": 6,
+    "rows": 7,
     "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
@@ -40,7 +40,7 @@
   {
     "view": "agents",
     "rows": 2,
-    "rowsAfterClicks": 7,
+    "rowsAfterClicks": 8,
     "dialogsOpened": [
       "新建 Agent"
     ],
@@ -106,13 +106,11 @@
   {
     "view": "secrets",
     "rows": 0,
-    "rowsAfterClicks": 14,
+    "rowsAfterClicks": 0,
     "dialogsOpened": [],
     "pageErrors": [],
     "consoleErrors": [],
-    "bad": [
-      "secrets/click:运行环境: 503 GET /workspaces/8922cb46-d818-4d55-b710-135ff41214ba/sandboxes"
-    ]
+    "bad": []
   },
   {
     "view": "runtime",

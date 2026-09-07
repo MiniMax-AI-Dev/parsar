@@ -1897,7 +1897,7 @@
   },
   "connectors": {
     "page": {
-      "title": "Connectors",
+      "title": "Agent connectors",
       "description": "How Agents actually run. A Connector is the integration layer — one connector can carry multiple Agents."
     },
     "aggregateHint": "This view aggregates connector types in use by Agents in the current workspace. Connectors don't have their own registry table by design (anti-overengineering: connector identity lives directly on each Agent's connector_type field).",
@@ -3027,7 +3027,7 @@
   },
   "connections": {
     "page": {
-      "title": "Connections"
+      "title": "Integrations"
     },
     "providers": {
       "github": "For GitHub PR, issue, and repository capabilities.",

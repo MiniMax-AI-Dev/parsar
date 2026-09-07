@@ -47,10 +47,15 @@ SANDBOXES = [{
     "metadata": {},
 }]
 
+# /connector-usage answers with AGENT connector types (how Parsar drives an
+# agent), not the IM platforms below. The fixture used to carry feishu/slack
+# here, which made the Agent-connectors page look like a copy of Channels.
 CONNECTOR_USAGE = {"connectors": [
-    {"connector_type": "feishu", "label": "Feishu / Lark", "status": "ready", "agent_count": 3,
-     "agent_slugs": ["reviewer-bot", "release-notes", "docs-writer"]},
-    {"connector_type": "slack", "label": "Slack", "status": "needs_config", "agent_count": 0, "agent_slugs": []},
+    {"connector_type": "agent_daemon", "label": "Agent Daemon", "status": "ready", "agent_count": 3,
+     "agent_slugs": ["reviewer-bot", "release-notes", "triage"]},
+    {"connector_type": "http", "label": "HTTP Agent", "status": "ready", "agent_count": 1,
+     "agent_slugs": ["docs-writer"]},
+    {"connector_type": "a2a", "label": "A2A", "status": "needs_config", "agent_count": 0, "agent_slugs": []},
 ]}
 
 IM_CONNECTORS = {"master_key_configured": True, "connectors": [

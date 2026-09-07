@@ -1897,7 +1897,7 @@
   },
   "connectors": {
     "page": {
-      "title": "连接器",
+      "title": "Agent 连接器",
       "description": "Agent 的执行接入方式。Connector 是接入层抽象，一个 Connector 可以承载多个 Agent 的运行。"
     },
     "aggregateHint": "当前展示的是当前工作区内 Agent 使用的 connector 类型聚合视图。Connector 没有独立的注册表/实例表（反过度设计：connector 身份直接长在每个 Agent 的 connector_type 字段上）。",
@@ -3027,7 +3027,7 @@
   },
   "connections": {
     "page": {
-      "title": "连接"
+      "title": "集成"
     },
     "providers": {
       "github": "用于 GitHub PR、Issue、Repo 等能力。",
